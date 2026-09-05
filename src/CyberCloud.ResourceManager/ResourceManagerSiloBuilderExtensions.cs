@@ -2,6 +2,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Drift;
+using CyberCloud.ResourceManager.Expiry;
 using CyberCloud.ResourceManager.Grains;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
@@ -60,7 +61,22 @@ public static class ResourceManagerSiloBuilderExtensions {
     public static ISiloBuilder AddCyberCloudResourceManager(this ISiloBuilder silo) {
         ArgumentNullException.ThrowIfNull(silo);
 
-        return silo.ConfigureServices(services => services.AddCyberCloudResourceManager());
+        return silo.ConfigureServices(services => {
+                services.AddCyberCloudResourceManager();
+
+                // ⚠ ON THE SILO OVERLOAD ONLY, AND THAT IS THE WHOLE REASON THIS METHOD NOW HAS A
+                // BODY. ExpirySweeperBackfill is an IHostedService and a hosted service registered
+                // in the gateway's container would RUN there — unlike DriftScanner and
+                // ReconcileDriver, which the paragraph below describes as registered on both sides
+                // and resolved on one. It walks tenants and arms grains, which is silo work; the
+                // gateway is an Orleans client and would be doing it a second time for no reason.
+                //
+                // ⚠ It is registered rather than offered, because a host that must remember a second
+                // call will not — the lesson AddCyberCloudProvider taught this file the hard way.
+                // ExpirySweeperBackfillOptions.RunOnStart is how a harness turns it off.
+                services.AddHostedService<ExpirySweeperBackfill>();
+            }
+        );
     }
 
     /// <summary>

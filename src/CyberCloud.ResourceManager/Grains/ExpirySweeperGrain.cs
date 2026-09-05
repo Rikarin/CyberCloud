@@ -20,7 +20,10 @@ namespace CyberCloud.ResourceManager.Grains;
 ///         this grain is its reminder row, which Orleans keeps in the reminder table — and a
 ///         reminder is not a fact about a resource, which is the whole reason
 ///         <see cref="IExpirySweeperGrain" /> argues for arming off "there is something parked"
-///         rather than off a deadline.
+///         rather than off a deadline. The one field it keeps across a pass — <see cref="resumeFrom" />,
+///         the rotation cursor — is in memory and is a scheduling hint rather than a fact about a
+///         resource: losing it repeats a window of the registry, which is what every pass did before
+///         it existed.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>It decides one thing and one thing only: whether a registry entry is still true.</b>
@@ -65,6 +68,31 @@ public sealed class ExpirySweeperGrain(
     Guid subscriptionId;
     string group = string.Empty;
 
+    /// <summary>
+    ///     Where the next pass starts, or <see langword="null" /> to start at the beginning.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE ROTATION <c>IExpirySweeperGrain.MaxPerSweep</c> ARGUES FOR, AND IT IS IN
+    ///         MEMORY BECAUSE MAKING IT DURABLE WOULD COST MORE THAN LOSING IT DOES.</b> Losing it —
+    ///         a silo restart, a migration, a collection between ticks — restarts the rotation at the
+    ///         head of the ordering, which is where every pass started before this field existed; it
+    ///         cannot make a pass act on the wrong entry, because the entry is re-read from the
+    ///         registry and re-checked against the index either way. Persisting it would put this
+    ///         grain in <c>durable-grains.txt</c> and add a state write per pass to protect a
+    ///         scheduling hint, and it would still be lost on the one event that matters most
+    ///         (a registry that shrank under it).
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And the activation normally outlives the interval.</b>
+    ///         <c>IExpirySweeperGrain.SweepPeriod</c> is an hour and Orleans' default collection age
+    ///         is two, so a group over the cap keeps ticking on the same activation and the rotation
+    ///         advances. That is a default rather than a guarantee, which is why the paragraph above
+    ///         has to say what losing it costs.
+    ///     </para>
+    /// </remarks>
+    string? resumeFrom;
+
     /// <inheritdoc />
     public override Task OnActivateAsync(CancellationToken cancellationToken) {
         tenantId = ResourceManagerGrainKeys.TenantOf(this);
@@ -76,45 +104,55 @@ public sealed class ExpirySweeperGrain(
         // ⚠ NOTHING IS ARMED HERE, AND THE ABSENCE IS DELIBERATE. An activation is not evidence that
         // this group has anything parked — a sweep, a hand call or the arm itself brings the grain
         // up — so arming on activation would register a reminder for every group anybody ever asks
-        // about, including the one whose last entry a purge has just cleared. The reminder row is
-        // durable in Orleans' own table and survives a silo loss without help; what re-establishes
-        // it after it is genuinely lost is the next ArmAsync, which every writer that adds a registry
-        // entry makes.
+        // about, including the one whose last entry a purge has just cleared. ResourceGroupGrain
+        // does arm on activation, and the difference is what it arms off: its evidence is its own
+        // durable state, already loaded, while this grain HOLDS NOTHING — so the same line here
+        // would be a registry read in front of every ArmAsync a delete makes, to answer a question
+        // ArmIfParkedAsync answers once per group at start-up instead.
+        //
+        // ⚠ WHAT PUTS A LOST ROW BACK, since "the reminder is durable in Orleans' table" is not an
+        // answer to a table restored from a backup or to a park that ran on a silo with no reminder
+        // service (2026-09-05, #12 review). Three things: the next ArmAsync in this group, a hand
+        // SweepAsync — which arms as well as sweeps — and ExpirySweeperBackfill, which walks every
+        // resource group at silo start and calls ArmIfParkedAsync. Before those, a group whose last
+        // delete had already happened was never swept at all, which is the state issue #12 exists
+        // to end.
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public async Task<Result> ArmAsync() {
+    public async Task<Result<bool>> ArmAsync() => Result<bool>.Success(await ArmCoreAsync());
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> IsArmedAsync() {
         try {
-            _ = await this.RegisterOrUpdateReminder(
-                ReminderName,
-                IExpirySweeperGrain.SweepPeriod,
-                IExpirySweeperGrain.SweepPeriod
-            );
-
-            return Result.Success;
+            return Result<bool>.Success(await this.GetReminder(ReminderName) is not null);
         }
-        catch (InvalidOperationException error) {
-            // ⚠ SUCCESS, AND THE CALLER IS THE REASON. Both callers are on a path that is parking a
-            // resource, and a park that failed because the platform could not arrange to purge the
-            // resource in seven days' time would leave the delete stuck for ever over a schedule.
-            // The same call, the same refusal and the same decision as
-            // ResourceGroupGrain.ArmOrDisarmAsync's, whose remarks put it as "turning an absent
-            // cleanup into an absent platform". What is lost is exactly what master loses today:
-            // nothing ends this group's windows on the clock's account. SweepAsync is still callable
-            // and POST …/purge still works.
-            logger.LogWarning(
-                "Resource group '{Group}' in subscription {Subscription} could not arm its expired-"
-                + "window sweeper because this silo has no reminder service: {Reason} Recovery "
-                + "windows in this group will not be ended automatically here; "
-                + "IExpirySweeperGrain.SweepAsync still works and an authorized purge is unaffected.",
-                group,
-                subscriptionId,
-                error.Message
-            );
-
-            return Result.Success;
+        catch (InvalidOperationException) {
+            // A silo with no reminder service has no row and never will have one, which is exactly
+            // what `false` says to the operator asking. The arm that would have created it has
+            // already logged the warning; repeating it on a read would print one line per question.
+            return Result<bool>.Success(false);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> ArmIfParkedAsync() {
+        var parked = await Parked().ListAsync();
+
+        if (parked.TryGetError(out var listError)) {
+            // ⚠ PROPAGATED RATHER THAN READ AS "NOTHING PARKED", which is the same rule SweepAsync's
+            // own list failure follows and for the same reason: a registry that could not be read is
+            // not a registry with nothing in it, and the caller here is a backfill that reports how
+            // many groups it covered.
+            return Result<bool>.Failure(listError);
+        }
+
+        if (parked.GetValueOrThrow().Count == 0) {
+            return Result<bool>.Success(false);
+        }
+
+        return Result<bool>.Success(await ArmCoreAsync());
     }
 
     /// <inheritdoc />
@@ -131,11 +169,24 @@ public sealed class ExpirySweeperGrain(
 
         var entries = listed.GetValueOrThrow();
 
-        // ⚠ THE ORDER IS THE REGISTRY'S — canonical path, ordinally — so a group that is over the cap
-        // works through the same prefix on every tick rather than sampling a different arbitrary
-        // subset each time. A resource near the end of the ordering is reached once the ones before
-        // it have been purged, which they will be, because a purge removes its entry.
-        var batch = entries.Take(IExpirySweeperGrain.MaxPerSweep).ToList();
+        // ⚠ THE ORDER IS THE REGISTRY'S — canonical path, ordinally — AND THE WINDOW OVER IT ROTATES
+        // RATHER THAN BEING A FIXED PREFIX (2026-09-05, #12 review). This line was
+        // `entries.Take(MaxPerSweep)`, justified with "a resource near the end of the ordering is
+        // reached once the ones before it have been purged, which they will be, because a purge
+        // removes its entry". Two refusals this file documents as PERSISTENT falsify that premise:
+        // EndWindowAsync's CanNotDelete/ReadOnly lock case, which stays parked and is refused on
+        // every tick until the lock is lifted, and its withdrawn-provider case, whose entry stays by
+        // design. With more than MaxPerSweep entries in one group, enough of either inside the first
+        // window meant everything past it was NEVER examined — windows ending with nothing sweeping
+        // them, indefinitely, which is the state issue #12 exists to close. Resuming where the last
+        // pass stopped and wrapping bounds any entry's wait at ⌈entries ÷ MaxPerSweep⌉ passes
+        // regardless of what the entries before it answer.
+        //
+        // ⚠ THE ORDERING STILL DOES THE WORK, and that is why this is a cursor rather than a shuffle.
+        // The window moves by a whole pass at a time over a stable ordering, so an entry is examined
+        // once per rotation rather than on a coin toss — and a pass under the cap is the whole
+        // registry, which is every group in the tree today.
+        var batch = Rotate(entries, out var nextFrom);
 
         // One id per PASS and not per purge: ExpiredPurgeRequest.CorrelationId's remarks say it "says
         // which sweep ended this window", singular, and every operation record this pass produces
@@ -174,12 +225,18 @@ public sealed class ExpirySweeperGrain(
             }
         }
 
+        // ⚠ ADVANCED ONLY HERE, AFTER THE PASS RAN, so a pass that threw leaves the cursor where it
+        // was and the next one re-examines the same window rather than skipping past whatever the
+        // failure interrupted.
+        resumeFrom = nextFrom;
+
         var report = new ExpirySweep {
             Examined = batch.Count,
             Purged = purged.ToImmutable(),
             Forgotten = forgotten.ToImmutable(),
             Deferred = entries.Count - batch.Count,
-            Disarmed = await DisarmIfNothingIsParkedAsync()
+            Disarmed = await ArmOrDisarmAsync(),
+            ResumeFrom = nextFrom
         };
 
         Report(report);
@@ -323,7 +380,8 @@ public sealed class ExpirySweeperGrain(
     }
 
     /// <summary>
-    ///     Cancels the reminder when this group has nothing parked left.
+    ///     Registers the reminder when this group still has something parked, and cancels it when it
+    ///     has nothing left.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -332,6 +390,16 @@ public sealed class ExpirySweeperGrain(
     ///         side.</b> A standing reminder per resource group platform-wide would be a row per
     ///         group and a tick per group per hour, for ever, to look at a registry that is empty for
     ///         all but a few days of a group's life.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>IT ARMS AS WELL AS DISARMS, AND IT USED TO ONLY DISARM (2026-09-05, #12
+    ///         review).</b> The arm costs nothing when the row is already there — <see cref="ArmCoreAsync" />
+    ///         reads <c>GetReminder</c> first — and it is what makes a hand-driven
+    ///         <see cref="SweepAsync" /> a repair rather than a single pass: an operator sweeping a
+    ///         group whose row was lost, or was never written because the park ran on a silo with no
+    ///         reminder service, leaves it ticking. It also closes the ordinary case of the residual
+    ///         described below in one direction, since a tick that finds entries re-asserts the row
+    ///         it is running on.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The registry is listed AGAIN rather than the pass's own list being reused, and
@@ -357,10 +425,19 @@ public sealed class ExpirySweeperGrain(
     ///     decision rather than the outcome, so a silo with no reminder service still reports
     ///     <see langword="true" />: there was never a row for it to cancel.
     /// </returns>
-    async Task<bool> DisarmIfNothingIsParkedAsync() {
+    async Task<bool> ArmOrDisarmAsync() {
         var remaining = await Parked().ListAsync();
 
-        if (remaining.IsFailure || remaining.GetValueOrThrow().Count > 0) {
+        if (remaining.IsFailure) {
+            // A registry that could not be re-read is not a registry with nothing in it, and the
+            // direction of that ignorance is what decides this: leaving the row alone leaves the
+            // group swept, while cancelling on a failed read would stand a sweeper down over a
+            // storage blip. Nothing is armed either, because there is no evidence to arm off.
+            return false;
+        }
+
+        if (remaining.GetValueOrThrow().Count > 0) {
+            _ = await ArmCoreAsync();
             return false;
         }
 
@@ -381,6 +458,131 @@ public sealed class ExpirySweeperGrain(
         }
 
         return true;
+    }
+
+    /// <summary>
+    ///     Registers the reminder if it is not already registered, and says whether it had to.
+    /// </summary>
+    /// <returns>
+    ///     Whether this call created the row. <see langword="false" /> both when it was already there
+    ///     and when this silo has no reminder service — see <c>IExpirySweeperGrain.ArmAsync</c>.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE <c>GetReminder</c> GUARD IS THE WHOLE POINT OF THIS METHOD AND THE FIX IT
+    ///         CARRIES (2026-09-05, #12 review).</b> <c>RegisterOrUpdateReminder</c> rewrites an
+    ///         existing row with <c>StartAt = UtcNow + dueTime</c> and restarts the local timer, so
+    ///         calling it unconditionally with a due time of <c>SweepPeriod</c> pushed the next tick
+    ///         a full hour out on every arm. Every converged delete arms
+    ///         (<c>OperationGrain.ParkAsync</c>) and every refused restore arms
+    ///         (<c>ResourceManagerService.RepairParkedRegistryAsync</c>), so a resource group with a
+    ///         soft delete more often than hourly never swept once — the exact failure the grain
+    ///         exists to prevent, produced by the grain's own arming. The guard is the idiom
+    ///         <see cref="ArmOrDisarmAsync" /> already used two hundred lines below to cancel.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The race the guard leaves is in the harmless direction.</b> Two arms interleaving
+    ///         can both see <see langword="null" /> and both register; the second write is the same
+    ///         row with a due time a few milliseconds later, which is a rounding error against an
+    ///         hour rather than the unbounded deferral above. Nothing here can make a tick happen
+    ///         <i>earlier</i> than the row says, and a sweep cannot purge early whatever it is
+    ///         handed — <c>IResourceIndexGrain.ResolveExpiredAsync</c> decides that.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>SUCCESS ON A SILO WITH NO REMINDER SERVICE, AND THE CALLER IS THE REASON.</b>
+    ///         Both writers are on a path that is parking a resource, and a park that failed because
+    ///         the platform could not arrange to purge the resource in seven days' time would leave
+    ///         the delete stuck for ever over a schedule. The same call, the same refusal and the
+    ///         same decision as <c>ResourceGroupGrain.ArmOrDisarmAsync</c>'s, whose remarks put it as
+    ///         "turning an absent cleanup into an absent platform". What is lost is exactly what
+    ///         master loses today: nothing ends this group's windows on the clock's account.
+    ///         <see cref="SweepAsync" /> is still callable and <c>POST …/purge</c> still works.
+    ///     </para>
+    /// </remarks>
+    async Task<bool> ArmCoreAsync() {
+        try {
+            if (await this.GetReminder(ReminderName) is not null) {
+                return false;
+            }
+
+            _ = await this.RegisterOrUpdateReminder(
+                ReminderName,
+                IExpirySweeperGrain.SweepPeriod,
+                IExpirySweeperGrain.SweepPeriod
+            );
+
+            return true;
+        }
+        catch (InvalidOperationException error) {
+            logger.LogWarning(
+                "Resource group '{Group}' in subscription {Subscription} could not arm its expired-"
+                + "window sweeper because this silo has no reminder service: {Reason} Recovery "
+                + "windows in this group will not be ended automatically here; "
+                + "IExpirySweeperGrain.SweepAsync still works and an authorized purge is unaffected.",
+                group,
+                subscriptionId,
+                error.Message
+            );
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     The window of entries this pass looks at, and where the next pass starts.
+    /// </summary>
+    /// <param name="entries">The registry's whole listing, in its own canonical-path ordering.</param>
+    /// <param name="nextFrom">
+    ///     The canonical path the next pass begins at, or <see langword="null" /> when this pass took
+    ///     the whole registry.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Resumed <i>inclusively</i> from a path rather than from an index, because the
+    ///         registry moves between passes.</b> An index would name a different entry after a purge
+    ///         removed something earlier in the ordering; a path names the same entry, or — when that
+    ///         entry has gone — the next one after it, which is where the rotation should carry on
+    ///         anyway. A cursor that has fallen off the end of a shrunken registry restarts at the
+    ///         head, which is the only other place it could sensibly go.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The wrap is what bounds the wait, and it is the half a plain "skip forward" would
+    ///         not have.</b> Without it a cursor past the last entry would sweep a short tail and
+    ///         then start again, so the entries just before the cursor would be examined half as
+    ///         often as the rest. Taking <c>MaxPerSweep</c> entries from the cursor <i>around</i> the
+    ///         ordering makes every entry's turn come exactly once per rotation.
+    ///     </para>
+    /// </remarks>
+    List<ParkedResource> Rotate(IReadOnlyList<ParkedResource> entries, out string? nextFrom) {
+        nextFrom = null;
+
+        if (entries.Count == 0) {
+            return [];
+        }
+
+        var start = 0;
+
+        if (resumeFrom is { } cursor) {
+            for (var i = 0; i < entries.Count; i++) {
+                if (string.CompareOrdinal(entries[i].AddressOf().CanonicalPath, cursor) >= 0) {
+                    start = i;
+                    break;
+                }
+            }
+        }
+
+        var take = Math.Min(IExpirySweeperGrain.MaxPerSweep, entries.Count);
+        var batch = new List<ParkedResource>(take);
+
+        for (var i = 0; i < take; i++) {
+            batch.Add(entries[(start + i) % entries.Count]);
+        }
+
+        if (take < entries.Count) {
+            nextFrom = entries[(start + take) % entries.Count].AddressOf().CanonicalPath;
+        }
+
+        return batch;
     }
 
     /// <summary>One log line per pass, and only when the pass did something.</summary>

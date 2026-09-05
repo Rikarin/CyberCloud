@@ -1,6 +1,7 @@
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Core.Contracts;
 using CyberCloud.ResourceManager.Actions;
+using CyberCloud.ResourceManager.Expiry;
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -787,6 +788,15 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // A cap of two, so the interest limit is reachable in a test rather than after
                     // 200 subscribes. docs/plan/10 § Rate limiting.
                     services.AddSingleton(new ConnectionLimits { StreamsPerConnection = 2 });
+
+                    // ⚠ THE BACKFILL IS OFF AND EXPIRYSWEEPERTESTS DRIVES IT BY HAND, which is the
+                    // same knob and the same reason as TenancyRefreshOptions.RunBackgroundRefresh:
+                    // a suite that asserts which resource groups are armed cannot share a process
+                    // with a loop that is quietly arming them. ExpirySweeperTests constructs
+                    // ExpirySweeperBackfill against this cluster's client factory and calls
+                    // RunAsync, which is the same method AddCyberCloudResourceManager's hosted
+                    // service calls.
+                    services.Configure<ExpirySweeperBackfillOptions>(backfill => backfill.RunOnStart = false);
 
                     services.AddSingleton<ConformingReconciler>();
 

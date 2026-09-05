@@ -1,4 +1,8 @@
+using CyberCloud.ResourceManager.Expiry;
 using CyberCloud.ResourceManager.Tests.Infrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Orleans.Multitenant;
 
 namespace CyberCloud.ResourceManager.Tests;
 
@@ -436,7 +440,349 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
         swept.Disarmed.ShouldBeTrue();
     }
 
+    /// <summary>
+    ///     ⚠ <b>A second arm does not rewrite the reminder row, because rewriting it would push the
+    ///     next tick a whole <c>SweepPeriod</c> out.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         This is the #12 review's first finding as a test. Orleans'
+    ///         <c>RegisterOrUpdateReminder(name, dueTime, period)</c> is idempotent on the row's
+    ///         <i>identity</i> and not in its <i>effect</i>: it rewrites <c>StartAt</c> as
+    ///         <c>UtcNow + dueTime</c> and restarts the local timer. <c>ArmAsync</c> passed
+    ///         <c>SweepPeriod</c> as the due time and called it unconditionally, and every converged
+    ///         delete arms — so a resource group with a soft delete more often than hourly pushed its
+    ///         own sweep out for ever and never swept once.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What is asserted is the guard rather than the schedule, and that is the most a
+    ///         test out here can see.</b> A reminder's due time is not exposed to anything but the
+    ///         reminder service, so "the tick did not move" is not observable; "the row was not
+    ///         written again" is, now that <c>ArmAsync</c> answers whether it registered. Those are
+    ///         the same statement given the implementation, which registers only when
+    ///         <c>GetReminder</c> answers null, and the second half —
+    ///         <see cref="IExpirySweeperGrain.IsArmedAsync" /> still true afterwards — is what stops
+    ///         a "fix" that answered false by not arming at all.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task ASecondArmDoesNotRewriteTheRowThatIsAlreadyThere() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var address = VaultAddress("armed-once", "sweep-arming");
+        await CreateGroupAsync(address);
+
+        var sweeper = cluster.Sweeper(address);
+
+        (await sweeper.IsArmedAsync()).GetValueOrThrow()
+            .ShouldBeFalse("nothing is parked in this group and nothing has armed it");
+
+        (await sweeper.ArmAsync()).GetValueOrThrow()
+            .ShouldBeTrue("the first arm is what registers the row");
+
+        (await sweeper.IsArmedAsync()).GetValueOrThrow().ShouldBeTrue();
+
+        (await sweeper.ArmAsync()).GetValueOrThrow()
+            .ShouldBeFalse(
+                "a second arm must leave the existing row alone: RegisterOrUpdateReminder would "
+                + "rewrite StartAt as UtcNow + SweepPeriod, so a group deleting more often than "
+                + "hourly would never reach a tick — #12 review, the first finding"
+            );
+
+        (await sweeper.ArmAsync()).GetValueOrThrow().ShouldBeFalse();
+
+        (await sweeper.IsArmedAsync()).GetValueOrThrow()
+            .ShouldBeTrue("answering 'I did not register' must not mean 'and there is no row'");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A resource parked with nothing arming its group is picked up by the backfill, and by
+    ///     a hand sweep.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The #12 review's second finding. <c>ArmAsync</c>'s two callers both sit on a path that
+    ///         has just added a registry entry, so the sweeper covers the windows that open after it
+    ///         is deployed and no others: every resource already inside a window when this ships has
+    ///         nothing driving it, and a resource group whose last delete has already happened would
+    ///         never acquire a sweeper at all. The same shape covers the two losses <c>ArmAsync</c>
+    ///         tolerates by design — a park on a silo with no reminder service, and a reminder table
+    ///         restored from a backup.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The registry is written directly here, and that is the faithful reproduction
+    ///         rather than a shortcut.</b> "Parked before the sweeper existed" is exactly an entry
+    ///         written by a writer that did not arm, which is what every writer was two commits ago.
+    ///         Going through the delete path instead would arm on the way past and test nothing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The walk itself is driven, not just <c>ArmIfParkedAsync</c>.</b>
+    ///         <c>ExpirySweeperBackfill</c> reaches a group through three enumerations that have to
+    ///         line up — the tenant directory, the tenant's subscriptions and the subscription's
+    ///         resource groups — and a backfill that armed nothing because one of them was empty
+    ///         would look exactly like a backfill that found nothing to do. So the group is created
+    ///         <i>through its subscription</i>, which is what puts it in the third list.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task AGroupParkedWithNothingArmingItIsCoveredByTheBackfill() {
+        ResourceManagerCluster.ResetDoubles();
+
+        const string Group = "sweep-backfill";
+        var address = VaultAddress("never-armed", Group);
+        var tenant = cluster.For(ResourceManagerCluster.Tenant);
+
+        var made = await tenant
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(Subscription))
+            .CreateResourceGroupAsync(Group, "eu-west-1");
+
+        made.IsSuccess.ShouldBeTrue(made.Error?.Message);
+
+        // The entry a writer that did not arm would have left — which is every writer there was
+        // before this grain existed.
+        var parked = await cluster.Parked(address).ParkAsync(address.WithId(Guid.NewGuid()));
+        parked.IsSuccess.ShouldBeTrue(parked.Error?.Message);
+
+        var sweeper = cluster.Sweeper(address);
+        (await sweeper.IsArmedAsync()).GetValueOrThrow()
+            .ShouldBeFalse("this is the state the review found: an entry, and nothing driving it");
+
+        await RegisterInDirectoryAsync();
+
+        var covered = await Backfill().RunAsync(TestContext.Current.CancellationToken);
+
+        covered.Groups.ShouldBeGreaterThanOrEqualTo(1);
+        covered.Unreadable.ShouldBe(0);
+        covered.Armed.ShouldBeGreaterThanOrEqualTo(1);
+
+        (await sweeper.IsArmedAsync()).GetValueOrThrow()
+            .ShouldBeTrue("the backfill is what covers a window that opened before there was a clock");
+
+        // ── And a group with nothing parked is left alone, which is the condition's whole point ──
+        var empty = VaultAddress("nothing-here", "sweep-backfill-empty");
+
+        var second = await tenant
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(Subscription))
+            .CreateResourceGroupAsync("sweep-backfill-empty", "eu-west-1");
+
+        second.IsSuccess.ShouldBeTrue(second.Error?.Message);
+
+        (await cluster.Sweeper(empty).ArmIfParkedAsync()).GetValueOrThrow()
+            .ShouldBeFalse(
+                "arming unconditionally would put a reminder row behind every resource group that "
+                + "has ever existed, which is the standing cost the disarm exists to avoid"
+            );
+
+        (await cluster.Sweeper(empty).IsArmedAsync()).GetValueOrThrow().ShouldBeFalse();
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A hand sweep of a group that still has something parked leaves it armed.</b>
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The other half of the arm-or-disarm decision, and the reason
+    ///     <c>IExpirySweeperGrain.SweepAsync</c> is worth offering an operator at all: a sweep that
+    ///     only ever <i>disarmed</i> would run one pass over a group whose reminder was never
+    ///     registered and leave it exactly as silent afterwards. <c>ResourceGroupGrain</c>'s reaper
+    ///     has taken this shape since it was written.
+    /// </remarks>
+    [Fact]
+    public async Task ASweepThatFindsSomethingLeavesTheGroupArmed() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var address = VaultAddress("still-running", "sweep-rearms");
+        await CreateGroupAsync(address);
+
+        // ⚠ An entry the pass KEEPS, and parked by a writer that did not arm — the index says
+        // soft-deleted so the reconcile leaves it alone, and the window is longer than this suite
+        // can advance so the purge refuses it. Written directly for the reason
+        // AGroupOverThePerPassCapReachesTheEntriesPastIt gives: going through the delete path would
+        // arm on the way past and there would be nothing left to observe.
+        await ParkWithoutArmingAsync(address);
+
+        var sweeper = cluster.Sweeper(address);
+        (await sweeper.IsArmedAsync()).GetValueOrThrow()
+            .ShouldBeFalse("nothing has armed this group, which is the state the backfill exists for");
+
+        var swept = await Sweep(address);
+
+        swept.Kept.ShouldBe(1);
+        swept.Purged.ShouldBeEmpty();
+        swept.Forgotten.ShouldBeEmpty();
+        swept.Disarmed.ShouldBeFalse();
+
+        (await sweeper.IsArmedAsync()).GetValueOrThrow()
+            .ShouldBeTrue("a pass that found something arms rather than merely not disarming");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A group with more entries than one pass can take does not starve the ones past the
+    ///     cap, even when everything before them is refused on every tick.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The #12 review's fourth finding. The cap used to take a fixed prefix of the registry's
+    ///         ordering, justified by "a resource near the end of the ordering is reached once the
+    ///         ones before it have been purged, which they will be, because a purge removes its
+    ///         entry". Two refusals the grain documents as <i>persistent</i> falsify that — a
+    ///         <c>CanNotDelete</c> lock and a type this host no longer serves — so a first window
+    ///         full of them meant entries past it were never examined at all.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The refusal reproduced here is the ordinary one, and it is enough.</b> Every
+    ///         entry inside the cap is a window that has not ended, which <c>PurgeExpiredAsync</c>
+    ///         refuses on every tick — the same shape as the lock's refusal, and the one the grain
+    ///         says is "the overwhelmingly common case". What matters is that they are kept rather
+    ///         than removed, because a removal is what the old comment assumed and what does not
+    ///         happen.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The index is written directly rather than through a hundred creates and deletes,
+    ///         which is the difference between a test and a minute of cluster time.</b> What the
+    ///         sweep asks of each entry is <c>ResolveSoftDeletedAsync</c> and then
+    ///         <c>PurgeExpiredAsync</c>, and both are answered by the path index — so a claimed,
+    ///         confirmed and soft-deleted binding is the whole of what an entry needs to be true and
+    ///         unexpired. The one entry left <i>without</i> an index is the tell: it is past the cap,
+    ///         it is the only one a pass can act on, and it is acted on by the second pass.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task AGroupOverThePerPassCapReachesTheEntriesPastIt() {
+        ResourceManagerCluster.ResetDoubles();
+
+        const string Group = "sweep-cap";
+        var cap = IExpirySweeperGrain.MaxPerSweep;
+
+        // ⚠ Zero-padded so the ordinal ordering of the canonical paths is the numeric one, and one
+        // wider than the cap so that exactly one entry falls past the first window.
+        var starved = VaultAddress($"cap-{cap:D4}", Group);
+
+        await CreateGroupAsync(starved);
+
+        for (var i = 0; i < cap; i++) {
+            await ParkWithoutArmingAsync(VaultAddress($"cap-{i:D4}", Group));
+        }
+
+        // ⚠ The one past the cap, and it has NO index entry — so it is the only entry in the group a
+        // pass can do anything with, which is what makes "was it examined" observable at all.
+        (await cluster.Parked(starved).ParkAsync(starved.WithId(Guid.NewGuid()))).IsSuccess.ShouldBeTrue();
+
+        var first = await Sweep(starved);
+
+        first.Examined.ShouldBe(cap);
+        first.Deferred.ShouldBe(1);
+        first.Kept.ShouldBe(cap, "every entry in the first window is a window that has not ended");
+        first.Forgotten.ShouldBeEmpty();
+        first.Purged.ShouldBeEmpty();
+        first.ResumeFrom.ShouldBe(starved.CanonicalPath);
+
+        var second = await Sweep(starved);
+
+        second.Examined.ShouldBe(cap);
+        second.Forgotten.ShouldBe(
+            [starved.CanonicalPath],
+            "the second pass resumes where the first stopped: with a fixed prefix this entry's "
+            + "window would end with nothing ever looking at it — #12 review, the fourth finding"
+        );
+
+        second.ResumeFrom.ShouldNotBe(
+            starved.CanonicalPath,
+            "the window moved on rather than parking itself on the one entry that changed"
+        );
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Puts one true, unexpired registry entry in a group without anything arming its sweeper.
+    /// </summary>
+    /// <param name="address">The address, whose GUID is minted here.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE STATE THE #12 REVIEW IS ABOUT, AND IT IS REACHED BY WRITING THE TWO GRAINS A
+    ///         SOFT DELETE WRITES RATHER THAN BY RUNNING ONE.</b> A sweep asks each entry exactly two
+    ///         questions and the path index answers both — <c>ResolveSoftDeletedAsync</c>, for
+    ///         whether the entry is still true, and (through <c>PurgeExpiredAsync</c>)
+    ///         <c>ResolveExpiredAsync</c>, for whether the window has ended. A claimed, confirmed and
+    ///         soft-deleted binding plus a registry entry is therefore the whole of what the sweeper
+    ///         can see, and it is what a resource parked before this grain existed looks like.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Going through <c>ParkedVaultAsync</c> instead would arm the sweeper on the way
+    ///         past</b> — <c>OperationGrain.ParkAsync</c> is one of the two writers that arms — so
+    ///         every "was it armed" assertion would be vacuous, and a hundred of them would cost a
+    ///         minute of cluster time each.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Ten years of window, so the entry is refused on every pass rather than purged on
+    ///         one.</b> This suite advances the shared <c>TestClock</c> by days, and a window it
+    ///         could cross would turn a "kept" assertion into a race with whichever case ran first.
+    ///     </para>
+    /// </remarks>
+    async Task ParkWithoutArmingAsync(ResourceId address) {
+        var id = Guid.NewGuid();
+        var index = cluster.Index(address);
+
+        (await index.TryClaimAsync(address.WithId(id), id)).IsSuccess.ShouldBeTrue();
+        (await index.ConfirmAsync(id)).IsSuccess.ShouldBeTrue();
+        (await index.SoftDeleteAsync(id, TimeSpan.FromDays(3650))).IsSuccess.ShouldBeTrue();
+
+        (await cluster.Parked(address).ParkAsync(address.WithId(id))).IsSuccess.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     The backfill, built against the <b>client</b>'s grain factory.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Built here rather than resolved, for <c>ResourceManagerCluster.Manager</c>'s reason: the
+    ///     silo's hosted-service registration is turned off in this harness (see the cluster), and
+    ///     what is under test is <c>RunAsync</c> — the same method the hosted service calls.
+    /// </remarks>
+    ExpirySweeperBackfill Backfill() =>
+        new(
+            cluster.Grains,
+            Options.Create(new ExpirySweeperBackfillOptions()),
+            NullLogger<ExpirySweeperBackfill>.Instance
+        );
+
+    /// <summary>
+    ///     Puts this suite's tenant and subscription where the backfill's walk can find them.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The harness creates its subscription and its groups directly, which is enough for every
+    ///     other class here — the write path addresses a group by key and never enumerates. The
+    ///     backfill does enumerate, so it needs the two links nothing else in this harness writes:
+    ///     the tenant's directory entry and the tenant's list of subscriptions. Both are idempotent,
+    ///     so a re-run of this class is a no-op.
+    /// </remarks>
+    async Task RegisterInDirectoryAsync() {
+        var tenant = cluster.For(ResourceManagerCluster.Tenant);
+
+        var created = await tenant
+            .GetGrain<ITenantGrain>(GrainKeys.Tenant(ResourceManagerCluster.Tenant))
+            .CreateAsync("resource-manager-tests", "Resource manager tests", "eu-west-1");
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        var added = await tenant
+            .GetGrain<ITenantGrain>(GrainKeys.Tenant(ResourceManagerCluster.Tenant))
+            .AddSubscriptionAsync(Subscription);
+
+        added.IsSuccess.ShouldBeTrue(added.Error?.Message);
+
+        var registered = await cluster.Grains
+            .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
+            .RegisterAsync(
+                new() {
+                    TenantId = ResourceManagerCluster.Tenant,
+                    Slug = "resource-manager-tests",
+                    HomeRegion = "eu-west-1",
+                    Status = TenantStatus.Active
+                }
+            );
+
+        registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
+    }
 
     /// <summary>A vault's address in this suite's own subscription and its own resource group.</summary>
     /// <remarks>

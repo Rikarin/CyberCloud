@@ -193,6 +193,16 @@ reasons beyond the premise, in the order they mattered:
   service at the moment of the park, a crash between two writes, a reminder table restored from a
   backup — and nothing anywhere records that a window needs driving. A scan re-derives its candidates
   from a registry that has a stated invariant and a repair.
+  ⚠ **This reason was stated too widely and the narrowing is owed to it (2026-09-05, #12 review).**
+  A lost *group-level* row is not repaired by re-deriving the candidate set, because the re-derivation
+  only happens on the tick that the lost row would have produced — and the asymmetry runs the wrong
+  way for this design, since a group-level row costs a whole resource group's windows rather than one
+  resource's. What makes the reason hold as narrowed is that the row is re-derivable from a durable
+  record this design has and the recorded one did not: the registry says which groups have something
+  parked, so the next park in the group, a hand `SweepAsync` (which arms as well as sweeps) and
+  `ExpirySweeperBackfill` — a walk of every resource group at silo start — each put it back. A
+  per-resource reminder has no equivalent, because nothing durable anywhere records *which deadline*
+  was lost.
 - **The scan reconciles what a reminder could not.** Asking the index per entry is what lets a sweep
   *remove* an entry the index no longer agrees with, which is the first thing in the tree that can
   correct a parked-resource registry that has gone long. `RepairParkedRegistryAsync`'s known race

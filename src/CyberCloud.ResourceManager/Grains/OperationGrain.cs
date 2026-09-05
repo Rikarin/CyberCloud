@@ -1,5 +1,6 @@
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Reconcile;
+using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
 using System.Globalization;
 
@@ -28,7 +29,8 @@ public sealed class OperationGrain(
     ReconcileDriver driver,
     IResourceRelationWriter relations,
     IGrainFactory grains,
-    IClock clock
+    IClock clock,
+    ILogger<OperationGrain> logger
 )
     : Grain, IOperationGrain, IRemindable {
     /// <summary>
@@ -634,13 +636,38 @@ public sealed class OperationGrain(
         // entry had not been written yet, cancel the reminder it had just been given, and leave the
         // resource with nothing driving it.
         //
-        // ⚠ RETRIED LIKE ITS NEIGHBOURS, and the reason it can afford to be is that ArmAsync answers
-        // Success when the silo simply has no reminder service — the one failure a soft delete must
-        // not be blocked by. What is left to fail here is our own code, which is what a retry is for.
-        var armed = await Sweeper(spec).ArmAsync();
-        if (armed.TryGetError(out var armError)) {
-            await ScheduleAsync(ReconcileOutcome.Failed(armError, true));
-            return;
+        // ⚠ NOT RETRIED, AND NOT GUARDED ON A RESULT, WHICH IS THE OPPOSITE OF WHAT THIS SAID
+        // (2026-09-05, #12 review). It read "RETRIED LIKE ITS NEIGHBOURS" and guarded on
+        // `armed.TryGetError`, and that guard was DEAD CODE: IExpirySweeperGrain.ArmAsync returns
+        // success on both of its paths — the register and the caught "this silo has no reminder
+        // service" — so the branch could never be taken and the retry it described could never
+        // happen. What could happen was the thing neither the guard nor the comment covered: a
+        // THROWN call. The callee is a non-reentrant activation this design deliberately makes
+        // long-running (MaxPerSweep purge choreographies in one turn) and the tree configures no
+        // ResponseTimeout, so Orleans' 30-second default applies; a timeout has no Result to
+        // inspect and OperationGrain has no try/catch, so it escaped the pass. ArmAsync is now
+        // [AlwaysInterleave], which is what actually removes the queueing, and this catch is the
+        // belt: a park is finished work and an arm is a schedule, so the delete converges either
+        // way.
+        //
+        // ⚠ AND SWALLOWING IT IS THE SAME DECISION ArmAsync ITSELF TAKES ONE LEVEL DOWN, for the
+        // reason its remarks give: failing the delete because the platform could not arrange to
+        // purge the resource in seven days' time turns an absent sweeper into an absent platform.
+        // What is lost is exactly what master loses today — nothing ends this group's windows on
+        // the clock's account — and three things put it back: the group's next park, a hand
+        // SweepAsync, and ExpirySweeperBackfill at the next silo start.
+        try {
+            _ = await Sweeper(spec).ArmAsync();
+        }
+        catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(
+                error,
+                "'{Path}' is parked but its resource group's expiry sweeper could not be armed, so "
+                + "nothing in this group is ending recovery windows on a clock until its next park, "
+                + "a hand IExpirySweeperGrain.SweepAsync, or the next silo start's backfill. The "
+                + "soft delete itself is complete — issue #12.",
+                spec.ResourcePath
+            );
         }
 
         // ── AND IT LEAVES THE GROUP'S MEMBERSHIP, WHICH IS NOT THE DELETE THIS PATH REFUSED TO DO ─

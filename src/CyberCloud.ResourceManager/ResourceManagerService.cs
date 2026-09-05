@@ -1423,7 +1423,31 @@ public sealed class ResourceManagerService(
         // failed leaves the state the defect left rather than a worse one. ArmAsync answers Success
         // on a silo with no reminder service, so the only thing this can report is our own failure,
         // and a retried restore reaches this line again.
-        _ = await Sweeper(addressed).ArmAsync();
+        //
+        // ⚠ AND `_ =` DISCARDS A RESULT BUT NOT AN EXCEPTION, WHICH IS WHY THE try IS HERE
+        // (2026-09-05, #12 review). This method is on the RESTORE's request path — reached from the
+        // expired screen, which then returns a clean NotFound — and the interleaving this change
+        // itself calls "the likeliest pair in the tree" is precisely a sweep in progress at the
+        // moment a window closes. A sweep is a long turn by design (MaxPerSweep purge
+        // choreographies) and the tree configures no ResponseTimeout, so before ArmAsync was
+        // [AlwaysInterleave] a call landing on a busy activation could exceed Orleans' 30-second
+        // default and THROW — turning the tenant's intended 404 into a 500 over a schedule the
+        // tenant never asked about. The attribute is the fix; this catch is what makes the sentence
+        // above ("the caller's answer belongs to the refusal that brought us here") true for every
+        // failure rather than only for the ones shaped like a Result.
+        try {
+            _ = await Sweeper(addressed).ArmAsync();
+        }
+        catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(
+                error,
+                "'{Path}' was put back into its resource group's parked registry but the group's "
+                + "expiry sweeper could not be armed. The caller's own answer is unaffected; the "
+                + "group's windows are ended by its next park, a hand IExpirySweeperGrain."
+                + "SweepAsync, or the next silo start's backfill — issue #12.",
+                addressed.Id.CanonicalPath
+            );
+        }
     }
 
     /// <summary>

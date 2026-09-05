@@ -1,3 +1,4 @@
+using Orleans.Concurrency;
 using System.Collections.Immutable;
 
 namespace CyberCloud.ResourceManager.Contracts;
@@ -66,16 +67,44 @@ public sealed record ExpirySweep {
     ///     Whether this pass found nothing left parked and cancelled its own reminder.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Reported because a reminder is otherwise unobservable from outside the grain, and
-    ///     "armed exactly while there is something to sweep" is a claim rather than a comment only if
-    ///     something can read it.</b> Orleans exposes <c>GetReminder</c> to the grain and to nobody
-    ///     else, so a test — or an operator looking at a log line — has no other way to tell a
-    ///     sweeper that stood down from one that is still ticking over an empty registry every hour
-    ///     for ever. It is the decision and not the outcome: on a silo with no reminder service there
-    ///     was never a row to cancel, and this still says the pass found nothing.
+    ///     <para>
+    ///         ⚠ <b>Reported because a reminder is otherwise unobservable from outside the grain, and
+    ///         "armed exactly while there is something to sweep" is a claim rather than a comment
+    ///         only if something can read it.</b> Orleans exposes <c>GetReminder</c> to the grain and
+    ///         to nobody else, so a test — or an operator looking at a log line — has no other way to
+    ///         tell a sweeper that stood down from one that is still ticking over an empty registry
+    ///         every hour for ever. It is the decision and not the outcome: on a silo with no
+    ///         reminder service there was never a row to cancel, and this still says the pass found
+    ///         nothing. <c>IExpirySweeperGrain.IsArmedAsync</c> answers the other half — what the row
+    ///         actually is — and was added because this field alone could not.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is one half of a decision that goes both ways.</b> A pass that ends with the
+    ///         registry <i>not</i> empty arms rather than merely refraining from disarming, which is
+    ///         <c>ResourceGroupGrain.ArmOrDisarmAsync</c>'s shape and is what makes a hand-driven
+    ///         <c>SweepAsync</c> — the remedy this interface offers an operator whose group was
+    ///         parked on a silo with no reminder service — leave the group ticking afterwards
+    ///         instead of swept once and abandoned.
+    ///     </para>
     /// </remarks>
     [Id(4)]
     public bool Disarmed { get; init; }
+
+    /// <summary>
+    ///     The canonical path the next pass starts at, or <see langword="null" /> when the next pass
+    ///     starts at the beginning of the registry's ordering.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The rotating cursor <see cref="IExpirySweeperGrain.MaxPerSweep" /> describes, and it
+    ///     is reported for the reason <see cref="Disarmed" /> is: it is a decision taken inside the
+    ///     grain that changes what the <i>next</i> call will do, so an operator staring at a group
+    ///     that is over the cap can see the window moving rather than infer it.</b> It is the first
+    ///     entry <b>after</b> the last one this pass examined, so it is <see langword="null" />
+    ///     exactly when the pass got all the way round — and a group under the cap therefore always
+    ///     reports <see langword="null" />.
+    /// </remarks>
+    [Id(5)]
+    public string? ResumeFrom { get; init; }
 
     /// <summary>
     ///     The entries this pass left exactly as it found them — the ordinary answer for a window
@@ -143,6 +172,22 @@ public sealed record ExpirySweep {
 ///             committed quota forever. The candidate set here is re-derived from the registry on
 ///             every tick, and the registry has a stated invariant and a repair
 ///             (<c>ResourceManagerService.RepairParkedRegistryAsync</c>).
+///             <para>
+///                 ⚠ <b>THIS REASON WAS STATED TOO WIDELY AND THE NARROWING IS OWED TO IT
+///                 (2026-09-05, #12 review).</b> A lost <i>group-level</i> row is not repaired by
+///                 re-deriving the candidate set, because the re-derivation only happens on a tick
+///                 that the lost row is what would have produced. The asymmetry is real and it runs
+///                 the wrong way for this design: a per-resource reminder that is lost costs one
+///                 resource's window, and a group-level row that is lost costs <i>every</i> window in
+///                 that resource group. What makes the reason hold as narrowed is that the row is
+///                 re-derivable from a durable record that this design has and the recorded one did
+///                 not — <see cref="IParkedResourceRegistryGrain" /> — so three things put it back:
+///                 the next <see cref="ArmAsync" /> in the group, a hand
+///                 <see cref="SweepAsync" /> (which arms as well as sweeps), and
+///                 <see cref="ArmIfParkedAsync" />, which <c>ExpirySweeperBackfill</c> drives over
+///                 every resource group at silo start. A per-resource reminder has no equivalent,
+///                 because there is no durable record anywhere of <i>which deadline</i> was lost.
+///             </para>
 ///         </item>
 ///         <item>
 ///             ⚠ <b>The scan reconciles what the reminder could not.</b> Asking the index per entry
@@ -230,6 +275,18 @@ public interface IExpirySweeperGrain : IGrainWithStringKey {
     ///         stamped the window. That asymmetry is why an hour is affordable and a minute would buy
     ///         nothing worth its ticks. Orleans' reminder floor is one minute either way.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE SENTENCE ABOVE IS ONLY TRUE BECAUSE <see cref="ArmAsync" /> REGISTERS AT MOST
+    ///         ONCE, AND IT WAS FALSE WHEN THIS FILE FIRST SHIPPED (fixed 2026-09-05, #12 review).</b>
+    ///         Orleans' <c>RegisterOrUpdateReminder(name, dueTime, period)</c> does not leave an
+    ///         existing row alone: it rewrites it with <c>StartAt = UtcNow + dueTime</c> and restarts
+    ///         the local timer. This grain passes <see cref="SweepPeriod" /> as the due time, so an
+    ///         arm on every converged delete pushed the next tick a whole hour out — and a resource
+    ///         group with a soft delete more often than hourly never swept at all, which is the exact
+    ///         state #12 exists to close. The arm is now guarded on <c>GetReminder(…) is null</c>, the
+    ///         idiom this file's own disarm already used, so the row's <c>StartAt</c> is written once
+    ///         and the period below is what separates two ticks.
+    ///     </para>
     /// </remarks>
     static TimeSpan SweepPeriod { get; } = TimeSpan.FromHours(1);
 
@@ -238,15 +295,32 @@ public interface IExpirySweeperGrain : IGrainWithStringKey {
     ///     <see cref="ExpirySweep.Deferred" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A cap because a pass holds this activation, and <c>ListRequest.MaxPageSize</c>
-    ///     because the platform has already argued that number.</b> One entry costs an index read
-    ///     plus a whole purge choreography, and a group whose registry holds hundreds would keep this
-    ///     activation — and therefore the <see cref="ArmAsync" /> a concurrent delete is waiting on —
-    ///     busy for as long as that takes. <c>ListRequest.MaxPageSize</c> is the tree's existing
-    ///     answer to "how much work is one pass worth", chosen for a listing rather than for this,
-    ///     and reusing it beats inventing a second number that would drift away from it. Nothing is
-    ///     lost by capping: the entries beyond it are still in the registry and the next tick starts
-    ///     from the same ordering.
+    ///     <para>
+    ///         ⚠ <b>A cap because a pass holds this activation, and <c>ListRequest.MaxPageSize</c>
+    ///         because the platform has already argued that number.</b> One entry costs an index read
+    ///         plus a whole purge choreography, and a group whose registry holds hundreds would keep
+    ///         this activation busy for as long as that takes. <c>ListRequest.MaxPageSize</c> is the
+    ///         tree's existing answer to "how much work is one pass worth", chosen for a listing
+    ///         rather than for this, and reusing it beats inventing a second number that would drift
+    ///         away from it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE CAP TAKES A ROTATING WINDOW AND NOT A FIXED PREFIX, WHICH IS A CORRECTNESS
+    ///         FIX RATHER THAN A REFINEMENT (2026-09-05, #12 review).</b> This remark used to say the
+    ///         entries beyond the cap were reached "once the ones before them have been purged, which
+    ///         they will be, because a purge removes its entry". That premise is contradicted by two
+    ///         refusals this very interface documents as <i>persistent</i>: a <c>CanNotDelete</c> or
+    ///         <c>ReadOnly</c> lock, which "stays parked and this grain will retry it, refused, on
+    ///         every tick until the lock is lifted", and a type this host no longer serves, whose
+    ///         entry "stays" by design. With more than <see cref="MaxPerSweep" /> entries in one
+    ///         group, enough permanently-refused ones inside the first window meant entries beyond it
+    ///         were <b>never examined</b> — their windows ended and nothing swept them, for ever. So
+    ///         a pass now resumes after the last entry the previous pass looked at and wraps around
+    ///         the registry's ordering, which bounds the wait for any entry at
+    ///         ⌈registry ÷ <see cref="MaxPerSweep" />⌉ passes no matter what the others answer. The
+    ///         cursor is <see cref="ExpirySweep.ResumeFrom" />; it is in memory rather than durable,
+    ///         which <c>ExpirySweeperGrain</c>'s own remarks account for.
+    ///     </para>
     /// </remarks>
     static int MaxPerSweep => ListRequest.MaxPageSize;
 
@@ -254,7 +328,9 @@ public interface IExpirySweeperGrain : IGrainWithStringKey {
     ///     Registers this group's sweep reminder, if it is not already registered.
     /// </summary>
     /// <returns>
-    ///     Success, including when this silo has no reminder service at all — see the remarks.
+    ///     Whether this call created the row — <see langword="false" /> when the group was already
+    ///     armed <i>and</i> when this silo has no reminder service at all. Never a failure; see the
+    ///     remarks.
     /// </returns>
     /// <remarks>
     ///     <para>
@@ -267,9 +343,30 @@ public interface IExpirySweeperGrain : IGrainWithStringKey {
     ///         an entry that appeared without arming would sit unswept until the group's next park.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Idempotent, because both callers are retried.</b> Orleans'
-    ///         <c>RegisterOrUpdateReminder</c> is itself idempotent on (grain, name), so a second
-    ///         call re-registers the same row rather than adding one.
+    ///         ⚠ <b>REGISTERED AT MOST ONCE, AND THIS PARAGRAPH USED TO SAY THE OPPOSITE WAS
+    ///         HARMLESS (2026-09-05, #12 review).</b> It read <i>"Orleans'
+    ///         <c>RegisterOrUpdateReminder</c> is itself idempotent on (grain, name), so a second call
+    ///         re-registers the same row rather than adding one"</i>. Idempotent on the row's
+    ///         <i>identity</i> it is; idempotent in effect it is not. The call rewrites the row with
+    ///         <c>StartAt = UtcNow + dueTime</c> and restarts the local timer, and this grain's due
+    ///         time is <see cref="SweepPeriod" /> — so every arm pushed the next tick a full hour
+    ///         out, and a resource group whose deletes arrive more often than hourly <b>never swept
+    ///         at all</b>. The implementation now registers only when
+    ///         <c>GetReminder(ReminderName)</c> answers <see langword="null" />, which is the idiom
+    ///         the disarm in the same grain was already using. The <see cref="bool" /> this returns
+    ///         is what makes "at most once" assertable from outside a grain, since a reminder row is
+    ///         not otherwise observable — see <see cref="IsArmedAsync" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see cref="AlwaysInterleaveAttribute" />, because both callers are on a request
+    ///         path and a sweep is deliberately long.</b> <see cref="MaxPerSweep" /> purge
+    ///         choreographies run in one turn of a non-reentrant activation, and the tree configures
+    ///         no <c>ResponseTimeout</c>, so Orleans' 30-second default applies: an arm that queued
+    ///         behind a sweep in progress could time out and <i>throw</i> into
+    ///         <c>OperationGrain.ParkAsync</c> or into a tenant's restore. Interleaving is safe here
+    ///         in a way <c>[Reentrant]</c> on the whole grain would not be — this method touches no
+    ///         state a sweep touches; the reminder row is Orleans' and the three key fields are
+    ///         written once at activation and never again.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>A silo with no reminder service succeeds anyway, and that is the same decision
@@ -278,10 +375,75 @@ public interface IExpirySweeperGrain : IGrainWithStringKey {
     ///         <i>delete</i> that was parking the resource — turning an absent sweeper into an absent
     ///         platform. What is lost instead is only what master already loses: nothing ends that
     ///         window on the clock's account. <see cref="SweepAsync" /> is still callable by hand,
-    ///         and an ordinary <c>POST …/purge</c> still works.
+    ///         and an ordinary <c>POST …/purge</c> still works. That is also why this returns no
+    ///         failure at all: a caller that cannot act on the answer should not be handed a refusal
+    ///         to mis-handle — <c>OperationGrain</c> carried a guard on one for a while and it was
+    ///         dead code.
     ///     </para>
     /// </remarks>
-    Task<Result> ArmAsync();
+    [AlwaysInterleave]
+    Task<Result<bool>> ArmAsync();
+
+    /// <summary>
+    ///     Whether this group's sweep reminder is registered right now.
+    /// </summary>
+    /// <returns>
+    ///     Whether a row exists. <see langword="false" /> on a silo with no reminder service, which
+    ///     is the truth from that silo's point of view: nothing is going to tick here.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>This exists because <see cref="ExpirySweep.Disarmed" />'s remarks complain that it
+    ///     should.</b> They say a reminder "is otherwise unobservable from outside the grain", and
+    ///     that "a test — or an operator looking at a log line — has no other way to tell a sweeper
+    ///     that stood down from one that is still ticking over an empty registry every hour for
+    ///     ever". <c>GetReminder</c> is available to the grain, so the grain can answer it; the only
+    ///     reason it did not was that nothing asked. It answers the operator's question — <i>is
+    ///     anything actually going to end this group's windows?</i> — and it is what lets
+    ///     <see cref="ArmAsync" />'s at-most-once rule and <see cref="ArmIfParkedAsync" />'s backfill
+    ///     be asserted rather than described.
+    /// </remarks>
+    [AlwaysInterleave]
+    Task<Result<bool>> IsArmedAsync();
+
+    /// <summary>
+    ///     Arms this group's sweeper if — and only if — the group has something parked.
+    /// </summary>
+    /// <returns>Whether this call armed it, or the registry's failure if it could not be read.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE BACKFILL, AND IT EXISTS BECAUSE ARMING FROM THE WRITE PATH ALONE COVERS ONLY
+    ///         THE WINDOWS THAT OPEN AFTER IT IS DEPLOYED (2026-09-05, #12 review).</b>
+    ///         <see cref="ArmAsync" />'s two callers both sit on a path that has just <i>added</i> a
+    ///         registry entry, so on the deploy that first ships this grain every resource already
+    ///         inside a window has no sweeper — and a group whose last delete has already happened
+    ///         never gets one, because nothing in the tree would ever call. That is the objection the
+    ///         design argument on this interface makes to a per-resource reminder — <i>"if the
+    ///         registration is lost … the resource is left exactly where master leaves it today"</i> —
+    ///         read at group granularity, where it is worse rather than better: a lost row costs a
+    ///         whole resource group's windows rather than one resource's.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is what <c>ExpirySweeperBackfill</c> calls, once per resource group, and
+    ///         nothing else may.</b> The condition is the whole point: arming unconditionally would
+    ///         put a reminder row behind every resource group that has ever existed, which is exactly
+    ///         the standing cost <see cref="ExpirySweep.Disarmed" /> exists to avoid. So the answer
+    ///         comes from the registry — one read, no purge, no index call — and a group with nothing
+    ///         parked ends the call having written nothing anywhere.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The registry's failure is propagated here and not swallowed, unlike
+    ///         <see cref="ArmAsync" />'s.</b> "Could not read the registry" is not "the group has
+    ///         nothing parked", and the caller is a backfill that reports how many groups it covered:
+    ///         a shard that was unreachable must not be counted as a group that needed no sweeper.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <see cref="AlwaysInterleaveAttribute" /> for <see cref="ArmAsync" />'s reason and one
+    ///         more: the backfill walks the platform at start-up, and a walk that blocked behind a
+    ///         sweep in progress would take a response timeout per busy group.
+    ///     </para>
+    /// </remarks>
+    [AlwaysInterleave]
+    Task<Result<bool>> ArmIfParkedAsync();
 
     /// <summary>
     ///     One pass: reconcile this group's parked-resource registry against the index, and hand
@@ -302,6 +464,15 @@ public interface IExpirySweeperGrain : IGrainWithStringKey {
     ///         age is the thing it is judging. This one judges nothing: the deadline belongs to
     ///         <c>IResourceIndexGrain</c> and is read by the front this drives. A parameter here
     ///         would be a knob that could make a purge early.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It leaves the group armed if it found anything, and stands down only if it did
+    ///         not.</b> That is the same arm-or-disarm decision
+    ///         <c>ResourceGroupGrain.ArmOrDisarmAsync</c> takes, and it is what makes the hand call
+    ///         above worth offering: an operator who sweeps a group whose reminder was never
+    ///         registered — the silo with no reminder service, a reminder table restored from a
+    ///         backup — gets the row put back by the same call, rather than one pass and the same
+    ///         silence afterwards.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Safe to run twice and safe to interleave with an ordinary purge or restore.</b>

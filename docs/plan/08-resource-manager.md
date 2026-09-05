@@ -677,6 +677,18 @@ would carry `RecoverableUntil` into the reminder table as its due time — a sec
 deadline this document keeps in one grain on purpose — and would have nothing to reconcile against
 when its registration was lost.
 
+⚠ **"Armed while that group has anything parked" is a claim about writers, and writers only cover the
+windows that open after the sweeper ships (2026-09-05, #12 review).** The two arming call sites are
+both on a path that has just *added* a registry entry, so a resource already inside a window when this
+lands has nothing driving it, and a resource group whose last delete has already happened would never
+acquire a sweeper at all — the exact state issue #12 exists to end, reached by deploying the thing
+that ends it. No event-driven arm can close that, because the uncovered case is defined by nothing
+happening in the group; only an enumeration can. `ExpirySweeperBackfill` is that enumeration: a
+silo-start walk of the tenant directory, each tenant's subscriptions and each subscription's resource
+groups, arming the sweeper of every group whose registry is not empty and leaving every other group
+without a row. It costs one grain call per group per silo start and it is what would have to change
+first — a resumable cursor, or one silo holding it — if the platform outgrew a walk that shape.
+
 ⚠ **The two facts about a parked resource that made the search impossible are unchanged and still
 true.** The index is one grain per path and one-way; and a parked resource **has left its resource
 group's membership**, because `OperationGrain.ParkAsync` calls the *group's* `CompleteDeleteAsync`
