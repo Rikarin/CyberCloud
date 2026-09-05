@@ -796,10 +796,15 @@ public static class ChartAnnotationEmitter {
     ///     <para>
     ///         ⚠ <b>And the doors were enumerated rather than guessed at, because a per-site fix that
     ///         leaves the next one open is the defect class this tree keeps finding.</b> Counted
-    ///         2026-09-05 with <c>grep -rn "ValueProblems(" --include=*.cs .</c> from the repository
-    ///         root — the trailing parenthesis keeps prose like this paragraph out of the count — which
-    ///         reports seven occurrences and exactly THREE real callers:
-    ///         <c>SchemaProperty.CheckLiteral</c> (reached from
+    ///         2026-09-05 with <c>grep -rn "ValueProblems(" --include=*.cs . | grep -v "///"</c> from
+    ///         the repository root — the trailing parenthesis drops the places that name the method in
+    ///         prose without calling it, and the <c>grep -v "///"</c> drops THIS paragraph and its twin
+    ///         on <c>ResourceSchema.PatternProblem</c>, which quote the command in order to pin it and
+    ///         so contain the literal <c>ValueProblems(</c> and match themselves (#78 shipped the
+    ///         command without that second filter, so it pinned a seven that its own unfiltered form
+    ///         no longer returned; its review caught it, and the long version of the argument is on
+    ///         <c>PatternProblem</c>) — which reports seven occurrences, all code, and exactly THREE
+    ///         real callers: <c>SchemaProperty.CheckLiteral</c> (reached from
     ///         <see cref="SchemaProperty.Incoherences" />, guarded there since #76's review),
     ///         <c>ResourceSchema.Validate</c>, and <see cref="CheckAgainstOwnConstraints" /> below.
     ///         <c>Validate</c> is the request path and is deliberately unguarded: by the time a body

@@ -1220,17 +1220,37 @@ public sealed record ResourceSchema {
     ///     <para>
     ///         ⚠ <b>So the doors are enumerated rather than assumed, because a per-site fix that leaves
     ///         the next one open is how this hole was reopened once already.</b> Counted 2026-09-05
-    ///         with <c>grep -rn "ValueProblems(" --include=*.cs .</c> from the repository root — the
-    ///         trailing parenthesis is what keeps prose like this paragraph out of the count — which
-    ///         reports SEVEN occurrences: two declarations (this method and the private forwarder on
+    ///         with <c>grep -rn "ValueProblems(" --include=*.cs . | grep -v "///"</c> from the
+    ///         repository root, which reports SEVEN occurrences and all seven are code: two
+    ///         declarations (this method and the private forwarder on
     ///         <see cref="SchemaProperty" />), the forwarder's own body, this method's array recursion,
     ///         and THREE real callers. Those three are <c>SchemaProperty.CheckLiteral</c> (reached from
     ///         <see cref="SchemaProperty.Incoherences" />, guarded there), <see cref="Validate" />
     ///         (the request path, deliberately unguarded for the reason the paragraph above gives), and
-    ///         <c>ChartAnnotationEmitter.CheckAgainstOwnConstraints</c> (guarded as of #78). ⚠ <b>What
-    ///         would make this stale:</b> a fourth caller. If it judges a provider-declared literal
-    ///         before <see cref="Of" /> has run, it owes the same probe-and-clear; if it is a request
-    ///         path, it owes nothing and the throw is the point.
+    ///         <c>ChartAnnotationEmitter.CheckAgainstOwnConstraints</c> (guarded as of #78).
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The <c>| grep -v "///"</c> is load-bearing, and #78 shipped this paragraph without
+    ///         it — which made the count wrong in the same commit that pinned it, and #78's review
+    ///         caught it.</b> The trailing parenthesis does real work: it drops every place that names
+    ///         the method in prose without calling it — the bare <c>ResourceSchema.ValueProblems</c>
+    ///         spellings in <c>ChartAnnotationEmitter</c>, <c>OpenApiEmitter</c> and the two test
+    ///         files, and the <c>ValueProblems → ConstraintProblems → PatternProblem</c> chain in the
+    ///         comment above <see cref="SchemaProperty.Incoherences" />'s own pattern probe. What it
+    ///         cannot drop is THIS paragraph and its twin on
+    ///         <c>ChartAnnotationEmitter.CheckPatternRuns</c>: each one quotes the command in order to
+    ///         pin it, so each one contains the literal text <c>ValueProblems(</c> and is matched by
+    ///         the very command it documents. Unfiltered it counts its own documentation, so it
+    ///         answers with more than the seven written here — and no fixed number can be pinned for
+    ///         that case either, because it moves every time one of these paragraphs is reworded. An
+    ///         inflated count sends the next reader hunting a fourth caller that does not exist, or
+    ///         teaches them that the counts in this tree are not worth re-running, which is the
+    ///         opposite of what pinning one is for. Dropping <c>///</c> lines costs the tripwire
+    ///         nothing, because a caller is code and not a doc comment: a real fourth one still
+    ///         appears. ⚠ <b>What would make this
+    ///         stale:</b> a fourth caller. If it judges a provider-declared literal before
+    ///         <see cref="Of" /> has run, it owes the same probe-and-clear; if it is a request path, it
+    ///         owes nothing and the throw is the point.
     ///     </para>
     /// </remarks>
     static string? PatternProblem(string pattern, string value) =>
