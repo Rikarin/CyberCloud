@@ -445,8 +445,18 @@ partial class Build
             Environment.ProcessorCount
         );
 
-        // The container-backed ones go first, because they dominate wall clock and the cheap suites
-        // fill the idle cores behind them rather than the other way round.
+        // The container-backed ones go first, because they dominate wall clock and a chain that long
+        // has to start at t = 0 rather than be discovered at the end of a run.
+        //
+        // ⚠ THIS COMMENT ALSO SAID "and the cheap suites fill the idle cores behind them rather than
+        // the other way round" UNTIL THE #77 REVIEW, AND THAT PART WAS NOT TRUE. A worker that is
+        // blocked on a semaphore still owns the queue item it pulled, and the partitioner hands the
+        // items out one at a time in order — so while the head of the queue is gated suites, every
+        // worker is pinned to one of them and the cheap suites behind them do not start at all. They
+        // begin only once fewer gated suites remain than there are workers: the queue drains rather
+        // than overlaps. ClusterBackedSuiteDegree states the same fact from the other side and says
+        // what raising MaxDegreeOfParallelism would and would not buy. Ordering this way is still
+        // right, for the reason above; what it does not do is fill idle cores.
         //
         // ⚠ And the cluster-backed ones go first WITHIN that, which is new with #77 and is not
         // cosmetic. Seventeen suites sharing one permit are a serial chain about as long as the whole
@@ -770,10 +780,22 @@ partial class Build
     ///     </para>
     ///     <para>
     ///         ⚠ <b>A suite whose output directory is not there is treated as container-backed</b>,
-    ///         which is the safe direction: gating a cheap suite costs a little wall clock, and
-    ///         letting an unknown one through costs the starved run this whole mechanism exists to
-    ///         prevent. It should not happen — every caller of RunSuites depends on <c>Compile</c> —
-    ///         so it is logged rather than passed over.
+    ///         which is the safe direction: gating a cheap suite costs wall clock, and letting an
+    ///         unknown one through costs the starved run this whole mechanism exists to prevent. It
+    ///         should not happen — every caller of RunSuites depends on <c>Compile</c> — so it is
+    ///         logged rather than passed over.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>"Costs a little wall clock" is what that said until the #77 review, and the
+    ///         degraded case is now three times worse than it was.</b>
+    ///         <see cref="StartsCluster" /> answers the same missing directory the same safe way, so
+    ///         a suite that lands here is gated on BOTH permits and the cluster one is
+    ///         <see cref="ClusterBackedSuiteDegree" /> = 1. Before #77 a cleaned
+    ///         <c>artifacts/</c> made every suite container-backed and the gate ran at the derived
+    ///         degree — 3 on this ten-CPU host; now it makes every suite cluster-backed as well and
+    ///         the whole gate is strictly serial. The warning below says so in as many words,
+    ///         because the symptom of the degraded case is a slow gate and nothing else, and a slow
+    ///         gate is the thing people wait out.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>"Testcontainers" WAS STILL TOO NARROW A PIECE OF EVIDENCE, AND #77 IS WHAT THAT
@@ -796,11 +818,19 @@ partial class Build
 
         if (!output.DirectoryExists()) {
             Log.Warning(
-                "Test: {Suite} has no build output under {Output}, so whether it starts a container "
-                + "is unknown. Treating it as container-backed, which is the direction that costs "
-                + "wall clock rather than a starved run. Build.Test.cs § StartsContainers.",
+                "Test: {Suite} has no build output under {Output}, so NEITHER of the two questions "
+                + "asked about it can be answered — whether it starts a container, and whether it "
+                + "holds a Kubernetes cluster. It is treated as both, which is the direction that "
+                + "costs wall clock rather than a starved run. ⚠ That cost is not small any more: a "
+                + "cluster-backed verdict spends the cluster permit, of which there are "
+                + "{ClusterDegree}, so a run in which EVERY suite lands here is a run in which every "
+                + "suite is strictly serial whatever the container degree says. One such line is a "
+                + "suite to look at; a screenful of them is a stale or cleaned artifacts directory "
+                + "and a build to stop rather than wait out. Build.Test.cs § StartsContainers and "
+                + "§ StartsCluster.",
                 project.NameWithoutExtension,
-                output);
+                output,
+                ClusterBackedSuiteDegree);
 
             return true;
         }
@@ -848,7 +878,11 @@ partial class Build
     ///         ⚠ <b>Silent on a missing output directory, and only because
     ///         <see cref="StartsContainers" /> has already warned about the same directory</b> — both
     ///         are asked of every suite, and one fact should not produce two warnings. The answer is
-    ///         the same safe direction: an unknown suite is treated as holding a cluster.
+    ///         the same safe direction: an unknown suite is treated as holding a cluster. ⚠ That
+    ///         warning is worded to cover this verdict as well as its own, which it was not until the
+    ///         #77 review, and the reason it has to is that this verdict is the expensive one: a
+    ///         cleaned <c>artifacts/</c> now serialises the entire gate rather than running it at the
+    ///         derived container degree.
     ///     </para>
     /// </remarks>
     bool StartsCluster(AbsolutePath project) {
@@ -961,11 +995,51 @@ partial class Build
     ///         the reason they have to move together is this paragraph.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The cost, and it is smaller than it looks.</b> The seventeen were already serial
-    ///         in practice — fifteen by <c>ClusterSlot</c> — so this does not lengthen the chain; it
-    ///         stops the other two from overlapping it, and it hands the container budget back to the
-    ///         four suites that can actually use it. #77 measured the whole tree at 18 m 14 s with
-    ///         the cluster suites effectively serialised already.
+    ///         ⚠ <b>The cost, stated in full — this paragraph read "and it is smaller than it looks"
+    ///         until the #77 review, and it was false on the machine that matters.</b> Fifteen of the
+    ///         seventeen were already serial through <c>ClusterSlot</c>, so the cap does not lengthen
+    ///         <em>that</em> chain. What it does is stop the other two overlapping it, and stopping
+    ///         an overlap is the same arithmetic as adding its wall clock to the chain:
+    ///         <c>CyberCloud.Kubernetes.Tests</c> and <c>CyberCloud.AppHost.Tests</c> now queue where
+    ///         they used to run beside it. That is the point rather than a side effect — the overlap
+    ///         is the defect #77 measured, and there is no way to keep the fix and not pay for it —
+    ///         but it is a cost and not a rounding error. It does hand the container budget back to
+    ///         the four suites that can actually use it. #77 measured the whole tree at 18 m 14 s on
+    ///         this ten-CPU host with the cluster suites effectively serialised already.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>AND ON CI THE COST DOES NOT COME FROM THIS CAP AT ALL. IT COMES FROM
+    ///         <see cref="StartsCluster" />, AND IT IS THE LARGER HALF.</b> GitHub's hosted
+    ///         <c>ubuntu-24.04</c> runner — <c>.github/workflows/gate.yml</c> pins it — has 2 or 4
+    ///         vCPUs, and <see cref="ContainerBackedSuiteDegree" /> is
+    ///         <c>Math.Max(1, ProcessorCount / 3)</c>, so it is <b>1</b> on either: every
+    ///         container-backed suite was ALREADY strictly serial there, before #77, on master. This
+    ///         cap therefore constrains nothing on a runner — cluster-backed implies container-backed
+    ///         by construction, and a container degree of 1 admits one suite at a time on its own.
+    ///         What changes on CI is the SET, not the degree: <c>CyberCloud.AppHost.Tests</c> ships
+    ///         no <c>Testcontainers</c> assembly, so master's glob ran it entirely ungated, and the
+    ///         <c>or</c> in <see cref="StartsContainers" /> now puts it in the chain. Up to its own
+    ///         wall clock joins the critical path — its <c>.csproj</c> says <i>"IT IS THEREFORE
+    ///         SLOW … this suite is a large fraction of"</i> the <c>Test</c> budget, and it measured
+    ///         2 m 43 s warm on this ten-CPU host, which a cold small runner will not beat.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>That is a real charge against a real budget, and it has NOT been measured on a
+    ///         runner — nothing in this tree can measure it.</b> <c>gate.yml</c> gives the
+    ///         <c>test</c> job <c>timeout-minutes: 30</c> and
+    ///         <c>.github/scripts/assert-budget.sh</c> fails the pipeline past the 25 minutes
+    ///         <c>pr.yml</c> § <c>BUDGET_MINUTES</c> sets, so it can cost a PR. ⚠ <b>The lever is
+    ///         not this constant.</b> Making the cluster degree track the container degree — so the
+    ///         cap "can never serialise more than master did" — is the repair that suggests itself
+    ///         and it is worth nothing twice over: on CI it changes nothing, because the container
+    ///         degree is already 1 and the added suite is added by the classifier; on this ten-CPU
+    ///         host it would set the cluster degree to 3, which is exactly the three-concurrent-k3s
+    ///         overlap #77 exists to close. It would pay nothing where the cost is and undo the fix
+    ///         where it is not. If the budget does go red, <c>assert-budget.sh</c> names the job that
+    ///         spent it, and docs/plan/23 § CI shape prescribes parallelism or a move to nightly with
+    ///         a written reason — the candidate for the second being <c>CyberCloud.AppHost.Tests</c>,
+    ///         whose own <c>.csproj</c> argues against it, and the untried parallelism being the
+    ///         <c>MaxDegreeOfParallelism</c> question the next paragraph is about.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>One consequence to know before reaching for it: a waiting suite still holds a

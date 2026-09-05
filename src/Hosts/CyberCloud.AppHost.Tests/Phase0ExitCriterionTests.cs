@@ -249,8 +249,18 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology) {
 ///     </para>
 /// </remarks>
 static class TestPaths {
+    /// <summary>The directory holding <c>CyberCloud.slnx</c>.</summary>
+    /// <remarks>
+    ///     ⚠ Exposed rather than kept behind <see cref="AppHostDirectory" /> because a second reader
+    ///     arrived with the #77 review: <c>ClusterBackedGatingTests</c> reads
+    ///     <c>build/Build.Test.cs</c> to check that the globs it copies are still the globs the build
+    ///     runs. Two walks up to the solution file in one assembly is how they come to disagree about
+    ///     what the root is.
+    /// </remarks>
+    public static string Repository { get; } = RepositoryRoot();
+
     public static string AppHostDirectory { get; } =
-        Path.Combine(RepositoryRoot(), "src", "Hosts", "CyberCloud.AppHost");
+        Path.Combine(Repository, "src", "Hosts", "CyberCloud.AppHost");
 
     static string RepositoryRoot() {
         var directory = new DirectoryInfo(Path.GetDirectoryName(typeof(TestPaths).Assembly.Location)!);

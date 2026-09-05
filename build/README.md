@@ -446,11 +446,40 @@ worse than none: raising the degree to 2 would still leave fifteen of the sevent
 that genuinely holds two clusters needs the constant **and** `ClusterSlot`'s permit count moved
 together.
 
-⚠ **The cost is smaller than it looks.** The seventeen were already serial in practice — fifteen of
-them by `ClusterSlot` — so the cap does not lengthen that chain; it stops the other two overlapping
-it, and hands the container budget back to the four suites that can use it. The cluster-backed
-suites are now also ordered first, because a serial chain about as long as the whole gate has to
-start at *t* = 0 rather than whenever a worker happens to reach one.
+⚠ **The cost, in full.** This section read *"the cost is smaller than it looks … the cap does not
+lengthen that chain"* until the #77 review, and on the machine that matters that was false. Fifteen
+of the seventeen were already serial through `ClusterSlot`, so the cap does not lengthen *that*
+chain — but stopping the other two from overlapping it is the same arithmetic as adding their wall
+clock to it. `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` now queue where they used
+to run beside it, which is the point rather than a side effect: the overlap is the defect #77
+measured, and there is no way to keep the fix and not pay for it. It does hand the container budget
+back to the four suites that can use it, and the cluster-backed suites are now ordered first,
+because a serial chain about as long as the whole gate has to start at *t* = 0 rather than whenever
+a worker happens to reach one.
+
+⚠ **On CI the cost is bigger, and it does not come from this cap at all.** GitHub's hosted
+`ubuntu-24.04` runner — which `.github/workflows/gate.yml` pins — has 2 or 4 vCPUs, and
+`ContainerBackedSuiteDegree` is `Math.Max(1, ProcessorCount ÷ 3)`, so on either it is **1**: every
+container-backed suite was *already* strictly serial there, on master, before #77. The cluster cap
+constrains nothing on a runner, because cluster-backed implies container-backed and a container
+degree of 1 admits one suite at a time by itself. What changes on CI is the **set**:
+`CyberCloud.AppHost.Tests` ships no `Testcontainers` assembly, so master's glob ran it ungated, and
+the `or` in `StartsContainers` now puts it into the chain. Up to its own wall clock joins the
+critical path — its `.csproj` calls the suite slow and "a large fraction of" the `Test` budget, and
+it measured **2 m 43 s** warm on a ten-CPU host, which a cold small runner will not beat.
+
+⚠ **That is a real charge against a real budget and it has not been measured on a runner.**
+`gate.yml` gives the `test` job `timeout-minutes: 30`, and `.github/scripts/assert-budget.sh` fails
+the pipeline past the **25 minutes** `pr.yml` § `BUDGET_MINUTES` sets — so this can cost a PR rather
+than only a wait. **The lever is not the cluster degree.** Letting it track the container degree, so
+that the cap "can never serialise more than master did", is worth nothing twice over: on CI it
+changes nothing, because the degree there is already 1 and the extra suite comes from the
+classifier; on a ten-CPU host it would set the cluster degree to **3**, which is precisely the
+three-concurrent-k3s overlap #77 exists to close. If the budget does go red, `assert-budget.sh`
+names the job that spent it and docs/plan/23 § CI shape prescribes parallelism or a move to nightly
+with a written reason — the move being `CyberCloud.AppHost.Tests`, whose own `.csproj` argues
+against it, and the untried parallelism being `MaxDegreeOfParallelism`, which is
+`Environment.ProcessorCount` today and pins a worker per *waiting* suite.
 
 ### Which suites are container-backed comes from the build output, not from the `.csproj`
 
@@ -475,6 +504,14 @@ tool's stdout. A comment cannot fool it, a transitive reference cannot hide from
 right on its own the next time somebody adds a container to a suite through a shared fixture. A
 suite with no build output is treated as container-backed, which is the direction that costs wall
 clock rather than a starved run.
+
+⚠ **Since #77 that degraded case is three times more expensive, and the warning says so.**
+`StartsCluster` answers the same missing directory the same safe way, so a suite that lands there is
+gated on **both** permits. A cleaned or stale `artifacts/` used to mean "every suite is
+container-backed", and the gate then ran at the derived degree — 3 on a ten-CPU host. It now means
+every suite is cluster-backed too, and the whole gate is strictly serial. The only symptom either
+way is a slow gate, which is the thing people wait out rather than investigate, so the warning names
+the cluster verdict and the cost of it explicitly.
 
 ⚠ **"Testcontainers" was still too narrow a piece of evidence, and #77 is what that cost.**
 `CyberCloud.AppHost.Tests` brings up Redis, PostgreSQL, NATS *and* a k3s through Aspire and ships not

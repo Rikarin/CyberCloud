@@ -82,11 +82,19 @@
     <ItemGroup>
         <!--
           ⚠ FOR TWO CONSTANTS AND ONE LOCK, AND THE LOCK IS THE REASON. ClusterSlot is documented as
-          "one cross-process permit to hold a k3s container … shared by every assembly that runs a
-          cluster-backed suite"; an assembly that started its own k3s WITHOUT taking it would be one
-          more suite competing for the container budget, which is the starvation that cap exists to
-          prevent. ClusterInfrastructure.K3sImage comes with it, so this suite cannot drift onto a
-          different API server from the ones it sits beside.
+          "one cross-process permit to hold a k3s container, taken for the life of the test process
+          … shared by the fifteen assemblies built on ClusterInfrastructure"; an assembly that
+          started its own k3s WITHOUT taking it would be one more suite competing for the container
+          budget, which is the starvation that cap exists to prevent. ClusterInfrastructure.K3sImage
+          comes with it, so this suite cannot drift onto a different API server from the ones it sits
+          beside.
+
+          ⚠ THAT QUOTATION READ "shared by every assembly that runs a cluster-backed suite" UNTIL THE
+          #77 REVIEW, AND CITING IT HERE IS WHAT MADE IT LOAD-BEARING. #77 gave "cluster-backed
+          suite" a build-enforced meaning of seventeen suites, of which only fifteen take this lock —
+          so the sentence this file quoted as the contract had been refuted by the same change that
+          rewrote the rest of this comment. The summary on ClusterSlot.FileName now says which
+          fifteen, and says that this file quotes it.
 
           ⚠ THIS PARAGRAPH NAMED "THE FOUR-SUITE BUDGET TASK #95 SET" UNTIL 2026-09-05, AND BOTH
           HALVES OF THAT HAD MOVED. The container budget is derived from the host rather than the

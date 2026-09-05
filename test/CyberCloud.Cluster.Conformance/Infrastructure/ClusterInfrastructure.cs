@@ -205,7 +205,21 @@ public sealed record ClusterEndpoints(
 ///     lock that outlives every test.
 /// </remarks>
 public static class ClusterSlot {
-    /// <summary>The lock file's name. Shared by every assembly that runs a cluster-backed suite.</summary>
+    /// <summary>
+    ///     The lock file's name. Shared by the fifteen assemblies built on
+    ///     <see cref="ClusterInfrastructure" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This read "shared by every assembly that runs a cluster-backed suite" until the #77
+    ///     review, and #77 is precisely what made it false.</b>
+    ///     <c>build/Build.Test.cs</c> § <c>StartsCluster</c> gives "cluster-backed suite" a
+    ///     build-enforced meaning — seventeen suites, decided by what their output ships — and two of
+    ///     the seventeen take no lock here at all. <see cref="ClusterInfrastructure" />'s remarks
+    ///     name them. Every assembly that takes <i>this</i> permit shares this name; not every
+    ///     cluster-backed suite takes it, which is the whole reason build/ has a cap of its own.
+    ///     ⚠ <c>CyberCloud.Bundle.Cluster.Conformance.csproj</c> quotes this summary as the
+    ///     documented contract for depending on the project, so the two move together.
+    /// </remarks>
     public const string FileName = "cybercloud-cluster-conformance.slot";
 
     static FileStream? held;

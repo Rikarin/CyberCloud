@@ -1,4 +1,5 @@
 using Aspire.Hosting.Testing;
+using System.Text.RegularExpressions;
 
 namespace CyberCloud.AppHost.Tests;
 
@@ -37,8 +38,28 @@ namespace CyberCloud.AppHost.Tests;
 ///         rest of the suite cannot run. Same reasoning as <c>ClusterInfrastructure</c>'s remark
 ///         about the one test in that assembly that never touches Docker.
 ///     </para>
+///     <para>
+///         ⚠ <b>WHAT THIS CLASS COVERS, STATED EXACTLY, BECAUSE #77'S COMMIT MESSAGE CALLED IT "THE
+///         REGRESSION TEST" AND THAT OVERSTATED IT.</b> The first three tests below assert facts
+///         about <em>this</em> assembly against a copy of the build's globs, so on their own they
+///         would all stay green if <c>StartsCluster</c> were deleted outright and
+///         <c>StartsContainers</c> reverted to its bare <c>Testcontainers*.dll</c> glob — the exact
+///         hole #77 measured, reopened, with a green suite over it. The review that found that is
+///         right, and the last two tests are the repair: they read <c>build/Build.Test.cs</c> itself
+///         and fail if the globs the build runs are no longer the globs this file copies, or if
+///         <c>StartsContainers</c> stops delegating to <c>StartsCluster</c>. There is no test
+///         project under <c>build/</c> to put them in, and a suite that is <i>itself</i> the subject
+///         of the classification is the honest second-best place for them.
+///     </para>
+///     <para>
+///         ⚠ <b>What they still do not cover</b> is the semaphore, the ordering and the degrees —
+///         those are behaviour of a <c>Parallel.ForEach</c> over the whole tree, and a test that
+///         re-implemented them would be a test of itself. They are covered by the argument written
+///         out at length in <c>Build.Test.cs</c> § <c>ClusterBackedSuiteDegree</c> and by the log
+///         line <c>RunSuites</c> prints on every run, which names both counts and both degrees.
+///     </para>
 /// </remarks>
-public sealed class ClusterBackedGatingTests {
+public sealed partial class ClusterBackedGatingTests {
     /// <summary>
     ///     The globs <c>build/Build.Test.cs</c> § <c>StartsCluster</c> runs over a suite's output
     ///     directory, copied verbatim.
@@ -98,6 +119,13 @@ public sealed class ClusterBackedGatingTests {
         // classification quietly degrades to "everything is expensive" and the only visible symptom
         // is a slower gate. That is a bad way to find out, so it is asserted from the one side that
         // can see where the assembly really is.
+        //
+        // ⚠ AND "SLOWER" UNDERSTATES IT SINCE #77, which is worth knowing before reading a red run
+        // here as cosmetic. StartsCluster answers the same missing directory the same safe way, so a
+        // suite that lands there is gated on BOTH permits and the cluster one is 1 — the degraded
+        // case used to be the whole gate at the derived container degree and is now the whole gate
+        // strictly serial, 73 suites one at a time on a job with timeout-minutes: 30.
+        // Build.Test.cs § StartsContainers has the warning that says so.
         var configuration = new DirectoryInfo(OutputDirectory);
 
         var because =
@@ -113,4 +141,101 @@ public sealed class ClusterBackedGatingTests {
         project.Name.ShouldBe("CyberCloud.AppHost.Tests", because);
         project.Parent.ShouldNotBeNull(because).Name.ShouldBe("bin", because);
     }
+
+    // ── The two that read build/Build.Test.cs, and why they have to ───────────────────────────────
+    //
+    // ⚠ Everything above this line asserts a property of THIS assembly. That is a rot detector for
+    // the Aspire reference, and the #77 review pointed out what it is not: with StartsCluster
+    // deleted and StartsContainers reverted to `Testcontainers*.dll`, every test above still passes
+    // and this suite goes back to running its k3s ungated beside another one. ClusterEvidence was a
+    // PRIVATE COPY of two literals with nothing checking that it was still a copy of anything.
+    //
+    // ⚠ So the copy is checked against the original. Reading a source file is a blunt instrument and
+    // it is the one available: build/ has no test project, `_build.csproj` is not referenced from
+    // any suite, and the alternative — a third file listing the globs for both to agree with — is
+    // one more place for the same drift. Both tests fail with the edit a reader has to make, which
+    // is the property that matters: this is the file the person renaming a package will not think of.
+
+    /// <summary>The build file both globs are actually spelled in.</summary>
+    static string BuildTestSource { get; } =
+        File.ReadAllText(Path.Combine(TestPaths.Repository, "build", "Build.Test.cs"));
+
+    /// <summary>The source of one method of <see cref="BuildTestSource" />, by its signature.</summary>
+    /// <remarks>
+    ///     ⚠ Bracketed by the signature and the first <c>}</c> at member indentation, rather than
+    ///     parsed. A brace counter would be the correct way to do this and would be forty lines of
+    ///     test-only code with its own defects; both methods here are eight lines with no nested type
+    ///     in them, and a reformat that breaks this shows up as a failing test naming the signature
+    ///     it could not find, which is the outcome a reader can act on either way.
+    /// </remarks>
+    static string SourceOf(string signature) {
+        var start = BuildTestSource.IndexOf(signature, StringComparison.Ordinal);
+
+        start.ShouldBeGreaterThanOrEqualTo(
+            0,
+            $"build/Build.Test.cs no longer contains the line `{signature}`. Either the method was "
+            + "renamed or removed — in which case the classification #77 added has gone and this "
+            + "suite's k3s is ungated again — or it was only reformatted, in which case this test "
+            + "needs the new spelling. #77."
+        );
+
+        var end = BuildTestSource.IndexOf("\n    }", start, StringComparison.Ordinal);
+
+        end.ShouldBeGreaterThan(
+            start,
+            $"`{signature}` in build/Build.Test.cs is not closed by a `}}` at member indentation, so "
+            + "this test cannot tell where the method ends."
+        );
+
+        return BuildTestSource[start..end];
+    }
+
+    [Fact]
+    public void TheGlobsThisTestCopiesAreTheGlobsTheBuildActuallyRuns() {
+        var call = GlobFilesCall.Match(SourceOf("bool StartsCluster(AbsolutePath project) {"));
+
+        call.Success.ShouldBeTrue(
+            "build/Build.Test.cs § StartsCluster no longer decides anything with a GlobFiles call, so "
+            + "the evidence this test copies cannot be compared to it. If the classifier now reads "
+            + "something other than the suite's output directory, this test has to read it too. #77."
+        );
+
+        var globs = StringLiteral
+            .Matches(call.Groups["args"].Value)
+            .Select(match => match.Groups["glob"].Value)
+            .ToArray();
+
+        globs.ShouldBe(
+            ClusterEvidence,
+            "build/Build.Test.cs § StartsCluster globs for a different set of assemblies than "
+            + "ClusterEvidence above lists, so this suite's copy of the rule has drifted from the "
+            + "rule. Whichever is right, the two spellings are what #77 added this class to keep "
+            + "together — fix both."
+        );
+    }
+
+    [Fact]
+    public void TheContainerClassifierStillDefersToTheClusterOne() {
+        SourceOf("bool StartsContainers(AbsolutePath project) {").ShouldContain(
+            "StartsCluster(project)",
+            customMessage:
+            "build/Build.Test.cs § StartsContainers no longer asks StartsCluster, so "
+            + "\"cluster-backed implies container-backed\" is back to holding only while two globs "
+            + "happen to agree. This suite ships no Testcontainers assembly, so the container glob "
+            + "alone calls it cheap: it is the one that stops being gated, which is exactly #77."
+        );
+    }
+
+    /// <summary>The argument list of a <c>GlobFiles</c> call, which is where the evidence is named.</summary>
+    [GeneratedRegex(@"GlobFiles\((?<args>[^)]*)\)")]
+    private static partial Regex GlobFilesCall { get; }
+
+    /// <summary>One double-quoted literal.</summary>
+    /// <remarks>
+    ///     ⚠ No escape handling, and it does not need any: a glob that contained a <c>\"</c> would be
+    ///     split in half here and the equality assertion above would fail naming both halves. The
+    ///     failure mode is a confusing red, not a false green, which is the direction to be sloppy in.
+    /// </remarks>
+    [GeneratedRegex("\"(?<glob>[^\"]*)\"")]
+    private static partial Regex StringLiteral { get; }
 }
