@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -16,6 +17,13 @@ namespace CyberCloud.Sdk.Tests;
 //  putting the stand-in here proves that everything an emitter needs is PUBLIC on
 //  CyberCloud.Sdk — nothing below uses an `internal`. If a future emitter change needs something
 //  that is not public, this file stops compiling, which is the earliest possible warning.
+//
+//  ⚠ THAT WARNING ONLY FIRES OVER SHAPES THIS FILE ACTUALLY MIRRORS, and issue #73 is the proof.
+//  SdkEmitter made `{Type}Resource.Data` `required` and EmitterContract.cs § 1 grew the clause that
+//  says a hand-written constructor assigning it owes `[SetsRequiredMembers]` — and this file, which
+//  is that clause's only instance, went on compiling because `WidgetResource` still declared a
+//  plain `{ get; }`. A stand-in that does not move when the contract moves checks nothing. So: a
+//  change to EmitterContract.cs § 1 is a change here, in the same commit.
 //
 //  Read src/CyberCloud.Sdk/EmitterContract.cs first. It is the contract; this is one instance of it.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -64,6 +72,21 @@ public sealed partial class WidgetListPage {
 
 /// <summary>One widget.</summary>
 public sealed partial class WidgetResource {
+    // ⚠ `required Data` AND [SetsRequiredMembers], AND THIS PAIR IS THE POINT OF THE FILE — issue
+    // #73. SdkEmitter now emits `public required {Model}Data Data { get; init; }` on every
+    // {Type}Resource; it was `= new()` until 2026-09-05, which is CS9035 against a body whose
+    // members are `required`, and 110 of those were checked into generated/sdk/2026-08-01.cs
+    // unnoticed. EmitterContract.cs § 1's {Type}Resource row records what that asks of the
+    // hand-written half, and a contract with no instance is a sentence rather than a check — so the
+    // emitted shape is mirrored here rather than described.
+    //
+    // ⚠ WHAT BREAKS IF THE ATTRIBUTE GOES. Not this constructor: a constructor may leave a required
+    // member unset. Every `new WidgetResource(...)` below becomes CS9035 instead — the call sites in
+    // WidgetCollection and WidgetOperationSource, which are the shapes an emitted client is made of.
+    // Three of them, and verified by deleting the attribute on 2026-09-05: three CS9035s. That is
+    // the header's "this file stops compiling" promise reaching past accessibility, which used to be
+    // the only thing it covered.
+    [SetsRequiredMembers]
     public WidgetResource(CyberCloudClientContext context, Uri uri, WidgetData data) {
         Context = context;
         Uri = uri;
@@ -74,7 +97,7 @@ public sealed partial class WidgetResource {
 
     public Uri Uri { get; }
 
-    public WidgetData Data { get; }
+    public required WidgetData Data { get; init; }
 }
 
 /// <summary>

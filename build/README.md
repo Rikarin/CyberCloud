@@ -17,16 +17,23 @@ build/
 ├── Build.Load.cs             # ─┘
 ├── Build.Publish.cs          # NuGet, npm, charts, `cyc` binaries per RID
 ├── ArchitectureFacts.cs      # ⚠ not a Build partial — see below
+├── CodeSurface.cs            # ⚠ likewise: every type and member this repository compiles
+├── WireContract.cs           # ⚠ likewise: the [Id(n)] manifests under build/wire
+├── GeneratedSdkSurface.cs    # ⚠ likewise: generated/sdk/*.cs through Roslyn (issue #73)
 ├── CoverageReport.cs         # ⚠ likewise: Cobertura in, per-assembly line rates out
 └── TargetPreconditions.cs    # ⚠ likewise: "blocked here, and here is what to install"
 ```
 
-`ArchitectureFacts.cs`, `CoverageReport.cs` and `TargetPreconditions.cs` are the files here that are
-**not** partials of `Build`, and the exception is deliberate. `Architecture` reads compiled assemblies through `System.Reflection.Metadata`; the record
+The six files above that are **not** partials of `Build` are a deliberate exception. `Architecture`
+reads compiled assemblies through `System.Reflection.Metadata`; the record
 and the `ICustomAttributeTypeProvider` that does it are ordinary types with their own lifetime, and
 folding them into the target's partial would mix "what the gates read" with "what the gates decide"
 in one 700-line file. `CoverageReport.cs` splits `Test` along the same seam, and gains the same
-thing: what a report says is checkable without running a build. The rule that still holds is the one
+thing: what a report says is checkable without running a build. `GeneratedSdkSurface.cs` is the
+newest and the only one that reads **source** rather than metadata — it hands each
+`generated/sdk/{api-version}.cs` to Roslyn, because "is this valid C#" is a question only a C#
+compiler answers and the `Generated surfaces` row had been answering "are the bytes the same"
+instead. The rule that still holds is the one
 that matters: **one partial per target, named after it** — no target's logic lives anywhere but its
 own `Build.<Target>.cs`.
 

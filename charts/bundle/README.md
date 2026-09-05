@@ -41,7 +41,7 @@ somebody else's chart or manifest performs.
 ## What a component owes
 
 `build/Build.Architecture.cs`'s **Bundle** gate fails the build when any of this is missing. It is
-listed in `ArchitectureGates` beside the other fourteen rows, and it reports `○` rather than `✔`
+listed in `ArchitectureGates` beside the other sixteen rows, and it reports `○` rather than `✔`
 if it ever inspects nothing.
 
 | Key | Required | What it is |

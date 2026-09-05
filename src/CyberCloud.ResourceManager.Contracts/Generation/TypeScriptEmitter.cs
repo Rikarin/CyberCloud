@@ -126,9 +126,11 @@ public static class TypeScriptEmitter {
     ///         what the app reaches, so a generated file nothing imports yet is a file nothing
     ///         type-checks — and <c>portal/eslint.config.mjs</c> ignores this directory on purpose.
     ///         The .NET SDK emitter has shipped two defects of exactly that shape into a checked-in
-    ///         artifact (a duplicate enum and an undeclared one), green under every gate, because
-    ///         nothing in this repository compiles <c>generated/sdk/*.cs</c>. This project file is
-    ///         what stops the same thing happening one language over.
+    ///         artifact (a duplicate enum and an undeclared one), green under every gate, because at
+    ///         the time nothing in this repository compiled <c>generated/sdk/*.cs</c> — it has had a
+    ///         compiler of its own since issue #73, <c>Generated SDK compiles</c> in
+    ///         <c>build/Build.Architecture.cs</c>. This project file is what stops the same thing
+    ///         happening one language over.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>A JSONC comment rather than a <c>"//"</c> key.</b> <c>tsc</c> parses a tsconfig
@@ -408,8 +410,9 @@ public static class TypeScriptEmitter {
             // The first version of this emitter declared unions only for a type's body, so
             // CyberCloud.Messaging/kafkaClusters' listKeys response referred to
             // MessagingKafkaClustersListKeysResultSecurityProtocol and nothing declared it. `tsc`
-            // said so in one line; the .NET SDK emitter has had the same defect, unnoticed, for as
-            // long as it has existed — CS0246 in a file nothing in this repository compiles.
+            // said so in one line; the .NET SDK emitter had the same defect, unnoticed, for as long
+            // as it had existed — CS0246 in a file nothing in this repository compiled until issue
+            // #73, which is the gate that would find it today.
             AppendUnions(built, name, DocumentReader.LeavesOf(response));
 
             built.Append("\n/** What ").Append(Comment(action.Name)).Append(" returns.")
@@ -896,7 +899,9 @@ public static class TypeScriptEmitter {
     ///     ⚠ <b>This exists because nothing in the .NET build type-checks TypeScript and
     ///     <c>portal/eslint.config.mjs</c> ignores this directory.</b> The .NET SDK emitter shipped a
     ///     property typed with a name it never declared, in a file no build in this repository
-    ///     compiles; the same mistake here would reach the portal's <c>ng build</c>, one target
+    ///     compiled — issue #73 has since given that file a compiler too, and this check is what
+    ///     found the shape in the first place; the same mistake here would reach the portal's
+    ///     <c>ng build</c>, one target
     ///     later, and only once something imported the client. So every name the client imports has
     ///     to be a name the models export — which is the cheapest check that would have caught it,
     ///     and it is honest about being narrower than a compiler.
@@ -934,11 +939,17 @@ public static class TypeScriptEmitter {
                 continue;
             }
 
+            // ⚠ THE TENSE OF THE LAST CLAUSE IS LOAD-BEARING AND THIS IS NOT A COMMENT — this text is
+            // printed into a build log, so a stale claim here is a gate telling a developer
+            // something false about the repository's own gates. `generated/sdk/*.cs` was compiled by
+            // nothing until issue #73 added `Generated SDK compiles`; saying so in the present tense
+            // would be exactly the drift this emitter's own checks exist to catch.
             problems.Add(
                 $"src/client.ts imports '{trimmed}' from './models' and src/models.ts does not export "
                 + "it. The portal's build would fail on an import of a type that is not there, one "
                 + "target after this one — which is the failure the .NET SDK emitter shipped, in a "
-                + "file nothing in this repository compiles."
+                + "file nothing in this repository compiled until issue #73 gave it a compiler of "
+                + "its own."
             );
         }
 

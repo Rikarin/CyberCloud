@@ -96,8 +96,15 @@ partial class Build
 
     /// <summary>
     ///     The ten gates from docs/plan/23 § The architecture gates, in the order the doc lists them,
-    ///     plus the six this build adds. Named here so the target's log output is the checklist, and so
+    ///     plus the seven this build adds. Named here so the target's log output is the checklist, and so
     ///     adding a gate is a visible diff against the doc rather than a silent omission.
+    ///     <para>
+    ///         ⚠ <b><c>Generated SDK compiles</c> is placed immediately after <c>Generated
+    ///         surfaces</c> rather than with the other additions at the end, and the position is the
+    ///         argument.</b> It is the row that says what the row above it does not: byte-identical
+    ///         is not valid, and the .NET SDK is the one of the five surfaces with nothing downstream
+    ///         to notice. Issue #73.
+    ///     </para>
     ///     <para>
     ///         ⚠ <b>Three of the ten are enforced by the compiler instead, and this target must not
     ///         re-implement them.</b> <c>src/CyberCloud.Analyzers</c> ships CC1001–CC1007. It was four
@@ -133,6 +140,7 @@ partial class Build
         ("Secrets", "no [Id] member named *Password/*Secret/*Token/*Key outside CyberCloud.Vault"),
         ("No blocking", ".Result, .Wait(), async void banned in grain assemblies"),
         ("Generated surfaces", "OpenAPI/CLI/SDK/forms and the portal's TypeScript client regenerate byte-identically from the registry"),
+        ("Generated SDK compiles", "every generated/sdk/{api-version}.cs is handed to Roslyn against the real CyberCloud.Sdk — the row above compares bytes, and byte-identical is not valid. Issue #73; not in docs/plan/23"),
         ("Action handlers", "every synchronous declared action names an IResourceActionHandler; a long-running one must not — not in docs/plan/23"),
         ("OpenAPI compatibility", "published api-versions diffed; a breaking change fails"),
         ("Labels", "every reconciler's rendered output carries the seven cybercloud.io/* labels, asserted against real output"),
@@ -224,8 +232,8 @@ partial class Build
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
-            + "Action handlers, Analyzer coverage, Plan citations, Code citations, Bundle and Log "
-            + "egress, which that table does not list",
+            + "Generated SDK compiles, Action handlers, Analyzer coverage, Plan citations, Code "
+            + "citations, Bundle and Log egress, which that table does not list",
             ArchitectureGates.Length);
 
         var outcomes = new List<GateOutcome>
@@ -238,6 +246,7 @@ partial class Build
             GateOutcome.Analyzer("Secrets", "CC1005, in full"),
             GateOutcome.Analyzer("No blocking", "CC1001 and CC1002, wider than the doc's 'grain assemblies'"),
             GeneratedSurfacesGate(),
+            GeneratedSdkCompilesGate(),
             ActionHandlerGate(),
             OpenApiCompatibilityGate(),
             LabelsGate(),
@@ -1344,6 +1353,78 @@ partial class Build
             + $"{Generation.Derived.Count} derived file(s) — the cyc verb tree, the .NET SDK and the "
             + $"portal forms — and {Generation.TypeScript.Count} file(s) of the portal's TypeScript "
             + "client, all regenerated and compared byte-for-byte",
+            violations);
+    }
+
+    // ── Gate: the generated SDK compiles — issue #73, not in docs/plan/23 ─────────────────────
+
+    /// <summary>
+    ///     Every <c>generated/sdk/{api-version}.cs</c> is valid C# against the real
+    ///     <c>CyberCloud.Sdk</c>. Issue #73.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This row exists because the one above it answers a narrower question than its
+    ///         name suggests.</b> "The surfaces regenerate byte-identically" reads as "the surfaces
+    ///         are good", and for four of the five it is nearly true because something downstream
+    ///         consumes them — the <c>cyc</c> host parses the verb tree, the portal renders the form
+    ///         schemas, <c>pnpm typecheck:api</c> runs <c>tsc</c> over the TypeScript client, and
+    ///         <c>openapi/</c> is validated and diffed. <b>Nothing consumed the .NET SDK.</b> No
+    ///         <c>.csproj</c> includes <c>generated/sdk/*.cs</c>, so the checked-in file had never
+    ///         been handed to a compiler, and three separate defects shipped inside it —
+    ///         <c>CS0101</c>, <c>CS0246</c> and seventeen <c>CS0102</c>s over fourteen duplicated
+    ///         property names — every one of them green under every gate here. This is the C# half of
+    ///         what <c>pnpm typecheck:api</c> has been doing for the TypeScript client all along.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Reads the checked-in file, not the generator's output.</b> The row above proves
+    ///         those two are equal; this one is deliberately not written to depend on it, because
+    ///         "the file in git is not valid C#" is the sentence issue #73 is about.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Counted in FILES and in the types they declare, and the second number is the
+    ///         vacuity guard.</b> A file that parsed to nothing produces no errors, and a gate that
+    ///         reported ✔ over an empty compilation would be the same defect this row was added to
+    ///         fix. <see cref="GeneratedSdkSurface" /> carries the rest of the reasoning — why
+    ///         <c>CS8795</c> is accepted, why this is not a throwaway <c>.csproj</c>, and what would
+    ///         make the exemption stale.
+    ///     </para>
+    /// </remarks>
+    GateOutcome GeneratedSdkCompilesGate()
+    {
+        if (GeneratedSdkBlocker() is { } blocker)
+            return GateOutcome.Blocked("Generated SDK compiles", blocker);
+
+        var compiled = CompiledGeneratedSdk();
+        var violations = new List<string>();
+
+        foreach (var file in compiled)
+        {
+            foreach (var error in file.Errors)
+            {
+                violations.Add(
+                    $"generated/{SdkSurfaceDirectory}/{file.File} does not compile — {error}. "
+                    + "generated/README.md makes that directory read-only, so the fix is in "
+                    + "src/CyberCloud.ResourceManager.Contracts/Generation/SdkEmitter.cs and then "
+                    + "./build.sh Generate");
+            }
+
+            if (file.Types == 0)
+            {
+                violations.Add(
+                    $"generated/{SdkSurfaceDirectory}/{file.File} declares no type at all, so it "
+                    + "compiled clean by having nothing in it. A surface with no types is a "
+                    + "generator that produced nothing, not an SDK that is correct");
+            }
+        }
+
+        return GateOutcome.From(
+            "Generated SDK compiles",
+            compiled.Count,
+            $"api-version file(s) declaring {compiled.Sum(x => x.Types)} type(s), each compiled on "
+            + $"its own against {SdkAssemblyName} — {compiled.Sum(x => x.Declared)} partial member(s) "
+            + "accepted as declared-but-not-implemented, which is the hand-written half that does "
+            + "not exist yet (docs/plan/21 § Generation)",
             violations);
     }
 

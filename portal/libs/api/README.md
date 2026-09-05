@@ -34,9 +34,15 @@ exist failed at compile time rather than resolving to an empty module.
 purpose — so a generated file nothing imports yet is a file nothing checks. That is not
 hypothetical: the .NET SDK emitter shipped two defects of exactly this shape into a checked-in
 artifact (a duplicate enum, and a property typed with a name nothing declared), green under every
-gate in the repository, because nothing here compiles `generated/sdk/*.cs`. `pnpm typecheck:api`
+gate in the repository, because nothing there compiled `generated/sdk/*.cs`. `pnpm typecheck:api`
 runs `tsc` over this package on every `pnpm verify`, so this surface has a compiler and that one
 now has the checks that compiler found.
+
+⚠ **And that one now has a compiler of its own** — issue #73 added `Generated SDK compiles` to
+`./build.sh Architecture`, which hands every `generated/sdk/{api-version}.cs` to Roslyn. It found two
+further defect families the same day (fourteen duplicated property names, and 110 unset required
+members across 22 resource types), which is the argument for this section rather than against it: the
+surface with a compiler is the surface whose defects are known.
 
 ## What the portal may assume about it
 

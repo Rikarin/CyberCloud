@@ -66,6 +66,73 @@ partial class Build
     /// <summary>How a message names that directory — repository-relative, with forward slashes.</summary>
     const string PortalApiRelative = "portal/libs/api";
 
+    /// <summary>
+    ///     The subdirectory of <c>generated/</c> holding the .NET SDK — <c>SdkEmitter.DirectoryName</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A literal rather than the constant, because <c>build/_build.csproj</c> is deliberately
+    ///     outside <c>CyberCloud.slnx</c> and references nothing under <c>src/</c> — the same reason
+    ///     <see cref="PortalApiRelative" /> above is a literal. It cannot drift silently: the
+    ///     directory is where <c>Generate</c> writes and where <see cref="GeneratedSdkFiles" />
+    ///     reads, so a rename empties this glob and the gate reports ○ over zero files rather than ✔.
+    /// </remarks>
+    const string SdkSurfaceDirectory = "sdk";
+
+    /// <summary>The hand-written half the generated one is compiled against — issue #73.</summary>
+    const string SdkAssemblyName = "CyberCloud.Sdk";
+
+    /// <summary>
+    ///     Every checked-in file of the .NET SDK surface, oldest api-version first.
+    /// </summary>
+    /// <remarks>
+    ///     Globbed off disk rather than taken from the generation report, deliberately: issue #73 is
+    ///     about the file that is CHECKED IN never reaching a compiler, and a list derived from the
+    ///     generator would compile what the generator just produced instead. The two are equal
+    ///     whenever the <c>Generated surfaces</c> row is green, and the whole point is not to depend
+    ///     on that.
+    /// </remarks>
+    IReadOnlyList<AbsolutePath> GeneratedSdkFiles =>
+        (DerivedSurfacesDirectory / SdkSurfaceDirectory) is var directory && directory.DirectoryExists()
+            ? directory.GlobFiles("*.cs").OrderBy(x => x.Name, StringComparer.Ordinal).ToList()
+            : [];
+
+    /// <summary>
+    ///     Each of those files as a C# compiler sees it — <see cref="GeneratedSdkSurface" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One compilation per file, never one over the set.</b> The generated types carry no
+    ///     api-version in their namespace, so two published api-versions declare the same type names;
+    ///     compiling them together would be <c>CS0101</c> on every model in the SDK. The reasoning is
+    ///     on <see cref="GeneratedSdkSurface" />, and it is the reason this is not a throwaway
+    ///     <c>.csproj</c>.
+    /// </remarks>
+    // List rather than IReadOnlyList: CA1859 is an error here and this is a private helper — the
+    // same reason Build.Architecture.cs § ShippingProjectFiles returns a Dictionary.
+    List<GeneratedSdkFile> CompiledGeneratedSdk()
+    {
+        var references = new[] { AssemblyOf(SdkAssemblyName) };
+
+        return GeneratedSdkFiles.Select(file => GeneratedSdkSurface.Compile(file, references)).ToList();
+    }
+
+    /// <summary>
+    ///     The reason the compilation above could not be trusted, or <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Reported as one line rather than left to produce hundreds. Without
+    ///     <c>CyberCloud.Sdk.dll</c> every <c>Response&lt;T&gt;</c>, <c>Operation&lt;T&gt;</c>,
+    ///     <c>WaitUntil</c> and <c>AsyncPageable&lt;T&gt;</c> in the file is <c>CS0246</c> — a gate
+    ///     failing loudly for a reason that has nothing to do with the file it is inspecting, which
+    ///     is how a reader learns to disbelieve it.
+    /// </remarks>
+    string? GeneratedSdkBlocker()
+        => AssemblyOf(SdkAssemblyName).FileExists()
+            ? null
+            : $"{SdkAssemblyName} has no built assembly at {AssemblyOf(SdkAssemblyName)}, so the "
+            + $"generated SDK cannot be compiled against the shapes it names — Response<T>, "
+            + $"Operation<T>, WaitUntil and AsyncPageable<T> are all its. Run ./build.sh Compile "
+            + $"first, in the same configuration ({Configuration}).";
+
     /// <summary>Where docs/plan/03 § Providers puts every provider. Matched at any depth below.</summary>
     AbsolutePath ProvidersRoot => RootDirectory / "src" / "Providers";
 
@@ -197,6 +264,47 @@ partial class Build
                 + "it. A generated surface nothing generates is one nobody can reproduce.");
         }
 
+        // ⚠ THE .NET SDK IS COMPILED, HERE AND IN `Architecture` — issue #73. This target has just
+        // rewritten the file, so it is the earliest place an emitter change that produces invalid C#
+        // can be told about it; the gate in Build.Architecture.cs is the one CI forms a verdict from.
+        // The alternative — leaving it to `Architecture` alone — is an author who runs `Generate`,
+        // sees green, commits, and learns from CI what the compiler already knew locally.
+        List<GeneratedSdkFile> compiledSdk = [];
+
+        if (GeneratedSdkBlocker() is { } blocker)
+        {
+            failures.Add(blocker);
+        }
+        else
+        {
+            compiledSdk = CompiledGeneratedSdk();
+
+            foreach (var compiled in compiledSdk)
+            {
+                foreach (var error in compiled.Errors)
+                {
+                    failures.Add(
+                        $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} does "
+                        + $"not compile — {error}. The Generated surfaces comparison is byte-for-byte "
+                        + "and byte-identical is not valid; fix the emitter, not the file.");
+                }
+
+                // ⚠ THE VACUITY GUARD, THE SAME ONE Build.Architecture.cs's `Generated SDK compiles`
+                // row carries. A file that parsed to nothing produces no errors, so the loop above
+                // would say nothing about it and this target would pass over a surface the generator
+                // emitted empty. A row that reports success over an empty compilation is the defect
+                // issue #73 was filed about, one level up.
+                if (compiled.Types == 0)
+                {
+                    failures.Add(
+                        $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} "
+                        + "declares no type at all, so it compiled clean by having nothing in it. A "
+                        + "surface with no types is a generator that produced nothing, not an SDK "
+                        + "that is correct.");
+                }
+            }
+        }
+
         // ⚠ THE PORTAL'S CLIENT — issue #21. Reported against its own directory rather than folded
         // into the three above, because it is written to portal/libs/api and a message naming
         // generated/ would send a reader to look at the wrong tree.
@@ -224,11 +332,19 @@ partial class Build
 
         if (failures.Count == 0)
         {
+            // ⚠ THE .NET SDK IS COUNTED HERE, NOT LEFT TO SILENCE — issue #73. The block above only
+            // ever ADDS failures, so on an empty glob its loop never runs and a success line that
+            // said nothing about the SDK would read exactly like one where every file compiled.
+            // Build.Architecture.cs's row reports ○ over a count for the same reason.
             Log.Information(
                 "Generate: {Count} document(s) regenerate byte-identically and break nothing published; "
-                + "{Client} TypeScript client file(s) for the portal",
+                + "{Client} TypeScript client file(s) for the portal; {Sdk} .NET SDK api-version "
+                + "file(s) declaring {Types} type(s), each compiled on its own against {Assembly}",
                 report.Documents.Count,
-                report.TypeScript.Count);
+                report.TypeScript.Count,
+                compiledSdk.Count,
+                compiledSdk.Sum(x => x.Types),
+                SdkAssemblyName);
 
             // ⚠ Zero files is news rather than silence, the same distinction Build.Charts.cs draws:
             // a run that emitted no client is not a run that emitted a correct one, and a portal
@@ -238,6 +354,20 @@ partial class Build
                 Log.Warning(
                     "Generate: the TypeScript client is empty, so portal/libs/api holds nothing the "
                     + "portal can import and every page would hand-roll its calls — issue #21.");
+            }
+
+            // ⚠ And the same distinction for the surface this target has just rewritten. Zero here
+            // is a glob that matched nothing — `SdkEmitter.DirectoryName` renamed out from under the
+            // literal above, or a generator that wrote no SDK at all — and either way the compile
+            // check said nothing because it had nothing to say, which is not the same as passing.
+            if (compiledSdk.Count == 0)
+            {
+                Log.Warning(
+                    "Generate: no api-version file was found under {Directory}/{Sdk}, so nothing was "
+                    + "handed to a compiler. `Generated SDK compiles` reports ○ over the same "
+                    + "count — issue #73.",
+                    DerivedSurfacesDirectory.Name,
+                    SdkSurfaceDirectory);
             }
 
             return;

@@ -1,5 +1,5 @@
 // Bundle — the gate over charts/bundle/, reported by Build.Architecture.cs's `Architecture` target
-// beside the other fourteen rows.
+// beside the other sixteen rows.
 //
 // ⚠ WHY THIS ROW IS NOT IN Build.Charts.cs, WHICH IS THE OBVIOUS PLACE FOR IT.
 // `Build.Charts` globs `charts/**/Chart.yaml`, and for each hit it regenerates a values.schema.json

@@ -395,9 +395,23 @@ public static class DerivedSurfaces {
     ///     would be found by whoever opened the file.
     /// </summary>
     /// <remarks>
-    ///     ⚠ A brace count is not a parser and does not pretend to be. It catches the one failure this
-    ///     emitter can actually have — a branch that opens a type and does not close it — without
-    ///     bringing a compiler into a generation step.
+    ///     <para>
+    ///         ⚠ A brace count is not a parser and does not pretend to be. It catches the one failure
+    ///         this emitter can actually have — a branch that opens a type and does not close it —
+    ///         without bringing a compiler into a generation step.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>AND A COMPILER IS NOW BROUGHT IN, ONE STEP LATER, BECAUSE THIS WAS NOT ENOUGH —
+    ///         issue #73.</b> Balanced braces were the whole of what anything knew about this
+    ///         surface's validity, and four defect families shipped underneath that knowledge:
+    ///         <c>CS0101</c>, <c>CS0246</c>, <c>CS0102</c> and <c>CS9035</c>. The
+    ///         <c>Generated SDK compiles</c> gate in <c>build/Build.Architecture.cs</c> hands each
+    ///         checked-in <c>generated/sdk/{api-version}.cs</c> to Roslyn against the real
+    ///         <c>CyberCloud.Sdk</c>. This check is left where it is and is not redundant: it runs
+    ///         with no compiled assemblies beside it, on the text this method was handed, so a
+    ///         generator that could not even close a brace says so before the gate reports a hundred
+    ///         cascading parse errors.
+    ///     </para>
     /// </remarks>
     static ImmutableArray<string> SdkProblems(string source) {
         var problems = new List<string>();

@@ -42,6 +42,16 @@ namespace CyberCloud.Sdk;
 ///                 One instance. Holds a <see cref="CyberCloudClientContext" /> and its own URL, exposes
 ///                 <c>Data</c>, and carries the type's operations and its
 ///                 <c>x-cybercloud-action</c> actions.
+///                 ⚠ <b><c>Data</c> is <c>required</c>, so a hand-written constructor that assigns it
+///                 needs <c>[SetsRequiredMembers]</c>.</b> It was <c>= new()</c> until 2026-09-05, and
+///                 that is <c>CS9035</c> for every type whose schema requires a property — the emitter
+///                 gives those members C#'s own <c>required</c> so that a body the API would refuse
+///                 does not compile, and a defaulted empty body is precisely such a body. 110 of them
+///                 were checked in, over 22 resource types, and the first thing to read them was the
+///                 <c>Generated SDK compiles</c> gate that issue #73 added.
+///                 <c>CyberCloud.Sdk.Tests/StandIn/WidgetStandIn.cs</c> is the one instance of this
+///                 row, and it carries the attribute: drop it there and that file stops compiling,
+///                 which is the whole reason the stand-in lives in a project that is built.
 ///             </description>
 ///         </item>
 ///         <item>

@@ -153,7 +153,7 @@ public sealed partial class ClickHouseClusterResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public ClickHouseClusterData Data { get; init; } = new();
+    public required ClickHouseClusterData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<ClickHouseClusterResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -413,7 +413,7 @@ public sealed partial class ValkeyCacheData {
     /// <summary>None keeps nothing, RDB snapshots periodically, AOF appends every write.</summary>
     /// <remarks>Defaults to "AOF" when left unset.</remarks>
     [JsonPropertyName("mode")]
-    public ValkeyCachePersistenceMode? Mode { get; set; }
+    public ValkeyCachePersistenceMode? PersistenceMode { get; set; }
 
     /// <summary>Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.</summary>
     /// <remarks>Defaults to "8Gi" when left unset.</remarks>
@@ -456,7 +456,7 @@ public sealed partial class ValkeyCacheResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public ValkeyCacheData Data { get; init; } = new();
+    public required ValkeyCacheData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<ValkeyCacheResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -656,7 +656,7 @@ public sealed partial class ContainerRegistryResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public ContainerRegistryData Data { get; init; } = new();
+    public required ContainerRegistryData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<ContainerRegistryResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -808,7 +808,7 @@ public sealed partial class ManagedKubernetesClusterResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public ManagedKubernetesClusterData Data { get; init; } = new();
+    public required ManagedKubernetesClusterData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<ManagedKubernetesClusterResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -1004,7 +1004,7 @@ public sealed partial class NodePoolResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public NodePoolData Data { get; init; } = new();
+    public required NodePoolData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<NodePoolResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -1212,7 +1212,7 @@ public sealed partial class MariaDBServerResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public MariaDBServerData Data { get; init; } = new();
+    public required MariaDBServerData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<MariaDBServerResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -1421,7 +1421,7 @@ public sealed partial class PostgreSQLServerData {
     /// <summary>Whether continuous backup and WAL archiving run.</summary>
     /// <remarks>Defaults to true when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? BackupEnabled { get; set; }
 
     /// <summary>How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.</summary>
     /// <remarks>Defaults to 14 when left unset.</remarks>
@@ -1451,12 +1451,12 @@ public sealed partial class PostgreSQLServerData {
     /// <summary>Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.</summary>
     /// <remarks>Defaults to true when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? MonitoringEnabled { get; set; }
 
     /// <summary>Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.</summary>
     /// <remarks>Defaults to true when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? PoolingEnabled { get; set; }
 
     /// <summary>Number of pooler pods.</summary>
     /// <remarks>Defaults to 2 when left unset.</remarks>
@@ -1524,7 +1524,7 @@ public sealed partial class PostgreSQLServerResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public PostgreSQLServerData Data { get; init; } = new();
+    public required PostgreSQLServerData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<PostgreSQLServerResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -1685,7 +1685,7 @@ public sealed partial class DocumentDatabaseAccountData {
     /// <summary>Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.</summary>
     /// <remarks>Defaults to false when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? BackupEnabled { get; set; }
 
     /// <summary>How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.</summary>
     /// <remarks>Defaults to 14 when left unset.</remarks>
@@ -1705,7 +1705,7 @@ public sealed partial class DocumentDatabaseAccountData {
     /// <summary>Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production".</summary>
     /// <remarks>Defaults to true when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? MonitoringEnabled { get; set; }
 
     /// <summary>Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.</summary>
     /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
@@ -1753,7 +1753,7 @@ public sealed partial class DocumentDatabaseAccountResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public DocumentDatabaseAccountData Data { get; init; } = new();
+    public required DocumentDatabaseAccountData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<DocumentDatabaseAccountResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -1900,7 +1900,7 @@ public sealed partial class KafkaClusterData {
     /// <summary>Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.</summary>
     /// <remarks>Defaults to true when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? CruiseControlEnabled { get; set; }
 
     /// <summary>Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.</summary>
     /// <remarks>Defaults to [] when left unset.</remarks>
@@ -1910,7 +1910,7 @@ public sealed partial class KafkaClusterData {
     /// <summary>Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.</summary>
     /// <remarks>Defaults to false when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? ExternalEnabled { get; set; }
 
     /// <summary>Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.</summary>
     /// <remarks>Defaults to true when left unset.</remarks>
@@ -1920,7 +1920,7 @@ public sealed partial class KafkaClusterData {
     /// <summary>Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.</summary>
     /// <remarks>Defaults to true when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? MonitoringEnabled { get; set; }
 
     /// <summary>Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.</summary>
     /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
@@ -1935,7 +1935,7 @@ public sealed partial class KafkaClusterData {
     /// <summary>Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("size")]
-    public string? Size { get; set; }
+    public string? RetentionSize { get; set; }
 
     /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
@@ -1965,7 +1965,7 @@ public sealed partial class KafkaClusterData {
     /// <summary>Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.</summary>
     /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
     [JsonPropertyName("size")]
-    public required string Size { get; set; }
+    public required string StorageSize { get; set; }
 
     /// <summary>How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.</summary>
     /// <remarks>Defaults to 2 when left unset.</remarks>
@@ -1998,7 +1998,7 @@ public sealed partial class KafkaClusterResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public KafkaClusterData Data { get; init; } = new();
+    public required KafkaClusterData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<KafkaClusterResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -2164,7 +2164,7 @@ public sealed partial class NATSClusterData {
     /// <summary>Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.</summary>
     /// <remarks>Defaults to false when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? ExternalEnabled { get; set; }
 
     /// <summary>Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
@@ -2174,7 +2174,7 @@ public sealed partial class NATSClusterData {
     /// <summary>Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.</summary>
     /// <remarks>Defaults to false when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? LeafNodesEnabled { get; set; }
 
     /// <summary>Largest number of client connections one server accepts.</summary>
     /// <remarks>Defaults to 65536 when left unset.</remarks>
@@ -2189,7 +2189,7 @@ public sealed partial class NATSClusterData {
     /// <summary>Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". The endpoint itself is always served; this decides whether anything scrapes it.</summary>
     /// <remarks>Defaults to true when left unset.</remarks>
     [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
+    public bool? MonitoringEnabled { get; set; }
 
     /// <summary>Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.</summary>
     /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
@@ -2237,7 +2237,7 @@ public sealed partial class NATSClusterResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public NATSClusterData Data { get; init; } = new();
+    public required NATSClusterData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<NATSClusterResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -2494,7 +2494,7 @@ public sealed partial class RabbitMQClusterResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public RabbitMQClusterData Data { get; init; } = new();
+    public required RabbitMQClusterData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<RabbitMQClusterResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -2701,7 +2701,7 @@ public sealed partial class MonitorWorkspaceResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public MonitorWorkspaceData Data { get; init; } = new();
+    public required MonitorWorkspaceData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<MonitorWorkspaceResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -2836,7 +2836,7 @@ public sealed partial class PublicIPAddressResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public PublicIPAddressData Data { get; init; } = new();
+    public required PublicIPAddressData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<PublicIPAddressResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -2962,7 +2962,7 @@ public sealed partial class VirtualNetworkResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public VirtualNetworkData Data { get; init; } = new();
+    public required VirtualNetworkData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<VirtualNetworkResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -3085,7 +3085,7 @@ public sealed partial class LoadBalancerData {
     /// <summary>The TCP port every backend address is reached on. ⚠ One port for the whole pool: a pool whose members listen on different ports is two pools.</summary>
     /// <remarks>Required on a create. Defaults to 8080 when left unset.</remarks>
     [JsonPropertyName("port")]
-    public required long Port { get; set; }
+    public required long BackendPort { get; set; }
 
     /// <summary>The cluster the proxy runs in. ⚠ It must be the cluster the virtual network was created in: a proxy in another cluster has no route into this network at all.</summary>
     /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
@@ -3095,7 +3095,7 @@ public sealed partial class LoadBalancerData {
     /// <summary>The TCP port the proxy listens on. ⚠ There is no protocol setting: HAProxy does not proxy UDP in any version, so every rule here is TCP.</summary>
     /// <remarks>Required on a create. Defaults to 80 when left unset.</remarks>
     [JsonPropertyName("port")]
-    public required long Port { get; set; }
+    public required long FrontendPort { get; set; }
 
     /// <summary>The IPv4 address the proxy answers on, inside the subnet's range. ⚠ Required, and it is the one thing about this resource a tenant must choose: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. A bare address and never a prefix.</summary>
     /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.1.10" when left unset.</remarks>
@@ -3153,7 +3153,7 @@ public sealed partial class LoadBalancerResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public LoadBalancerData Data { get; init; } = new();
+    public required LoadBalancerData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<LoadBalancerResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -3265,52 +3265,52 @@ public sealed partial class SecurityGroupData {
     /// <summary>Whether outbound ICMP is allowed to the remotes above. Off by default.</summary>
     /// <remarks>Defaults to false when left unset.</remarks>
     [JsonPropertyName("allowIcmp")]
-    public bool? AllowIcmp { get; set; }
+    public bool? EgressAllowIcmp { get; set; }
 
     /// <summary>The IPv4 range outbound traffic may reach, or empty for no IPv4 rules at all.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("remoteV4")]
-    public string? RemoteV4 { get; set; }
+    public string? EgressRemoteV4 { get; set; }
 
     /// <summary>The IPv6 range outbound traffic may reach, or empty for no IPv6 rules at all.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("remoteV6")]
-    public string? RemoteV6 { get; set; }
+    public string? EgressRemoteV6 { get; set; }
 
     /// <summary>TCP ports outbound traffic may reach, in the same form as the inbound list. Empty means no outbound TCP.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("tcpPorts")]
-    public string? TcpPorts { get; set; }
+    public string? EgressTcpPorts { get; set; }
 
     /// <summary>UDP ports outbound traffic may reach. Empty means no outbound UDP — which includes DNS on port 53.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("udpPorts")]
-    public string? UdpPorts { get; set; }
+    public string? EgressUdpPorts { get; set; }
 
     /// <summary>Whether inbound ICMP is allowed from the remotes above. Off by default. ⚠ With this off, a workload in this group does not answer ping and does not receive path-MTU messages.</summary>
     /// <remarks>Defaults to false when left unset.</remarks>
     [JsonPropertyName("allowIcmp")]
-    public bool? AllowIcmp { get; set; }
+    public bool? IngressAllowIcmp { get; set; }
 
     /// <summary>The IPv4 range inbound traffic may come from, in CIDR form, or empty for no IPv4 rules at all. Use 0.0.0.0/0 for the whole internet.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("remoteV4")]
-    public string? RemoteV4 { get; set; }
+    public string? IngressRemoteV4 { get; set; }
 
     /// <summary>The IPv6 range inbound traffic may come from, or empty for no IPv6 rules at all. ⚠ A group with only an IPv4 remote silently permits nothing over IPv6, which on a dual-stack subnet is not the same as permitting nothing.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("remoteV6")]
-    public string? RemoteV6 { get; set; }
+    public string? IngressRemoteV6 { get; set; }
 
     /// <summary>TCP ports inbound traffic may reach, as a comma-separated list of ports and ranges — for example 80,443,8000-8100. Empty means no TCP is allowed inbound. ⚠ There is no way to say 'every protocol'; 1-65535 says 'every TCP port'.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("tcpPorts")]
-    public string? TcpPorts { get; set; }
+    public string? IngressTcpPorts { get; set; }
 
     /// <summary>UDP ports inbound traffic may reach, in the same form as tcpPorts. Empty means no UDP is allowed inbound.</summary>
     /// <remarks>Defaults to "" when left unset.</remarks>
     [JsonPropertyName("udpPorts")]
-    public string? UdpPorts { get; set; }
+    public string? IngressUdpPorts { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
@@ -3323,7 +3323,7 @@ public sealed partial class SecurityGroupResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public SecurityGroupData Data { get; init; } = new();
+    public required SecurityGroupData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<SecurityGroupResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -3459,7 +3459,7 @@ public sealed partial class SubnetResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public SubnetData Data { get; init; } = new();
+    public required SubnetData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<SubnetResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -3484,11 +3484,11 @@ public sealed partial class SubnetResource {
 
         /// <summary>How many IPv4 addresses remain. ⚠ Zero here is the answer to 'why will nothing schedule in this subnet'.</summary>
         [JsonPropertyName("available")]
-        public required long Available { get; set; }
+        public required long V4Available { get; set; }
 
         /// <summary>How many IPv4 addresses the prefix contains that may be allocated, excluding the network address, the broadcast address and the gateway.</summary>
         [JsonPropertyName("total")]
-        public required long Total { get; set; }
+        public required long V4Total { get; set; }
 
         /// <summary>How many IPv4 addresses are currently allocated to ports.</summary>
         [JsonPropertyName("used")]
@@ -3496,11 +3496,11 @@ public sealed partial class SubnetResource {
 
         /// <summary>How many IPv6 addresses remain, as a decimal string, or empty for an IPv4-only subnet.</summary>
         [JsonPropertyName("available")]
-        public string? Available { get; set; }
+        public string? V6Available { get; set; }
 
         /// <summary>How many IPv6 addresses the prefix contains, as a decimal string, or empty for an IPv4-only subnet. ⚠ A string because a /64 does not fit in the signed 64-bit integer SchemaKind.WholeNumber validates through.</summary>
         [JsonPropertyName("total")]
-        public string? Total { get; set; }
+        public string? V6Total { get; set; }
     }
 
     /// <summary>ListAddressUsage. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
@@ -3624,7 +3624,7 @@ public sealed partial class WidgetResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public WidgetData Data { get; init; } = new();
+    public required WidgetData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<WidgetResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -3822,7 +3822,7 @@ public sealed partial class OpenSearchServiceResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public OpenSearchServiceData Data { get; init; } = new();
+    public required OpenSearchServiceData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<OpenSearchServiceResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -4050,7 +4050,7 @@ public sealed partial class StorageAccountResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public StorageAccountData Data { get; init; } = new();
+    public required StorageAccountData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<StorageAccountResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -4173,7 +4173,7 @@ public sealed partial class BucketResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public BucketData Data { get; init; } = new();
+    public required BucketData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<BucketResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -4367,7 +4367,7 @@ public sealed partial class CloudTerminalResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public CloudTerminalData Data { get; init; } = new();
+    public required CloudTerminalData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<CloudTerminalResource>> GetAsync(CancellationToken cancellationToken = default);
