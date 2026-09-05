@@ -49,6 +49,21 @@ namespace CyberCloud.Cluster.Conformance.Infrastructure;
 ///         container at a time. It does <b>not</b> serialise against
 ///         <c>CyberCloud.Kubernetes.Tests</c>, which would need one line in that project.
 ///     </para>
+///     <para>
+///         ⚠ <b>That last sentence stood unread for long enough to cost a run — #77.</b> Two suites
+///         hold a k3s and take no <see cref="ClusterSlot" />: <c>CyberCloud.Kubernetes.Tests</c>,
+///         named above, and <c>CyberCloud.AppHost.Tests</c>, which starts one through Aspire and
+///         takes a machine-wide lock of its own under a different file name. Three unrelated permits
+///         over seventeen cluster-backed suites, so three API servers could be live at once. The cap
+///         that now covers all seventeen is <c>build/Build.Test.cs</c>
+///         § <c>ClusterBackedSuiteDegree</c>, which is <b>1</b> precisely because that is the number
+///         this permit already enforces — build/ was taught the invariant rather than the two suites
+///         being taught the permit, because a lock taken <i>inside</i> a test process cannot stop the
+///         build from starting the process, so the fifteen used to spend the container budget on
+///         waiting rather than on working. ⚠ This lock stays regardless: it is what serialises a
+///         `dotnet run` of one suite against a second checkout's, which no semaphore in one build
+///         process can see.
+///     </para>
 /// </remarks>
 public static class ClusterInfrastructure {
     /// <summary>

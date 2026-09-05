@@ -83,10 +83,18 @@
         <!--
           ⚠ FOR TWO CONSTANTS AND ONE LOCK, AND THE LOCK IS THE REASON. ClusterSlot is documented as
           "one cross-process permit to hold a k3s container … shared by every assembly that runs a
-          cluster-backed suite"; an assembly that started its own k3s WITHOUT taking it would be the
-          sixteenth container-backed suite competing for the four-suite budget Task #95 set, which is
-          the starvation that cap exists to prevent. ClusterInfrastructure.K3sImage comes with it, so
-          this suite cannot drift onto a different API server from the ones it sits beside.
+          cluster-backed suite"; an assembly that started its own k3s WITHOUT taking it would be one
+          more suite competing for the container budget, which is the starvation that cap exists to
+          prevent. ClusterInfrastructure.K3sImage comes with it, so this suite cannot drift onto a
+          different API server from the ones it sits beside.
+
+          ⚠ THIS PARAGRAPH NAMED "THE FOUR-SUITE BUDGET TASK #95 SET" UNTIL 2026-09-05, AND BOTH
+          HALVES OF THAT HAD MOVED. The container budget is derived from the host rather than the
+          literal four, and since #77 the suites that hold a CLUSTER have a budget of their own at
+          one — build/Build.Test.cs § ClusterBackedSuiteDegree, which finds them by what their output
+          ships rather than by whether they took this lock. Two suites that hold a k3s never did take
+          it. The number is deliberately not repeated here: build/README.md § "The cluster degree is
+          1" is where it lives.
 
           It does drag Orleans, PostgreSQL and Redis in as transitive package references. Nothing here
           binds to a type from any of them, and the alternative — copying an image tag and a lock-file
