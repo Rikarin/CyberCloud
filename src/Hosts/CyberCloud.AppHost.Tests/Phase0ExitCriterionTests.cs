@@ -249,6 +249,25 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology) {
 ///     </para>
 /// </remarks>
 static class TestPaths {
+    /// <summary>
+    ///     The walk for <c>CyberCloud.slnx</c>, deferred until somebody asks for its answer.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A <see cref="Lazy{T}" /> rather than <c>= RepositoryRoot()</c>, and issue #82 is why
+    ///     the difference matters to a class that is not this one.</b> A static property initialiser
+    ///     runs in the type's static constructor, so with the walk written that way, touching ANY
+    ///     member of <c>TestPaths</c> — <see cref="AppHostDirectory" /> included — hit the disk. That
+    ///     made "does initialising my class reach the repository?" unanswerable for
+    ///     <c>ClusterBackedGatingTests</c>: the only way to ask was to touch <c>TestPaths</c>, and
+    ///     touching it was itself the thing being asked about. Constructing a
+    ///     <c>Lazy&lt;string&gt;</c> touches nothing, so
+    ///     <see cref="RepositoryHasBeenResolved" /> can now be read by a class that has not yet
+    ///     decided to resolve it.
+    ///     ⚠ Nothing else changes. <c>Lazy&lt;T&gt;</c>'s default mode is thread-safe and caches both
+    ///     the answer and the exception, which is the behaviour a <c>{ get; }</c> initialiser had.
+    /// </remarks>
+    static readonly Lazy<string> LazyRepository = new(RepositoryRoot);
+
     /// <summary>The directory holding <c>CyberCloud.slnx</c>.</summary>
     /// <remarks>
     ///     ⚠ Exposed rather than kept behind <see cref="AppHostDirectory" /> because a second reader
@@ -257,9 +276,32 @@ static class TestPaths {
     ///     runs. Two walks up to the solution file in one assembly is how they come to disagree about
     ///     what the root is.
     /// </remarks>
-    public static string Repository { get; } = RepositoryRoot();
+    public static string Repository => LazyRepository.Value;
 
-    public static string AppHostDirectory { get; } =
+    /// <summary>Whether anything in this assembly has resolved <see cref="Repository" /> yet.</summary>
+    /// <remarks>
+    ///     ⚠ <b>For <c>ClusterBackedGatingTests</c>'s issue #82 guard, and it is deliberately a fact
+    ///     about the whole assembly rather than about one class</b> — a <c>Lazy</c> resolves once and
+    ///     cannot say who forced it. That is why the guard reads this twice and compares, instead of
+    ///     asserting it is false: by the time a class initialises, another test class in this
+    ///     assembly may already have resolved the root, and an assertion on the bare flag would pass
+    ///     or fail on execution order. See that guard's remarks.
+    /// </remarks>
+    public static bool RepositoryHasBeenResolved => LazyRepository.IsValueCreated;
+
+    /// <summary>Where the AppHost project is, which is where its k3s writes the kubeconfig.</summary>
+    /// <remarks>
+    ///     ⚠ Computed on each access rather than cached in a <c>{ get; }</c> initialiser, which would
+    ///     put the walk back into <c>TestPaths</c>'s own static constructor and undo the paragraph on
+    ///     <see cref="LazyRepository" />. There are three call sites and none of them is in a loop —
+    ///     <c>ReconcileThroughTheRealHostTests</c> and <c>TenantOverHttpTests</c> each read it once
+    ///     into a <c>KubeconfigPath</c> static of their own, and
+    ///     <see cref="Phase0ExitCriterionTests.TheKubeconfigIsWrittenWhereSomethingOutsideTheContainerCanReadIt" />
+    ///     reads it once in a test body. The walk behind it is still done once and cached by
+    ///     <see cref="LazyRepository" />; what repeats is a <c>Path.Combine</c> of four strings, which
+    ///     is not worth a second <c>Lazy</c> to avoid.
+    /// </remarks>
+    public static string AppHostDirectory =>
         Path.Combine(Repository, "src", "Hosts", "CyberCloud.AppHost");
 
     static string RepositoryRoot() {

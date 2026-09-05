@@ -23,10 +23,24 @@
       What actually bounds this suite: `.github/workflows/gate.yml` § `test` sets
       `timeout-minutes: 30`, which is a kill switch and not a budget, and
       `.github/workflows/pr.yml` § "Enforce the 25-minute budget" fails the pipeline past
-      `BUDGET_MINUTES: 25` — six gate jobs in parallel, this suite inside one of them. The cost
-      argument above is unaffected; only the number attached to it was wrong, which is the failure
-      mode a citation to a section rather than to a line is supposed to make less likely and does
-      not.
+      `BUDGET_MINUTES: 25` — this suite inside one of the six jobs that budget is measured over. The
+      cost argument above is unaffected; only the number attached to it was wrong, which is the
+      failure mode a citation to a section rather than to a line is supposed to make less likely and
+      does not.
+
+      ⚠ SIX JOBS, FROM TWO FILES, AND THIS SENTENCE SAID "six gate jobs" UNTIL THE REVIEW OF THE #81
+      BRANCH — which is a citation defect of exactly the kind the paragraph above exists to record,
+      committed in the replacement for it. Recounted 2026-09-05 against the roster the budget script
+      is actually handed, `pr.yml` § budget's `EXPECTED_JOBS`:
+
+          architecture, test, generate, charts, portal   five jobs, all declared in gate.yml
+          security                                       one job, declared in pr.yml
+
+      gate.yml declares FIVE jobs and no more; `pr.yml` § gate calls it through `workflow_call`, so
+      those five report as "gate / architecture" and so on beside pr.yml's own `security`. The
+      seventh job, `budget`, is the measurer and excludes itself (`SELF_JOB: budget`), which is why
+      it is not on the roster and not counted here. Counting it as a sixth GATE job would have been a
+      claim about the wrong file: the fix for a slow `security` is not in gate.yml.
     -->
 
     <ItemGroup>

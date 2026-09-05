@@ -63,9 +63,8 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         ⚠ <b>HOW THE FOUR NUMBERS WERE COUNTED, because a count in a comment is the kind of claim
 ///         this gate exists to stop being taken on trust, and because reviewers had answered 110,
 ///         111 and 222 to the last of them.</b> Re-derived on 2026-09-05, not copied:
-///         <c>git show 16fd0ca:generated/sdk/2026-08-01.cs</c> — the last commit at which all four
-///         families are present at once, since <c>d40d962</c> fixed <c>CS0101</c> and <c>CS0246</c> by
-///         hand one commit before <c>e2005ed</c> added this gate — handed to a probe that replicates
+///         <c>git show 16fd0ca:generated/sdk/2026-08-01.cs</c> — the last blob of that file in which
+///         all four families are present at once — handed to a probe that replicates
 ///         <see cref="Compile" /> exactly: the same <c>LanguageVersion.Latest</c> parse options, the
 ///         same <c>TRUSTED_PLATFORM_ASSEMBLIES</c> reference set plus the built
 ///         <c>CyberCloud.Sdk.dll</c>, the same pinned <c>Microsoft.CodeAnalysis.CSharp</c> 5.6.0, and
@@ -92,7 +91,35 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         once per redeclaration.
 ///         ⚠ <b>What makes all of this stale:</b> nothing in the working tree — these are counts over
 ///         a historical blob, and <c>16fd0ca</c> is what pins them. They change only if that hash is
-///         wrong, which is checkable in one command.
+///         wrong.
+///     </para>
+///     <para>
+///         ⚠ <b>WHY <c>16fd0ca</c> IS THAT BLOB, IN TWO COMMANDS, BECAUSE THE FIRST ANSWER GIVEN HERE
+///         WAS WRONG AND THIS IS THE PARAGRAPH WRITTEN SO THAT NOTHING IS TAKEN ON TRUST.</b> The
+///         sentence above read "since <c>d40d962</c> fixed <c>CS0101</c> and <c>CS0246</c> by hand ONE
+///         COMMIT BEFORE <c>e2005ed</c> added this gate" until the review of this branch. The two
+///         commits are not adjacent and the claim was never load-bearing:
+///         <c>git rev-list --count d40d962..e2005ed</c> is <c>42</c>, and <c>e2005ed~1</c> is
+///         <c>8548ee9</c>. What actually pins the blob is adjacency in the FILE's history, not in the
+///         branch's, and that is the fact the derivation needs:
+///         <list type="bullet">
+///             <item>
+///                 <c>git log --oneline -- generated/sdk/2026-08-01.cs</c> lists <c>e2005ed</c> then
+///                 <c>d40d962</c>, so <c>d40d962</c> — the commit that fixed <c>CS0101</c> and
+///                 <c>CS0246</c> by hand — is the previous commit to TOUCH this file.
+///             </item>
+///             <item>
+///                 <c>git rev-parse --short d40d962^</c> is <c>16fd0ca</c>. Its blob is therefore the
+///                 last one written before those two families were repaired, which is what makes it
+///                 the last state of the file carrying all four at once.
+///             </item>
+///         </list>
+///         Both commands were re-run on the tree that carries this comment. ⚠ The forty-two commits
+///         between are irrelevant precisely BECAUSE none of them touched this file — which is the
+///         first command's real content, and the reason the substantive claim survived a false
+///         sentence. That is the failure mode worth naming: an incidental detail nobody needed,
+///         asserted with the same confidence as the numbers, in the comment whose entire purpose is
+///         that its numbers can be checked.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Why this is not a throwaway <c>.csproj</c>, which is where issue #73 starts.</b>

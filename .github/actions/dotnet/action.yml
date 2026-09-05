@@ -56,9 +56,40 @@ runs:
     # without a copy. Verified on 2026-09-05 locally rather than reasoned about: `dotnet --version`
     # in a directory whose global.json names an uninstalled band exits 155 and prints both the
     # requested version and the global.json path.
+    #
+    # ⚠ AND THE ASSIGNMENT ON THE NEXT LINE IS THE WHOLE OF WHY THIS STEP CAN FAIL AT ALL. It read
+    # `echo "SDK: $(dotnet --version)"` when issue #80 landed, and that step could not go red: a
+    # command substitution used as an ARGUMENT does not set the exit status of the enclosing command,
+    # `echo` succeeds, and `set -e` has nothing to fire on. The review that caught it replicated
+    # GitHub's own `shell: bash` invocation — `bash --noprofile --norc -e -o pipefail` — and both the
+    # synthetic and the real form were re-run here on 2026-09-05 against a scratch directory whose
+    # global.json names `99.0.100`:
+    #
+    #     set -euo pipefail; echo "SDK: $(dotnet --version)"; echo "runner: probe"   -> exit 0
+    #     set -euo pipefail; sdk=$(dotnet --version); echo "SDK: $sdk"; …            -> exit 155
+    #
+    # ⚠ The green form is worse than a blank line, which is why this is not cosmetic. `dotnet` writes
+    # its "A compatible .NET SDK was not found" diagnosis to stderr but prints the INSTALLED SDK
+    # LIST to stdout, so the substitution captured it and the step logged
+    # `SDK: 10.0.400 [C:\…\dotnet\sdk]` — a plausible, reassuring line naming an SDK that had just
+    # been refused. A reader scanning a green job for the toolchain would have found exactly what
+    # they expected to see.
+    #
+    # ⚠ So: `dotnet --version` on a line of its own, as an assignment, and echoed afterwards. An
+    # assignment whose right-hand side is a command substitution DOES take the substitution's exit
+    # status, which is what makes `set -e` bite. Keep it a bare `sdk=$(…)` at top level — writing it
+    # as `local sdk=$(…)` or `export sdk=$(…)` puts a builtin in front and hands the status back to
+    # the builtin, which is the same defect wearing a different hat.
+    #
+    # ⚠ The job did still go red before this fix, and that is a mitigation rather than the check:
+    # `./build.sh` later runs `dotnet tool restore` as a bare command under `set -eo pipefail`, which
+    # does propagate 155. Issue #80 asked whether anything ASSERTS the floor in CI, and until this
+    # line the honest answer was "only by accident, in another file, after the step named for it has
+    # already passed".
     - name: Prove the SDK satisfies global.json
       shell: bash
       run: |
         set -euo pipefail
-        echo "SDK: $(dotnet --version)"
+        sdk=$(dotnet --version)
+        echo "SDK: $sdk"
         echo "runner: ${{ runner.os }}/${{ runner.arch }}"
