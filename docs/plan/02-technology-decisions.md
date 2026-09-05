@@ -4,7 +4,7 @@
 
 | Item | Choice | Note |
 |---|---|---|
-| SDK | .NET 10 | `global.json` pins `10.0.100` with `rollForward: latestFeature`, matching `~/Projects/Survival/Server` |
+| SDK | .NET 10 | `global.json` floors at `10.0.300` with `rollForward: latestFeature`. ⚠ `10.0.100` until issue #80 — the analyzers need Roslyn 5.6, which the `10.0.3xx` band carries, and a `10.0.1xx` SDK *satisfied* the old floor and then failed the build with `CS9057` |
 | TFM | `net10.0` | Single TFM everywhere. No multi-targeting, no netstandard |
 | Language | C# 14, `LangVersion=latest` | See [00](00-vision-and-principles.md) for the subset |
 | Solution | `CyberCloud.slnx` | Plus `.slnf` filters per area for fast IDE loads |
@@ -98,9 +98,16 @@ transcription.** Four documents assert "analyzer-enforced" — [00 § Coding sta
 analyzer-authoring or analyzer-testing package at all, so nothing in it could have been written.
 
 ⚠ **The version rule is a ceiling, not a preference.** `Microsoft.CodeAnalysis.*` must not exceed
-the compiler that loads the analyzer. `global.json` rolls forward to SDK 10.0.302, whose `csc`
-reports `5.6.0-2.26329.109`; 5.6.0 is the released build of that same compiler and is therefore the
-pin. A newer Roslyn produces an analyzer the SDK silently fails to load.
+the compiler that loads the analyzer. 5.6.0 is the released build of the compiler in the `10.0.3xx`
+SDK band, and a newer Roslyn produces an analyzer that band's compiler refuses to load.
+
+⚠ **Read the other way, the same rule is a floor under `global.json`, and until issue #80 nothing
+said so.** This paragraph used to open "`global.json` rolls forward to SDK 10.0.302" — a fact about
+one machine, because `rollForward: latestFeature` rolls *up* to the newest band installed. The floor
+is now written where the toolchain reads it: `global.json` asks for `10.0.300`, so an SDK that cannot
+load the analyzers is refused by the SDK resolver, which names `global.json` and the version it
+wants, instead of by `CS9057` in whichever project compiles first.
+`Directory.Packages.props` § Roslyn carries the three measurements the band is derived from.
 
 ⚠ **`Microsoft.CodeAnalysis.CSharp.Workspaces` is not referenced by anything.** It is pinned so that
 central transitive pinning can lift it: `…Analyzer.Testing` 1.1.4 declares its Roslyn dependency as

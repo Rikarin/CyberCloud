@@ -41,19 +41,85 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Issue #73 in one sentence: the <c>Generated surfaces</c> row compares BYTES, and
-///         byte-identical is not valid.</b> Three defects shipped in
+///         byte-identical is not valid.</b> <b>Four</b> defect families shipped in
 ///         <c>generated/sdk/2026-08-01.cs</c> — <c>CS0101</c> from a duplicated enum name,
-///         <c>CS0246</c> from an action's enum that was referenced and never declared, and
-///         seventeen <c>CS0102</c>s from fourteen duplicated property names across eight declaring
-///         types — every one of them green under every gate in this repository, because no
-///         <c>.csproj</c> includes that file and nothing else handed it to a compiler. The first two
-///         were found by running <c>tsc</c> over a DIFFERENT surface and then reading the C# one by
-///         eye; the third was found by this file, on the day it was written.
-///         ⚠ <b>Fourteen names and seventeen diagnostics is not a rounding error</b> — three of the
-///         names (<c>Enabled</c>, on <c>KafkaClusterData</c>, <c>NATSClusterData</c> and
+///         <c>CS0246</c> from an action's enum that was referenced and never declared, seventeen
+///         <c>CS0102</c>s from fourteen duplicated property names across eight declaring types, and
+///         110 <c>CS9035</c>s from twenty-two <c>= new()</c> initialisers standing in for a body
+///         whose members are <c>required</c> — every one of them green under every gate in this
+///         repository, because no <c>.csproj</c> includes that file and nothing else handed it to a
+///         compiler. The first two were found by running <c>tsc</c> over a DIFFERENT surface and then
+///         reading the C# one by eye; the last two were found by this file, on the day it was
+///         written.
+///         ⚠ <b>This paragraph said "Three defects" until issue #81</b>, and so did
+///         <c>Build.Architecture.cs</c> § <c>GeneratedSdkCompilesGate</c> and
+///         <c>build/_build.csproj</c>. The <c>484bacf</c> review corrected the <c>CS0102</c> count in
+///         all three sentences and left the family count at three, against
+///         <c>DerivedSurfaces.cs</c>, <c>generated/README.md</c> and <c>portal/libs/api/README.md</c>,
+///         which say four. Three files in <c>build/</c> — the machinery that gates citation honesty —
+///         were the ones that disagreed.
+///     </para>
+///     <para>
+///         ⚠ <b>HOW THE FOUR NUMBERS WERE COUNTED, because a count in a comment is the kind of claim
+///         this gate exists to stop being taken on trust, and because reviewers had answered 110,
+///         111 and 222 to the last of them.</b> Re-derived on 2026-09-05, not copied:
+///         <c>git show 16fd0ca:generated/sdk/2026-08-01.cs</c> — the last blob of that file in which
+///         all four families are present at once — handed to a probe that replicates
+///         <see cref="Compile" /> exactly: the same <c>LanguageVersion.Latest</c> parse options, the
+///         same <c>TRUSTED_PLATFORM_ASSEMBLIES</c> reference set plus the built
+///         <c>CyberCloud.Sdk.dll</c>, the same pinned <c>Microsoft.CodeAnalysis.CSharp</c> 5.6.0, and
+///         the error diagnostics grouped by id rather than read off a log:
+///         <c>CS0101</c> 1, <c>CS0246</c> 1, <c>CS0102</c> 17, <c>CS9035</c> 110, plus the 170
+///         <c>CS8795</c>s this gate accepts. The same probe over today's checked-in file gives the 170
+///         and nothing else, which is the gate's own verdict arrived at a second way.
+///     </para>
+///     <para>
+///         ⚠ <b>110, not the 111 you get by counting the word <c>required</c>.</b> <c>CS9035</c> is
+///         one diagnostic per unset required member per creation site, so the arithmetic is
+///         "required members of each <c>{Model}Data</c>, summed over the twenty-two
+///         <c>public {Model}Data Data { get; init; } = new();</c> lines" — and that sum is 111 in the
+///         source text. It is 110 to the compiler because <c>LoadBalancerData</c> declares
+///         <c>Port</c> <c>required</c> TWICE: that pair is one of the seventeen <c>CS0102</c>s, and a
+///         redeclared member is one member. The 222 in <c>e2005ed</c>'s commit message is the
+///         syntactic 111 doubled. The other seven types with duplicated names leave the sum alone:
+///         six of them never declared the same member <c>required</c> on both copies, and the seventh,
+///         <c>SubnetResource.ListAddressUsageResult</c>, is not one of the twenty-two <c>= new()</c>
+///         targets at all.
+///         ⚠ <b>Fourteen names and seventeen diagnostics is not a rounding error either</b> — three of
+///         the names (<c>Enabled</c>, on <c>KafkaClusterData</c>, <c>NATSClusterData</c> and
 ///         <c>PostgreSQLServerData</c>) were declared three times each, and <c>CS0102</c> is emitted
-///         once per redeclaration. Counted on 2026-09-05 by compiling the pre-fix file with this
-///         very class.
+///         once per redeclaration.
+///         ⚠ <b>What makes all of this stale:</b> nothing in the working tree — these are counts over
+///         a historical blob, and <c>16fd0ca</c> is what pins them. They change only if that hash is
+///         wrong.
+///     </para>
+///     <para>
+///         ⚠ <b>WHY <c>16fd0ca</c> IS THAT BLOB, IN TWO COMMANDS, BECAUSE THE FIRST ANSWER GIVEN HERE
+///         WAS WRONG AND THIS IS THE PARAGRAPH WRITTEN SO THAT NOTHING IS TAKEN ON TRUST.</b> The
+///         sentence above read "since <c>d40d962</c> fixed <c>CS0101</c> and <c>CS0246</c> by hand ONE
+///         COMMIT BEFORE <c>e2005ed</c> added this gate" until the review of this branch. The two
+///         commits are not adjacent and the claim was never load-bearing:
+///         <c>git rev-list --count d40d962..e2005ed</c> is <c>42</c>, and <c>e2005ed~1</c> is
+///         <c>8548ee9</c>. What actually pins the blob is adjacency in the FILE's history, not in the
+///         branch's, and that is the fact the derivation needs:
+///         <list type="bullet">
+///             <item>
+///                 <c>git log --oneline -- generated/sdk/2026-08-01.cs</c> lists <c>e2005ed</c> then
+///                 <c>d40d962</c>, so <c>d40d962</c> — the commit that fixed <c>CS0101</c> and
+///                 <c>CS0246</c> by hand — is the previous commit to TOUCH this file.
+///             </item>
+///             <item>
+///                 <c>git rev-parse --short d40d962^</c> is <c>16fd0ca</c>. Its blob is therefore the
+///                 last one written before those two families were repaired, which is what makes it
+///                 the last state of the file carrying all four at once.
+///             </item>
+///         </list>
+///         Both commands were re-run on the tree that carries this comment. ⚠ The forty-two commits
+///         between are irrelevant precisely BECAUSE none of them touched this file — which is the
+///         first command's real content, and the reason the substantive claim survived a false
+///         sentence. That is the failure mode worth naming: an incidental detail nobody needed,
+///         asserted with the same confidence as the numbers, in the comment whose entire purpose is
+///         that its numbers can be checked.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Why this is not a throwaway <c>.csproj</c>, which is where issue #73 starts.</b>
@@ -108,7 +174,9 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         that failed on a style rule would be a gate the next person turns off.
 ///     </para>
 ///     <para>
-///         ✔ <b>Verified by breaking it, on 2026-09-05, SDK 10.0.400 / Roslyn 5.6.0.</b> Two probes
+///         ✔ <b>Verified by breaking it, on 2026-09-05, SDK 10.0.400 with Roslyn 5.6.0 — the pinned
+///         <c>Microsoft.CodeAnalysis.CSharp</c> this class compiles with, which is NOT that SDK's own
+///         <c>csc</c> (10.0.400 ships 5.9.0-1.26379.115; issue #80).</b> Two probes
 ///         appended to <c>generated/sdk/2026-08-01.cs</c> and reverted: a second
 ///         <c>public enum ValkeyCacheMode</c> gave
 ///         <c>✘ Generated SDK compiles Failed … line 4598: CS0101 The namespace

@@ -128,8 +128,18 @@ sealed partial class Build : NukeBuild
         .DependsOn(Compile)
         .Executes(GenerateSurfaces);
 
+    // ⚠ The count is INTERPOLATED, not typed, and issue #81 is why. This line read "The ten
+    // architecture gates" while ArchitectureGates held seventeen — the ten docs/plan/23 lists plus
+    // the seven this build adds — and #73's seventeenth made it one staler without anything going
+    // red: `--help` is prose, and the two citation gates this very target runs check citations, not
+    // counts. Build.Architecture.cs § ArchitectureGates is the list the target actually walks, so its
+    // Length is the one number that cannot disagree with the run. The header CheckArchitecture logs
+    // is already written this way, which is how the two came to disagree in the first place.
     Target Architecture => _ => _
-        .Description("The ten architecture gates. docs/plan/23 § The architecture gates.")
+        .Description(
+            $"The {ArchitectureGates.Length} architecture gates — the ten in docs/plan/23 "
+            + "§ The architecture gates, plus the ones this build adds. Build.Architecture.cs "
+            + "§ ArchitectureGates names every one.")
         .DependsOn(Compile)
         .Executes(CheckArchitecture);
 

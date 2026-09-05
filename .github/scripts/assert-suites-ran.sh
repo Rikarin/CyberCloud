@@ -9,8 +9,18 @@
 # Build.Test.cs § RunTests returns success when discovery finds no per-PR project, and the comment
 # there argues the case at length: a gate that is red from commit one is a gate everyone learns to
 # ignore. That reasoning is right for the build and wrong for CI. docs/plan/23 § CI shape gates
-# every PR on `Test`, this repository has 26 per-PR suites today, and the day discovery returns
+# every PR on `Test`, this repository has 73 per-PR suites today, and the day discovery returns
 # zero of them is the day a green tick means nothing.
+#
+# ⚠ That number read 26 until issue #81, and it is prose rather than a threshold — nothing below
+# compares against it; the three guards test for zero. It is still worth being right, because 26 was
+# the number #77 needed when it was reasoning about what this gate costs. Recounted 2026-09-05 by
+# applying Build.Test.cs § SuiteOwning's own rules to the project files under its SourceRoots
+# (src/, test/, cli/): 42 `*.Tests` + 30 `*.Conformance` + `CyberCloud.Isolation` = 73, out of 141
+# .csproj files there. Build.Test.cs § StartsCluster and build/README.md § "How many
+# container-backed suites run at once" both record the same 73 from the same day.
+# ⚠ What makes it stale: any project added under src/, test/ or cli/ whose name ends `.Tests` or
+# `.Conformance`. It is a comment, so nothing goes red — re-run the count above.
 #
 # So the build stays lenient and the workflow is strict. Three independent guards, because each
 # catches a different way of running nothing:
@@ -78,7 +88,7 @@ fi
 echo "Test: ${#reports[@]} suite(s), $total test(s) executed."
 
 # The count lands in the job summary so the number is visible on the run page, not only in a log
-# somebody has to expand. A drop from 26 suites to 3 is the kind of thing that is obvious in a
+# somebody has to expand. A drop from 73 suites to 3 is the kind of thing that is obvious in a
 # table and invisible in a scrollback.
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     {

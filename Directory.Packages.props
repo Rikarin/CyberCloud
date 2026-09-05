@@ -284,11 +284,51 @@
           docs/plan/02 § Test and build.
     
           ⚠ VERSION RULE: Microsoft.CodeAnalysis.* must not exceed the compiler that loads the analyzer.
-          global.json rolls forward to SDK 10.0.302, whose csc reports 5.6.0-2.26329.109, so 5.6.0 —
-          the released build of that same compiler — is the ceiling and is what is pinned. Taking a
-          newer Roslyn than the SDK's would produce an analyzer the SDK cannot load, and the symptom is
-          a build warning about a missing analyzer assembly rather than an error.
-    
+          A compiler refuses to load an analyzer built against a newer Roslyn than its own, so the SDK's
+          csc is a CEILING ON THIS PIN — and, read the other way, this pin is a FLOOR UNDER THE SDK, and
+          therefore under global.json. 5.6.0 is the released build of the compiler in the 10.0.3xx SDK
+          band, and `global.json` names `10.0.300` for exactly that reason. Issue #80.
+
+          ⚠ THE TWO DIRECTIONS, SPELLED OUT, BECAUSE THIS PARAGRAPH HAD THEM INVERTED AND IT IS THE ONE
+          PLACE THAT HAS TO BE RIGHT. It read "this pin is a ceiling on every SDK the tree is allowed to
+          be built with" until the review of the #80 branch — which is backwards, and contradicted its
+          own next clause three words later. Nothing bounds the SDK from above here. The tree is its own
+          counterexample: it builds on 10.0.400, whose csc is 5.9.0-1.26379.115 (measured below), far
+          above any such "ceiling", and it builds because a NEWER compiler loads an analyzer built
+          against an OLDER Roslyn without complaint. That is the whole asymmetry:
+
+            * ceiling on the PACKAGE, set by the compiler — raise this pin above the csc that runs in
+              CI or on a contributor's machine and that compiler refuses the analyzer: CS9057.
+            * floor under the SDK, set by the package — an SDK whose csc is older than this pin cannot
+              load the analyzer, so `global.json` must refuse it. That refusal is the fix #80 asked for.
+
+          Both readings are one sentence — "the package must not exceed the compiler" — and the second
+          is the one this repository enforces, because the pin moves by hand and the SDK arrives from a
+          runner image. docs/plan/02 § Platform baseline states the same rule in the same two
+          directions and is the register these four rows belong to.
+
+          ⚠ WHERE 10.0.300 COMES FROM, since a wrong floor here is a confusing error on somebody
+          else's machine. Three measurements, none of them a guess:
+
+            * SDK 10.0.103 runs compiler 5.0.0.0 — issue #80's transcript, which is the whole
+              complaint: `CSC : error CS9057: Analyzer assembly '…/CyberCloud.Analyzers.dll' cannot be
+              used because it references version '5.6.0.0' of the compiler, which is newer than the
+              currently running version '5.0.0.0'`.
+            * SDK 10.0.302 ships csc 5.6.0-2.26329.109 — recorded by whoever first wrote this
+              paragraph, and the reason 5.6.0 is the number pinned.
+            * SDK 10.0.400 ships 5.9.0-1.26379.115 — measured 2026-09-05 off
+              sdk/10.0.400/Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll.
+
+          A feature band carries one Roslyn minor for its life, so 10.0.3xx is the lowest band on which
+          5.6 is attested and `10.0.300` is the floor. ⚠ 10.0.2xx is NOT measured here — no such SDK
+          was installed to ask — so if that band also carries 5.6 this floor is one band too strict.
+          That is the direction to be wrong in: the cost is an SDK install, where the cost of being one
+          band too lax is CS9057 in a project that has nothing to do with the problem.
+
+          ⚠ What makes this stale: raising this pin above 5.6.0. The pin and `global.json`'s
+          `sdk.version` move together — a 5.9.0 pin without a floor of 10.0.400 is the same defect
+          issue #80 filed, one band up.
+
           ⚠ netstandard2.0 is still the required analyzer TFM at 5.6.0 — checked, not assumed:
           ~/.nuget/packages/microsoft.codeanalysis.csharp/5.6.0/lib/ contains net10.0, net8.0 AND
           netstandard2.0. See the header of src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj.

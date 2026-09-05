@@ -114,8 +114,12 @@ jobs:
       - name: ./build.sh Test
         run: .github/scripts/run-build.sh "$RUNNER_TEMP/test.log" Test
 
-      # always(): the guard is diagnostic as well as a gate, and "26 suites, 3 104 tests" is worth
-      # as much beside a failed run as beside a green one.
+      # always(): the guard is diagnostic as well as a gate, and its "N suite(s), M test(s)
+      # executed." line is worth as much beside a failed run as beside a green one.
+      # ⚠ This comment illustrated that line with "26 suites, 3 104 tests" until issue #81. The 26
+      # was the same stale count the script's own header carried — it is 73, recounted there — and
+      # the test total is not a number this file can pin honestly, so the shape is quoted and the
+      # example is not.
       - name: Prove the suites actually ran
         if: always()
         run: .github/scripts/assert-suites-ran.sh artifacts/test-results "$RUNNER_TEMP/test.log"

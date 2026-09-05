@@ -21,8 +21,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         ⚠ <b><c>--phase 15</c>, and that narrows what the run proves.</b> A selector narrows a
 ///         run to what it selects, so this exercises the installer's per-component path and NOT its
 ///         ordering: a defect in the barrier between phases would not be caught here. Installing
-///         every phase would mean nineteen operators and three virtual machines in a lane narrower
-///         than one suite, which is the reason the bundle had no cluster-backed proof at all.
+///         every phase would mean nineteen operators and three virtual machines in a lane exactly
+///         one suite wide, which is the reason the bundle had no cluster-backed proof at all.
+///         ⚠ "in a lane narrower than one suite" until issue #81. It is not narrower than one:
+///         <c>build/Build.Test.cs</c> § <c>ClusterBackedSuiteDegree</c> is 1, so the lane is one
+///         suite exactly, and a lane narrower than that would run nothing at all.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>That paragraph used to quote the script's usage text — <i>"skips that guarantee and
@@ -40,10 +43,18 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         citation the sibling <c>.csproj</c> and <c>charts/bundle/README.md</c> were corrected for
 ///         on 2026-09-05, in a third copy nobody looked for. The container cap is derived from the
 ///         host rather than the literal four, and since #77 a suite that holds a <em>cluster</em> —
-///         this one does — waits on a second cap of its own at <b>one</b>:
-///         <c>build/Build.Test.cs</c> § <c>ClusterBackedSuiteDegree</c>. The number is deliberately
-///         not repeated here; build/README.md § "The cluster degree is 1" is where it lives, for the
-///         reason this paragraph exists.
+///         this one does — waits on a second cap of its own: <c>build/Build.Test.cs</c>
+///         § <c>ClusterBackedSuiteDegree</c>, which is <b>1</b>.
+///         ⚠ <b>That last clause read "The number is deliberately not repeated here;
+///         build/README.md § 'The cluster degree is 1' is where it lives" until issue #81, and the
+///         same sentence had already said "at one" three words earlier.</b> It cannot not be
+///         repeated: the section it points at carries the number in its own heading. So the number is
+///         stated once, plainly, and build/README.md § "The cluster degree is 1" is where it is
+///         ARGUED rather than merely written down — that it is the invariant fifteen of the seventeen
+///         cluster-backed assemblies already keep among themselves through <c>ClusterSlot</c>. ⚠ What
+///         would make this stale is that constant moving, and unlike <c>ContainerBackedSuiteDegree</c>
+///         beside it, it is neither derived from the host nor overridable, so it moves only by
+///         somebody editing the line.
 ///     </para>
 /// </remarks>
 public static class BundleInstaller {

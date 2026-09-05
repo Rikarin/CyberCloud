@@ -1371,10 +1371,18 @@ partial class Build
     ///         schemas, <c>pnpm typecheck:api</c> runs <c>tsc</c> over the TypeScript client, and
     ///         <c>openapi/</c> is validated and diffed. <b>Nothing consumed the .NET SDK.</b> No
     ///         <c>.csproj</c> includes <c>generated/sdk/*.cs</c>, so the checked-in file had never
-    ///         been handed to a compiler, and three separate defects shipped inside it —
-    ///         <c>CS0101</c>, <c>CS0246</c> and seventeen <c>CS0102</c>s over fourteen duplicated
-    ///         property names — every one of them green under every gate here. This is the C# half of
-    ///         what <c>pnpm typecheck:api</c> has been doing for the TypeScript client all along.
+    ///         been handed to a compiler, and <b>four</b> separate defect families shipped inside it —
+    ///         one <c>CS0101</c>, one <c>CS0246</c>, seventeen <c>CS0102</c>s over fourteen duplicated
+    ///         property names, and <b>110</b> <c>CS9035</c>s over twenty-two <c>= new()</c> sites —
+    ///         every one of them green under every gate here. This is the C# half of what
+    ///         <c>pnpm typecheck:api</c> has been doing for the TypeScript client all along.
+    ///         ⚠ This sentence said "three separate defects" until issue #81. The <c>484bacf</c>
+    ///         review pass corrected the <c>CS0102</c> COUNT inside it and left the FAMILY count at
+    ///         three, so this paragraph, <see cref="GeneratedSdkSurface" /> and
+    ///         <c>build/_build.csproj</c> disagreed with <c>DerivedSurfaces.cs</c>,
+    ///         <c>generated/README.md</c> and <c>portal/libs/api/README.md</c>, which all said four.
+    ///         <c>CS9035</c> is the family that went missing; <see cref="GeneratedSdkSurface" /> shows
+    ///         how all four were counted and from which blob.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Reads the checked-in file, not the generator's output.</b> The row above proves

@@ -14,16 +14,31 @@
       devenv's design-time build) or on .NET (`dotnet build`, `csc`). netstandard2.0 is the only TFM
       both hosts can load, and Microsoft.CodeAnalysis.Analyzers enforces that with RS1041.
   
-      ⚠ VERIFIED, not assumed, against the SDK actually in use (global.json rolls to 10.0.302, whose
-      compiler reports version 5.6.0-2.26329.109):
-  
+      ⚠ VERIFIED, not assumed, against the package this assembly is compiled against — which is the
+      thing the TFM question actually turns on, and is the same on every machine:
+
           $ ls ~/.nuget/packages/microsoft.codeanalysis.csharp/5.6.0/lib/
           net10.0  net8.0  netstandard2.0
-  
-        Roslyn 5.6.0 — the version of the compiler this SDK ships — still publishes a netstandard2.0
-        target, so the requirement has NOT changed. If a future Roslyn drops it, this project moves to
-        whatever TFM replaces it and this comment is the record of why.
-  
+
+        Microsoft.CodeAnalysis.CSharp 5.6.0 — the version Directory.Packages.props § Roslyn pins, and
+        so the Roslyn this analyzer is built against — still publishes a netstandard2.0 target, so the
+        requirement has NOT changed. If a future Roslyn drops it, this project moves to whatever TFM
+        replaces it and this comment is the record of why.
+
+      ⚠ THAT SENTENCE READ "against the SDK actually in use (global.json rolls to 10.0.302, whose
+      compiler reports version 5.6.0-2.26329.109)" UNTIL ISSUE #80, AND IT WAS A CLAIM ABOUT ONE
+      MACHINE. `rollForward: latestFeature` rolls UP to the newest feature band installed, so which
+      SDK global.json resolves to is a property of whoever is reading it: 10.0.302 on the machine that
+      wrote the line, and 10.0.400 on the machine that removed it — whose csc reports
+      5.9.0-1.26379.115, measured 2026-09-05 off
+      sdk/10.0.400/Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll rather than assumed. Nothing here
+      needs that number. global.json states a FLOOR — `10.0.300`, the lowest band on which Roslyn 5.6
+      is attested — and a floor is the whole of what this project requires: a compiler loads an
+      analyzer built against its own Roslyn or an older one, so every SDK at or above the floor can
+      load this one. Directory.Packages.props § Roslyn carries the three measurements the band is
+      derived from and says which one is an inference; .github/actions/dotnet is where CI is made to
+      meet it.
+
       The guard in Directory.Build.targets (CyberCloudGuardAgainstMultiTargeting) is not tripped: it
       fires on `TargetFrameworks` (plural), and this is still a single-TFM project.
     -->
