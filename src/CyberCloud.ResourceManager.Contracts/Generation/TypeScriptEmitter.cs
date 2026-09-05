@@ -896,7 +896,9 @@ public static class TypeScriptEmitter {
     ///     ⚠ <b>This exists because nothing in the .NET build type-checks TypeScript and
     ///     <c>portal/eslint.config.mjs</c> ignores this directory.</b> The .NET SDK emitter shipped a
     ///     property typed with a name it never declared, in a file no build in this repository
-    ///     compiles; the same mistake here would reach the portal's <c>ng build</c>, one target
+    ///     compiled — issue #73 has since given that file a compiler too, and this check is what
+    ///     found the shape in the first place; the same mistake here would reach the portal's
+    ///     <c>ng build</c>, one target
     ///     later, and only once something imported the client. So every name the client imports has
     ///     to be a name the models export — which is the cheapest check that would have caught it,
     ///     and it is honest about being narrower than a compiler.

@@ -66,6 +66,73 @@ partial class Build
     /// <summary>How a message names that directory — repository-relative, with forward slashes.</summary>
     const string PortalApiRelative = "portal/libs/api";
 
+    /// <summary>
+    ///     The subdirectory of <c>generated/</c> holding the .NET SDK — <c>SdkEmitter.DirectoryName</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A literal rather than the constant, because <c>build/_build.csproj</c> is deliberately
+    ///     outside <c>CyberCloud.slnx</c> and references nothing under <c>src/</c> — the same reason
+    ///     <see cref="PortalApiRelative" /> above is a literal. It cannot drift silently: the
+    ///     directory is where <c>Generate</c> writes and where <see cref="GeneratedSdkFiles" />
+    ///     reads, so a rename empties this glob and the gate reports ○ over zero files rather than ✔.
+    /// </remarks>
+    const string SdkSurfaceDirectory = "sdk";
+
+    /// <summary>The hand-written half the generated one is compiled against — issue #73.</summary>
+    const string SdkAssemblyName = "CyberCloud.Sdk";
+
+    /// <summary>
+    ///     Every checked-in file of the .NET SDK surface, oldest api-version first.
+    /// </summary>
+    /// <remarks>
+    ///     Globbed off disk rather than taken from the generation report, deliberately: issue #73 is
+    ///     about the file that is CHECKED IN never reaching a compiler, and a list derived from the
+    ///     generator would compile what the generator just produced instead. The two are equal
+    ///     whenever the <c>Generated surfaces</c> row is green, and the whole point is not to depend
+    ///     on that.
+    /// </remarks>
+    IReadOnlyList<AbsolutePath> GeneratedSdkFiles =>
+        (DerivedSurfacesDirectory / SdkSurfaceDirectory) is var directory && directory.DirectoryExists()
+            ? directory.GlobFiles("*.cs").OrderBy(x => x.Name, StringComparer.Ordinal).ToList()
+            : [];
+
+    /// <summary>
+    ///     Each of those files as a C# compiler sees it — <see cref="GeneratedSdkSurface" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One compilation per file, never one over the set.</b> The generated types carry no
+    ///     api-version in their namespace, so two published api-versions declare the same type names;
+    ///     compiling them together would be <c>CS0101</c> on every model in the SDK. The reasoning is
+    ///     on <see cref="GeneratedSdkSurface" />, and it is the reason this is not a throwaway
+    ///     <c>.csproj</c>.
+    /// </remarks>
+    // List rather than IReadOnlyList: CA1859 is an error here and this is a private helper — the
+    // same reason Build.Architecture.cs § ShippingProjectFiles returns a Dictionary.
+    List<GeneratedSdkFile> CompiledGeneratedSdk()
+    {
+        var references = new[] { AssemblyOf(SdkAssemblyName) };
+
+        return GeneratedSdkFiles.Select(file => GeneratedSdkSurface.Compile(file, references)).ToList();
+    }
+
+    /// <summary>
+    ///     The reason the compilation above could not be trusted, or <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Reported as one line rather than left to produce hundreds. Without
+    ///     <c>CyberCloud.Sdk.dll</c> every <c>Response&lt;T&gt;</c>, <c>Operation&lt;T&gt;</c>,
+    ///     <c>WaitUntil</c> and <c>AsyncPageable&lt;T&gt;</c> in the file is <c>CS0246</c> — a gate
+    ///     failing loudly for a reason that has nothing to do with the file it is inspecting, which
+    ///     is how a reader learns to disbelieve it.
+    /// </remarks>
+    string? GeneratedSdkBlocker()
+        => AssemblyOf(SdkAssemblyName).FileExists()
+            ? null
+            : $"{SdkAssemblyName} has no built assembly at {AssemblyOf(SdkAssemblyName)}, so the "
+            + $"generated SDK cannot be compiled against the shapes it names — Response<T>, "
+            + $"Operation<T>, WaitUntil and AsyncPageable<T> are all its. Run ./build.sh Compile "
+            + $"first, in the same configuration ({Configuration}).";
+
     /// <summary>Where docs/plan/03 § Providers puts every provider. Matched at any depth below.</summary>
     AbsolutePath ProvidersRoot => RootDirectory / "src" / "Providers";
 
@@ -195,6 +262,29 @@ partial class Build
             failures.Add(
                 $"{DerivedSurfacesDirectory.Name}/{stale} is checked in and this run did not produce "
                 + "it. A generated surface nothing generates is one nobody can reproduce.");
+        }
+
+        // ⚠ THE .NET SDK IS COMPILED, HERE AND IN `Architecture` — issue #73. This target has just
+        // rewritten the file, so it is the earliest place an emitter change that produces invalid C#
+        // can be told about it; the gate in Build.Architecture.cs is the one CI forms a verdict from.
+        // The alternative — leaving it to `Architecture` alone — is an author who runs `Generate`,
+        // sees green, commits, and learns from CI what the compiler already knew locally.
+        if (GeneratedSdkBlocker() is { } blocker)
+        {
+            failures.Add(blocker);
+        }
+        else
+        {
+            foreach (var compiled in CompiledGeneratedSdk())
+            {
+                foreach (var error in compiled.Errors)
+                {
+                    failures.Add(
+                        $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} does "
+                        + $"not compile — {error}. The Generated surfaces comparison is byte-for-byte "
+                        + "and byte-identical is not valid; fix the emitter, not the file.");
+                }
+            }
         }
 
         // ⚠ THE PORTAL'S CLIENT — issue #21. Reported against its own directory rather than folded

@@ -4,6 +4,11 @@ Everything in this directory is **generated and checked in**. Do not edit it. `.
 overwrites it, and `./build.sh Architecture` fails on any difference between what is here and what the
 generator produces.
 
+⚠ That comparison is **byte-for-byte, which proves the emitter is deterministic and proves nothing
+about whether the output is valid**. For `sdk/` there is a second gate that does — `Generated SDK
+compiles`, issue #73 — and the "What is not here" section below says why it is a Roslyn compilation
+in the build rather than a `.csproj`.
+
 | Directory | Surface | Consumed by |
 |---|---|---|
 | `cli/{api-version}.json` | The `cyc` verb tree — groups, commands, verbs, flags, aliases, exit codes | The hand-written `cyc` host ([21](../docs/plan/21-cli-and-sdks.md) § `cyc` — the CLI) |
@@ -39,12 +44,24 @@ makes the gateway serve `openapi/` as files. Nothing here is served to anyone.
 - **The SDK's hand-written half** — credential types, pipeline policies, convenience methods, tests
   ([21](../docs/plan/21-cli-and-sdks.md) § Generation). Every generated type is `partial` so that half
   extends these in place rather than wrapping them.
-- **A `.csproj` for `sdk/`.** The clients name `Azure.Core`'s `Operation<T>`, `Response<T>`,
-  `WaitUntil` and `AsyncPageable<T>`, which arrive with that hand-written half; compiling this file
-  before it exists would fail for reasons that have nothing to do with the generator. The models
-  depend on nothing but the BCL. ⚠ The drift gate does not care either way — it compares bytes — so the
-  contract this surface owes is enforced from the day it is generated rather than from the day it
-  compiles.
+- **A `.csproj` for `sdk/`** — but it is compiled anyway, and that changed with issue #73. The
+  clients name `Response<T>`,
+  `Operation<T>`, `WaitUntil` and `AsyncPageable<T>`, which are `CyberCloud.Sdk`'s own shapes and
+  arrive with the hand-written half, and every operation is a `partial` declaration whose
+  implementing half that same hand-written code owes — so a project including this file fails on
+  `CS8795` before it fails on anything real. **Two further things make a project the wrong tool
+  here:** the emitted namespace carries no api-version, so `<Compile Include="sdk/*.cs" />` would be
+  `CS0101` on every type the day a second api-version is published; and a project would compile only
+  what its glob matched, which is how an older api-version stops being checked. So
+  `build/Build.Architecture.cs`'s **`Generated SDK compiles`** gate hands **each file, on its own**,
+  to Roslyn against the real `CyberCloud.Sdk`, accepting `CS8795` and nothing else. It is the C#
+  equivalent of the `pnpm typecheck:api` that has always covered the TypeScript client.
+
+  ⚠ **The row above it compares BYTES, and byte-identical is not valid.** That distinction is not
+  theoretical: `sdk/2026-08-01.cs` was shipping `CS0101` (a duplicated enum name), `CS0246` (an
+  action's enum referenced and never declared), fourteen `CS0102`s (duplicated property names, from
+  flattening a nested body) and 222 `CS9035`s (`= new()` for a body whose members are `required`) —
+  green under every gate in this repository, because nothing had ever handed the file to a compiler.
 - **The portal's TypeScript client.** It exists (issue #21) and is generated from the same document
   by the same run, but it is written to `portal/libs/api/` rather than here — [03](../docs/plan/03-repository-layout.md)
   § Assembly graph rules, rule 6 gives the generator that directory, and `Build.Architecture` enforces

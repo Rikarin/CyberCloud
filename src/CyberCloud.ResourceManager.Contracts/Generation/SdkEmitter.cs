@@ -26,13 +26,20 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///         it — a wrapper is a second surface with a second set of names.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The output is checked in and is not in a <c>.csproj</c> yet, and that is a stated
-///         limitation rather than an oversight.</b> The clients reference <c>Azure.Core</c>'s
-///         <c>Operation&lt;T&gt;</c>, <c>Response&lt;T&gt;</c> and <c>WaitUntil</c>, which arrive with
-///         the hand-written half; compiling this file before that exists would fail for reasons that
-///         have nothing to do with the generator. The models below depend on nothing but the BCL. The
-///         drift gate does not care either way — it compares bytes — so the contract this surface owes
-///         is enforced from the day it is generated rather than from the day it compiles.
+///         ⚠ <b>The output is checked in, is in no <c>.csproj</c>, and IS NOW COMPILED ANYWAY —
+///         issue #73.</b> Until 2026-09-05 this paragraph said the file's absence from a project was
+///         "a stated limitation rather than an oversight", and the limitation it stated was real: the
+///         clients name <c>Response&lt;T&gt;</c>, <c>Operation&lt;T&gt;</c>, <c>WaitUntil</c> and
+///         <c>AsyncPageable&lt;T&gt;</c>, which are <c>CyberCloud.Sdk</c>'s (the 2026-08-11 decision to
+///         reimplement rather than take <c>Azure.Core</c> — see that .csproj), and half of every
+///         <c>partial</c> member here is hand-written and does not exist yet. What did not follow was
+///         the conclusion. <b>Two defects shipped in this file</b> — <c>CS0101</c> from a duplicated
+///         enum name and <c>CS0246</c> from an action's undeclared one — green under every gate,
+///         because the <c>Generated surfaces</c> row compares BYTES and byte-identical is not valid.
+///         The <c>Generated SDK compiles</c> gate in <c>build/Build.Architecture.cs</c> now hands each
+///         checked-in file to Roslyn against the real <c>CyberCloud.Sdk</c>; it is the C# half of what
+///         <c>pnpm typecheck:api</c> already did for the TypeScript client, and it found a THIRD
+///         family the same day — see <see cref="MemberNaming" />.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Determinism, in a language rather than in JSON.</b> No timestamp, no machine name, no
@@ -268,8 +275,9 @@ public static class SdkEmitter {
     ///     closed sets — so <c>generated/sdk/2026-08-01.cs</c> declared <c>public enum
     ///     ValkeyCacheMode</c> twice and two properties referred to it. That is <c>CS0101</c> in
     ///     whatever consumes the SDK, it was checked in, and every gate in this repository was green
-    ///     over it: nothing here compiles the generated file. Found by running <c>tsc</c> over the
-    ///     TypeScript client, which has the same shape and a compiler that was actually run.
+    ///     over it: nothing here compiled the generated file. Found by running <c>tsc</c> over the
+    ///     TypeScript client, which has the same shape and a compiler that was actually run — and
+    ///     the C# file has one of its own now, issue #73.
     /// </remarks>
     readonly record struct EnumNaming(string Model, ImmutableHashSet<string> Ambiguous) {
         /// <summary>The naming for one model's leaves.</summary>
@@ -293,6 +301,102 @@ public static class SdkEmitter {
         /// <param name="leaf">The leaf.</param>
         public string NameOf(SchemaLeaf leaf) =>
             Model + (Ambiguous.Contains(leaf.Name) ? NestedName(leaf.JsonPointer) : Pascal(leaf.Name));
+    }
+
+    /// <summary>
+    ///     How one emitted class's PROPERTIES are named — the same rule <see cref="EnumNaming" />
+    ///     applies to its enum types, one level down, because the collision is the same collision.
+    /// </summary>
+    /// <param name="ByPointer">
+    ///     JSON pointer to C# identifier, for every non-object leaf of the class. Keyed on the
+    ///     pointer because that is the one thing about a leaf the document guarantees is unique;
+    ///     <see cref="SchemaLeaf.Name" /> is precisely what is not.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS EXISTS BECAUSE THE NAME WAS <c>Pascal(leaf.Name)</c> AND THAT PRODUCED A
+    ///         FILE THAT DOES NOT COMPILE — issue #73, found on 2026-09-05 by the gate that issue
+    ///         asked for, on its first run.</b> The body of a resource is FLATTENED onto one class
+    ///         (see the ⚠ on <see cref="AppendMember" />), so <c>/properties/mode</c> and
+    ///         <c>/properties/persistence/mode</c> both became <c>public … Mode { get; set; }</c> on
+    ///         <c>ValkeyCacheData</c>. That is <c>CS0102</c>, and it was checked in fourteen times
+    ///         over six resource types — <c>ValkeyCacheData.Mode</c>,
+    ///         <c>SecurityGroupData.TcpPorts</c>, <c>KafkaClusterData.Size</c>,
+    ///         <c>SubnetResource.ListAddressUsageResult.Total</c> and nine more.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The shape is the third instance of one defect, not a new one.</b> The enum name
+    ///         was <c>model + Pascal(leaf.Name)</c> and collided (<c>CS0101</c>); an action's enums
+    ///         were referenced and not declared (<c>CS0246</c>); and the property name was
+    ///         <c>Pascal(leaf.Name)</c> and collided. All three were live at once, all three were
+    ///         green, and the reason is one reason: <b>a byte comparison is not a compiler</b>. The
+    ///         first two were found by running <c>tsc</c> over a different surface; this one was
+    ///         found by <c>Build.Architecture</c>'s <c>Generated SDK compiles</c> row, which is what
+    ///         issue #73 exists to add.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Only the colliding pair moves</b>, the rule <see cref="EnumNaming" /> and
+    ///         <c>CliEmitter.FlagsOf</c> both apply: <c>Mode</c> stays <c>Mode</c> and the nested one
+    ///         becomes <c>PersistenceMode</c>. Renaming every nested member would rewrite most of a
+    ///         published SDK's surface to disambiguate the few percent that need it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Counted on <c>Pascal(leaf.Name)</c> rather than on <c>leaf.Name</c>, unlike
+    ///         <see cref="EnumNaming" />.</b> Two leaves named <c>max_memory</c> and
+    ///         <c>maxMemory</c> are distinct in the document and are one identifier in C#; the
+    ///         collision this guards is a C# one, so it is counted in C#. <see cref="EnumNaming" />
+    ///         has the same hole and is left alone here — the gate that found this one would find
+    ///         that one too, and a speculative fix to a shape no document has is a change nothing
+    ///         can test.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A residual collision throws rather than being emitted.</b>
+    ///         <c>/properties/persistenceMode</c> beside <c>/properties/persistence/mode</c> resolves
+    ///         to <c>PersistenceMode</c> twice, and the nested form has nowhere left to go. Thrown
+    ///         here, naming both pointers, for <c>ModelNames</c>' reason: the alternative is a
+    ///         compiler error in generated code that names neither the resource type nor the schema
+    ///         that produced it.
+    ///     </para>
+    /// </remarks>
+    readonly record struct MemberNaming(ImmutableDictionary<string, string> ByPointer) {
+        /// <summary>The naming for one class's leaves.</summary>
+        /// <param name="owner">The emitted class, for the message when two leaves cannot be told apart.</param>
+        /// <param name="leaves">Its leaves. Object leaves are containers and declare no member.</param>
+        public static MemberNaming For(string owner, ImmutableArray<SchemaLeaf> leaves) {
+            var members = leaves.Where(x => !x.IsObject).ToList();
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+
+            foreach (var leaf in members) {
+                var bare = Pascal(leaf.Name);
+                counts[bare] = counts.GetValueOrDefault(bare) + 1;
+            }
+
+            var resolved = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
+            var taken = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var leaf in members) {
+                var bare = Pascal(leaf.Name);
+                var name = counts[bare] > 1 ? NestedName(leaf.JsonPointer) : bare;
+
+                if (taken.TryGetValue(name, out var other)) {
+                    throw new InvalidOperationException(
+                        $"'{leaf.JsonPointer}' and '{other}' both generate the member name "
+                        + $"'{owner}.{name}'. Two properties with one name do not compile, and the "
+                        + "error would surface in whatever consumes the SDK rather than here. Rename "
+                        + "one of the two schema properties."
+                    );
+                }
+
+                taken[name] = leaf.JsonPointer;
+                resolved[leaf.JsonPointer] = name;
+            }
+
+            return new(resolved.ToImmutable());
+        }
+
+        /// <summary>The C# name one leaf's property takes.</summary>
+        /// <param name="leaf">The leaf. Must not be an object — a container declares no member.</param>
+        public string NameOf(SchemaLeaf leaf) => ByPointer[leaf.JsonPointer];
     }
 
     /// <summary>
@@ -332,16 +436,16 @@ public static class SdkEmitter {
             .Append("Data {\n");
 
         var naming = EnumNaming.For(model, leaves);
+        var members = MemberNaming.For(model + "Data", leaves);
 
         foreach (var leaf in leaves) {
-            // A container is a nested object in the wire body; it is flattened onto this class with
-            // a JsonPropertyName that carries the nesting, so a caller sets one property rather than
-            // building the envelope by hand.
+            // A container is a nested object in the wire body; this class is flat, so the container
+            // declares no member of its own and its children are emitted beside their uncles.
             if (leaf.IsObject) {
                 continue;
             }
 
-            AppendMember(built, naming, leaf);
+            AppendMember(built, naming, members, leaf);
         }
 
         // ⚠ No special case for tags, and that is the tag fix paying off on this surface. The bag is
@@ -351,7 +455,35 @@ public static class SdkEmitter {
         built.Append("}\n");
     }
 
-    static void AppendMember(StringBuilder built, EnumNaming naming, SchemaLeaf leaf) {
+    /// <summary>One property of an emitted class.</summary>
+    /// <param name="built">The compilation unit being built.</param>
+    /// <param name="naming">How this class's closed sets are named.</param>
+    /// <param name="members">How this class's properties are named — <see cref="MemberNaming" />.</param>
+    /// <param name="leaf">The leaf. Never an object: a container declares no member.</param>
+    /// <remarks>
+    ///     ⚠ <b>THE <c>[JsonPropertyName]</c> BELOW IS THE LEAF'S OWN NAME AND FOR A NESTED LEAF
+    ///     THAT IS THE WRONG WIRE NAME. Known, unfixed here, and NOT what issue #73 was about.</b>
+    ///     The body is nested on the wire — <c>CyberCloud.Cache/redis</c> sends
+    ///     <c>{"properties":{"persistence":{"mode":"AOF"}}}</c> — and this class is flat, so
+    ///     <c>PersistenceMode</c> carries <c>[JsonPropertyName("mode")]</c>: a name that collides with
+    ///     the top-level <c>mode</c>'s (<c>System.Text.Json</c> throws on the pair the first time the
+    ///     type is serialised) and that would not round-trip even alone. There is no correct flat
+    ///     answer — <c>"persistence/mode"</c> is a name the API does not have — so the fix is for this
+    ///     emitter to declare a nested class per container instead of flattening, which changes every
+    ///     model in the SDK, the shape docs/plan/21 § The .NET SDK's conventions table describes, and
+    ///     nothing in issue #73. It is invisible to the <c>Generated SDK compiles</c> gate for the
+    ///     ordinary reason a wrong program compiles.
+    ///     <para>
+    ///         ⚠ <b>The evidence that this is a defect and not a taste is one directory over.</b>
+    ///         <see cref="TypeScriptEmitter" /> reads the SAME document and emits
+    ///         <c>v4?: { available: number; total: number }</c> — nested, matching the wire — while
+    ///         this emitter emits <c>V4Available</c> and <c>V4Total</c> side by side on a flat class.
+    ///         Two generated clients for one API disagree about the shape of its bodies, and only one
+    ///         of them can be right. Recorded here rather than filed and forgotten because this is
+    ///         the line somebody will change.
+    ///     </para>
+    /// </remarks>
+    static void AppendMember(StringBuilder built, EnumNaming naming, MemberNaming members, SchemaLeaf leaf) {
         var schema = leaf.Schema;
         var description = DocumentReader.Text(schema["description"]);
 
@@ -396,7 +528,7 @@ public static class SdkEmitter {
             .Append(Required(leaf) ? "required " : string.Empty)
             .Append(ClrType(naming, leaf))
             .Append(' ')
-            .Append(Pascal(leaf.Name))
+            .Append(members.NameOf(leaf))
             .Append(" { get; set; }")
             .Append(Initialiser(naming, leaf))
             .Append('\n');
@@ -490,10 +622,26 @@ public static class SdkEmitter {
             .Append("Resource {\n")
             .Append("    /// <summary>The resource's fully qualified id.</summary>\n")
             .Append("    public string Id { get; init; } = string.Empty;\n")
+            // ⚠ `required`, NOT `= new()`, AND THE INITIALISER WAS CS9035 IN EVERY RESOURCE THAT HAS
+            // A REQUIRED BODY MEMBER — 222 of them across 24 types, found by the `Generated SDK
+            // compiles` gate on the day it was added (issue #73). `AppendMember` gives a schema's
+            // required properties C#'s own `required`, precisely so that a body the API would refuse
+            // does not compile; `new()` is exactly such a body, so the two decisions were in direct
+            // contradiction and the second one was in a file no compiler read.
+            //
+            // `required` rather than dropping the initialiser and leaving it non-nullable, which is
+            // CS8618, and rather than making it nullable, which would put a null check on the body of
+            // a resource the caller just fetched. A resource without a body is not a resource, and
+            // this is that sentence in a form the compiler enforces at every construction site.
+            //
+            // ⚠ WHAT THIS ASKS OF THE HAND-WRITTEN HALF: a constructor that assigns Data needs
+            // [SetsRequiredMembers] — see CyberCloud.Sdk/EmitterContract.cs § 1, where the
+            // {Type}Resource row now says so. The stand-in in CyberCloud.Sdk.Tests/StandIn/ is the
+            // one instance of that contract and is where it is checked.
             .Append("\n    /// <summary>The body, projected at this api-version.</summary>\n")
-            .Append("    public ")
+            .Append("    public required ")
             .Append(model)
-            .Append("Data Data { get; init; } = new();\n")
+            .Append("Data Data { get; init; }\n")
             .Append("\n    /// <summary>Re-reads the resource.</summary>\n")
             .Append("    public partial Task<Response<")
             .Append(model)
@@ -584,13 +732,20 @@ public static class SdkEmitter {
         var leaves = DocumentReader.LeavesOf(schema);
         var naming = EnumNaming.For(name, leaves);
 
+        // ⚠ An action payload is flattened exactly as a body is, so it collides exactly as a body
+        // does — `CyberCloud.Network/subnets`' listAddressUsage declares `total` and `available` at
+        // two depths and emitted `SubnetResource.ListAddressUsageResult.Total` twice. Both halves of
+        // AppendMember's remark apply here unchanged, including the [JsonPropertyName] one below.
+        var members = MemberNaming.For(name, leaves);
+
         // ⚠ AN ACTION'S OWN CLOSED SETS, AND LEAVING THEM OUT WAS A GENERATED FILE THAT DOES NOT
         // COMPILE. `ClrType` renders an enum leaf as `{payload}{Member}` whether or not anything
         // declared it, so `CyberCloud.Messaging/kafkaClusters`'s listKeys response emitted
         // `public required ListKeysResultSecurityProtocol SecurityProtocol` against a type that
         // appeared nowhere in the file — CS0246, checked in, and green under every gate here because
-        // nothing in this repository compiles generated/sdk/*.cs. Nested at the payload's own indent
-        // because the payload class is nested inside the resource.
+        // at the time nothing in this repository compiled generated/sdk/*.cs. ⚠ Something does now:
+        // `Generated SDK compiles` in build/Build.Architecture.cs, issue #73. Nested at the payload's
+        // own indent because the payload class is nested inside the resource.
         AppendEnums(built, naming, leaves, "    ");
 
         built.Append("\n    /// <summary>").Append(Escape(summary)).Append("</summary>\n")
@@ -615,7 +770,7 @@ public static class SdkEmitter {
                 .Append(Required(leaf) ? "required " : string.Empty)
                 .Append(ClrType(naming, leaf))
                 .Append(' ')
-                .Append(Pascal(leaf.Name))
+                .Append(members.NameOf(leaf))
                 .Append(" { get; set; }")
                 .Append(Initialiser(naming, leaf))
                 .Append('\n');
@@ -657,8 +812,8 @@ public static class SdkEmitter {
 
         foreach (var placeholder in placeholders) {
             // ⚠ A type path whose segments repeat — `a/a/b` — would emit `string aName, string aName`,
-            // which is CS0100 in a file nothing compiles until a consumer does. Thrown here so the
-            // failure names the type rather than arriving as a compiler error in generated code.
+            // which is CS0100. The `Generated SDK compiles` gate (issue #73) would now catch it, at a
+            // line number in a 250 KB file; thrown here so the failure names the type instead.
             if (!seen.Add(Camel(placeholder))) {
                 throw new InvalidOperationException(
                     $"'{type.ResourceType}' has two ancestors whose placeholder is '{placeholder}', so "
@@ -808,8 +963,14 @@ public static class SdkEmitter {
         // scope response's `type` is a closed set of three, so ClrType renders it as
         // `ScopeResourceType` — a name nothing else would ever emit. The first run of this method
         // produced exactly that: a property whose type was undeclared, in a file no build in this
-        // repository compiles, so nothing here would have caught it either.
+        // repository compiled, so nothing here would have caught it either. ⚠ That last clause is no
+        // longer true — `Generated SDK compiles`, issue #73 — and this comment is left standing
+        // because it is the reason the gate exists rather than a claim about today.
         AppendEnums(built, EnumNaming.For("ScopeResource", leaves), leaves);
+
+        // A scope body is flattened like every other, so it is named like every other —
+        // see MemberNaming.
+        var scopeMembers = MemberNaming.For("ScopeResource", leaves);
 
         built.Append("\n/// <summary>A tenant, a subscription or a resource group, as the API renders it.</summary>\n")
             .Append("/// <remarks>⚠ There is no provisioningState and no Operation&lt;T&gt; anywhere on this\n")
@@ -838,7 +999,7 @@ public static class SdkEmitter {
                 .Append(Required(leaf) ? "required " : string.Empty)
                 .Append(ClrType(EnumNaming.For("ScopeResource", leaves), leaf))
                 .Append(' ')
-                .Append(Pascal(leaf.Name))
+                .Append(scopeMembers.NameOf(leaf))
                 .Append(" { get; set; }")
                 .Append(Initialiser(EnumNaming.For("ScopeResource", leaves), leaf))
                 .Append('\n');
@@ -935,6 +1096,7 @@ public static class SdkEmitter {
         var name = ScopeName(scope) + "CreateContent";
         var leaves = DocumentReader.LeavesOf(scope.Body);
         var naming = EnumNaming.For(name, leaves);
+        var members = MemberNaming.For(name, leaves);
 
         AppendEnums(built, naming, leaves);
 
@@ -962,7 +1124,7 @@ public static class SdkEmitter {
                 .Append(Required(leaf) ? "required " : string.Empty)
                 .Append(ClrType(naming, leaf))
                 .Append(' ')
-                .Append(Pascal(leaf.Name))
+                .Append(members.NameOf(leaf))
                 .Append(" { get; set; }")
                 .Append(Initialiser(naming, leaf))
                 .Append('\n');

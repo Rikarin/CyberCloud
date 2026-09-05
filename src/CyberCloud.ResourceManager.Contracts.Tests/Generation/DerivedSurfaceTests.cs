@@ -446,6 +446,16 @@ public sealed class DerivedSurfaceTests {
             .ShouldAllBe(x => x.Contains("partial", StringComparison.Ordinal)
                               || x.Contains("static class", StringComparison.Ordinal));
 
+    /// <summary>
+    ///     ⚠ <b>A brace count, and it is no longer the strongest thing that reads this file.</b>
+    /// </summary>
+    /// <remarks>
+    ///     Issue #73 added the <c>Generated SDK compiles</c> gate — <c>build/Build.Architecture.cs</c>
+    ///     hands every checked-in <c>generated/sdk/{api-version}.cs</c> to Roslyn against the real
+    ///     <c>CyberCloud.Sdk</c> — so "is it valid C#" now has a real answer and this assertion is the
+    ///     cheap one that runs without a compiled SDK beside it. It is kept for that reason: this
+    ///     suite emits from a fixture registry, and the gate can only read what is checked in.
+    /// </remarks>
     [Fact]
     public void TheSourceIsBraceBalancedSoItIsNotObviouslyUncompilable() {
         var depth = 0;
@@ -456,6 +466,70 @@ public sealed class DerivedSurfaceTests {
         }
 
         depth.ShouldBe(0);
+    }
+
+    // ── The two shapes issue #73's gate found on its first run ────────────────────────────────
+    //
+    // ⚠ Both had been checked in for as long as this emitter had existed, and both are the same
+    // defect as the CS0101 and CS0246 that TypeScriptSurfaceTests records: a generated surface that
+    // nothing compiles is a surface whose validity nobody has ever checked. The `Generated surfaces`
+    // gate compared it byte-for-byte the whole time and byte-identical is not valid.
+
+    /// <summary>
+    ///     ⚠ <b>Two leaves whose names are equal declare two properties, not one name twice.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The body is flattened onto one class, so <c>/properties/mode</c> and
+    ///     <c>/properties/persistence/mode</c> both emitted <c>public … Mode { get; set; }</c> —
+    ///     <c>CS0102</c>, fourteen times over six resource types in
+    ///     <c>generated/sdk/2026-08-01.cs</c>, including <c>ValkeyCacheData.Mode</c> and
+    ///     <c>SubnetResource.ListAddressUsageResult.Total</c>. Only the nested one moves, which is
+    ///     the rule <c>SdkEmitter.EnumNaming</c> already applied one level up to the enum TYPE names
+    ///     of this very pair — the property names were left behind.
+    /// </remarks>
+    [Fact]
+    public void TwoLeavesWithTheSameNameDeclareTwoPropertiesAndNotOneTwice() {
+        var body = Body(SdkOf(CollidingLeafNames()), "ServerData");
+
+        PropertyNames(body).ShouldBe(["Mode", "PersistenceMode"], ignoreOrder: true);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A pair the nested form cannot separate throws, naming both pointers.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <c>/properties/persistenceMode</c> beside <c>/properties/persistence/mode</c> is the case
+    ///     the fallback runs out on. Thrown from the emitter for <c>SdkEmitter.ModelNames</c>'
+    ///     reason: the alternative is a <c>CS0102</c> in generated code that names neither the
+    ///     resource type nor the two schema properties that produced it, and the gate that would now
+    ///     catch it reports a line number in a 250 KB file rather than a cause.
+    /// </remarks>
+    [Fact]
+    public void APairTheNestedNameCannotSeparateFailsRatherThanEmittingOneNameTwice() {
+        var thrown = Should.Throw<InvalidOperationException>(
+            () => SdkOf(UnseparableLeafNames())
+        );
+
+        thrown.Message.ShouldContain("/properties/persistence/mode");
+        thrown.Message.ShouldContain("/properties/persistenceMode");
+        thrown.Message.ShouldContain("ServerData.PersistenceMode");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A resource's body is <c>required</c> and is never defaulted to an empty one.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <c>public {Model}Data Data { get; init; } = new();</c> is <c>CS9035</c> once per unset
+    ///     required member, and nearly every published type requires at least one:
+    ///     <c>generated/sdk/2026-08-01.cs</c> carried 222 of them. The contradiction was inside this
+    ///     one emitter:
+    ///     <c>AppendMember</c> gives a required schema property C#'s own <c>required</c> precisely so
+    ///     that a body the API would refuse does not compile, and <c>new()</c> is exactly such a body.
+    /// </remarks>
+    [Fact]
+    public void AResourcesBodyIsRequiredRatherThanAnEmptyOneTheApiWouldRefuse() {
+        Sdk.ShouldContain("public required PostgreSQLServerData Data { get; init; }");
+        Sdk.ShouldNotContain("Data { get; init; } = new();");
     }
 
     // ── Determinism, which is a correctness property for a file that is diffed ─────────────────
@@ -723,4 +797,70 @@ public sealed class DerivedSurfaceTests {
             );
         }
     }
+
+    // ── Reading the emitted C# ─────────────────────────────────────────────────────────────────
+    //
+    // ⚠ Text, and only because the alternative is out of reach from here. The real reader is Roslyn,
+    // in build/Build.Architecture.cs § `Generated SDK compiles` (issue #73), and it cannot run in
+    // this suite: it reads what is checked in, and these tests emit from a fixture registry that is
+    // checked in nowhere. What follows is deliberately narrow — the declaration lines this emitter
+    // writes, in the exact shape it writes them — rather than a parser this file would then own.
+
+    /// <summary>The .NET SDK for a registry with one type, so a fixture body can be varied freely.</summary>
+    static string SdkOf(ResourceSchema body) =>
+        SdkEmitter.Emit(OpenApiEmitter.Emit(
+            new FakeRegistry {
+                Namespaces = [Fixtures.Namespace],
+                Types = [
+                    new ResourceTypeRegistration {
+                        Type = new(Fixtures.Namespace, "servers"),
+                        ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), body)],
+                        Display = new("Server", "Servers", "server", "A server.")
+                    }
+                ]
+            },
+            ApiVersion.Parse(Fixtures.FirstVersion)
+        ));
+
+    /// <summary>The body of one top-level emitted class, between its brace and the one at column 0.</summary>
+    static string Body(string source, string className) {
+        var head = "public sealed partial class " + className + " {\n";
+        var at = source.IndexOf(head, StringComparison.Ordinal);
+
+        at.ShouldBeGreaterThanOrEqualTo(0, $"the emitter declared no '{className}'");
+
+        var rest = source[(at + head.Length)..];
+
+        return rest[..rest.IndexOf("\n}\n", StringComparison.Ordinal)];
+    }
+
+    /// <summary>The identifier of every auto-property declared in a class body.</summary>
+    static IEnumerable<string> PropertyNames(string body) =>
+        body.Split('\n')
+            .Select(x => x.Trim())
+            .Where(x => x.Contains(" { get; set; }", StringComparison.Ordinal))
+            .Select(x => x[..x.IndexOf(" { get; set; }", StringComparison.Ordinal)])
+            .Select(x => x[(x.LastIndexOf(' ') + 1)..]);
+
+    /// <summary>A body with <c>mode</c> at two depths — the shape that emitted <c>Mode</c> twice.</summary>
+    static ResourceSchema CollidingLeafNames() =>
+        ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Required: true),
+            new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
+            new("/properties/persistence", SchemaKind.Nested),
+            new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one.")
+        ]);
+
+    /// <summary>
+    ///     The same pair plus the flat spelling of the nested one's fallback name, which is the case
+    ///     the fallback runs out on.
+    /// </summary>
+    static ResourceSchema UnseparableLeafNames() =>
+        ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Required: true),
+            new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
+            new("/properties/persistence", SchemaKind.Nested),
+            new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one."),
+            new("/properties/persistenceMode", SchemaKind.Text, Description: "The one that ends it.")
+        ]);
 }

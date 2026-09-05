@@ -97,6 +97,23 @@
       a template, strip it again. The pin lives in Directory.Packages.props § Build.
     -->
     <PackageReference Include="Nuke.Common" />
+
+    <!--
+      ⚠ FOR ONE GATE, AND IT IS THE POINT OF THAT GATE — issue #73, `Generated SDK compiles`.
+      Nothing in this repository compiled `generated/sdk/*.cs`, so three defects shipped inside a
+      checked-in .NET SDK while the `Generated surfaces` row compared it byte-for-byte and passed.
+      "Is this valid C#" is a question only a C# compiler answers; GeneratedSdkSurface.cs hands each
+      file to Roslyn, and a brace counter or a regular expression would be the same not-a-compiler
+      the gate exists to replace. Same argument, same package, as
+      CyberCloud.Kubernetes.Contracts.Tests § CompileFailureTests.
+
+      ⚠ NO Version= — CPM is on repo-wide and the 5.6.0 pin lives in Directory.Packages.props
+      § Roslyn, where its ceiling (the compiler that loads CyberCloud.Analyzers) is argued. This
+      project is not an analyzer and does not set that ceiling; it shares the pin because CPM has
+      one version per package id, and 5.6.0 is the released build of the SDK's own csc, which is the
+      compiler whose verdict this gate wants.
+    -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
   </ItemGroup>
 
 </Project>

@@ -20,9 +20,12 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 ///     <para>
 ///         ⚠ <b>The .NET SDK is asserted here too, and deliberately so.</b> Both defects below were
 ///         live in <c>generated/sdk/2026-08-01.cs</c> for as long as those emitters had existed —
-///         green under every gate in this repository, because nothing here compiles that file. A
-///         suite that fixed the TypeScript half and left the C# half unasserted would be the same
-///         blindness with one more surface in it.
+///         green under every gate in this repository, because at the time nothing here compiled that
+///         file. A suite that fixed the TypeScript half and left the C# half unasserted would be the
+///         same blindness with one more surface in it. ⚠ The C# half has had a compiler of its own
+///         since issue #73 — <c>Generated SDK compiles</c> in <c>build/Build.Architecture.cs</c> —
+///         which reads what is CHECKED IN; these assertions read what the emitter PRODUCES, from a
+///         fixture registry no document carries, so neither replaces the other.
 ///     </para>
 /// </remarks>
 public sealed class TypeScriptSurfaceTests {
@@ -101,7 +104,8 @@ public sealed class TypeScriptSurfaceTests {
     ///     <c>/properties/persistence/mode</c>. The name was <c>model + Pascal(leaf.Name)</c> in both
     ///     emitters, so <c>generated/sdk/2026-08-01.cs</c> declared <c>public enum ValkeyCacheMode</c>
     ///     twice and two properties referred to it — <c>CS0101</c>, checked in, and invisible because
-    ///     no build here compiles that file. <c>tsc</c> found it in one line as <c>TS2300</c>.
+    ///     no build here compiled that file. <c>tsc</c> found it in one line as <c>TS2300</c>, and
+    ///     issue #73 has since given the C# file a compiler that would have found it too.
     /// </remarks>
     [Fact]
     public void TwoClosedSetsWithTheSameLeafNameGetDistinctNames() {
