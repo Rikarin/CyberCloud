@@ -693,18 +693,28 @@ public class GrainKeysTests {
         //
         //   sub/{32}/rg/{63}     = 4 + 32 + 4 + 63 = 103
         //   parked/{32}/rg/{63}  = 7 + 32 + 4 + 63 = 106
+        //   sweep/{32}/rg/{63}   = 6 + 32 + 4 + 63 = 105
         //
-        // Both are asserted by name, which is what makes a third shape with a longer prefix have to
-        // come here and say so.
+        // ⚠ THE THIRD LINE IS ISSUE #12'S AND IT DID NOT MOVE THE MAXIMUM, which is the fact worth
+        // asserting rather than assuming: `sweep/` is one character shorter than `parked/`, so the
+        // bound stays at 106 and this test would have passed without the line. It is here because
+        // the previous sentence said a third shape "has to come here and say so", and a shape that
+        // came here and was silently absent would leave the next reader recounting from the enum.
+        // Re-counted by hand on 2026-09-05 over all three prefixes.
+        //
+        // All three are asserted by name, which is what makes a fourth shape with a longer prefix
+        // have to come here and say so.
         var group = GrainKeys.ResourceGroup(Subscription, new('a', 63));
         var parked = GrainKeys.ParkedResourceRegistry(Subscription, new('a', 63));
+        var sweeper = GrainKeys.ExpirySweeper(Subscription, new('a', 63));
 
         group.Length.ShouldBe(103);
         parked.Length.ShouldBe(106);
+        sweeper.Length.ShouldBe(105);
 
         // ⚠ 103 AND NOT 106 BELOW, AND THE TWO NUMBERS ARE NOT IN CONFLICT — the loop's scope is
         // narrower than the type's. Corpus.EveryGrainKeyShapeFor yields docs/plan/06 § Grain keys'
-        // EIGHT shapes and not the type's twenty (see its remarks: it is that table, deliberately,
+        // EIGHT shapes and not the type's twenty-one (see its remarks: it is that table, deliberately,
         // not an inventory of GrainKeys), and 103 is the true maximum over those eight. Raising it
         // to 106 to match the sentence above would weaken the only bound this loop enforces in
         // exchange for nothing, since the parked shape is not among the eight it walks and is
@@ -1036,5 +1046,102 @@ public class GrainKeysTests {
         Should.Throw<ArgumentException>(
             () => GrainKeys.ParkedResourceRegistry(Subscription, "pr/od"),
             "a resource group name containing '/' must not be constructible into a registry key"
+        );
+
+    // ── The expiry sweeper — docs/plan/07 § Azure RBAC, issue #12 ─────────────────────────────
+    //
+    // ⚠ THE TAIL IS NOW SHARED BY THREE SHAPES RATHER THAN TWO, which is what makes this section a
+    // copy of the one above rather than one case appended to it. `sub/{sub}/rg/{name}`,
+    // `parked/{sub}/rg/{name}` and `sweep/{sub}/rg/{name}` differ by their first segment alone and
+    // carry the SAME payload, so every near-miss the registry has, the sweeper has too — and one
+    // more besides: the two of them are the pair a reader is most likely to confuse, because they
+    // address the same resource group's soft-delete machinery and only one of them holds the state.
+    // A fork that folded them would point a sweep's reminder at the registry grain, which is the
+    // activation GrainKeys.ExpirySweeper exists to keep the sweep out of.
+
+    [Fact]
+    public void TheExpirySweeperShapeIsSweepSlashSubscriptionSlashRgSlashName() {
+        GrainKeys.ExpirySweeper(Subscription, "prod")
+            .ShouldBe("sweep/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/prod");
+
+        var parsed = GrainKeys.Parse(GrainKeys.ExpirySweeper(Subscription, "prod")).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.ExpirySweeper);
+        parsed.Id.ShouldBe(Subscription);
+        parsed.Name.ShouldBe("prod");
+        parsed.ToString().ShouldBe(GrainKeys.ExpirySweeper(Subscription, "prod"));
+    }
+
+    [Fact]
+    public void TheThreeResourceGroupShapesAreThreeKeysWithOnePayload() {
+        // The property the fork in ParseFourSegments has to have, over a corpus rather than one
+        // triple: for every (subscription, group) the three shapes produce three DIFFERENT strings
+        // that decode to three different kinds and to the SAME subscription and name. A parser that
+        // folded any pair would satisfy the payload half and fail the kind half, which is why both
+        // are asserted.
+        foreach (var id in Corpus.ResourceIds(500, 12)) {
+            var group = GrainKeys.ResourceGroup(id.SubscriptionId, id.ResourceGroup);
+            var parked = GrainKeys.ParkedResourceRegistry(id.SubscriptionId, id.ResourceGroup);
+            var sweeper = GrainKeys.ExpirySweeper(id.SubscriptionId, id.ResourceGroup);
+
+            new[] { group, parked, sweeper }.Distinct(StringComparer.Ordinal).Count().ShouldBe(3);
+
+            var decoded = new[] { group, parked, sweeper }
+                .Select(x => GrainKeys.Parse(x).GetValueOrThrow())
+                .ToArray();
+
+            decoded.Select(x => x.Kind)
+                .ShouldBe(
+                    [GrainKeyKind.ResourceGroup, GrainKeyKind.ParkedResourceRegistry, GrainKeyKind.ExpirySweeper]
+                );
+
+            decoded.Select(x => x.Id).Distinct().ShouldBe([id.SubscriptionId]);
+            decoded.Select(x => x.Name).Distinct(StringComparer.Ordinal).ShouldBe([id.ResourceGroup]);
+
+            GrainKeys.IsTenantQualificationSafe(sweeper).ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void AResourceGroupCalledSweepIsStillNotAnExpirySweeperKey() {
+        // `sweep` is a legal resource group name under ResourceNaming, so the near-miss below is
+        // constructible by a tenant rather than only by a forger.
+        var group = GrainKeys.ResourceGroup(Subscription, "sweep");
+
+        group.ShouldNotBe(GrainKeys.ExpirySweeper(Subscription, "prod"));
+        GrainKeys.Parse(group).GetValueOrThrow().Kind.ShouldBe(GrainKeyKind.ResourceGroup);
+
+        // …and the sweeper of the group that is itself called `sweep`, which is the one string a
+        // reader is most likely to misread. It is a sweeper key, and its name is `sweep`.
+        var sweeperOfSweep = GrainKeys.ExpirySweeper(Subscription, "sweep");
+        var decoded = GrainKeys.Parse(sweeperOfSweep).GetValueOrThrow();
+
+        sweeperOfSweep.ShouldBe("sweep/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/sweep");
+        decoded.Kind.ShouldBe(GrainKeyKind.ExpirySweeper);
+        decoded.Name.ShouldBe("sweep");
+    }
+
+    [Theory]
+    [InlineData("sweep/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f", "the prefix and a subscription is not the shape")]
+    [InlineData("sweep/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg", "the marker with no name")]
+    [InlineData("sweep/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/xx/prod", "the wrong marker")]
+    [InlineData("sweep/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/prod/extra", "trailing junk")]
+    [InlineData("sweep/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f/rg/prod", "the D form is not the N form")]
+    [InlineData("sweep/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/PROD", "an upper-case group name")]
+    [InlineData("Sweep/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/prod", "the prefix is matched case-sensitively")]
+    [InlineData("sweeper/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/prod", "a near-miss prefix is not the prefix")]
+    public void AForgedExpirySweeperKeyIsRejectedRatherThanReinterpreted(string forged, string why) {
+        GrainKeys.TryParse(forged, out _).ShouldBeFalse($"'{forged}' — {why}");
+        GrainKeys.Parse(forged).Error!.Code.ShouldBe(ErrorCode.InvalidGrainKey);
+    }
+
+    [Fact]
+    public void TheExpirySweeperFactoryRefusesAnInjectedResourceGroupName() =>
+        // The same defence, and the same reasoning, as the other two four-segment factories': the
+        // one caller-controlled component of all three shapes is the same name, so a hole in any
+        // one factory is a hole in the set.
+        Should.Throw<ArgumentException>(
+            () => GrainKeys.ExpirySweeper(Subscription, "pr/od"),
+            "a resource group name containing '/' must not be constructible into a sweeper key"
         );
 }

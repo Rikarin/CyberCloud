@@ -168,12 +168,60 @@ unrestorable, unpurgeable by anybody, holding its name and its committed quota, 
 message said — no request that changes the answer. The condition is now the flag **and** a window
 that has not ended, asked of the grain that owns the deadline.
 
-⚠ **What is still owed is the caller of the mechanism, and it is deliberately small.** Nothing yet
-drives `PurgeExpiredAsync` on a clock; it is a method with two tests and no scheduler. The shape that
-fits this platform is a durable reminder registered when the resource is parked and firing at its
-deadline, rather than a scan — there is no enumeration of parked resources anywhere (see § Storage:
-the index is one grain per path and one-way), so a sweeper that *searched* would need an index that
-does not exist, while a reminder needs only the moment the window is opened.
+⚠ **The caller of the mechanism is built, and it is a scan rather than the reminder-per-resource this
+paragraph used to record.** `IExpirySweeperGrain` — key `sweep/{subscriptionId:N}/rg/{name}`, one
+activation per resource group, holding a reminder while that group has anything parked and cancelling
+it when it does not. Every tick reads
+[08](08-resource-manager.md) § Soft delete's parked-resource registry, asks the index whether each
+entry is still true, and hands the ones that are to `PurgeExpiredAsync`. **It takes no decision the
+two fronts do not already take**: it never reads `RecoverableUntil`, so it can be late and cannot be
+early.
+
+⚠ **The shape recorded here was "a durable reminder registered when the resource is parked and firing
+at its deadline, rather than a scan", and the reason given was that "a sweeper that *searched* would
+need an index that does not exist". That index landed first.**
+[08](08-resource-manager.md) § Soft delete's `IParkedResourceRegistryGrain` is exactly an enumeration
+of the resources a window is running on, so the premise is gone and the conclusion is re-taken. Three
+reasons beyond the premise, in the order they mattered:
+
+- **A reminder that fires at a deadline is a second durable copy of the deadline.** Its due time *is*
+  `RecoverableUntil`, written into the reminder table by a different writer and read back by the
+  reminder service's clock — which is the same objection this section already makes to a caller-side
+  comparison. A reminder armed off *"this group has something parked"* carries no deadline at all: it
+  says **look**, and `ResolveExpiredAsync` says **whether**.
+- **A per-resource reminder has no repair path.** Lose the registration — a silo with no reminder
+  service at the moment of the park, a crash between two writes, a reminder table restored from a
+  backup — and nothing anywhere records that a window needs driving. A scan re-derives its candidates
+  from a registry that has a stated invariant and a repair.
+  ⚠ **This reason was stated too widely and the narrowing is owed to it (2026-09-05, #12 review).**
+  A lost *group-level* row is not repaired by re-deriving the candidate set, because the re-derivation
+  only happens on the tick that the lost row would have produced — and the asymmetry runs the wrong
+  way for this design, since a group-level row costs a whole resource group's windows rather than one
+  resource's. What makes the reason hold as narrowed is that the row is re-derivable from a durable
+  record this design has and the recorded one did not: the registry says which groups have something
+  parked, so the next park in the group, a hand `SweepAsync` (which arms as well as sweeps) and
+  `ExpirySweeperBackfill` — a walk of every resource group at silo start — each put it back. A
+  per-resource reminder has no equivalent, because nothing durable anywhere records *which deadline*
+  was lost.
+- **The scan reconciles what a reminder could not.** Asking the index per entry is what lets a sweep
+  *remove* an entry the index no longer agrees with, which is the first thing in the tree that can
+  correct a parked-resource registry that has gone long. `RepairParkedRegistryAsync`'s known race
+  stops being permanent damage and becomes damage with a one-period lifetime.
+
+⚠ **And it is a grain of its own rather than a reminder on the registry, which is a cycle rather than
+a preference.** A sweep calls `PurgeExpiredAsync`, and the purge calls the registry's `UnparkAsync` —
+so a reminder firing on the registry grain would be an activation awaiting a call back into itself.
+Every grain a purge touches is closed to the driver for the same reason. It is the twenty-first grain
+key shape and it holds no state of its own.
+
+⚠ **What the sweeper makes routine is worth stating where the decision is.** Purges of the five types
+that declare a window stop being something a person types. [08](08-resource-manager.md) § Soft delete
+records that the operator-owned claims of `DBforMySQL/servers` and `Storage/accounts` are not named by
+anything in this repository, so *"their purges still leave their disks"* — now on a timetable. And
+issue #69 finds `DBforPostgreSQL/servers`' window hollow: the sweeper destroys nothing #69 has not
+already destroyed, but it releases that name and returns that quota on schedule with nobody in the
+loop. Neither is an argument for holding every window open for ever, which trades a disk for a name
+and a committed quota held permanently.
 
 ⚠ **And it is the second permission carrying `& !Rel("suspended")`.** § The model's sketch above
 shows the negation on `assignRole` alone, and `CyberCloudSchema`'s own remarks used to call that

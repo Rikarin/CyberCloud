@@ -1559,10 +1559,14 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     ///         issue #71 exists to end.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Expired-but-unpurged is the ordinary long-term state and not a corner, which is
-    ///         why this case matters more than its rarity suggests.</b> Issue #12's expiry sweeper
-    ///         does not exist yet, so nothing ends a window on the clock's account; every parked
-    ///         resource that nobody restores or purges arrives here and stays. The other three
+    ///         ⚠ <b>Expired-but-unpurged is not a corner, which is why this case matters more than
+    ///         its rarity suggests.</b> When this was written it was the ordinary long-term state,
+    ///         because nothing ended a window on the clock's account and every parked resource that
+    ///         nobody restored or purged arrived here and stayed. ⚠ <b>Issue #12's sweeper
+    ///         (<see cref="ExpirySweeperTests" />) changed which of those two things is true and did
+    ///         not weaken this case: it is no longer a state a resource <i>sits</i> in, it is a state
+    ///         a tenant's restore <i>races a sweep for</i>, which is the same line reached by a
+    ///         narrower window and more often.</b> The other three
     ///         registry cases in this section all use unexpired windows, so none of them would have
     ///         gone red — <see cref="ARestoreAfterTheWindowHasPassedIsRefused" /> drives this exact
     ///         sequence and passes because it never reads the registry.

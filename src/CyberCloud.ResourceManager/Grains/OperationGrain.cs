@@ -1,5 +1,6 @@
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Reconcile;
+using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
 using System.Globalization;
 
@@ -28,7 +29,8 @@ public sealed class OperationGrain(
     ReconcileDriver driver,
     IResourceRelationWriter relations,
     IGrainFactory grains,
-    IClock clock
+    IClock clock,
+    ILogger<OperationGrain> logger
 )
     : Grain, IOperationGrain, IRemindable {
     /// <summary>
@@ -620,6 +622,54 @@ public sealed class OperationGrain(
             return;
         }
 
+        // ── AND THE THING THAT WILL END THE WINDOW IS TOLD THERE IS ONE ─────────────────────────
+        //
+        // ⚠ THE WINDOW OPENS HERE, SO THIS IS WHERE THE CLOCK IS ARMED — issue #12, and the item
+        // docs/plan/07 § Azure RBAC left owed after it built both fronts of purge: "nothing yet
+        // drives PurgeExpiredAsync on a clock". IExpirySweeperGrain is that clock. It is armed off
+        // "this group has something parked" rather than off a deadline, so this call carries no time
+        // and makes no claim about one — see the grain's remarks for why the deadline stays with the
+        // one activation that stamped it.
+        //
+        // ⚠ AFTER THE PARK AND NOT BEFORE, because the sweeper disarms itself on a registry it finds
+        // empty. Arming first would leave a window in which a tick could run against a group whose
+        // entry had not been written yet, cancel the reminder it had just been given, and leave the
+        // resource with nothing driving it.
+        //
+        // ⚠ NOT RETRIED, AND NOT GUARDED ON A RESULT, WHICH IS THE OPPOSITE OF WHAT THIS SAID
+        // (2026-09-05, #12 review). It read "RETRIED LIKE ITS NEIGHBOURS" and guarded on
+        // `armed.TryGetError`, and that guard was DEAD CODE: IExpirySweeperGrain.ArmAsync returns
+        // success on both of its paths — the register and the caught "this silo has no reminder
+        // service" — so the branch could never be taken and the retry it described could never
+        // happen. What could happen was the thing neither the guard nor the comment covered: a
+        // THROWN call. The callee is a non-reentrant activation this design deliberately makes
+        // long-running (MaxPerSweep purge choreographies in one turn) and the tree configures no
+        // ResponseTimeout, so Orleans' 30-second default applies; a timeout has no Result to
+        // inspect and OperationGrain has no try/catch, so it escaped the pass. ArmAsync is now
+        // [AlwaysInterleave], which is what actually removes the queueing, and this catch is the
+        // belt: a park is finished work and an arm is a schedule, so the delete converges either
+        // way.
+        //
+        // ⚠ AND SWALLOWING IT IS THE SAME DECISION ArmAsync ITSELF TAKES ONE LEVEL DOWN, for the
+        // reason its remarks give: failing the delete because the platform could not arrange to
+        // purge the resource in seven days' time turns an absent sweeper into an absent platform.
+        // What is lost is exactly what master loses today — nothing ends this group's windows on
+        // the clock's account — and three things put it back: the group's next park, a hand
+        // SweepAsync, and ExpirySweeperBackfill at the next silo start.
+        try {
+            _ = await Sweeper(spec).ArmAsync();
+        }
+        catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(
+                error,
+                "'{Path}' is parked but its resource group's expiry sweeper could not be armed, so "
+                + "nothing in this group is ending recovery windows on a clock until its next park, "
+                + "a hand IExpirySweeperGrain.SweepAsync, or the next silo start's backfill. The "
+                + "soft delete itself is complete — issue #12.",
+                spec.ResourcePath
+            );
+        }
+
         // ── AND IT LEAVES THE GROUP'S MEMBERSHIP, WHICH IS NOT THE DELETE THIS PATH REFUSED TO DO ─
         //
         // ⚠ THE GROUP'S CompleteDeleteAsync, NOT THE RESOURCE'S — and the remarks above forbid only
@@ -651,7 +701,9 @@ public sealed class OperationGrain(
                 + " direct role assignment(s) were dropped. It has left its resource group's listing "
                 + "and joined its resource group's registry of parked resources, which is where it "
                 + "can be found while the window lasts. Its desired state and its committed quota "
-                + "are kept so that a restore can apply it again; both end at the purge."
+                + "are kept so that a restore can apply it again; both end at the purge, which the "
+                + "group's expiry sweeper will run once the window closes if nobody restores or "
+                + "purges it first."
             )
         );
 
@@ -1023,6 +1075,23 @@ public sealed class OperationGrain(
         Tenant(spec)
             .GetGrain<IParkedResourceRegistryGrain>(
                 GrainKeys.ParkedResourceRegistry(spec.SubscriptionId, Address(spec).ResourceGroup)
+            );
+
+    /// <summary>
+    ///     The same resource group's expiry sweeper — issue #12, docs/plan/07 § Azure RBAC.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Built from the same two values <see cref="Parked" /> is</b>, because it exists to read
+    ///     exactly that registry: a sweeper addressed at a different group than the entry just written
+    ///     would arm a clock over somebody else's windows and leave this one with none. It is a third
+    ///     grain type behind a third key shape over one resource group, which
+    ///     <c>GrainKeys.ExpirySweeper</c> argues for at length — the short version is that a purge
+    ///     calls back into the registry, so the driver cannot live there.
+    /// </remarks>
+    IExpirySweeperGrain Sweeper(OperationSpec spec) =>
+        Tenant(spec)
+            .GetGrain<IExpirySweeperGrain>(
+                GrainKeys.ExpirySweeper(spec.SubscriptionId, Address(spec).ResourceGroup)
             );
 
     TenantGrainFactory Tenant(OperationSpec spec) =>

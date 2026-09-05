@@ -130,11 +130,13 @@ public sealed record ParkedResource {
 ///         reverses.</b> What was missing is a second collection, and this is it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Three writes, at three call sites that already existed — and a fourth that re-asks
+///         ⚠ <b>Three writes, at three call sites that already existed — and two more that re-ask
 ///         the index.</b> Written by <c>OperationGrain.ParkAsync</c> where the soft delete unlists the
 ///         member; cleared by <c>ResourceManagerService.RestoreAsync</c> where the restore puts it
 ///         back; cleared by <c>ResourceManagerService.PurgeCoreAsync</c> where the purge releases the
-///         name.
+///         name. The other two are <c>ResourceManagerService.RepairParkedRegistryAsync</c>, which
+///         re-parks, and <c>ExpirySweeperGrain.SweepAsync</c>, which unparks — see the paragraph
+///         below for what makes both legitimate.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE RULE IS NOT "NO FOURTH WRITER". IT IS "NO WRITER THAT DOES NOT RE-ASK THE
@@ -148,6 +150,18 @@ public sealed record ParkedResource {
 ///         <see cref="IndexEntryState.SoftDeleted" /> of the same resource GUID, so it makes no claim
 ///         of its own. An entry that appeared from anywhere else — from a writer that did not ask —
 ///         would be a claim about a recovery window made by something that does not hold one.
+///     </para>
+///     <para>
+///         ⚠ <b>And the rule reads the same way in the other direction, which is what
+///         <c>ExpirySweeperGrain.SweepAsync</c> is (2026-09-05, issue #12).</b> It is a <i>fifth</i>
+///         writer and it only ever <see cref="UnparkAsync" />s, and it does so only for an entry the
+///         index has just told it is false — not <see cref="IndexEntryState.SoftDeleted" />, or
+///         soft-deleted as a <i>different</i> resource GUID. That is this type's invariant read as a
+///         removal rule rather than as an ordering rule, and it is the first thing in the tree that
+///         can correct a registry that has gone <b>long</b>. Before it, a long entry was permanent,
+///         because nothing could address the resource again;
+///         <c>ResourceManagerService.RepairParkedRegistryAsync</c>'s "NARROWED, NOT CLOSED" remarks
+///         are where that mattered and where it is now written down.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE INVARIANT, WHICH IS WHAT FIXES THE ORDER OF ALL THREE:
@@ -179,8 +193,9 @@ public sealed record ParkedResource {
 ///         resources that group has ever had, which is bounded by the subscription's quota
 ///         (docs/plan/06 § Quota) exactly as the group's own membership is. Entries leave at the
 ///         restore or at the purge; an entry whose window has passed and whose purge has not run
-///         stays, which is the state the expiry driver ends and is now — for the first time —
-///         enumerable.
+///         used to stay indefinitely, and that is the state <c>IExpirySweeperGrain</c> now ends —
+///         armed by <see cref="ParkAsync" />'s two callers and reading <see cref="ListAsync" /> on a
+///         clock, which this listing is what made possible.
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.ResourceManager.IParkedResourceRegistryGrain")]

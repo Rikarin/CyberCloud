@@ -111,7 +111,15 @@ public enum GrainKeyKind {
     ///     docs/plan/08 § Soft delete. See <see cref="GrainKeys.ParkedResourceRegistry" /> for why a
     ///     second shape addresses the same resource group <see cref="ResourceGroup" /> already does.
     /// </summary>
-    ParkedResourceRegistry
+    ParkedResourceRegistry,
+
+    /// <summary>
+    ///     <c>IExpirySweeperGrain</c> — <c>sweep/{subscriptionId:N}/rg/{name}</c>, docs/plan/07
+    ///     § Azure RBAC and docs/plan/08 § Soft delete. The <i>third</i> shape addressing one
+    ///     resource group; see <see cref="GrainKeys.ExpirySweeper" /> for why it is a grain of its
+    ///     own rather than a reminder on the registry it reads.
+    /// </summary>
+    ExpirySweeper
 }
 
 /// <summary>
@@ -141,6 +149,12 @@ public enum GrainKeyKind {
 ///                 <see cref="GrainKeyKind.ParkedResourceRegistry" />
 ///             </term>
 ///             <description>The same two, for the same reason — it addresses a resource group too.</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.ExpirySweeper" />
+///             </term>
+///             <description>The same two again, and for the third time the same reason.</description>
 ///         </item>
 ///         <item>
 ///             <term>
@@ -192,8 +206,9 @@ public readonly record struct GrainKey {
     public Guid Id { get; }
 
     /// <summary>
-    ///     The resource group name, for <see cref="GrainKeyKind.ResourceGroup" /> and
-    ///     <see cref="GrainKeyKind.ParkedResourceRegistry" />.
+    ///     The resource group name, for <see cref="GrainKeyKind.ResourceGroup" />,
+    ///     <see cref="GrainKeyKind.ParkedResourceRegistry" /> and
+    ///     <see cref="GrainKeyKind.ExpirySweeper" />.
     /// </summary>
     public string Name => name ?? string.Empty;
 
@@ -254,6 +269,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.Session => GrainKeys.Session(Id),
             GrainKeyKind.ManagedIdentity => GrainKeys.ManagedIdentity(Id),
             GrainKeyKind.ParkedResourceRegistry => GrainKeys.ParkedResourceRegistry(Id, Name),
+            GrainKeyKind.ExpirySweeper => GrainKeys.ExpirySweeper(Id, Name),
             _ => string.Empty
         };
 }
@@ -270,23 +286,27 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; two
-///         more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
+///         <b>The twenty-one shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
 ///         the rows that same table is missing for the grains docs/plan/11 § The object model names;
-///         and the twentieth is <see cref="ParkedResourceRegistry" />, which docs/plan/08 § Soft
+///         the twentieth is <see cref="ParkedResourceRegistry" />, which docs/plan/08 § Soft
 ///         delete names as <i>"a per-resource-group registry of parked resources … in one grain that
-///         does not"</i> exist. It does now, so the row is here.
+///         does not"</i> exist — it does now, so the row is here; and the twenty-first is
+///         <see cref="ExpirySweeper" />, the thing that reads that registry on a clock, which
+///         docs/plan/07 § Azure RBAC left owed as <i>"the caller of the mechanism"</i>.
 ///         See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Twenty was nineteen and was eight before that, and the count is re-derived rather
-///         than incremented.</b> Counted on 2026-09-05 off <see cref="GrainKeyKind" />'s members,
-///         excluding <see cref="GrainKeyKind.None" />, which is not a key. It goes stale the moment a
+///         ⚠ <b>Twenty-one was twenty, was nineteen, and was eight before that, and the count is
+///         re-derived rather than incremented.</b> Counted on 2026-09-05 off
+///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
+///         is not a key — twenty-one members, of which <see cref="ExpirySweeper" /> is the one added
+///         that day. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
 ///         docs/plan/06's <i>table</i>, and it stopped being the size of this type eleven shapes ago.
@@ -428,6 +448,14 @@ public readonly record struct GrainKey {
 ///                 <c>parked/{subscriptionId:N}/rg/{name}</c> — docs/plan/08 § Soft delete
 ///             </description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ExpirySweeper" />
+///             </term>
+///             <description>
+///                 <c>sweep/{subscriptionId:N}/rg/{name}</c> — docs/plan/07 § Azure RBAC
+///             </description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The four <c>rel/</c> shapes are docs/plan/07 § Storage's, plus the two that document
@@ -481,10 +509,11 @@ public readonly record struct GrainKey {
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
 ///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
-///         <c>parked</c>, <c>idx</c>, <c>rel</c>, <c>tenant</c>, <c>platform</c>) and its
-///         segment count, and the only caller-controlled component
-///         — the resource group name, in <see cref="ResourceGroup" /> and in
-///         <see cref="ParkedResourceRegistry" />, which are the same name — is validated by
+///         <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>, <c>tenant</c>, <c>platform</c>) and
+///         its segment count, and the only caller-controlled component
+///         — the resource group name, in <see cref="ResourceGroup" />, in
+///         <see cref="ParkedResourceRegistry" /> and in <see cref="ExpirySweeper" />, which are all
+///         the same name — is validated by
 ///         <see cref="ResourceNaming" />, which forbids <c>/</c>. A name that somehow carried a
 ///         <c>/</c> would change the segment count and be rejected on the way back in rather than
 ///         re-parsed as a different shape. See <c>GrainKeysTests</c> § key-shape collision.
@@ -526,6 +555,12 @@ public static class GrainKeys {
     ///     § Soft delete.
     /// </summary>
     public const string ParkedResourceRegistryPrefix = "parked/";
+
+    /// <summary>
+    ///     <c>sweep/</c> — the thing that ends a resource group's expired recovery windows,
+    ///     docs/plan/07 § Azure RBAC.
+    /// </summary>
+    public const string ExpirySweeperPrefix = "sweep/";
 
     /// <summary><c>idx/path/</c> — the resource path index.</summary>
     public const string PathIndexPrefix = "idx/path/";
@@ -674,6 +709,67 @@ public static class GrainKeys {
             + ResourceGroupSegment
             + "/"
             + validated;
+    }
+
+    /// <summary>
+    ///     <c>sweep/{subscriptionId:N}/rg/{name}</c> — <c>IExpirySweeperGrain</c>, the thing that
+    ///     drives <c>IResourceManager.PurgeExpiredAsync</c> over that group's parked resources on a
+    ///     clock (docs/plan/07 § Azure RBAC, issue #12).
+    /// </summary>
+    /// <param name="subscriptionId">The subscription the group belongs to.</param>
+    /// <param name="name">The resource group's name, validated as <see cref="ResourceGroup" /> validates it.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A THIRD SHAPE FOR ONE RESOURCE GROUP, AND THE REASON IT IS NOT A REMINDER ON
+    ///         <see cref="ParkedResourceRegistry" />'S GRAIN IS A CYCLE RATHER THAN A PREFERENCE.</b>
+    ///         The sweep's whole job is to call <c>PurgeExpiredAsync</c>, and
+    ///         <c>ResourceManagerService.PurgeCoreAsync</c> calls
+    ///         <c>IParkedResourceRegistryGrain.UnparkAsync</c> — so a reminder that fired on the
+    ///         registry grain would be an activation awaiting a call back into itself. Orleans
+    ///         addresses that activation by (grain type, key) and a grain is non-reentrant unless it
+    ///         says otherwise, so the
+    ///         nested call queues behind the turn that is waiting for it and neither moves. (The
+    ///         escape hatches — <c>[Reentrant]</c>, and call-chain reentrancy opted into per call —
+    ///         are both ways of saying "let something else run in the middle of this grain's turn",
+    ///         which is a strange thing to grant a registry three choreographies write to.) Every
+    ///         other grain a purge touches — the resource, the index, the operation — is closed to a
+    ///         sweeper for the same reason; a grain the purge never reaches is the only place the
+    ///         driver can stand.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And even without the cycle it would still be a second grain.</b> One turn at a
+    ///         time also means a sweep in progress delays every <c>ParkAsync</c> and
+    ///         <c>UnparkAsync</c> in that group — a delete's park, a restore's unpark, a purge's
+    ///         unpark — for as long as the sweep runs. Those are the three choreographies
+    ///         <c>ParkedResourceRegistryGrain</c>'s remarks say it never reaches another grain in
+    ///         order to stay out of, and the restore is the very request most likely to be racing the
+    ///         sweep for the same resource.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A separate <see cref="GrainKeyKind" /> and not the registry's key, which
+    ///         <see cref="ParkedResourceRegistry" />'s own remarks already settled for the general
+    ///         case:</b> two grain types behind one kind makes <see cref="Parse" />'s answer
+    ///         ambiguous in exactly the situation the parser exists for — a physical key found in
+    ///         Redis, in a log line or in a dead-letter handler, being routed back to the grain that
+    ///         wrote it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Resource-group-scoped because the registry it reads is</b>, and a sweeper wider
+    ///         than its input would be a grain that has to enumerate resource groups in order to find
+    ///         the enumeration it actually wants. The same boundary, for the same reason
+    ///         <see cref="ParkedResourceRegistry" /> gives.
+    ///     </para>
+    ///     <para>
+    ///         The prefix is <c>sweep</c> rather than <c>expiry</c> because the tree already calls
+    ///         this kind of thing a sweep — <c>ResourceGroupGrain.OrphanReminderName</c> is
+    ///         <c>reap-orphans</c> on an <c>OrphanSweepPeriod</c>, and docs/plan/08 § Soft delete
+    ///         asks for a thing that <i>"sweeps an expired window"</i> in as many words.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name" /> breaks <see cref="ResourceNaming" />.</exception>
+    public static string ExpirySweeper(Guid subscriptionId, string name) {
+        var validated = ResourceNaming.EnsureValid(name, nameof(name), "resource group name");
+        return ExpirySweeperPrefix + N(subscriptionId) + "/" + ResourceGroupSegment + "/" + validated;
     }
 
     /// <summary><c>res/{resourceId:N}</c> — <c>IResourceGrain</c>, docs/plan/06 § Grain keys.</summary>
@@ -1206,7 +1302,8 @@ public static class GrainKeys {
         if (string.IsNullOrEmpty(keyWithinTenant)) {
             return Invalid(
                 "A grain key within a tenant is required. It is one of 'sub/{id}', "
-                + "'sub/{id}/rg/{name}', 'parked/{id}/rg/{name}', 'res/{id}', 'user/{id}', "
+                + "'sub/{id}/rg/{name}', 'parked/{id}/rg/{name}', 'sweep/{id}/rg/{name}', "
+                + "'res/{id}', 'user/{id}', "
                 + "'op/{id}', 'cluster/{id}', "
                 + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', "
                 + "'platform/{singleton}', 'idx/path/{digest}', "
@@ -1378,14 +1475,16 @@ public static class GrainKeys {
             return ParseRelation(key, segments);
         }
 
-        // ⚠ TWO SHAPES SHARE THIS TAIL AND ARE TOLD APART BY THEIR FIRST SEGMENT ALONE, which is the
-        // same rule every other shape here is cut by. They address the same resource group through
-        // two grain types — see ParkedResourceRegistry — so the payload is identical and only the
-        // kind differs; getting that fork wrong would route a listing of parked resources at the
-        // group's own membership, which is the merge docs/plan/08 § Soft delete refuses.
+        // ⚠ THREE SHAPES SHARE THIS TAIL AND ARE TOLD APART BY THEIR FIRST SEGMENT ALONE, which is
+        // the same rule every other shape here is cut by. They address the same resource group
+        // through three grain types — see ParkedResourceRegistry and ExpirySweeper — so the payload
+        // is identical and only the kind differs; getting that fork wrong would route a listing of
+        // parked resources at the group's own membership, which is the merge docs/plan/08 § Soft
+        // delete refuses, or a sweep's reminder at the grain the sweep exists not to block.
         var groupKind = segments[0] switch {
             "sub" => GrainKeyKind.ResourceGroup,
             "parked" => GrainKeyKind.ParkedResourceRegistry,
+            "sweep" => GrainKeyKind.ExpirySweeper,
             _ => GrainKeyKind.None
         };
 
@@ -1394,7 +1493,8 @@ public static class GrainKeys {
             return Invalid(
                 $"'{key}' is not a grain key: the four-segment shapes are "
                 + "'sub/{subscriptionId}/rg/{name}' (docs/plan/06 § Grain keys), "
-                + "'parked/{subscriptionId}/rg/{name}' (docs/plan/08 § Soft delete) and "
+                + "'parked/{subscriptionId}/rg/{name}' (docs/plan/08 § Soft delete), "
+                + "'sweep/{subscriptionId}/rg/{name}' (docs/plan/07 § Azure RBAC) and "
                 + "'rel/{obj|sub|check}/{type}/{id}' (docs/plan/07 § Storage)."
             );
         }

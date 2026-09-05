@@ -783,9 +783,13 @@ public sealed class ResourceManagerService(
         // delete operation that drives it terminated when the resource was parked. What was left is
         // a resource still holding its name and its committed quota, still SoftDeleted, and in NO
         // listing at all — the exact state issue #71 exists to end, reached on an ordinary non-crash
-        // path, and reached by the COMMON case rather than a corner: #12's expiry sweeper does not
-        // exist yet, so expired-but-unpurged is where every parked resource eventually sits, and the
-        // enumeration destroyed is the one that sweeper is going to read.
+        // path, and reached by the COMMON case rather than a corner: when this was written #12's
+        // expiry sweeper did not exist, so expired-but-unpurged was where every parked resource
+        // eventually sat, and the enumeration destroyed was the one that sweeper was going to read.
+        // ⚠ THE SWEEPER EXISTS NOW (2026-09-05) AND THIS SCREEN IS MORE LOAD-BEARING RATHER THAN
+        // LESS: an expired window is no longer a long-term state, it is a state a tenant's restore
+        // races an IExpirySweeperGrain pass for, which is exactly when this line and the repair
+        // below are both reached.
         //
         // ⚠ ASKED OF THE INDEX GRAIN, WHICH IS WHY THIS IS NOT THE "TWO READS OF ONE DEADLINE" THE
         // NOTE FURTHER DOWN WARNS ABOUT. ResolveExpiredAsync compares RecoverableUntil against that
@@ -1346,8 +1350,9 @@ public sealed class ResourceManagerService(
     ///         concurrent purge had just released: that purge unparks and then releases, so a restore
     ///         interleaved with it can find the binding <c>Free</c> at
     ///         <c>IndexClaimMachine.Restore</c> — and an entry written after the name came back is
-    ///         the "long" registry the ordering above exists to make impossible, permanently, since
-    ///         nothing can address that resource again. So the entry comes back only when the index
+    ///         the "long" registry the ordering above exists to make impossible — which, until
+    ///         <c>IExpirySweeperGrain</c> landed, nothing could ever undo, since nothing could address
+    ///         that resource again. So the entry comes back only when the index
     ///         still says <c>SoftDeleted</c> <i>and</i> still says it of the same GUID; on every
     ///         other answer, short is the correct state and staying short is the repair.
     ///     </para>
@@ -1356,15 +1361,36 @@ public sealed class ResourceManagerService(
     ///         it were closed.</b> The guard holds at <i>read</i> time: this is a read of the index
     ///         followed by a write to the registry, two grain calls, and a purge that unparks and
     ///         releases in the gap still leaves an entry naming a name that is free. That is the
-    ///         permanent "long" the ordering exists to prevent, and it needs a purge and a restore of
+    ///         "long" the ordering exists to prevent, and it needs a purge and a restore of
     ///         the same resource to overlap inside that window. It is left rather than fixed for two
     ///         reasons, both worth stating: closing it needs the index and the registry to move under
     ///         one decision, which is a larger change than the data loss it would be buying down; and
     ///         master already carries a wider unguarded version of the same race — a restore that
     ///         <i>succeeds</i> between a purge's unpark and its release leaves a live resource whose
-    ///         name has been given away. ⚠ #12's sweeper makes purge-of-an-expired-resource
-    ///         concurrent with restore-of-an-expired-resource the likeliest pair in the tree, so this
-    ///         paragraph is the one to re-read when that driver is built.
+    ///         name has been given away.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>AND THE PARAGRAPH ABOVE USED TO END "PERMANENTLY", WHICH IS THE HALF ISSUE #12
+    ///         CHANGED (2026-09-05).</b> It read that the entry would stand for ever "since nothing
+    ///         can address that resource again", and it warned that <i>"#12's sweeper makes
+    ///         purge-of-an-expired-resource concurrent with restore-of-an-expired-resource the
+    ///         likeliest pair in the tree, so this paragraph is the one to re-read when that driver
+    ///         is built"</i>. Both halves came true at once. The driver — <c>IExpirySweeperGrain</c>
+    ///         — does make that pair ordinary, because the moment a window closes is exactly the
+    ///         moment a sweep starts purging and a tenant's restore starts being refused, and both of
+    ///         those reach <see cref="RepairParkedRegistryAsync" />. What it also does is take the
+    ///         permanence away: <b>a sweep asks the index about every entry it finds and removes the
+    ///         ones the index no longer agrees with</b>, so a resurrected entry naming a freed name
+    ///         now lives at most one <c>IExpirySweeperGrain.SweepPeriod</c> rather than for ever.
+    ///         Something can address that resource again after all — the sweeper, which holds the
+    ///         path and the GUID and asks <c>ResolveSoftDeletedAsync</c> directly.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The race itself is unchanged and is deliberately not claimed to be.</b> The write
+    ///         below still follows a read, the interleaving still produces a wrong entry, and what
+    ///         has changed is only how long the wrong entry survives and what notices. The two
+    ///         reasons for leaving it stand as written; the third — that the damage was permanent —
+    ///         no longer does.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The re-park's own failure is not propagated, because the caller's answer belongs
@@ -1384,6 +1410,44 @@ public sealed class ResourceManagerService(
         }
 
         _ = await Parked(addressed).ParkAsync(addressed.Id);
+
+        // ⚠ THE SECOND OF THE TWO WRITERS THAT ADD A REGISTRY ENTRY, SO IT IS THE SECOND THAT ARMS
+        // THE SWEEPER. IExpirySweeperGrain.ArmAsync's remarks fix the rule: the sweeper disarms
+        // itself on a registry it finds empty, so an entry that appeared without arming would sit
+        // unswept until the group's next park. This path is exactly where that happens — the entry
+        // this line puts back may be the group's ONLY one, and the sweep that emptied the registry a
+        // moment ago is what removed the reminder.
+        //
+        // ⚠ Discarded like the re-park above it, and for the reason the paragraph on the method
+        // gives: the caller's answer belongs to the refusal that brought us here, and a repair that
+        // failed leaves the state the defect left rather than a worse one. ArmAsync answers Success
+        // on a silo with no reminder service, so the only thing this can report is our own failure,
+        // and a retried restore reaches this line again.
+        //
+        // ⚠ AND `_ =` DISCARDS A RESULT BUT NOT AN EXCEPTION, WHICH IS WHY THE try IS HERE
+        // (2026-09-05, #12 review). This method is on the RESTORE's request path — reached from the
+        // expired screen, which then returns a clean NotFound — and the interleaving this change
+        // itself calls "the likeliest pair in the tree" is precisely a sweep in progress at the
+        // moment a window closes. A sweep is a long turn by design (MaxPerSweep purge
+        // choreographies) and the tree configures no ResponseTimeout, so before ArmAsync was
+        // [AlwaysInterleave] a call landing on a busy activation could exceed Orleans' 30-second
+        // default and THROW — turning the tenant's intended 404 into a 500 over a schedule the
+        // tenant never asked about. The attribute is the fix; this catch is what makes the sentence
+        // above ("the caller's answer belongs to the refusal that brought us here") true for every
+        // failure rather than only for the ones shaped like a Result.
+        try {
+            _ = await Sweeper(addressed).ArmAsync();
+        }
+        catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(
+                error,
+                "'{Path}' was put back into its resource group's parked registry but the group's "
+                + "expiry sweeper could not be armed. The caller's own answer is unaffected; the "
+                + "group's windows are ended by its next park, a hand IExpirySweeperGrain."
+                + "SweepAsync, or the next silo start's backfill — issue #12.",
+                addressed.Id.CanonicalPath
+            );
+        }
     }
 
     /// <summary>
@@ -2899,6 +2963,22 @@ public sealed class ResourceManagerService(
         Tenant(target)
             .GetGrain<IParkedResourceRegistryGrain>(
                 GrainKeys.ParkedResourceRegistry(target.Id.SubscriptionId, target.Id.ResourceGroup)
+            );
+
+    /// <summary>
+    ///     The same resource group's expiry sweeper — the clock behind
+    ///     <see cref="PurgeExpiredAsync" /> (issue #12, docs/plan/07 § Azure RBAC).
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Reached from exactly one place in this file — <see cref="RepairParkedRegistryAsync" />
+    ///     — and it is reached to <i>arm</i>, never to sweep.</b> A request path that swept would put
+    ///     a whole group's purges inside one caller's request, and the sweeper is a clock precisely so
+    ///     that nobody's request is the thing that ends somebody else's window.
+    /// </remarks>
+    IExpirySweeperGrain Sweeper(WriteTarget target) =>
+        Tenant(target)
+            .GetGrain<IExpirySweeperGrain>(
+                GrainKeys.ExpirySweeper(target.Id.SubscriptionId, target.Id.ResourceGroup)
             );
 
     TenantGrainFactory Tenant(WriteTarget target) =>

@@ -1,6 +1,7 @@
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Core.Contracts;
 using CyberCloud.ResourceManager.Actions;
+using CyberCloud.ResourceManager.Expiry;
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -543,6 +544,23 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                 GrainKeys.ParkedResourceRegistry(address.SubscriptionId, address.ResourceGroup)
             );
 
+    /// <summary>
+    ///     The same group's expiry sweeper — the clock behind
+    ///     <c>IResourceManager.PurgeExpiredAsync</c>, issue #12.
+    /// </summary>
+    /// <param name="address">Any address in the group. Only its subscription and group name are read.</param>
+    /// <remarks>
+    ///     ⚠ Built from the same two values as <see cref="Parked" /> for that helper's reason, and it
+    ///     matters more here than anywhere else: a case that swept one group and asserted against the
+    ///     registry of another would report a sweep that purged nothing and a registry that still
+    ///     holds everything, which is exactly what a broken sweeper looks like.
+    /// </remarks>
+    public IExpirySweeperGrain Sweeper(ResourceId address) =>
+        For(address.TenantId)
+            .GetGrain<IExpirySweeperGrain>(
+                GrainKeys.ExpirySweeper(address.SubscriptionId, address.ResourceGroup)
+            );
+
     /// <summary>The resource grain.</summary>
     public IResourceGrain Resource(Guid tenant, Guid resourceId) =>
         For(tenant).GetGrain<IResourceGrain>(GrainKeys.Resource(resourceId));
@@ -770,6 +788,15 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // A cap of two, so the interest limit is reachable in a test rather than after
                     // 200 subscribes. docs/plan/10 § Rate limiting.
                     services.AddSingleton(new ConnectionLimits { StreamsPerConnection = 2 });
+
+                    // ⚠ THE BACKFILL IS OFF AND EXPIRYSWEEPERTESTS DRIVES IT BY HAND, which is the
+                    // same knob and the same reason as TenancyRefreshOptions.RunBackgroundRefresh:
+                    // a suite that asserts which resource groups are armed cannot share a process
+                    // with a loop that is quietly arming them. ExpirySweeperTests constructs
+                    // ExpirySweeperBackfill against this cluster's client factory and calls
+                    // RunAsync, which is the same method AddCyberCloudResourceManager's hosted
+                    // service calls.
+                    services.Configure<ExpirySweeperBackfillOptions>(backfill => backfill.RunOnStart = false);
 
                     services.AddSingleton<ConformingReconciler>();
 
