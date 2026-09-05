@@ -258,6 +258,7 @@ public class GrainKeysTests {
     [InlineData("idx")]
     [InlineData("path")]
     [InlineData("email")]
+    [InlineData("parked")]
     public void AResourceGroupNamedAfterAnotherShapeIsStillAResourceGroup(string name) {
         var key = GrainKeys.ResourceGroup(Subscription, name);
         var parsed = GrainKeys.Parse(key).GetValueOrThrow();
@@ -683,10 +684,20 @@ public class GrainKeysTests {
     [Fact]
     public void EveryKeyIsBoundedInLengthSoRedisKeysAreNotUnbounded() {
         // A grain key becomes a Redis key (docs/plan/05); an unbounded one is a memory problem.
-        // The longest shape is sub/{32}/rg/{63} = 4 + 32 + 4 + 63 = 103.
-        var longest = GrainKeys.ResourceGroup(Subscription, new('a', 63));
+        //
+        // ⚠ THE LONGEST SHAPE IS NO LONGER sub/{32}/rg/{63}, AND THE NUMBER IS RECOUNTED RATHER THAN
+        // CARRIED. GrainKeys.ParkedResourceRegistry addresses the same resource group through a
+        // longer prefix, so the cap moved from 103 to 106 when it landed:
+        //
+        //   sub/{32}/rg/{63}     = 4 + 32 + 4 + 63 = 103
+        //   parked/{32}/rg/{63}  = 7 + 32 + 4 + 63 = 106
+        //
+        // Both are asserted, so a third shape with a longer prefix has to come here and say so.
+        var group = GrainKeys.ResourceGroup(Subscription, new('a', 63));
+        var parked = GrainKeys.ParkedResourceRegistry(Subscription, new('a', 63));
 
-        longest.Length.ShouldBe(103);
+        group.Length.ShouldBe(103);
+        parked.Length.ShouldBe(106);
 
         foreach (var key in Corpus.EveryGrainKeyShapeFor(Sample)) {
             key.Length.ShouldBeLessThanOrEqualTo(103);
@@ -922,4 +933,96 @@ public class GrainKeysTests {
             }
         }
     }
+
+    // ── The parked-resource registry — docs/plan/08 § Soft delete, issue #71 ──────────────────
+    //
+    // ⚠ THE SHAPE THAT SHARES A TAIL WITH ANOTHER ONE, which no other pair in this type does. Every
+    // shape but these two is told apart by its first segment AND a segment count nothing else has;
+    // `parked/{sub}/rg/{name}` and `sub/{sub}/rg/{name}` differ by their first segment alone, and
+    // they carry the SAME payload — the same subscription, the same group name — so a parser that
+    // cut on anything but that segment would return a well-formed key of the wrong kind rather than
+    // a rejection. That is the failure worth a section of its own: it would route a listing of
+    // parked resources at the group's own membership, which is the merge docs/plan/08 § Soft delete
+    // refuses in as many words.
+
+    [Fact]
+    public void TheParkedRegistryShapeIsParkedSlashSubscriptionSlashRgSlashName() {
+        GrainKeys.ParkedResourceRegistry(Subscription, "prod")
+            .ShouldBe("parked/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/prod");
+
+        var parsed = GrainKeys.Parse(GrainKeys.ParkedResourceRegistry(Subscription, "prod")).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.ParkedResourceRegistry);
+        parsed.Id.ShouldBe(Subscription);
+        parsed.Name.ShouldBe("prod");
+        parsed.ToString().ShouldBe(GrainKeys.ParkedResourceRegistry(Subscription, "prod"));
+    }
+
+    [Fact]
+    public void TheParkedRegistryAndItsResourceGroupAreTwoKeysWithOnePayload() {
+        // The property the fork in ParseFourSegments has to have, over a corpus rather than one
+        // pair: for every (subscription, group) the two shapes produce two DIFFERENT strings that
+        // decode to two different kinds and to the SAME subscription and name. A parser that folded
+        // them would satisfy the payload half and fail the kind half, which is why both are asserted.
+        foreach (var id in Corpus.ResourceIds(500, 71)) {
+            var group = GrainKeys.ResourceGroup(id.SubscriptionId, id.ResourceGroup);
+            var parked = GrainKeys.ParkedResourceRegistry(id.SubscriptionId, id.ResourceGroup);
+
+            parked.ShouldNotBe(group);
+
+            var decodedGroup = GrainKeys.Parse(group).GetValueOrThrow();
+            var decodedParked = GrainKeys.Parse(parked).GetValueOrThrow();
+
+            decodedGroup.Kind.ShouldBe(GrainKeyKind.ResourceGroup);
+            decodedParked.Kind.ShouldBe(GrainKeyKind.ParkedResourceRegistry);
+
+            decodedParked.Id.ShouldBe(decodedGroup.Id);
+            decodedParked.Name.ShouldBe(decodedGroup.Name);
+
+            GrainKeys.IsTenantQualificationSafe(parked).ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void AResourceGroupCalledParkedIsStillNotAParkedRegistryKey() {
+        // `parked` is a legal resource group name under ResourceNaming, so the near-miss below is
+        // constructible by a tenant rather than only by a forger.
+        var group = GrainKeys.ResourceGroup(Subscription, "parked");
+        var registry = GrainKeys.ParkedResourceRegistry(Subscription, "prod");
+
+        group.ShouldNotBe(registry);
+        GrainKeys.Parse(group).GetValueOrThrow().Kind.ShouldBe(GrainKeyKind.ResourceGroup);
+
+        // …and the registry of the group that is itself called `parked`, which is the one string a
+        // reader is most likely to misread. It is a registry key, and its name is `parked`.
+        var registryOfParked = GrainKeys.ParkedResourceRegistry(Subscription, "parked");
+        var decoded = GrainKeys.Parse(registryOfParked).GetValueOrThrow();
+
+        registryOfParked.ShouldBe("parked/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/parked");
+        decoded.Kind.ShouldBe(GrainKeyKind.ParkedResourceRegistry);
+        decoded.Name.ShouldBe("parked");
+    }
+
+    [Theory]
+    [InlineData("parked/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f", "the prefix and a subscription is not the shape")]
+    [InlineData("parked/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg", "the marker with no name")]
+    [InlineData("parked/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/xx/prod", "the wrong marker")]
+    [InlineData("parked/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/prod/extra", "trailing junk")]
+    [InlineData("parked/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f/rg/prod", "the D form is not the N form")]
+    [InlineData("parked/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/PROD", "an upper-case group name")]
+    [InlineData("Parked/7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/rg/prod", "the prefix is matched case-sensitively")]
+    public void AForgedParkedRegistryKeyIsRejectedRatherThanReinterpreted(string forged, string why) {
+        GrainKeys.TryParse(forged, out _).ShouldBeFalse($"'{forged}' — {why}");
+        GrainKeys.Parse(forged).Error!.Code.ShouldBe(ErrorCode.InvalidGrainKey);
+    }
+
+    [Fact]
+    public void TheParkedRegistryFactoryRefusesAnInjectedResourceGroupName() =>
+        // The same defence, and the same corpus, as ResourceGroup's: the one caller-controlled
+        // component of both four-segment shapes is the same name, so a hole in either factory is a
+        // hole in the pair.
+        Should.Throw<ArgumentException>(
+            () => GrainKeys.ParkedResourceRegistry(Subscription, "pr/od"),
+            "a resource group name containing '/' must not be constructible into a registry key"
+        );
 }

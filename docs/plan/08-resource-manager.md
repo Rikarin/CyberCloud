@@ -490,6 +490,31 @@ the two collections answer different questions to different callers, and merging
 this type"* is expressible today; anything wider is still the addressing question, because
 `ResourceId.ParsePath` has `const int fixedPrefix = 8` and no subscription-scoped shape.
 
+⚠ **THE GRAIN NOW EXISTS AND THE THREE CALL SITES ARE WIRED, SO THE ENUMERATION IS NO LONGER THE
+BLOCKER — THE ENDPOINT OVER IT IS.** `IParkedResourceRegistryGrain` is the paragraph above, built:
+key `parked/{subscriptionId:N}/rg/{name}` (a **twentieth** `GrainKeyKind`, in shared
+`CyberCloud.Core`), durable, one activation per resource group, `ListAsync` for everything in the
+group and `ListOfTypeAsync(ResourceCollectionId)` for one collection of it. `OperationGrain.ParkAsync`
+writes an entry one line **before** it unlists the member; `ResourceManagerService.RestoreAsync` and
+`PurgeCoreAsync` clear it **before** the index write that would make it false. That ordering is the
+registry's one invariant — *an entry exists only while the index says `SoftDeleted`* — and it fixes
+the direction of every crash window: the registry can be short and never long, because a listing that
+**over**-reports offers a restore that answers `404` and tells a caller who may list the collection
+but may not read the resource that the name is held, which is the oracle § Soft delete refuses a
+`410 Gone` over.
+
+⚠ **It is a second collection and not a second membership.** The member still leaves the group at the
+park; `SoftDeletePathTests.ASoftDeletedResourceIsInNoListingBecauseItLeftItsGroupsMembership` is
+unchanged and still passes, and `SoftDeletePathTests.AParkedResourceIsInItsGroupsRegistryOfWhat`
+`IsRecoverable` is the other half of it — absent from the membership *and* present somewhere.
+
+**What is still owed is the endpoint**, and it is the third cost this section already named rather
+than a new one: a collection `GET` needs a page cap, a continuation and a `Check` per entry (ReBAC's
+`ListObjects` is M2), and a collection path reaches ADR-012's four surfaces, none of which can carry
+one — `DocumentReader.TypesOf` would read a collection path item carrying
+`x-cybercloud-resource-type` as a *second* type of the same name. Nothing about that changed; what
+changed is that the filter finally has an input.
+
 **Decided: the name is held for the whole window.** Azure holds it — *"You can't reuse the name of a
 key vault that was soft-deleted, until the retention period expires"*, DNS record included. Releasing
 it is the cheaper-sounding option and it breaks restore: a name taken by somebody else leaves a

@@ -201,3 +201,36 @@ public sealed class OperationGrainState {
     [Id(14)]
     public bool CancelTeardownDone { get; set; }
 }
+
+/// <summary>
+///     The durable state of an <c>IParkedResourceRegistryGrain</c> — one resource group's
+///     soft-deleted resources, docs/plan/08 § Soft delete.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Durable, and the argument is that nothing else holds this at all.</b> Every other
+///         fact about a parked resource has a second home — the name is held by
+///         <c>IResourceIndexGrain</c>, the body by <see cref="ResourceState" />, the quota by the
+///         subscription. The <i>enumeration</i> has none: the index is one grain per path and one-way,
+///         the group's membership deliberately no longer holds the resource, and no scan can find
+///         what no listing names. So docs/plan/05 § Choosing a tier's question — "can this be
+///         rebuilt" — answers no, and losing it puts every parked resource in the group back where
+///         issue #71 found them: recoverable in principle and reachable only by somebody who already
+///         remembers the exact path.
+///     </para>
+///     <para>
+///         Keyed by resource GUID rather than by path, for <c>GrainKeys.Resource</c>'s reason: a
+///         restore puts the resource back at its old address, but nothing here should have to be
+///         rewritten if it were ever moved or renamed, and the GUID is what both clears take.
+///     </para>
+///     <para>
+///         The collection is <c>{ get; set; }</c> for the reason given on <see cref="ResourceState" />.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.ParkedResourceRegistry")]
+public sealed class ParkedResourceRegistryState {
+    /// <summary>The parked resources, by resource id.</summary>
+    [Id(0)]
+    public Dictionary<Guid, ParkedResource> Entries { get; set; } = [];
+}

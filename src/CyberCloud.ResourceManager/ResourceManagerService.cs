@@ -769,6 +769,32 @@ public sealed class ResourceManagerService(
             }
         }
 
+        // ── AND IT LEAVES THE REGISTRY OF WHAT IS RECOVERABLE, BEFORE IT STOPS BEING RECOVERABLE ──
+        //
+        // ⚠ THE SECOND OF THE THREE CALL SITES docs/plan/08 § Soft delete NAMES — "cleared where the
+        // restore relists it". OperationGrain.ParkAsync wrote the entry; this is the ending that
+        // makes it false, and issue #71's registry is only worth having if both endings clear it.
+        //
+        // ⚠ BEFORE THE INDEX RESTORE, WHICH IS THE REGISTRY'S OWN INVARIANT AND NOT A PREFERENCE:
+        // an entry exists only while the index says SoftDeleted. Clearing after the index had been
+        // restored would leave, on any failure between the two, a registry that OFFERS a resource
+        // that is live — a restore that answers 404 to whoever accepts the offer, and, worse, a
+        // caller who may list this collection but may not read the resource being told the name is
+        // held. That is the enumeration oracle docs/plan/07 § The enforcement seam closes and the
+        // reason § Soft delete refuses a 410 Gone. Clearing first fails the other way: the resource
+        // stays parked, stays restorable by its own path, and is missing from one listing until the
+        // restore is retried — which every step below can also require, since RestorableAsync still
+        // answers for it and UnparkAsync is idempotent, so the retry re-runs the whole method and
+        // converges.
+        //
+        // ⚠ AND IT IS STRICT, like the rejoin further down. Nothing irreversible has happened yet:
+        // a failure here returns before the index is touched, so the caller's retry starts from the
+        // same state this call did.
+        var unparked = await Parked(addressed).UnparkAsync(addressed.Id.Id);
+        if (unparked.TryGetError(out var unparkError)) {
+            return Result<WriteAccepted>.Failure(unparkError);
+        }
+
         trace.Enter(WriteStep.IndexClaim);
 
         // ⚠ THE INDEX GOES FIRST HERE TOO, AND FOR THE MIRROR OF THE DELETE'S REASON. The index is
@@ -1121,6 +1147,27 @@ public sealed class ResourceManagerService(
         }
 
         trace.Enter(WriteStep.IndexClaim);
+
+        // ── AND IT LEAVES THE REGISTRY OF WHAT IS RECOVERABLE, BECAUSE IT IS ABOUT TO STOP BEING ──
+        //
+        // ⚠ THE THIRD OF THE THREE CALL SITES docs/plan/08 § Soft delete NAMES — "cleared where …
+        // the purge releases the name". Shared by both fronts, the authorized purge and the
+        // clock-driven one, for the reason this whole method is shared: a purge the clock drove
+        // through a different body would be a second implementation of the platform's one
+        // irreversible operation.
+        //
+        // ⚠ BEFORE THE RELEASE, AND HERE THE ORDER IS ALSO WHAT KEEPS THE PURGE RE-DRIVABLE. While
+        // the index still says SoftDeleted, RestorableAsync still answers, so a purge interrupted at
+        // any point up to the release can be retried from the top and will converge — UnparkAsync is
+        // idempotent, so the second attempt walks the same path. Once the name is released nothing
+        // can resolve the resource again, so bookkeeping left behind after that line has no request
+        // that finishes it: the entry would stand for ever, claiming a restore that answers 404.
+        // That is also the registry's invariant read from the other side — an entry exists only
+        // while the index says SoftDeleted, so it must go before the index stops saying it.
+        var unparked = await Parked(addressed).UnparkAsync(addressed.Id.Id);
+        if (unparked.TryGetError(out var unparkError)) {
+            return Result<WriteAccepted>.Failure(unparkError);
+        }
 
         // ⚠ THE NAME COMES BACK NOW, WHICH IS THE HARD DELETE'S ORDER AND FOR THE HARD DELETE'S
         // REASON. docs/plan/06 § Two-phase create: "release the index first (so the name is
@@ -2705,6 +2752,21 @@ public sealed class ResourceManagerService(
     IResourceGroupGrain Group(WriteTarget target) =>
         Tenant(target)
             .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(target.Id.SubscriptionId, target.Id.ResourceGroup));
+
+    /// <summary>
+    ///     The same resource group's registry of parked resources — docs/plan/08 § Soft delete, and
+    ///     the collection a soft-deleted resource is in instead of <see cref="Group" />'s.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Built from the <b>address</b> for the reason <see cref="Group" /> is, and the grain
+    ///     re-checks the tenant, the subscription and the group name against its own key — so a wrong
+    ///     key here is a refusal rather than a restore offered out of somebody else's group.
+    /// </remarks>
+    IParkedResourceRegistryGrain Parked(WriteTarget target) =>
+        Tenant(target)
+            .GetGrain<IParkedResourceRegistryGrain>(
+                GrainKeys.ParkedResourceRegistry(target.Id.SubscriptionId, target.Id.ResourceGroup)
+            );
 
     TenantGrainFactory Tenant(WriteTarget target) =>
         grains.ForTenant(target.Id.TenantId.ToString("D", CultureInfo.InvariantCulture));

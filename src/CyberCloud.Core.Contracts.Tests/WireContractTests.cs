@@ -73,6 +73,17 @@ public sealed class WireContractTests {
         // before this existed, because every registered type then was top-level.
         ("ResourceIdSurrogate", 6, "ParentNames"),
 
+        // ⚠ A NEW TYPE RATHER THAN A NEW MEMBER, so it starts at 0 and burns nothing. A collection
+        // address did not cross a grain boundary until IParkedResourceRegistryGrain.ListOfTypeAsync
+        // — docs/plan/08 § Soft delete's "what is recoverable in this group, of this type", issue
+        // #71 — so there is no older payload for these five numbers to be compatible with, which is
+        // the one moment the numbering is genuinely free.
+        ("ResourceCollectionIdSurrogate", 0, "TenantId"),
+        ("ResourceCollectionIdSurrogate", 1, "SubscriptionId"),
+        ("ResourceCollectionIdSurrogate", 2, "ResourceGroup"),
+        ("ResourceCollectionIdSurrogate", 3, "Type"),
+        ("ResourceCollectionIdSurrogate", 4, "ParentNames"),
+
         // ⚠ APPENDED BY A MOVE, NOT BY A NEW TYPE. SecretRef came here from
         // CyberCloud.ResourceManager.Contracts with its [Id(n)] numbers and its [Alias] untouched —
         // the numbers below are the ones it published there. A move that renumbered would be
@@ -103,6 +114,7 @@ public sealed class WireContractTests {
         ("ResultSurrogate`1", "CyberCloud.Core.Result`1"),
         ("ResourceTypeNameSurrogate", "CyberCloud.Core.ResourceTypeName"),
         ("ResourceIdSurrogate", "CyberCloud.Core.ResourceId"),
+        ("ResourceCollectionIdSurrogate", "CyberCloud.Core.ResourceCollectionId"),
 
         // ⚠ NOT "CyberCloud.Core.SecretRef", AND THE MISMATCH IS THE POINT. The type moved here from
         // CyberCloud.ResourceManager.Contracts; the alias records where the concept was published, and

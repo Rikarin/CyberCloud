@@ -6,9 +6,9 @@ namespace CyberCloud.Core.Resources;
 
 /// <summary>
 ///     Which grain a key within a tenant addresses. The set is closed — it is the grain-key table at
-///     docs/plan/06 § Grain keys plus the two shapes that table omits for grains docs/plan/04
-///     § Grain taxonomy does name (<see cref="Tenant" />, <see cref="PlatformSingleton" />), and
-///     nothing else may be a grain key.
+///     docs/plan/06 § Grain keys plus the shapes that table omits for grains the other plan documents
+///     do name, and nothing else may be a grain key. The full accounting, shape by shape and document
+///     by document, is on <see cref="GrainKeys" />; every row of it is a grain that exists.
 /// </summary>
 public enum GrainKeyKind {
     /// <summary><c>default(GrainKey)</c>. Not a key.</summary>
@@ -104,7 +104,14 @@ public enum GrainKeyKind {
     ///     <c>IManagedIdentityGrain</c> — <c>mi/{managedIdentityId:N}</c>. See
     ///     <see cref="GrainKeys.ManagedIdentity" />.
     /// </summary>
-    ManagedIdentity
+    ManagedIdentity,
+
+    /// <summary>
+    ///     <c>IParkedResourceRegistryGrain</c> — <c>parked/{subscriptionId:N}/rg/{name}</c>,
+    ///     docs/plan/08 § Soft delete. See <see cref="GrainKeys.ParkedResourceRegistry" /> for why a
+    ///     second shape addresses the same resource group <see cref="ResourceGroup" /> already does.
+    /// </summary>
+    ParkedResourceRegistry
 }
 
 /// <summary>
@@ -128,6 +135,12 @@ public enum GrainKeyKind {
 ///                 <see cref="GrainKeyKind.ResourceGroup" />
 ///             </term>
 ///             <description><see cref="Id" /> = the <i>subscription</i>, <see cref="Name" /> = the group.</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.ParkedResourceRegistry" />
+///             </term>
+///             <description>The same two, for the same reason — it addresses a resource group too.</description>
 ///         </item>
 ///         <item>
 ///             <term>
@@ -178,7 +191,10 @@ public readonly record struct GrainKey {
     /// <summary>The GUID this key carries — see the table on the type.</summary>
     public Guid Id { get; }
 
-    /// <summary>The resource group name, for <see cref="GrainKeyKind.ResourceGroup" />.</summary>
+    /// <summary>
+    ///     The resource group name, for <see cref="GrainKeyKind.ResourceGroup" /> and
+    ///     <see cref="GrainKeyKind.ParkedResourceRegistry" />.
+    /// </summary>
     public string Name => name ?? string.Empty;
 
     /// <summary>The index digest, for the two <c>idx/</c> shapes.</summary>
@@ -237,6 +253,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.ServicePrincipal => GrainKeys.ServicePrincipal(Id),
             GrainKeyKind.Session => GrainKeys.Session(Id),
             GrainKeyKind.ManagedIdentity => GrainKeys.ManagedIdentity(Id),
+            GrainKeyKind.ParkedResourceRegistry => GrainKeys.ParkedResourceRegistry(Id, Name),
             _ => string.Empty
         };
 }
@@ -253,15 +270,26 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The nineteen shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; two
+///         <b>The twenty shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; two
 ///         more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
-///         Platform rows; four are docs/plan/07 § Storage's authorization grains; the last five are
-///         the rows that same table is missing for the grains docs/plan/11 § The object model names.
+///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
+///         the rows that same table is missing for the grains docs/plan/11 § The object model names;
+///         and the twentieth is <see cref="ParkedResourceRegistry" />, which docs/plan/08 § Soft
+///         delete names as <i>"a per-resource-group registry of parked resources … in one grain that
+///         does not"</i> exist. It does now, so the row is here.
 ///         See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
+///     </para>
+///     <para>
+///         ⚠ <b>Twenty was nineteen and was eight before that, and the count is re-derived rather
+///         than incremented.</b> Counted on 2026-09-05 off <see cref="GrainKeyKind" />'s members,
+///         excluding <see cref="GrainKeyKind.None" />, which is not a key. It goes stale the moment a
+///         member is added without this sentence being reread, which is exactly how issue #71 came to
+///         describe this type as covering "eight key shapes today": eight is the size of
+///         docs/plan/06's <i>table</i>, and it stopped being the size of this type eleven shapes ago.
 ///     </para>
 ///     <list type="table">
 ///         <item>
@@ -392,6 +420,14 @@ public readonly record struct GrainKey {
 ///             </term>
 ///             <description><c>mi/{managedIdentityId:N}</c> — docs/plan/11 § Managed identity</description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ParkedResourceRegistry" />
+///             </term>
+///             <description>
+///                 <c>parked/{subscriptionId:N}/rg/{name}</c> — docs/plan/08 § Soft delete
+///             </description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The four <c>rel/</c> shapes are docs/plan/07 § Storage's, plus the two that document
@@ -444,9 +480,11 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
-///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>idx</c>) and its
-///         segment count, and the one caller-controlled component
-///         — the resource group name in <see cref="ResourceGroup" /> — is validated by
+///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
+///         <c>parked</c>, <c>idx</c>, <c>rel</c>, <c>tenant</c>, <c>platform</c>) and its
+///         segment count, and the only caller-controlled component
+///         — the resource group name, in <see cref="ResourceGroup" /> and in
+///         <see cref="ParkedResourceRegistry" />, which are the same name — is validated by
 ///         <see cref="ResourceNaming" />, which forbids <c>/</c>. A name that somehow carried a
 ///         <c>/</c> would change the segment count and be rejected on the way back in rather than
 ///         re-parsed as a different shape. See <c>GrainKeysTests</c> § key-shape collision.
@@ -482,6 +520,12 @@ public static class GrainKeys {
 
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
+
+    /// <summary>
+    ///     <c>parked/</c> — a resource group's registry of soft-deleted resources, docs/plan/08
+    ///     § Soft delete.
+    /// </summary>
+    public const string ParkedResourceRegistryPrefix = "parked/";
 
     /// <summary><c>idx/path/</c> — the resource path index.</summary>
     public const string PathIndexPrefix = "idx/path/";
@@ -573,6 +617,63 @@ public static class GrainKeys {
     public static string ResourceGroup(Guid subscriptionId, string name) {
         var validated = ResourceNaming.EnsureValid(name, nameof(name), "resource group name");
         return SubscriptionPrefix + N(subscriptionId) + "/" + ResourceGroupSegment + "/" + validated;
+    }
+
+    /// <summary>
+    ///     <c>parked/{subscriptionId:N}/rg/{name}</c> — <c>IParkedResourceRegistryGrain</c>, the
+    ///     resource group's registry of soft-deleted resources (docs/plan/08 § Soft delete).
+    /// </summary>
+    /// <param name="subscriptionId">The subscription the group belongs to.</param>
+    /// <param name="name">The resource group's name, validated as <see cref="ResourceGroup" /> validates it.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A SECOND SHAPE ADDRESSING THE SAME RESOURCE GROUP, AND THAT IS THE DECISION
+    ///         RATHER THAN AN OVERSIGHT.</b> Orleans addresses an activation by (grain type, key), so
+    ///         <c>IParkedResourceRegistryGrain</c> could have been reached with
+    ///         <see cref="ResourceGroup" />'s key and no row would have been added to
+    ///         <see cref="GrainKeyKind" /> at all. It must not be: this type documents every kind as
+    ///         naming exactly one grain interface, and <see cref="Parse" /> exists so that a physical
+    ///         key found in Redis, in a log line or in a dead-letter handler says which grain wrote
+    ///         it. Two grain types behind one kind makes that answer ambiguous in precisely the
+    ///         situation the parser is for, and the ambiguity is invisible until somebody is reading
+    ///         a key at three in the morning.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Resource-group-scoped, and deliberately not subscription-scoped.</b> docs/plan/08
+    ///         § Soft delete: <i>"its address … is no longer blocked — <c>ResourceCollectionId</c>
+    ///         exists and is resource-group-scoped, so 'what is recoverable in this group of this
+    ///         type' is expressible today; anything wider is still the addressing question, because
+    ///         <c>ResourceId.ParsePath</c> has <c>const int fixedPrefix = 8</c> and no
+    ///         subscription-scoped shape."</i> A <c>parked/{subscriptionId:N}</c> key covering a whole
+    ///         subscription would be a listing with no address a caller could ask for, and it would
+    ///         take the addressing decision by implication rather than on purpose.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>NOT a member of the group's own membership, which is the same refusal one level
+    ///         down.</b> docs/plan/08 § Soft delete: the two collections <i>"answer different
+    ///         questions to different callers, and merging them is exactly the <c>410 Gone</c> the
+    ///         decision above refuses"</i> — a parked resource left in the group's listing hands a
+    ///         caller who may list the group but may not read the resource the "something is held
+    ///         here" signal. So it is a separate grain with a separate key, and
+    ///         <c>OperationGrain.ParkAsync</c> writes this one at the same moment it clears the other.
+    ///     </para>
+    ///     <para>
+    ///         The prefix is a word rather than an abbreviation because <c>del</c> reads a character
+    ///         away from <c>rel</c>, and because "parked" is the verb the resource manager already
+    ///         uses for this state — <c>OperationGrain.ParkAsync</c>,
+    ///         <c>IResourceIndexGrain.ResolveSoftDeletedAsync</c>'s callers, and the operation
+    ///         progress entry the park writes.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name" /> breaks <see cref="ResourceNaming" />.</exception>
+    public static string ParkedResourceRegistry(Guid subscriptionId, string name) {
+        var validated = ResourceNaming.EnsureValid(name, nameof(name), "resource group name");
+        return ParkedResourceRegistryPrefix
+            + N(subscriptionId)
+            + "/"
+            + ResourceGroupSegment
+            + "/"
+            + validated;
     }
 
     /// <summary><c>res/{resourceId:N}</c> — <c>IResourceGrain</c>, docs/plan/06 § Grain keys.</summary>
@@ -1105,12 +1206,14 @@ public static class GrainKeys {
         if (string.IsNullOrEmpty(keyWithinTenant)) {
             return Invalid(
                 "A grain key within a tenant is required. It is one of 'sub/{id}', "
-                + "'sub/{id}/rg/{name}', 'res/{id}', 'user/{id}', 'op/{id}', 'cluster/{id}', "
+                + "'sub/{id}/rg/{name}', 'parked/{id}/rg/{name}', 'res/{id}', 'user/{id}', "
+                + "'op/{id}', 'cluster/{id}', "
                 + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', "
                 + "'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}' or 'rel/check/{type}/{id}' — see docs/plan/06 § Grain keys, "
-                + "docs/plan/07 § Storage and docs/plan/11 § The object model."
+                + "docs/plan/07 § Storage, docs/plan/08 § Soft delete and docs/plan/11 § The object "
+                + "model."
             );
         }
 
@@ -1275,12 +1378,24 @@ public static class GrainKeys {
             return ParseRelation(key, segments);
         }
 
-        if (!string.Equals(segments[0], "sub", StringComparison.Ordinal)
+        // ⚠ TWO SHAPES SHARE THIS TAIL AND ARE TOLD APART BY THEIR FIRST SEGMENT ALONE, which is the
+        // same rule every other shape here is cut by. They address the same resource group through
+        // two grain types — see ParkedResourceRegistry — so the payload is identical and only the
+        // kind differs; getting that fork wrong would route a listing of parked resources at the
+        // group's own membership, which is the merge docs/plan/08 § Soft delete refuses.
+        var groupKind = segments[0] switch {
+            "sub" => GrainKeyKind.ResourceGroup,
+            "parked" => GrainKeyKind.ParkedResourceRegistry,
+            _ => GrainKeyKind.None
+        };
+
+        if (groupKind == GrainKeyKind.None
             || !string.Equals(segments[2], ResourceGroupSegment, StringComparison.Ordinal)) {
             return Invalid(
                 $"'{key}' is not a grain key: the four-segment shapes are "
-                + "'sub/{subscriptionId}/rg/{name}' (docs/plan/06 § Grain keys) and 'rel/{obj|sub|check}/"
-                + "{type}/{id}' (docs/plan/07 § Storage)."
+                + "'sub/{subscriptionId}/rg/{name}' (docs/plan/06 § Grain keys), "
+                + "'parked/{subscriptionId}/rg/{name}' (docs/plan/08 § Soft delete) and "
+                + "'rel/{obj|sub|check}/{type}/{id}' (docs/plan/07 § Storage)."
             );
         }
 
@@ -1294,7 +1409,7 @@ public static class GrainKeys {
         var name = ResourceNaming.Validate(segments[3], "resource group name");
         return name.TryGetError(out var error)
             ? Result<GrainKey>.Failure(new(ErrorCode.InvalidGrainKey, error.Message))
-            : Result<GrainKey>.Success(new(GrainKeyKind.ResourceGroup, subscriptionId, segments[3], null));
+            : Result<GrainKey>.Success(new(groupKind, subscriptionId, segments[3], null));
     }
 
     static Result<GrainKey> ParseRelation(string key, string[] segments) {

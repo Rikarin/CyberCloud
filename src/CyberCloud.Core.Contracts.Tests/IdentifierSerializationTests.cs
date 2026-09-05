@@ -121,6 +121,86 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
         orleans.RoundTrip(default(ResourceId)).ShouldBe(default);
     }
 
+    // ── ResourceCollectionId — the address of a collection, which now travels ──────────────────
+    //
+    // ⚠ IT DID NOT TRAVEL UNTIL IParkedResourceRegistryGrain.ListOfTypeAsync, whose question is "what
+    // is recoverable in this group, of this type" — docs/plan/08 § Soft delete, issue #71. So these
+    // cases are the first thing standing between that grain call and a surrogate nobody exercised.
+
+    [Fact]
+    public void ATopLevelResourceCollectionIdRoundTrips() {
+        var original = new ResourceCollectionId(
+            TenantId,
+            SubscriptionId,
+            "prod",
+            new("CyberCloud.DBforPostgreSQL", "servers")
+        );
+
+        var round = orleans.RoundTrip(original);
+
+        round.ShouldBe(original);
+        round.Path.ShouldBe(original.Path);
+        round.ParentNames.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ANestedResourceCollectionIdKeepsTheAncestorNameThatMakesItAnAddress() {
+        // ⚠ The ancestor name is what distinguishes one server's databases from another's, and it is
+        // its own surrogate member — so assert it rather than trusting the Path comparison, which a
+        // payload that dropped it would still satisfy one level shallower for a different collection.
+        var original = new ResourceCollectionId(
+            TenantId,
+            SubscriptionId,
+            "prod",
+            new("CyberCloud.DBforPostgreSQL", "servers/databases"),
+            "pg-main"
+        );
+
+        var round = orleans.RoundTrip(original);
+
+        round.ShouldBe(original);
+        round.ParentNames.ShouldBe("pg-main");
+        round.Path.ShouldBe(original.Path);
+    }
+
+    [Fact]
+    public void ACollectionAndTheResourceItWouldContainStayDistinctAcrossTheWire() {
+        // The property ResourceCollectionId exists for: the two grammars partition every path, so a
+        // collection must not arrive as a resource named after its own type. Both are round-tripped
+        // and then re-parsed by the OTHER parser, which must refuse.
+        var member = new ResourceId(
+            TenantId,
+            SubscriptionId,
+            "prod",
+            new("CyberCloud.DBforPostgreSQL", "servers"),
+            "orders-db",
+            ResourceGuid
+        );
+
+        var collection = orleans.RoundTrip(ResourceCollectionId.Of(member));
+
+        collection.Member("orders-db").Path.ShouldBe(member.Path);
+        ResourceId.TryParsePath(collection.Path, out _).ShouldBeFalse();
+        ResourceCollectionId.TryParsePath(member.Path, out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void DefaultResourceCollectionIdRoundTripsWithoutThrowing() {
+        // Same reason as default(ResourceId)'s: the constructor validates the group name and refuses
+        // an empty type, and a failed Result<ResourceCollectionId> — what ParsePath returns for every
+        // malformed path — holds default and writes it.
+        orleans.RoundTrip(default(ResourceCollectionId)).ShouldBe(default);
+
+        var failure = ResourceCollectionId.ParsePath("/nope");
+        failure.IsFailure.ShouldBeTrue();
+
+        var round = orleans.RoundTrip(failure);
+
+        round.IsFailure.ShouldBeTrue();
+        round.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
+        round.Error.Message.ShouldBe(failure.Error!.Message);
+    }
+
     // ── Grain keys, which are derived on arrival and never sent ────────────────────────────────
 
     [Fact]
