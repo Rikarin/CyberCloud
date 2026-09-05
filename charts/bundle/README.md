@@ -339,7 +339,11 @@ installs — not off a README. `./charts/bundle/install.sh --verify` repeats tha
 What is **not** verified, and why not:
 
 Task #95 capped container-backed suites at four concurrent — `CC_TEST_CONTAINER_PARALLELISM` in
-`build/Build.Test.cs` — because a ten-CPU host starved itself running ten k3s suites at once.
+`build/Build.Test.cs` — because a ten-CPU host starved itself running ten k3s suites at once. ⚠ That
+literal four is history: the cap is derived from the host now, and since #77 the suites that hold a
+*cluster* have a second cap of their own at **one** — `build/Build.Test.cs`
+§ `ClusterBackedSuiteDegree`, and build/README.md § "The cluster degree is 1" has the reasoning. The
+lane is therefore narrower than the sentence below assumed, not wider.
 Nineteen components, three of which run virtual machines, do not fit in that lane. A suite that
 installed two of them and asserted the bundle works would be the failure class this repository has
 shipped roughly ten times: **a check that answers a narrower question than it appears to**. So the
@@ -356,9 +360,15 @@ to 3 m 15 s** with two installing classes — roughly 80 s for Testcontainers to
 for the helm install with `--wait`, the assertions in under a second, and the rest variance in what
 the machine was already doing. A red run costs more: the sabotage that removes `crds.enabled` takes
 **6 m 40 s**, because helm retries its post-install hook before giving up. The
-suite takes `ClusterSlot`, the same cross-process permit the other fifteen k3s-backed assemblies
-take, so it does not widen the concurrency Task #95 capped — it lengthens the serial tail on a
-machine where a daemon answers, and costs nothing at all on one where none does.
+suite takes `ClusterSlot`, the same cross-process permit the other **fourteen** assemblies built on
+`ClusterInfrastructure` take, so it does not widen the concurrency Task #95 capped — it lengthens the
+serial tail on a machine where a daemon answers, and costs nothing at all on one where none does.
+
+> ⚠ That count read "fifteen" until 2026-09-05 and was one too many: fifteen assemblies take
+> `ClusterSlot` in total, this one included. Two more hold a k3s and take it not at all —
+> `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` — which is seventeen cluster-backed
+> suites under three unrelated permits, and is what #77 turned out to be. `build/` now caps all
+> seventeen itself; the permit is no longer the only thing holding the line.
 
 **With the cloudnative-pg class it is 4 m 27 s to 4 m 47 s green across three runs, 9 tests, none
 skipped, measured 2026-09-03.**

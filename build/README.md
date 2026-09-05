@@ -349,9 +349,26 @@ gate people stop running is the same problem wearing a different hat. ⚠ And do
 that turns a flaky gate into a slow one that fails at a lower rate, which is strictly harder to
 diagnose.
 
+⚠ That paragraph is about the *container-backed* suites and stays true of them. The **cluster**-backed
+ones are a different set and they are serialised, because fifteen of the seventeen already serialise
+themselves through a lock file whatever the build does — see "The cluster degree is 1" below. That
+is not full serialisation bought for green; it is the build agreeing with a constraint that was
+already there.
+
 ## How many container-backed suites run at once, and how the tree knows which they are
 
 Two separate questions, and getting the second one wrong made the first one unanswerable.
+
+**There are two caps, not one.** A suite that holds a Kubernetes cluster and a suite that holds a
+PostgreSQL are both "container-backed" and they are not the same size, so `Build.Test.cs` gives them
+separate semaphores: `ContainerBackedSuiteDegree`, derived from the host's CPUs, and
+`ClusterBackedSuiteDegree`, which is **1** and is not derived from anything. Cluster-backed suites
+take both permits — the cluster one first, always, which is the whole of the deadlock argument — so
+the CPU budget still bounds the total.
+
+Counted 2026-09-05 over this tree's own build output, at **73** per-PR suites: **21** can start a
+container and **17 of those 21 hold a k3s API server**. The four that do not are
+`CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests`.
 
 ### The degree is derived from the host
 
@@ -374,14 +391,95 @@ server, PostgreSQL and Redis plus its own test host. Four would be safer and cos
 the gate's wall clock here; `CC_TEST_CONTAINER_PARALLELISM` is the lever, which is why the failure
 message names it.
 
+⚠ **#77 measured three failing and two passing on this host, and the three stays.** On the tree at
+`8548ee9`, a derived degree of 3 lost
+`CyberCloud.Providers.ContainerRegistry.Cluster.Conformance` — 8/8 alone — while a degree of 2 took
+all 73 suites green in 18 m 14 s. Read on its own that table says the divisor is one too large. Read
+with the section below it says something else: at `8548ee9` a slot could be spent on a suite holding
+a whole k3s, and **nothing stopped a second and a third being held beside it**, so "degree 3" could
+mean three concurrent Kubernetes control planes and "degree 2" only made that overlap one slot less
+likely. Lowering the divisor would have bought green by narrowing a window. The cluster cap closes
+it, and the 3 keeps meaning what it has meant since 2026-08-20.
+
+⚠ **What would make the three stale** is what always has: a change to what one *non-cluster*
+container-backed suite costs — a fifth of them, or one of the four gaining a second heavy container.
+A new `*.Cluster.Conformance` suite no longer makes it stale, which is the property #77 asked for.
+
 ⚠ **What the derivation models is CPU, and it is worth naming the two things it does not.** Memory
 is the obvious other candidate, and the tree cannot observe it honestly — on Linux the daemon shares
 the host's RAM, while on macOS and Windows it lives in a VM whose allocation a .NET process can only
 learn by asking `docker info`, which is a subprocess that hangs when the daemon is unhealthy, inside
 the target whose job is to tell a starved host from a broken one. The other is how many k3s clusters
-a daemon will hold, which has no API at all. The environment variable is the lever for both. A
-derivation that is wrong on some host is fine *because* the override exists and the failure message
-names it; a constant is wrong on every host but the one it was measured on, and says nothing.
+a daemon will hold, which has no API at all — and that one is no longer left to this arithmetic; see
+the next section. The environment variable is the lever for what remains. A derivation that is wrong
+on some host is fine *because* the override exists and the failure message names it; a constant is
+wrong on every host but the one it was measured on, and says nothing.
+
+### The cluster degree is 1, and it is not tuned
+
+`Build.Test.cs` § `ClusterBackedSuiteDegree` is the constant **1**, and unlike every other number in
+that file it is neither measured nor derived nor overridable, because it is not a property of the
+host. It is the invariant fifteen of the seventeen cluster-backed assemblies already keep among
+themselves: `ClusterSlot`, in
+[`test/CyberCloud.Cluster.Conformance/Infrastructure/ClusterInfrastructure.cs`](../test/CyberCloud.Cluster.Conformance/Infrastructure/ClusterInfrastructure.cs),
+is a lock file taken before the containers and held until the process exits — "however many of them
+a run contains, at most one is holding a k3s container at a time". The constant is `build/` finally
+being told that permit exists.
+
+⚠ **Which is worth doing even though the permit already works, because two suites are outside it and
+both were invisible to the build before #77:**
+
+* `CyberCloud.Kubernetes.Tests` starts its own k3s through `K3sFixture` and takes **no** permit —
+  `ClusterInfrastructure`'s remark says so in as many words.
+* `CyberCloud.AppHost.Tests` starts a k3s too, through Aspire rather than Testcontainers, on the
+  fixed host port **6443**. It takes a machine-wide lock of its own,
+  `cybercloud-apphost-local-topology.lock`, which is a **different file** from `ClusterSlot`'s and
+  therefore excludes nothing but a second copy of itself. It shipped no `Testcontainers` assembly,
+  so the old `StartsContainers` glob called it *cheap*: it ran entirely ungated.
+
+Three disjoint answers to "may I hold a cluster?", so three k3s API servers could be live at once
+underneath a cap that said "three container suites". That is the arithmetic #77 measured.
+
+⚠ **There is deliberately no `CC_TEST_CLUSTER_PARALLELISM`.** An override that cannot take effect is
+worse than none: raising the degree to 2 would still leave fifteen of the seventeen queued behind
+`ClusterSlot`, so the setting would appear to work, change almost nothing, and be believed. A host
+that genuinely holds two clusters needs the constant **and** `ClusterSlot`'s permit count moved
+together.
+
+⚠ **The cost, in full.** This section read *"the cost is smaller than it looks … the cap does not
+lengthen that chain"* until the #77 review, and on the machine that matters that was false. Fifteen
+of the seventeen were already serial through `ClusterSlot`, so the cap does not lengthen *that*
+chain — but stopping the other two from overlapping it is the same arithmetic as adding their wall
+clock to it. `CyberCloud.Kubernetes.Tests` and `CyberCloud.AppHost.Tests` now queue where they used
+to run beside it, which is the point rather than a side effect: the overlap is the defect #77
+measured, and there is no way to keep the fix and not pay for it. It does hand the container budget
+back to the four suites that can use it, and the cluster-backed suites are now ordered first,
+because a serial chain about as long as the whole gate has to start at *t* = 0 rather than whenever
+a worker happens to reach one.
+
+⚠ **On CI the cost is bigger, and it does not come from this cap at all.** GitHub's hosted
+`ubuntu-24.04` runner — which `.github/workflows/gate.yml` pins — has 2 or 4 vCPUs, and
+`ContainerBackedSuiteDegree` is `Math.Max(1, ProcessorCount ÷ 3)`, so on either it is **1**: every
+container-backed suite was *already* strictly serial there, on master, before #77. The cluster cap
+constrains nothing on a runner, because cluster-backed implies container-backed and a container
+degree of 1 admits one suite at a time by itself. What changes on CI is the **set**:
+`CyberCloud.AppHost.Tests` ships no `Testcontainers` assembly, so master's glob ran it ungated, and
+the `or` in `StartsContainers` now puts it into the chain. Up to its own wall clock joins the
+critical path — its `.csproj` calls the suite slow and "a large fraction of" the `Test` budget, and
+it measured **2 m 43 s** warm on a ten-CPU host, which a cold small runner will not beat.
+
+⚠ **That is a real charge against a real budget and it has not been measured on a runner.**
+`gate.yml` gives the `test` job `timeout-minutes: 30`, and `.github/scripts/assert-budget.sh` fails
+the pipeline past the **25 minutes** `pr.yml` § `BUDGET_MINUTES` sets — so this can cost a PR rather
+than only a wait. **The lever is not the cluster degree.** Letting it track the container degree, so
+that the cap "can never serialise more than master did", is worth nothing twice over: on CI it
+changes nothing, because the degree there is already 1 and the extra suite comes from the
+classifier; on a ten-CPU host it would set the cluster degree to **3**, which is precisely the
+three-concurrent-k3s overlap #77 exists to close. If the budget does go red, `assert-budget.sh`
+names the job that spent it and docs/plan/23 § CI shape prescribes parallelism or a move to nightly
+with a written reason — the move being `CyberCloud.AppHost.Tests`, whose own `.csproj` argues
+against it, and the untried parallelism being `MaxDegreeOfParallelism`, which is
+`Environment.ProcessorCount` today and pins a worker per *waiting* suite.
 
 ### Which suites are container-backed comes from the build output, not from the `.csproj`
 
@@ -406,6 +504,37 @@ tool's stdout. A comment cannot fool it, a transitive reference cannot hide from
 right on its own the next time somebody adds a container to a suite through a shared fixture. A
 suite with no build output is treated as container-backed, which is the direction that costs wall
 clock rather than a starved run.
+
+⚠ **Since #77 that degraded case is three times more expensive, and the warning says so.**
+`StartsCluster` answers the same missing directory the same safe way, so a suite that lands there is
+gated on **both** permits. A cleaned or stale `artifacts/` used to mean "every suite is
+container-backed", and the gate then ran at the derived degree — 3 on a ten-CPU host. It now means
+every suite is cluster-backed too, and the whole gate is strictly serial. The only symptom either
+way is a slow gate, which is the thing people wait out rather than investigate, so the warning names
+the cluster verdict and the cost of it explicitly.
+
+⚠ **"Testcontainers" was still too narrow a piece of evidence, and #77 is what that cost.**
+`CyberCloud.AppHost.Tests` brings up Redis, PostgreSQL, NATS *and* a k3s through Aspire and ships not
+one Testcontainers assembly, so the glob called it cheap — the same failure as the `.csproj` grep it
+replaced, one library further along: **a check that answers a narrower question than it appears
+to**. `Build.Test.cs` § `StartsCluster` is the answer, and `StartsContainers` is now an `or` over it,
+so *cluster-backed implies container-backed* holds by construction rather than by two globs that
+happen to agree.
+
+`StartsCluster` looks for `Testcontainers.K3s*.dll` or `Aspire.Hosting.Testing*.dll`. The second is
+an inference and is exact on this tree: a suite shipping it starts a `DistributedApplication`, the
+only one here is `CyberCloud.AppHost`, and ADR-014 puts a k3s in it. What would make it stale is a
+second `DistributedApplication` in this repository with no cluster in it — and the fix then is to
+read the app host's resources, not to add a project name to a list.
+
+⚠ **It deliberately does not ask whether a suite takes `ClusterSlot`.** Two of the seventeen do not,
+and they are precisely the two whose overlap #77 measured. The evidence has to be the cluster, not
+the promise about it.
+
+The literal `Aspire.Hosting.Testing` in `build/` is checked from the other side by
+`CyberCloud.AppHost.Tests` § `ClusterBackedGatingTests`, which spells the same name against the type
+that actually starts the topology — the defect class `GenerationReportTests` exists for, one
+directory over.
 
 ## Why the analyser exemptions are where they are
 

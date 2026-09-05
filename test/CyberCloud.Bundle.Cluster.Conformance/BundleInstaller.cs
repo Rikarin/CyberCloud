@@ -23,8 +23,19 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         installing"</i> — the guarantee being the phase barrier. So this exercises the installer's
 ///         per-component path and NOT its ordering: a defect in the barrier between phases would not
 ///         be caught here. Installing every phase would mean nineteen operators and three virtual
-///         machines in a Testcontainers lane Task #95 capped at four concurrent suites, which is the
-///         reason the bundle had no cluster-backed proof at all.
+///         machines in a lane narrower than one suite, which is the reason the bundle had no
+///         cluster-backed proof at all.
+///     </para>
+///     <para>
+///         ⚠ <b>That sentence read "in a Testcontainers lane Task #95 capped at four concurrent
+///         suites" until the #77 review, and both halves of it had moved</b> — the same stale
+///         citation the sibling <c>.csproj</c> and <c>charts/bundle/README.md</c> were corrected for
+///         on 2026-09-05, in a third copy nobody looked for. The container cap is derived from the
+///         host rather than the literal four, and since #77 a suite that holds a <em>cluster</em> —
+///         this one does — waits on a second cap of its own at <b>one</b>:
+///         <c>build/Build.Test.cs</c> § <c>ClusterBackedSuiteDegree</c>. The number is deliberately
+///         not repeated here; build/README.md § "The cluster degree is 1" is where it lives, for the
+///         reason this paragraph exists.
 ///     </para>
 /// </remarks>
 public static class BundleInstaller {

@@ -361,7 +361,57 @@ partial class Build
         // of why 4 starved a suite and 3 did not. See StartsContainers, which asks the built output
         // instead. ⚠ Every count in this comment is a dated measurement of a tree that grows; the
         // arithmetic below reads the suites it is given and none of these numbers is wired into it.
+        //
+        // ⚠ AND THE SET IS NOW TWO SETS, BECAUSE THE CONSTRAINT WAS NEVER CPU — #77.
+        //
+        // #77 measured the derived degree of 3 losing
+        // `CyberCloud.Providers.ContainerRegistry.Cluster.Conformance` on this ten-CPU host at
+        // 8548ee9 — 8/8 when run alone — while a degree of 2 took all 73 suites green in 18 m 14 s.
+        // The obvious repair is a smaller divisor and it is the wrong one, for the reason the
+        // paragraphs above already give about red that means nothing: a degree lowered until the
+        // build passes is a degree that will hide the next real defect, and it would have hidden
+        // this one. The number was not what had gone stale. The set it applied to was, again.
+        //
+        // ⚠ MEASURED 2026-09-05 OVER THIS TREE'S OWN BUILD OUTPUT, AT 73 PER-PR SUITES: 21 ship
+        // something that can start a container, and SEVENTEEN OF THE 21 HOLD A WHOLE KUBERNETES
+        // CLUSTER. The four that do not are
+        // `CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests`. So a budget denominated
+        // in "container-backed suites" was, for very nearly every slot it ever handed out, a budget
+        // in k3s clusters — and three separate mechanisms were each answering "may I hold one?" on
+        // their own, none of them aware of the other two:
+        //
+        //   * FIFTEEN assemblies take `ClusterSlot` — a lock file in the temp directory, held for the
+        //     life of the process — so at most one of the fifteen holds a cluster at a time. That
+        //     permit is the tree's real model of the constraint #77 asks for, it has been in
+        //     test/CyberCloud.Cluster.Conformance all along, and nothing in build/ knew it existed.
+        //   * `CyberCloud.Kubernetes.Tests` starts its own k3s through `K3sFixture` and takes NO
+        //     permit. ClusterInfrastructure's remarks say so in as many words: "It does not serialise
+        //     against CyberCloud.Kubernetes.Tests, which would need one line in that project."
+        //   * `CyberCloud.AppHost.Tests` starts a k3s as well — through Aspire rather than
+        //     Testcontainers, on the FIXED host port 6443 — and StartsContainers could not see it at
+        //     all, because the suite ships `Aspire.Hosting.Testing` and not one Testcontainers
+        //     assembly. It takes a machine-wide lock of its own,
+        //     `cybercloud-apphost-local-topology.lock`, which is a DIFFERENT file from ClusterSlot's
+        //     and therefore excludes nothing except a second copy of itself.
+        //
+        // Three disjoint answers to one question, so three k3s API servers could be live at once
+        // underneath a cap that said "three container suites". That is the arithmetic #77 measured,
+        // and it is why 2 looked like the honest divisor: at 2 there was no third slot for
+        // `CyberCloud.Kubernetes.Tests` to enter beside whichever assembly held ClusterSlot, and
+        // `AppHost.Tests` — ungated either way — had one fewer neighbour.
+        //
+        // ⚠ SO THE DIVISOR IS UNCHANGED AT 3 AND THE CLUSTER-BACKED SUITES GET A SEMAPHORE OF THEIR
+        // OWN. That is #77's third option, and it is the only one of the three that models the
+        // constraint rather than the symptom: the count that has to be capped is clusters, the
+        // number is not a property of this host, and it is not tuned — see ClusterBackedSuiteDegree,
+        // which is 1 because 1 is what ClusterSlot already enforces among fifteen of the seventeen.
         var containerBacked = projects.Where(StartsContainers).ToHashSet();
+
+        // ⚠ A SUBSET of containerBacked by construction rather than by two globs that happen to
+        // agree — StartsContainers returns true for everything StartsCluster does, and says why. A
+        // cluster-backed suite therefore takes BOTH permits, which is what keeps the container
+        // budget a bound on the total rather than a bound on the cheap half of it.
+        var clusterBacked = projects.Where(StartsCluster).ToHashSet();
 
         var derivedDegree = ContainerBackedSuiteDegree;
 
@@ -375,12 +425,18 @@ partial class Build
                 ? configured
                 : derivedDegree;
 
+        // ⚠ Both counts and both degrees, because a reader diagnosing a starved run needs to know
+        // which of the two budgets the named suite was spending. The line that reported only the
+        // container one is how #77 came to be read as a problem with the divisor.
         Log.Information(
-            "Test: {Container} of {Total} suite(s) ship Testcontainers and run at a parallelism of "
-            + "{Degree} ({Source}); the remaining {Rest} run at {Cpu}. Build.Test.cs § "
-            + "ContainerBackedSuiteDegree has the measurement.",
-            containerBacked.Count,
+            "Test: {Cluster} of {Total} suite(s) hold a Kubernetes cluster and run {ClusterDegree} at "
+            + "a time; {Container} can start a container at all and run at a parallelism of {Degree} "
+            + "({Source}); the remaining {Rest} run at {Cpu}. Build.Test.cs § "
+            + "ClusterBackedSuiteDegree and § ContainerBackedSuiteDegree have the measurements.",
+            clusterBacked.Count,
             projects.Count,
+            ClusterBackedSuiteDegree,
+            containerBacked.Count,
             containerDegree,
             containerDegree == derivedDegree
                 ? $"{Environment.ProcessorCount} CPU(s) ÷ {CpusPerContainerBackedSuite}"
@@ -389,9 +445,30 @@ partial class Build
             Environment.ProcessorCount
         );
 
-        // The container-backed ones go first, because they dominate wall clock and the cheap suites
-        // fill the idle cores behind them rather than the other way round.
-        var ordered = projects.OrderByDescending(containerBacked.Contains).ToList();
+        // The container-backed ones go first, because they dominate wall clock and a chain that long
+        // has to start at t = 0 rather than be discovered at the end of a run.
+        //
+        // ⚠ THIS COMMENT ALSO SAID "and the cheap suites fill the idle cores behind them rather than
+        // the other way round" UNTIL THE #77 REVIEW, AND THAT PART WAS NOT TRUE. A worker that is
+        // blocked on a semaphore still owns the queue item it pulled, and the partitioner hands the
+        // items out one at a time in order — so while the head of the queue is gated suites, every
+        // worker is pinned to one of them and the cheap suites behind them do not start at all. They
+        // begin only once fewer gated suites remain than there are workers: the queue drains rather
+        // than overlaps. ClusterBackedSuiteDegree states the same fact from the other side and says
+        // what raising MaxDegreeOfParallelism would and would not buy. Ordering this way is still
+        // right, for the reason above; what it does not do is fill idle cores.
+        //
+        // ⚠ And the cluster-backed ones go first WITHIN that, which is new with #77 and is not
+        // cosmetic. Seventeen suites sharing one permit are a serial chain about as long as the whole
+        // gate — 18 m 14 s of which the cluster suites are most — so the chain has to start at t = 0.
+        // Ordered the other way it starts whenever a thread first happens to reach a cluster suite,
+        // and the gate is that chain PLUS whatever ran before it. OrderBy is a stable sort, so the
+        // ordinal order ClassifiedTestProjects established survives inside each of the three groups
+        // and the run order is still the same on every machine.
+        var ordered = projects
+            .OrderByDescending(clusterBacked.Contains)
+            .ThenByDescending(containerBacked.Contains)
+            .ToList();
 
         // ⚠ Constructed HERE, not lazily inside the loop body. The first version of this was a
         // `static SemaphoreSlim? slots` with `slots ??= new(...)`, which is not thread-safe: several
@@ -400,14 +477,47 @@ partial class Build
         // cause it to exceed its maximum count". One object, created before anything can race for it.
         using var containerSlots = new SemaphoreSlim(containerDegree, containerDegree);
 
+        // ⚠ A SECOND semaphore rather than a smaller first one, and the difference is the whole of
+        // #77. One semaphore can only express "how many suites", and the suites are not alike: four
+        // of the twenty-one hold a PostgreSQL or a Redis and seventeen hold a Kubernetes control
+        // plane. Shrinking the shared cap until the heavy case fits makes the light case wait for a
+        // reason that is not true of it, and — worse — leaves the tree with no place to write down
+        // what the real limit is, so the next cluster-backed suite silently spends the same budget
+        // again. Two caps say two different sentences, and each one is checkable on its own.
+        using var clusterSlots = new SemaphoreSlim(ClusterBackedSuiteDegree, ClusterBackedSuiteDegree);
+
         Parallel.ForEach(
             Partitioner.Create(ordered, EnumerablePartitionerOptions.NoBuffering),
             new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
             project =>
             {
-                // ⚠ One semaphore, taken only by the suites that need a container. A cheap suite never
-                // waits on it, so capping the containers costs nothing on the other 36.
+                // ⚠ Two semaphores, each taken only by the suites it is about. A cheap suite waits on
+                // neither, so capping either one costs nothing on the other 52 (2026-09-05).
                 var gated = containerBacked.Contains(project);
+                var holdsCluster = clusterBacked.Contains(project);
+
+                // ⚠ CLUSTER PERMIT FIRST, CONTAINER PERMIT SECOND, ON EVERY THREAD, AND THE ORDER IS
+                // THE CORRECTNESS ARGUMENT. Two locks taken in one order by everybody cannot
+                // deadlock; taken in two orders they can, and the symptom would be a run sitting at
+                // zero tests started — which is one of the four symptoms the failure message at the
+                // bottom of this method already names as contention, so it would be diagnosed as the
+                // thing it is not. The single `finally` below releases in the mirror-image order for
+                // the same reader's sake, though release order cannot deadlock anything.
+                //
+                // ⚠ It also cannot starve. Only ClusterBackedSuiteDegree suites can be holding a
+                // cluster permit and waiting for a container slot, and every holder of a container
+                // slot is a suite that is running and will finish, so the wait is bounded by one
+                // suite's wall clock rather than by another semaphore.
+                //
+                // ⚠ Both are taken OUTSIDE the try rather than one inside the other's, and that is
+                // safe only because nothing between them can throw: neither Wait is given a token,
+                // and both semaphores are disposed after Parallel.ForEach returns, so neither
+                // OperationCanceledException nor ObjectDisposedException is reachable here. Two
+                // nested try/finallys would say the same thing and would put two `try {` lines at
+                // one indentation in a body this long, which is how a reader loses which is which.
+                if (holdsCluster) {
+                    clusterSlots.Wait();
+                }
 
                 if (gated) {
                     containerSlots.Wait();
@@ -483,8 +593,15 @@ partial class Build
                     failures.Add($"{name} exited {exitCode}");
                 }
                 finally {
+                    // ⚠ Released in the mirror image of the order they were taken. It does not matter
+                    // to correctness here — a release never blocks — but a reader checking the
+                    // lock-ordering argument above should be able to check it from one place.
                     if (gated) {
                         containerSlots.Release();
+                    }
+
+                    if (holdsCluster) {
+                        clusterSlots.Release();
                     }
                 }
             });
@@ -512,7 +629,14 @@ partial class Build
             + "and this failure may not look like one: an Npgsql connect timeout inside a collection "
             + "fixture, a suite sitting at zero tests started, and a TLS reset from a k3s API server "
             + "that went away are all the same cause wearing different clothes. Run the named suite "
-            + "alone before believing it, and if it passes alone, lower CC_TEST_CONTAINER_PARALLELISM.");
+            + "alone before believing it, and if it passes alone, lower CC_TEST_CONTAINER_PARALLELISM. "
+            + "⚠ If the named suite holds a Kubernetes cluster, that lever is the wrong one and "
+            + "lowering it will look like it worked: at most "
+            + $"{ClusterBackedSuiteDegree} such suite(s) run at a time whatever the container degree "
+            + "is, so a cluster-backed suite starved on this host is a host that cannot hold ONE "
+            + "cluster beside the container budget, not a degree that is too high. Build.Test.cs § "
+            + "ClusterBackedSuiteDegree says what to do about that and why the number is not a "
+            + "parameter. #77.");
     }
 
     /// <summary>
@@ -656,10 +780,37 @@ partial class Build
     ///     </para>
     ///     <para>
     ///         ⚠ <b>A suite whose output directory is not there is treated as container-backed</b>,
-    ///         which is the safe direction: gating a cheap suite costs a little wall clock, and
-    ///         letting an unknown one through costs the starved run this whole mechanism exists to
-    ///         prevent. It should not happen — every caller of RunSuites depends on <c>Compile</c> —
-    ///         so it is logged rather than passed over.
+    ///         which is the safe direction: gating a cheap suite costs wall clock, and letting an
+    ///         unknown one through costs the starved run this whole mechanism exists to prevent. It
+    ///         should not happen — every caller of RunSuites depends on <c>Compile</c> — so it is
+    ///         logged rather than passed over.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>"Costs a little wall clock" is what that said until the #77 review, and the
+    ///         degraded case is now three times worse than it was.</b>
+    ///         <see cref="StartsCluster" /> answers the same missing directory the same safe way, so
+    ///         a suite that lands here is gated on BOTH permits and the cluster one is
+    ///         <see cref="ClusterBackedSuiteDegree" /> = 1. Before #77 a cleaned
+    ///         <c>artifacts/</c> made every suite container-backed and the gate ran at the derived
+    ///         degree — 3 on this ten-CPU host; now it makes every suite cluster-backed as well and
+    ///         the whole gate is strictly serial. The warning below says so in as many words,
+    ///         because the symptom of the degraded case is a slow gate and nothing else, and a slow
+    ///         gate is the thing people wait out.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>"Testcontainers" WAS STILL TOO NARROW A PIECE OF EVIDENCE, AND #77 IS WHAT THAT
+    ///         COST.</b> <c>CyberCloud.AppHost.Tests</c> starts Redis, PostgreSQL, NATS <em>and a
+    ///         k3s</em> — through Aspire, whose <c>DistributedApplicationTestingBuilder</c> runs
+    ///         <c>CyberCloud.AppHost</c>'s own <c>Program.cs</c> — and it ships not one
+    ///         <c>Testcontainers</c> assembly, so this method called it cheap and the semaphore never
+    ///         saw it. Measured 2026-09-05 on this tree: it is the only suite in it that ships
+    ///         <c>Aspire.Hosting.Testing</c>, and the k3s it publishes is on the fixed host port 6443.
+    ///         ⚠ That is the SAME failure as the <c>.csproj</c> grep this method replaced, one library
+    ///         further along — a check that answers a narrower question than it appears to — so the
+    ///         answer is not another package name bolted on here but
+    ///         <see cref="StartsCluster" />, asked as an <c>or</c> below, which makes
+    ///         "cluster-backed implies container-backed" true by construction rather than by two
+    ///         globs that happen to agree.
     ///     </para>
     /// </remarks>
     bool StartsContainers(AbsolutePath project) {
@@ -667,16 +818,81 @@ partial class Build
 
         if (!output.DirectoryExists()) {
             Log.Warning(
-                "Test: {Suite} has no build output under {Output}, so whether it starts a container "
-                + "is unknown. Treating it as container-backed, which is the direction that costs "
-                + "wall clock rather than a starved run. Build.Test.cs § StartsContainers.",
+                "Test: {Suite} has no build output under {Output}, so NEITHER of the two questions "
+                + "asked about it can be answered — whether it starts a container, and whether it "
+                + "holds a Kubernetes cluster. It is treated as both, which is the direction that "
+                + "costs wall clock rather than a starved run. ⚠ That cost is not small any more: a "
+                + "cluster-backed verdict spends the cluster permit, of which there are "
+                + "{ClusterDegree}, so a run in which EVERY suite lands here is a run in which every "
+                + "suite is strictly serial whatever the container degree says. One such line is a "
+                + "suite to look at; a screenful of them is a stale or cleaned artifacts directory "
+                + "and a build to stop rather than wait out. Build.Test.cs § StartsContainers and "
+                + "§ StartsCluster.",
                 project.NameWithoutExtension,
-                output);
+                output,
+                ClusterBackedSuiteDegree);
 
             return true;
         }
 
-        return output.GlobFiles("Testcontainers*.dll").Count > 0;
+        return output.GlobFiles("Testcontainers*.dll").Count > 0 || StartsCluster(project);
+    }
+
+    /// <summary>
+    ///     Whether a suite holds a whole Kubernetes cluster, answered from what it was built with.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the class the cap was always really about, and until #77 the tree had no
+    ///         name for it.</b> Measured 2026-09-05 over this tree's build output, at 73 per-PR
+    ///         suites: 21 can start a container and <b>17 of the 21 hold a k3s API server</b> — the
+    ///         fifteen <c>*.Cluster.Conformance</c> assemblies, <c>CyberCloud.Kubernetes.Tests</c> and
+    ///         <c>CyberCloud.AppHost.Tests</c>. The other four are
+    ///         <c>CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests</c>. A budget
+    ///         denominated in container-backed suites was therefore a budget in clusters wearing a
+    ///         more forgiving name.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Two pieces of evidence, and neither is a project name.</b>
+    ///         <c>Testcontainers.K3s</c> in the output is the direct one. <c>Aspire.Hosting.Testing</c>
+    ///         is the indirect one and is worth the paragraph it needs: a suite that ships it starts a
+    ///         <c>DistributedApplication</c>, the only one in this tree is
+    ///         <c>CyberCloud.AppHost</c>, and docs/plan/02 § ADR-014 puts a k3s in it — so on this
+    ///         tree the inference is exact. On a tree where it is not, the wrong answer is the
+    ///         over-gating one: a suite that starts an app host holding no cluster would wait for a
+    ///         permit it does not need, which costs wall clock, and that is the same direction the
+    ///         missing-output case below already chooses. ⚠ What would make it stale is a second
+    ///         <c>DistributedApplication</c> in this repository with no cluster in it; the fix then is
+    ///         to read the app host's resources rather than to add a project name to a list here.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It deliberately does not ask whether the suite takes <c>ClusterSlot</c>.</b> That
+    ///         lock file is the tree's cross-process permit and fifteen assemblies take it, but two of
+    ///         the seventeen do not — <c>ClusterInfrastructure</c>'s own remarks say
+    ///         <c>CyberCloud.Kubernetes.Tests</c> does not, and <c>CyberCloud.AppHost.Tests</c> takes
+    ///         a different lock file entirely — so a rule phrased over the permit would have missed
+    ///         exactly the two suites whose overlap #77 measured. The evidence has to be the cluster,
+    ///         not the promise about it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Silent on a missing output directory, and only because
+    ///         <see cref="StartsContainers" /> has already warned about the same directory</b> — both
+    ///         are asked of every suite, and one fact should not produce two warnings. The answer is
+    ///         the same safe direction: an unknown suite is treated as holding a cluster. ⚠ That
+    ///         warning is worded to cover this verdict as well as its own, which it was not until the
+    ///         #77 review, and the reason it has to is that this verdict is the expensive one: a
+    ///         cleaned <c>artifacts/</c> now serialises the entire gate rather than running it at the
+    ///         derived container degree.
+    ///     </para>
+    /// </remarks>
+    bool StartsCluster(AbsolutePath project) {
+        var output = SuiteOutputDirectory(project);
+
+        if (!output.DirectoryExists()) {
+            return true;
+        }
+
+        return output.GlobFiles("Testcontainers.K3s*.dll", "Aspire.Hosting.Testing*.dll").Count > 0;
     }
 
     /// <summary>
@@ -716,8 +932,140 @@ partial class Build
     ///         of the gate's wall clock on a ten-core host; the lever for a host that needs it is
     ///         <c>CC_TEST_CONTAINER_PARALLELISM</c>, which is why the failure message names it.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>#77 REPORTED THREE FAILING AND TWO PASSING ON THIS HOST, AND THE THREE STAYS —
+    ///         2026-09-05.</b> Read on its own that table says the divisor is one too large; read
+    ///         with <see cref="StartsCluster" /> it says something else. At 8548ee9 a slot could be
+    ///         spent on a suite holding a whole k3s, and nothing stopped a second and a third being
+    ///         held beside it: <c>CyberCloud.Kubernetes.Tests</c> takes no cross-process permit and
+    ///         <c>CyberCloud.AppHost.Tests</c> was not gated at all. So "degree 3" could mean three
+    ///         concurrent Kubernetes control planes, and "degree 2" made that particular overlap
+    ///         one slot less likely — which is a difference in how often the run gets away with it,
+    ///         not a calibration. Lowering the divisor would have bought green by narrowing a
+    ///         window, and left the tree with the same three unrelated answers to "may I hold a
+    ///         cluster". <see cref="ClusterBackedSuiteDegree" /> is the cap that closes it; this
+    ///         number keeps meaning what it has meant since 2026-08-20, and the five-run measurement
+    ///         above is still the evidence for it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What would make the three stale</b> is what has always made it stale: a change to
+    ///         what one container-backed suite costs. Concretely — a fifth non-cluster suite growing
+    ///         a second heavy container, or the four that exist today
+    ///         (<c>CyberCloud.{Authorization,ServiceDefaults,Tenancy,Vault}.Tests</c>, counted
+    ///         2026-09-05) gaining a k3s and moving out of this budget into the other one. A new
+    ///         <c>*.Cluster.Conformance</c> suite does <em>not</em> make it stale any more, which is
+    ///         the property #77 asked for: they are capped by count of clusters, not by CPU.
+    ///     </para>
     /// </remarks>
     const int CpusPerContainerBackedSuite = 3;
+
+    /// <summary>
+    ///     How many suites may hold a Kubernetes cluster at once.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>One, and — unlike every other number in this file — it is not measured, not
+    ///         derived, and not tunable, because it is not a property of the host.</b> It is the
+    ///         invariant fifteen of the seventeen cluster-backed assemblies already keep among
+    ///         themselves: <c>ClusterSlot</c>, in
+    ///         <c>test/CyberCloud.Cluster.Conformance/Infrastructure/ClusterInfrastructure.cs</c>, is
+    ///         a lock file taken before the containers and held until the process exits, and its own
+    ///         remark states the guarantee — "however many of them a run contains, at most one is
+    ///         holding a k3s container at a time". This constant is <c>build/</c> finally being told
+    ///         about it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Which is why it is worth having even though the permit already exists.</b> Two
+    ///         suites are outside it and both were invisible here before #77:
+    ///         <c>CyberCloud.Kubernetes.Tests</c>, which <c>ClusterInfrastructure</c>'s remark names
+    ///         as unserialised ("would need one line in that project"), and
+    ///         <c>CyberCloud.AppHost.Tests</c>, which takes
+    ///         <c>cybercloud-apphost-local-topology.lock</c> — a different file, excluding only a
+    ///         second copy of itself. Gating here covers all seventeen with no edit to either suite,
+    ///         and it is the right place for the rule regardless: a permit taken inside a test
+    ///         process cannot stop the build from starting the process, so the seventeen used to
+    ///         spend the container budget on waiting rather than on working.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>There is deliberately no <c>CC_TEST_CLUSTER_PARALLELISM</c>.</b> An override that
+    ///         cannot take effect is worse than none: raising this to 2 would still leave fifteen of
+    ///         the seventeen queued behind <c>ClusterSlot</c>, so the setting would appear to work,
+    ///         change almost nothing, and be believed. If a host genuinely holds two clusters, the
+    ///         edit is this constant <em>and</em> <c>ClusterSlot</c>'s permit count, together, and
+    ///         the reason they have to move together is this paragraph.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The cost, stated in full — this paragraph read "and it is smaller than it looks"
+    ///         until the #77 review, and it was false on the machine that matters.</b> Fifteen of the
+    ///         seventeen were already serial through <c>ClusterSlot</c>, so the cap does not lengthen
+    ///         <em>that</em> chain. What it does is stop the other two overlapping it, and stopping
+    ///         an overlap is the same arithmetic as adding its wall clock to the chain:
+    ///         <c>CyberCloud.Kubernetes.Tests</c> and <c>CyberCloud.AppHost.Tests</c> now queue where
+    ///         they used to run beside it. That is the point rather than a side effect — the overlap
+    ///         is the defect #77 measured, and there is no way to keep the fix and not pay for it —
+    ///         but it is a cost and not a rounding error. It does hand the container budget back to
+    ///         the four suites that can actually use it. #77 measured the whole tree at 18 m 14 s on
+    ///         this ten-CPU host with the cluster suites effectively serialised already.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>AND ON CI THE COST DOES NOT COME FROM THIS CAP AT ALL. IT COMES FROM
+    ///         <see cref="StartsCluster" />, AND IT IS THE LARGER HALF.</b> GitHub's hosted
+    ///         <c>ubuntu-24.04</c> runner — <c>.github/workflows/gate.yml</c> pins it — has 2 or 4
+    ///         vCPUs, and <see cref="ContainerBackedSuiteDegree" /> is
+    ///         <c>Math.Max(1, ProcessorCount / 3)</c>, so it is <b>1</b> on either: every
+    ///         container-backed suite was ALREADY strictly serial there, before #77, on master. This
+    ///         cap therefore constrains nothing on a runner — cluster-backed implies container-backed
+    ///         by construction, and a container degree of 1 admits one suite at a time on its own.
+    ///         What changes on CI is the SET, not the degree: <c>CyberCloud.AppHost.Tests</c> ships
+    ///         no <c>Testcontainers</c> assembly, so master's glob ran it entirely ungated, and the
+    ///         <c>or</c> in <see cref="StartsContainers" /> now puts it in the chain. Up to its own
+    ///         wall clock joins the critical path — its <c>.csproj</c> says <i>"IT IS THEREFORE
+    ///         SLOW … this suite is a large fraction of"</i> the <c>Test</c> budget, and it measured
+    ///         2 m 43 s warm on this ten-CPU host, which a cold small runner will not beat.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>That is a real charge against a real budget, and it has NOT been measured on a
+    ///         runner — nothing in this tree can measure it.</b> <c>gate.yml</c> gives the
+    ///         <c>test</c> job <c>timeout-minutes: 30</c> and
+    ///         <c>.github/scripts/assert-budget.sh</c> fails the pipeline past the 25 minutes
+    ///         <c>pr.yml</c> § <c>BUDGET_MINUTES</c> sets, so it can cost a PR. ⚠ <b>The lever is
+    ///         not this constant.</b> Making the cluster degree track the container degree — so the
+    ///         cap "can never serialise more than master did" — is the repair that suggests itself
+    ///         and it is worth nothing twice over: on CI it changes nothing, because the container
+    ///         degree is already 1 and the added suite is added by the classifier; on this ten-CPU
+    ///         host it would set the cluster degree to 3, which is exactly the three-concurrent-k3s
+    ///         overlap #77 exists to close. It would pay nothing where the cost is and undo the fix
+    ///         where it is not. If the budget does go red, <c>assert-budget.sh</c> names the job that
+    ///         spent it, and docs/plan/23 § CI shape prescribes parallelism or a move to nightly with
+    ///         a written reason — the candidate for the second being <c>CyberCloud.AppHost.Tests</c>,
+    ///         whose own <c>.csproj</c> argues against it, and the untried parallelism being the
+    ///         <c>MaxDegreeOfParallelism</c> question the next paragraph is about.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>One consequence to know before reaching for it: a waiting suite still holds a
+    ///         <see cref="Parallel" /> worker.</b> <c>MaxDegreeOfParallelism</c> is
+    ///         <see cref="Environment.ProcessorCount" /> and the partitioner hands out one item at a
+    ///         time in order, so while the head of the queue is seventeen cluster-backed suites, the
+    ///         workers are pinned to them and the cheap suites behind them do not start — the queue
+    ///         drains rather than overlaps until fewer cluster suites remain than there are workers.
+    ///         That was already true before #77 (the container-backed suites were ordered first and
+    ///         most of them were these), so it is not a regression, and it is deliberately left
+    ///         alone: the fix would be to raise <c>MaxDegreeOfParallelism</c> above the core count on
+    ///         the argument that a thread blocked on a semaphore is not using a CPU, and that also
+    ///         raises the ceiling on how many <em>cheap</em> suites run at once, which is a number
+    ///         nobody here has measured. It is the next thing to try if this gate's wall clock
+    ///         becomes the complaint, and it should be measured before it is believed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What would make the one stale</b> is a change to the thing it mirrors: a
+    ///         <c>ClusterSlot</c> that admits more than one process, or a host whose daemon is
+    ///         measured holding two k3s API servers without either suite slowing down. Neither is a
+    ///         thing this tree can observe on its own, which is exactly why the number is written
+    ///         here as a claim about the tree rather than derived from
+    ///         <see cref="Environment.ProcessorCount" /> — CPU count was never what limited it.
+    ///     </para>
+    /// </remarks>
+    const int ClusterBackedSuiteDegree = 1;
 
     /// <summary>
     ///     How many container-backed suites may be live at once, derived from this host.
@@ -733,6 +1081,15 @@ partial class Build
     ///         `docker info`, which is a subprocess that hangs when the daemon is unhealthy — inside
     ///         the target whose whole job is to tell a starved host from a broken one. The other is
     ///         how many k3s clusters a daemon will hold, which has no API at all.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The second of those two is no longer left to this arithmetic — #77.</b> It has no
+    ///         API, but it does have an answer, and the answer had been in the tree the whole time:
+    ///         <c>ClusterSlot</c> serialises the assemblies that hold one. <see cref="StartsCluster" />
+    ///         is which suites those are and <see cref="ClusterBackedSuiteDegree" /> is the cap, and
+    ///         the reason it is a separate semaphore rather than a smaller value here is that this
+    ///         number is about CPU and that one is about a thing CPU never predicted. So what remains
+    ///         unmodelled here is memory alone.
     ///     </para>
     ///     <para>
     ///         So this is deliberately the constraint the tree can read for nothing, and

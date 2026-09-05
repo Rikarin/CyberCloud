@@ -49,6 +49,21 @@ namespace CyberCloud.Cluster.Conformance.Infrastructure;
 ///         container at a time. It does <b>not</b> serialise against
 ///         <c>CyberCloud.Kubernetes.Tests</c>, which would need one line in that project.
 ///     </para>
+///     <para>
+///         ⚠ <b>That last sentence stood unread for long enough to cost a run — #77.</b> Two suites
+///         hold a k3s and take no <see cref="ClusterSlot" />: <c>CyberCloud.Kubernetes.Tests</c>,
+///         named above, and <c>CyberCloud.AppHost.Tests</c>, which starts one through Aspire and
+///         takes a machine-wide lock of its own under a different file name. Three unrelated permits
+///         over seventeen cluster-backed suites, so three API servers could be live at once. The cap
+///         that now covers all seventeen is <c>build/Build.Test.cs</c>
+///         § <c>ClusterBackedSuiteDegree</c>, which is <b>1</b> precisely because that is the number
+///         this permit already enforces — build/ was taught the invariant rather than the two suites
+///         being taught the permit, because a lock taken <i>inside</i> a test process cannot stop the
+///         build from starting the process, so the fifteen used to spend the container budget on
+///         waiting rather than on working. ⚠ This lock stays regardless: it is what serialises a
+///         `dotnet run` of one suite against a second checkout's, which no semaphore in one build
+///         process can see.
+///     </para>
 /// </remarks>
 public static class ClusterInfrastructure {
     /// <summary>
@@ -190,7 +205,21 @@ public sealed record ClusterEndpoints(
 ///     lock that outlives every test.
 /// </remarks>
 public static class ClusterSlot {
-    /// <summary>The lock file's name. Shared by every assembly that runs a cluster-backed suite.</summary>
+    /// <summary>
+    ///     The lock file's name. Shared by the fifteen assemblies built on
+    ///     <see cref="ClusterInfrastructure" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This read "shared by every assembly that runs a cluster-backed suite" until the #77
+    ///     review, and #77 is precisely what made it false.</b>
+    ///     <c>build/Build.Test.cs</c> § <c>StartsCluster</c> gives "cluster-backed suite" a
+    ///     build-enforced meaning — seventeen suites, decided by what their output ships — and two of
+    ///     the seventeen take no lock here at all. <see cref="ClusterInfrastructure" />'s remarks
+    ///     name them. Every assembly that takes <i>this</i> permit shares this name; not every
+    ///     cluster-backed suite takes it, which is the whole reason build/ has a cap of its own.
+    ///     ⚠ <c>CyberCloud.Bundle.Cluster.Conformance.csproj</c> quotes this summary as the
+    ///     documented contract for depending on the project, so the two move together.
+    /// </remarks>
     public const string FileName = "cybercloud-cluster-conformance.slot";
 
     static FileStream? held;
