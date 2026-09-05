@@ -136,6 +136,11 @@ cluster.
 > reorders it: two of them given the other way round still install in `bundle.yaml`'s order, because
 > the order is the roster's property and a flag that reordered it would be a second place the order
 > is written.
+>
+> ⚠ **The usage text went on saying it anyway until #74, and now it counts instead of claiming.**
+> `install.sh --help` prints the phases and how many components each holds, read out of `bundle.yaml`
+> at the moment it is asked. The four numbers in the paragraph above are this file's own and are
+> counted here on 2026-09-05; they go stale when the roster moves, and `--help` does not.
 
 > ⚠ **A selector that matches nothing is an error, and until 2026-09-03 it was a green run.**
 > `--phase 99` printed one empty phase header and exited 0 under *"Bundle applied"*; `--verify
@@ -293,23 +298,33 @@ What that supports is **the install mechanism**, and now one path through it end
 runs unattended against a cluster it is handed, reads a pin out of a `component.yaml` rather than
 carrying one, two components install onto one node without fighting, and its `--wait` makes
 "installed" mean "serving" — **for a `helm` component**. What it does not support is the roster.
-Sixteen pins are still resolved-but-never-applied; no `manifest:` component has been applied, so
-`kubectl` has never been invoked by *this script* under test.
+Sixteen pins are still resolved-but-never-applied *by a test*.
 
-> ⚠ **The `--wait` clause is false for six of the nineteen, and it took reading the script to
-> notice.** The `manifest:` branch is a bare `kubectl apply --server-side` with no wait of any kind;
-> the one `kubectl wait --for=condition=Established` it can reach runs only for a component that has
-> a `manifestExtra`, and even then inside the component rather than at the phase boundary. So
-> `bundle.yaml` § phases overstates its own guarantee for kubevirt, containerized-data-importer,
-> cluster-api, kamaji-control-plane-provider, cluster-api-provider-kubevirt and
-> rabbitmq-cluster-operator. `bundle.yaml` § owed, `the-manifest-path-waits-for-nothing`, has the
-> reading and says why the wait is not written in advance of running those six.
+> ⚠ **The `--wait` clause was false for six of the nineteen, it took reading the script to notice,
+> and half of it is now true.** The `manifest:` branch was a bare `kubectl apply --server-side` with
+> no wait of any kind; the one `kubectl wait --for=condition=Established` it could reach ran only for
+> a component that has a `manifestExtra`. Since #74 it runs after **every** manifest apply — after
+> each component rather than once per phase, because phase 40's two providers admit against
+> definitions the rows before them *in the same phase* installed, and a wait that fires after every
+> apply gives the boundary property as well. What is still missing is the operator: nothing waits for
+> a manifest component's Deployment to be Available, and that wait stays unwritten because no pod of
+> any of the eight it would name has ever run. `bundle.yaml` § owed,
+> `the-manifest-path-waits-for-nothing`, has every reading and the eight names.
 
-**The phase *order* is exercised and the phase *barrier* is not, and they are different claims.** A
-full `--dry-run` — no cluster, under a second — asserts that all nineteen components are attempted
-once each, in the roster's order, under ascending phase headers. That is the only assertion here that
-covers every row. What a dry run cannot answer is whether "installed" implies "serving" at a
-boundary, which is the paragraph above. `bundle.yaml` § owed,
+> ⚠ **The `manifest:` branch has now been run — by hand, on 2026-09-05, against an API server with no
+> kubelet.** All six components were applied through `install.sh` itself onto one
+> `rancher/k3s:v1.35.7-k3s1` started `--disable-agent`, because the host's Docker reports `Cgroup
+> Version: 1` and 1.35's kubelet refuses to start on such a host. All six exit `0`; the two-document
+> path ran for the first time. **A reading taken once by a person is not a gate**, and this one is
+> recorded as what it is: nothing re-runs it, and `kubectl` has still never been invoked by this
+> script under test.
+
+**The phase *order* is exercised, the phase *barrier* is half exercised, and they are different
+claims.** A full `--dry-run` — no cluster, under a second — asserts that all nineteen components are
+attempted once each, in the roster's order, under ascending phase headers, and that every `manifest:`
+component is followed by an establishment wait before the next component starts. That is the only
+assertion here that covers every row. What a dry run cannot answer is whether "installed" implies
+"serving" at a boundary, which is the paragraph above. `bundle.yaml` § owed,
 `most-of-the-roster-has-never-been-installed`, keeps the full list.
 
 > ⚠ **A defect the install found rather than the reading.** `cert-manager/component.yaml` recorded
@@ -406,6 +421,14 @@ what those six components need to be waited on for — which is what
 `bundle.yaml` § owed, `the-manifest-path-waits-for-nothing`, refuses to guess at in advance.
 `rabbitmq-cluster-operator` is the cheap one: phase 50, one document, no second apply, and a
 `rabbitmq.com/v1beta1` `RabbitmqCluster` that `charts/managed/rabbitmq` already renders.
+
+> ⚠ **Half of that was answered on 2026-09-05 without a suite, and the half it answered is the half
+> that needed no pods.** All six were applied through `install.sh` against an API server with no
+> kubelet, which settled what they create — eight Deployments in eight namespaces, none of them the
+> `<component>-system` the script computes — and which is why the establishment wait could be written
+> and the Availability wait still cannot. **The suite is still owed**, and it is owed more sharply
+> than before: what it has to buy now is a *running operator*, not an inventory. `bundle.yaml` § owed,
+> `the-manifest-path-waits-for-nothing`.
 
 See [ADR-010](../../docs/plan/02-technology-decisions.md) § ADR-010, ADR-011 § The licence audit, and
 [docs/plan/12](../../docs/plan/12-managed-data-services.md) § The pattern, once.

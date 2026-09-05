@@ -23,11 +23,13 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         phase N is installed and its CRDs are established before phase N+1 begins". The half a
 ///         dry run can answer is <i>which component is attempted when</i>, over all nineteen rows and
 ///         all eight phases, which is what this class asserts. The half it cannot answer is whether
-///         "installed" implies "serving" — that is <c>--wait</c>, it is asserted on a real cluster by
-///         the two installing classes, and for the six <c>manifest:</c> components it is not true at
-///         all: the <c>kubectl</c> branch waits for nothing unless the component has a
-///         <c>manifestExtra</c>, and even then it waits inside the component rather than at the phase
-///         boundary. <c>bundle.yaml</c> § owed, <c>the-manifest-path-waits-for-nothing</c>.
+///         "installed" implies "serving" — that is <c>--wait</c>, and it is asserted on a real
+///         cluster by the two installing classes. For the six <c>manifest:</c> components it is half
+///         true since #74: the <c>kubectl</c> branch now waits for every definition it applied to be
+///         Established, which
+///         <see cref="EveryManifestComponentIsFollowedByAnEstablishmentWait" /> asserts the shape of
+///         here, and nothing waits for the operator behind those definitions to be running.
+///         <c>bundle.yaml</c> § owed, <c>the-manifest-path-waits-for-nothing</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>It needs no Docker daemon and installs nothing</b>, which is why it is worth having
@@ -135,6 +137,193 @@ public sealed class BundleInstallSelection {
             );
 
             phasePrevious = at;
+        }
+    }
+
+    /// <summary>
+    ///     Every <c>manifest:</c> component's apply is followed by an establishment wait before the
+    ///     next component starts.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the SHAPE of the phase barrier and not its truth, and the difference is
+    ///         the whole reason the class comment above splits the two.</b> A dry run executes
+    ///         nothing, so what it can say is that the installer emits a
+    ///         <c>kubectl wait --for=condition=Established</c> after every <c>manifest:</c> apply and
+    ///         before it moves on. What it cannot say is that the wait ever returns true, or that the
+    ///         operator behind the definitions is running — <c>charts/bundle/bundle.yaml</c> § owed,
+    ///         <c>the-manifest-path-waits-for-nothing</c>, is the row that owes the second half.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Until #74 that wait fired only for a component declaring a <c>manifestExtra</c>,
+    ///         which is two of the six</b>, so four manifest applies were followed by nothing and the
+    ///         phase they sit in ended with definitions the API server might not yet serve. The
+    ///         assertion is per component rather than per phase for the reason install.sh gives at
+    ///         the wait itself: phase 40's two providers admit against definitions the rows before
+    ///         them <i>in the same phase</i> installed, so a boundary-only wait would not order them.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <c>helm</c> component is asserted to run no <c>kubectl</c> at all</b>, which is
+    ///         the other half of the same claim: the wait belongs to the branch that needs it, and a
+    ///         line that leaked into the helm path would be a second barrier nobody argued for. Helm
+    ///         has <c>--wait</c>, and <c>--wait</c> is the clause that was always true.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Sabotage-verified on 2026-09-05 rather than reasoned about, and the part worth
+    ///         keeping is which rows survive it.</b> Moving the wait back inside the
+    ///         <c>manifestExtra</c> guard — where it sat before #74 — turns FOUR of the six red and
+    ///         leaves kubevirt and containerized-data-importer green, because those two are the
+    ///         components that declare a second document and so reached the wait already. A
+    ///         regression test whose sabotage turns every row red would not have told this defect
+    ///         apart from the wait being deleted outright.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task EveryManifestComponentIsFollowedByAnEstablishmentWait() {
+        Assert.SkipUnless(
+            BundleInstaller.OnPath("bash"),
+            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
+            + "PROVE: that every `manifest:` component's apply is followed by a `kubectl wait "
+            + "--for=condition=Established` before the next component begins."
+        );
+
+        var run = await BundleInstaller.RunAsync(
+            "--dry-run",
+            kubeconfig: null,
+            TestContext.Current.CancellationToken
+        );
+
+        run.ExitCode.ShouldBe(
+            0,
+            "charts/bundle/install.sh --dry-run executes nothing and must therefore succeed on any "
+            + "machine with bash. Its output was:\n" + run.Output
+        );
+
+        var roster = BundleInstaller.Roster();
+        var manifests = 0;
+
+        // ⚠ Every position is resolved before any of them is sliced between. A loop that looked up
+        // the next component's header only when it needed it would index a string with -1 on the
+        // run where the installer walked past a component, which is a crash rather than the report
+        // that names the component.
+        var positions = roster
+            .Select(entry => run.Output.IndexOf("\n  " + entry.Component + "\n", StringComparison.Ordinal))
+            .ToList();
+
+        for (var index = 0; index < roster.Count; index++) {
+            var component = roster[index].Component;
+            var at = positions[index];
+
+            at.ShouldBeGreaterThanOrEqualTo(
+                0,
+                $"charts/bundle/install.sh --dry-run never attempted `{component}`. Its output "
+                + "was:\n" + run.Output
+            );
+
+            // ⚠ To the NEXT component's header rather than to the end of the output, so a wait
+            // emitted once for the whole run — or emitted for the following component — cannot
+            // satisfy this row. That is the exact defect being regression-tested: the wait existed
+            // and was in the wrong place.
+            var end = index + 1 < roster.Count && positions[index + 1] > at
+                ? positions[index + 1]
+                : run.Output.Length;
+
+            var segment = run.Output[at..end];
+            var kind = BundleInstaller.Pin(component, "install");
+
+            if (kind == "manifest") {
+                manifests++;
+
+                segment.ShouldContain(
+                    "kubectl wait --for=condition=Established",
+                    Case.Sensitive,
+                    $"charts/bundle/install.sh applied `{component}` — a `manifest:` component in "
+                    + $"phase {roster[index].Phase} — and moved on without waiting for its "
+                    + "definitions to be Established. `kubectl apply` returns when the API server has "
+                    + "STORED the objects, so the next component, and the next phase, can be admitted "
+                    + "against a definition that is not served yet. charts/bundle/bundle.yaml "
+                    + "§ phases calls a phase a barrier and this is the half of it that is "
+                    + "implemented. What install.sh emitted for this component was:\n" + segment
+                );
+            } else {
+                segment.ShouldNotContain(
+                    "kubectl",
+                    Case.Sensitive,
+                    $"charts/bundle/install.sh ran kubectl for `{component}`, whose "
+                    + $"component.yaml declares `install: {kind}`. A helm component's barrier is "
+                    + "helm's own `--wait`; a kubectl line here is a second barrier with no argument "
+                    + "behind it, and the argument is the thing this repository checks. What "
+                    + "install.sh emitted for this component was:\n" + segment
+                );
+            }
+        }
+
+        // ⚠ The count is read off the roster rather than written here, and it is asserted only to be
+        // non-zero. A test that walked nineteen components and found no `manifest:` one would pass
+        // every assertion above by never running one — the empty-set pass this file's other cases
+        // exist to refuse.
+        manifests.ShouldBeGreaterThan(
+            0,
+            "no component in charts/bundle/bundle.yaml declares `install: manifest`, so this test "
+            + "asserted the barrier over nothing and passed. Either the reader is broken or the "
+            + "roster no longer has a manifest component, and both are worth a red run."
+        );
+    }
+
+    /// <summary>
+    ///     The usage text counts the phases out of the roster instead of asserting how big they are.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>#74's third finding is a number that went stale in prose, twice.</b> The text said
+    ///     <c>--phase</c> is <i>"for repairing one row"</i>, which is wrong for the fourteen
+    ///     components that share a phase; the 2026-09-03 correction added <c>--component</c> and left
+    ///     the sentence saying much the same thing. So the fix is not a better sentence — it is
+    ///     removing the number from the sentence. <c>install.sh --help</c> now reads
+    ///     <c>bundle.yaml</c> and prints what it finds, and this asserts the two agree.
+    ///     ⚠ <b>The expected line is built from the roster, so this test cannot be the second place
+    ///     the count lives either</b> — the same rule
+    ///     <see cref="TheDryRunAttemptsEveryRosteredComponentOnceInTheRostersOrder" /> follows for the
+    ///     order.
+    /// </remarks>
+    [Fact]
+    public async Task TheUsageTextCountsThePhasesOutOfTheRoster() {
+        Assert.SkipUnless(
+            BundleInstaller.OnPath("bash"),
+            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
+            + "PROVE: that `--help` reports each phase's size as charts/bundle/bundle.yaml has it."
+        );
+
+        var run = await BundleInstaller.RunAsync(
+            "--help",
+            kubeconfig: null,
+            TestContext.Current.CancellationToken
+        );
+
+        run.ExitCode.ShouldBe(
+            0,
+            "charts/bundle/install.sh --help must succeed. Its output was:\n" + run.Output
+        );
+
+        var held = BundleInstaller.Roster()
+            .GroupBy(entry => entry.Phase)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        held.ShouldNotBeEmpty(
+            "charts/bundle/bundle.yaml's `components:` block read as empty, so this test would have "
+            + "compared the usage text against no phases at all and passed."
+        );
+
+        foreach (var (phase, count) in held) {
+            var expected = $"phase {phase,-3} {count,2} component" + (count == 1 ? "" : "s");
+
+            run.Output.ShouldContain(
+                expected,
+                Case.Sensitive,
+                $"charts/bundle/install.sh --help does not say that phase {phase} holds {count} "
+                + "component(s), which is what charts/bundle/bundle.yaml lists. A usage text that "
+                + "disagrees with the roster is how `--phase` came to be documented as \"repairing "
+                + "one row\" for a phase holding eight of them. Its output was:\n" + run.Output
+            );
         }
     }
 

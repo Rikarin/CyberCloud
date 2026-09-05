@@ -11,6 +11,15 @@
 
 # The phases, in the order `install.sh` applies them. A phase is a barrier: every component in phase N
 # is installed and its CRDs are established before phase N+1 begins.
+#
+# ⚠ THAT SENTENCE OVERSTATED ITSELF UNTIL #74 AND NOW STATES EXACTLY HALF OF WHAT IT USED TO IMPLY,
+# WHICH IS THE HALF THAT IS TRUE. "Its CRDs are established" is now enforced for every kind of
+# component: helm's `--wait` for the thirteen `helm` and `helm-archive` rows, and a
+# `kubectl wait --for=condition=Established crd --all` after every apply for the six `manifest:` ones,
+# which before #74 ran only for the two of those six that declare a `manifestExtra`. What "installed"
+# still does NOT mean for a `manifest:` row is that the operator has a running pod — helm's `--wait`
+# gives that for a chart and nothing gives it here. `owed:` § `the-manifest-path-waits-for-nothing`
+# is that remainder, and it names the eight Deployments a wait would have to name.
 phases:
   - phase: 10
     name: fabric
@@ -21,10 +30,25 @@ phases:
   - phase: 15
     name: certificates
     why: >
-      cert-manager, and it is here because two phase-40 components' webhooks mount a Secret only
+      cert-manager, and it is here because later components' webhooks mount a Secret only
       cert-manager creates. ⚠ It was not on Task #109's starting list; it was found by reading
       `cluster-api-components.yaml` and the Kamaji chart's templates rather than their READMEs. A
       cluster missing it accepts every install and admits no Cluster.
+      ⚠ THIS ROW SAID "TWO PHASE-40 COMPONENTS" UNTIL #74 AND THE SUBJECT IS NEITHER TWO NOR CONFINED
+      TO PHASE 40. Counted on 2026-09-05 by applying all six `manifest:` components to one API server
+      and reading the objects back off it: FIVE Deployments in the bundle mount a Secret that only a
+      cert-manager `Certificate` produces — `capi-controller-manager`,
+      `capi-kubeadm-bootstrap-controller-manager` and `capi-kubeadm-control-plane-controller-manager`
+      from charts/bundle/cluster-api, `capk-controller-manager` from
+      charts/bundle/cluster-api-provider-kubevirt, and `rabbitmq-cluster-operator` from
+      charts/bundle/rabbitmq-cluster-operator, WHICH IS PHASE 50. Applying that last one to a cluster
+      with no `cert-manager.io/v1` was run rather than reasoned about: `kubectl apply` places
+      THIRTEEN of its sixteen objects, refuses the THREE cert-manager ones with "ensure CRDs are
+      installed first", and install.sh exits 1 — so the ordering failure here is loud, and the
+      Deployment it leaves behind could not have started either way. charts/bundle/kamaji ships its
+      own Issuer and Certificate as chart templates and so is a sixth dependant that no applied
+      document shows.
+      The count goes stale when a component is added, bumped, or drops its webhook.
   - phase: 20
     name: crds
     why: >
@@ -157,20 +181,30 @@ owed:
       runs unattended against a cluster it is handed; it reads a pin out of a component.yaml rather
       than carrying one; its `--wait` makes "installed" mean "serving" FOR A HELM COMPONENT — see
       `the-manifest-path-waits-for-nothing`, which is the clause that turned out to be false for six
-      of the nineteen; a `serves:` line is true of the cluster afterwards; and two components install
-      onto one node without fighting.
+      of the nineteen and is now half true of them; a `serves:` line is true of the cluster
+      afterwards; and two components install onto one node without fighting.
       WHAT IT DOES NOT PROVE, AND THE DISTANCE IS STILL THE WHOLE OF THIS ROW: that the other SIXTEEN
-      pins install. Nothing has exercised any `manifest:` component, so the two-document apply with
-      the establishment wait between them is unexercised and `kubectl` has never been invoked BY THIS
-      SCRIPT under test — the kubectl in the cloudnative-pg suite is the test's own, applying a
-      rendered chart. Nothing runs kube-ovn, KubeVirt, CDI, Cluster API or Kamaji, which is where the
-      three virtual machines and most of the risk are.
-      ⚠ THE PHASE ORDER IS NOW RUN AND THE PHASE BARRIER IS STILL NOT, AND THE TWO ARE DIFFERENT
+      pins install under a test. Nothing runs kube-ovn or Kamaji, which is where most of the
+      remaining risk is.
+      ⚠ THE `manifest:` HALF OF THAT SENTENCE MOVED ON 2026-09-05 AND IT MOVED BY HAND RATHER THAN BY
+      A SUITE, WHICH IS A WEAKER THING AND IS RECORDED AS ONE. All SIX `manifest:` components were
+      applied through install.sh against an API server with no kubelet — see
+      `the-manifest-path-waits-for-nothing` for the fixture and every reading. So the `kubectl` branch
+      and the two-document apply are no longer unexercised, and `kubectl` has still NEVER been invoked
+      by this script UNDER TEST: the kubectl in the cloudnative-pg suite is the test's own, applying a
+      rendered chart. A reading taken once by a person is not a gate, and nothing re-runs it.
+      THE COUNT OF WHAT HAS BEEN APPLIED AT ALL, ON 2026-09-05: three by a test, six by that hand run,
+      and TEN by nothing — kube-ovn, prometheus-operator-crds, kamaji, clickhouse-operator,
+      mariadb-operator, opensearch-operator, redis-operator, seaweedfs-operator, strimzi-kafka-operator
+      and victoria-metrics-operator.
+      ⚠ THE PHASE ORDER IS RUN, AND THE PHASE BARRIER IS NOW HALF RUN, AND THE THREE ARE DIFFERENT
       CLAIMS. `BundleInstallSelection` drives a full `--dry-run` and asserts that all nineteen
       components are attempted once each, in the roster's order, under ascending phase headers — the
       first assertion here that covers every row, and it costs under a second because it touches no
-      cluster. What a dry run cannot answer is whether "installed" implies "serving" at a phase
-      boundary, and for the six `manifest:` rows the answer is no.
+      cluster. It also asserts, from the same dry run, that every `manifest:` component is followed by
+      an establishment wait before the next component begins, which is the barrier's SHAPE. What a dry
+      run cannot answer is whether "installed" implies "serving", and for the six `manifest:` rows the
+      answer is now "its definitions are served, its operator may not be running".
       ⚠ THE LANE, DECIDED RATHER THAN DEFERRED, AND MEASURED. The suite is 4 m 27 s – 4 m 47 s green
       across three runs with the cloudnative-pg class in it, against 2 m 20 s – 3 m 15 s without: the class costs about 1 m 50 s
       of serial tail, of which 26 s is the two-component install, 68 s is PostgreSQL reaching Ready,
@@ -214,22 +248,51 @@ owed:
       "serving". That is true of the THIRTEEN `helm` and `helm-archive` components and false of the
       SIX `manifest:` ones — kubevirt and containerized-data-importer in phase 30, cluster-api,
       kamaji-control-plane-provider and cluster-api-provider-kubevirt in phase 40, and
-      rabbitmq-cluster-operator in phase 50. The `manifest` branch is a bare
-      `kubectl apply --server-side` with no wait of any kind. The ONE wait it can reach —
-      `kubectl wait --for=condition=Established crd --all` — runs only when the component declares a
-      `manifestExtra`, which two of the six do, and even then it runs INSIDE the component, before its
-      second document, rather than at a phase boundary.
-      ⚠ SO `phases:` ABOVE OVERSTATES ITS OWN GUARANTEE. It says "every component in phase N is
-      installed and its CRDs are established before phase N+1 begins". For a manifest component,
-      "installed" means the apply returned — the operator Deployment may not have a running pod, and
-      its definitions may not be Established — and phase 40's four rows are exactly where that matters,
-      because cluster-api-provider-kubevirt and the Kamaji control-plane provider both admit against
-      CRDs and webhooks the rows before them installed.
-      ⚠ IT IS NOT FIXED HERE, DELIBERATELY. The fix is a `kubectl wait` per manifest component —
-      Established on its own CRDs, Available on its Deployments — and every candidate wait is a guess
-      until somebody has run those six components against an API server, which nothing has. Writing
-      the wait first would produce a barrier that is asserted and untested, which is the same shape of
-      claim this row exists to retract.
+      rabbitmq-cluster-operator in phase 50. The `manifest` branch was a bare
+      `kubectl apply --server-side` with no wait of any kind; the ONE wait it could reach —
+      `kubectl wait --for=condition=Established crd --all` — ran only when the component declares a
+      `manifestExtra`, which two of the six do, and even then it ran INSIDE the component, before its
+      second document.
+      ✅ THE DEFINITIONS HALF IS CLOSED ON 2026-09-05 AND IT WAS CLOSED BY RUNNING THE SIX RATHER THAN
+      BY ARGUING ABOUT THEM, WHICH IS WHAT THE PARAGRAPH BELOW ASKED FOR. install.sh now runs that
+      establishment wait after EVERY manifest apply, not only before a second document. It is per
+      component rather than per phase on purpose: phase 40 holds four rows and the two providers admit
+      against definitions the rows before them IN THE SAME PHASE installed, so a boundary-only wait
+      would not have ordered the case this row calls out — and a wait after every manifest apply
+      implies the boundary property anyway, because the last row of a phase has run it.
+      ⚠ WHAT WAS ACTUALLY RUN, BECAUSE THE PROVENANCE IS THE POINT OF THIS ROW. All six components
+      were applied through install.sh itself, one `--component` run each, onto ONE
+      `rancher/k3s:v1.35.7-k3s1` started with `--disable-agent` — an API server with NO KUBELET,
+      because the host's Docker reports `Cgroup Version: 1` and 1.35's kubelet refuses to start on
+      such a host. cert-manager's definitions were applied first, standing in for phase 15. Every one
+      of the six exits 0, the two-document path was exercised for the first time
+      (`kubevirt.kubevirt.io/kubevirt` and `cdi.cdi.kubevirt.io/cdi` both admitted after the wait),
+      one `--phase 30` run put BOTH of that phase's components on in one go, and
+      rabbitmq-cluster-operator went from 1.2 s to 4.7 s once the wait became unconditional, on a
+      cluster holding thirty-six definitions. Those thirty-six are four k3s ships, six cert-manager's,
+      and TWENTY-SIX from the six components themselves — cluster-api alone contributes seventeen.
+      ⚠ WHAT IS STILL OWED IS THE DEPLOYMENTS HALF, AND THE RUN MADE IT SHARPER RATHER THAN SMALLER.
+      "Established" says the API server will serve the kind; it says nothing about the operator, and a
+      phase-40 provider whose controller has no pod fails exactly like one whose CRD is missing, only
+      later. That wait is STILL a guess, for the same reason as before and now a narrower one: nothing
+      scheduled a pod, so not one of these Deployments has ever started. What the run did settle is
+      that the obvious spelling is WRONG. The six put EIGHT Deployments in EIGHT namespaces and NOT
+      ONE namespace is the `<component>-system` install.sh computes — `kubevirt/virt-operator`,
+      `cdi/cdi-operator`, `capi-system/capi-controller-manager`,
+      `capi-kubeadm-bootstrap-system/capi-kubeadm-bootstrap-controller-manager`,
+      `capi-kubeadm-control-plane-system/capi-kubeadm-control-plane-controller-manager`,
+      `kamaji-system/capi-kamaji-controller-manager`, `capk-system/capk-controller-manager` and
+      `rabbitmq-system/rabbitmq-cluster-operator`. cluster-api alone accounts for three of them, so
+      "its Deployment" is not even singular. Closing this is a declaration per component that
+      something reads — the shape `images:` took, and NOT the shape `imageDigest:` took, which
+      `images-are-not-pinned-by-digest` records as a key nothing ever read — plus a run on a cluster
+      that can schedule a pod.
+      ⚠ ONE THING THE FIX CANNOT BE IS SILENTLY GREEN, AND THAT WAS MEASURED TOO.
+      `kubectl wait --for=condition=Established crd -l <a label nothing carries>` prints "error: no
+      matching resources found" and exits 1 rather than reporting a met condition over an empty set —
+      so a barrier built out of `kubectl wait` fails loudly when it selects nothing, which is the
+      opposite of the defect `a-selector-that-matched-nothing-reported-success` records about this
+      script's own selectors.
   - id: a-selector-that-matched-nothing-reported-success
     says: >
       ✅ FIXED ON 2026-09-03, RECORDED BECAUSE THE READING IS WORTH MORE THAN THE FIX.
@@ -245,6 +308,16 @@ owed:
       nineteen components could not be addressed individually at all. `--component <name>` now exists,
       is repeatable, filters the roster and never reorders it — the roster carries the order, and a
       flag that reordered it would be a second place the order is written.
+      ⚠ THAT CORRECTION WAS HALF A CORRECTION AND #74 CAUGHT IT. The flag landed; the sentence did
+      not. It went on reading "--phase and --component both skip that guarantee and are for repairing
+      a row", which still calls a phase a row and still lumps the two flags together, and it still
+      said "helm waits for it" of a barrier that six components never reach helm for. On 2026-09-05 it
+      was rewritten to separate the two flags, to say what "installed" means for each install kind,
+      and — the part that stops this happening a third time — to COUNT the phases out of bundle.yaml
+      at `--help` time rather than assert a number. `roster()` moved above the argument loop for that,
+      because bash resolves a function name when the call runs and `-h` is answered inside the loop.
+      A number the usage text does not contain is a number that cannot go stale, which is the same
+      rule this file's own header applies to versions.
   - id: redis-operator-is-archived-and-its-chart-is-broken
     says: >
       ⚠ THE FOURTH SIGHTING OF ADR-010 CLAUSE 1'S AMENDMENT, AND THE FIRST WHERE THE OPERATOR EXISTS.

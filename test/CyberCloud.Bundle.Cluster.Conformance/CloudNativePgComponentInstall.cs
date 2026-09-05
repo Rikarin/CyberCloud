@@ -126,11 +126,13 @@ public sealed class CloudNativePgComponentInstaller {
 ///     <para>
 ///         ⚠ <b>What it still does NOT prove, said here because the gap is easy to overstate away.</b>
 ///         Not the phase <i>barrier</i> in full: this run walks two phases and helm's <c>--wait</c>
-///         holds each, but the six <c>manifest:</c> components wait for nothing at all and none of
-///         them is installed here — <c>bundle.yaml</c> § owed,
-///         <c>the-manifest-path-waits-for-nothing</c>. Not <c>install.sh</c>'s <c>kubectl</c> branch,
-///         which is still unexecuted by any test; the <c>kubectl</c> this class runs is its own, to
-///         apply a rendered chart. Not the other fifteen pins. And not the <i>default</i> body of
+///         holds each, and none of the six <c>manifest:</c> components — whose own barrier is an
+///         establishment wait since #74, and is still missing the operator half — is installed here.
+///         <c>bundle.yaml</c> § owed, <c>the-manifest-path-waits-for-nothing</c>. Not
+///         <c>install.sh</c>'s <c>kubectl</c> branch, which is still unexecuted by any test: the six
+///         were applied through it once, by hand on 2026-09-05 and against an API server with no
+///         kubelet, and nothing re-runs that. The <c>kubectl</c> this class runs is its own, to apply
+///         a rendered chart. Not the other fifteen pins. And not the <i>default</i> body of
 ///         <c>charts/managed/postgres</c>: <see cref="ChartValues" /> overrides seven values and says
 ///         why for each.
 ///     </para>

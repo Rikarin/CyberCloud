@@ -18,13 +18,21 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         <c>component.yaml</c> reader exactly as unexercised as they were.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>--phase 15</c>, and that narrows what the run proves.</b> The script's own usage
-///         text says <c>--phase</c> <i>"skips that guarantee and is for repairing one row, not for
-///         installing"</i> — the guarantee being the phase barrier. So this exercises the installer's
-///         per-component path and NOT its ordering: a defect in the barrier between phases would not
-///         be caught here. Installing every phase would mean nineteen operators and three virtual
-///         machines in a lane narrower than one suite, which is the reason the bundle had no
-///         cluster-backed proof at all.
+///         ⚠ <b><c>--phase 15</c>, and that narrows what the run proves.</b> A selector narrows a
+///         run to what it selects, so this exercises the installer's per-component path and NOT its
+///         ordering: a defect in the barrier between phases would not be caught here. Installing
+///         every phase would mean nineteen operators and three virtual machines in a lane narrower
+///         than one suite, which is the reason the bundle had no cluster-backed proof at all.
+///     </para>
+///     <para>
+///         ⚠ <b>That paragraph used to quote the script's usage text — <i>"skips that guarantee and
+///         is for repairing one row, not for installing"</i> — and the quotation had been stale since
+///         2026-09-03</b>, when <c>--component</c> landed and that sentence was rewritten around it.
+///         #74 rewrote the same text again on 2026-09-05, so the quotation is not re-quoted: it is
+///         removed. What this paragraph needs is a property of the script's BEHAVIOUR — a selector
+///         narrows a run — and quoting prose to establish behaviour is how a citation goes stale
+///         without anything going red. <c>charts/bundle/bundle.yaml</c> § owed,
+///         <c>a-selector-that-matched-nothing-reported-success</c>, keeps the usage text's history.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>That sentence read "in a Testcontainers lane Task #95 capped at four concurrent
