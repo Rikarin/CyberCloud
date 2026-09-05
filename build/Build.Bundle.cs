@@ -24,7 +24,9 @@
 // failure class this repository has shipped roughly ten times:
 //
 //   * a component.yaml missing a key, or naming a directory it is not in                  → Manifest
+//   * a component.yaml carrying a top-level key nothing under charts/bundle/ reads        → Manifest
 //   * a component declaring neither `serves:` nor a written `servesNoDefinitions:`         → Manifest
+//   * an `images:` entry whose tag is `latest`, which is the absence of a pin             → Manifest
 //   * a component declaring a licence outside ADR-011's allow-list                        → Licence
 //   * bundle.yaml and the directories disagreeing about which components exist            → Roster
 //   * a managed chart rendering a group no component serves, OR a pin that stopped
@@ -245,11 +247,20 @@ partial class Build
 
             components.Add(new(directory.Name, file, scalars, serves));
 
-            foreach (var required in new[] { "component", "phase", "licence", "install", "source", "checked" })
+            // ⚠ `requiredBy` joined this list on 2026-09-05 and adding it changed nothing about the
+            // tree, which is the point: charts/bundle/README.md § What a component owes has listed it
+            // as "Required: always" since the table was written and says this gate "fails the build
+            // when any of this is missing", and this gate did not read it. All nineteen components
+            // carry one, so the rule was true of the files and false of the machine — which is the
+            // same shape as the `imageDigest:` key that claimed `--verify` compared it: a control
+            // that reads as a control and is not one. Issue #75.
+            foreach (var required in new[] { "component", "phase", "licence", "install", "source", "checked", "requiredBy" })
             {
                 if (!scalars.ContainsKey(required))
                     violations.Add($"{relative} declares no `{required}:`.");
             }
+
+            violations.AddRange(UnknownKeyViolations(relative, scalars));
 
             if (scalars.TryGetValue("component", out var declaredName)
                 && !string.Equals(declaredName, directory.Name, StringComparison.Ordinal))
@@ -454,6 +465,42 @@ partial class Build
                 + "as a supply-chain change rather than as a typo";
         }
 
+        // ⚠ `latest` IS NOT A WEAK PIN, IT IS THE ABSENCE OF ONE, AND THIS RULE COULD ONLY BE
+        // WRITTEN AFTER THE TWO ENTRIES THAT CARRIED IT WERE CLOSED. Until 2026-09-05
+        // clickhouse-operator recorded `bitnami/kubectl:latest` and kamaji recorded
+        // `cfssl/cfssl:latest`. What settled it was a measurement rather than an opinion:
+        // re-resolving all thirty-two recorded references on 2026-09-05 found thirty-one serving the
+        // digest beside them and exactly one moved — `bitnami/kubectl:latest`, forty-eight hours
+        // after the record was written. Both are versioned now, through a values key each chart
+        // publishes, so the count is zero and a rule that keeps it there costs nothing to obey.
+        // charts/bundle/bundle.yaml § owed, `a-tag-that-names-no-version-is-not-a-pin`.
+        //
+        // ⚠ NO PROSE ESCAPE, DELIBERATELY, AND THIS FILE HAS TWO OF THOSE SO THE OMISSION IS A
+        // CHOICE. `servesNoDefinitions:` and `rendersNoWorkloadImages:` exist because a real
+        // component genuinely serves nothing and a real component genuinely renders nothing: the
+        // exception is a property of the world. A component that MUST pull `latest` is not that — it
+        // is a supply-chain decision, and the right place for one is a diff in this file with the
+        // argument beside it, not a sentence in a manifest that nobody diffs.
+        //
+        // ⚠ WHAT IT CANNOT SEE, said here rather than implied: an untagged reference. images.sh drops
+        // CustomResourceDefinition documents, so the Kamaji provider's two untagged
+        // `registry.k8s.io/kas-network-proxy/*` schema defaults never reach a record for this to
+        // check — that hazard belongs to charts/managed/kubernetes and is recorded there. Within the
+        // record itself an untagged entry is impossible: ImageReference requires a tag.
+        foreach (var image in images.Where(image => LatestTag.IsMatch(image)))
+        {
+            yield return
+                $"{relative} lists `{image}` under `images:`, whose tag is `latest`. A tag that names "
+                + "a version is a weak pin; a tag that names no version is not a pin at all — "
+                + "whatever it points at today is not what it pointed at when somebody reviewed it, "
+                + "and the only thing that would notice is a run of images.sh. This is not "
+                + "hypothetical: `bitnami/kubectl:latest` moved in the forty-eight hours after it was "
+                + "recorded, alone among thirty-two references. Check whether the chart publishes a "
+                + "values key for the image — two of them did — and pin the tag there; if it does "
+                + "not, the answer is a decision argued in charts/bundle/bundle.yaml § owed, "
+                + "`a-tag-that-names-no-version-is-not-a-pin`, and a diff in this gate";
+        }
+
         // ⚠ Duplicates are a violation rather than a set union, because the two entries would carry
         // two different digests for one reference and the comparison would accept whichever came
         // first. A record that can hold two answers is a record that has none.
@@ -524,6 +571,89 @@ partial class Build
                 $"{relative} declares `install: {install}` and no `{key}:`. install.sh reads the pin "
                 + "out of this file and hard-codes no version, so a missing key is not a default — it "
                 + "is an install command with an empty argument in it";
+        }
+    }
+
+    /// <summary>
+    ///     Every top-level key a <c>component.yaml</c> may carry, and who consumes it.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This exists because of one key that was not here: <c>imageDigest:</c>.</b>
+    ///         <c>charts/bundle/redis-operator/component.yaml</c> carried it beside a comment saying
+    ///         it was "recorded so that <c>install.sh --verify</c> can compare what it pulled against
+    ///         what was reviewed", and nothing read it — <c>verify_component</c> reads the chart and
+    ///         manifest pins and has never read a digest. A key nothing reads is not inert: it reads
+    ///         as a control, so a reviewer counts it as one, and the true count of images checked by
+    ///         digest was zero of nineteen while the file said otherwise. Issue #75, and
+    ///         charts/bundle/bundle.yaml § owed, <c>images-are-not-pinned-by-digest</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An allow-list rather than "every key must be machine-read", because three of
+    ///         these are read by people and saying so is the honest version.</b> <c>appVersion</c>,
+    ///         <c>notes</c> and <c>requiredBy</c> are consumed by whoever opens the file and by no
+    ///         script; they are here deliberately, and the difference between "documented" and
+    ///         "checked" is exactly what <c>imageDigest:</c> blurred. Everything else is read by
+    ///         <c>install.sh</c>, <c>images.sh</c> or this gate.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Adding a key is meant to cost a diff here.</b> That is the whole mechanism: a new
+    ///         key arrives with the reader that consumes it, or it arrives with an argument for why a
+    ///         human is the reader. A gate that tolerated unknown keys would let the next
+    ///         <c>imageDigest:</c> in silently, and the failure mode of that is a review that trusts
+    ///         a check nobody wrote.
+    ///     </para>
+    /// </remarks>
+    static readonly HashSet<string> BundleComponentKeys = new(StringComparer.Ordinal)
+    {
+        // Read by this gate.
+        "component",
+        "phase",
+        "licence",
+        "source",
+        "checked",
+        "serves",
+        "servesNoDefinitions",
+        "images",
+        "rendersNoWorkloadImages",
+
+        // Read by install.sh and images.sh, which switch on `install:` and read the pin beneath it.
+        "install",
+        "repo",
+        "chart",
+        "version",
+        "chartCrds",
+        "versionCrds",
+        "archive",
+        "release",
+        "manifest",
+        "manifestExtra",
+        "values",
+
+        // Read by people. Kept, and kept separate, because a key nobody reads at all is the defect
+        // this list exists to catch and a key a reader needs is not.
+        "appVersion",
+        "notes",
+        "requiredBy",
+    };
+
+    /// <summary>
+    ///     A <c>component.yaml</c> carries no top-level key this directory has no reader for.
+    /// </summary>
+    static IEnumerable<string> UnknownKeyViolations(string relative, Dictionary<string, string> scalars)
+    {
+        foreach (var key in scalars.Keys
+            .Where(key => !BundleComponentKeys.Contains(key))
+            .OrderBy(key => key, StringComparer.Ordinal))
+        {
+            yield return
+                $"{relative} declares `{key}:`, which nothing under charts/bundle/ reads — not "
+                + "install.sh, not images.sh, not this gate. The key that produced this rule was "
+                + "`imageDigest:`, recorded beside a comment claiming `install.sh --verify` compared "
+                + "it while `verify_component` had never read a digest: a control that reads as a "
+                + "control and is not one is worse than no control, because a reviewer counts it. "
+                + "Either add the reader in the same commit, or add the key to BundleComponentKeys "
+                + "in build/Build.Bundle.cs with the person who reads it named beside it";
         }
     }
 
@@ -831,6 +961,17 @@ partial class Build
     static readonly Regex ImageReference = new(
         @"^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$",
         RegexOptions.Compiled);
+
+    /// <summary>An <c>images:</c> entry whose tag is <c>latest</c>, in any casing.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The tag is the segment between the LAST colon and the <c>@</c>, and matching it any
+    ///     other way gets a repository called <c>latest/…</c> or a registry on a port wrong.</b>
+    ///     Case-insensitive because a registry's tag namespace is case-sensitive and a reviewer's
+    ///     eye is not: <c>Latest</c> would be a different tag and the same absence of a pin.
+    /// </remarks>
+    static readonly Regex LatestTag = new(
+        @":latest@sha256:[0-9a-f]{64}$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // ── Ordering ──────────────────────────────────────────────────────────────────────────────
 

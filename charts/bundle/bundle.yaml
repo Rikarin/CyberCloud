@@ -382,27 +382,65 @@ owed:
       ⚠ WHAT IS STILL OWED, AND IT IS NOT THE SAME ITEM ANY MORE. (1) The record is a RECORD, not a
       pin: the tag is still what reaches the kubelet, so this detects a moved tag rather than
       preventing one. Preventing it means a values override per chart, and several charts have no
-      digest key at all — redis-operator's component.yaml documents that case firsthand. (2) A
+      digest key at all — redis-operator's component.yaml documents that case firsthand. ⚠ AND THE
+      TWO CHARTS THAT DID TURN OUT TO HAVE AN IMAGE VALUES PATH, on 2026-09-05, DO NOT MAKE THIS ITEM
+      SMALLER: clickhouse-operator's `crdHook.image.*` and kamaji's `cfssl.image.tag` both compose
+      `repository:tag` in the template and can therefore carry a VERSION and never a digest. What
+      those two closed is `a-tag-that-names-no-version-is-not-a-pin`, which is a different row. Zero
+      of nineteen components is still the count of images pinned by digest. (2) A
       MIRROR MAP, still unmodelled, the same shape charts/managed/harbor's `imageRegistry` escape
       hatch takes for a single service. (3) The `manifest:` components under-report: kubevirt and
       containerized-data-importer record their OPERATOR image, and the operator then pulls
       virt-api, virt-controller, virt-handler and virt-launcher by names that appear nowhere in the
       applied document. (4) Nothing runs images.sh on a schedule, so a tag that moves is caught when
       somebody asks.
-  - id: two-images-in-this-bundle-are-latest
+  - id: a-tag-that-names-no-version-is-not-a-pin
     says: >
-      ⚠ FOUND BY THE FIRST RUN OF images.sh ON 2026-09-03, AND IT IS A DIFFERENT PROBLEM FROM
-      `images-are-not-pinned-by-digest` RATHER THAN AN INSTANCE OF IT. A tag that names a version is
-      a weak pin; a tag that names no version is not a pin at all.
-      charts/bundle/clickhouse-operator renders `bitnami/kubectl:latest`, and charts/bundle/kamaji
-      renders `cfssl/cfssl:latest`. Both resolve today and both are recorded with the digest they
-      resolved to, so images.sh will go red the next time either moves — which for `latest` is a
-      question of when. ⚠ `bitnami/kubectl` is the sharper of the two, and the reading is firsthand
-      rather than remembered: on 2026-09-03 `bitnami/kubectl:latest` resolves, a VERSIONED tag on the
-      same repository (`bitnami/kubectl:1.34.1`) answers 404, and `bitnamilegacy/kubectl:latest`
-      resolves. So the versioned catalogue has moved namespace and what this component depends on is
-      the one tag left behind in the old one — a `latest` with nothing beside it to fall back to.
-      ⚠ A THIRD SIGHTING IS DELIBERATELY NOT COUNTED HERE, AND CHECKING IT IS THE POINT. The Kamaji
+      ⚠ THIS ROW WAS CALLED `two-images-in-this-bundle-are-latest` AND THE NUMBER IN ITS NAME IS NOW
+      ZERO. Renamed rather than edited in place, for the reason
+      `most-of-the-roster-has-never-been-installed` carries in its own text — that row shed a count
+      from its name after three successive names had carried one that was wrong by the time somebody
+      quoted it. A number in a name is a claim nothing checks. Both sightings closed on 2026-09-05 —
+      issue #75 — and the reading that produced them is kept below, because the argument rather than
+      the count is the part worth having.
+      ⚠ WHAT WAS FOUND, BY THE FIRST RUN OF images.sh ON 2026-09-03. A tag that names a version is a
+      weak pin; a tag that names no version is not a pin at all. charts/bundle/clickhouse-operator
+      rendered `bitnami/kubectl:latest` and charts/bundle/kamaji rendered `cfssl/cfssl:latest`.
+      `bitnami/kubectl` was the sharper of the two: on 2026-09-03 `bitnami/kubectl:latest` resolved, a
+      VERSIONED tag on the same repository (`bitnami/kubectl:1.34.1`) answered 404, and
+      `bitnamilegacy/kubectl:latest` resolved — the versioned catalogue had moved namespace and what
+      this bundle depended on was the one tag left behind in the old one.
+      ⚠ AND IT MOVED, IN TWO DAYS, WHICH IS THE MEASUREMENT THAT DECIDED THE REST. Re-resolving ALL
+      THIRTY-TWO recorded references through the OCI distribution API on 2026-09-05 found thirty-one
+      serving the digest their component.yaml records and exactly one moved: `bitnami/kubectl:latest`,
+      recorded sha256:e0fcb25c… on 2026-09-03 and serving sha256:b29d8c16… on 2026-09-05. The row
+      that predicted "images.sh will go red the next time either moves — which for `latest` is a
+      question of when" was answered by the calendar in forty-eight hours.
+      ✅ BOTH ARE VERSIONED NOW, THROUGH UPSTREAM'S OWN VALUES KEYS AND NOT THROUGH A FORK.
+      clickhouse-operator sets `crdHook.image.repository: clastix/kubectl` and
+      `crdHook.image.tag: v1.36.4`; kamaji sets `cfssl.image.tag: v1.6.5`. Each component.yaml
+      carries the full argument, the alternatives that were checked and rejected, and what would make
+      the choice stale. Two facts are worth repeating here because they are the load-bearing ones.
+      (a) `cfssl/cfssl:v1.6.5` and `cfssl/cfssl:latest` resolve to the SAME DIGEST on 2026-09-05, so
+      that half changed a label and not a byte. (b) `bitnami/kubectl` has no versioned tag left to
+      pin to — on 2026-09-05 the repository carries exactly one human-readable tag, `latest`, beside
+      cosign artefacts — and the bytes it now serves report `Client Version: v1.37.0`, two minors
+      ahead of this platform's own `rancher/k3s:v1.35.7-k3s1` and so outside kubectl's supported ±1
+      skew. Staying was not the cheap option; it was the broken one.
+      ⚠ THE PREVIOUS POSITION — "nothing is overridden here, because an override that pins somebody
+      else's helper image to a digest we chose is a fork of their chart with no note saying so" — WAS
+      RIGHT ABOUT DIGESTS AND TOO WIDE ABOUT TAGS, and it is corrected rather than quietly dropped. A
+      digest we picked would be a fork: it would freeze bytes upstream never chose. A VERSIONED TAG
+      passed through a values key upstream published, replacing a tag upstream left version-less, is
+      upstream's own escape hatch used for its own purpose — and neither key can carry a digest
+      anyway, because both templates compose `repository:tag` and nothing else.
+      ⚠ THE GATE IS WHAT KEEPS IT AT ZERO. build/Build.Bundle.cs § ImagesViolations now fails the
+      build on any `images:` entry whose tag is `latest`, which is a rule that can exist only because
+      the count is zero: it was written after the two were closed, not before, and it is why nobody
+      has to re-count. There is deliberately NO prose escape on it, unlike `rendersNoWorkloadImages:`
+      — a component that genuinely cannot avoid `latest` is a decision worth a diff in the gate with
+      the argument beside it, which is exactly what this row is.
+      ⚠ A THIRD SIGHTING IS STILL DELIBERATELY NOT COUNTED, AND CHECKING IT IS THE POINT. The Kamaji
       control-plane provider's CRD carries `registry.k8s.io/kas-network-proxy/proxy-agent` and
       `-server` with NO TAG — which means `latest` — as `default:` values inside the KamajiControlPlane
       OpenAPI schema. images.sh drops CustomResourceDefinition documents and so does not report them,
@@ -410,10 +448,22 @@ owed:
       plane that asks for konnectivity. It is a real hazard for charts/managed/kubernetes and it
       belongs to that chart's conformance.yaml, not to this row. Counting it would have made the
       bundle's own install look worse than it is, which is the mirror of the failure this repository
-      keeps finding.
-      Closing all of it is upstream's `values:` in two cases and a decision in the third; nothing is
-      overridden here, because an override that pins somebody else's helper image to a digest we
-      chose is a fork of their chart with no note saying so.
-      ⚠ TWO ETCD VERSIONS IN ONE CHART, RECORDED WHILE HERE: charts/bundle/kamaji renders
-      `quay.io/coreos/etcd:v3.5.1` AND `v3.5.6`. Both are pulled by the same install. Whether that is
-      deliberate on Kamaji's part is unread.
+      keeps finding. The gate above cannot see it either, for the same reason and by the same
+      exclusion.
+      ⚠ WHAT IS STILL OWED HERE, AND IT IS THE ETCD HALF. The two etcd references this row recorded
+      as "two versions of the same component in one chart" are not that, and the chart was read on
+      2026-09-05 rather than guessed at: templates/etcd_sts.yaml renders the etcd SERVER from
+      `.Values.etcd.image.tag`, pinned at v3.5.6, and templates/etcd_job_postinstall.yaml line 51
+      renders an etcdctl CLIENT as the LITERAL string `quay.io/coreos/etcd:v3.5.1` — a post-install
+      Job that adds the `root` user and enables auth. One server, one client four patches older,
+      same 3.5 line, same v3 API, which is why nothing has failed. It stays owed because the client
+      is a 2021 build pulled `imagePullPolicy: Always` on every install and there is NO values key
+      for it: closing it is an upstream change or a fork, and this directory does not fork charts.
+      ⚠ AND ONE ENTRY OF THE THIRTY-TWO IS A PROPERTY OF THE RENDERER RATHER THAN OF THE BUNDLE,
+      found while reading the etcd jobs. kamaji renders `clastix/kubectl:<tag>` where the tag is
+      `v<Capabilities.KubeVersion.Major>.<Minor>` — so the recorded `v1.36` is whatever Kubernetes
+      version the helm that ran images.sh reported, and against this platform's own
+      `rancher/k3s:v1.35.7-k3s1` the same chart renders `clastix/kubectl:v1.35`. Making the record
+      match what a cluster pulls means `helm template --kube-version` inside images.sh, which changes
+      what EVERY component renders; it belongs with a re-record of all thirty-two and not with the
+      edit that found it.
