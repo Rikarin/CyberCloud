@@ -269,10 +269,26 @@ public sealed record WriteRequest {
 ///         impersonated; a deadline that has passed can only be waited for.
 ///     </para>
 ///     <para>
-///         ⚠ <b>There is no api-version-free form and there cannot be.</b> The registration is what
-///         names the type's purge behaviour and its committed quota, and both are read per
-///         api-version — so whatever drives this records the version the resource was stored under
-///         and hands it back.
+///         ⚠ <b>There is no api-version-free form and there cannot be.</b> Step 1 of the write path
+///         resolves a type <i>and</i> a version together — <c>IProviderRegistry.Resolve</c> — so a
+///         request with no version does not resolve at all and never reaches the precondition above.
+///     </para>
+///     <para>
+///         ⚠ <b>This paragraph used to end "so whatever drives this records the version the resource
+///         was stored under and hands it back", and the driver that arrived cannot do that
+///         (2026-09-05, issue #12).</b> Nothing durable records it in a form a driver can read:
+///         <c>ResourceState.ApiVersion</c> is the version of the last write, but
+///         <c>IResourceGrain.GetAsync</c> must be <i>given</i> a version in order to be asked and
+///         echoes back the one it was given, and <c>ParkedResource</c> deliberately carries only an
+///         address and a GUID. So <c>ExpirySweeperGrain</c> hands back the type's
+///         <c>ResourceTypeRegistration.Newest</c>, and what makes that a substitution rather than a
+///         guess is that the purge reads nothing per-version: <c>ResourceManagerService.PurgeCoreAsync</c>
+///         takes the whole stored superset (<c>GetAsync(version, [])</c>, empty pointers), and purge
+///         protection, the meters and the permissions all live on the <i>type's</i> registration
+///         rather than on an <c>ApiVersionRegistration</c>. The version reaches step 1, which must
+///         accept it, and the change notification, which reports it. ⚠ If a future edit makes any
+///         part of a purge read this version's <i>schema</i>, that stops being true and this record
+///         needs the version recorded at the park instead.
 ///     </para>
 /// </remarks>
 [GenerateSerializer]

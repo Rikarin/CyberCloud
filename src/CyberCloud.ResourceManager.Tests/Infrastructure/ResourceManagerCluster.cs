@@ -543,6 +543,23 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                 GrainKeys.ParkedResourceRegistry(address.SubscriptionId, address.ResourceGroup)
             );
 
+    /// <summary>
+    ///     The same group's expiry sweeper — the clock behind
+    ///     <c>IResourceManager.PurgeExpiredAsync</c>, issue #12.
+    /// </summary>
+    /// <param name="address">Any address in the group. Only its subscription and group name are read.</param>
+    /// <remarks>
+    ///     ⚠ Built from the same two values as <see cref="Parked" /> for that helper's reason, and it
+    ///     matters more here than anywhere else: a case that swept one group and asserted against the
+    ///     registry of another would report a sweep that purged nothing and a registry that still
+    ///     holds everything, which is exactly what a broken sweeper looks like.
+    /// </remarks>
+    public IExpirySweeperGrain Sweeper(ResourceId address) =>
+        For(address.TenantId)
+            .GetGrain<IExpirySweeperGrain>(
+                GrainKeys.ExpirySweeper(address.SubscriptionId, address.ResourceGroup)
+            );
+
     /// <summary>The resource grain.</summary>
     public IResourceGrain Resource(Guid tenant, Guid resourceId) =>
         For(tenant).GetGrain<IResourceGrain>(GrainKeys.Resource(resourceId));

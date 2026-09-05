@@ -620,6 +620,29 @@ public sealed class OperationGrain(
             return;
         }
 
+        // ── AND THE THING THAT WILL END THE WINDOW IS TOLD THERE IS ONE ─────────────────────────
+        //
+        // ⚠ THE WINDOW OPENS HERE, SO THIS IS WHERE THE CLOCK IS ARMED — issue #12, and the item
+        // docs/plan/07 § Azure RBAC left owed after it built both fronts of purge: "nothing yet
+        // drives PurgeExpiredAsync on a clock". IExpirySweeperGrain is that clock. It is armed off
+        // "this group has something parked" rather than off a deadline, so this call carries no time
+        // and makes no claim about one — see the grain's remarks for why the deadline stays with the
+        // one activation that stamped it.
+        //
+        // ⚠ AFTER THE PARK AND NOT BEFORE, because the sweeper disarms itself on a registry it finds
+        // empty. Arming first would leave a window in which a tick could run against a group whose
+        // entry had not been written yet, cancel the reminder it had just been given, and leave the
+        // resource with nothing driving it.
+        //
+        // ⚠ RETRIED LIKE ITS NEIGHBOURS, and the reason it can afford to be is that ArmAsync answers
+        // Success when the silo simply has no reminder service — the one failure a soft delete must
+        // not be blocked by. What is left to fail here is our own code, which is what a retry is for.
+        var armed = await Sweeper(spec).ArmAsync();
+        if (armed.TryGetError(out var armError)) {
+            await ScheduleAsync(ReconcileOutcome.Failed(armError, true));
+            return;
+        }
+
         // ── AND IT LEAVES THE GROUP'S MEMBERSHIP, WHICH IS NOT THE DELETE THIS PATH REFUSED TO DO ─
         //
         // ⚠ THE GROUP'S CompleteDeleteAsync, NOT THE RESOURCE'S — and the remarks above forbid only
@@ -651,7 +674,9 @@ public sealed class OperationGrain(
                 + " direct role assignment(s) were dropped. It has left its resource group's listing "
                 + "and joined its resource group's registry of parked resources, which is where it "
                 + "can be found while the window lasts. Its desired state and its committed quota "
-                + "are kept so that a restore can apply it again; both end at the purge."
+                + "are kept so that a restore can apply it again; both end at the purge, which the "
+                + "group's expiry sweeper will run once the window closes if nobody restores or "
+                + "purges it first."
             )
         );
 
@@ -1023,6 +1048,23 @@ public sealed class OperationGrain(
         Tenant(spec)
             .GetGrain<IParkedResourceRegistryGrain>(
                 GrainKeys.ParkedResourceRegistry(spec.SubscriptionId, Address(spec).ResourceGroup)
+            );
+
+    /// <summary>
+    ///     The same resource group's expiry sweeper — issue #12, docs/plan/07 § Azure RBAC.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Built from the same two values <see cref="Parked" /> is</b>, because it exists to read
+    ///     exactly that registry: a sweeper addressed at a different group than the entry just written
+    ///     would arm a clock over somebody else's windows and leave this one with none. It is a third
+    ///     grain type behind a third key shape over one resource group, which
+    ///     <c>GrainKeys.ExpirySweeper</c> argues for at length — the short version is that a purge
+    ///     calls back into the registry, so the driver cannot live there.
+    /// </remarks>
+    IExpirySweeperGrain Sweeper(OperationSpec spec) =>
+        Tenant(spec)
+            .GetGrain<IExpirySweeperGrain>(
+                GrainKeys.ExpirySweeper(spec.SubscriptionId, Address(spec).ResourceGroup)
             );
 
     TenantGrainFactory Tenant(OperationSpec spec) =>

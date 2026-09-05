@@ -511,12 +511,15 @@ inside `IndexClaimMachine.Restore`, and nothing upstream filtered an expired ent
 (`ResolveSoftDeletedAsync` answers for any binding the index calls `SoftDeleted` and never reads
 `RecoverableUntil`), so restoring an expired-but-unpurged resource returned `404` and left it holding
 its name and its committed quota in **no** collection — this section's own defect, on a non-crash
-path, in what is the normal long-term state of a parked resource until #12's sweeper exists. Two
+path, in what was then the normal long-term state of a parked resource, because #12's sweeper did not
+yet exist. (It does now; expired-but-unpurged is no longer where a parked resource *sits*, it is the
+moment a restore races a sweep, which reaches the same line more often rather than less.) Two
 lines fix it and the pair is the rule: the expired case is refused **before** the unpark, asked of
 the index grain so one clock still owns the deadline; and any other refusal from the index restore
 repairs the registry by re-parking, but only while the index still says `SoftDeleted` of the same
 GUID — a blind re-park would resurrect an entry a concurrent purge had just released, which is the
-permanent **long** the ordering exists to prevent.
+**long** the ordering exists to prevent, and which until `IExpirySweeperGrain` landed nothing could
+undo.
 
 ⚠ **It is a second collection and not a second membership.** The member still leaves the group at the
 park; `SoftDeletePathTests.ASoftDeletedResourceIsInNoListingBecauseItLeftItsGroupsMembership` is
@@ -642,8 +645,10 @@ ordinals it shed**, which the desired body cannot name — probing past the repl
 deleting objects nothing in the desired state accounts for, with the guard as the only thing between
 that and a tenant's data.
 
-And **nothing sweeps an expired window**: an entry past `RecoverableUntil` refuses a
-restore and holds its name and its committed quota until somebody purges it by hand. It no longer
+And **nothing swept an expired window** — the sentence below is kept as it was written, because the
+two paragraphs after it are the answer and they only read as answers beside the question. An entry
+past `RecoverableUntil` refused a
+restore and held its name and its committed quota until somebody purged it by hand. It no longer
 holds a running data plane, which is what made it urgent. ⚠ **What a sweeper needs before it can be
 built is a decision this section cannot take on its own: an expiry is not a request, so there is
 nobody to authorize it, and `PurgeAsync` checks `PurgePermission` against a caller.** Either the
@@ -660,15 +665,31 @@ stamped it, so *"may this still be restored"* and *"is this window over"* cannot
 reasoning, the two things the mechanism does and does not inherit, and the purge-protection defect
 this uncovered are all there rather than here.
 
-⚠ **What is still owed is one thing and it is the caller.** Nothing drives `PurgeExpiredAsync` on a
-clock yet. ⚠ **A sweeper that searched could not be built even now, and the reason is worth stating
-where somebody will look for it: there is no enumeration of parked resources anywhere.** The index is
-one grain per path and one-way, `IKubeClusterConnection` has no list member, and — the one most
-likely to be assumed otherwise — **a parked resource has left its resource group's membership**:
-`OperationGrain.ParkAsync` calls the *group's* `CompleteDeleteAsync` deliberately, because a member
-left behind would put a name into a listing whose every read is the canonical `404`. So the shape
-that fits is a durable reminder registered at the moment the window opens, which needs no index at
-all.
+⚠ **The caller is built too, and it is a scan over the registry above rather than the reminder this
+paragraph used to record.** `IExpirySweeperGrain`, one activation per resource group, armed while that
+group has anything parked: each tick reads `IParkedResourceRegistryGrain.ListAsync`, asks each entry's
+index whether the entry is still true, and hands the ones that are to `PurgeExpiredAsync`. The
+reasoning is [07](07-rebac-authorization.md) § Azure RBAC's, because the fork was, and the short
+version is that this paragraph's own premise expired: it said *"a sweeper that searched could not be
+built even now … there is no enumeration of parked resources anywhere"*, and the section immediately
+above it is that enumeration, landed a fortnight of commits earlier. A reminder per parked resource
+would carry `RecoverableUntil` into the reminder table as its due time — a second durable copy of a
+deadline this document keeps in one grain on purpose — and would have nothing to reconcile against
+when its registration was lost.
+
+⚠ **The two facts about a parked resource that made the search impossible are unchanged and still
+true.** The index is one grain per path and one-way; and a parked resource **has left its resource
+group's membership**, because `OperationGrain.ParkAsync` calls the *group's* `CompleteDeleteAsync`
+deliberately, since a member left behind would put a name into a listing whose every read is the
+canonical `404`. What changed is that a *second* collection now answers, which is what the registry
+was for.
+
+⚠ **And the sweeper makes two things above routine that were previously rare.** The operator-owned
+claims this section leaves owed are now leaked on a schedule rather than only when somebody types a
+purge, for `DBforMySQL/servers` and `Storage/accounts`; and the hollow window issue #69 finds on
+`DBforPostgreSQL/servers` now ends on schedule with nobody in the loop. Neither is a reason to hold
+every window open for ever — that trades a disk for a name and a committed quota held permanently —
+and both are owed to their own sections.
 
 **Decided: committed quota is NOT returned on delete for a soft-deletable type. It is returned on
 purge.** ⚠ **This is the decision most easily got wrong from Azure by analogy, because Azure does

@@ -23,6 +23,16 @@ namespace CyberCloud.ResourceManager.Grains;
 ///         grain hop inside both, and would still be reading a value that can change the moment it
 ///         answers.
 ///     </para>
+///     <para>
+///         ⚠ <b>That is also why the expiry sweeper is a grain of its own rather than a reminder
+///         here (2026-09-05, issue #12).</b> A sweep calls <c>IResourceManager.PurgeExpiredAsync</c>
+///         and a purge calls <see cref="UnparkAsync" />, so a reminder on <i>this</i> activation
+///         would await a call back into itself; and one turn at a time means a sweep in flight would
+///         delay every park and unpark in the group, which is the property the paragraph above
+///         exists to protect. <c>IExpirySweeperGrain</c> holds the reminder, reads
+///         <see cref="ListAsync" /> and calls <see cref="UnparkAsync" /> from outside — a caller like
+///         the other three, not a fourth job for this grain.
+///     </para>
 /// </remarks>
 public sealed class ParkedResourceRegistryGrain(
     [PersistentState("parkedResources", StorageTiers.Durable)] IPersistentState<ParkedResourceRegistryState> state,
