@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
@@ -198,12 +199,28 @@ public readonly record struct SchemaProperty(
     ///     A regular expression the whole string must match, or <c>""</c> for none. Text kinds only.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Anchored implicitly and matched with a timeout.</b> The pattern is applied to the whole
-    ///     value, so <c>[a-z]+</c> means <c>^[a-z]+$</c> — JSON Schema's <c>pattern</c> is a
-    ///     <i>search</i> and this is not, because a provider that wrote an unanchored pattern got a
-    ///     validator that accepted anything containing a match. The emitted document anchors it
-    ///     explicitly so the two readings agree. A catastrophic backtrack is a
-    ///     <see cref="RegexMatchTimeoutException" /> rather than a hung request thread.
+    ///     <para>
+    ///         ⚠ <b>Anchored implicitly.</b> The pattern is applied to the whole value, so
+    ///         <c>[a-z]+</c> means <c>^[a-z]+$</c> — JSON Schema's <c>pattern</c> is a <i>search</i>
+    ///         and this is not, because a provider that wrote an unanchored pattern got a validator
+    ///         that accepted anything containing a match. The emitted document anchors it explicitly so
+    ///         the two readings agree, and <see cref="Matcher" /> is the one place the anchoring is
+    ///         spelled.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And matched by the non-backtracking engine, which is a correctness property and
+    ///         not a performance one.</b> A declared pattern runs against a caller-supplied string on
+    ///         the request path, so it is the classic place a crafted value turns one regular
+    ///         expression into a request thread that never returns.
+    ///         <see cref="RegexOptions.NonBacktracking" /> is linear in the input by construction, so
+    ///         that cannot happen and no time budget is set — the same argument, for the same reason,
+    ///         as <c>CyberCloud.Core.Security.SecretShapedText</c>, which runs over attacker-influenced
+    ///         log text. The cost is stated rather than hidden: the engine refuses lookarounds,
+    ///         backreferences and atomic groups, so a pattern reaching for one is refused by
+    ///         <see cref="Incoherences" /> at silo start with a message rather than accepted and then
+    ///         run. See <see cref="Matcher" /> for why the budget that used to be here was removed
+    ///         (#76).
+    ///     </para>
     /// </remarks>
     public string Pattern {
         // Normalised for the same reason AllowedValues is: `default(SchemaProperty)` skips
@@ -383,12 +400,28 @@ public readonly record struct SchemaProperty(
         }
 
         if (Pattern.Length > 0) {
+            // ⚠ The probe builds the SAME matcher the request path runs and keeps it — see Matcher.
+            // Compiling the bare pattern here, as this did, checked a different expression from the
+            // anchored one Validate builds, and checked it with a wall clock; both are gone.
             try {
-                _ = Regex.Match(string.Empty, Pattern, RegexOptions.None, PatternTimeout);
+                _ = Matcher(Pattern);
             } catch (ArgumentException malformed) {
                 problems.Add($"'{JsonPointer}' declares the pattern '{Pattern}', which does not compile: {malformed.Message}");
-            } catch (RegexMatchTimeoutException) {
-                problems.Add($"'{JsonPointer}' declares a pattern that times out on the empty string.");
+            } catch (NotSupportedException unsupported) {
+                // The non-backtracking engine's refusal, and it is deliberately a declaration-time
+                // problem rather than a fallback to the backtracking one. A lookaround, a
+                // backreference or an atomic group is exactly the construct whose cost is not linear
+                // in the input, and this property is applied to caller-supplied strings — so the
+                // answer is "express it without one", not "run it and hope". Every such construct has
+                // a boring equivalent for the shapes a schema pattern is actually for; where it does
+                // not, the check belongs in the provider's own validation, next to the parser, the way
+                // NetworkAddressing.ProblemWith decides what V4Pattern deliberately does not.
+                problems.Add(
+                    $"'{JsonPointer}' declares the pattern '{Pattern}', which the non-backtracking "
+                    + $"engine refuses: {unsupported.Message} A schema pattern runs against a "
+                    + "caller-supplied string, so it must be linear in the input — lookarounds, "
+                    + "backreferences and atomic groups are not expressible here."
+                );
             }
         }
 
@@ -435,12 +468,88 @@ public readonly record struct SchemaProperty(
         }
     }
 
-    /// <summary>How long a declared <see cref="Pattern" /> may run before it is a bug rather than a match.</summary>
+    /// <summary>
+    ///     The compiled whole-value matcher for a declared <see cref="Pattern" /> — the one place a
+    ///     schema pattern becomes a <see cref="Regex" />.
+    /// </summary>
+    /// <param name="pattern">A declared <see cref="Pattern" />, unanchored, as the provider wrote it.</param>
+    /// <exception cref="ArgumentException">The pattern does not compile.</exception>
+    /// <exception cref="NotSupportedException">
+    ///     The pattern uses a construct the non-backtracking engine refuses.
+    /// </exception>
     /// <remarks>
-    ///     ⚠ On the request path. A catastrophic backtrack with no timeout is a request thread that
-    ///     never returns, which is a denial of service a tenant can trigger with one string.
+    ///     <para>
+    ///         ⚠ <b>THIS REPLACED A 100 ms MATCH TIMEOUT, AND THE REPLACEMENT IS THE POINT (#76).</b>
+    ///         The timeout was set on every match — the request-path one <i>and</i> the ones
+    ///         <see cref="Incoherences" /> runs while a schema is being <i>declared</i>: the probe
+    ///         above, and the check that a declared <c>DefaultJson</c> or <c>ExampleJson</c> satisfies
+    ///         its own property. A .NET match timeout is wall-clock, so on a loaded machine a
+    ///         trivially-matching pattern can exceed it because the thread was descheduled, not
+    ///         because the expression is slow. That made
+    ///         <c>ResourceSchema.Of</c> — which providers call from static initialisers and which
+    ///         every fixture builder in the test suite calls — a construction that fails on machine
+    ///         load. It did:
+    ///         <c>ChartAnnotationTests.APointerNoTypeDeclaresAsPlacementIsStillAnOrdinaryChartRow</c>
+    ///         went red once with "could not be checked against this property's pattern within the
+    ///         time budget" and green on re-run, which is the container-parallelism flake's family
+    ///         (#67) — a red that tells you about the host and therefore a red people learn to re-run
+    ///         rather than read.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Raising the budget would have been the wrong repair, because a budget was the
+    ///         wrong instrument.</b> A time budget is a guess about a hostile input, and a schema is
+    ///         <i>declared</i> from text this repository compiled — a provider's own pattern against a
+    ///         provider's own default. There is no adversary at declaration time, so the budget bought
+    ///         nothing there and cost a flake. Where there <i>is</i> an adversary — a caller's string
+    ///         on the request path — the budget was the weaker of the two available answers: it stops
+    ///         a catastrophic backtrack after it has already burned 100 ms of a request thread, and it
+    ///         does so per request, so an attacker who has found the pattern still gets to buy 100 ms
+    ///         of CPU per call. <see cref="RegexOptions.NonBacktracking" /> removes the hazard instead
+    ///         of bounding it: the engine is linear in the input by construction, so there is nothing
+    ///         to time out and no timeout is set. That is the same instrument, chosen for the same
+    ///         reason, as <c>CyberCloud.Core.Security.SecretShapedText</c>, whose patterns run over
+    ///         attacker-influenced log text — and the argument that the log canary needed it while a
+    ///         schema pattern did not never held: both run over untrusted text.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Cached, and the cache is what makes "it compiled at silo start" mean "it runs at
+    ///         request time".</b> <see cref="Incoherences" /> calls this while the schema is being
+    ///         declared, so every registered pattern is built and kept before the first request — and
+    ///         a pattern the engine refuses fails the process that would have served it rather than
+    ///         the first caller who reached the property, which is what
+    ///         <see cref="ResourceSchema.Of" /> exists to do. It also keeps the non-backtracking
+    ///         engine's construction cost, which is higher than the interpreted engine's, off the
+    ///         request path entirely; the static <see cref="Regex" /> overloads this used to call keep
+    ///         only <see cref="Regex.CacheSize" /> (15) entries and the registry has more distinct
+    ///         patterns than that. ⚠ The key space is bounded because it is provider-authored: a
+    ///         <see cref="Pattern" /> comes from a registration compiled into an assembly and never
+    ///         from a request, so this dictionary cannot be grown by a caller.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What would make this stale.</b> Checked 2026-09-05 against every
+    ///         <see cref="Pattern" /> then registered — character classes, alternation and bounded
+    ///         quantifiers throughout, and the non-backtracking engine took all of them. Two things
+    ///         would reopen the question. One: a provider with a genuine need for a lookaround or a
+    ///         backreference, which is now a hard refusal at silo start rather than a slow match — the
+    ///         answer is a check in that provider's own validation next to its parser, and only if
+    ///         that is impossible is the engine choice worth revisiting, because the alternative is a
+    ///         time budget over caller-supplied text again. Two: a runtime in which
+    ///         <see cref="RegexOptions.NonBacktracking" /> stops being linear in the input, at which
+    ///         point the argument above is void and this member is where the replacement goes.
+    ///     </para>
     /// </remarks>
-    internal static readonly TimeSpan PatternTimeout = TimeSpan.FromMilliseconds(100);
+    internal static Regex Matcher(string pattern) =>
+        Matchers.GetOrAdd(
+            pattern,
+            // Anchored, because a declared pattern is a whole-value match and not a search — see the
+            // remarks on Pattern. ⚠ The emitters write their own `^(?:…)$` into the documents they
+            // produce (OpenApiEmitter, ChartAnnotationEmitter); this is the runtime's copy of that one
+            // decision, and the two are kept honest by SchemaExpressivenessTests and the emitter
+            // suites asserting the same anchoring rather than by sharing a string.
+            static x => new Regex("^(?:" + x + ")$", RegexOptions.NonBacktracking)
+        );
+
+    static readonly ConcurrentDictionary<string, Regex> Matchers = new(StringComparer.Ordinal);
 
     static string Number(double value) => value.ToString("R", CultureInfo.InvariantCulture);
 
@@ -1023,23 +1132,35 @@ public sealed record ResourceSchema {
     ///     nothing is.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A timeout refuses the value rather than accepting it unchecked.</b> The alternative —
-    ///     "we could not tell, so allow it" — turns one crafted string into a way past every pattern
-    ///     in the platform.
+    ///     <para>
+    ///         ⚠ <b>This is the request-path match — <paramref name="value" /> came out of a caller's
+    ///         body — and it has no time budget because it no longer needs one (#76).</b>
+    ///         <see cref="SchemaProperty.Matcher" /> builds the matcher with
+    ///         <see cref="RegexOptions.NonBacktracking" />, which is linear in the input by
+    ///         construction; the catastrophic backtrack the old 100 ms budget existed to cut short
+    ///         cannot happen, so there is nothing to cut short. The argument for the engine, and why
+    ///         it is a better answer than the budget was, is on <see cref="SchemaProperty.Matcher" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And therefore there is no "we could not tell" branch left.</b> The old one refused
+    ///         the value on a timeout — correctly, since the alternative would have turned one crafted
+    ///         string into a way past every pattern in the platform — but it was reachable by a busy
+    ///         host as well as by a hostile string, so a tenant's valid value could be refused because
+    ///         the silo was under load. The answer is now the same one on every machine.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Nothing is caught here.</b> A pattern that does not compile, or that the engine
+    ///         refuses, is a problem <see cref="SchemaProperty.Incoherences" /> reports and
+    ///         <see cref="ResourceSchema.Of" /> throws on at silo start. Reaching this method with one
+    ///         means a schema was built past <c>Of</c> — an object initialiser in a test — and that is
+    ///         a bug in this tree, which announces itself by throwing rather than by quietly becoming
+    ///         a <c>400</c> aimed at a caller who did nothing wrong.
+    ///     </para>
     /// </remarks>
-    static string? PatternProblem(string pattern, string value) {
-        try {
-            // Anchored, because an unanchored `pattern` is a search and a provider that wrote one got
-            // a validator that accepted anything containing a match — see the remarks on
-            // SchemaProperty.Pattern.
-            return Regex.IsMatch(value, "^(?:" + pattern + ")$", RegexOptions.None, SchemaProperty.PatternTimeout)
-                ? null
-                : $"does not match '{pattern}', which is applied to the whole value.";
-        } catch (RegexMatchTimeoutException) {
-            return "could not be checked against this property's pattern within the time budget, so it "
-                   + "is refused rather than accepted unchecked.";
-        }
-    }
+    static string? PatternProblem(string pattern, string value) =>
+        SchemaProperty.Matcher(pattern).IsMatch(value)
+            ? null
+            : $"does not match '{pattern}', which is applied to the whole value.";
 
     /// <summary>
     ///     What is wrong with a string under a format, or <see langword="null" /> when nothing is.

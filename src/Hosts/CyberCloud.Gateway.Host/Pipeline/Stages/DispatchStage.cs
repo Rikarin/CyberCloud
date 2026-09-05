@@ -227,6 +227,14 @@ sealed class DispatchStage(
     ///         changes nothing: the manager resumes at "the next member of THIS group whose path
     ///         sorts after this string", and the group it walks came from the rebuilt address.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And the parsed <c>$top</c> is used twice — for this page and for the
+    ///         <c>nextLink</c> of the next one (#76).</b> A page-shaping parameter that reaches the
+    ///         manager but not the link the client is told to follow applies to page one and to
+    ///         nothing after it, with no error anywhere; the argument is on
+    ///         <c>GatewayRouterPaths.NextLink</c>. Reading it into a local rather than parsing it
+    ///         twice is what keeps the request and the link describing the same request.
+    ///     </para>
     /// </remarks>
     async Task<GatewayOutcome> CollectionAsync(
         GatewayRequestContext context,
@@ -234,6 +242,7 @@ sealed class DispatchStage(
         CancellationToken cancellationToken
     ) {
         var query = context.Http.Request.Query;
+        var top = int.TryParse(query["$top"], CultureInfo.InvariantCulture, out var asked) ? asked : 0;
 
         var listed = await manager.ListAsync(
             new() {
@@ -241,7 +250,7 @@ sealed class DispatchStage(
                 Path = context.Route.CollectionPath,
                 ApiVersion = context.ApiVersion.Value,
                 Caller = context.Caller,
-                Top = int.TryParse(query["$top"], CultureInfo.InvariantCulture, out var top) ? top : 0,
+                Top = top,
                 Continuation = query["$skipToken"].ToString()
             },
             cancellationToken
@@ -261,6 +270,7 @@ sealed class DispatchStage(
                     options.PublicBaseUri,
                     context.Route.CollectionPath,
                     context.ApiVersion.Value,
+                    top,
                     page.Continuation
                 )
             )

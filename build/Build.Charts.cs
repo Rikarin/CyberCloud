@@ -1447,15 +1447,29 @@ partial class Build
                         break;
                     }
 
+                    // ⚠ Built with the SAME engine SchemaProperty.Matcher uses, so this file cannot
+                    // approve a `@pattern` the runtime validator would then refuse to run. It also
+                    // gets the constructed Regex into ChartPatterns for CheckPattern below.
                     try
                     {
-                        _ = Regex.Match(string.Empty, argument, RegexOptions.None, PatternTimeout);
+                        _ = ChartPattern(argument);
                     }
                     catch (ArgumentException malformed)
                     {
                         problems.Add(
                             $"{line}: `@pattern` is not a regular expression that compiles: "
                             + $"{malformed.Message}");
+
+                        break;
+                    }
+                    catch (NotSupportedException unsupported)
+                    {
+                        problems.Add(
+                            $"{line}: `@pattern` uses a construct the non-backtracking engine refuses: "
+                            + $"{unsupported.Message} The same pattern reaches SchemaProperty.Pattern, "
+                            + "which runs it against a caller-supplied string and therefore requires it "
+                            + "to be linear in the input — no lookarounds, backreferences or atomic "
+                            + "groups.");
 
                         break;
                     }
@@ -1538,10 +1552,30 @@ partial class Build
     static string? Empty(string value) => value.Length == 0 ? null : value;
 
     /// <summary>
-    ///     How long a <c>@pattern</c> may run against the empty string before it is a bug rather than a
-    ///     match — <c>SchemaProperty.PatternTimeout</c>'s value, restated here.
+    ///     A <c>@pattern</c> as the anchored, non-backtracking matcher <c>SchemaProperty.Matcher</c>
+    ///     builds for the same expression — the one place this file compiles one.
     /// </summary>
-    static readonly TimeSpan PatternTimeout = TimeSpan.FromMilliseconds(100);
+    /// <remarks>
+    ///     ⚠ <b>This used to be a 100 ms match timeout restating <c>SchemaProperty.PatternTimeout</c>,
+    ///     and it went the same way that member did (#76).</b> A .NET match timeout is wall clock, so
+    ///     a build machine under load could fail the chart gate on a pattern that matches instantly —
+    ///     a red about the host rather than about the tree, on a check whose whole input is text this
+    ///     repository committed. The hazard the budget guarded is real but it is on the request path,
+    ///     where the same pattern runs against a caller's string; the runtime answer there is
+    ///     <c>RegexOptions.NonBacktracking</c>, which is linear in the input by construction, and this
+    ///     file uses it too so that "the chart gate accepted it" and "the validator can run it" are one
+    ///     statement. The cache is not an optimisation: it is what lets the directive reader's compile
+    ///     probe and <see cref="CheckPattern" /> be the same object, so they cannot disagree.
+    /// </remarks>
+    static Regex ChartPattern(string pattern) =>
+        ChartPatterns.TryGetValue(pattern, out var cached)
+            ? cached
+            : ChartPatterns[pattern] = new Regex(Anchored(pattern), RegexOptions.NonBacktracking);
+
+    // A plain Dictionary and not a ConcurrentDictionary: this target walks the charts serially, and a
+    // lock-free type here would advertise a concurrency this file does not have. If chart checking is
+    // ever parallelised, this is one of the places that has to change with it.
+    static readonly Dictionary<string, Regex> ChartPatterns = new(StringComparer.Ordinal);
 
     // ── Literals ──────────────────────────────────────────────────────────────────────────────
 
@@ -1888,6 +1922,14 @@ partial class Build
     ///     <see cref="Regex.IsMatch(string, string)" /> — a search — would approve a default that
     ///     <c>helm lint</c> then rejects two steps later against this file's own output. The anchoring
     ///     is written once, in <see cref="Anchored" />, so the two cannot drift apart.
+    ///     <para>
+    ///         ⚠ <b>No timeout, and no catch for one.</b> <see cref="ChartPattern" /> is
+    ///         non-backtracking, so "this pattern did not finish" is not a state this check can be in;
+    ///         the branch that used to report it could be entered by a busy build agent as easily as
+    ///         by a hostile pattern, which made it a build failure about the machine (#76). A pattern
+    ///         that could backtrack is now refused where it is read, by the directive reader above,
+    ///         with a message naming the construct.
+    ///     </para>
     /// </remarks>
     static void CheckPattern(ChartValue value, ValueAnnotation annotation, List<string> problems)
     {
@@ -1896,20 +1938,8 @@ partial class Build
 
         var text = value.Default.GetValue<string>();
 
-        try
-        {
-            if (Regex.IsMatch(text, Anchored(annotation.Pattern), RegexOptions.None, PatternTimeout))
-                return;
-        }
-        catch (RegexMatchTimeoutException)
-        {
-            problems.Add(
-                $"{value.Line}: '{value.Name}' has a `@pattern` that did not finish matching its own "
-                + "default within 100ms. A pattern that backtracks is a pattern an attacker can hold "
-                + "the API open with.");
-
+        if (ChartPattern(annotation.Pattern).IsMatch(text))
             return;
-        }
 
         problems.Add(
             $"{value.Line}: '{value.Name}' defaults to `{text}`, which its own `@pattern "

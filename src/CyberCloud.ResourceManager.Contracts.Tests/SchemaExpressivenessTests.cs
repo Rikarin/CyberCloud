@@ -234,6 +234,92 @@ public sealed class SchemaExpressivenessTests {
         Should.Throw<ArgumentException>(() => Schema(new SchemaProperty("/s", SchemaKind.Text) { Pattern = "[a-" }))
             .Message.ShouldContain("does not compile");
 
+    /// <summary>
+    ///     The pattern that used to need a stopwatch, answered on its merits instead (#76).
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The assertion that matters is the <i>message</i>, not the elapsed time.</b> Under
+    ///         the 100 ms match timeout this replaced, this input was also refused inside a second —
+    ///         but refused with "could not be checked against this property's pattern within the time
+    ///         budget", which is the validator saying it gave up. <c>SchemaProperty.Matcher</c> is
+    ///         <c>RegexOptions.NonBacktracking</c>, so the engine is linear in the input by
+    ///         construction and the answer is the real one: this string does not match. A refusal that
+    ///         depends on how long the match took is a refusal that depends on how busy the silo is,
+    ///         and a tenant's valid value must not be rejected because a neighbouring request was
+    ///         expensive.
+    ///     </para>
+    ///     <para>
+    ///         <c>(a+)+b</c> against a run of <c>a</c>s ending in something else is the canonical
+    ///         exponential blow-up; the same shape, for the same reason, as
+    ///         <c>CyberCloud.Core.Tests.SecretShapedTextTests.ALongHostileStringIsAnsweredInLinearTimeRatherThanEventually</c>.
+    ///         The elapsed-time bound is kept as a second, coarse assertion: 5 s is not a performance
+    ///         claim, it is the difference between linear and never.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void APatternThatWouldBacktrackCatastrophicallyIsAnsweredRatherThanTimedOut() {
+        var schema = Schema(new SchemaProperty("/s", SchemaKind.Text) { Pattern = "(a+)+b" });
+        var hostile = new string('a', 60) + "!";
+
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        var validated = Validate(schema, $$"""{"s":"{{hostile}}"}""");
+        elapsed.Stop();
+
+        validated.IsFailure.ShouldBeTrue();
+        validated.Error!.Message.ShouldContain(
+            "does not match",
+            Case.Sensitive,
+            "the value was refused because the validator ran out of time rather than because it does "
+            + "not satisfy the pattern"
+        );
+
+        elapsed.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>
+    ///     And the same at declaration time, which is where the flake actually lived (#76).
+    /// </summary>
+    /// <remarks>
+    ///     <c>SchemaProperty.Incoherences</c> checks a declared <c>DefaultJson</c> against its own
+    ///     property's constraints, so before this change a schema was <i>constructed</i> under a wall
+    ///     clock — and <c>ResourceSchema.Of</c> is called from provider static initialisers and from
+    ///     every fixture builder in the suite.
+    ///     <c>ChartAnnotationTests.APointerNoTypeDeclaresAsPlacementIsStillAnOrdinaryChartRow</c> went
+    ///     red once on the time budget and green on re-run, which is a red about the host rather than
+    ///     about the tree. There is no way to assert "no wall clock was consulted" directly, so this
+    ///     asserts the observable consequence: the refusal names the mismatch a reader can act on and
+    ///     never a budget, on the worst pattern-and-literal pair a declaration can hold.
+    /// </remarks>
+    [Fact]
+    public void ADeclarationIsCheckedOnItsMeritsRatherThanAgainstAClock() =>
+        Should.Throw<ArgumentException>(
+                () => Schema(
+                    new SchemaProperty("/s", SchemaKind.Text) {
+                        Pattern = "(a+)+b",
+                        DefaultJson = "\"" + new string('a', 60) + "!\""
+                    }
+                )
+            )
+            .Message.ShouldContain("does not match", Case.Sensitive, "the declaration was judged by a stopwatch");
+
+    /// <summary>
+    ///     ⚠ <b>The price of the non-backtracking engine, charged where a provider can see it.</b>
+    /// </summary>
+    /// <remarks>
+    ///     A lookaround, a backreference or an atomic group is exactly the construct whose cost is not
+    ///     linear in the input, and a <c>Pattern</c> is applied to a caller-supplied string. So one is
+    ///     refused at declaration time with a message naming the rule, rather than accepted here and
+    ///     thrown from <c>Regex</c> at the first request that reached the property — the same
+    ///     "fail the process that would have served it" argument <c>ResourceSchema.Of</c> is built on.
+    /// </remarks>
+    [Fact]
+    public void APatternTheLinearEngineCannotRunIsRefusedAtDeclarationTime() =>
+        Should.Throw<ArgumentException>(
+                () => Schema(new SchemaProperty("/s", SchemaKind.Text) { Pattern = "(?=[a-z])[a-z0-9]+" })
+            )
+            .Message.ShouldContain("non-backtracking");
+
     // ── 9. Defaults and examples ───────────────────────────────────────────────────────────────
 
     [Fact]
