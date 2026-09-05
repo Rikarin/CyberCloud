@@ -33,18 +33,70 @@ requiredBy:
 # and its own comment reads "if empty and enabled=true defaults to `default`". Both halves were read
 # off chart 1.0.0. Turning `datastore.enabled` off, or setting a nameOverride, breaks every managed
 # cluster create until charts/managed/kubernetes' `dataStoreName` is changed to match.
+#
+# ⚠ THE SECOND OVERRIDE IS A SUPPLY-CHAIN ONE AND IT COSTS NOTHING, WHICH IS WHY IT IS WORTH DOING —
+# issue #75. Chart 1.0.0's etcd PRE-install hook (templates/etcd_job_preinstall.yaml) runs cfssl to
+# mint the etcd CA and its peer, server and root-client certificates, and its image is
+# `"{{ .Values.cfssl.image.repository }}:{{ .Values.cfssl.image.tag }}"` with the tag defaulting to
+# `latest` — values.yaml line 219, read off the packaged chart on 2026-09-05. A tag that names no
+# version is not a pin: whatever it points at today is not what it pointed at when this component was
+# written, and only images.sh would ever notice the change.
+#
+# ⚠ AND THE OVERRIDE IS BYTE-FOR-BYTE THE SAME IMAGE, MEASURED RATHER THAN ASSUMED. On 2026-09-05
+# both `cfssl/cfssl:latest` and `cfssl/cfssl:v1.6.5` resolve to
+# sha256:c9018c2ddf0b1f8dbef166057cc751d1becd5c3b0b7014cb9fe06972f725106f through the OCI
+# distribution API — `latest` is currently an alias for the newest release, and v1.6.5 is the newest
+# release Cloudflare has tagged. So this changes which LABEL is asked for and changes no bytes at
+# all, which is the cheapest possible way to stop depending on a moving one.
+# WHAT IT COSTS, said plainly: a cfssl 1.6.6 would no longer arrive on its own. That is what a pin
+# is for, and `images.sh` cannot tell anybody a newer version exists — only that this one moved.
+# WHAT MAKES IT STALE: a Kamaji chart bump that renames `cfssl.image.tag`, or a cfssl release worth
+# taking.
 values:
   datastore.enabled: "true"
+  cfssl.image.tag: "v1.6.5"
 
 # Every container image this component's pinned artefact renders, with the digest its registry served
-# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+# on 2026-09-05. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
 #
 # ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
 # chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
 # A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
 # directory — and `images.sh` is what turns that from invisible into a red run.
+#
+# ⚠ THE RESOLVE HALF OF images.sh WAS RE-RUN FOR THIS EDIT AND THE RENDER HALF WAS NOT, because the
+# machine that made it has no `helm` on PATH. All five references below were resolved through the OCI
+# distribution API on 2026-09-05 and all five served the digest recorded beside them; the cfssl tag
+# substitution is read off the chart's own template rather than off a render.
+# `./charts/bundle/images.sh --component kamaji` on a machine with helm is what closes that gap.
+#
+# ⚠ TWO ETCD REFERENCES, AND THEY ARE NOT TWO VERSIONS OF THE DATASTORE. Issue #75 records this as
+# "Kamaji pulls etcd at v3.5.1 AND v3.5.6 — two versions of the same component in one chart", which
+# is what the rendered output looks like and is not what the chart does. Read off chart 1.0.0 on
+# 2026-09-05:
+#   * templates/etcd_sts.yaml renders the etcd SERVER — the StatefulSet that is the datastore — as
+#     `{{ .Values.etcd.image.repository }}:{{ .Values.etcd.image.tag | default "v3.5.4" }}`, and
+#     values.yaml pins that tag at v3.5.6. One server, one version.
+#   * templates/etcd_job_postinstall.yaml line 51 renders an etcd CLIENT — a post-install Job whose
+#     `etcd-client` container runs `etcdctl member list`, adds the `root` user and enables auth — as
+#     the LITERAL string `quay.io/coreos/etcd:v3.5.1`. It is hard-coded: there is no values key for
+#     it, so it cannot be overridden from here at all, only forked.
+# So this is one etcd server and one etcdctl binary four patches older than it, inside the same 3.5
+# line and speaking the same v3 API, which is why nothing has failed. It is still worth its row: the
+# client image is a 2021 build pulled with `imagePullPolicy: Always` on every install, and closing it
+# is an upstream change. bundle.yaml § owed, `a-tag-that-names-no-version-is-not-a-pin`.
+#
+# ⚠ AND `clastix/kubectl` BELOW IS THE ONE ENTRY IN THIS BLOCK THAT IS A PROPERTY OF THE RENDERER
+# RATHER THAN OF THIS BUNDLE. All three etcd jobs render it as
+# `printf "clastix/kubectl:%s" (include "etcd.jobsTagKubeVersion" .)`, and that helper is
+# `v<.Capabilities.KubeVersion.Major>.<Minor>` — so the tag recorded here is whatever Kubernetes
+# version the helm that ran `images.sh` reported, and NOT what a cluster pulls. Against this
+# platform's own pin, `rancher/k3s:v1.35.7-k3s1`, this line would render `clastix/kubectl:v1.35`.
+# Recorded rather than fixed: making it match needs `helm template --kube-version` in images.sh, and
+# that changes what every component renders and so belongs with a re-record of all thirty-two rather
+# than with this edit.
 images:
-  - cfssl/cfssl:latest@sha256:c9018c2ddf0b1f8dbef166057cc751d1becd5c3b0b7014cb9fe06972f725106f
+  - cfssl/cfssl:v1.6.5@sha256:c9018c2ddf0b1f8dbef166057cc751d1becd5c3b0b7014cb9fe06972f725106f
   - clastix/kamaji:v1.0.0@sha256:d54553535ad43ef48dae79e416474e72f44292abeb252f6483a1aeb3b7b3cdc2
   - clastix/kubectl:v1.36@sha256:e0d36c70466434165766f9feda3a89550942b262696e0c40f60f8b2a6cc7df23
   - quay.io/coreos/etcd:v3.5.1@sha256:56aa454c329505b221216a60647ab315bf87c5bafe1ffe81c0af9014b496788a

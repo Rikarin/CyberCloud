@@ -217,8 +217,18 @@ re-resolves and compares:
 ./charts/bundle/images.sh --resolve            # regenerate the block after a bump
 ```
 
-**Thirty-two images across eighteen components**, counted on 2026-09-03; `prometheus-operator-crds`
-renders CustomResourceDefinitions and no container, and says so in `rendersNoWorkloadImages:`.
+**Thirty-two images across eighteen components**, re-counted on 2026-09-05 by summing the `images:`
+entries of all nineteen `component.yaml` files: one component carries five, one carries four, three
+carry three, one carries two, twelve carry one, and one carries none — 19 components, 32 entries.
+`prometheus-operator-crds` is the zero: it renders CustomResourceDefinitions and no container, and
+says so in `rendersNoWorkloadImages:`. The number goes stale when a component is added or removed,
+when a pin moves to a chart that renders a different number of containers, or when a `values:`
+override switches a workload on or off — so re-count rather than quote it.
+
+**Thirty-one of those thirty-two still serve the digest recorded beside them**, re-resolved through
+the OCI distribution API on 2026-09-05. The one that had moved was `bitnami/kubectl:latest`, in the
+forty-eight hours since the record was written — see the `latest` note below, and
+`bundle.yaml` § owed, `a-tag-that-names-no-version-is-not-a-pin`, for what was done about it.
 
 > ⚠ **A record, not a pin, and being exact about that is the point.** The tag is still what reaches
 > the kubelet. This detects a tag that moved; it does not prevent one. Preventing it needs a values
@@ -233,12 +243,26 @@ renders CustomResourceDefinitions and no container, and says so in `rendersNoWor
 > and manifest pins and has never read a digest. The true count of images checked by digest was zero
 > of nineteen. See `bundle.yaml` § owed, `images-are-not-pinned-by-digest`.
 
-> ⚠ **Two images in this bundle are `latest`.** `clickhouse-operator` renders
-> `bitnami/kubectl:latest` and `kamaji` renders `cfssl/cfssl:latest` — neither is ours to fix, both
-> are recorded with the digest they resolve to today, and `images.sh` is what will notice when they
-> move. `bundle.yaml` § owed, `two-images-in-this-bundle-are-latest`, has the reading on why
-> `bitnami/kubectl` is the sharper of the two, and why the two untagged references in the Kamaji
-> provider's CRD schema are deliberately *not* counted here.
+> ⚠ **No image in this bundle is `latest` any more, and the build fails if one is RECORDED as it
+> again.** — the gate reads the checked-in `images:` block, not a render, so an upstream chart bump
+> that starts rendering `latest` stays green until somebody re-runs `images.sh` and pastes the result.
+> That is the same distance between a record and the thing it records that this row is about, and it
+> is why the record is worth keeping short.
+> Two were until 2026-09-05: `clickhouse-operator` rendered `bitnami/kubectl:latest` and `kamaji`
+> rendered `cfssl/cfssl:latest`. The row that recorded them said "neither is ours to fix", and that
+> was too wide — both charts publish a values key for the image, which is upstream's own escape hatch
+> rather than a fork of their chart. `clickhouse-operator` now sets
+> `crdHook.image.repository: clastix/kubectl` and `crdHook.image.tag: v1.36.4`; `kamaji` now sets
+> `cfssl.image.tag: v1.6.5`, which on 2026-09-05 is the same digest `latest` served. **The
+> `bitnami/kubectl` half is not a style fix.** That tag *moved* in the forty-eight hours between the
+> record being written and issue #75 being worked, it is the only one of the thirty-two that did, its
+> repository has no versioned tag left to pin to — the versioned catalogue is in `bitnamilegacy/` —
+> and the bytes it now serves are `kubectl v1.37.0`, two minors ahead of this platform's own
+> `rancher/k3s:v1.35.7-k3s1` and outside kubectl's supported skew. The two `component.yaml` files
+> carry the full argument and the alternatives that were checked and rejected; `bundle.yaml` § owed,
+> `a-tag-that-names-no-version-is-not-a-pin`, carries the reading, the etcd half that is **still
+> owed**, and why the two untagged references in the Kamaji provider's CRD schema are deliberately
+> *not* counted here.
 
 The scan ADR-011 § Enforcement asks for is a different thing again, and `build/Build.Licence.cs`
 carries the measurement showing it cannot be written against the allow-list that ADR names: 76 of
@@ -349,6 +373,25 @@ What *is* verified, on every build, by the Bundle gate:
   `servesNoDefinitions: true`, and adding a `serves: storage.k8s.io/v1` beside it each turn this row
   red, with a different message;
 * the roster and the directories agree;
+* no `images:` entry names the tag `latest`. ⚠ A rule that could only be written *after* the two that
+  did were closed, on 2026-09-05, and one with no prose escape on purpose: `servesNoDefinitions:` and
+  `rendersNoWorkloadImages:` exist because a real component genuinely serves nothing and a real
+  component genuinely renders nothing, whereas a component that must pull `latest` is a decision
+  worth a diff in `build/Build.Bundle.cs` with the argument beside it. Sabotage-verified on
+  2026-09-05 by putting `bitnami/kubectl:latest@sha256:…` back into
+  `clickhouse-operator/component.yaml`: the row goes red naming the file and the entry;
+* no `component.yaml` carries a top-level key nothing reads. ⚠ This is the `imageDigest:` rule.
+  `redis-operator` carried that key with a comment saying `install.sh --verify` compared it, and
+  nothing ever did — a control that reads as a control and is not one, which is worse than no control
+  at all. A key the allow-list in `build/Build.Bundle.cs` does not name is now a failure naming the
+  key, and three of the twenty-three it does name are marked as read by a *person* rather than by a
+  script, because "documented" and "checked" being the same word is what `imageDigest:` traded on.
+  ⚠ `requiredBy:` moved into the required set in the same commit, and this table has claimed it was
+  required since it was written: the gate read six keys and the table listed seven. All nineteen
+  components already carried one, so the rule was true of the files and false of the machine.
+  Sabotage-verified on 2026-09-05 by renaming `requiredBy:` to `requiredBys:` in
+  `redis-operator/component.yaml` — two rows go red, one for the missing key and one for the key
+  nothing reads;
 * no commit changes a pin and a managed template together.
 
 What is verified **by hand, on a date recorded in each `component.yaml`**: every chart repository,

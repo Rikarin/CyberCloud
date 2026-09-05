@@ -40,20 +40,85 @@ requiredBy:
 # creates. Of the nine data-service operators here, this and Strimzi are the two whose defaults had
 # to be overridden; the other seven watch every namespace out of the box and were each checked rather
 # than assumed.
+#
+# ⚠ THE OTHER TWO OVERRIDES ARE ONE SUPPLY-CHAIN FIX, AND IT REPLACES THE ONLY `latest` THIS
+# COMPONENT EVER PULLED — issue #75. Chart 0.27.3 runs a pre-install/pre-upgrade hook Job that
+# `kubectl apply --server-side`s the four CustomResourceDefinitions the chart ships under `crds/`
+# (templates/hooks/crd-install-job.yaml), and its image is
+# `"{{ .Values.crdHook.image.repository }}:{{ .Values.crdHook.image.tag }}"` defaulting to
+# `bitnami/kubectl` and `latest` — read off the packaged chart on 2026-09-05, values.yaml lines 14-18.
+# Everything below was resolved against a registry, or run in a container, on 2026-09-05.
+#
+#   * `latest` IS NOT A PIN, AND HERE THAT IS MEASURED RATHER THAN ARGUED. The digest this file
+#     recorded on 2026-09-03 was sha256:e0fcb25c…; on 2026-09-05 Docker Hub served sha256:b29d8c16….
+#     Re-resolving ALL THIRTY-TWO references recorded across this directory on 2026-09-05 found
+#     thirty-one unchanged and this one moved. It is the only entry in the bundle that moved in two
+#     days, which is what a tag naming no version buys.
+#   * THE VERSIONED CATALOGUE HAS LEFT THE NAMESPACE, so "pin the tag we already use" was not on
+#     offer. `bitnami/kubectl` today carries exactly ONE human-readable tag — `latest` — beside
+#     cosign `.sig`/`.att`/`.metadata` artefacts; the versioned tags are in `bitnamilegacy/kubectl`,
+#     whose newest is 1.33.4. There is nothing in the live namespace to pin to.
+#   * AND THE BYTES IT MOVED TO ARE ALREADY OUT OF SKEW. `bitnami/kubectl:latest` reports
+#     `Client Version: v1.37.0`, run here on 2026-09-05. This platform's own cluster pin is
+#     `rancher/k3s:v1.35.7-k3s1` — src/CyberCloud.Kubernetes.Tests/Infrastructure/K3sFixture.cs — so
+#     `latest` is TWO minors ahead of the API server it would apply against, outside kubectl's
+#     supported ±1 skew. That is a present-tense defect rather than a future one.
+#
+# So the tag is overridden and the repository with it, because `crdHook.image.repository` and
+# `crdHook.image.tag` are both values keys: this is upstream's own escape hatch, not a fork of their
+# chart. Three alternatives were checked rather than dismissed, and each was rejected for a reason:
+#
+#   * `bitnamilegacy/kubectl:1.33.4` — resolves, and `docker run --entrypoint /bin/sh` shows a shell
+#     and `kubectl` at /opt/bitnami/kubectl/bin/kubectl, so it would work. Rejected because that
+#     namespace exists in order to be deleted: pinning into it is depending on somebody else's
+#     deprecation timetable, which is the thing issue #75 objects to, and a frozen archive takes no
+#     CVE fix ever.
+#   * `registry.k8s.io/kubectl:v1.34.1` — the obvious answer, and it does not work. It is distroless:
+#     `docker run --entrypoint /bin/sh registry.k8s.io/kubectl:v1.34.1` fails with
+#     `stat /bin/sh: no such file or directory`. The hook's `command:` is `/bin/sh -c` with a loop
+#     over the mounted definitions and is NOT a values key, so this image would turn a supply-chain
+#     hazard into an install that cannot start.
+#   * `crdHook.enabled: false` — no helper image at all, and helm installs the chart's own `crds/` on
+#     a first install. Rejected because helm never UPDATES `crds/` on an upgrade and install.sh runs
+#     `helm upgrade --install`: it would trade a hazard images.sh can see for a schema that silently
+#     stops being updated on every bump.
+#
+# What `clastix/kubectl:v1.36.4` has instead: a patch-level tag rather than a floating one; a
+# publisher THIS BUNDLE ALREADY PULLS FROM — charts/bundle/kamaji's three etcd jobs render
+# `clastix/kubectl:<kubeversion>` — so it adds no supplier and no new trust decision; the shape this
+# hook needs, verified here rather than assumed (`/bin/sh` present, `kubectl` on PATH at
+# /usr/local/bin/kubectl, `Client Version: v1.36.4`); and one minor above the platform's k3s pin,
+# which puts it INSIDE kubectl's supported skew window — where the bytes `latest` now serves
+# (v1.37.0) and clastix's own newest tag (v1.37.0, published 2026-08-27) both sit outside it. The
+# newest available tag was therefore the wrong answer here, and that is why it is not the one taken.
+#
+# ⚠ WHAT THIS IS NOT IS A DIGEST PIN, and the distinction is the same one redis-operator/component.yaml
+# records for its own image. The template composes `repository:tag` and nothing else, so this values
+# path can carry a tag and can never carry a digest. The block below is still a RECORD.
+# WHAT MAKES IT STALE: a clastix/kubectl v1.36 patch release, or this platform moving off Kubernetes
+# 1.35 far enough that v1.36.4 leaves the skew window.
 values:
   watchNamespaces[0]: ".*"
+  crdHook.image.repository: "clastix/kubectl"
+  crdHook.image.tag: "v1.36.4"
 
 # Every container image this component's pinned artefact renders, with the digest its registry served
-# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+# on 2026-09-05. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
 #
 # ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
 # chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
 # A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
 # directory — and `images.sh` is what turns that from invisible into a red run.
+#
+# ⚠ THE RESOLVE HALF OF images.sh WAS RE-RUN FOR THIS EDIT AND THE RENDER HALF WAS NOT, because the
+# machine that made it has no `helm` on PATH. Every reference below was resolved through the OCI
+# distribution API on 2026-09-05; the substitution of the third one is read off the chart's own
+# template rather than off a render. `./charts/bundle/images.sh --component clickhouse-operator` on a
+# machine with helm is what closes that gap, and it is the first thing to run over this change.
 images:
   - altinity/clickhouse-operator:0.27.3@sha256:0520bfb8015dcb270f0600f542cad117e637cdcdc791bfd71b7964ff067d1589
   - altinity/metrics-exporter:0.27.3@sha256:1e7c1d8167aad902513be37dcf7e439cf8a2564779a23008b8c81d879e71fb60
-  - bitnami/kubectl:latest@sha256:e0fcb25c485a8ad0665d0dd4b4a67cefb6baee32b0e3b19f54f1b468c49c1ed5
+  - clastix/kubectl:v1.36.4@sha256:e0d36c70466434165766f9feda3a89550942b262696e0c40f60f8b2a6cc7df23
 
 notes: >
   charts/managed/clickhouse/values.yaml carries twelve `@internal` rows where its siblings carry ten
