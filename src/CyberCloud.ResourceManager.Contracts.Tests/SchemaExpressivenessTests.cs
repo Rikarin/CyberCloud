@@ -253,8 +253,17 @@ public sealed class SchemaExpressivenessTests {
     ///         <c>(a+)+b</c> against a run of <c>a</c>s ending in something else is the canonical
     ///         exponential blow-up; the same shape, for the same reason, as
     ///         <c>CyberCloud.Core.Tests.SecretShapedTextTests.ALongHostileStringIsAnsweredInLinearTimeRatherThanEventually</c>.
-    ///         The elapsed-time bound is kept as a second, coarse assertion: 5 s is not a performance
-    ///         claim, it is the difference between linear and never.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And there is deliberately no elapsed-time bound, which this test carried for one
+    ///         review cycle and should not have.</b> A wall-clock assertion is the exact instrument
+    ///         #76 removes everywhere else: it turns a busy or oversubscribed agent into a red about
+    ///         the host rather than about the tree, which is the flake family (#67) this issue exists
+    ///         to stop growing. It also asserted nothing the message assertion does not already:
+    ///         restore the old budget and the message becomes the timeout's, which is exactly what
+    ///         the assertion below refuses; drop to the backtracking engine with no budget at all and
+    ///         the run never finishes, which the test host reports on its own. Neither outcome needs
+    ///         a stopwatch in the test body.
     ///     </para>
     /// </remarks>
     [Fact]
@@ -262,9 +271,7 @@ public sealed class SchemaExpressivenessTests {
         var schema = Schema(new SchemaProperty("/s", SchemaKind.Text) { Pattern = "(a+)+b" });
         var hostile = new string('a', 60) + "!";
 
-        var elapsed = System.Diagnostics.Stopwatch.StartNew();
         var validated = Validate(schema, $$"""{"s":"{{hostile}}"}""");
-        elapsed.Stop();
 
         validated.IsFailure.ShouldBeTrue();
         validated.Error!.Message.ShouldContain(
@@ -273,8 +280,6 @@ public sealed class SchemaExpressivenessTests {
             "the value was refused because the validator ran out of time rather than because it does "
             + "not satisfy the pattern"
         );
-
-        elapsed.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
     }
 
     /// <summary>
@@ -319,6 +324,79 @@ public sealed class SchemaExpressivenessTests {
                 () => Schema(new SchemaProperty("/s", SchemaKind.Text) { Pattern = "(?=[a-z])[a-z0-9]+" })
             )
             .Message.ShouldContain("non-backtracking");
+
+    /// <summary>
+    ///     And the refusal survives the property ALSO declaring a literal, which is the normal shape.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The case above misses this by construction, and the miss was a real escape.</b>
+    ///         <c>SchemaProperty.Incoherences</c> guards the compile probe and then, a few lines
+    ///         later, checks the declared <c>DefaultJson</c> by running it through the ordinary
+    ///         request-path validation — which builds the same matcher again, in
+    ///         <c>ResourceSchema.PatternProblem</c>, where nothing is caught on purpose. So a property
+    ///         with an unrunnable pattern <i>and</i> a default threw a bare
+    ///         <c>NotSupportedException</c> out of <c>ResourceSchema.Of</c>: it named neither the
+    ///         pointer nor the rule, it discarded every other problem the schema had, and it broke
+    ///         <c>Of</c>'s documented <c>ArgumentException</c> contract for every caller that asserts
+    ///         on it. Pattern-plus-default is not an exotic combination here —
+    ///         <c>Cidr.OptionalV4Pattern</c> and <c>PortRange.OptionalListPattern</c> exist precisely
+    ///         so that an optional patterned property can default to <c>""</c>, and every one of
+    ///         <c>NetworkSecurityGroups</c>' patterned properties is declared that way.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The default has to be a well-formed string of the property's own kind for this to
+    ///         test anything.</b> <c>ResourceSchema.ValueProblems</c> reports a kind mismatch and stops
+    ///         — a <c>42</c> here would never reach the constraint checks, so the pattern would never
+    ///         be built a second time and the test would pass against the defect. <c>"abc"</c> reaches
+    ///         them; <c>MinLength</c> is the independent problem, and it is checked <i>before</i> the
+    ///         pattern in <c>ConstraintProblems</c>, so it is also the thing the throw used to discard.
+    ///     </para>
+    ///     <para>
+    ///         So this asserts all three halves at once: the exception type, the worded refusal naming
+    ///         the pointer, and that the <i>other</i> problem on the same declaration still made it
+    ///         into the aggregated list.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void APatternTheLinearEngineCannotRunIsRefusedByNameEvenWithADefaultAlongside() {
+        var refusal = Should.Throw<ArgumentException>(
+            () => Schema(
+                new SchemaProperty("/s", SchemaKind.Text) {
+                    Pattern = "(?=[a-z])[a-z0-9]+",
+                    MinLength = 10,
+                    DefaultJson = "\"abc\""
+                }
+            )
+        );
+
+        refusal.Message.ShouldContain("'/s'");
+        refusal.Message.ShouldContain("non-backtracking");
+        refusal.Message.ShouldContain(
+            "the minimum is 10",
+            Case.Sensitive,
+            "the unrunnable pattern swallowed the other problem on the same declaration"
+        );
+    }
+
+    /// <summary>
+    ///     The same for a pattern that does not compile at all, and for an <c>ExampleJson</c>.
+    /// </summary>
+    /// <remarks>
+    ///     The compile failure takes the other <c>catch</c> in <c>SchemaProperty.Incoherences</c>, and
+    ///     an example is checked by the second <c>CheckLiteral</c> call rather than the first, so both
+    ///     of those are separate ways back into the throw this pins. <c>Regex</c> raises
+    ///     <c>ArgumentException</c> here rather than <c>NotSupportedException</c>, which is a different
+    ///     escape with the same shape: an exception naming a bracket instead of the pointer.
+    /// </remarks>
+    [Fact]
+    public void AMalformedPatternIsRefusedByNameEvenWithAnExampleAlongside() =>
+        Should.Throw<ArgumentException>(
+                () => Schema(
+                    new SchemaProperty("/s", SchemaKind.Text) { Pattern = "[a-", ExampleJson = "\"abc\"" }
+                )
+            )
+            .Message.ShouldContain("does not compile");
 
     // ── 9. Defaults and examples ───────────────────────────────────────────────────────────────
 

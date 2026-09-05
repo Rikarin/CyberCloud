@@ -932,8 +932,11 @@ single group needs is **one**. The remote is then a v4 slot and a v6 slot (`addr
   1–65535 grammar, six alternation branches with **disjoint leading digits** so it stays linear, and
   it refuses `0`, `65536` and `99999` with a `400` and a JSON Pointer **before the write path
   answers**. ⚠ It is deliberately *unlike* `Cidr.V4Pattern`, which is shape-only — a complete IPv6
-  grammar in one expression is a catastrophic-backtracking hazard on a request path and a bounded
-  decimal integer is not. **So this family now enforces exactly as much as each property can bear,
+  grammar in one expression is long, unreadable and, on a backtracking engine, a
+  catastrophic-backtracking hazard, and a bounded decimal integer is none of those. (#76 made
+  `SchemaProperty.Matcher` non-backtracking, which removes the last of those three from every request
+  path; the CIDR patterns stay shape-only because `Cidr.TryParse` is what decides meaning.) **So this
+  family now enforces exactly as much as each property can bear,
   rather than one rule for all of them.** What is left after the 202 is one relation, `min <= max`.
 - ⚠ **Failure class (b) was answered from the substrate and the answer is the good one.** Read in
   `pkg/ovs/ovn-nb-acl.go`: `CreateSgDenyAllACL` installs `outport == @{pg} && ip` and

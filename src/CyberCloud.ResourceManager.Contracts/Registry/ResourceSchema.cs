@@ -399,6 +399,22 @@ public readonly record struct SchemaProperty(
             );
         }
 
+        // ⚠ Whether the literal checks at the bottom of this method may consult the pattern. A
+        // pattern that does not compile, or that the linear engine refuses, is reported by name by
+        // the probe below — and then it must not be built a SECOND time, because the second build is
+        // not inside a try. CheckLiteral runs the ordinary request-path validation over the declared
+        // literal (ValueProblems → ConstraintProblems → PatternProblem), and PatternProblem catches
+        // nothing by design: reaching it with a pattern that cannot run is a bug in this tree, so it
+        // throws rather than becoming a 400 aimed at a caller. ConcurrentDictionary.GetOrAdd does not
+        // remember a factory that threw, so the throw comes back on every call. Pattern together with
+        // a literal is the NORMAL combination here — NetworkSecurityGroups' '/properties/ingress/
+        // remoteV4' declares Cidr.OptionalV4Pattern, DefaultJson "\"\"" and an ExampleJson, and its
+        // siblings across that family do the same — so without this the carefully worded refusal
+        // above escapes Incoherences as a bare NotSupportedException naming neither the pointer nor
+        // the rule, takes every other problem this method collected with it, and breaks Of's
+        // documented ArgumentException contract — #76's review found it.
+        var patternRuns = true;
+
         if (Pattern.Length > 0) {
             // ⚠ The probe builds the SAME matcher the request path runs and keeps it — see Matcher.
             // Compiling the bare pattern here, as this did, checked a different expression from the
@@ -406,8 +422,10 @@ public readonly record struct SchemaProperty(
             try {
                 _ = Matcher(Pattern);
             } catch (ArgumentException malformed) {
+                patternRuns = false;
                 problems.Add($"'{JsonPointer}' declares the pattern '{Pattern}', which does not compile: {malformed.Message}");
             } catch (NotSupportedException unsupported) {
+                patternRuns = false;
                 // The non-backtracking engine's refusal, and it is deliberately a declaration-time
                 // problem rather than a fallback to the backtracking one. A lookaround, a
                 // backreference or an atomic group is exactly the construct whose cost is not linear
@@ -433,8 +451,15 @@ public readonly record struct SchemaProperty(
             );
         }
 
-        CheckLiteral(nameof(DefaultJson), DefaultJson, problems);
-        CheckLiteral(nameof(ExampleJson), ExampleJson, problems);
+        // ⚠ The literal is still checked on everything else it declares — kind, bounds, length, the
+        // closed set — when the pattern is the thing that is broken. Dropping the literal checks
+        // altogether would hide a second, independent declaration bug behind the first, and the whole
+        // point of collecting into `problems` rather than throwing on the first one is that a
+        // provider gets the entire list from one silo start.
+        var checkable = patternRuns ? this : this with { Pattern = "" };
+
+        CheckLiteral(nameof(DefaultJson), DefaultJson, checkable, problems);
+        CheckLiteral(nameof(ExampleJson), ExampleJson, checkable, problems);
 
         return problems.ToImmutable();
     }
@@ -443,7 +468,22 @@ public readonly record struct SchemaProperty(
     ///     Checks a declared literal: that it parses, that it is of this property's kind, and — for a
     ///     default — that this property's own constraints accept it.
     /// </summary>
-    void CheckLiteral(string member, string literal, ImmutableArray<string>.Builder problems) {
+    /// <param name="member">Which member the literal came from, for the message.</param>
+    /// <param name="literal">The literal, as the provider wrote it.</param>
+    /// <param name="against">
+    ///     The property whose constraints the literal is judged by — <c>this</c>, except that
+    ///     <see cref="Incoherences" /> passes a copy with <see cref="Pattern" /> cleared when the
+    ///     pattern is itself one of the problems it is reporting. Building a matcher that already
+    ///     threw would throw again, out of a method whose whole contract is to return problems rather
+    ///     than to raise one.
+    /// </param>
+    /// <param name="problems">The collector.</param>
+    void CheckLiteral(
+        string member,
+        string literal,
+        SchemaProperty against,
+        ImmutableArray<string>.Builder problems
+    ) {
         if (literal.Length == 0) {
             return;
         }
@@ -461,7 +501,7 @@ public readonly record struct SchemaProperty(
             return;
         }
 
-        foreach (var problem in ValueProblems(this, parsed, JsonPointer)) {
+        foreach (var problem in ValueProblems(against, parsed, JsonPointer)) {
             problems.Add(
                 $"'{JsonPointer}' declares a {member} this property's own schema rejects: {problem.Message}"
             );
@@ -1155,6 +1195,18 @@ public sealed record ResourceSchema {
     ///         means a schema was built past <c>Of</c> — an object initialiser in a test — and that is
     ///         a bug in this tree, which announces itself by throwing rather than by quietly becoming
     ///         a <c>400</c> aimed at a caller who did nothing wrong.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Which is only true because <see cref="SchemaProperty.Incoherences" /> keeps it
+    ///         true, and that is not free.</b> <c>Incoherences</c> checks a declared
+    ///         <c>DefaultJson</c>/<c>ExampleJson</c> by running it through this very path, so a
+    ///         property that declares BOTH an unrunnable pattern and a literal would arrive here
+    ///         <i>from</i> the method whose job is to report that pattern as a problem — and the throw
+    ///         would replace a message naming the pointer and the rule with a bare
+    ///         <see cref="NotSupportedException" />, discarding every other problem collected for that
+    ///         schema. It clears <see cref="SchemaProperty.Pattern" /> for that check for exactly this
+    ///         reason (#76's review). Anything else that comes to validate a literal at declaration
+    ///         time owes the same care.
     ///     </para>
     /// </remarks>
     static string? PatternProblem(string pattern, string value) =>

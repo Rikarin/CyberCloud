@@ -37,8 +37,9 @@ public static class IpAddresses {
     /// <remarks>
     ///     ⚠ <b><see cref="Cidr.V4Pattern" /> without the length, and loose for the same reason.</b> It
     ///     accepts <c>999.1.1.1</c>, which <see cref="TryParse" /> then refuses; every alternative to
-    ///     <c>\d{1,3}</c> that enforces 0–255 is a longer expression with more backtracking in it, and
-    ///     this one runs on the request path against a caller-supplied string.
+    ///     <c>\d{1,3}</c> that enforces 0–255 is a longer expression that buys nothing
+    ///     <see cref="TryParse" /> does not already decide, and this one runs on the request path
+    ///     against a caller-supplied string.
     /// </remarks>
     public const string V4Pattern = @"(\d{1,3}\.){3}\d{1,3}";
 
@@ -47,8 +48,9 @@ public static class IpAddresses {
     /// </summary>
     /// <remarks>
     ///     ⚠ Deliberately permissive, for <see cref="Cidr.V6Pattern" />'s reason: a complete IPv6
-    ///     grammar in one expression is a known catastrophic-backtracking hazard on a request path with
-    ///     a 100 ms budget. ⚠ <b>It admits upper case and the substrate does not</b> —
+    ///     grammar in one expression is long, unreadable and — on a backtracking engine — a known
+    ///     catastrophic-backtracking hazard, which is why <c>SchemaProperty.Matcher</c> is not one
+    ///     (#76). ⚠ <b>It admits upper case and the substrate does not</b> —
     ///     <c>handleAddOvnEip</c> refuses an EIP whose <c>spec.v6Ip</c> contains an upper-case
     ///     character, by name — so <see cref="ProblemWith" /> refuses it here instead, where the caller
     ///     still gets a pointer.

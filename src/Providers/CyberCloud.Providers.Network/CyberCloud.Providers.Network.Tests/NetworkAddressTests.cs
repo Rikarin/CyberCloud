@@ -395,10 +395,11 @@ public sealed class NetworkAddressTests {
     [Fact]
     public void ThePatternAndTheParserDisagreeOnlyInTheDirectionThatIsSafe() {
         // ⚠ THE DIVISION OF LABOUR, PINNED. The Pattern is a SHAPE check that runs on the request
-        // path with a 100 ms budget, so it is deliberately linear and loose; TryParse decides
-        // meaning. What must never happen is the reverse — a value the pattern REFUSES that TryParse
-        // would have accepted — because that is a legal address space the API rejects for no reason
-        // the tenant can see.
+        // path against a caller-supplied string, under the non-backtracking engine
+        // SchemaProperty.Matcher builds (#76), so it is deliberately linear and loose; TryParse
+        // decides meaning. What must never happen is the reverse — a value the pattern REFUSES that
+        // TryParse would have accepted — because that is a legal address space the API rejects for no
+        // reason the tenant can see.
         const string PatternAcceptsParserRefuses = "999.0.0.1/8";
 
         System.Text.RegularExpressions.Regex
