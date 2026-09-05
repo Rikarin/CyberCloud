@@ -269,13 +269,17 @@ partial class Build
         // can be told about it; the gate in Build.Architecture.cs is the one CI forms a verdict from.
         // The alternative — leaving it to `Architecture` alone — is an author who runs `Generate`,
         // sees green, commits, and learns from CI what the compiler already knew locally.
+        List<GeneratedSdkFile> compiledSdk = [];
+
         if (GeneratedSdkBlocker() is { } blocker)
         {
             failures.Add(blocker);
         }
         else
         {
-            foreach (var compiled in CompiledGeneratedSdk())
+            compiledSdk = CompiledGeneratedSdk();
+
+            foreach (var compiled in compiledSdk)
             {
                 foreach (var error in compiled.Errors)
                 {
@@ -283,6 +287,20 @@ partial class Build
                         $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} does "
                         + $"not compile — {error}. The Generated surfaces comparison is byte-for-byte "
                         + "and byte-identical is not valid; fix the emitter, not the file.");
+                }
+
+                // ⚠ THE VACUITY GUARD, THE SAME ONE Build.Architecture.cs's `Generated SDK compiles`
+                // row carries. A file that parsed to nothing produces no errors, so the loop above
+                // would say nothing about it and this target would pass over a surface the generator
+                // emitted empty. A row that reports success over an empty compilation is the defect
+                // issue #73 was filed about, one level up.
+                if (compiled.Types == 0)
+                {
+                    failures.Add(
+                        $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} "
+                        + "declares no type at all, so it compiled clean by having nothing in it. A "
+                        + "surface with no types is a generator that produced nothing, not an SDK "
+                        + "that is correct.");
                 }
             }
         }
@@ -314,11 +332,19 @@ partial class Build
 
         if (failures.Count == 0)
         {
+            // ⚠ THE .NET SDK IS COUNTED HERE, NOT LEFT TO SILENCE — issue #73. The block above only
+            // ever ADDS failures, so on an empty glob its loop never runs and a success line that
+            // said nothing about the SDK would read exactly like one where every file compiled.
+            // Build.Architecture.cs's row reports ○ over a count for the same reason.
             Log.Information(
                 "Generate: {Count} document(s) regenerate byte-identically and break nothing published; "
-                + "{Client} TypeScript client file(s) for the portal",
+                + "{Client} TypeScript client file(s) for the portal; {Sdk} .NET SDK api-version "
+                + "file(s) declaring {Types} type(s), each compiled on its own against {Assembly}",
                 report.Documents.Count,
-                report.TypeScript.Count);
+                report.TypeScript.Count,
+                compiledSdk.Count,
+                compiledSdk.Sum(x => x.Types),
+                SdkAssemblyName);
 
             // ⚠ Zero files is news rather than silence, the same distinction Build.Charts.cs draws:
             // a run that emitted no client is not a run that emitted a correct one, and a portal
@@ -328,6 +354,20 @@ partial class Build
                 Log.Warning(
                     "Generate: the TypeScript client is empty, so portal/libs/api holds nothing the "
                     + "portal can import and every page would hand-roll its calls — issue #21.");
+            }
+
+            // ⚠ And the same distinction for the surface this target has just rewritten. Zero here
+            // is a glob that matched nothing — `SdkEmitter.DirectoryName` renamed out from under the
+            // literal above, or a generator that wrote no SDK at all — and either way the compile
+            // check said nothing because it had nothing to say, which is not the same as passing.
+            if (compiledSdk.Count == 0)
+            {
+                Log.Warning(
+                    "Generate: no api-version file was found under {Directory}/{Sdk}, so nothing was "
+                    + "handed to a compiler. `Generated SDK compiles` reports ○ over the same "
+                    + "count — issue #73.",
+                    DerivedSurfacesDirectory.Name,
+                    SdkSurfaceDirectory);
             }
 
             return;

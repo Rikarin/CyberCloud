@@ -1372,9 +1372,9 @@ partial class Build
     ///         <c>openapi/</c> is validated and diffed. <b>Nothing consumed the .NET SDK.</b> No
     ///         <c>.csproj</c> includes <c>generated/sdk/*.cs</c>, so the checked-in file had never
     ///         been handed to a compiler, and three separate defects shipped inside it —
-    ///         <c>CS0101</c>, <c>CS0246</c> and fourteen <c>CS0102</c>s — every one of them green
-    ///         under every gate here. This is the C# half of what <c>pnpm typecheck:api</c> has been
-    ///         doing for the TypeScript client all along.
+    ///         <c>CS0101</c>, <c>CS0246</c> and seventeen <c>CS0102</c>s over fourteen duplicated
+    ///         property names — every one of them green under every gate here. This is the C# half of
+    ///         what <c>pnpm typecheck:api</c> has been doing for the TypeScript client all along.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Reads the checked-in file, not the generator's output.</b> The row above proves

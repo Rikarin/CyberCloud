@@ -40,9 +40,9 @@ now has the checks that compiler found.
 
 ⚠ **And that one now has a compiler of its own** — issue #73 added `Generated SDK compiles` to
 `./build.sh Architecture`, which hands every `generated/sdk/{api-version}.cs` to Roslyn. It found two
-further defect families the same day (fourteen duplicate property names and 222 unset required
-members), which is the argument for this section rather than against it: the surface with a compiler
-is the surface whose defects are known.
+further defect families the same day (fourteen duplicated property names, and 110 unset required
+members across 22 resource types), which is the argument for this section rather than against it: the
+surface with a compiler is the surface whose defects are known.
 
 ## What the portal may assume about it
 

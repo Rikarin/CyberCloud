@@ -481,8 +481,9 @@ public sealed class DerivedSurfaceTests {
     /// <remarks>
     ///     The body is flattened onto one class, so <c>/properties/mode</c> and
     ///     <c>/properties/persistence/mode</c> both emitted <c>public … Mode { get; set; }</c> —
-    ///     <c>CS0102</c>, fourteen times over six resource types in
-    ///     <c>generated/sdk/2026-08-01.cs</c>, including <c>ValkeyCacheData.Mode</c> and
+    ///     <c>CS0102</c>: fourteen duplicated names over eight declaring types in
+    ///     <c>generated/sdk/2026-08-01.cs</c> — seventeen diagnostics, because three of the names were
+    ///     declared three times — including <c>ValkeyCacheData.Mode</c> and
     ///     <c>SubnetResource.ListAddressUsageResult.Total</c>. Only the nested one moves, which is
     ///     the rule <c>SdkEmitter.EnumNaming</c> already applied one level up to the enum TYPE names
     ///     of this very pair — the property names were left behind.
@@ -521,8 +522,9 @@ public sealed class DerivedSurfaceTests {
     /// <remarks>
     ///     <c>public {Model}Data Data { get; init; } = new();</c> is <c>CS9035</c> once per unset
     ///     required member, and nearly every published type requires at least one:
-    ///     <c>generated/sdk/2026-08-01.cs</c> carried 222 of them. The contradiction was inside this
-    ///     one emitter:
+    ///     <c>generated/sdk/2026-08-01.cs</c> carried 110 of them, over 22 resource types — the sum
+    ///     of each body's required members, which is why it is neither the 22 initialisers nor the
+    ///     file's 203 <c>required</c> declarations. The contradiction was inside this one emitter:
     ///     <c>AppendMember</c> gives a required schema property C#'s own <c>required</c> precisely so
     ///     that a body the API would refuse does not compile, and <c>new()</c> is exactly such a body.
     /// </remarks>

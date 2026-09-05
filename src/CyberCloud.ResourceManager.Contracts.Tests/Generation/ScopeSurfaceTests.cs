@@ -189,10 +189,14 @@ public sealed class ScopeSurfaceTests {
     /// </summary>
     /// <remarks>
     ///     The first version of the scope emitter produced a property typed <c>ScopeResourceType</c>
-    ///     and never emitted that enum. Nothing in this repository compiles
-    ///     <c>generated/sdk/*.cs</c> — it is an artifact, not a source file — so the byte gate was
-    ///     green, every test passed, and the first person to find out would have been the first
-    ///     person to consume the SDK. This is the cheapest check that would have caught it.
+    ///     and never emitted that enum. Nothing in this repository compiled
+    ///     <c>generated/sdk/*.cs</c> at the time — it is an artifact, not a source file — so the byte
+    ///     gate was green, every test passed, and the first person to find out would have been the
+    ///     first person to consume the SDK. This is the cheapest check that would have caught it.
+    ///     ⚠ It is not the only one any more: <c>Generated SDK compiles</c> (issue #73) hands the
+    ///     CHECKED-IN file to Roslyn, and a <c>CS0246</c> is exactly what it reports. This assertion
+    ///     reads what the emitter PRODUCES from a fixture no document carries, so neither replaces
+    ///     the other — the same division <c>TypeScriptSurfaceTests</c> records.
     /// </remarks>
     [Fact]
     public void TheSdkDeclaresTheScopeTypesItReferences() {
@@ -204,7 +208,9 @@ public sealed class ScopeSurfaceTests {
         sdk.ShouldContain("public enum ScopeResourceType {");
 
         // ⚠ A non-nullable string with no initialiser and no `required` is CS8618 wherever this file
-        // is compiled, which is nowhere in this repository.
+        // is compiled — which was nowhere in this repository until issue #73, and is `Generated SDK
+        // compiles` today. That gate is errors-only by design and CS8618 is a warning, so it would
+        // still let this one through; this assertion is what does not.
         sdk.ShouldContain("public required string Id { get; set; }");
     }
 

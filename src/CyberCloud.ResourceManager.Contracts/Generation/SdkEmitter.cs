@@ -319,10 +319,13 @@ public static class SdkEmitter {
     ///         asked for, on its first run.</b> The body of a resource is FLATTENED onto one class
     ///         (see the ⚠ on <see cref="AppendMember" />), so <c>/properties/mode</c> and
     ///         <c>/properties/persistence/mode</c> both became <c>public … Mode { get; set; }</c> on
-    ///         <c>ValkeyCacheData</c>. That is <c>CS0102</c>, and it was checked in fourteen times
-    ///         over six resource types — <c>ValkeyCacheData.Mode</c>,
+    ///         <c>ValkeyCacheData</c>. That is <c>CS0102</c>, and fourteen duplicated names were
+    ///         checked in over eight declaring types — <c>ValkeyCacheData.Mode</c>,
     ///         <c>SecurityGroupData.TcpPorts</c>, <c>KafkaClusterData.Size</c>,
-    ///         <c>SubnetResource.ListAddressUsageResult.Total</c> and nine more.
+    ///         <c>SubnetResource.ListAddressUsageResult.Total</c> and ten more. ⚠ <b>Fourteen names,
+    ///         SEVENTEEN diagnostics</b>: <c>Enabled</c> was declared three times on each of
+    ///         <c>KafkaClusterData</c>, <c>NATSClusterData</c> and <c>PostgreSQLServerData</c>, and
+    ///         the compiler reports one <c>CS0102</c> per redeclaration rather than one per name.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The shape is the third instance of one defect, not a new one.</b> The enum name
@@ -623,11 +626,19 @@ public static class SdkEmitter {
             .Append("    /// <summary>The resource's fully qualified id.</summary>\n")
             .Append("    public string Id { get; init; } = string.Empty;\n")
             // ⚠ `required`, NOT `= new()`, AND THE INITIALISER WAS CS9035 IN EVERY RESOURCE THAT HAS
-            // A REQUIRED BODY MEMBER — 222 of them across 24 types, found by the `Generated SDK
-            // compiles` gate on the day it was added (issue #73). `AppendMember` gives a schema's
-            // required properties C#'s own `required`, precisely so that a body the API would refuse
-            // does not compile; `new()` is exactly such a body, so the two decisions were in direct
-            // contradiction and the second one was in a file no compiler read.
+            // A REQUIRED BODY MEMBER — 110 of them across 22 {Model}Resource types, found by the
+            // `Generated SDK compiles` gate on the day it was added (issue #73). ⚠ 110, and the way
+            // to arrive at it is the reason the number is written down: CS9035 is one diagnostic per
+            // unset required member per `new()`, so it is the SUM over those 22 sites of each body's
+            // required members, not the site count and not the file's 203 `required` lines. Nor is
+            // it 111: LoadBalancerData declared `Port` twice, so its seven `required` lines were six
+            // required MEMBERS. Taken from Roslyn on 2026-09-05, over the pre-fix
+            // generated/sdk/2026-08-01.cs, with the compilation GeneratedSdkSurface.Compile builds.
+            //
+            // `AppendMember` gives a schema's required properties C#'s own `required`, precisely so
+            // that a body the API would refuse does not compile; `new()` is exactly such a body, so
+            // the two decisions were in direct contradiction and the second one was in a file no
+            // compiler read.
             //
             // `required` rather than dropping the initialiser and leaving it non-nullable, which is
             // CS8618, and rather than making it nullable, which would put a null check on the body of
@@ -994,8 +1005,12 @@ public static class SdkEmitter {
                 .Append("    public ")
                 // ⚠ `required` on the members the schema requires, exactly as AppendPayload does. A
                 // non-nullable string with no initialiser and no `required` is CS8618 in whatever
-                // project consumes this file — and nothing in THIS repository compiles it, so the
-                // first person to find out would be the first person to use the SDK.
+                // project consumes this file, and until issue #73 nothing in THIS repository
+                // compiled it at all. ⚠ That gate does NOT close this one: `Generated SDK compiles`
+                // is errors-only on purpose (which analysers a consuming project runs is that
+                // project's business — GeneratedSdkSurface says so), and CS8618 is a warning. So the
+                // first person to find out would still be the first person to use the SDK, and this
+                // line is what stops there being anything to find.
                 .Append(Required(leaf) ? "required " : string.Empty)
                 .Append(ClrType(EnumNaming.For("ScopeResource", leaves), leaf))
                 .Append(' ')

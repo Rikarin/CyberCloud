@@ -59,9 +59,11 @@ makes the gateway serve `openapi/` as files. Nothing here is served to anyone.
 
   ⚠ **The row above it compares BYTES, and byte-identical is not valid.** That distinction is not
   theoretical: `sdk/2026-08-01.cs` was shipping `CS0101` (a duplicated enum name), `CS0246` (an
-  action's enum referenced and never declared), fourteen `CS0102`s (duplicated property names, from
-  flattening a nested body) and 222 `CS9035`s (`= new()` for a body whose members are `required`) —
-  green under every gate in this repository, because nothing had ever handed the file to a compiler.
+  action's enum referenced and never declared), seventeen `CS0102`s over fourteen duplicated property
+  names (from flattening a nested body) and 110 `CS9035`s (`= new()` for a body whose members are
+  `required`) — green under every gate in this repository, because nothing had ever handed the file
+  to a compiler. Those counts are Roslyn's over the pre-fix file, not a build log's: `CS0102` is one
+  per redeclaration rather than per name, and `CS9035` is one per unset required member per `new()`.
 - **The portal's TypeScript client.** It exists (issue #21) and is generated from the same document
   by the same run, but it is written to `portal/libs/api/` rather than here — [03](../docs/plan/03-repository-layout.md)
   § Assembly graph rules, rule 6 gives the generator that directory, and `Build.Architecture` enforces

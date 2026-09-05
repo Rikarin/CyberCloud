@@ -44,11 +44,16 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         byte-identical is not valid.</b> Three defects shipped in
 ///         <c>generated/sdk/2026-08-01.cs</c> — <c>CS0101</c> from a duplicated enum name,
 ///         <c>CS0246</c> from an action's enum that was referenced and never declared, and
-///         <c>CS0102</c> from fourteen duplicated property names across six resource types — every
-///         one of them green under every gate in this repository, because no <c>.csproj</c> includes
-///         that file and nothing else handed it to a compiler. The first two were found by running
-///         <c>tsc</c> over a DIFFERENT surface and then reading the C# one by eye; the third was
-///         found by this file, on the day it was written.
+///         seventeen <c>CS0102</c>s from fourteen duplicated property names across eight declaring
+///         types — every one of them green under every gate in this repository, because no
+///         <c>.csproj</c> includes that file and nothing else handed it to a compiler. The first two
+///         were found by running <c>tsc</c> over a DIFFERENT surface and then reading the C# one by
+///         eye; the third was found by this file, on the day it was written.
+///         ⚠ <b>Fourteen names and seventeen diagnostics is not a rounding error</b> — three of the
+///         names (<c>Enabled</c>, on <c>KafkaClusterData</c>, <c>NATSClusterData</c> and
+///         <c>PostgreSQLServerData</c>) were declared three times each, and <c>CS0102</c> is emitted
+///         once per redeclaration. Counted on 2026-09-05 by compiling the pre-fix file with this
+///         very class.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Why this is not a throwaway <c>.csproj</c>, which is where issue #73 starts.</b>
@@ -62,10 +67,13 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///             (docs/plan/21 § Generation, and <c>CyberCloud.Sdk/EmitterContract.cs</c> § 3, which
 ///             is the contract those signatures are owed). A partial member with an accessibility
 ///             modifier and no implementation is <c>CS8795</c>, an ERROR — <c>&lt;NoWarn&gt;</c>
-///             cannot demote it — so a project including this file fails on 140 of them. Filtering
-///             one diagnostic id here is a line of code with an argument beside it; supplying 140
+///             cannot demote it — so a project including this file fails on 170 of them. Filtering
+///             one diagnostic id here is a line of code with an argument beside it; supplying 170
 ///             hand-written stubs, and one more for every method the emitter ever gains, is a second
-///             surface that drifts.
+///             surface that drifts. ⚠ <b>170, not 140.</b> One <c>CS8795</c> is emitted per partial
+///             MEMBER; 140 is the count of TYPES the file declares, and the two numbers are reported
+///             side by side in this gate's own line. Counted on 2026-09-05 against
+///             <c>generated/sdk/2026-08-01.cs</c>, which has 170 <c>public partial</c> members.
 ///         </item>
 ///         <item>
 ///             <b><c>generated/sdk/*.cs</c> is not one compilation and must never become one.</b>
