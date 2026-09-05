@@ -238,7 +238,11 @@ forty-eight hours since the record was written — see the `latest` note below, 
 > and manifest pins and has never read a digest. The true count of images checked by digest was zero
 > of nineteen. See `bundle.yaml` § owed, `images-are-not-pinned-by-digest`.
 
-> ⚠ **No image in this bundle is `latest` any more, and the build fails if one becomes it again.**
+> ⚠ **No image in this bundle is `latest` any more, and the build fails if one is RECORDED as it
+> again.** — the gate reads the checked-in `images:` block, not a render, so an upstream chart bump
+> that starts rendering `latest` stays green until somebody re-runs `images.sh` and pastes the result.
+> That is the same distance between a record and the thing it records that this row is about, and it
+> is why the record is worth keeping short.
 > Two were until 2026-09-05: `clickhouse-operator` rendered `bitnami/kubectl:latest` and `kamaji`
 > rendered `cfssl/cfssl:latest`. The row that recorded them said "neither is ours to fix", and that
 > was too wide — both charts publish a values key for the image, which is upstream's own escape hatch

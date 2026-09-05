@@ -485,8 +485,13 @@ partial class Build
         // ⚠ WHAT IT CANNOT SEE, said here rather than implied: an untagged reference. images.sh drops
         // CustomResourceDefinition documents, so the Kamaji provider's two untagged
         // `registry.k8s.io/kas-network-proxy/*` schema defaults never reach a record for this to
-        // check — that hazard belongs to charts/managed/kubernetes and is recorded there. Within the
-        // record itself an untagged entry is impossible: ImageReference requires a tag.
+        // check — that hazard belongs to charts/managed/kubernetes and is OWED there, not recorded:
+        // as of 2026-09-05 `git grep kas-network-proxy` matches this file, charts/bundle/bundle.yaml
+        // and charts/bundle/images.sh, and charts/managed/kubernetes/conformance.yaml names it
+        // nowhere. ⚠ The sentence said "and is recorded there" until that grep was run. Counting a
+        // hazard as tracked somewhere it is not is the defect #75 is about, one level up from the
+        // `imageDigest:` key nothing read. Within the record itself an untagged entry is impossible:
+        // ImageReference requires a tag.
         foreach (var image in images.Where(image => LatestTag.IsMatch(image)))
         {
             yield return
