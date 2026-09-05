@@ -736,6 +736,111 @@ public sealed class ChartAnnotationTests {
         block.Problems.ShouldContain(x => x.Contains(reason, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     A pattern the linear engine refuses is a named problem here too — and it is named even when
+    ///     the property also declares a <c>DefaultJson</c>, which is the shape that used to throw (#78).
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is #76's hole, one door over, and the door is the reason the test builds its
+    ///         schema by object initialiser.</b> #76 made <c>SchemaProperty.Matcher</c>
+    ///         <c>RegexOptions.NonBacktracking</c> with no match timeout, so a lookaround, a
+    ///         backreference or an atomic group is refused <i>by name</i> when the matcher is built;
+    ///         <c>SchemaProperty.Incoherences</c> catches that refusal, and — after #76's review —
+    ///         clears <c>Pattern</c> before running the declared literal through the ordinary
+    ///         request-path validation, because that path builds the same matcher a second time in
+    ///         <c>ResourceSchema.PatternProblem</c>, where nothing is caught on purpose.
+    ///         <c>ChartAnnotationEmitter</c> never calls <c>Incoherences</c> and reached that second
+    ///         build through <c>CheckAgainstOwnConstraints</c>, so a schema that never passed through
+    ///         <c>ResourceSchema.Of</c> — which is precisely what every belt check in this emitter
+    ///         exists for, and what <c>Emit(new ResourceSchema { … })</c> is here — threw a bare
+    ///         <c>NotSupportedException</c> out of a method whose contract is to collect problems.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>DefaultJson</c> has to be a well-formed string of the property's own kind or
+    ///         this test cannot fail.</b> <c>ResourceSchema.ValueProblems</c> reports a kind mismatch
+    ///         and stops, so a <c>42</c> would never reach the constraint checks and the matcher would
+    ///         never be built a second time. <c>MinLength</c> is the independent problem, checked
+    ///         <i>before</i> the pattern in <c>ConstraintProblems</c> — it is what the throw used to
+    ///         discard, and asserting it here is what proves the other half of the collector survived.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And the refusal is owed to the chart gate whether or not a literal is declared</b>
+    ///         — <c>build/Build.Charts.cs</c> compiles a <c>@pattern</c> with the same engine and the
+    ///         same anchoring, so writing one would fail the gate against a file this emitter had just
+    ///         written. The <c>[Theory]</c> row with no <c>DefaultJson</c> pins that half.
+    ///     </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("(?=[a-z])[a-z0-9]+")]
+    [InlineData("(?<![a-z])[a-z0-9]+")]
+    [InlineData("(?>[a-z]+)[0-9]")]
+    [InlineData(@"([a-z])\1")]
+    public void APatternTheLinearEngineCannotRunIsNamedRatherThanThrownOutOfTheEmitter(string pattern) {
+        var bare = Emit(new ResourceSchema {
+            Properties = [
+                new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Pattern = pattern }
+            ]
+        });
+
+        bare.Text.ShouldBeEmpty();
+        bare.Problems.ShouldContain(x => x.Contains("non-backtracking", StringComparison.Ordinal));
+        bare.Problems.ShouldContain(x => x.Contains("'/properties/gap'", StringComparison.Ordinal));
+
+        var withDefault = Emit(new ResourceSchema {
+            Properties = [
+                new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                new("/properties/gap", SchemaKind.Text, Description: "A gap.") {
+                    Pattern = pattern,
+                    MinLength = 10,
+                    DefaultJson = "\"abc\""
+                }
+            ]
+        });
+
+        withDefault.Text.ShouldBeEmpty();
+        withDefault.Problems.ShouldContain(x => x.Contains("non-backtracking", StringComparison.Ordinal));
+        withDefault.Problems.ShouldContain(
+            x => x.Contains("the minimum is 10", StringComparison.Ordinal),
+            "the unrunnable pattern swallowed the other problem the same declaration has"
+        );
+    }
+
+    /// <summary>
+    ///     The array case, which inherits the cleared pattern rather than needing its own guard (#78).
+    /// </summary>
+    /// <remarks>
+    ///     <c>ResourceSchema.ValueProblems</c> recurses into an array's elements with
+    ///     <c>property with { Kind = property.ElementKind, … }</c>, so the element carries whatever
+    ///     <c>Pattern</c> the array was handed — an empty one, once the emitter has cleared it. Without
+    ///     that inheritance the guard would hold for a <c>{string}</c> and not for a
+    ///     <c>{array}</c> of strings, which is the per-site-fix failure this repository keeps finding.
+    ///     ⚠ The default has to hold at least one element: an empty array never recurses, so
+    ///     <c>"[]"</c> here would pass against the defect.
+    /// </remarks>
+    [Fact]
+    public void AnArrayElementInheritsTheClearedPatternRatherThanRebuildingIt() {
+        var block = Emit(new ResourceSchema {
+            Properties = [
+                new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                new("/properties/gaps", SchemaKind.Array, Description: "Gaps.") {
+                    ElementKind = SchemaKind.Text,
+                    Pattern = "(?=[a-z])[a-z0-9]+",
+                    MinLength = 10,
+                    DefaultJson = "[\"abc\"]"
+                }
+            ]
+        });
+
+        block.Text.ShouldBeEmpty();
+        block.Problems.ShouldContain(x => x.Contains("non-backtracking", StringComparison.Ordinal));
+        block.Problems.ShouldContain(
+            x => x.Contains("the minimum is 10", StringComparison.Ordinal),
+            "the array element rebuilt the matcher the array itself was excused from building"
+        );
+    }
+
     [Fact]
     public void ASecretThatAlsoDeclaresAFormatIsRefusedBecauseBothWriteTheSameKeyword() {
         // `@secret` already means `format: password` — the three keywords OpenApiEmitter puts on a
