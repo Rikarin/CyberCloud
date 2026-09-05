@@ -251,11 +251,28 @@ public sealed partial class ClusterBackedGatingTests {
     ///         So the two terms cover different halves of one property and the guard is their OR.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>WHAT IS STILL NOT OBSERVED, stated rather than implied.</b> A static initialiser
-    ///         added here that reaches the disk WITHOUT going through either — its own
-    ///         <c>File.ReadAllText</c> on a path it computes for itself — re-creates issue #82 and
-    ///         leaves this green. No in-process flag can see that; only a reviewer can. This paragraph
-    ///         exists because the sentence below it used to claim the guard covered it.
+    ///         ⚠ <b>WHAT IS STILL NOT OBSERVED, stated rather than implied — and it is two things,
+    ///         not one.</b> First: a static initialiser added here that reaches the disk WITHOUT going
+    ///         through either — its own <c>File.ReadAllText</c> on a path it computes for itself —
+    ///         re-creates issue #82 and leaves this green. No in-process flag can see that; only a
+    ///         reviewer can. Second, and less obvious: <b>the second term is a LOWER BOUND, not a
+    ///         measurement.</b> <c>RepositoryWasResolvedBeforeThisClass</c> is a snapshot, so if any
+    ///         other class in this assembly resolved the root first the snapshot is already
+    ///         <c>true</c> and the term is structurally incapable of moving — a future initialiser
+    ///         here that reaches the repository through <c>TestPaths</c> rather than through
+    ///         <see cref="LazyBuildTestSource" /> is then invisible, and the guard stays green. So the
+    ///         delta answers "did THIS class's initialisation reach the repository" only when this
+    ///         class is the first to ask; otherwise it answers nothing and cannot say so.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ That is the same overstatement twice, and it is worth naming as a pattern rather
+    ///         than fixing quietly: #77's commit message called <c>ClusterBackedGatingTests</c> "the
+    ///         regression test" when it asserted nothing about the code it named, #82's first guard
+    ///         claimed to cover "initialising this class reaches the repository" when it watched one
+    ///         <c>Lazy</c>, and this paragraph's predecessor claimed the widened delta "closes" that
+    ///         class when it narrows it. A guard in this file has been described as stronger than it
+    ///         is on every attempt so far; the next person to widen it should assume the same of their
+    ///         own wording and write down what it cannot see before writing what it can.
     ///     </para>
     /// </remarks>
     static readonly bool ReachedTheRepositoryDuringTypeInitialisation;
@@ -337,9 +354,12 @@ public sealed partial class ClusterBackedGatingTests {
     /// <remarks>
     ///     ⚠ <b>It asserts a fact about the STATIC CONSTRUCTOR, because that is where issue #82
     ///     lived and nothing else in this class can see it.</b> Adding
-    ///     <c>_ = LazyBuildTestSource.Value;</c> to the static constructor, or a static initialiser
-    ///     that resolves <see cref="TestPaths.Repository" /> for any other reason, turns this red and
-    ///     leaves the other five green — which is the shape the defect had: every test passing on a
+    ///     <c>_ = LazyBuildTestSource.Value;</c> to the static constructor turns this red and
+    ///     leaves the other five green. A static initialiser that resolves
+    ///     <see cref="TestPaths.Repository" /> for some other reason turns it red <i>only when this
+    ///     class is the first in the assembly to resolve the root</i> — see the second half of
+    ///     <see cref="ReachedTheRepositoryDuringTypeInitialisation" />'s remarks, which says why that
+    ///     term is a lower bound rather than a measurement. Red here is the shape the defect had: every test passing on a
     ///     machine that has the source tree, and every test failing at once on a machine that does
     ///     not.
     ///     ⚠ <b>Why not the direct test</b> — run the class with the repository absent and watch the
