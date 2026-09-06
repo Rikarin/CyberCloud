@@ -470,6 +470,18 @@ public static class KafkaClusters {
                     // a generated values.yaml. The reasoning above is unaffected and the gap is not
                     // closed.
                     //
+                    // ⚠ AND THE "one case in ChartAnnotationEmitter and one in Build.Charts'
+                    // Validate" ABOVE UNDERCOUNTS — corrected by #84's review on the same day,
+                    // because it disagreed with the FIVE #84 wrote into ChartAnnotationEmitter and
+                    // the NINE it wrote into charts/README.md: three answers to one question in one
+                    // commit. Build.Charts' PropertyNode writes `pattern`, `minLength`, `maxLength`
+                    // and `format` onto the node itself for EVERY type and would have to move all
+                    // four into `items` on an array; its CheckPattern and CheckLength each return
+                    // unless the default is a JSON string, so an array default is checked against
+                    // nothing. Those three are the sites all three figures missed. The enumeration
+                    // is BY NAME, once, in charts/README.md § What a chart cannot say — this note
+                    // carries no figure of its own so it cannot drift from that one.
+                    //
                     // WHAT IT COSTS: a body may send "999.0.0.1/99" and be accepted. It reaches
                     // `loadBalancerSourceRanges`, where the API server refuses the Service, and the
                     // resource fails to converge AFTER the caller was told 202 — the exact failure

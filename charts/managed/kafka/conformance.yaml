@@ -132,8 +132,17 @@ owed:
       Charts failed on the file it had just written, so declaring Pattern here would have been red
       with the complaint pointing at a generated values.yaml; it is now red with the complaint
       pointing at this registration and naming the property. What it costs is unchanged, and so is
-      what would close it: emitting `items.pattern` for a text ElementKind, plus the cross-check in
-      Build.Charts' Validate.
+      what would close it — but NOT the two-site figure this entry carried, which the #84 review
+      found disagreeing with two other counts committed the same day: FIVE in ChartAnnotationEmitter
+      and NINE in charts/README.md. The sentence above, "Closing it is one case in
+      ChartAnnotationEmitter and one in Build.Charts' Validate", UNDERCOUNTS and predates #84.
+      Build.Charts' PropertyNode writes `pattern`, `minLength`, `maxLength` and `format` onto the
+      node itself for EVERY type and would have to move all four into `items` on an array, or JSON
+      Schema ignores them — which is the failure this whole item is about; and its CheckPattern and
+      CheckLength each return unless the default is a JSON string, so an array default would be
+      checked against nothing and `helm lint --strict` would reject the chart's own values two steps
+      later. The sites are enumerated BY NAME, once, in charts/README.md § What a chart cannot say.
+      This entry deliberately carries no figure of its own so that the two cannot drift apart again.
   - id: replication-factor-versus-node-count
     says: >
       The `replication-factor-fits-the-cluster` assertion above is not enforceable by the registry

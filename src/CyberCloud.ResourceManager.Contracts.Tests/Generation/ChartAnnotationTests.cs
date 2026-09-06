@@ -485,6 +485,82 @@ public sealed class ChartAnnotationTests {
         );
     }
 
+    /// <summary>
+    ///     The same three refinements on a kind that is neither a <c>{string}</c> nor an
+    ///     <c>{array}</c> — the half of the shipped guard's <c>Kind is not SchemaKind.Text</c> that
+    ///     <c>Kind is SchemaKind.Array</c> would not cover (#84 review).
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This exists because narrowing the guard to the reachable case left the suite
+    ///         green, so the paragraph in <c>CheckUnspellable</c> defending the wider form was
+    ///         defending a choice nothing measured.</b> The theory above pins the array of text — the
+    ///         one shape <c>SchemaProperty.Incoherences</c> lets through, because it collapses an
+    ///         array to its <c>ElementKind</c> before gating the three refinements on
+    ///         <c>value is not SchemaKind.Text</c>. Rewriting <c>property.Kind is not
+    ///         SchemaKind.Text</c> as <c>property.Kind is SchemaKind.Array</c> was measured on
+    ///         2026-09-06 against the commit that shipped the guard and left every test in this
+    ///         project green; with the rows below it is red. The sabotage recorded on that commit —
+    ///         <c>Kind is SchemaKind.Unknown</c> — disables the guard outright and so only re-proves
+    ///         the array row.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The declaration here is INCOHERENT, and that is exactly why it is built by object
+    ///         initialiser.</b> <c>Incoherences</c> gates <c>Pattern</c>,
+    ///         <c>MinLength</c>/<c>MaxLength</c> and <c>Format</c> on <c>value is not
+    ///         SchemaKind.Text</c>, and <c>value</c> is the kind itself for anything that is not an
+    ///         array — so <c>ResourceSchema.Of</c> refuses it, which the first assertion runs rather
+    ///         than asserts from memory. The only way such a registration reaches this emitter is a
+    ///         schema constructed as <c>new ResourceSchema { … }</c>, which never ran
+    ///         <c>Incoherences</c> at all. That is the belt <c>CheckUnspellable</c> is, stated as a
+    ///         test instead of as a comment.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And it is not a hypothetical construction.</b> <c>OpenApiEmitter</c> re-runs
+    ///         <c>Incoherences</c> over every property precisely because reaching an emitter with a
+    ///         schema that skipped <c>Of</c> is a thing that happens, and the
+    ///         <c>Emit(new ResourceSchema { … })</c> fixtures elsewhere in this file — the
+    ///         non-backtracking pattern ones from #76 and #78 among them — are the same shape.
+    ///     </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(SchemaKind.Boolean, "@pattern")]
+    [InlineData(SchemaKind.WholeNumber, "@length")]
+    [InlineData(SchemaKind.Number, "@format")]
+    public void AStringOnlyRefinementIsRefusedOnAKindThatIsNeitherTextNorAnArray(
+        SchemaKind kind,
+        string directive
+    ) {
+        var parent = new SchemaProperty("/properties", SchemaKind.Nested, Description: "The configuration.");
+
+        var bare = new SchemaProperty("/properties/gap", kind, Description: "A gap.");
+
+        var refined = directive switch {
+            "@pattern" => bare with { Pattern = "[a-z]+" },
+            "@length" => bare with { MinLength = 1, MaxLength = 63 },
+            _ => bare with { Format = SchemaFormat.Uuid }
+        };
+
+        // ⚠ The braces this guard is the belt for, run rather than remembered: no schema that went
+        // through `Of` can carry this declaration, which is what makes the object initialiser below
+        // the only route to it — and what makes a guard narrowed to `SchemaKind.Array` untestable
+        // through `Of` and therefore untested.
+        Should.Throw<ArgumentException>(() => ResourceSchema.Of([parent, refined]));
+
+        var block = Emit(new ResourceSchema { Properties = [parent, refined] });
+
+        // Nothing is written when anything was refused — the same rule as the array theory above.
+        block.Text.ShouldBeEmpty();
+        block.Problems.ShouldContain(
+            x => x.Contains("'/properties/gap'", StringComparison.Ordinal)
+                && x.Contains("`" + directive + "` refines a string", StringComparison.Ordinal),
+            $"`{directive}` on a {kind} survived CheckUnspellable, so the guard is narrower than "
+            + "`Kind is not SchemaKind.Text` — and a schema built as `new ResourceSchema { … }` "
+            + "would reach build/Build.Charts.cs with a directive it refuses on any `@param` that is "
+            + "not `{string}`."
+        );
+    }
+
     [Fact]
     public void EveryAnnotationBlockSitsDirectlyAboveTheKeyItDescribes() {
         // The block is the run of `## @` lines immediately above the key — a blank line or an ordinary

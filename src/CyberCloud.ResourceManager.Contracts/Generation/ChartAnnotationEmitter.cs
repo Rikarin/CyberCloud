@@ -689,8 +689,24 @@ public static class ChartAnnotationEmitter {
         // "999.0.0.1/99", be accepted, and fail at the API server AFTER the caller was told 202. This
         // refusal does NOT close that gap and must not be read as closing it: closing it means
         // emitting `items.pattern` / `items.minLength` / `items.maxLength` / `items.format` for a text
-        // element kind, which is the shape `@enum`-on-an-array already has, and that is one case here
-        // plus one in Build.Charts' Validate plus the reader, the table and charts/README.md. What
+        // element kind, which is the shape `@enum`-on-an-array already has.
+        //
+        // ⚠ CORRECTED 2026-09-06 BY #84's OWN REVIEW, WHICH FOUND THREE ANSWERS TO ONE QUESTION IN
+        // ONE COMMIT. This paragraph said "one case here plus one in Build.Charts' Validate plus the
+        // reader, the table and charts/README.md" — FIVE — while both conformance.yaml entries said
+        // TWO and charts/README.md said NINE. Two of that five are not needed at all: `@pattern`,
+        // `@length` and `@format` are ALREADY in the Directives allow-list and ALREADY have parse
+        // cases in TakeAnnotation, because what this gap is missing is a TYPE and not a word — which
+        // is also why the nine-sites-in-four-files figure, the measured cost of a directive that does
+        // not exist, cannot be it. And two nobody had mentioned ARE needed: PropertyNode writes
+        // `pattern`, `minLength`, `maxLength` and `format` onto the node itself for EVERY type, so on
+        // an array they have to move INTO `items` or JSON Schema ignores them — the very failure this
+        // refusal is about, one file over — and Build.Charts' CheckPattern and CheckLength each
+        // return unless the default is a JSON STRING, so an array default is checked against nothing
+        // and `helm lint --strict` would reject the chart's own values two steps later. The
+        // enumeration lives in charts/README.md § What a chart cannot say, named site by site, and
+        // that is the ONE place the figure is written down: this comment and the conformance entries
+        // point at it rather than carrying a count that can drift from it again. What
         // this does is make the two ends agree: the registration is refused where the mistake is,
         // with the property's own pointer on it, instead of the chart gate failing on a generated
         // values.yaml this emitter had just written.
