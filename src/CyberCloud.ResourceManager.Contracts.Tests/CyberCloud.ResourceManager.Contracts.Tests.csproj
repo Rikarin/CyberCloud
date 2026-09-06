@@ -5,6 +5,12 @@
       projection, the closed ReconcileOutcome, the backoff arithmetic and the 60-minute timeout
       message, and the write-trace ordering invariant.
 
+      It is also where the tree-reading guards live â€” QuantityParserTests, which scans src/ for a
+      second quantity grammar, and RoadmapReconciliationTests, which holds docs/plan/24's published
+      resource-type claims against openapi/. Neither needs a grain, a container or a reference to a
+      provider; both need the repository beside the artifacts directory, which they resolve from a
+      test body rather than a static initialiser (#82).
+
       ⚠ NO Testcontainers AND NO Aspire.Hosting HERE, AND NONE IS NEEDED. Nothing in this project
       touches a grain, so ADR-018's "real storage" rule does not reach it — that rule is about grain
       behaviour, and these are value types with no storage at all. The grain-backed half is

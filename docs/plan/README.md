@@ -55,8 +55,8 @@ status board.
 | 21 | [CLI and SDKs](21-cli-and-sdks.md) | `cyc`, the Azure-shaped .NET SDK, generation, other languages, the OpenAPI contract |
 | 22 | [Metering, Billing and Quota](22-billing-metering-and-quota.md) | The usage pipeline, rating, invoicing, cost visibility, quota, abuse |
 | 23 | [Build, CI and Testing](23-build-ci-and-testing.md) | Nuke, the architecture gates, the test layers, the chaos invariants, rollout |
-| 24 | [Roadmap](24-roadmap.md) | Five phases, exit criteria, ~90 EM, and the cut list in cutting order |
-| 25 | [Risks and Open Questions](25-risks-and-open-questions.md) | Ten ranked risks, ten open questions, and the four corrections to the brief |
+| 24 | [Roadmap](24-roadmap.md) | Five phases, exit criteria, 71.6–89.1 EM to M3 (reconciled against the tree 2026-09-06 — the range is a fact about the plan, not a hedge), and the cut list in cutting order |
+| 25 | [Risks and Open Questions](25-risks-and-open-questions.md) | Ten ranked risks, eleven open questions (five of them closed in place), and the six corrections to the brief |
 
 ## The load-bearing decisions, in one place
 
