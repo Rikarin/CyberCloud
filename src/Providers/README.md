@@ -235,6 +235,24 @@ finding:
   `/properties/external/allowedCidrs` carries **no** shape constraint and a malformed CIDR is
   accepted by the API and refused by the API server after the caller was told `202`. Closing it is
   one case in `ChartAnnotationEmitter` and one in `Build.Charts`' `Validate`.
+
+  > ⚠ **UPDATED 2026-09-06 (#84), AND THE UPDATE IS NOT THE FIX. This entry was the one site that
+  > kept the pre-#84 sentence** — `charts/managed/kafka/conformance.yaml`,
+  > `charts/managed/nats/conformance.yaml` and `KafkaClusters` were updated and this was not, so the
+  > provider-author entry point went on saying the case does not exist. It does:
+  > `ChartAnnotationEmitter.CheckUnspellable` refuses `@pattern`, `@length` and `@format` on any
+  > `@param` that is not a `{string}`, naming the property, the `SchemaProperty` member and the
+  > directive. It is a **refusal**, not the emission this gap is waiting for — declaring the `Pattern`
+  > is still red — so what changed is only WHERE the complaint lands. The `./build.sh Charts` message
+  > quoted above is therefore now the *second* thing that would go wrong rather than the first.
+  >
+  > ⚠ **And "one case in `ChartAnnotationEmitter` and one in `Build.Charts`' `Validate`" undercounts.**
+  > `PropertyNode` writes `pattern`, `minLength`, `maxLength` and `format` onto the node itself for
+  > *every* type and would have to move all four into `items` on an array — the very failure this
+  > bullet is about — and `CheckPattern` and `CheckLength` each return unless the default is a JSON
+  > string, so an array default is checked against nothing. The sites are enumerated **by name**,
+  > once, in `charts/README.md` § What a chart cannot say; #84 committed three disagreeing figures
+  > for this before its review reduced them to that one list.
 - **A bare k3s serves no REST path for a custom resource, and the failure names nothing.** The
   sample's cluster-backed suite renders a core-group `ConfigMap`, whose path the API server serves
   without being told; a Strimzi `Kafka`'s does not exist, and the client cannot discover the group,

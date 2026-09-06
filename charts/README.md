@@ -438,6 +438,86 @@ The gap runs the other way, and it is where a fact can be lost:
 * **`@secret` is a string's directive and `@widget` renders one scalar field.** `SchemaProperty` does
   not enforce either — `Incoherences` permits a `WidgetHint` on an array — so the emitter refuses
   what the chart reader would.
+* **`@pattern`, `@length` and `@format` refine a *string*, and an ARRAY OF TEXT is the one place the
+  registry disagrees.** `Build.Charts` refuses all three on any `@param` whose type is not
+  `{string}`, for the reason its own comment gives: they are JSON Schema keywords that are *silently
+  ignored* on every other type, so the directive reads as a constraint and validates nothing.
+  `SchemaProperty.Incoherences` refuses them too — but only after collapsing an array to its
+  `ElementKind` (`var value = Kind is SchemaKind.Array ? ElementKind : Kind`), so **an array of text
+  carrying a `Pattern`, a length bound or a `SchemaFormat` is a perfectly coherent registration**
+  which `ResourceSchema.Validate` enforces per element. Until **2026-09-06 (#84)** the emitter wrote
+  it anyway — `## @param x {array}` followed by `## @pattern …` — and `./build.sh Charts` then failed
+  on the file the emitter had just written, pointing at a generated `values.yaml` line rather than at
+  the registration. `CheckUnspellable` now refuses it, naming the property, the `SchemaProperty`
+  member and the directive.
+
+  > ⚠ **That is the refusal, not the closing of the gap, and the gap has two real users waiting.**
+  > `KafkaClusters` and `NatsClusters` both want `Pattern = CidrPattern` on
+  > `/properties/external/allowedCidrs` and withhold it *only* because this surface refuses it —
+  > `charts/managed/kafka/conformance.yaml` and `charts/managed/nats/conformance.yaml` carry the cost
+  > as `cidr-shape-is-unenforced`: a body may send `999.0.0.1/99`, be accepted, reach
+  > `loadBalancerSourceRanges` and fail at the API server **after** the caller was told `202`. Closing
+  > it for real means emitting `items.pattern` / `items.minLength` / `items.maxLength` /
+  > `items.format` for a text element kind — the same per-element shape the `@enum`-on-an-array bullet
+  > above already has. #84 deliberately did not attempt it; it made the two ends agree about what is
+  > refused so that the complaint lands where the mistake is.
+  >
+  > ⚠ **CORRECTED 2026-09-06 by #84's own review: this said it was "the *same* nine-sites-in-four-files
+  > shape as the five that closed on 2026-08-12", and it is not.** Nine-in-four is the *measured* cost
+  > of a directive the vocabulary **does not have**, and four of those nine are precisely the sites a
+  > directive that already exists does not need — the `Directives` allow-list, the parse case in
+  > `TakeAnnotation`, its field on `ValueAnnotation`, and the `Subset` checker's fourth copy of the
+  > table. `@pattern`, `@length` and `@format` sit in all four today, on a `{string}`:
+  > `git grep -n '"pattern",' -- build/Build.Charts.cs '*ChartAnnotationTests.cs'`,
+  > `git grep -n 'string? Pattern' -- build/Build.Charts.cs` and
+  > `git grep -n 'case "pattern":' -- build/Build.Charts.cs`. What this gap is missing is a **type**,
+  > not a word, which is a different and smaller change — and #84 committed three different figures
+  > for it in one go (**two** in the two `conformance.yaml` entries, **five** in
+  > `ChartAnnotationEmitter`, **nine** here), which is worse than any one of them being wrong.
+  >
+  > **So the sites, named rather than counted, because the note this replaces was an integer written
+  > before anyone tried it and the 2026-08-12 correction above exists for exactly that reason. This
+  > is still a prediction. Check it, do not trust it:**
+  >
+  > 1. **`build/Build.Charts.cs` `Validate`** — `if (present && annotation.Type is not "string")` has
+  >    to let an array through.
+  > 2. **`build/Build.Charts.cs` `PropertyNode`** — it writes `pattern`, `minLength`, `maxLength` and
+  >    `format` onto the node itself for *every* type, and builds `items` in a separate
+  >    `Type is "array"` branch. On an array those four keywords must move **into** `items`, or they
+  >    are ignored — which is the exact failure the refusal above is about, one file over.
+  > 3. **`build/Build.Charts.cs` `CheckPattern`** — it returns unless the default is a JSON *string*,
+  >    so an array default is checked against nothing. Per element, or a chart's own `values.yaml` may
+  >    violate its own emitted `items.pattern` and `helm lint --strict` rejects it two steps later,
+  >    with Helm's message rather than one naming the line.
+  > 4. **`build/Build.Charts.cs` `CheckLength`** — the same early return, the same consequence.
+  > 5. **`ChartAnnotationEmitter.CheckUnspellable`** — the #84 refusal narrows to "not text *and* not
+  >    an array of text". `Render` needs nothing: it already appends `## @pattern`, `## @length` and
+  >    `## @format` for any property carrying them, whatever its kind, which is how the defect #84
+  >    closed got out in the first place.
+  > 6. **§ The annotation format above** — the `@length`, `@pattern` and `@format` rows say `string`
+  >    under *Applies to*, and would say `string`, `array` with `items.…` under *Emits*, as `@enum`'s
+  >    row already does.
+  > 7. **`ChartAnnotationTests`** — the two #84 theories assert the refusal and invert.
+  >
+  > **Seven sites in four files** on the same accounting that produced nine, four of them in
+  > `build/Build.Charts.cs` and two of those four (3 and 4) the ones a prediction would miss, being
+  > the half that guards the chart's own defaults rather than the schema it emits. This entry is the
+  > count; `charts/managed/kafka/conformance.yaml`, `charts/managed/nats/conformance.yaml`,
+  > `KafkaClusters` and `src/Providers/README.md` point here rather than carrying a figure of their
+  > own.
+  >
+  > ⚠ **And #84's own claim that "no registered array-of-text property declares one today" is wrong,
+  > which is worth knowing before the next reader trusts it.**
+  > `CyberCloud.Sample/widgets`' `/properties/allowedCidrs` declares
+  > `Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}"` on an `ElementKind = SchemaKind.Text`. Counted
+  > 2026-09-06: `src/` outside `*.Tests/` holds **eight** `SchemaKind.Array` property declarations and
+  > `SampleWidgets.cs` is the **only** one carrying a string refinement — the two at
+  > `/properties/external/allowedCidrs` are *comments* saying the `Pattern` was withheld. (Stale the
+  > moment a ninth array property is added, or one is built through a helper rather than a literal
+  > `SchemaKind.Array,` argument.) Nothing is red because the Sample provider names **no** chart —
+  > 21 of the registry's 22 resource types name one, and its type is the 22nd — so the emitter never
+  > sees the property; and if it ever did, that same property's `Widget = WidgetHint.Cidr` on an array
+  > was already refused by the bullet above. The conclusion held; the premise did not.
 
 * **A nested `@internal` row is preserved too, and until 2026-08-12 it was not.** `Rewrite` walked
   root keys only, so `bootstrap.password` — `@internal`, inside the *generated* `bootstrap:` object —

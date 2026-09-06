@@ -460,6 +460,28 @@ public static class KafkaClusters {
                     // enforced by nothing — and conformance.yaml § owed carries it as
                     // `cidr-shape-is-unenforced`.
                     //
+                    // ⚠ UPDATED 2026-09-06 (#84) AND STILL NOT DECLARED. ChartAnnotationEmitter has
+                    // the case now, and it is a REFUSAL rather than the emission this note is
+                    // waiting for: CheckUnspellable names the property, the SchemaProperty member
+                    // and the directive. Before #84 the emitter wrote `## @param allowedCidrs
+                    // {array}` followed by `## @pattern …` and the gate refused the file the emitter
+                    // had just written — so declaring the Pattern was red either way, and what
+                    // changed is only that the complaint would now arrive at THIS line instead of at
+                    // a generated values.yaml. The reasoning above is unaffected and the gap is not
+                    // closed.
+                    //
+                    // ⚠ AND THE "one case in ChartAnnotationEmitter and one in Build.Charts'
+                    // Validate" ABOVE UNDERCOUNTS — corrected by #84's review on the same day,
+                    // because it disagreed with the FIVE #84 wrote into ChartAnnotationEmitter and
+                    // the NINE it wrote into charts/README.md: three answers to one question in one
+                    // commit. Build.Charts' PropertyNode writes `pattern`, `minLength`, `maxLength`
+                    // and `format` onto the node itself for EVERY type and would have to move all
+                    // four into `items` on an array; its CheckPattern and CheckLength each return
+                    // unless the default is a JSON string, so an array default is checked against
+                    // nothing. Those three are the sites all three figures missed. The enumeration
+                    // is BY NAME, once, in charts/README.md § What a chart cannot say — this note
+                    // carries no figure of its own so it cannot drift from that one.
+                    //
                     // WHAT IT COSTS: a body may send "999.0.0.1/99" and be accepted. It reaches
                     // `loadBalancerSourceRanges`, where the API server refuses the Service, and the
                     // resource fails to converge AFTER the caller was told 202 — the exact failure
