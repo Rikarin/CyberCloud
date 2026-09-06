@@ -257,7 +257,12 @@ region migration is called *budgeted* in [04 § Failure and upgrade](04-orleans-
 **here** for it (*"— [24](24-roadmap.md), M3"*), which is what makes this page the only place it is
 priced rather than merely the first. Everything else comes from [01](01-azure-parity-catalogue.md),
 [12 § Effort](12-managed-data-services.md) or, for full webmail, [17 § Effort](17-communication-and-email.md)'s
-*"+2.0 (M3)"*.
+*"+2.0 (M3)"* — **except the two rows the paragraph below un-daggers**, whose prices come from
+[18](18-security-vault-and-malware-scan.md) and [21 § Effort](21-cli-and-sdks.md) and from nowhere in
+01/12/17. ⚠ That exception is written here rather than left to the reader to notice, because the
+sentence was still saying "everything else" on 2026-09-06 after the rows it was wrong about had already
+been corrected below it — a footnote whose negative half is fixed and whose positive half is not is the
+same defect one clause over, in the one paragraph that exists to say where numbers come from.
 
 ⚠ **This dagger stood on two more rows until 2026-09-06 and was false on both, which is worth saying
 rather than quietly correcting** — provenance is the dagger's entire purpose, so a dagger on a row that
