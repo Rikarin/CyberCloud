@@ -192,9 +192,23 @@ independent witness to the same fact the type list gives and is worth more than 
 
 ⚠ **This phase's rows sum to 38.4 EM against a 28 EM heading, and this document never says why.**
 Phase 2 states its own parallelism in a parenthetical — *"sums to ~44; ~18 of it runs in parallel"* —
-and phase 3 does not, so the 10.4 EM difference is a critical-path assumption that exists only in the
-[§ Running total](#running-total) column header. That was harmless while nothing had shipped. It is not
-harmless now: it is exactly what stops 4.4 EM of finished work being subtracted from the 28.
+and phase 3 does not.
+
+⚠ **There are two explanations for the 10.4 EM and this reconciliation cannot choose between them, so
+it names both.** (1) A critical-path assumption, unstated here and surviving only in
+[§ Running total](#running-total)'s column header — which is how this document read it until
+2026-09-06. (2) **The simpler one, and the one with evidence behind it:** the heading is not this
+phase's arithmetic at all. [01 § Summary of scope](01-azure-parity-catalogue.md)'s M2 milestone total
+is **28**, and its M3 total is **20** — phase 4's heading, to the digit. Two headings taken from the
+milestone budget of another document is enough to say these are a **top-down** allocation while the rows
+below them are **bottom-up** per-item estimates, in which case the difference was never parallelism and
+the two numbers were never the same quantity. ⚠ The third milestone does not match and is not evidence
+either way: doc 01's M1 total is **46** against phases 0–2's 1.5 + 14 + 26 = **41.5**, which is its own
+disagreement and is recorded in [§ Running total](#running-total). ⚠ The effect on the plan is the same under either reading and is the reason it is
+written here: 4.4 EM of finished work still cannot simply be subtracted from the 28, because it is not
+established that the 28 ever contained it. Under reading (2) it is not even certain that it should
+shrink the 28 at all. Deciding this is a scheduling exercise on one side and a re-estimate on the
+other — see [§ Running total](#running-total), which is where the consequence is carried.
 
 **Exit:** 28 resource types; paying customers on self-serve billing; a BYO on-prem cluster in
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
@@ -228,25 +242,66 @@ the design was never as absent as the line made it look.
 | Virtual desktops | #52 | 2.0 | |
 | CDN / http-cache | #53 | 1.0 † | |
 | Resource graph API | #54 | ⚠ none | |
-| Security posture | #55 | 1.5 † | |
+| Security posture | #55 | 1.5 | |
 | GPU pools and fractional sharing | #56 | ⚠ none | |
 | Placement policies | #57 | ⚠ none | |
 | Region migration | #58 | 1.0 † | |
-| Terraform provider | #59 | 1.5 † | |
+| Terraform provider | #59 | 1.5 | |
 | Full webmail | #60 | 2.0 | |
 
-† Priced **only** in this document's own cut list — these four rows appear nowhere else with a number
-against them. Everything else comes from [01](01-azure-parity-catalogue.md),
+† Priced **only** in this document's own cut list — **CDN and region migration**, and those two only,
+appear nowhere else with a number against them. [01](01-azure-parity-catalogue.md) gives CDN a
+namespace, an M3 verdict and no estimate, and [14](14-networking.md)'s `cdnProfiles` row does the same;
+region migration is called *budgeted* in [04 § Failure and upgrade](04-orleans-topology.md) and
+[25 § R6](25-risks-and-open-questions.md) without a number in either — and doc 04 sends the reader
+**here** for it (*"— [24](24-roadmap.md), M3"*), which is what makes this page the only place it is
+priced rather than merely the first. Everything else comes from [01](01-azure-parity-catalogue.md),
 [12 § Effort](12-managed-data-services.md) or, for full webmail, [17 § Effort](17-communication-and-email.md)'s
 *"+2.0 (M3)"*.
+
+⚠ **This dagger stood on two more rows until 2026-09-06 and was false on both, which is worth saying
+rather than quietly correcting** — provenance is the dagger's entire purpose, so a dagger on a row that
+*does* have a source elsewhere is the one kind of error it cannot afford. **Security posture** is priced
+outside this document twice: [18](18-security-vault-and-malware-scan.md)'s own heading
+*"`CyberCloud.Security/assessments` — posture · M3 · 1.5 EM"* and the `Posture assessments | M3 | 1.5`
+line in its § Effort table — and a third time in **#42**, which is the issue this table's `Issue` column
+cites as its source, as *"#55 Security posture — `CyberCloud.Security/assessments` · 1.5 EM"*. The
+**Terraform provider** is priced in [21](21-cli-and-sdks.md) as *"~1.5 EM even generated"* and again as
+`Terraform provider | 1.5 (M3)` in its § Effort table. Both external figures equal the cut-list ones, so
+no total in this document moves; what moves is where the numbers came from, and a row whose estimate has
+an outside witness is a different thing from a row whose estimate has only this page.
 
 ⚠ **Thirteen of the seventeen carry an estimate; they sum to 16.9 EM against a 20 EM heading, and the
 other four carry no estimate anywhere** — the policy engine, the resource graph API, GPU pools and
 placement policies. That leaves 3.1 EM implied between the four, and #42 already prices the policy
 evaluator alone at *"roughly 1.0 + 1.5 EM plus the engine"* when it is built once for its three subjects
-and much worse when it is built three times. **So phase 4's headline is the one number in this plan with
-no derivation underneath it**, and 1.8 EM of it has now been spent early while 0.6 of it was never real.
-Marking the two shipped rows without saying that would make the 20 look better-founded than it is.
+and much worse when it is built three times. 1.8 EM of it has now been spent early while 0.6 of it was
+never real, and marking the two shipped rows without saying that would make the 20 look better-founded
+than it is.
+
+⚠ **Corrected 2026-09-06, and it is the correction that matters more than the paragraph it sits under.**
+This section published *"phase 4's headline is the one number in this plan with no derivation underneath
+it"*, in bold, and that is false — the derivation is one document away and this reconciliation used that
+document for six other rows without reading the table at the end of it.
+[01 § Summary of scope](01-azure-parity-catalogue.md) splits the milestone budgets **top-down**:
+
+| Milestone (doc 01) | Providers | Provider EM | Platform EM | Total | This document's heading |
+|---|---|---|---|---|---|
+| M1 | 12 | 20 | 26 | **46** | phases 0–2 sum to **41.5** — ⚠ the one that does *not* reconcile |
+| M2 | +16 | 20 | 8 | **28** | phase 3 — **28**, exactly |
+| M3 | +12 | 15 | 5 | **20** | phase 4 — **20**, exactly: 15 + 5 |
+
+⚠ **So the 20 is 15 EM of provider work plus 5 EM of platform work over twelve providers, and what has
+no derivation is something else and worse: the mapping.** The seventeen rows on this page are a
+**bottom-up** list whose priced thirteen sum to 16.9, against a top-down 15 for providers alone. The
+gap is not evidence of slack; the two figures are not measuring the same set. ⚠ And the 3.1 EM this
+document called *implied between the four unpriced rows* lands suspiciously near doc 01's **5 EM of M3
+platform work** — the policy engine, the resource graph API and placement policies are platform work
+rather than catalogue rows, which would put them inside that 5 and outside the +12 providers entirely.
+Not resolved here, because resolving it re-estimates two documents; recorded, because 3.1 and 5 being
+near each other is either the explanation or a coincidence, and the plan should not go on treating the
+question as unasked. GPU pools is the one of the four that does not fit that reading — [01](01-azure-parity-catalogue.md)
+puts it **⊂ Compute** and M3, which is a provider row.
 
 **Exit:** compliance-shaped customers can adopt (private endpoints, policy, posture, residency);
 multi-region is real for at least two regions; the Terraform provider is published.
@@ -287,11 +342,19 @@ committed.
 reconciliation done by hand is true on the day it is done, and the last one was true for weeks after it
 stopped being. So the recount is no longer only prose: `RoadmapReconciliationTests`, in
 `CyberCloud.ResourceManager.Contracts.Tests`, reads the published document and this page and fails when
-they disagree — on the set of types, on the per-phase counts, on the **Total**, and on the number
-printed under the command above. Publishing a twenty-third type now turns a test red with the roadmap
-named in the message, rather than leaving a plan that gets re-planned from memory. ⚠ It cannot check the
-`Landed` column's *judgement*, only its arithmetic and its names; the date in this heading is still what
-says when a person last read the rest.
+they disagree — on the set of types, on **each phase row's count against the types that row names**, on
+their sum, on the **Total**, and on the number printed under the command above. Publishing a
+twenty-third type now turns a test red with the roadmap named in the message, rather than leaving a plan
+that gets re-planned from memory.
+
+⚠ **The per-row half of that was prose before it was an assertion, and only for a day.** As first
+published this paragraph claimed the per-phase counts were checked when the test compared their *sum*
+to 22 and nothing else — a table listing all 22 correct names with phase 2 reading 14 and phase 3
+reading 5 passed every assertion in it. The assertion now exists (#45's review); the sentence above is
+what it does rather than what it was hoped to do. ⚠ **And "arithmetic" means this table's arithmetic
+only.** No EM figure anywhere in this document is machine-checked — not a phase heading, not a row, not
+the 71.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
+heading is still what says when a person last read the rest.
 
 All 22, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
@@ -339,11 +402,11 @@ this recount, and it is written down here so the next recount does not make it.
 
 ## Running total
 
-| Phase | EM (critical path, as planned) | Rows sum to | Landed or dropped | Where the number comes from |
+| Phase | EM (the phase heading, as planned) | Rows sum to | Landed or dropped | Where the number comes from |
 |---|---|---|---|---|
 | 0 — Prerequisites | ~~1.5~~ **1.1** | 1.1 | **0.4 ⊘** | Exact. Phase 0's heading *is* its row sum, so the dropped ADR-005 bump comes straight off |
 | 1 — Spine | 14 | 14.0 | — | Not reconciled here; only exit criterion 4 was checked |
-| 2 — M1 | 26 | 44.0 | **≥ 11.3 ✅** | 3.0 + 1.5 + 2.0 + 1.5 fully shipped rows, plus 3.3 of the `Network` row's split. Conservative: the partly-landed Managed Kubernetes (4.0) and Monitor (2.5) rows have no defensible split and are counted as zero |
+| 2 — M1 | 26 | 44.0 | **≥ 11.3 ✅** | 3.0 + 1.5 + 2.0 + 1.5 fully shipped rows, plus 3.3 of the `Network` row's split. Conservative: the partly-landed Managed Kubernetes (4.0) and Monitor (2.5) rows have no defensible split and are counted as zero. ⚠ Not conservative enough — the 3.0 row's ✅ means *published*, and #69 is open inside it; see below |
 | 3 — M2 | 28 | 38.4 | **4.4 ✅** | The whole `Data` row |
 | 4 — M3 | 20 | 16.9 priced, 4 items unpriced | **1.8 ✅, 0.6 ⊘** | MariaDB 0.8 + OpenSearch 1.0 shipped; Qdrant's 0.6 void |
 
@@ -351,18 +414,46 @@ this recount, and it is written down here so the next recount does not make it.
 the finding, not a hedge**, and it is narrower than the old single number was honest.
 
 The arithmetic, once, so it can be checked: the plan's own 89.5 loses phase 0's dropped 0.4 outright,
-which gives **89.1**. Against that sit 11.3 + 4.4 + 1.8 = **17.5 EM of rows that are finished**. Work
-that is finished takes zero time on *any* path, so it can only make the remaining critical path shorter
-— but by **at most** its own size, and by **at least** nothing, and this document does not say which of
-its rows were on the critical path in the first place. 89.1 − 17.5 = **71.6** is therefore the floor and
-89.1 the ceiling.
+which gives **89.1**. Against that sit 11.3 + 4.4 + 1.8 = **17.5 EM of rows whose every named type is
+published**. Work that is finished takes zero time on *any* path, so it can only make the remaining
+critical path shorter — but by **at most** its own size, and by **at least** nothing, and this document
+does not say which of its rows were on the critical path in the first place. 89.1 − 17.5 = **71.6** is
+therefore the floor and 89.1 the ceiling.
 
-⚠ **Naming what makes it a range is worth more than picking a point inside it.** Phases 2 and 3 quote a
-critical path (26 and 28) while their rows sum to 44.0 and 38.4; phase 2 states its parallelism
-assumption in a parenthetical and phase 3 states none at all. That gap was invisible while nothing had
-shipped and it is load-bearing the moment anything does — it is the whole reason 17.5 EM of completed
-work cannot simply be subtracted. **Closing the range is a scheduling exercise — say which rows are on
-the path — not a re-estimate.**
+⚠ **That 17.5 said "rows that are finished" until 2026-09-06, and this document's own annotations do not
+support the word.** [§ How to read the `Landed` column](#how-to-read-the-landed-column) defines ✅ as no
+more than *a published resource type in `openapi/2026-08-01.json` for every type the row names* — and
+one ✅ row inside the 17.5 carries a live defect three tables above: **Postgres · Valkey · NATS**, 3.0 EM,
+where #69 is open against the first because the seven-day recovery window returns an `initdb`. A
+published type is not a working restore, and the same caution that counted Managed Kubernetes (4.0) and
+Monitor (2.5) as **zero** should not have skipped a row this page had already qualified. ⚠ **The floor
+survives and it is worth saying why rather than leaving it to be re-derived:** subtracting *more* than
+is truly finished can only push the result *down*, so 71.6 remains a valid lower bound — it is simply a
+weaker one than it looked, and the ✅ column is a claim about the published document rather than about
+the feature.
+
+⚠ **Naming what makes it a range is worth more than picking a point inside it.** Phases 2 and 3 quote
+26 and 28 while their rows sum to 44.0 and 38.4; phase 2 says in a parenthetical that its 26 is the
+critical path, and phase 3 says nothing. ⚠ **And "critical path" is this document's reading of those
+headings rather than a fact about them** — [§ Phase 3](#phase-3--m2-a-catalogue-that-is-a-business--28-em)
+now records the competing one: 28 and 20 are [01 § Summary of scope](01-azure-parity-catalogue.md)'s M2
+and M3 milestone totals exactly, so the headings may be a top-down budget that the bottom-up rows were
+never inside. Either way the gap was invisible while nothing had shipped and is load-bearing the moment
+anything does, and either way it is the reason 17.5 EM of completed work cannot simply be subtracted.
+**Closing the range is a scheduling exercise on the first reading — say which rows are on the path — and
+a re-estimate on the second.**
+
+⚠ **A second published total sits one link away and this section did not mention it.**
+[01 § Summary of scope](01-azure-parity-catalogue.md) still reads **~94 EM to M3** — 46 + 28 + 20 from
+its own milestone table — against the 89.1 here, in the same paragraph that sends the reader to this
+document for the sequencing and the cut list. The gap is entirely M1: doc 01's M2 (28) and M3 (20) are
+phase 3's and phase 4's headings to the digit, while its M1 total of 46 sits against phases 0–2's
+1.5 + 14 + 26 = 41.5. Recorded rather than resolved, exactly as the `agentPools` disagreement above is —
+moving either number is a re-estimate of a document this issue did not reconcile. ⚠ **Its months line
+is not the failure this one had**, and saying so is the point of checking rather than assuming: doc 01
+says *"4–5 engineers for about eighteen months"*, and 94 ÷ 5 = 18.8, so that figure divides. What it
+omits is the other end of its own range — 94 ÷ 4 = 23.5 — which is the same understatement of the slow
+end, arrived at honestly.
 
 ⚠ **And the ceiling is not a ceiling.** Qdrant's 0.6 is out of the 20 as an *estimate*, not as work:
 [12 § Qdrant](12-managed-data-services.md) says the row must be re-costed against what it actually

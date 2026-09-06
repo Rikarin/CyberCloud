@@ -107,11 +107,20 @@ public sealed class RoadmapReconciliationTests {
     ///     command it quotes — equal the number of published resource types.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The pinned command output is the half most likely to rot and the half nobody
-    ///     re-runs.</b> This tree has shipped pinned counts that did not reproduce more than once —
-    ///     #81 was four of them, three sitting in the machinery that gates citation honesty, and
-    ///     #78's review found a <c>grep</c> that was counting its own paragraph. A number inside a
-    ///     fenced block looks like evidence, which is precisely why a stale one is expensive.
+    ///     <para>
+    ///         ⚠ <b>"The per-phase counts" means each row against its own names, not merely their
+    ///         sum</b> — #45's review, which is the second time on this branch that a guard was
+    ///         described in prose as one assertion wider than it was written. A sum that holds while
+    ///         two rows are wrong in opposite directions is exactly the failure a total hides.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The pinned command output is the half most likely to rot and the half nobody
+    ///         re-runs.</b> This tree has shipped pinned counts that did not reproduce more than
+    ///         once — #81 was four of them, three sitting in the machinery that gates citation
+    ///         honesty, and #78's review found a <c>grep</c> that was counting its own paragraph. A
+    ///         number inside a fenced block looks like evidence, which is precisely why a stale one
+    ///         is expensive.
+    ///     </para>
     /// </remarks>
     [Fact]
     public void TheRoadmapsPinnedRecountIsTheNumberTheCommandProduces() {
@@ -154,6 +163,25 @@ public sealed class RoadmapReconciliationTests {
             published.Length,
             "docs/plan/24 § What has landed's **Total** row is not the number of published resource types"
         );
+
+        // ⚠ EACH ROW'S OWN COUNT, not only the sum of them — added by #45's review, which found the
+        // document advertising this check one assertion wider than it was. The sum and the **Total**
+        // can both be right while the split across phases is wrong: all 22 correct names, listed
+        // exactly once each, with phase 2 reading 14 and phase 3 reading 5, passed every assertion
+        // above. And the split is not decoration — the prose around the table leans on it ("two of
+        // the 22 belong to phase 4 and one is phase 1's deliberately trivial sample", and phase 3's
+        // "four of them are this phase's `Data` row"), and § Running total's per-phase ✅ figures are
+        // read off it. A count cell nobody checks against the row it sits on is the same shape of
+        // claim as a pinned `grep` nobody re-runs.
+        foreach (var phase in phases) {
+            CountCell(phase).ShouldBe(
+                QualifiedName.Count(phase),
+                "a row of docs/plan/24 § What has landed counts a different number of resource types "
+                + "than it names. The count cell and the backticked names in the same row have to "
+                + "agree before the per-phase split means anything — recount that row rather than "
+                + $"adjusting another to keep the total at {published.Length}. The row: {phase}"
+            );
+        }
 
         // ── The pinned command, and the number printed under it ───────────────────────────────────
         var opens = Array.FindIndex(lines, x => string.Equals(x, "```console", StringComparison.Ordinal));
