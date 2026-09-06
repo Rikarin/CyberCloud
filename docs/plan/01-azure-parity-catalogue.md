@@ -246,6 +246,17 @@ Named so nobody re-proposes them at month nine.
 choices in § E hold up and that nobody tries to write a database. [24 — Roadmap](24-roadmap.md) has
 the sequencing, the exit criteria, and the cut list in the order it should be cut.
 
+⚠ **This 94 and doc 24's total are two different numbers and a reader who follows that link will meet
+the other one** (#45, 2026-09-06). It is stated here rather than left to be discovered: 94 is the
+top-down sum of the table above — 46 + 28 + 20 — for a plan in which nothing has been built yet;
+[24 § Running total](24-roadmap.md) publishes **71.6–89.1 EM**, reconciled against the resource types
+this tree has actually published. Neither figure has been re-estimated to meet the other, because that
+is a re-estimate of two documents and nobody has done it. ⚠ **The gap is not spread across the plan, it
+is entirely M1:** M2's 28 and M3's 20 above are doc 24's phase 3 and phase 4 headings to the digit,
+while this table's M1 total of 46 sits against that document's phases 0–2 summing to 41.5. ⚠ And the
+months: 94 ÷ 5 = 18.8 is where *"about eighteen months"* comes from, so it is the **fast** end of the
+stated 4–5 engineers and not the range. The slow end is 94 ÷ 4 = 23.5.
+
 The number that actually matters is not 94. It is the **2 engineer-weeks per new managed service**
 target in [00](00-vision-and-principles.md). If that number is right, the catalogue grows on its own
 after M1 and the total is a starting point rather than a budget. If it is wrong — if the twelfth
