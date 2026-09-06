@@ -170,9 +170,11 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     ///         so a second <c>BeginCreateAsync</c>, a <c>CompleteCreateAsync</c> that leaves another
     ///         member behind, a <c>BeginDeleteAsync</c> and <c>ReapOrphansAsync</c> all re-assert a
     ///         lost row too, and a comment in that method claiming otherwise has been corrected.
-    ///         This case deletes the row and then calls only <c>ListAsync</c>, which is the one
-    ///         reader that does not come through <c>ArmOrDisarmAsync</c>, precisely so that the
-    ///         activation is the only thing that <i>can</i> have re-armed. Asserting the narrower
+    ///         This case deletes the row and then calls only <c>ListAsync</c>, which is <i>a</i>
+    ///         reader that does not come through <c>ArmOrDisarmAsync</c> — not "the one", which this
+    ///         remark claimed until 2026-09-06; eleven public members of the grain do not arm, and
+    ///         <c>ListAsync</c> is merely the cheapest of them that forces an activation. It is used
+    ///         precisely so that the activation is the only thing that <i>can</i> have re-armed. Asserting the narrower
     ///         property is what makes the third sabotage — <c>OnActivateAsync</c>'s arm removed —
     ///         land on this case and nothing else.
     ///     </para>
@@ -267,7 +269,7 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     ///     <para>
     ///         ⚠ <b>It drives with <c>ListAsync</c> on purpose, and polling the table alone would
     ///         hang for the whole budget.</b> Nothing re-arms until something calls the grain, and
-    ///         <c>ListAsync</c> is the reader that does <i>not</i> come through
+    ///         <c>ListAsync</c> is one of the eleven members that do <i>not</i> come through
     ///         <c>ArmOrDisarmAsync</c> — so a row that appears after one can only have been written
     ///         by the activation that the call forced, which is the <c>OnActivateAsync</c> line
     ///         #83's third sabotage reverts to watch this case go red.

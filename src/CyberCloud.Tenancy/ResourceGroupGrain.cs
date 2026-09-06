@@ -596,8 +596,14 @@ public sealed class ResourceGroupGrain(
                 // What the guard does cost is the REFRESH: a row that is already there keeps the
                 // StartAt it was written with, which is the whole of the fix above. The only group
                 // left without a live reminder is therefore one that has members in Creating, has
-                // lost its row, and is never called again — no create, no completion, no delete, no
-                // activation. That is bounded on the path that matters: ResourceGroupReclaimer
+                // lost its row, and is never reached again THROUGH ONE OF THE SIX ARMING MEMBERS —
+                // OnActivateAsync, BeginCreateAsync, CompleteCreateAsync, BeginDeleteAsync,
+                // CompleteGroupDeleteAsync, ReapOrphansAsync. ⚠ That is NOT the same as "never
+                // called again", which this comment said until 2026-09-06: eleven public members do
+                // not arm at all (GetAsync, SetLockAsync, FailDeleteAsync, CompleteDeleteAsync,
+                // ListAsync, ListOrphansAsync, RecordClusterAsync, ListClustersAsync,
+                // BeginGroupDeleteAsync, CreateAsync, DeactivateAsync), so a group can be read and
+                // written all day and still not re-arm, for as long as its activation survives. That is bounded on the path that matters: ResourceGroupReclaimer
                 // calls ReapOrphansAsync directly before it seals a group, so a group delete never
                 // waits on this reminder.
                 if (await this.GetReminder(OrphanReminderName) is null) {
