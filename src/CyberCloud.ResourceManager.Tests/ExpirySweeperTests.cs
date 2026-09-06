@@ -29,14 +29,27 @@ namespace CyberCloud.ResourceManager.Tests;
 ///         leaves parked resources on purpose, so nothing here may touch it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The reminder itself is not observable from a test, and
-///         <c>ExpirySweep.Disarmed</c> is what stands in for it.</b> Orleans exposes
-///         <c>GetReminder</c> to the grain and to nobody else, so "armed exactly while there is
-///         something parked" cannot be asserted directly from out here. What can be asserted is the
-///         decision the grain took — it reports whether the pass found an empty registry and stood
-///         down — and both directions of that decision are driven below. What is <b>not</b> covered
-///         is whether <c>RegisterOrUpdateReminder</c> was really called, which is
-///         <c>ResourceGroupGrain</c>'s reaper's position too.
+///         ⚠ <b>The reminder is not observable through the GRAIN, and <c>ExpirySweep.Disarmed</c>
+///         is what stands in for it here.</b> Orleans exposes <c>GetReminder</c> to the grain and to
+///         nobody else, so "armed exactly while there is something parked" cannot be asserted
+///         through the contract. What can be asserted is the decision the grain took — it reports
+///         whether the pass found an empty registry and stood down — and both directions of that
+///         decision are driven below; <see cref="IExpirySweeperGrain.IsArmedAsync" /> and
+///         <c>ArmAsync</c>'s return exist because of the same limit.
+///     </para>
+///     <para>
+///         ⚠ <b>THE ROW ITSELF IS READABLE AFTER ALL, AND THIS FILE STILL DOES NOT READ IT
+///         (2026-09-06, #83).</b> This paragraph used to say the reminder was not observable from a
+///         test at all and that <c>ResourceGroupGrain</c>'s reaper was in the same position; both
+///         halves were wrong. <c>Orleans.IReminderTable</c> is public and is a singleton in the
+///         silo's container wherever <c>UseInMemoryReminderService</c> is called — which
+///         <c>ResourceManagerCluster</c> does — so <c>ReadRow(grainId, name)</c> hands back the
+///         <c>ReminderEntry</c> with its <c>StartAt</c>, its <c>Period</c> and its <c>ETag</c>, and
+///         a rewritten row is visible as a moved <c>StartAt</c> and a fresh <c>ETag</c>.
+///         <c>OrphanReaperArmingTests</c> in <c>CyberCloud.Tenancy.Tests</c> asserts the same fix
+///         that way — on the schedule rather than on a proxy for it. Doing the same to
+///         <see cref="ASecondArmDoesNotRewriteTheRowThatIsAlreadyThere" /> would strengthen it and is
+///         owed; #83's branch had no business rewriting #12's assertions to get there.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The other thing nothing here covers is the per-pass cap.</b>

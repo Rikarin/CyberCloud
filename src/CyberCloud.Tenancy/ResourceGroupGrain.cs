@@ -41,6 +41,18 @@ public sealed class ResourceGroupGrain(
         // so this is normally a no-op — but a group whose members were recorded before this grain
         // had a reaper at all has candidates and no reminder, and that group would otherwise keep
         // its phantoms until somebody created a resource in it.
+        //
+        // ⚠ AND THIS LINE IS WHY THE REAPER NEEDS NO BACKFILL, WHICH IS THE ONE PLACE #83 DIVERGES
+        // FROM #12 (2026-09-06). ExpirySweeperGrain deliberately arms nothing on activation and
+        // owes ExpirySweeperBackfill instead, because it HOLDS NOTHING: its evidence is a separate
+        // registry grain, so an activation is not evidence and a group whose last delete had
+        // already happened would never acquire a sweeper. This grain's evidence is its own durable
+        // state, already loaded by the activation that runs this line, so the same walk would buy
+        // nothing here. What is left is a group whose orphans nobody ever looks at — and every path
+        // that CAN look (ListAsync, BeginCreateAsync, the group delete) is a call on this grain and
+        // therefore activates it and arms the reaper on the way past. The group delete does not wait
+        // for the tick either: ResourceGroupReclaimer calls ReapOrphansAsync by hand before it
+        // seals.
         await ArmOrDisarmAsync();
     }
 
@@ -522,6 +534,17 @@ public sealed class ResourceGroupGrain(
     ///         which is why it is one method rather than a call at each site.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>THE ARM READS <c>GetReminder</c> FIRST, AND WITHOUT THAT READ THE COST DECISION
+    ///         ABOVE TURNS INTO A REAPER THAT NEVER RAN (2026-09-06, #83).</b> Making every writer of
+    ///         <c>CreatingSince</c> come through here is what keeps the reaper proportional to
+    ///         in-flight creates — and it also means the arm is called once per create rather than
+    ///         once per group. <c>RegisterOrUpdateReminder</c> rewrites an existing row with
+    ///         <c>StartAt = UtcNow + dueTime</c>, so calling it unconditionally with a due time of
+    ///         <see cref="OrphanSweepPeriod" /> deferred the next tick a full fifteen minutes on
+    ///         every call: a busy group pushed its own sweep out for ever. See the body for the race
+    ///         the guard leaves and for what re-asserts a row that was lost.
+    ///     </para>
+    ///     <para>
     ///         ⚠ <b>A silo with no reminder service logs and carries on.</b>
     ///         <c>RegisterOrUpdateReminder</c> throws there, and letting that escape would make every
     ///         create in such a silo fail over a sweeper — turning an absent cleanup into an absent
@@ -534,11 +557,42 @@ public sealed class ResourceGroupGrain(
     async Task ArmOrDisarmAsync() {
         try {
             if (state.State.CreatingSince.Count > 0) {
-                _ = await this.RegisterOrUpdateReminder(
-                    OrphanReminderName,
-                    OrphanSweepPeriod,
-                    OrphanSweepPeriod
-                );
+                // ⚠ REGISTERED ONLY WHEN THERE IS NO ROW, AND THE GUARD IS THE WHOLE OF #83.
+                // RegisterOrUpdateReminder is idempotent on the row's IDENTITY and not in its
+                // EFFECT: it rewrites the row with StartAt = UtcNow + dueTime and restarts the
+                // local timer. The due time here is OrphanSweepPeriod, and this method sits on the
+                // write path of every BeginCreateAsync and every CompleteCreateAsync — so a group
+                // creating resources more often than once every fifteen minutes pushed its own
+                // reaper tick out on every call and never reached one. The reaper was armed,
+                // GetReminder answered a row, and nothing swept. The idiom is the one the disarm
+                // branch below already used to cancel, and the fix is the same one
+                // ExpirySweeperGrain.ArmCoreAsync carries for the identical defect (#12 review,
+                // 2026-09-05) — filed separately because the consequence differs: #12's miss was a
+                // recovery window that never ends, this one's is a phantom member in a listing.
+                //
+                // ⚠ THE RACE THE GUARD LEAVES IS IN THE HARMLESS DIRECTION. Two arms interleaving
+                // can both read null and both register; the second write is the same row with a
+                // StartAt a few milliseconds later, which is a rounding error against fifteen
+                // minutes rather than the unbounded deferral above. Nothing here can make a tick
+                // happen EARLIER than the row says, and an early tick could not do damage anyway —
+                // ReapOrphansAsync refuses a threshold shorter than the index lease and proves each
+                // candidate against its own index before it removes anything.
+                //
+                // ⚠ AND THE ROW IS NOT RE-ASSERTED ON THE WAY PAST, which is the cost of the guard
+                // and is deliberate. A reminder lost from Orleans' table — restored from a backup,
+                // or never written because the arm ran on a silo with no reminder service — is put
+                // back by the next activation of this grain (OnActivateAsync) or by the next
+                // BeginCreateAsync that finds CreatingSince empty first, and not by a create into a
+                // group that already has one in flight. That is under-driving, and it is bounded:
+                // ResourceGroupReclaimer calls ReapOrphansAsync directly before it seals a group,
+                // so a group delete never waits on this reminder.
+                if (await this.GetReminder(OrphanReminderName) is null) {
+                    _ = await this.RegisterOrUpdateReminder(
+                        OrphanReminderName,
+                        OrphanSweepPeriod,
+                        OrphanSweepPeriod
+                    );
+                }
 
                 return;
             }

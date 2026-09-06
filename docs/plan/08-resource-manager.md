@@ -149,6 +149,28 @@ SDK enumeration still have nothing to call. What changed is that the inventory t
 now populated — before this, each of them could have been built, shipped, and answered "empty" for every
 group correctly.
 
+⚠ **THE REAPER HAS SINCE LANDED, WHICH SPENDS THE FIRST HALF OF THE PARAGRAPH ABOVE — AND THE SAME
+CLAIM IS MADE A SECOND TIME IN § Soft delete, where it is equally spent.**
+`IResourceGroupGrain.ReapOrphansAsync` is the sweeping half `ListOrphansAsync` never had: it reads
+that list and then proves each candidate against its own `IResourceIndexGrain` before removing
+anything, because age alone would sweep a create that is merely slow. It has two production callers.
+`ResourceGroupGrain` drives it from a reminder — `reap-orphans`, period fifteen minutes — armed off
+`CreatingSince` and cancelled when that empties, so the reaper costs a reminder row per group with an
+in-flight create rather than a row per group for ever; and `ResourceGroupReclaimer` calls it by hand
+before it seals a group, because a group whose only member is a phantom could otherwise never be
+deleted at all.
+
+⚠ **The reminder was armed and it never reached a tick (#83, fixed 2026-09-06).** `ArmOrDisarmAsync`
+called `RegisterOrUpdateReminder` unconditionally with a due time equal to the sweep period, and that
+call does not leave an existing row alone — it rewrites it with `StartAt = UtcNow + dueTime` and
+restarts the local timer. The arm sits on the write path of every `BeginCreateAsync` and every
+`CompleteCreateAsync`, so a resource group creating resources more often than every fifteen minutes
+deferred its own sweep on every call: armed, `GetReminder` answering a row, and nothing sweeping. It
+now registers only when `GetReminder` answers null. The identical defect, with the identical fix, is
+`ExpirySweeperGrain.ArmCoreAsync`'s (§ Soft delete, issue #12) — found there first and left for its
+own branch because the consequence differs: that one's miss is a recovery window that never ends,
+this one's is a phantom member in a listing that the group's own delete still clears by hand.
+
 **The delete side belongs to the operation grain, not to `DeleteAsync`.** A delete is accepted long
 before it converges and the resource stays visible in `Deleting` the whole time
 ([06](06-tenancy-and-resource-model.md) § Two-phase create), so unlinking at the request would blind
