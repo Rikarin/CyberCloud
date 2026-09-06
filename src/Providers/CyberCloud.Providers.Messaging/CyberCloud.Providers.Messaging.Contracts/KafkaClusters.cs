@@ -460,6 +460,16 @@ public static class KafkaClusters {
                     // enforced by nothing — and conformance.yaml § owed carries it as
                     // `cidr-shape-is-unenforced`.
                     //
+                    // ⚠ UPDATED 2026-09-06 (#84) AND STILL NOT DECLARED. ChartAnnotationEmitter has
+                    // the case now, and it is a REFUSAL rather than the emission this note is
+                    // waiting for: CheckUnspellable names the property, the SchemaProperty member
+                    // and the directive. Before #84 the emitter wrote `## @param allowedCidrs
+                    // {array}` followed by `## @pattern …` and the gate refused the file the emitter
+                    // had just written — so declaring the Pattern was red either way, and what
+                    // changed is only that the complaint would now arrive at THIS line instead of at
+                    // a generated values.yaml. The reasoning above is unaffected and the gap is not
+                    // closed.
+                    //
                     // WHAT IT COSTS: a body may send "999.0.0.1/99" and be accepted. It reaches
                     // `loadBalancerSourceRanges`, where the API server refuses the Service, and the
                     // resource fails to converge AFTER the caller was told 202 — the exact failure

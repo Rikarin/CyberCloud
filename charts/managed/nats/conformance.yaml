@@ -183,7 +183,9 @@ owed:
       full argument. What this one adds is that the gap is not specific to one type: docs/plan/12
       § Cross-cutting decisions gives every service in the catalogue the same firewall list, so all
       ten will find it. Closing it is one case in ChartAnnotationEmitter and one in Build.Charts'
-      Validate.
+      Validate. ⚠ UPDATED 2026-09-06 (#84): the case in ChartAnnotationEmitter now exists and is a
+      REFUSAL rather than the emission — see charts/managed/kafka/conformance.yaml for the full
+      argument. The gap and its cost are unchanged.
   - id: publicips-meter-is-undeclarable
     says: >
       A cluster with external.enabled true consumes one public IP and no meter says so. ⚠ THE REASON

@@ -390,6 +390,101 @@ public sealed class ChartAnnotationTests {
         widget.Problems.ShouldContain(x => x.Contains("renders one scalar field", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     A <c>@pattern</c>, a <c>@length</c> or a <c>@format</c> on a <c>@param</c> that is not a
+    ///     <c>{string}</c> is refused at the registration rather than written into a file the chart
+    ///     gate then rejects (#84).
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The declaration under test is COHERENT, and that is the whole defect.</b>
+    ///         <c>SchemaProperty.Incoherences</c> collapses an array to its <c>ElementKind</c> —
+    ///         <c>var value = Kind is SchemaKind.Array ? ElementKind : Kind</c> — before gating
+    ///         <c>Format</c> and <c>MinLength</c>/<c>MaxLength</c>/<c>Pattern</c> on
+    ///         <c>value is not SchemaKind.Text</c>, so an <b>array of text</b> carrying any of the
+    ///         three passes construction and is enforced per element by <c>ResourceSchema.Validate</c>.
+    ///         Nothing upstream of the emitter has an opinion, which is why the schema here is built
+    ///         through <c>ResourceSchema.Of</c> rather than by object initialiser: an
+    ///         <c>Of</c> that refused it would make this test pass against the defect.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This is #78's sentence one directive over, and the shape #78's own array
+    ///         regression test already constructs.</b> Before this refusal the emitter wrote
+    ///         <c>## @param x {array}</c> followed by <c>## @pattern …</c>, and
+    ///         <c>build/Build.Charts.cs</c> then failed on the file the emitter had just written,
+    ///         pointing at a generated <c>values.yaml</c> with a line number rather than at the
+    ///         registration that caused it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is a refusal and NOT the closing of <c>cidr-shape-is-unenforced</c>.</b>
+    ///         <c>KafkaClusters</c> and <c>NatsClusters</c> both want <c>Pattern = CidrPattern</c> on
+    ///         <c>/properties/external/allowedCidrs</c> and withhold it precisely because the chart
+    ///         gate refuses it; that gap is recorded at <c>charts/managed/kafka/conformance.yaml</c>
+    ///         and <c>charts/managed/nats/conformance.yaml</c>, and closing it means emitting
+    ///         <c>items.pattern</c> — the per-element shape <c>@enum</c> on an array already has. What
+    ///         changed is only WHERE the complaint lands.
+    ///     </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("@pattern")]
+    [InlineData("@length")]
+    [InlineData("@format")]
+    public void AStringOnlyRefinementOnANonStringParamIsRefusedAtTheRegistration(string directive) {
+        var refined = new SchemaProperty(
+            "/properties/allowedCidrs",
+            SchemaKind.Array,
+            Description: "Source ranges permitted to reach the external listener."
+        ) {
+            ElementKind = SchemaKind.Text,
+            DefaultJson = "[]"
+        };
+
+        var block = Emit(ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Description: "The configuration."),
+            directive switch {
+                "@pattern" => refined with { Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}" },
+                "@length" => refined with { MinLength = 9, MaxLength = 18 },
+                _ => refined with { Format = SchemaFormat.Uri }
+            }
+        ]));
+
+        // Nothing is written when anything was refused — a half-written block is a configuration
+        // surface that silently lost a constraint.
+        block.Text.ShouldBeEmpty();
+        block.Problems.ShouldContain(
+            x => x.Contains("'/properties/allowedCidrs'", StringComparison.Ordinal)
+                && x.Contains("`" + directive + "` refines a string", StringComparison.Ordinal),
+            $"`{directive}` on a `{{array}}` was emitted, and build/Build.Charts.cs refuses exactly "
+            + "that pair — so the gate would fail on a file this emitter had just written."
+        );
+
+        // ⚠ The control, and the reason this cannot pass by refusing everything: on a `{string}` all
+        // three directives still reach the block. The fixture carries one of each — a quantity
+        // pattern, `1..63` and a uuid — so the refusal above is about the TYPE and not the directive.
+        Block.ShouldContain("## " + directive + " ");
+
+        // ⚠ And the other end, which this assembly can only compare rather than call: the refusal
+        // above is a mirror of build/Build.Charts.cs's own, and a gate that stopped refusing the pair
+        // would make this emitter refuse a directive the chart would happily have carried. Both
+        // halves compile perfectly on their own — build/_build.csproj is outside the solution.
+        var reader = ReaderSource();
+
+        reader.ShouldContain(
+            $"(\"{directive}\", annotation.",
+            Case.Sensitive,
+            $"build/Build.Charts.cs no longer lists `{directive}` among the string refinements it "
+            + "refuses on a non-string `@param`, so ChartAnnotationEmitter is now refusing a "
+            + "registration the chart gate would have accepted."
+        );
+
+        reader.ShouldContain(
+            "if (present && annotation.Type is not \"string\")",
+            Case.Sensitive,
+            "build/Build.Charts.cs no longer gates the three string refinements on `{string}`, so the "
+            + "emitter's mirror of that gate is describing a rule that is gone."
+        );
+    }
+
     [Fact]
     public void EveryAnnotationBlockSitsDirectlyAboveTheKeyItDescribes() {
         // The block is the run of `## @` lines immediately above the key — a blank line or an ordinary

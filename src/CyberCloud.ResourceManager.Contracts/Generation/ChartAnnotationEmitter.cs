@@ -113,6 +113,24 @@ public sealed record ChartRewrite(string Text, ImmutableArray<string> Problems, 
 ///         directive table. Nine sites in four files, not four.
 ///     </para>
 ///     <para>
+///         ⚠ <b>A directive that EXISTS can still be refused on a type, and that third category is
+///         separate from both lists above.</b> <c>@secret</c>, <c>@widget</c>,
+///         <c>@pattern</c>, <c>@length</c> and <c>@format</c> are all written, read and cross-checked
+///         — and <c>build/Build.Charts.cs</c> refuses each of them on the wrong <c>@param</c> type,
+///         because a JSON Schema keyword that applies to a string is <i>silently ignored</i> on any
+///         other type and so reads as a constraint while validating nothing.
+///         <see cref="SchemaProperty.Incoherences" /> does not refuse them there: it collapses an
+///         array to its <see cref="SchemaProperty.ElementKind" /> first, so an <b>array of text</b>
+///         carrying a <see cref="SchemaProperty.Pattern" />, a length bound or a
+///         <see cref="SchemaFormat" /> is a coherent registration the registry means and enforces per
+///         element. <see cref="CheckUnspellable" /> refuses all five here (#84) so the complaint lands
+///         on the registration rather than on a generated <c>values.yaml</c> line number. ⚠ That is a
+///         refusal, <b>not</b> the closing of the gap: <c>charts/managed/kafka</c> and
+///         <c>charts/managed/nats</c> record it as <c>cidr-shape-is-unenforced</c>, and closing it
+///         means teaching the vocabulary the <c>items.pattern</c> shape that <c>@enum</c> on an array
+///         already has.
+///     </para>
+///     <para>
 ///         ⚠ <b><c>@pattern</c> carries the pattern UNANCHORED and every consumer anchors it.</b>
 ///         <see cref="SchemaProperty.Pattern" /> is a whole-value match — <c>ResourceSchema</c> tests it
 ///         as <c>^(?:…)$</c> — whereas JSON Schema's <c>pattern</c> keyword and
@@ -571,17 +589,33 @@ public static class ChartAnnotationEmitter {
     }
 
     /// <summary>
-    ///     The facts whose <i>spelling</i> the vocabulary cannot carry, as opposed to the members it
-    ///     has no word for at all.
+    ///     The facts the vocabulary cannot carry <i>here</i> — an argument it cannot spell, or a
+    ///     directive the reader refuses on this <c>@param</c>'s type — as opposed to the members it has
+    ///     no word for at all.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Every one of these was found by reading <c>build/Build.Charts.cs</c>'s own regular
-    ///     expressions rather than its documentation.</b> A one-sided bound is the sharp one:
-    ///     <see cref="SchemaProperty" /> lets a property declare a <see cref="SchemaProperty.Minimum" />
-    ///     with no <see cref="SchemaProperty.Maximum" />, and <c>@range</c>'s pattern requires both —
-    ///     so the obvious emission, <c>## @range 1..</c>, is "malformed `@range`" against a file this
-    ///     emitter had just written. charts/README.md says <c>@range &lt;min&gt;..&lt;max&gt;</c> and
-    ///     says nothing about whether either side may be empty; the regex is the answer.
+    ///     <para>
+    ///         ⚠ <b>Every one of these was found by reading <c>build/Build.Charts.cs</c>'s own regular
+    ///         expressions rather than its documentation.</b> A one-sided bound is the sharp one:
+    ///         <see cref="SchemaProperty" /> lets a property declare a
+    ///         <see cref="SchemaProperty.Minimum" /> with no <see cref="SchemaProperty.Maximum" />, and
+    ///         <c>@range</c>'s pattern requires both — so the obvious emission, <c>## @range 1..</c>,
+    ///         is "malformed `@range`" against a file this emitter had just written. charts/README.md
+    ///         says <c>@range &lt;min&gt;..&lt;max&gt;</c> and says nothing about whether either side
+    ///         may be empty; the regex is the answer.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Several of these cases are not about an argument at all: they are a directive the
+    ///         reader refuses on a type, and that is why the summary was widened on 2026-09-06
+    ///         (#84).</b> <c>@secret</c> on a non-string, <c>@widget</c> on an object or an array,
+    ///         and — since #84 — <c>@pattern</c>, <c>@length</c> and <c>@format</c> on anything the
+    ///         <c>@param</c> line will not call a <c>{string}</c>. They share one shape:
+    ///         <see cref="SchemaProperty.Incoherences" /> permits the declaration,
+    ///         <c>build/Build.Charts.cs</c> refuses the directive, and without a case here the emitter
+    ///         writes a block that fails the gate that reads it back. The refusal belongs at the
+    ///         registration, which is where the mistake is; the gate can only point at a generated
+    ///         file with a line number.
+    ///     </para>
     /// </remarks>
     static void CheckUnspellable(SchemaProperty property, List<string> problems) {
         var pointer = property.JsonPointer;
@@ -624,6 +658,58 @@ public static class ChartAnnotationEmitter {
                 + $"{ResourceSchema.Describe(property.Kind)}. `@widget` renders one scalar field, and "
                 + "build/Build.Charts.cs refuses it on an object or an array."
             );
+        }
+
+        // ⚠ THE THREE STRING REFINEMENTS ON A `@param` THAT IS NOT `{string}` — the same sentence as
+        // the two cases above, reached by a different route, and the one this emitter used to write
+        // anyway (#84). build/Build.Charts.cs refuses `@pattern`, `@length` and `@format` on any
+        // `@param` whose type token is not `{string}`, and says why in its own comment: they are JSON
+        // Schema keywords that apply to a string and are SILENTLY IGNORED on anything else, so the
+        // directive reads as a constraint and validates nothing at all. The `{type}` token comes from
+        // Kind — Render writes `SchemaVocabulary.JsonTypeOf(property.Kind)` into the `@param` line —
+        // so the question the gate will ask is about Kind and not about ElementKind.
+        //
+        // ⚠ THE ARRAY OF TEXT IS THE REACHABLE HALF, AND IT IS THE HALF Incoherences LEAVES OPEN.
+        // SchemaProperty.Incoherences collapses `var value = Kind is SchemaKind.Array ? ElementKind :
+        // Kind` before gating Format and MinLength/MaxLength/Pattern on `value is not
+        // SchemaKind.Text`. So a `{integer}` carrying a Pattern never survives ResourceSchema.Of —
+        // and an array of text carrying one is a perfectly COHERENT registration, which this emitter
+        // would then write as `## @param x {array}` followed by `## @pattern …`, against a gate that
+        // refuses precisely that pair. The condition below is written against Kind rather than
+        // narrowed to Array because a schema built as `new ResourceSchema { … }` never ran
+        // Incoherences at all, which is what every belt check in this method exists for.
+        //
+        // ⚠ REFUSED RATHER THAN DROPPED, AND THE GAP IT NAMES IS ALREADY RECORDED ACROSS THE TREE —
+        // `git grep -l cidr-shape-is-unenforced` is the list, and no number is pinned here because
+        // this paragraph would be in it.
+        // KafkaClusters and NatsClusters both carry a note at `/properties/external/allowedCidrs`
+        // saying `Pattern = CidrPattern` belongs there and is withheld only because declaring it
+        // would make `./build.sh Charts` red for every future run; charts/managed/kafka and
+        // charts/managed/nats carry the cost as `cidr-shape-is-unenforced` — a body may send
+        // "999.0.0.1/99", be accepted, and fail at the API server AFTER the caller was told 202. This
+        // refusal does NOT close that gap and must not be read as closing it: closing it means
+        // emitting `items.pattern` / `items.minLength` / `items.maxLength` / `items.format` for a text
+        // element kind, which is the shape `@enum`-on-an-array already has, and that is one case here
+        // plus one in Build.Charts' Validate plus the reader, the table and charts/README.md. What
+        // this does is make the two ends agree: the registration is refused where the mistake is,
+        // with the property's own pointer on it, instead of the chart gate failing on a generated
+        // values.yaml this emitter had just written.
+        if (property.Kind is not SchemaKind.Text) {
+            var describe = ResourceSchema.Describe(property.Kind);
+
+            if (property.Pattern.Length > 0) {
+                problems.Add(Refinement(pointer, describe, nameof(SchemaProperty.Pattern), "@pattern"));
+            }
+
+            if (property.MinLength is not null || property.MaxLength is not null) {
+                problems.Add(Refinement(pointer, describe, "a length bound", "@length"));
+            }
+
+            if (property.Format is not SchemaFormat.None) {
+                problems.Add(
+                    Refinement(pointer, describe, $"SchemaFormat.{property.Format}", "@format")
+                );
+            }
         }
 
         CheckPatternIsSpellable(property, problems);
@@ -675,6 +761,27 @@ public static class ChartAnnotationEmitter {
             );
         }
     }
+
+    /// <summary>
+    ///     A string-only refinement declared on a property the <c>@param</c> line will not call a
+    ///     <c>{string}</c> — <c>@pattern</c>, <c>@length</c> or <c>@format</c> (#84).
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The message names <b>three</b> things on purpose: the property, so the complaint lands on
+    ///     the registration; the <c>SchemaProperty</c> member, so the reader knows which line of C# to
+    ///     delete; and the directive, so the reader can find the refusal in
+    ///     <c>build/Build.Charts.cs</c> that this one is standing in for. The alternative wording —
+    ///     "on a `{array}`" — is what the chart gate says, and it says it about a generated file with
+    ///     a line number, which is exactly the failure this method exists to prevent.
+    /// </remarks>
+    static string Refinement(string pointer, string kind, string member, string directive) =>
+        $"'{pointer}' declares {member} and is a {kind}. `{directive}` refines a string, and "
+        + $"build/Build.Charts.cs refuses it on any `@param` that is not `{{string}}` — JSON Schema "
+        + "ignores the keyword on every other type, so the directive would read as a constraint and "
+        + "validate nothing. An ARRAY OF TEXT is the case worth reading twice: SchemaProperty applies "
+        + "the refinement per element and ResourceSchema.Validate enforces it there, so the registry "
+        + "means it and the chart cannot say it — charts/README.md § What a chart cannot say, and the "
+        + "`cidr-shape-is-unenforced` note at charts/managed/kafka/conformance.yaml.";
 
     static string NegativeLength(string pointer, string member, int value) =>
         $"'{pointer}' declares {member} {value.ToString(CultureInfo.InvariantCulture)}, and `@length` "
