@@ -578,14 +578,28 @@ public sealed class ResourceGroupGrain(
                 // ReapOrphansAsync refuses a threshold shorter than the index lease and proves each
                 // candidate against its own index before it removes anything.
                 //
-                // ⚠ AND THE ROW IS NOT RE-ASSERTED ON THE WAY PAST, which is the cost of the guard
-                // and is deliberate. A reminder lost from Orleans' table — restored from a backup,
-                // or never written because the arm ran on a silo with no reminder service — is put
-                // back by the next activation of this grain (OnActivateAsync) or by the next
-                // BeginCreateAsync that finds CreatingSince empty first, and not by a create into a
-                // group that already has one in flight. That is under-driving, and it is bounded:
-                // ResourceGroupReclaimer calls ReapOrphansAsync directly before it seals a group,
-                // so a group delete never waits on this reminder.
+                // ⚠ AND A LOST ROW *IS* RE-ASSERTED ON THE WAY PAST — the paragraph that stood here
+                // said the opposite and was wrong (corrected 2026-09-06 after review of #83). It
+                // claimed the guard skipped "a create into a group that already has one in flight"
+                // and called the residue under-driving. It does not: the condition is GetReminder
+                // answering null, which is "there is no row" and nothing at all about whether
+                // another create is already in flight. So every path that reaches this branch —
+                // BeginCreateAsync into a group already creating, CompleteCreateAsync or
+                // BeginDeleteAsync that leaves another member behind, ReapOrphansAsync, and
+                // OnActivateAsync — puts back a reminder lost from Orleans' table, whether it was
+                // lost to a table restored from a backup or never written because the arm ran on a
+                // silo with no reminder service and took the catch below.
+                // AReaperRowLostFromTheTableIsPutBackByTheNextActivation is that property as a
+                // test, and the wrong paragraph mattered because a reader who believed it could
+                // have designed a backfill for a hazard that does not exist.
+                //
+                // What the guard does cost is the REFRESH: a row that is already there keeps the
+                // StartAt it was written with, which is the whole of the fix above. The only group
+                // left without a live reminder is therefore one that has members in Creating, has
+                // lost its row, and is never called again — no create, no completion, no delete, no
+                // activation. That is bounded on the path that matters: ResourceGroupReclaimer
+                // calls ReapOrphansAsync directly before it seals a group, so a group delete never
+                // waits on this reminder.
                 if (await this.GetReminder(OrphanReminderName) is null) {
                     _ = await this.RegisterOrUpdateReminder(
                         OrphanReminderName,

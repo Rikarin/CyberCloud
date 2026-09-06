@@ -152,15 +152,29 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     ///         faithful reproduction of both.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What puts it back is <c>OnActivateAsync</c>, and that is why this grain owes no
-    ///         equivalent of <c>ExpirySweeperBackfill</c>.</b> That backfill exists because
-    ///         <c>ExpirySweeperGrain</c> holds nothing — its evidence is a separate registry grain,
-    ///         so an activation is not evidence and it deliberately arms nothing on one. This grain's
-    ///         evidence is its own durable state, loaded by the activation itself, so the activation
-    ///         can decide correctly with no extra read; the case below is that line doing its job.
-    ///         What is left over is a group whose orphans nobody ever looks at, and every path that
-    ///         can look — <c>ListAsync</c>, <c>BeginCreateAsync</c>, the group delete — is a call on
-    ///         this grain and therefore arms the reaper on the way past.
+    ///         ⚠ <b>What puts it back <i>here</i> is <c>OnActivateAsync</c>, and that is why this
+    ///         grain owes no equivalent of <c>ExpirySweeperBackfill</c>.</b> That backfill exists
+    ///         because <c>ExpirySweeperGrain</c> holds nothing — its evidence is a separate registry
+    ///         grain, so an activation is not evidence and it deliberately arms nothing on one. This
+    ///         grain's evidence is its own durable state, loaded by the activation itself, so the
+    ///         activation can decide correctly with no extra read; the case below is that line doing
+    ///         its job. What is left over is a group whose orphans nobody ever looks at, and every
+    ///         path that can look — <c>ListAsync</c>, <c>BeginCreateAsync</c>, the group delete — is
+    ///         a call on this grain and therefore activates it, and the activation arms the reaper
+    ///         on the way past.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The activation is not the only thing that would put the row back, and the case
+    ///         is narrower than the guard on purpose (2026-09-06, review of #83).</b> The guard in
+    ///         <c>ArmOrDisarmAsync</c> is "there is no row", not "no create is already in flight" —
+    ///         so a second <c>BeginCreateAsync</c>, a <c>CompleteCreateAsync</c> that leaves another
+    ///         member behind, a <c>BeginDeleteAsync</c> and <c>ReapOrphansAsync</c> all re-assert a
+    ///         lost row too, and a comment in that method claiming otherwise has been corrected.
+    ///         This case deletes the row and then calls only <c>ListAsync</c>, which is the one
+    ///         reader that does not come through <c>ArmOrDisarmAsync</c>, precisely so that the
+    ///         activation is the only thing that <i>can</i> have re-armed. Asserting the narrower
+    ///         property is what makes the third sabotage — <c>OnActivateAsync</c>'s arm removed —
+    ///         land on this case and nothing else.
     ///     </para>
     /// </remarks>
     [Fact]
@@ -184,14 +198,12 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
         await PastTheClockGranularity();
 
         // The silo loses the activation. The next call re-reads PostgreSQL, finds web-01 still in
-        // CreatingSince, and arms off that.
+        // CreatingSince, and arms off that — see RowPutBackByAnActivation for why the wait for the
+        // deactivation to land is a bounded retry here and not the flat pause the rest of the suite
+        // uses.
         await group.DeactivateAsync();
-        await WaitForDeactivation();
 
-        (await Group(address).ListAsync()).GetValueOrThrow()
-            .ShouldContain(x => x.ResourceId == address.Id, TwoPhaseCreateTests.StateSurvivedDeactivation);
-
-        var back = await Row(group);
+        var back = await RowPutBackByAnActivation(address);
 
         back.ShouldNotBeNull(
             "OnActivateAsync arms off CreatingSince, which is what covers a group whose members "
@@ -202,6 +214,9 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
             armed.StartAt,
             "and it is a NEW row rather than the old one having survived the delete"
         );
+
+        (await Group(address).ListAsync()).GetValueOrThrow()
+            .ShouldContain(x => x.ResourceId == address.Id, TwoPhaseCreateTests.StateSurvivedDeactivation);
     }
 
     static Guid Tenant(int n) => TenancyCluster.Tenant(8300 + n);
@@ -228,9 +243,53 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     static Task PastTheClockGranularity() =>
         Task.Delay(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken);
 
-    /// <summary>See <c>TwoPhaseCreateTests.WaitForDeactivation</c> — the same pause, same reason.</summary>
-    static Task WaitForDeactivation() =>
-        Task.Delay(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken);
+    /// <summary>
+    ///     Calls the group until an activation has put the reaper row back, or gives up and answers
+    ///     <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A BOUNDED RETRY AND NOT THE FLAT 250 ms THE REST OF THE SUITE USES, BECAUSE HERE
+    ///         THE PAUSE WOULD BE LOAD-BEARING (2026-09-06, review of #83).</b>
+    ///         <c>DeactivateOnIdle</c> only <i>schedules</i> the deactivation, so a call made too
+    ///         soon reaches the same activation: <c>OnActivateAsync</c> never re-runs, nothing
+    ///         re-arms, and the row is still missing.
+    ///         <c>TwoPhaseCreateTests.WaitForDeactivation</c> can afford to be flat because its own
+    ///         remarks are true of it — the state assertions there hold whether or not the grain has
+    ///         died yet, so a short pause blunts the case rather than failing it, which is why that
+    ///         helper calls itself a sharpener and not a correctness crutch. The assertion here is
+    ///         the opposite shape: the row comes back only if the grain really died and came back,
+    ///         so a pause that ran short would be a RED that says nothing about the code — in a
+    ///         suite that already flakes under container contention. Retrying instead makes a slow
+    ///         deactivation cost seconds rather than a false failure, and a genuinely unarmed grain
+    ///         still fails, just later.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It drives with <c>ListAsync</c> on purpose, and polling the table alone would
+    ///         hang for the whole budget.</b> Nothing re-arms until something calls the grain, and
+    ///         <c>ListAsync</c> is the reader that does <i>not</i> come through
+    ///         <c>ArmOrDisarmAsync</c> — so a row that appears after one can only have been written
+    ///         by the activation that the call forced, which is the <c>OnActivateAsync</c> line
+    ///         #83's third sabotage reverts to watch this case go red.
+    ///     </para>
+    /// </remarks>
+    async Task<ReminderEntry?> RowPutBackByAnActivation(ResourceId address) {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+
+        while (true) {
+            _ = (await Group(address).ListAsync()).GetValueOrThrow();
+
+            if (await Row(Group(address)) is { } row) {
+                return row;
+            }
+
+            if (DateTime.UtcNow >= deadline) {
+                return null;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        }
+    }
 
     async Task<ResourceId> GroupAndAddress(Guid tenant, string groupName, string resourceName) {
         var subscription = Guid.NewGuid();
