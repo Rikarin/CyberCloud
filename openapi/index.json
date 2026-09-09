@@ -184,6 +184,7 @@
     "CyberCloud.DBforMySQL",
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.DocumentDB",
+    "CyberCloud.Mail",
     "CyberCloud.Messaging",
     "CyberCloud.Monitor",
     "CyberCloud.Network",
@@ -294,6 +295,19 @@
         "plural": "Document database accounts",
         "alias": "docdb",
         "summary": "MongoDB-compatible, not MongoDB: FerretDB over PostgreSQL, covering CRUD, indexes and the wire protocol. Multi-document transactions are not supported. Runs on a CloudNativePG cluster, so failover, backup and point-in-time recovery are the operator's.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Mail/domains",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Mail domain",
+        "plural": "Mail domains",
+        "alias": "domain",
+        "summary": "A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain must publish before the platform will send for it.",
         "declared": true
       }
     },

@@ -758,6 +758,77 @@ export interface DocumentDBAccountsListKeysResult {
 }
 
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsPreset =
+  | 'c1.large'
+  | 'c1.medium'
+  | 'c1.micro'
+  | 'c1.nano'
+  | 'c1.small'
+  | 'c1.xlarge';
+
+/** The values /properties/version accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVersion =
+  | '2.3'
+  | '2.4';
+
+/** Mail domain. A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain must publish before the platform will send for it. */
+export interface MailDomainsData {
+  /** The region the mail domain is billed in. */
+  location: string;
+  /** The domain's own settings. */
+  properties?: {
+    /** The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source. */
+    catchAll?: string;
+    /** The cluster whose namespace holds the mail back end. */
+    clusterId: string;
+    /** Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one. */
+    dedicatedIp?: boolean;
+    /** The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published. */
+    domain: string;
+    /** Spam and virus filtering. */
+    filtering?: {
+      /** Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database. */
+      antivirus?: boolean;
+      /** The Rspamd score at or above which a message is rejected outright rather than filed as junk. */
+      rejectThreshold?: number;
+    };
+    /** Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool. */
+    relayHosts?: string[];
+    /** Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve. */
+    sieve?: boolean;
+    /** CPU and memory for the back end, either by preset or explicitly. */
+    sizing?: {
+      /** Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset. */
+      cpu?: string;
+      /** Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. */
+      memory?: string;
+      /** A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable. */
+      preset?: MailDomainsPreset;
+    };
+    /** The mail store. */
+    storage?: {
+      /** The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume. */
+      mailboxQuota?: string;
+      /** The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks. */
+      size: string;
+    };
+    /** Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. */
+    version: MailDomainsVersion;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Mail domain, as the API returns it. */
+export interface MailDomainsResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.Mail/domains';
+  readonly properties?: MailDomainsData['properties'];
+}
+
+/** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
 export type MessagingKafkaClustersPreset =
   | 'c1.nano'
   | 'c1.micro'

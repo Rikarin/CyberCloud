@@ -1,0 +1,249 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/mail/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the mail chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "catchAll": {
+      "default": "",
+      "description": "The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source.",
+      "pattern": "^(?:^([a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?)?$)$",
+      "type": "string",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/catchAll"
+    },
+    "dedicatedIp": {
+      "default": false,
+      "description": "Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one.",
+      "type": "boolean",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/dedicatedIp"
+    },
+    "domain": {
+      "default": "example.com",
+      "description": "The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.",
+      "examples": [
+        "example.com"
+      ],
+      "maxLength": 253,
+      "pattern": "^(?:^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$)$",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/domain"
+    },
+    "filtering": {
+      "additionalProperties": false,
+      "description": "Spam and virus filtering.",
+      "properties": {
+        "antivirus": {
+          "default": true,
+          "description": "Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database.",
+          "type": "boolean",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/filtering/antivirus"
+        },
+        "rejectThreshold": {
+          "default": 15,
+          "description": "The Rspamd score at or above which a message is rejected outright rather than filed as junk.",
+          "maximum": 30,
+          "minimum": 5,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/filtering/rejectThreshold"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/filtering"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 10,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Mail/domains",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "relayHosts": {
+      "default": [],
+      "description": "Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool.",
+      "items": {},
+      "type": "array",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/relayHosts"
+    },
+    "sieve": {
+      "default": true,
+      "description": "Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve.",
+      "type": "boolean",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/sieve"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory for the back end, either by preset or explicitly.",
+      "properties": {
+        "cpu": {
+          "default": "",
+          "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/sizing/cpu"
+        },
+        "memory": {
+          "default": "",
+          "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/sizing/memory"
+        },
+        "preset": {
+          "default": "c1.micro",
+          "description": "A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+          "enum": [
+            "c1.large",
+            "c1.medium",
+            "c1.micro",
+            "c1.nano",
+            "c1.small",
+            "c1.xlarge"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "storage": {
+      "additionalProperties": false,
+      "description": "The mail store.",
+      "properties": {
+        "mailboxQuota": {
+          "default": "1Gi",
+          "description": "The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/storage/mailboxQuota"
+        },
+        "size": {
+          "default": "20Gi",
+          "description": "The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/storage/size"
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/storage"
+    },
+    "version": {
+      "default": "2.4",
+      "description": "Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+      "enum": [
+        "2.3",
+        "2.4"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "domain",
+    "version"
+  ],
+  "title": "mail chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "mail",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Mail/domains"
+}

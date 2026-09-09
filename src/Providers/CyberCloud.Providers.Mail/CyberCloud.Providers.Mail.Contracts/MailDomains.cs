@@ -409,8 +409,32 @@ public static class MailDomains {
     ///     <c>items.enum</c>, which is the same per-element shape. The full argument is at the Kafka
     ///     constant and is not repeated.
     /// </remarks>
+    /// <remarks>
+    ///     ⚠ <b>NO LOOKAHEAD, AND THAT IS A HARD CONSTRAINT ON EVERY PATTERN IN THIS PLATFORM RATHER
+    ///     THAN A STYLE NOTE.</b> This constant began as
+    ///     <c>^(?=.{1,253}$)([A-Za-z0-9]…</c> — the standard way to bound a hostname's total length
+    ///     while validating its labels. `./build.sh Charts` generates <c>values.schema.json</c> from
+    ///     this schema and then runs <c>helm lint --strict</c>, and <b>Helm validates with Go's
+    ///     regexp, which is RE2 and has no lookahead at all</b>: <i>"invalid or unsupported Perl
+    ///     syntax: `(?=`"</i>. JSON Schema's own specification says ECMA-262, so a lookahead is legal
+    ///     in the document and unusable by the one tool that reads it here.
+    ///     <para>
+    ///         ⚠ It is the only lookahead the tree has ever contained — every other provider's
+    ///         patterns are quantity, CIDR and enum shapes that never needed one — so this is a
+    ///         constraint nothing had met before rather than a rule anybody broke.
+    ///     </para>
+    ///     <para>
+    ///         The total-length bound it was buying is now <c>MaxLength</c> on the property, which is
+    ///         where a length belongs anyway: a reader sees <c>253</c> rather than deducing it from a
+    ///         regex, and the emitted schema says <c>maxLength</c> rather than hiding it in a pattern
+    ///         no portal could explain.
+    ///     </para>
+    /// </remarks>
     public const string HostnamePattern =
-        "^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$";
+        "^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$";
+
+    /// <summary>The longest a fully-qualified domain name may be, from RFC 1035.</summary>
+    public const int HostnameMaxLength = 253;
 
     /// <summary>A mailbox local part, for the catch-all.</summary>
     /// <remarks>
@@ -473,7 +497,23 @@ public static class MailDomains {
                     + "changing it would invalidate every record the tenant has published."
                 ) {
                     Pattern = HostnamePattern,
+                    // ⚠ The total-length bound the pattern's lookahead used to carry — see
+                    // HostnamePattern for why it cannot be in the regex.
+                    MaxLength = HostnameMaxLength,
                     Immutable = true,
+                    // ⚠ A DEFAULT IS REQUIRED HERE EVEN THOUGH THE PROPERTY IS, AND THE REASON IS THE
+                    // CHART RATHER THAN THE API. `./build.sh Charts` generates values.yaml from this
+                    // schema and refuses a value that its own `@pattern` rejects — a property with a
+                    // pattern and no default is emitted as `""`, and `helm lint` would then reject
+                    // the chart against the schema the same run generates. Every required patterned
+                    // property in the tree carries a default that satisfies its own pattern; this is
+                    // the first whose default cannot be a real value.
+                    //
+                    // ⚠ `example.com` and not a plausible-looking domain. RFC 2606 reserves it for
+                    // documentation, so it is the one hostname that cannot belong to somebody — a
+                    // placeholder that leaked into a running configuration would send mail for a
+                    // domain nobody owns rather than for a domain somebody else does.
+                    DefaultJson = "\"example.com\"",
                     ExampleJson = "\"example.com\""
                 },
                 new(
@@ -948,7 +988,7 @@ public static class MailDomains {
     /// <remarks>
     ///     ⚠ <b>Every property the schema declares is written, including the ones equal to their
     ///     defaults.</b> A body that omitted them would test the accessors' fallbacks rather than the
-    ///     rendering, and the two are different questions — <c>MailDomainDeclarationTests</c> asks
+    ///     rendering, and the two are different questions — <c>MailDeclarationTests</c> asks
     ///     the first one deliberately, with bodies that omit.
     /// </remarks>
     public static string Body(

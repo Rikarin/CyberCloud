@@ -1832,6 +1832,194 @@ public sealed partial class DocumentDatabaseAccountCollection {
 }
 
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MailDomainPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 1,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 2,
+
+    /// <summary>c1.micro</summary>
+    [JsonStringEnumMemberName("c1.micro")]
+    C1Micro = 3,
+
+    /// <summary>c1.nano</summary>
+    [JsonStringEnumMemberName("c1.nano")]
+    C1Nano = 4,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 5,
+
+    /// <summary>c1.xlarge</summary>
+    [JsonStringEnumMemberName("c1.xlarge")]
+    C1Xlarge = 6
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MailDomainVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>2.3</summary>
+    [JsonStringEnumMemberName("2.3")]
+    N23 = 1,
+
+    /// <summary>2.4</summary>
+    [JsonStringEnumMemberName("2.4")]
+    N24 = 2
+}
+
+/// <summary>The body of a CyberCloud.Mail/domains.</summary>
+/// <remarks>A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain must publish before the platform will send for it.</remarks>
+public sealed partial class MailDomainData {
+
+    /// <summary>The region the mail domain is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("catchAll")]
+    public string? CatchAll { get; set; }
+
+    /// <summary>The cluster whose namespace holds the mail back end.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("dedicatedIp")]
+    public bool? DedicatedIp { get; set; }
+
+    /// <summary>The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "example.com" when left unset.</remarks>
+    [JsonPropertyName("domain")]
+    public required string Domain { get; set; }
+
+    /// <summary>Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("antivirus")]
+    public bool? Antivirus { get; set; }
+
+    /// <summary>The Rspamd score at or above which a message is rejected outright rather than filed as junk.</summary>
+    /// <remarks>Defaults to 15 when left unset.</remarks>
+    [JsonPropertyName("rejectThreshold")]
+    public long? RejectThreshold { get; set; }
+
+    /// <summary>Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool.</summary>
+    /// <remarks>Defaults to [] when left unset.</remarks>
+    [JsonPropertyName("relayHosts")]
+    public IList<string> RelayHosts { get; set; } = new List<string>();
+
+    /// <summary>Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("sieve")]
+    public bool? Sieve { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
+    /// <remarks>Defaults to "c1.micro" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public MailDomainPreset? Preset { get; set; }
+
+    /// <summary>The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume.</summary>
+    /// <remarks>Defaults to "1Gi" when left unset.</remarks>
+    [JsonPropertyName("mailboxQuota")]
+    public string? MailboxQuota { get; set; }
+
+    /// <summary>The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks.</summary>
+    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
+    /// <remarks>Required on a create. Defaults to "2.4" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required MailDomainVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Mail domain, and the operations on it.</summary>
+public sealed partial class MailDomainResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public MailDomainData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<MailDomainResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<MailDomainResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        MailDomainData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Mail domains in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class MailDomainCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Mail/domains";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Mail domain.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<MailDomainResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        MailDomainData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Mail domain by name.</summary>
+    public partial Task<Response<MailDomainResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Mail domains in this group, paged.</summary>
+    public partial AsyncPageable<MailDomainResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum KafkaClusterPreset {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
     Unknown = 0,

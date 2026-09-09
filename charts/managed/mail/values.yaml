@@ -23,9 +23,11 @@
 
 ## @param domain {string} The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.
 ## @required
-## @pattern ^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$
 ## @immutable
-domain: ""
+## @length ..253
+## @pattern ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$
+## @example "example.com"
+domain: example.com
 
 ## @param version {string} Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.
 ## @required

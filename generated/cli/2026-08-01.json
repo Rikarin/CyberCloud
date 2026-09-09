@@ -4815,6 +4815,541 @@
         }
       }
     },
+    "mail": {
+      "name": "mail",
+      "summary": "Commands for the CyberCloud.Mail provider.",
+      "commands": {
+        "domains": {
+          "name": "domains",
+          "resourceType": "CyberCloud.Mail/domains",
+          "title": "Mail domain",
+          "plural": "Mail domains",
+          "summary": "A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain must publish before the platform will send for it.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Mail domain.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--antivirus",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database.",
+                  "jsonPointer": "/properties/filtering/antivirus",
+                  "default": true
+                },
+                {
+                  "name": "--catch-all",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source.",
+                  "jsonPointer": "/properties/catchAll",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the mail back end.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--dedicated-ip",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one.",
+                  "jsonPointer": "/properties/dedicatedIp",
+                  "default": false
+                },
+                {
+                  "name": "--domain",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.",
+                  "jsonPointer": "/properties/domain",
+                  "immutable": true,
+                  "default": "example.com",
+                  "example": "example.com"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the mail domain is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--mailbox-quota",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume.",
+                  "jsonPointer": "/properties/storage/mailboxQuota",
+                  "default": "1Gi"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.micro",
+                    "c1.nano",
+                    "c1.small",
+                    "c1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.micro"
+                },
+                {
+                  "name": "--reject-threshold",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The Rspamd score at or above which a message is rejected outright rather than filed as junk.",
+                  "jsonPointer": "/properties/filtering/rejectThreshold",
+                  "default": 15
+                },
+                {
+                  "name": "--relay-hosts",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool.",
+                  "jsonPointer": "/properties/relayHosts",
+                  "repeated": true,
+                  "default": []
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--sieve",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve.",
+                  "jsonPointer": "/properties/sieve",
+                  "default": true
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "20Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "2.3",
+                    "2.4"
+                  ],
+                  "default": "2.4"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Mail domain. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Mail domains in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Mail domain.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Mail domain. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--antivirus",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database.",
+                  "jsonPointer": "/properties/filtering/antivirus",
+                  "default": true
+                },
+                {
+                  "name": "--catch-all",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source.",
+                  "jsonPointer": "/properties/catchAll",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the mail back end.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--dedicated-ip",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one.",
+                  "jsonPointer": "/properties/dedicatedIp",
+                  "default": false
+                },
+                {
+                  "name": "--domain",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.",
+                  "jsonPointer": "/properties/domain",
+                  "immutable": true,
+                  "default": "example.com",
+                  "example": "example.com"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the mail domain is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--mailbox-quota",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume.",
+                  "jsonPointer": "/properties/storage/mailboxQuota",
+                  "default": "1Gi"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.micro",
+                    "c1.nano",
+                    "c1.small",
+                    "c1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.micro"
+                },
+                {
+                  "name": "--reject-threshold",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The Rspamd score at or above which a message is rejected outright rather than filed as junk.",
+                  "jsonPointer": "/properties/filtering/rejectThreshold",
+                  "default": 15
+                },
+                {
+                  "name": "--relay-hosts",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool.",
+                  "jsonPointer": "/properties/relayHosts",
+                  "repeated": true,
+                  "default": []
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--sieve",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve.",
+                  "jsonPointer": "/properties/sieve",
+                  "default": true
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "20Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "2.3",
+                    "2.4"
+                  ],
+                  "default": "2.4"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "domain"
+        }
+      }
+    },
     "messaging": {
       "name": "messaging",
       "summary": "Commands for the CyberCloud.Messaging provider.",
