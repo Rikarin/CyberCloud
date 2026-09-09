@@ -475,6 +475,29 @@
         <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Tests/CyberCloud.Providers.Monitor.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Conformance/CyberCloud.Providers.Monitor.Conformance.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Cluster.Conformance/CyberCloud.Providers.Monitor.Cluster.Conformance.csproj" />
+
+        <!--
+          The fourteenth provider family — CyberCloud.Mail/domains, on Dovecot, Postfix and Rspamd.
+          docs/plan/17 § `CyberCloud.Mail`, "the managed mail server · M2 · 3.5 EM".
+
+          ⚠ IT IS THE FIRST FAMILY WHOSE ROW WAS GATED ON AN OPERATIONAL COMMITMENT RATHER THAN AN
+          ENGINEERING ONE. docs/plan/25 row 2 held it closed until the abuse desk was staffed, because
+          docs/plan/17 § Deliverability requires `abuse@` monitored by a human with the authority to
+          suspend a tenant within the hour — and § R7 is explicit that building the module without
+          that ends with the platform's address blocks listed and its OWN transactional email failing
+          with them. The row closed on 2026-08-11. No other provider in this file has a precondition
+          that code could not satisfy.
+
+          ⚠ IT IS ALSO THE FIRST WITH NO OPERATOR CANDIDATE AT ALL. charts/managed/nats records an
+          operator that existed and was archived; Postfix and Dovecot predate Kubernetes by two
+          decades and were never going to have one.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Contracts/CyberCloud.Providers.Mail.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Application/CyberCloud.Providers.Mail.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Tests/CyberCloud.Providers.Mail.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Conformance/CyberCloud.Providers.Mail.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Cluster.Conformance/CyberCloud.Providers.Mail.Cluster.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />

@@ -1,0 +1,48 @@
+# Managed mail — docs/plan/17 § `CyberCloud.Mail`, "the managed mail server · M2 · 3.5 EM".
+#
+# ⚠ THERE IS NO OPERATOR FOR ANY OF THE THREE COMPONENTS, AND THAT IS THE FIRST FACT ABOUT THIS
+# CHART. Postfix, Dovecot and Rspamd are three of the oldest and most widely deployed daemons on the
+# internet and not one of them has a Kubernetes controller worth depending on. So this chart renders
+# core kinds directly, the same shape charts/managed/nats took after nats-operator was archived —
+# rather than one custom resource a controller expands. See SOURCE next to this file.
+apiVersion: v2
+name: mail
+description: Managed mail — per-tenant Dovecot, Postfix and Rspamd, with DKIM signing and a retained mail store.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default Dovecot version, matching values.yaml `version`.
+appVersion: "2.4"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - mail
+  - smtp
+  - imap
+  - dovecot
+  - postfix
+  - rspamd
+
+home: https://www.dovecot.org
+sources:
+  - https://github.com/dovecot/core
+  - https://github.com/vdukhovni/postfix
+  - https://github.com/rspamd/rspamd
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's body
+# rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+#
+# ⚠ `operator: none` IS AN ANSWER AND A MISSING KEY IS NOT. "This service has no operator" and
+# "somebody forgot to write which one" are indistinguishable when the row is absent, and the first is
+# a fact that changes what the reconciler has to do.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Mail/domains
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

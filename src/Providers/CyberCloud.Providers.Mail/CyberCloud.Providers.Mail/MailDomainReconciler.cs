@@ -361,14 +361,16 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
         return Result<Dictionary<string, string>>.Success(resolved);
     }
 
-    /// <summary>The five objects a domain is, in dependency order.</summary>
-    static ImmutableArray<ObjectRef> Targets(string ns, string name) => [
-        MailDomains.CredentialsSecretRef(ns, name),
-        MailDomains.ConfigMapRef(ns, name),
-        MailDomains.ServiceRef(ns, name),
-        MailDomains.SetRef(ns, name),
-        MailDomains.PodMonitorRef(ns, name)
-    ];
+    /// <summary>
+    ///     The five objects a domain is, in dependency order.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><see cref="MailDomains.Objects" /> and not a second list.</b> The conformance case
+    ///     declares the objects it expects from that same method, so a reconciler with its own copy
+    ///     could apply a sixth object — or miss one — and the suite that exists to catch exactly
+    ///     that would be reading the list it was told to expect rather than the list applied.
+    /// </remarks>
+    static ImmutableArray<ObjectRef> Targets(string ns, string name) => MailDomains.Objects(ns, name);
 
     /// <summary>The five documents, paired with where each goes, in the same order.</summary>
     static ImmutableArray<(ObjectRef Target, string Body)> Documents(

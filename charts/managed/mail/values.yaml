@@ -1,0 +1,99 @@
+# Managed mail — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from MailDomains.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+#
+# ⚠ `domain` IS A PROPERTY AND NOT THE RESOURCE NAME, WHICH IS NOT WHAT docs/plan/17 SPECIFIES. That
+# document writes this type as `domains/{domain}`. A resource name on this platform must match the
+# Kubernetes DNS-1123 LABEL rule — no dots — because it becomes an object name and a label value, so
+# `domains/example.com` is refused before any provider code runs. The name is an ordinary name and
+# the domain is an immutable property beside it.
+
+# ⚠ THERE IS NO `storage.class`, AND ITS ABSENCE IS DELIBERATE. Two charts once handed tenants a
+# storage class the bundle did not provide, which is a claim that stays Pending forever with no
+# error anybody sees. The claim this chart renders names no class at all, so it binds through the
+# cluster default — which the bundle does install.
+
+## @param domain {string} The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.
+## @required
+## @pattern ^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$
+## @immutable
+domain: ""
+
+## @param version {string} Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.
+## @required
+## @enum 2.3 | 2.4
+version: "2.4"
+
+## @param sizing {object} CPU and memory for the back end, either by preset or explicitly.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.
+  ## @enum c1.large | c1.medium | c1.micro | c1.nano | c1.small | c1.xlarge
+  ## @widget cozy-preset
+  preset: c1.micro
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The mail store.
+storage:
+  ## @param size {string} The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  size: "20Gi"
+  ## @param mailboxQuota {string} The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume.
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  mailboxQuota: "1Gi"
+
+## @param catchAll {string} The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source.
+## @pattern ^([a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?)?$
+catchAll: ""
+
+## @param relayHosts {array} Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool.
+relayHosts: []
+
+## @param dedicatedIp {boolean} Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one.
+dedicatedIp: false
+
+## @param filtering {object} Spam and virus filtering.
+filtering:
+  ## @param rejectThreshold {integer} The Rspamd score at or above which a message is rejected outright rather than filed as junk.
+  ## @range 5..30
+  rejectThreshold: 15
+  ## @param antivirus {boolean} Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database.
+  antivirus: true
+
+## @param sieve {boolean} Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve.
+sieve: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Mail/domains
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

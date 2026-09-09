@@ -1,0 +1,67 @@
+# The Dovecot, Postfix and Rspamd configuration.
+#
+# ⚠ NO CREDENTIAL REACHES THIS OBJECT. The DKIM key and the master password are mounted from the
+# Secret; a ConfigMap is readable by anyone holding `get configmaps`, which is a strictly weaker
+# right than `get secrets`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mail.name" . }}-mail-config
+  labels:
+    {{- include "mail.platformLabels" . | nindent 4 }}
+    {{- include "mail.selectorLabels" . | nindent 4 }}
+data:
+  dovecot.conf: |
+    protocols = imap lmtp{{ if .Values.sieve }} sieve{{ end }}
+    mail_location = mdbox:/srv/mail/%d/%n
+    mail_home = /srv/mail/{{ .Values.domain }}/%n
+    first_valid_uid = 1000
+    mail_plugins = $mail_plugins quota
+    quota_rule = *:storage={{ .Values.storage.mailboxQuota }}
+    service lmtp {
+      inet_listener lmtp {
+        port = 24
+      }
+    }
+    service imap-login {
+      inet_listener imap {
+        port = 143
+      }
+      # ⚠ Port 0 disables the TLS listener deliberately. docs/plan/17 § Topology terminates TLS at
+      # the shared front door with the tenant's certificate; a second termination here would need a
+      # second copy of a private key.
+      inet_listener imaps {
+        port = 0
+      }
+    }
+  main.cf: |
+    myhostname = {{ .Values.domain }}
+    mydestination = {{ .Values.domain }}
+    virtual_mailbox_domains = {{ .Values.domain }}
+    virtual_transport = lmtp:inet:localhost:24
+    smtpd_milters = inet:localhost:11333
+    milter_default_action = tempfail
+    relayhost = {{ if .Values.relayHosts }}[{{ index .Values.relayHosts 0 }}]{{ end }}
+    {{- if .Values.catchAll }}
+    luser_relay = {{ .Values.catchAll }}@{{ .Values.domain }}
+    local_recipient_maps =
+    {{- else }}
+    local_recipient_maps = $virtual_mailbox_maps
+    {{- end }}
+  rspamd.conf: |
+    actions {
+      reject = {{ .Values.filtering.rejectThreshold }};
+      add_header = {{ div .Values.filtering.rejectThreshold 3 }};
+    }
+    dkim_signing {
+      selector = "cc";
+      path = "/etc/mail/dkimPrivateKey";
+    }
+    {{- if .Values.filtering.antivirus }}
+    antivirus {
+      clamav {
+        type = "clamav";
+        servers = "/run/clamav/clamd.sock";
+      }
+    }
+    {{- end }}

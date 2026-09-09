@@ -120,10 +120,34 @@ public static class MailDomains {
 
     /// <summary>The resource type. docs/plan/17 § Resource model.</summary>
     /// <remarks>
-    ///     ⚠ <b>The resource's NAME is the mail domain</b> — <c>domains/{domain}</c> in doc 17's
-    ///     model — rather than a property holding one. That is what makes
-    ///     <see cref="TryRequiredRecords" /> a function of the address, and it is why no
-    ///     <c>/properties/domain</c> exists to drift out of agreement with the name.
+    ///     <para>
+    ///         ⚠ <b>THE RESOURCE'S NAME IS NOT THE MAIL DOMAIN, AND doc 17'S MODEL CANNOT BE BUILT AS
+    ///         IT IS WRITTEN.</b> That document spells this type <c>domains/{domain}</c> — the address
+    ///         segment <i>is</i> the domain. It cannot be. <c>ResourceNaming</c> applies the
+    ///         Kubernetes <b>DNS-1123 label</b> rule to every resource name on this platform:
+    ///         <c>[a-z0-9]([-a-z0-9]*[a-z0-9])?</c>, 1–63 characters, <b>no dots</b> — because the
+    ///         name becomes a Kubernetes object name and a label value. Every mail domain worth
+    ///         hosting contains at least one dot, so <c>domains/example.com</c> is refused by the
+    ///         platform's own address parser before any of this code runs.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The rule is not this type's to relax</b>, and relaxing it would be the wrong fix
+    ///         even if it were: the name is what
+    ///         <see cref="ConfigMapName" /> and its siblings build every object name from, and a dot
+    ///         is legal in an object name but <b>not</b> in the DNS-1123 <i>label</i> that a
+    ///         <c>StatefulSet</c>'s pod names and its Service's DNS records are built from. A type
+    ///         that allowed dots in the name would render objects the API server accepts and pods it
+    ///         refuses to schedule.
+    ///     </para>
+    ///     <para>
+    ///         So the domain is <b>a required, immutable property</b> and the name is an ordinary
+    ///         resource name — <c>domains/example-com</c> with
+    ///         <c>properties.domain = "example.com"</c> is the shape. ⚠ The cost is a fact that now
+    ///         lives in two places and can disagree, which is exactly what the name-as-domain design
+    ///         avoided; <c>Immutable</c> on the property is what stops the disagreement moving after
+    ///         create, and it is why <see cref="TryRequiredRecords" /> takes the domain as an
+    ///         argument rather than reading an address.
+    ///     </para>
     /// </remarks>
     public const string TypePath = "domains";
 
@@ -398,6 +422,18 @@ public static class MailDomains {
     /// </remarks>
     public const string LocalPartPattern = "^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$";
 
+    /// <summary>The same, but accepting the empty string. ⚠ What <c>catchAll</c> is declared with.</summary>
+    /// <remarks>
+    ///     ⚠ <b>A pattern is applied to the WHOLE value, so a property whose default is <c>""</c> must
+    ///     have a pattern that accepts <c>""</c>.</b> Declaring
+    ///     <see cref="LocalPartPattern" /> on <c>catchAll</c> made the type unloadable —
+    ///     <c>ResourceSchema.Of</c> refused it as an incoherent declaration, at static
+    ///     construction, which is the same check <c>OptionalQuantityPattern</c> exists to satisfy for
+    ///     the sizing overrides. The failure is worth recording rather than quietly fixing: the
+    ///     platform caught a property whose default value no body could ever have set.
+    /// </remarks>
+    public const string OptionalLocalPartPattern = "^([a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?)?$";
+
     // ── The schema ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>The body shape of api-version <see cref="V2026" />.</summary>
@@ -428,6 +464,18 @@ public static class MailDomains {
                 },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
+                new(
+                    "/properties/domain",
+                    SchemaKind.Text,
+                    Required: true,
+                    Description: "The mail domain this resource hosts, for example example.com. "
+                    + "Immutable: the DKIM record, the SPF record and the MX all name it, so "
+                    + "changing it would invalidate every record the tenant has published."
+                ) {
+                    Pattern = HostnamePattern,
+                    Immutable = true,
+                    ExampleJson = "\"example.com\""
+                },
                 new(
                     "/properties/version",
                     SchemaKind.Text,
@@ -503,7 +551,7 @@ public static class MailDomains {
                     + "the better answer for deliverability: a catch-all accepts every dictionary "
                     + "attack and turns the domain into a backscatter source."
                 ) {
-                    Pattern = LocalPartPattern,
+                    Pattern = OptionalLocalPartPattern,
                     DefaultJson = "\"\""
                 },
                 new(
@@ -512,6 +560,10 @@ public static class MailDomains {
                     Description: "Smart hosts to relay outbound mail through instead of delivering "
                     + "it directly. Empty means the platform's own outbound pool."
                 ) {
+                    // ⚠ Without ElementKind the array reaches an SDK as `object[]` and a CLI cannot
+                    // type a repeated flag from it — ResourceSchema.Of refuses the declaration
+                    // outright, which is how this was found.
+                    ElementKind = SchemaKind.Text,
                     DefaultJson = "[]"
                 },
                 new(
@@ -571,6 +623,16 @@ public static class MailDomains {
 
         return (cpu.Length > 0 ? cpu : fallback.Cpu, memory.Length > 0 ? memory : fallback.Memory);
     }
+
+    /// <summary>The mail domain a body hosts.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Read from the body and never from the address</b> — see <see cref="TypePath" /> for
+    ///     why the resource name cannot be the domain. A caller that substituted
+    ///     <c>context.Id.Name</c> here would render a Postfix configuration accepting mail for
+    ///     <c>example-com</c>, which is not a domain anybody sends to, and every message for the real
+    ///     domain would be rejected as a relay attempt.
+    /// </remarks>
+    public static string Domain(JsonElement desired) => Root(desired, "domain", string.Empty);
 
     /// <summary>The Dovecot version a body asks for.</summary>
     public static string Version(JsonElement desired) => Root(desired, "version", DefaultVersion);
@@ -861,6 +923,72 @@ public static class MailDomains {
         );
     }
 
+    /// <summary>The five objects a domain is, in dependency order.</summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    public static ImmutableArray<ObjectRef> Objects(string ns, string name) => [
+        CredentialsSecretRef(ns, name),
+        ConfigMapRef(ns, name),
+        ServiceRef(ns, name),
+        SetRef(ns, name),
+        PodMonitorRef(ns, name)
+    ];
+
+    /// <summary>A valid desired body, for tests and for the conformance case.</summary>
+    /// <param name="clusterId">The cluster the back end is placed in.</param>
+    /// <param name="domain">The mail domain. ⚠ Not the resource name — see <see cref="TypePath" />.</param>
+    /// <param name="storageSize">The mail volume size.</param>
+    /// <param name="mailboxQuota">The default per-mailbox quota.</param>
+    /// <param name="preset">A sizing preset.</param>
+    /// <param name="catchAll">The catch-all local part, or empty to reject unrouted mail.</param>
+    /// <param name="sieve">Whether Pigeonhole is on.</param>
+    /// <param name="antivirus">Whether ClamAV is on.</param>
+    /// <param name="rejectThreshold">The Rspamd reject score.</param>
+    /// <param name="location">The billing region.</param>
+    /// <remarks>
+    ///     ⚠ <b>Every property the schema declares is written, including the ones equal to their
+    ///     defaults.</b> A body that omitted them would test the accessors' fallbacks rather than the
+    ///     rendering, and the two are different questions — <c>MailDomainDeclarationTests</c> asks
+    ///     the first one deliberately, with bodies that omit.
+    /// </remarks>
+    public static string Body(
+        Guid clusterId,
+        string domain = "example.com",
+        string storageSize = DefaultStorageSize,
+        string mailboxQuota = DefaultMailboxQuota,
+        string preset = DefaultPreset,
+        string catchAll = "",
+        bool sieve = true,
+        bool antivirus = true,
+        int rejectThreshold = DefaultRejectThreshold,
+        string location = "eu-central"
+    ) =>
+        new JsonObject {
+            ["location"] = location,
+            ["properties"] = new JsonObject {
+                ["clusterId"] = clusterId.ToString("D", CultureInfo.InvariantCulture),
+                ["domain"] = domain,
+                ["version"] = DefaultVersion,
+                ["sizing"] = new JsonObject {
+                    ["preset"] = preset,
+                    ["cpu"] = string.Empty,
+                    ["memory"] = string.Empty
+                },
+                ["storage"] = new JsonObject {
+                    ["size"] = storageSize,
+                    ["mailboxQuota"] = mailboxQuota
+                },
+                ["catchAll"] = catchAll,
+                ["relayHosts"] = new JsonArray(),
+                ["dedicatedIp"] = false,
+                ["filtering"] = new JsonObject {
+                    ["rejectThreshold"] = rejectThreshold,
+                    ["antivirus"] = antivirus
+                },
+                ["sieve"] = sieve
+            }
+        }.ToJsonString();
+
     // ── The objects a desired body becomes ────────────────────────────────────────────────────
 
     /// <summary>The <c>Secret</c> document, from what the vault handed back.</summary>
@@ -910,18 +1038,19 @@ public static class MailDomains {
     }
 
     /// <summary>Dovecot's configuration — LMTP in, IMAP out, Pigeonhole when asked for.</summary>
-    /// <param name="name">The resource's own name, which is the mail domain.</param>
-    /// <param name="desired">The validated desired body.</param>
+    /// <param name="name">The resource's own name. ⚠ Not the domain — see <see cref="TypePath" />.</param>
+    /// <param name="desired">The validated desired body, which carries the domain.</param>
     public static string DovecotConf(string name, JsonElement desired) {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
+        var domain = Domain(desired);
         var protocols = SieveEnabled(desired) ? "imap lmtp sieve" : "imap lmtp";
 
         var builder = new StringBuilder()
             .Append("# Generated by CyberCloud.Mail/domains. Do not edit in place.\n")
             .Append(CultureInfo.InvariantCulture, $"protocols = {protocols}\n")
             .Append("mail_location = mdbox:/srv/mail/%d/%n\n")
-            .Append(CultureInfo.InvariantCulture, $"mail_home = /srv/mail/{name}/%n\n")
+            .Append(CultureInfo.InvariantCulture, $"mail_home = /srv/mail/{domain}/%n\n")
             .Append("first_valid_uid = 1000\n")
             .Append("mail_plugins = $mail_plugins quota\n")
             .Append(CultureInfo.InvariantCulture, $"quota_rule = *:storage={MailboxQuota(desired)}\n")
@@ -958,19 +1087,26 @@ public static class MailDomains {
     }
 
     /// <summary>Postfix's <c>main.cf</c> — submission and outbound for this domain.</summary>
-    /// <param name="name">The resource's own name, which is the mail domain.</param>
-    /// <param name="desired">The validated desired body.</param>
+    /// <param name="name">The resource's own name. ⚠ Not the domain — see <see cref="TypePath" />.</param>
+    /// <param name="desired">The validated desired body, which carries the domain.</param>
+    /// <remarks>
+    ///     ⚠ <b>Every hostname below is the BODY's domain, never the resource's name.</b> Rendering
+    ///     the name would give Postfix <c>virtual_mailbox_domains = example-com</c>, and mail for
+    ///     <c>example.com</c> would be refused as a relay attempt — a total delivery outage whose
+    ///     cause is one identifier that looks almost right.
+    /// </remarks>
     public static string PostfixMainCf(string name, JsonElement desired) {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
+        var domain = Domain(desired);
         var relays = RelayHosts(desired);
         var catchAll = CatchAll(desired);
 
         var builder = new StringBuilder()
             .Append("# Generated by CyberCloud.Mail/domains. Do not edit in place.\n")
-            .Append(CultureInfo.InvariantCulture, $"myhostname = {name}\n")
-            .Append(CultureInfo.InvariantCulture, $"mydestination = {name}\n")
-            .Append(CultureInfo.InvariantCulture, $"virtual_mailbox_domains = {name}\n")
+            .Append(CultureInfo.InvariantCulture, $"myhostname = {domain}\n")
+            .Append(CultureInfo.InvariantCulture, $"mydestination = {domain}\n")
+            .Append(CultureInfo.InvariantCulture, $"virtual_mailbox_domains = {domain}\n")
             .Append(
                 CultureInfo.InvariantCulture,
                 $"virtual_transport = lmtp:inet:localhost:{Text(LmtpPort)}\n"
@@ -1004,7 +1140,7 @@ public static class MailDomains {
             catchAll.Length > 0
                 ? string.Create(
                     CultureInfo.InvariantCulture,
-                    $"luser_relay = {catchAll}@{name}\nlocal_recipient_maps =\n"
+                    $"luser_relay = {catchAll}@{domain}\nlocal_recipient_maps =\n"
                 )
                 : "local_recipient_maps = $virtual_mailbox_maps\n"
         );
@@ -1242,7 +1378,20 @@ public static class MailDomains {
     public static ImmutableDictionary<string, string> SelectorLabels(string name) =>
         ImmutableDictionary<string, string>.Empty
             .Add("app.kubernetes.io/name", "mail")
-            .Add("app.kubernetes.io/instance", name);
+            .Add("app.kubernetes.io/instance", name)
+            .Add("app.kubernetes.io/component", BackEndComponent)
+            .Add("app.kubernetes.io/managed-by", "cybercloud");
+
+    /// <summary>
+    ///     The selector's <c>component</c> value. ⚠ One value for a pod running three daemons.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not <see cref="ImapComponent" />, and the difference is the unit being labelled.</b>
+    ///     The three container names describe processes <i>inside</i> one pod; a selector describes
+    ///     the pod. Reusing the Dovecot container's name here would make the selector say the pod is
+    ///     an IMAP server, which is a third of what it is.
+    /// </remarks>
+    public const string BackEndComponent = "backend";
 
     static JsonObject Selector(string name) {
         var labels = new JsonObject();

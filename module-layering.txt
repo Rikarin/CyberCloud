@@ -288,6 +288,10 @@ CyberCloud.Providers.Messaging -> CyberCloud.Core
 CyberCloud.Providers.Messaging -> CyberCloud.Kubernetes
 CyberCloud.Providers.Messaging -> CyberCloud.ResourceManager
 CyberCloud.Providers.Messaging -> CyberCloud.Tenancy
+CyberCloud.Providers.Mail -> CyberCloud.Core
+CyberCloud.Providers.Mail -> CyberCloud.Kubernetes
+CyberCloud.Providers.Mail -> CyberCloud.ResourceManager
+CyberCloud.Providers.Mail -> CyberCloud.Tenancy
 CyberCloud.Providers.Monitor -> CyberCloud.Core
 CyberCloud.Providers.Monitor -> CyberCloud.Kubernetes
 CyberCloud.Providers.Monitor -> CyberCloud.ResourceManager

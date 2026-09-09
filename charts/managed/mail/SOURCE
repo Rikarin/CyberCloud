@@ -1,0 +1,36 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: none
+
+# ⚠ THERE IS NO `upstream-api:` ROW AND NO OPERATOR, AND THIS ROW IS THE STRONGEST CASE OF THAT IN
+# THE TREE RATHER THAN A REPEAT OF THE NATS ONE. charts/managed/nats records an operator that
+# EXISTED and was archived. Here there was never one to archive, for all three components:
+#
+#   * Postfix and Dovecot have no Kubernetes operator from their own projects at all. Both predate
+#     Kubernetes by roughly two decades and both are configured by files rather than by an API.
+#   * Rspamd likewise ships no CRD.
+#   * The third-party "mailserver" charts that exist (docker-mailserver and friends) are single-pod
+#     appliances that bundle all three plus a webmail behind one opinionated configuration. They are
+#     a starting point for a hobbyist and not a multi-tenant control plane: none of them separates
+#     the shared front door from the per-tenant back end, which is the whole of docs/plan/17
+#     § Topology.
+#
+# So every object this chart renders is a core kind (`Secret`, `ConfigMap`, `Service`) or an `apps`
+# kind (`StatefulSet`), plus one `PodMonitor` from `monitoring.coreos.com/v1` which the platform
+# bundle installs.
+
+upstream-operator: none
+
+# ⚠ THE IMAGES ARE NOT UPSTREAM IMAGES AND THIS IS THE ROW MOST LIKELY TO BE READ AS DONE WHEN IT IS
+# NOT. `MailDomains.ImageRegistry` is `docker.io/cybercloud`, which is the platform's own namespace,
+# and NOTHING IN THIS REPOSITORY BUILDS THOSE THREE IMAGES. A mail back end needs Dovecot, Postfix
+# and Rspamd configured to read the ConfigMap and Secret this chart renders, and neither the official
+# images nor any third-party one does that out of the box. The image build is owed and is named in
+# the conformance.yaml § owed beside this file.
+
+images-built: no

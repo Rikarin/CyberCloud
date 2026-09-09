@@ -1,0 +1,30 @@
+# How the shared pools reach this back end.
+#
+# ⚠ ClusterIP AT EVERY SETTING, WITH NO EXPOSURE PARAMETER AT ALL. Every other managed service in
+# docs/plan/12 offers an optional external listener; this one must not, because docs/plan/17
+# § Topology puts the front doors in shared pools. A tenant-addressable LoadBalancer here would be a
+# second, unauthenticated way into the mail store that bypasses the pool doing the rate limiting and
+# the reputation management — which is the entire product.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mail.service" . }}
+  labels:
+    {{- include "mail.platformLabels" . | nindent 4 }}
+    {{- include "mail.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "mail.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: lmtp
+      port: 24
+      targetPort: 24
+    - name: imap
+      port: 143
+      targetPort: 143
+    {{- if .Values.sieve }}
+    - name: sieve
+      port: 4190
+      targetPort: 4190
+    {{- end }}
