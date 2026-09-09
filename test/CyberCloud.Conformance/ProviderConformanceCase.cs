@@ -92,7 +92,40 @@ public sealed record ProviderConformanceCase {
     /// <summary>The JSON Pointer <see cref="InvalidBody" /> must be refused at.</summary>
     public required string InvalidBodyTarget { get; init; }
 
-    /// <summary>An action the type declares, for the POST half of the verb grammar.</summary>
+    /// <summary>
+    ///     An action the type declares, for the POST half of the verb grammar, or empty when the type
+    ///     declares none.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS WAS <c>required</c> UNTIL A TYPE WITH NO ACTIONS EXISTED, AND THE HARNESS
+    ///         COULD NOT EXPRESS ONE AT ALL.</b> Thirteen provider families had each declared at
+    ///         least one action, so "every type has an action" had never been tested as an
+    ///         assumption — it was simply true of the sample so far.
+    ///         <c>CyberCloud.Mail/domains</c> is the first that declares none, and deliberately:
+    ///         <c>actions-without-handlers.txt</c> permits a handler-less action only on an
+    ///         already-published api-version, and that type's api-version is published by the change
+    ///         that would have declared one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Empty means the two POST assertions SKIP LOUDLY rather than pass quietly.</b> The
+    ///         alternative — a sentinel action name nobody declares — would have made
+    ///         <see cref="ProviderConformanceTests{TSource}.AnActionOnAnExistingResourceIsAccepted" />
+    ///         assert a refusal for the wrong reason and report it as coverage.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>IT IS STILL <c>required</c>, AND THAT MATTERS MORE THAN IT LOOKS.</b> The first
+    ///         attempt at this made the member optional with a default of <c>""</c>, and
+    ///         <c>ReferenceConformance.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
+    ///         went red — correctly. Its rule is that <i>"an optional one is an assertion the suite
+    ///         quietly stops making for the provider that omits it"</i>, and a defaulted member is
+    ///         omitted by <b>every</b> case that never thinks about it, including ones that do have
+    ///         an action and simply forgot. Keeping it required costs a no-action provider one
+    ///         explicit <c>ActionName = string.Empty</c> — a line a reviewer can see and ask about —
+    ///         and keeps the accident impossible. The relaxation was the lazy fix and the test
+    ///         caught it.
+    ///     </para>
+    /// </remarks>
     public required string ActionName { get; init; }
 
     /// <summary>The objects a converged resource owns in the cluster.</summary>

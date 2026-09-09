@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's and the k3s half is
+      CyberCloud.Providers.Mail.Cluster.Conformance's. What is left is what only THIS provider can be
+      wrong about — and on this type that list has one entry far more important than the rest:
+      THE DKIM KEY MUST NOT CHANGE BETWEEN PASSES. The shared suite drives a single create, so it
+      cannot see a second pass at all; MailDkimTests is where that lives.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The half generation does not reach — a Helm template is not a schema">
+        <!--
+          ⚠ THE CHART'S HELPERS CARRY TWO HAND-MAINTAINED BLOCKS AND BOTH CAN DRIFT SILENTLY.
+          `mail.resources` is the sizing table, the same shape three other charts have.
+          `mail.selectorLabels` is the more dangerous: a StatefulSet's spec.selector is IMMUTABLE
+          after create, the Service routes on it, the PodMonitor scrapes by it — and on THIS type
+          MailDomains.RetainedClaims also hands it to VolumeReclaimer as the claim's ownership
+          evidence, so a drift makes every purge refuse. MailSizingTests holds both against the C#.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/_helpers.tpl"
+                          LogicalName="mail.helpers.tpl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

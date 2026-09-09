@@ -1,0 +1,20 @@
+# What the platform scrapes — docs/plan/12 § The pattern, once, piece 6.
+#
+# ⚠ RSPAMD'S CONTROLLER IS THE ONLY ONE OF THE THREE THAT SERVES PROMETHEUS METRICS DIRECTLY. Postfix
+# and Dovecot both need a sidecar exporter to be scrapable at all, and neither is rendered here — so
+# this monitor covers filtering and says nothing about delivery or IMAP. That is recorded in
+# conformance.yaml § owed rather than left for somebody to infer from a thin dashboard.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "mail.service" . }}
+  labels:
+    {{- include "mail.platformLabels" . | nindent 4 }}
+    {{- include "mail.selectorLabels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mail.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics

@@ -1,0 +1,86 @@
+# The per-tenant back end: Dovecot, Postfix and Rspamd in one pod, over one mail volume.
+#
+# ⚠ A StatefulSet AND NOT A Deployment, AND THE REASON IS THE MAIL STORE RATHER THAN THE ORDINAL. A
+# mailbox is a filesystem: two pods mounting one volume both write the same mdbox index, which
+# Dovecot's own documentation says corrupts it without a director in front. A StatefulSet with one
+# replica and a claim template is one pod per volume BY CONSTRUCTION; a Deployment with replicas: 1
+# is one pod USUALLY, because a rolling update starts the new pod before the old one exits.
+#
+# ⚠ replicas IS NOT A PARAMETER, for the same reason. Scaling a mail back end is a Dovecot director
+# and a shared filesystem, which is a different design rather than a larger number here.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mail.service" . }}
+  labels:
+    {{- include "mail.platformLabels" . | nindent 4 }}
+    {{- include "mail.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ include "mail.service" . }}
+  selector:
+    matchLabels:
+      {{- include "mail.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mail.platformLabels" . | nindent 8 }}
+        {{- include "mail.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: dovecot
+          image: "docker.io/cybercloud/dovecot:{{ .Values.version }}"
+          resources:
+            {{- include "mail.resources" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mail
+            - name: credentials
+              mountPath: /etc/mail/secrets
+            - name: mail
+              mountPath: /srv/mail
+        - name: postfix
+          image: "docker.io/cybercloud/postfix:{{ .Values.version }}"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mail
+            - name: credentials
+              mountPath: /etc/mail/secrets
+            - name: mail
+              mountPath: /srv/mail
+        - name: rspamd
+          image: "docker.io/cybercloud/rspamd:{{ .Values.version }}"
+          ports:
+            - name: metrics
+              containerPort: 11334
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mail
+            - name: credentials
+              mountPath: /etc/mail/secrets
+            - name: mail
+              mountPath: /srv/mail
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "mail.name" . }}-mail-config
+        - name: credentials
+          secret:
+            secretName: {{ include "mail.name" . }}-mail-credentials
+            # ⚠ 0400. A DKIM private key readable by the whole pod is readable by the Postfix and
+            # Rspamd containers that do not need it, and by anything that later joins them.
+            defaultMode: 256
+  volumeClaimTemplates:
+    # ⚠ NO storageClassName, SO THIS BINDS THROUGH THE CLUSTER DEFAULT. Naming a class the bundle
+    # does not install is a claim that stays Pending forever with no error anybody sees — the defect
+    # two other charts shipped.
+    - metadata:
+        name: mail
+        labels:
+          {{- include "mail.selectorLabels" . | nindent 10 }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

@@ -1272,6 +1272,17 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     public async Task PostNeverCreates() {
         // docs/plan/08 § The write path, end to end: POST "appears only for actions on an existing
         // resource … never for creation." Checked by the manager, not by each action's handler.
+        if (Case.ActionName.Length == 0) {
+            Assert.Skip(
+                $"SKIPPED, AND SAYING SO — {Case.DisplayName} declares NO ACTION, so there is no POST "
+                + "for this assertion to make. That is a deliberate declaration rather than an "
+                + "omission (see the provider's own remarks), and the skip is loud because a silent "
+                + "pass here would read as 'the POST half of the verb grammar was checked'."
+            );
+
+            return;
+        }
+
         ProviderTestCluster<TSource>.Reset();
 
         var address = ProviderTestCluster<TSource>.Address("never-created");
@@ -1296,6 +1307,17 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
     [Fact]
     public async Task AnActionOnAnExistingResourceIsAccepted() {
+        if (Case.ActionName.Length == 0) {
+            Assert.Skip(
+                $"SKIPPED, AND SAYING SO — {Case.DisplayName} declares NO ACTION, so there is no POST "
+                + "for this assertion to make. That is a deliberate declaration rather than an "
+                + "omission (see the provider's own remarks), and the skip is loud because a silent "
+                + "pass here would read as 'the POST half of the verb grammar was checked'."
+            );
+
+            return;
+        }
+
         ProviderTestCluster<TSource>.Reset();
 
         var created = (await CreateAsync("actionable")).GetValueOrThrow();

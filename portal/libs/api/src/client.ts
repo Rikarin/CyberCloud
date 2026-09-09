@@ -28,6 +28,8 @@ import type {
   DocumentDBAccountsData,
   DocumentDBAccountsListKeysResult,
   DocumentDBAccountsResource,
+  MailDomainsData,
+  MailDomainsResource,
   MessagingKafkaClustersData,
   MessagingKafkaClustersListKeysResult,
   MessagingKafkaClustersResource,
@@ -389,6 +391,31 @@ export class CyberCloudApi {
   /** listKeys — permission 'listKeys'. ⚠ The response carries secret material. */
   listKeysDocumentDatabaseAccount(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<DocumentDBAccountsListKeysResult>> {
     return this.transport.send<DocumentDBAccountsListKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.DocumentDB/accounts/${CyberCloudApi.segment(resourceName)}/listKeys` });
+  }
+
+  /** Reads one Mail domain. */
+  getMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<MailDomainsResource>> {
+    return this.transport.send<MailDomainsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Mail domain. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: MailDomainsData): Promise<ApiResponse<MailDomainsResource>> {
+    return this.transport.send<MailDomainsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Mail domain. A merge patch: what is not set is not changed. */
+  updateMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<MailDomainsData>): Promise<ApiResponse<MailDomainsResource>> {
+    return this.transport.send<MailDomainsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Mail domain. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Mail domains in a resource group. ⚠ A short page never means "that is all there is". */
+  listMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MailDomainsResource>>> {
+    return this.transport.send<Page<MailDomainsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains`, query: CyberCloudApi.pageQuery(page) });
   }
 
   /** Reads one Kafka cluster. */

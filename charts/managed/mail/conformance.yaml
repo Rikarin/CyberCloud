@@ -1,0 +1,218 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Mail/domains. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Mail/domains
+apiVersion: "2026-08-01"
+chart: mail
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ FIVE, AND FOR A STRONGER VERSION OF THE REASON charts/managed/nats GIVES. That service lost its
+# operator to an archive; this one never had a candidate. Postfix and Dovecot predate Kubernetes by
+# about two decades and are configured by files rather than by an API, and Rspamd ships no CRD — so
+# what gets applied is the workload itself. See SOURCE.
+#
+# ⚠ FOUR OF THE FIVE ARE KINDS A BARE CLUSTER ALREADY SERVES. The PodMonitor is the exception and is
+# the only one the cluster-backed harness has to install a definition for.
+renders:
+  - group: ""
+    version: v1
+    # ⚠ The DKIM private key and the Dovecot master password, in ONE Secret. See
+    # MailDomains.GenerateCredentials for why one document rather than two: MintAsync's cas=0 is per
+    # PATH, so two paths would be two independent races and a pass interrupted between them would
+    # leave a signer and a listener from different attempts.
+    kind: Secret
+    count: 1
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+  - group: ""
+    version: v1
+    # ⚠ ONE, where the NATS row has two. There is no headless/client split because there is one pod
+    # and no peers for it to find: the shared inbound pool reaches this Service over LMTP and that is
+    # the only traffic it carries.
+    kind: Service
+    count: 1
+  - group: apps
+    version: v1
+    kind: StatefulSet
+    count: 1
+  - group: monitoring.coreos.com
+    version: v1
+    kind: PodMonitor
+    count: 1
+
+# ADR-013's seven, on every object.
+labels:
+  mandatory:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.mail_domains
+    cybercloud.io/managed-by: cybercloud
+  # ⚠ NOT one of the seven. These bind the Service, the PodMonitor and the mail claim to the POD,
+  # and they sit in spec.selector — which on a StatefulSet is IMMUTABLE after create.
+  #
+  # ⚠ ON THIS TYPE THEY HAVE A FOURTH CONSUMER WITH TEETH. MailDomains.RetainedClaims hands the same
+  # set to VolumeReclaimer as the RetainedVolume's OwnedBy evidence, and the reclaimer refuses to
+  # delete a claim whose stored object does not carry them exactly. A drift between the chart and
+  # MailDomains.SelectorLabels therefore makes every purge of a mail domain refuse — the safe
+  # direction, and still a bug.
+  additional:
+    StatefulSet:
+      app.kubernetes.io/name: mail
+      app.kubernetes.io/instance: "{resourceName}"
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: dkim-key-never-changes
+    says: >
+      THE MOST IMPORTANT ASSERTION ON THIS TYPE. A second reconcile pass renders the SAME DKIM
+      private key as the first, and so does a pass after the resource has been updated, after the
+      StatefulSet has been deleted out from under it, and after the silo has restarted. A key that
+      changes is not a converge failure anybody sees: the Secret settles again within seconds and the
+      damage is that the public key the tenant published in DNS now matches nothing, so every message
+      the domain sends fails DKIM at every receiver while this platform reports the domain healthy.
+  - id: published-record-matches-the-signing-key
+    says: >
+      The p= tag MailDomains.TryRequiredRecords derives is the public half of the private key the
+      Secret carries, for the key actually in the vault rather than a freshly generated one. This is
+      the other half of the assertion above and it fails on a different mistake: a reconciler that
+      minted correctly but derived the record from GenerateCredentials' return value.
+  - id: the-key-never-round-trips
+    says: >
+      A GET of the resource never returns the DKIM private key or the master password in any form,
+      and neither appears in the ConfigMap, the Service, the StatefulSet or the PodMonitor — only in
+      the Secret, and only as stringData.
+  - id: mail-store-survives-delete
+    says: >
+      Deleting the resource leaves the PersistentVolumeClaim behind, unconditionally and with no
+      property that turns that off. Then: a purge removes it only when the stored claim carries the
+      four selector labels exactly, and refuses on a mismatch rather than deleting on a name.
+  - id: one-pod-ever
+    says: >
+      The StatefulSet has exactly one replica at every body the schema accepts, and there is no
+      property that changes it. Two pods on one mdbox store corrupt the index, and the corruption is
+      not reported by anything — it is discovered when a mailbox stops opening.
+  - id: catch-all-off-means-reject
+    says: >
+      With catchAll empty, mail to an unknown recipient is rejected at RCPT TO rather than accepted
+      and bounced. An accept-then-bounce makes the domain a backscatter source and is how a
+      well-configured domain gets itself listed.
+  - id: no-external-address-at-any-setting
+    says: >
+      No Service this type renders is a LoadBalancer or a NodePort, at any body. The front doors are
+      shared pools; a tenant-addressable listener here bypasses the rate limiting and reputation
+      management that is the product.
+  - id: relay-order-does-not-drift
+    says: >
+      Two bodies naming the same relayHosts in different orders render byte-identical Postfix
+      configuration, so neither reports drift against the other.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - mail.domain.hours
+  - mail.storage.gib.hours
+  - mail.messages.delivered
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: the-images-do-not-exist
+    says: >
+      THE LARGEST ITEM ON THIS LIST AND THE ONE MOST EASILY READ AS DONE. MailDomains.ImageRegistry
+      is docker.io/cybercloud and NOTHING IN THIS REPOSITORY BUILDS dovecot, postfix OR rspamd. The
+      chart and the reconciler both render a pod spec that is correct and unschedulable. Neither the
+      official images nor any third-party one reads the ConfigMap and Secret this type renders, so
+      the image build is real work rather than a tag to pick. Until it lands, every assertion above
+      that needs a RUNNING back end — which is all of them except the four about rendered documents
+      — cannot be executed anywhere.
+  - id: child-types
+    says: >
+      docs/plan/17 § Resource model names mailboxes/{local} and groups/{name} as child types and
+      NEITHER IS DECLARED. Unlike charts/managed/nats' entry of the same name, nothing platform-level
+      blocks these: CyberCloud.Storage/accounts/buckets and
+      CyberCloud.ContainerService/managedClusters/agentPools both ship, so the harness, the CLI and
+      the SDK all carry the interleaved shape now. They are simply not in this pass. ⚠ A mail domain
+      with no mailboxes accepts no mail for anybody, so this is the gap between a running back end
+      and a usable product.
+  - id: verify-needs-a-dns-seam
+    says: >
+      docs/plan/17 names a verify action and it IS NOT DECLARED, which is deliberate and is argued at
+      MailProvider. It would answer "do this domain's SPF, DKIM, DMARC and MX records resolve", and
+      THIS REPOSITORY HAS NO DNS RESOLUTION SEAM AT ALL. actions-without-handlers.txt is not the
+      escape hatch: its rule permits a handler-less action only on an ALREADY published api-version,
+      and 2026-08-01 of this type is published by the same change that would have declared it. ⚠ The
+      derivable half is not owed — MailDomains.TryRequiredRecords is a pure function of the domain
+      and the resolved key, so "the exact records to add" is answerable today. What is owed is
+      reading them back, and the thing that would provide it — CyberCloud.Network/dnsZones — is
+      itself unbuilt.
+  - id: sending-is-not-actually-gated
+    says: >
+      docs/plan/17 § Deliverability says "the platform will not enable sending until the DNS records
+      verify". THAT GATE IS NOT BUILT AND CANNOT BE UNTIL THE ROW ABOVE IS: with no way to read the
+      records back there is nothing to gate on. A domain created today renders a back end that would
+      send if it had images. This is the single most consequential owed item for reputation, because
+      it is the one the abuse desk exists to catch after the fact.
+  - id: the-shared-pools-are-not-built
+    says: >
+      docs/plan/17 § Topology's answer is "shared front doors, per-tenant back ends". This type is
+      the back end ONLY. The shared inbound MTA pool that routes by recipient domain to a tenant's
+      LMTP, the shared submission pool, and the shared IMAP front door with SNI and cert-manager
+      certificates per verified domain are all absent, and none of them is a resource type — they
+      are platform infrastructure, so they belong in charts/bundle or deploy rather than here.
+  - id: outbound-pools-and-warm-up
+    says: >
+      /properties/dedicatedIp is accepted and does nothing. docs/plan/17 prices outbound pools,
+      dedicated IPs, the ~4-week warm-up ramp and RBL monitoring at 0.8 EM and every part is owed.
+      ⚠ docs/plan/25 row 2 adds a requirement easy to lose: the platform's OWN transactional sending
+      IPs must be separate from tenant sending IPs, so that one tenant's reputation problem cannot
+      take down the platform's OTPs and invoices.
+  - id: webmail
+    says: >
+      docs/plan/17 puts a minimal webmail — list, read, compose, search — in the M2 deliverable at
+      0.6 EM, against a JMAP-shaped API over the Dovecot back end. Neither the client nor the JMAP
+      surface exists. The document is explicit that a FULL client is 2.0 EM more and is M3, and that
+      saying so is better than discovering it.
+  - id: metrics-cover-filtering-only
+    says: >
+      The PodMonitor scrapes Rspamd's controller, which is the only one of the three daemons that
+      serves Prometheus metrics without a sidecar. Postfix and Dovecot each need an exporter that is
+      not rendered, so delivery latency, queue depth and IMAP session counts are unmonitored — and a
+      mail queue nobody can see the depth of is the classic way a delivery outage goes unnoticed.
+  - id: antivirus-can-be-asked-for-on-a-pod-too-small
+    says: >
+      filtering.antivirus adds roughly 1 GiB resident for the ClamAV signature database and nothing
+      stops a tenant enabling it on c1.nano, whose limit is 512Mi — an OOM-kill loop. The check is
+      an admission-time rule over TWO fields, and this platform's schema has no seam for one:
+      SchemaProperty constrains a property against constants, never against another property.
+  - id: dkim-key-rotation
+    says: >
+      MailDomains.DkimSelector is a constant, so there is no key rotation. Rotating means two
+      selectors live at once — publish the new record, switch the signer, retire the old — and this
+      platform cannot hold two live credentials for one resource, which is the same constraint that
+      keeps regenerateKeys undeclared across the whole catalogue.
+  - id: version-pins-are-unverified
+    says: >
+      Every version in MailDomains — the Dovecot minors and the three image tags — was written from
+      docs/plan/17 and upstream release naming rather than from an API query on the day it was
+      written. CyberCloud.ContainerService established the discipline after two of its pins turned
+      out not to exist. These must be checked before the row ships.

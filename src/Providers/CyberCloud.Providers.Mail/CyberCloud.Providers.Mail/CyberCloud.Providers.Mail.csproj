@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
+      bindings". A reconciler and a chart binding; no grain, for the reason the .Contracts .csproj
+      gives.
+
+      ⚠ ITS ENTIRE REFERENCE SET IS ITS OWN .Contracts. Everything else — IResourceReconciler,
+      ReconcileContext, KubeCommand, ISecretWriter — arrives through it.
+
+      ⚠ NO KubernetesClient. docs/plan/03 § Assembly graph rules, rule 3: nothing above
+      CyberCloud.Kubernetes names a k8s.Models type. Every object this provider applies is a CORE
+      kind — Secret, ConfigMap, Service, StatefulSet — which is exactly the case where a k8s.Models
+      type EXISTS and would be the tempting thing to reach for. Building them as JsonObject is what
+      keeps rule 3 true here without anyone having to remember it.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Mail.Contracts/CyberCloud.Providers.Mail.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

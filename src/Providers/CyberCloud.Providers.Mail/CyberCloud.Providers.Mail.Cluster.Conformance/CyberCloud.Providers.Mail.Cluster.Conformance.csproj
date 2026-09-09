@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The cluster-backed half — the same case, against a real API server in k3s.
+
+      ⚠ FOUR OF THIS TYPE'S FIVE OBJECTS ARE KINDS A BARE k3s ALREADY SERVES, so this is one of the
+      suites where a green run is genuine evidence the objects exist rather than evidence the
+      harness' CRD derivation works. The PodMonitor is the one exception.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Mail.Conformance/CyberCloud.Providers.Mail.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

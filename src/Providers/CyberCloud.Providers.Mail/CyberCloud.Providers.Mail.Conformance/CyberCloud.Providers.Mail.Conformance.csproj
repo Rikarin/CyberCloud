@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised".
+
+      ⚠ IT CONTAINS NO ASSERTIONS, AND THIS PROVIDER TESTS THAT CLAIM FROM A NEW DIRECTION. Earlier
+      families demonstrated it for one object, for two, and for a pair of custom resources with a
+      required binding between them. This one is the first whose five objects include a SECRET whose
+      contents the reconciler does not compute — it reads them back out of the vault — so the case's
+      ObjectMatchesDesired has to be true of a document whose bytes the case cannot predict.
+      test/CyberCloud.Conformance still needed no change: MailDomains.Matches answers `true` for a
+      Secret, because an apply that landed and read back IS the whole claim for an object no
+      controller rewrites.
+
+      ⚠ THIS PROJECT IS COUNTED BY THE Labels ARCHITECTURE GATE. Build.Architecture § LabelsGate runs
+      EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations in every *.Conformance
+      project under src/Providers.
+
+      ⚠ IT REFERENCES A PROJECT UNDER test/, which docs/plan/03 § test/ intends: CyberCloud.Conformance
+      is "the shared provider suite (parameterised, REFERENCED BY PROVIDERS)".
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

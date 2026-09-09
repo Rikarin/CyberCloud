@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema, the five-object projection, and the DNS records a
+      domain must publish before the platform will send for it.
+
+      ⚠ NO GRAIN INTERFACES, for the reason every provider before this one gives: everything a
+      reconcile needs is in the desired body ResourceGrain already stores. ⚠ THIS TYPE IS THE FIRST
+      WITH A SERIOUS CLAIM ON THE OTHER SIDE OF THAT, AND IT STILL DOES NOT NEED ONE. A mail domain
+      has verification state — which of SPF, DKIM, DMARC and MX currently resolve — that is neither
+      desired nor derivable from the body. It is not held here because it is not STATE: it is an
+      observation of the public DNS, so it belongs in ObserveAsync's ObservedState like every other
+      reading of a world this platform does not own.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

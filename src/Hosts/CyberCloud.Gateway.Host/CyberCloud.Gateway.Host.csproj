@@ -164,6 +164,7 @@
         <ProjectReference Include="../../Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Application/CyberCloud.Providers.DBforMySQL.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Application/CyberCloud.Providers.DocumentDB.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Application/CyberCloud.Providers.Mail.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Application/CyberCloud.Providers.Messaging.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Application/CyberCloud.Providers.Monitor.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Application/CyberCloud.Providers.Network.Application.csproj"/>

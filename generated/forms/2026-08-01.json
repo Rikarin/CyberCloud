@@ -2612,6 +2612,314 @@
         }
       ]
     },
+    "CyberCloud.Mail/domains": {
+      "resourceType": "CyberCloud.Mail/domains",
+      "apiVersion": "2026-08-01",
+      "title": "Mail domain",
+      "plural": "Mail domains",
+      "summary": "A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain must publish before the platform will send for it.",
+      "overrideKey": "CyberCloud.Mail/domains@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/catchAll",
+        "/properties/clusterId",
+        "/properties/dedicatedIp",
+        "/properties/domain",
+        "/properties/filtering",
+        "/properties/filtering/antivirus",
+        "/properties/filtering/rejectThreshold",
+        "/properties/relayHosts",
+        "/properties/sieve",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/mailboxQuota",
+        "/properties/storage/size",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the mail domain is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Mail domain to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The domain's own settings."
+        },
+        {
+          "jsonPointer": "/properties/catchAll",
+          "name": "catchAll",
+          "label": "Catch all",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source.",
+          "pattern": "^(?:^([a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?)?$)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the mail back end.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Mail domain to change it."
+        },
+        {
+          "jsonPointer": "/properties/dedicatedIp",
+          "name": "dedicatedIp",
+          "label": "Dedicated ip",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/domain",
+          "name": "domain",
+          "label": "Domain",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.",
+          "maxLength": 253,
+          "pattern": "^(?:^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Mail domain to change it.",
+          "default": "example.com",
+          "placeholder": "example.com"
+        },
+        {
+          "jsonPointer": "/properties/filtering",
+          "name": "filtering",
+          "label": "Filtering",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Spam and virus filtering."
+        },
+        {
+          "jsonPointer": "/properties/filtering/antivirus",
+          "name": "antivirus",
+          "label": "Antivirus",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "filtering",
+          "hint": "Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/filtering/rejectThreshold",
+          "name": "rejectThreshold",
+          "label": "Reject threshold",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "filtering",
+          "hint": "The Rspamd score at or above which a message is rejected outright rather than filed as junk.",
+          "minimum": 5,
+          "maximum": 30,
+          "default": 15
+        },
+        {
+          "jsonPointer": "/properties/relayHosts",
+          "name": "relayHosts",
+          "label": "Relay hosts",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool.",
+          "default": []
+        },
+        {
+          "jsonPointer": "/properties/sieve",
+          "name": "sieve",
+          "label": "Sieve",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory for the back end, either by preset or explicitly."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+          "choices": [
+            {
+              "value": "c1.large",
+              "label": "C1 large"
+            },
+            {
+              "value": "c1.medium",
+              "label": "C1 medium"
+            },
+            {
+              "value": "c1.micro",
+              "label": "C1 micro"
+            },
+            {
+              "value": "c1.nano",
+              "label": "C1 nano"
+            },
+            {
+              "value": "c1.small",
+              "label": "C1 small"
+            },
+            {
+              "value": "c1.xlarge",
+              "label": "C1 xlarge"
+            }
+          ],
+          "default": "c1.micro"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The mail store."
+        },
+        {
+          "jsonPointer": "/properties/storage/mailboxQuota",
+          "name": "mailboxQuota",
+          "label": "Mailbox quota",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "1Gi"
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "20Gi"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+          "choices": [
+            {
+              "value": "2.3",
+              "label": "2 3"
+            },
+            {
+              "value": "2.4",
+              "label": "2 4"
+            }
+          ],
+          "default": "2.4"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": []
+    },
     "CyberCloud.Messaging/kafkaClusters": {
       "resourceType": "CyberCloud.Messaging/kafkaClusters",
       "apiVersion": "2026-08-01",
