@@ -60,12 +60,19 @@ public sealed class MailDomainCase : IProviderCaseSource {
             // then tests "invalid for the wrong reason" while still going green.
             InvalidBody = cluster => WithoutStorageSize(MailDomains.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
-            // ⚠ NO ActionName, AND THIS IS THE ONLY CASE IN THE TREE THAT OMITS ONE. This type
+            // ⚠ EXPLICITLY EMPTY, AND THIS IS THE ONLY CASE IN THE TREE THAT SAYS SO. This type
             // declares no action at all — MailProvider carries the argument, which is that
             // actions-without-handlers.txt permits a handler-less action only on an ALREADY published
             // api-version, and this type's is published by the same change that would declare one.
-            // The suite's action assertions are about the verb grammar and simply have nothing to
-            // address here.
+            // The suite's two POST assertions skip loudly on an empty name rather than passing.
+            //
+            // ⚠ WRITTEN OUT RATHER THAN DEFAULTED, AND THE DIFFERENCE IS THE WHOLE POINT. Making the
+            // member optional would have let EVERY case omit it — including one that has an action
+            // and forgot — and the suite would have stopped asserting the verb grammar for that
+            // provider with nothing to say so. ReferenceConformance's
+            // EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile caught exactly that
+            // attempt. One explicit line here is the cost of keeping the accident impossible.
+            ActionName = string.Empty,
             Objects = (id, ns) => MailDomains.Objects(ns, id.Name),
             // ⚠ NOTHING. There is no operator for any of the three components, so no controller
             // writes an object this provider reads back. Stated rather than defaulted — see

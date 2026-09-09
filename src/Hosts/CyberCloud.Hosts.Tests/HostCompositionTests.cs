@@ -44,8 +44,15 @@ namespace CyberCloud.Hosts.Tests;
 /// </remarks>
 public sealed class HostCompositionTests {
     /// <summary>
-    ///     The twelve provider namespaces both hosts must serve, spelled out rather than counted.
+    ///     The fifteen provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
+    ///     fifteen.</b> The list is what the test reads and the list was right; the number beside it
+    ///     was three behind, which is the ordinary fate of a count written next to the thing it
+    ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
+    ///     a glance whether an entry went missing, and that is the failure this file exists for.
+    /// </remarks>
     /// <remarks>
     ///     ⚠ <b>Typed-out literals, and a count would not do.</b> A count passes when one provider is
     ///     swapped for another, and the failure that produced this file was not "one fewer provider" —
@@ -60,6 +67,7 @@ public sealed class HostCompositionTests {
         "CyberCloud.DBforMySQL",
         "CyberCloud.DBforPostgreSQL",
         "CyberCloud.DocumentDB",
+        "CyberCloud.Mail",
         "CyberCloud.Messaging",
         "CyberCloud.Monitor",
         "CyberCloud.Network",

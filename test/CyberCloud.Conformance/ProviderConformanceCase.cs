@@ -113,8 +113,20 @@ public sealed record ProviderConformanceCase {
     ///         <see cref="ProviderConformanceTests{TSource}.AnActionOnAnExistingResourceIsAccepted" />
     ///         assert a refusal for the wrong reason and report it as coverage.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>IT IS STILL <c>required</c>, AND THAT MATTERS MORE THAN IT LOOKS.</b> The first
+    ///         attempt at this made the member optional with a default of <c>""</c>, and
+    ///         <c>ReferenceConformance.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
+    ///         went red — correctly. Its rule is that <i>"an optional one is an assertion the suite
+    ///         quietly stops making for the provider that omits it"</i>, and a defaulted member is
+    ///         omitted by <b>every</b> case that never thinks about it, including ones that do have
+    ///         an action and simply forgot. Keeping it required costs a no-action provider one
+    ///         explicit <c>ActionName = string.Empty</c> — a line a reviewer can see and ask about —
+    ///         and keeps the accident impossible. The relaxation was the lazy fix and the test
+    ///         caught it.
+    ///     </para>
     /// </remarks>
-    public string ActionName { get; init; } = string.Empty;
+    public required string ActionName { get; init; }
 
     /// <summary>The objects a converged resource owns in the cluster.</summary>
     /// <remarks>
