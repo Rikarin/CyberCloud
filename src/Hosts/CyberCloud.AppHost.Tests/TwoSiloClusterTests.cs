@@ -42,8 +42,60 @@ public sealed class TwoSiloClusterTests(LocalTopology topology) {
         hosts.Values.ShouldAllBe(status => status == SiloStatus.Active);
     }
 
+    /// <summary>
+    ///     Waits until the cluster's membership reports both silos <see cref="SiloStatus.Active" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A PRECONDITION, NOT AN ASSERTION, AND THE TWO SAMPLING TESTS BELOW WERE MISSING
+    ///         IT.</b> Each says "40 activations over 2 silos miss one silo with probability
+    ///         2^-39" — which is true only once the placement director can SEE two silos. The fixture
+    ///         waits for both silos to report healthy and then starts the client, and a silo is
+    ///         healthy as soon as its own runtime routes messages; membership reaching the client
+    ///         takes another round after that. So whichever sampling test runs first races that
+    ///         round, places all forty activations on the one silo it knows about, and reports it as
+    ///         a placement failure.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It was found by adding a fifteenth provider module to the silo host</b>, which
+    ///         lengthened silo two's start-up enough to lose the race about two runs in three —
+    ///         measured, against three clean runs on the commit before it. Nothing about placement
+    ///         changed; the race was always there and the margin had simply been wide enough.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This does NOT belong in the fixture, and that is deliberate.</b> Waiting there
+    ///         would make <see cref="BothSilosAreInOneMembershipTable" /> assert something the
+    ///         fixture had just guaranteed — a test that passes by construction, which is worth less
+    ///         than no test. Here it is the precondition of the two tests that need it, and the
+    ///         membership test still converges on its own or fails.
+    ///     </para>
+    /// </remarks>
+    async Task BothSilosAreVisibleAsync() {
+        var management = topology.Client.GetGrain<IManagementGrain>(0);
+
+        for (var attempt = 0; attempt < 50; attempt++) {
+            var hosts = await management.GetHosts(true);
+
+            if (hosts.Count(x => x.Value == SiloStatus.Active) >= 2) {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
+        }
+
+        // ⚠ Not an Assert.Skip and not a silent return. If membership never converges the two tests
+        // below are meaningless, and the honest report is that the cluster never formed — which is
+        // BothSilosAreInOneMembershipTable's failure, reached from here.
+        throw new InvalidOperationException(
+            "the cluster never reported two Active silos, so placement could not be sampled. That is "
+            + "a membership failure rather than a placement one — see BothSilosAreInOneMembershipTable."
+        );
+    }
+
     [Fact]
     public async Task ActivationsAreSpreadOverBothSilos() {
+        await BothSilosAreVisibleAsync();
+
         var tenant = topology.Client.ForTenant(Id(Tenant));
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
@@ -63,6 +115,8 @@ public sealed class TwoSiloClusterTests(LocalTopology topology) {
 
     [Fact]
     public async Task AGrainReachesAGrainOnTheOtherSilo() {
+        await BothSilosAreVisibleAsync();
+
         var tenant = topology.Client.ForTenant(Id(Tenant));
 
         var byAddress = new Dictionary<string, string>(StringComparer.Ordinal);
