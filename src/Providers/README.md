@@ -1703,6 +1703,64 @@ sharper than "owed"**, and both are at `NetworkProvider`'s remarks.
   and licence to be checked *before* it is designed around) or a parent reconciler that can list its
   own children, which is `loadBalancers`' missing reader in a second shape.
 
+### What the fourteenth provider measured
+
+`CyberCloud.Mail/domains`, [17 § `CyberCloud.Mail`](../../docs/plan/17-communication-and-email.md),
+M2 · 3.5 EM. Dovecot, Postfix and Rspamd, per tenant, on five core kinds.
+
+- **⚠ THE RESOURCE MODEL IN doc 17 CANNOT BE BUILT AS IT IS WRITTEN, AND THE PLATFORM REFUSES IT
+  BEFORE ANY PROVIDER CODE RUNS.** That document spells the type `domains/{domain}` — the address
+  segment *is* the mail domain. `ResourceNaming` applies the Kubernetes **DNS-1123 label** rule to
+  every resource name on this platform — `[a-z0-9]([-a-z0-9]*[a-z0-9])?`, **no dots** — because a
+  name becomes an object name *and* a label value. Every mail domain worth hosting contains a dot,
+  so `domains/example.com` is rejected by `ResourceId`'s own constructor. ⚠ **It was found by a test
+  failing, not by reading the document**, which is the part worth keeping: the design had been read
+  several times by then and the sentence looks unremarkable until something tries to construct the
+  address.
+- **⚠ Relaxing the rule would have been the wrong fix even though it is where the eye goes.** A
+  Kubernetes *object name* may contain dots; the DNS-1123 *label* that a `StatefulSet`'s pod names
+  and its `Service`'s DNS records are built from may not. A type that allowed them would render
+  objects the API server accepts and pods it will never schedule — a resource that reports
+  `Succeeded` and runs nothing. So the domain is an **immutable property** and the name is an
+  ordinary name.
+- **⚠ The cost of that is a fact in two places, and the config renderers are where it bites.**
+  `MailDomains.PostfixMainCf` takes the domain from the **body**, never from `context.Id.Name`.
+  Rendering the name would give Postfix `virtual_mailbox_domains = example-com`, and every message
+  for the real domain would be refused as a relay attempt — a total delivery outage caused by one
+  identifier that looks almost right, on a type where nothing inside the cluster would report it.
+- **⚠ THE MINT-ONCE RULE IS LOAD-BEARING HERE IN A WAY IT IS ON NO OTHER TYPE, AND THIS IS THE FIRST
+  ROW WHERE BREAKING IT WOULD BE SILENT RATHER THAN LOUD.** `CyberCloud.ContainerRegistry/registries`
+  established the shape — mint with `cas=0`, render what you *resolved*, never what you generated.
+  On a registry, a credential that changed each pass breaks logins visibly. On a mail domain, a DKIM
+  key that changed each pass **converges perfectly**: the `Secret` settles in seconds, every object
+  reads back, the resource reports `Succeeded`, no gate goes red — and the public key the tenant
+  published in DNS now matches nothing, so every message the domain sends fails DKIM at every
+  receiver. There is no observation *inside* this system that would catch it. That is why
+  `MailDkimTests` exists, and why it was sabotage-tested rather than trusted.
+- **⚠ It is the first type in the catalogue that declares NO ACTION, and the rule made that choice
+  rather than the schedule.** doc 17 names `verify`, `sendTest` and `exportMailbox`.
+  `actions-without-handlers.txt` permits a handler-less action **only on an already-published
+  api-version**; `2026-08-01` of this type is published by the same change that would declare one, so
+  its own words apply — *"it is a reason to write the handler or not declare the action"*. `verify`
+  cannot be written: it asks whether a domain's records resolve, and **this repository has no DNS
+  resolution seam at all**. ⚠ The half that is derivable was derived and put somewhere an action is
+  not needed to reach it: `MailDomains.TryRequiredRecords` is a pure function of the domain and the
+  resolved key, so doc 17's *"with the exact records to add"* is answerable today.
+- **The platform's own coherence checks caught two schema defects at static construction**, which is
+  the earliest either could have been caught: a `DefaultJson` of `""` on a property whose pattern
+  rejects `""` — a default no body could ever have set — and an array with no `ElementKind`, which
+  would reach an SDK as `object[]`.
+- **⚠ Its five objects cost five applies and five reads, and there was never an operator to avoid
+  that.** `charts/managed/nats` records an operator that existed and was archived; Postfix and
+  Dovecot predate Kubernetes by two decades and were never going to have one. This is the strongest
+  version of ADR-010 clause 1's finding rather than another instance of it.
+- **⚠ What a green run here proves is bounded by something outside this repository: the three images
+  do not exist.** `MailDomains.ImageRegistry` is `docker.io/cybercloud` and nothing builds
+  `dovecot`, `postfix` or `rspamd`. Both harnesses assert over applied *documents*, and the API
+  server stores a `StatefulSet` whose images are imaginary quite happily — so every suite passes over
+  a mail domain that cannot start. It is `charts/managed/mail/conformance.yaml § owed`,
+  `the-images-do-not-exist`, and it is the reason no green here may be read as "managed mail works".
+
 ## Namespaces
 
 Every namespaced object this platform applies lands in `{subscriptionId:N}-{resourceGroup}`, derived

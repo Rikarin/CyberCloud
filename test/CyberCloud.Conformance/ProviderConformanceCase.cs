@@ -92,8 +92,29 @@ public sealed record ProviderConformanceCase {
     /// <summary>The JSON Pointer <see cref="InvalidBody" /> must be refused at.</summary>
     public required string InvalidBodyTarget { get; init; }
 
-    /// <summary>An action the type declares, for the POST half of the verb grammar.</summary>
-    public required string ActionName { get; init; }
+    /// <summary>
+    ///     An action the type declares, for the POST half of the verb grammar, or empty when the type
+    ///     declares none.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS WAS <c>required</c> UNTIL A TYPE WITH NO ACTIONS EXISTED, AND THE HARNESS
+    ///         COULD NOT EXPRESS ONE AT ALL.</b> Thirteen provider families had each declared at
+    ///         least one action, so "every type has an action" had never been tested as an
+    ///         assumption — it was simply true of the sample so far.
+    ///         <c>CyberCloud.Mail/domains</c> is the first that declares none, and deliberately:
+    ///         <c>actions-without-handlers.txt</c> permits a handler-less action only on an
+    ///         already-published api-version, and that type's api-version is published by the change
+    ///         that would have declared one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Empty means the two POST assertions SKIP LOUDLY rather than pass quietly.</b> The
+    ///         alternative — a sentinel action name nobody declares — would have made
+    ///         <see cref="ProviderConformanceTests{TSource}.AnActionOnAnExistingResourceIsAccepted" />
+    ///         assert a refusal for the wrong reason and report it as coverage.
+    ///     </para>
+    /// </remarks>
+    public string ActionName { get; init; } = string.Empty;
 
     /// <summary>The objects a converged resource owns in the cluster.</summary>
     /// <remarks>

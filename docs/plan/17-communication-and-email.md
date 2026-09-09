@@ -126,14 +126,39 @@ email failing.
 
 ### Resource model
 
+⚠ **CORRECTED 2026-09-09 — `{domain}` cannot be the address segment, and the block below said it
+was.** `ResourceNaming` applies the Kubernetes **DNS-1123 label** rule to every resource name on this
+platform — `[a-z0-9]([-a-z0-9]*[a-z0-9])?`, 1–63 characters, **no dots** — because a name becomes a
+Kubernetes object name *and* a label value. Every mail domain contains a dot, so
+`domains/example.com` is refused by `ResourceId`'s own constructor before any provider code runs. It
+was found by a test failing on that constructor, not by re-reading this document.
+
+⚠ **Relaxing the rule would be the wrong fix even though it is where the eye goes.** An object *name*
+may contain dots; the DNS-1123 *label* that a `StatefulSet`'s pod names and its `Service`'s DNS
+records are built from may not — so a type that allowed them would render objects the API server
+accepts and pods it will never schedule. The domain is therefore an **immutable property** beside an
+ordinary name, and the shape is `domains/example-com` with `properties.domain = "example.com"`.
+
 ```
-CyberCloud.Mail/domains/{domain}
+CyberCloud.Mail/domains/{name}          ⚠ an ordinary DNS-1123 name, NOT the domain
+  ├─ domain: the mail domain itself, required and immutable
   ├─ verification: SPF/DKIM/DMARC/MX status, with the exact records to add
   ├─ mailboxes/{local}     → quota, aliases, forwarding, password (Vault), Sieve rules
   ├─ groups/{name}         → distribution lists
   ├─ catchAll, relayHosts, dedicatedIp
   └─ actions: verify, sendTest, exportMailbox
 ```
+
+⚠ **None of the three actions is declared, and `verify` is the one that cannot be.** It answers
+whether a domain's records resolve, which needs to ask the public DNS — and **this repository has no
+DNS resolution seam at all**. `actions-without-handlers.txt` is not the escape hatch: it permits a
+handler-less action only on an *already published* api-version, and `CyberCloud.Mail/domains`'
+`2026-08-01` is published by the same change that would declare one. ⚠ The half that *is* derivable
+is derived and needs no action to reach: `MailDomains.TryRequiredRecords` is a pure function of the
+domain and the resolved DKIM key, so "the exact records to add" above is answerable today. What is
+owed is reading them back — and `CyberCloud.Network/dnsZones`, which would provide it, is itself
+unbuilt. **The consequence is that "the platform will not enable sending until the DNS records
+verify", below, is NOT built and cannot be until that seam exists.**
 
 Webmail is a portal app (Angular + xUI) against a JMAP-shaped API. ⚠ **Building a good webmail client
 is 2 EM on its own** and is not in the 3.5 above — the M2 deliverable is IMAP/SMTP access with a
