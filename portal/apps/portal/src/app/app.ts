@@ -9,6 +9,6 @@ import { ShellLayout } from '@cybercloud/shell';
   selector: 'cc-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ShellLayout],
-  template: '<cc-shell />',
+  template: '<cc-shell />'
 })
 export class App {}

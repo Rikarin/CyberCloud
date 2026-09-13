@@ -17,17 +17,17 @@
  * 250 KB initial one. A chunk over budget is the symptom this catches.
  */
 
-import { gzipSync } from 'node:zlib';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { dirname, join, basename } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 const KB = 1024;
 
 /** docs/plan/20 § Performance budget. */
 const BUDGET = {
   initialJsGzip: 250 * KB,
-  routeChunkGzip: 120 * KB,
+  routeChunkGzip: 120 * KB
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -38,8 +38,8 @@ if (!existsSync(browserDir)) {
   process.exit(1);
 }
 
-const gzipOf = (file) => gzipSync(readFileSync(join(browserDir, file)), { level: 9 }).length;
-const fmt = (bytes) => `${(bytes / KB).toFixed(1)} KB`;
+const gzipOf = file => gzipSync(readFileSync(join(browserDir, file)), { level: 9 }).length;
+const fmt = bytes => `${(bytes / KB).toFixed(1)} KB`;
 
 /**
  * The initial set is what the browser fetches before it can paint: every `<script src>` plus every
@@ -48,7 +48,7 @@ const fmt = (bytes) => `${(bytes / KB).toFixed(1)} KB`;
  * silently move a bundle out of the measured set.
  */
 function initialScripts() {
-  const entry = ['index.csr.html', 'index.html'].map((f) => join(browserDir, f)).find(existsSync);
+  const entry = ['index.csr.html', 'index.html'].map(f => join(browserDir, f)).find(existsSync);
 
   if (!entry) {
     console.error('✗ Neither index.csr.html nor index.html was emitted; cannot determine the initial set.');
@@ -66,8 +66,8 @@ function initialScripts() {
 }
 
 const initial = initialScripts();
-const allJs = readdirSync(browserDir).filter((f) => f.endsWith('.js'));
-const lazy = allJs.filter((f) => !initial.has(f));
+const allJs = readdirSync(browserDir).filter(f => f.endsWith('.js'));
+const lazy = allJs.filter(f => !initial.has(f));
 
 const initialTotal = [...initial].reduce((sum, f) => sum + gzipOf(f), 0);
 const failures = [];
@@ -78,7 +78,9 @@ console.log('  Initial JS (gzipped)');
 for (const f of [...initial].sort()) console.log(`    ${f.padEnd(44)} ${fmt(gzipOf(f)).padStart(10)}`);
 
 const initialVerdict = initialTotal < BUDGET.initialJsGzip ? 'PASS' : 'FAIL';
-console.log(`    ${'TOTAL'.padEnd(44)} ${fmt(initialTotal).padStart(10)}  / ${fmt(BUDGET.initialJsGzip)}  ${initialVerdict}`);
+console.log(
+  `    ${'TOTAL'.padEnd(44)} ${fmt(initialTotal).padStart(10)}  / ${fmt(BUDGET.initialJsGzip)}  ${initialVerdict}`
+);
 
 if (initialTotal >= BUDGET.initialJsGzip) {
   failures.push(`initial JS is ${fmt(initialTotal)} gzipped, over the ${fmt(BUDGET.initialJsGzip)} budget`);

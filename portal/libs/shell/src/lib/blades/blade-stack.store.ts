@@ -39,25 +39,25 @@ export class BladeStackStore {
    * with its own idea of the resource's state — is a stale-data bug that looks like a UI bug.
    */
   open(blade: BladeRef): void {
-    const existing = this._blades().findIndex((b) => b.id === blade.id);
+    const existing = this._blades().findIndex(b => b.id === blade.id);
 
     if (existing >= 0) {
-      this._blades.update((blades) => blades.slice(0, existing + 1));
+      this._blades.update(blades => blades.slice(0, existing + 1));
       return;
     }
 
-    this._blades.update((blades) => [...blades, blade]);
+    this._blades.update(blades => [...blades, blade]);
   }
 
   /** Pop the top blade. A no-op on the root, which is always something to show. */
   close(): void {
-    this._blades.update((blades) => (blades.length <= 1 ? blades : blades.slice(0, -1)));
+    this._blades.update(blades => (blades.length <= 1 ? blades : blades.slice(0, -1)));
   }
 
   /** Pop back to a blade already in the stack. Used by the breadcrumb trail. */
   popTo(id: string): void {
-    const index = this._blades().findIndex((b) => b.id === id);
-    if (index >= 0) this._blades.update((blades) => blades.slice(0, index + 1));
+    const index = this._blades().findIndex(b => b.id === id);
+    if (index >= 0) this._blades.update(blades => blades.slice(0, index + 1));
   }
 
   /** Replace the whole stack — how a deep link restores a trail on a cold load. */

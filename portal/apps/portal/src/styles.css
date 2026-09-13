@@ -87,5 +87,5 @@ body {
   docs/plan/20 § Information architecture gets broken by accident.
 */
 #cc-main:focus-visible {
-  @apply ring-focus outline-none ring-2;
+  @apply ring-focus ring-2 outline-none;
 }

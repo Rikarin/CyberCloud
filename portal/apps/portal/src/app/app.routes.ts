@@ -18,24 +18,24 @@ export const appRoutes: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    loadComponent: () => import('../pages/home/home').then((m) => m.Home),
-    title: 'Cyber Cloud',
+    loadComponent: () => import('../pages/home/home').then(m => m.Home),
+    title: 'Cyber Cloud'
   },
   {
     path: 'resources',
-    loadComponent: () => import('../pages/resources/resource-list').then((m) => m.ResourceList),
-    title: 'Resources',
+    loadComponent: () => import('../pages/resources/resource-list').then(m => m.ResourceList),
+    title: 'Resources'
   },
   {
     // One route for every resource type. The blade reads the schema for (type, apiVersion) at
     // runtime — docs/plan/20 § Performance budget: "Schemas are fetched per type, cached, and
     // versioned by the api-version".
     path: 'resource/:provider/:type/:name',
-    loadComponent: () => import('../pages/resources/resource-blade').then((m) => m.ResourceBlade),
+    loadComponent: () => import('../pages/resources/resource-blade').then(m => m.ResourceBlade)
   },
   {
     path: '**',
-    loadComponent: () => import('../pages/not-found/not-found').then((m) => m.NotFound),
-    title: 'Not found',
-  },
+    loadComponent: () => import('../pages/not-found/not-found').then(m => m.NotFound),
+    title: 'Not found'
+  }
 ];

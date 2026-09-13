@@ -53,8 +53,8 @@ export class OmnibarRegistry {
   readonly recent = computed(() => this._recent().slice(0, 8));
 
   register(source: OmnibarSource): () => void {
-    this.sources.update((sources) => [...sources.filter((s) => s.id !== source.id), source]);
-    return () => this.sources.update((sources) => sources.filter((s) => s.id !== source.id));
+    this.sources.update(sources => [...sources.filter(s => s.id !== source.id), source]);
+    return () => this.sources.update(sources => sources.filter(s => s.id !== source.id));
   }
 
   /**
@@ -63,11 +63,9 @@ export class OmnibarRegistry {
    * resource results alone, and the primary navigation must not have a single point of failure.
    */
   async search(query: string, signal: AbortSignal): Promise<readonly OmnibarResult[]> {
-    const settled = await Promise.allSettled(
-      this.sources().map((source) => source.search(query, signal)),
-    );
+    const settled = await Promise.allSettled(this.sources().map(source => source.search(query, signal)));
 
-    return settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+    return settled.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   }
 
   /**
@@ -76,6 +74,6 @@ export class OmnibarRegistry {
    * is that call — most-recently-chosen, deduplicated, capped.
    */
   remember(result: OmnibarResult): void {
-    this._recent.update((recent) => [result, ...recent.filter((r) => r.id !== result.id)].slice(0, 16));
+    this._recent.update(recent => [result, ...recent.filter(r => r.id !== result.id)].slice(0, 16));
   }
 }

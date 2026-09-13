@@ -75,9 +75,7 @@ type SecondFactor = 'totp' | 'recoveryCode';
 
       <form class="mt-5 flex flex-col gap-4" (ngSubmit)="onSubmit()">
         <div class="flex flex-col gap-1.5">
-          <label class="text-sm font-medium" for="cc-email" i18n="@@identity.signIn.emailLabel">
-            Email address
-          </label>
+          <label class="text-sm font-medium" for="cc-email" i18n="@@identity.signIn.emailLabel"> Email address </label>
           <input
             xuiInput
             id="cc-email"
@@ -145,11 +143,7 @@ type SecondFactor = 'totp' | 'recoveryCode';
 
           @if (offersPassword()) {
             <div class="flex flex-col gap-1.5">
-              <label
-                class="text-sm font-medium"
-                for="cc-password"
-                i18n="@@identity.signIn.passwordLabel"
-              >
+              <label class="text-sm font-medium" for="cc-password" i18n="@@identity.signIn.passwordLabel">
                 Password
               </label>
               <!--
@@ -237,15 +231,10 @@ type SecondFactor = 'totp' | 'recoveryCode';
 
       <p class="text-foreground-muted mt-6 text-sm">
         <span i18n="@@identity.signIn.noAccount">No account yet?</span>
-        <a
-          class="text-primary ms-1 underline"
-          [href]="signUpHref()"
-          i18n="@@identity.signIn.createOne"
-          >Create one</a
-        >
+        <a class="text-primary ms-1 underline" [href]="signUpHref()" i18n="@@identity.signIn.createOne">Create one</a>
       </p>
     </div>
-  `,
+  `
 })
 export class SignInPage {
   readonly #api = inject(IdentityApi);
@@ -261,9 +250,7 @@ export class SignInPage {
    * string, so no later refactor can accidentally use it. See `return-url.ts` for why the rule is
    * an allow-list of one shape.
    */
-  readonly returnUrl = computed(() =>
-    sanitizeReturnUrl(this.#route.snapshot.queryParamMap.get('returnUrl')),
-  );
+  readonly returnUrl = computed(() => sanitizeReturnUrl(this.#route.snapshot.queryParamMap.get('returnUrl')));
 
   /** The address, bound to the field. */
   readonly email = signal('');
@@ -325,9 +312,7 @@ export class SignInPage {
   readonly passkeyBlockedBy = computed(() => passkeyUnavailableReason());
 
   /** The sign-up link, carrying the same sanitized return URL. */
-  readonly signUpHref = computed(
-    () => `/signup?returnUrl=${encodeURIComponent(this.returnUrl())}`,
-  );
+  readonly signUpHref = computed(() => `/signup?returnUrl=${encodeURIComponent(this.returnUrl())}`);
 
   /** Goes back to the address step, clearing whatever was typed into the credential fields. */
   onChangeAddress(): void {
@@ -391,7 +376,7 @@ export class SignInPage {
     this.error.set(null);
 
     this.#api.beginPasskey(this.email()).subscribe({
-      next: (challenge) => {
+      next: challenge => {
         // An empty options string means the server could not build a challenge — a relying-party
         // misconfiguration, never an answer about the address. The password field is still there.
         if (challenge.optionsJson.length === 0) {
@@ -401,21 +386,21 @@ export class SignInPage {
         }
 
         assertPasskey(challenge.optionsJson).then(
-          (assertion) => {
+          assertion => {
             if (assertion === null) {
               this.busy.set(false);
               return;
             }
 
             this.#api.completePasskey(assertion, this.returnUrl()).subscribe({
-              next: (result) => this.#complete(result),
-              error: () => this.#failed(),
+              next: result => this.#complete(result),
+              error: () => this.#failed()
             });
           },
-          () => this.#failed(),
+          () => this.#failed()
         );
       },
-      error: () => this.#failed(),
+      error: () => this.#failed()
     });
   }
 
@@ -424,12 +409,12 @@ export class SignInPage {
     this.error.set(null);
 
     this.#api.begin(this.email()).subscribe({
-      next: (response) => {
+      next: response => {
         this.offered.set(response.offered);
         this.step.set('credential');
         this.busy.set(false);
       },
-      error: () => this.#failed(),
+      error: () => this.#failed()
     });
   }
 
@@ -438,8 +423,8 @@ export class SignInPage {
     this.error.set(null);
 
     this.#api.signInWithPassword(this.email(), this.password(), this.returnUrl()).subscribe({
-      next: (result) => this.#complete(result),
-      error: () => this.#failed(),
+      next: result => this.#complete(result),
+      error: () => this.#failed()
     });
   }
 
@@ -453,8 +438,8 @@ export class SignInPage {
         : this.#api.redeemRecoveryCode(this.code(), this.returnUrl());
 
     request.subscribe({
-      next: (result) => this.#complete(result),
-      error: () => this.#failed(),
+      next: result => this.#complete(result),
+      error: () => this.#failed()
     });
   }
 

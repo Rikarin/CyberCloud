@@ -49,7 +49,7 @@ import { ShellOmnibar } from '../omnibar/shell-omnibar';
     ShellOmnibar,
     NotificationsTray,
     XuiPanelStack,
-    XuiDockManagerImports,
+    XuiDockManagerImports
   ],
   host: { class: 'flex h-svh flex-col bg-background text-foreground' },
   template: `
@@ -90,7 +90,7 @@ import { ShellOmnibar } from '../omnibar/shell-omnibar';
     </main>
 
     <cc-omnibar />
-  `,
+  `
 })
 export class ShellLayout {
   private readonly blades = inject(BladeStackStore);
@@ -116,17 +116,17 @@ export class ShellLayout {
           header: $localize`:@@shell.pane.workspace:Workspace`,
           size: 3,
           allowClose: false,
-          allowFloating: false,
+          allowFloating: false
         },
         {
           type: 'contentPane',
           contentId: 'blades',
           header: $localize`:@@shell.pane.blades:Details`,
           size: 2,
-          allowClose: false,
-        },
-      ],
-    },
+          allowClose: false
+        }
+      ]
+    }
   });
 
   /**
@@ -140,7 +140,7 @@ export class ShellLayout {
 
     return {
       title: first?.title ?? $localize`:@@shell.blades.empty:No resource selected`,
-      content: EmptyBlade,
+      content: EmptyBlade
     };
   });
 }
@@ -157,6 +157,6 @@ export class ShellLayout {
     <p class="text-foreground-muted p-6 text-sm" i18n="@@shell.blades.emptyHint">
       Select a resource, or press Ctrl+K to search.
     </p>
-  `,
+  `
 })
 export class EmptyBlade {}

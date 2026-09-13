@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { XuiButton } from '@xui/button';
-import { XuiProgressBar } from '@xui/progress-bar';
 import { XuiPopover } from '@xui/popover';
+import { XuiProgressBar } from '@xui/progress-bar';
 import { NotificationsStore, OperationNotification } from './notifications.store';
 
 /**
@@ -46,18 +46,12 @@ import { NotificationsStore, OperationNotification } from './notifications.store
 
     <ng-template #tray>
       <div class="w-96 max-w-[90vw]" role="group" [attr.aria-label]="panelLabel">
-        <h2
-          class="border-border border-b px-3 py-2 text-sm font-semibold"
-          i18n="@@shell.notifications.heading"
-        >
+        <h2 class="border-border border-b px-3 py-2 text-sm font-semibold" i18n="@@shell.notifications.heading">
           Notifications
         </h2>
 
         @if (store.items().length === 0) {
-          <p
-            class="text-foreground-muted px-3 py-6 text-center text-sm"
-            i18n="@@shell.notifications.empty"
-          >
+          <p class="text-foreground-muted px-3 py-6 text-center text-sm" i18n="@@shell.notifications.empty">
             No operations yet.
           </p>
         } @else {
@@ -74,11 +68,7 @@ import { NotificationsStore, OperationNotification } from './notifications.store
                 }
 
                 @if (item.status === 'running') {
-                  <xui-progress-bar
-                    class="mt-1.5"
-                    [value]="fraction(item)"
-                    [aria-label]="item.title"
-                  />
+                  <xui-progress-bar class="mt-1.5" [value]="fraction(item)" [aria-label]="item.title" />
                 }
               </li>
             }
@@ -92,7 +82,7 @@ import { NotificationsStore, OperationNotification } from './notifications.store
       only a sighted user finds out about. docs/plan/20 § Accessibility, i18n, theming.
     -->
     <span class="sr-only" aria-live="polite">{{ liveMessage() }}</span>
-  `,
+  `
 })
 export class NotificationsTray {
   protected readonly store = inject(NotificationsStore);
@@ -108,9 +98,7 @@ export class NotificationsTray {
 
   protected readonly liveMessage = computed(() => {
     const running = this.store.running().length;
-    return running === 0
-      ? ''
-      : $localize`:@@shell.notifications.running:${running}:count: operations in progress`;
+    return running === 0 ? '' : $localize`:@@shell.notifications.running:${running}:count: operations in progress`;
   });
 
   protected onOpen(): void {

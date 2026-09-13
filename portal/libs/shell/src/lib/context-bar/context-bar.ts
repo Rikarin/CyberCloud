@@ -31,12 +31,10 @@ import { SubscriptionRef, TenantContextStore, TenantRef } from '../context/tenan
   host: {
     class: 'flex items-center gap-3 px-4 h-12 border-b border-border bg-surface shrink-0',
     role: 'region',
-    '[attr.aria-label]': 'regionLabel',
+    '[attr.aria-label]': 'regionLabel'
   },
   template: `
-    <span class="text-foreground-muted text-xs font-medium" i18n="@@shell.contextBar.tenant">
-      Tenant
-    </span>
+    <span class="text-foreground-muted text-xs font-medium" i18n="@@shell.contextBar.tenant"> Tenant </span>
 
     <xui-select
       class="min-w-56"
@@ -51,9 +49,7 @@ import { SubscriptionRef, TenantContextStore, TenantRef } from '../context/tenan
 
     <span class="bg-border h-6 w-px" aria-hidden="true"></span>
 
-    <span class="text-foreground-muted text-xs font-medium" i18n="@@shell.contextBar.subscription">
-      Subscription
-    </span>
+    <span class="text-foreground-muted text-xs font-medium" i18n="@@shell.contextBar.subscription"> Subscription </span>
 
     <xui-select
       class="min-w-64"
@@ -71,7 +67,7 @@ import { SubscriptionRef, TenantContextStore, TenantRef } from '../context/tenan
       already show it; this exists for the users who cannot see them.
     -->
     <span class="sr-only" aria-live="polite">{{ announcement() }}</span>
-  `,
+  `
 })
 export class ContextBar {
   protected readonly store = inject(TenantContextStore);

@@ -1,11 +1,7 @@
-import {
-  ApplicationConfig,
-  provideBrowserGlobalErrorListeners,
-  provideZonelessChangeDetection,
-} from '@angular/core';
-import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection } from '@angular/core';
 import { provideClientHydration, withEventReplay, withIncrementalHydration } from '@angular/platform-browser';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
 import { appRoutes } from './app.routes';
 import { accessTokenInterceptor } from './auth/access-token.interceptor';
 
@@ -30,7 +26,7 @@ export const appConfig: ApplicationConfig = {
       withComponentInputBinding(),
       // A blade that reopens scrolled to where it was is the behaviour people expect from Azure's
       // portal; anchor scrolling makes a deep link to a section of a long settings blade work.
-      withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
+      withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' })
     ),
     provideHttpClient(withFetch(), withInterceptors([accessTokenInterceptor])),
 
@@ -44,6 +40,6 @@ export const appConfig: ApplicationConfig = {
     // switcher between first paint and hydration is replayed rather than swallowed. In a portal
     // whose first interaction is often "switch to the right subscription", a swallowed click is
     // the user acting in the wrong place.
-    provideClientHydration(withEventReplay(), withIncrementalHydration()),
-  ],
+    provideClientHydration(withEventReplay(), withIncrementalHydration())
+  ]
 };

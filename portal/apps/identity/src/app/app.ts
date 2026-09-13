@@ -20,6 +20,6 @@ import { RouterOutlet } from '@angular/router';
         <router-outlet />
       </main>
     </div>
-  `,
+  `
 })
 export class App {}

@@ -2,13 +2,13 @@ import { TenantContextStore } from './tenant-context';
 
 const tenants = [
   { id: 't-acme', displayName: 'Acme Corporation' },
-  { id: 't-initech', displayName: 'Initech Holdings' },
+  { id: 't-initech', displayName: 'Initech Holdings' }
 ];
 
 const subscriptions = [
   { id: 's-acme-prod', tenantId: 't-acme', displayName: 'Acme Production' },
   { id: 's-acme-dev', tenantId: 't-acme', displayName: 'Acme Development' },
-  { id: 's-initech-prod', tenantId: 't-initech', displayName: 'Initech Production' },
+  { id: 's-initech-prod', tenantId: 't-initech', displayName: 'Initech Production' }
 ];
 
 /**
@@ -28,8 +28,8 @@ describe('TenantContextStore — docs/plan/20 § Information architecture', () =
   it('offers only the active tenant’s subscriptions', () => {
     store.selectTenant('t-acme');
 
-    expect(store.subscriptions().map((s) => s.id)).toEqual(['s-acme-prod', 's-acme-dev']);
-    expect(store.subscriptions().some((s) => s.tenantId !== 't-acme')).toBe(false);
+    expect(store.subscriptions().map(s => s.id)).toEqual(['s-acme-prod', 's-acme-dev']);
+    expect(store.subscriptions().some(s => s.tenantId !== 't-acme')).toBe(false);
   });
 
   it('clears the subscription when the tenant changes', () => {

@@ -27,7 +27,7 @@ import { TenantContextStore } from '@cybercloud/shell';
         Select a subscription to list resources.
       </p>
     }
-  `,
+  `
 })
 export class ResourceList {
   protected readonly context = inject(TenantContextStore);

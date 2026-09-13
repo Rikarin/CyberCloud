@@ -36,12 +36,12 @@ and no `@xui/*` peer range constrains it, so it is the portal's call and it need
 portal work starts, or local and CI will silently differ". Four inputs decided it on 2026-08-11,
 and they were re-checked on 2026-08-12 after `@xui/*` released 2.2.1 through 2.2.4:
 
-| Input | Value | Effect |
-|---|---|---|
-| Angular 22's own `engines.node` | `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0` | 22, 24 and 26 are all permitted — Angular does not decide it either |
-| Node release state, 2026-08 | 22 is **Maintenance**, 24 is **Active LTS**, 26 is **Current** | 24 is the only one that is both supported and LTS today |
-| ~~xUI's own pin~~ | ~~`engines.node: 24.x`~~ — see below | ⚠ **Withdrawn 2026-08-12.** It is not a constraint on this workspace |
-| The dev host | 26.5.0, and it is the only Node installed | Needs to keep working, so the pin cannot be a wall |
+| Input                           | Value                                                          | Effect                                                               |
+| ------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Angular 22's own `engines.node` | `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0`                         | 22, 24 and 26 are all permitted — Angular does not decide it either  |
+| Node release state, 2026-08     | 22 is **Maintenance**, 24 is **Active LTS**, 26 is **Current** | 24 is the only one that is both supported and LTS today              |
+| ~~xUI's own pin~~               | ~~`engines.node: 24.x`~~ — see below                           | ⚠ **Withdrawn 2026-08-12.** It is not a constraint on this workspace |
+| The dev host                    | 26.5.0, and it is the only Node installed                      | Needs to keep working, so the pin cannot be a wall                   |
 
 ⚠ **The input this decision called strongest does not exist.** It was recorded as "xUI itself pins
 `engines.node: 24.x`, which is the strongest signal". Re-checked against **npm** on 2026-08-12,
@@ -54,7 +54,7 @@ from, for exactly this class of reason. It binds xUI's contributors, not xUI's c
 That is a real correction, and it does **not** move the pin. Re-evaluated, the surviving form of
 the input still points at 24: every `@xui/*` package at 2.2.4 was published from Node 24.18.0
 (`_nodeVersion` in the registry metadata), so 24 remains the runtime the library is built and
-tested on. It is now a *weak* input where the decision claimed a strong one — it is corroboration,
+tested on. It is now a _weak_ input where the decision claimed a strong one — it is corroboration,
 not a constraint — and with it demoted, the pin rests on the Node release calendar alone.
 
 So: **24**, unchanged, because none of the four inputs reversed. Node 26 is still rejected on the
@@ -101,14 +101,14 @@ docs/plan/02 § ADR-017 records the peer range as `@angular/*: 22` — "a **majo
 concludes the portal "is free within Angular 22.x". ⚠ **That is not true of every `@xui/*` package
 at 2.2.0**, and the exceptions are load-bearing:
 
-| Package | Peer | Note |
-|---|---|---|
-| `@xui/panel-stack` | `"@angular/common": "22.0.8"` | **Exact**, not `22` |
-| `@xui/popover` | `"@angular/common": "22.0.8"` | Exact |
-| `@xui/tooltip` | `"@angular/common": "22.0.8"` | Exact |
-| `@xui/breadcrumb` | `"@angular/common": "22.0.8"` | Exact |
-| `@xui/echarts` | `"@angular/cdk": "22.0.6"` | Exact, and a *different* version again |
-| everything else | `"@angular/*": "22"` | The major range ADR-017 describes |
+| Package            | Peer                          | Note                                   |
+| ------------------ | ----------------------------- | -------------------------------------- |
+| `@xui/panel-stack` | `"@angular/common": "22.0.8"` | **Exact**, not `22`                    |
+| `@xui/popover`     | `"@angular/common": "22.0.8"` | Exact                                  |
+| `@xui/tooltip`     | `"@angular/common": "22.0.8"` | Exact                                  |
+| `@xui/breadcrumb`  | `"@angular/common": "22.0.8"` | Exact                                  |
+| `@xui/echarts`     | `"@angular/cdk": "22.0.6"`    | Exact, and a _different_ version again |
+| everything else    | `"@angular/*": "22"`          | The major range ADR-017 describes      |
 
 `@angular/common@22.0.8` in turn peers `"@angular/core": "22.0.8"` exactly, so the whole framework
 follows. Four of those six packages are in the M1 shell, so this is not a corner case — with
@@ -129,23 +129,23 @@ Every one of these fails the build rather than warning. `pnpm gates` runs them i
 which invokes this chain rather than restating it. Locally that target runs `pnpm verify` instead,
 which is `gates` without the Node wall; see § Node above for why that asymmetry is deliberate.
 
-| Gate | Command | What it enforces |
-|---|---|---|
-| Node | `pnpm node:gate` | The pin above, in CI only |
-| Lint | `pnpm lint` | `ChangeDetectorRef` and web storage are **banned identifiers**; `OnPush` is mandatory; every template string carries an `i18n` marker |
-| Tests | `pnpm test` | Components, stores, axe on every route, and the conventions suite |
-| Build + budget | `pnpm build` | The production build, then `scripts/bundle-budget.mjs` |
-| SSR isolation | `pnpm test:ssr` | `scripts/ssr-isolation.test.mjs`, run by `pnpm build` once the bundle exists |
+| Gate           | Command          | What it enforces                                                                                                                      |
+| -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Node           | `pnpm node:gate` | The pin above, in CI only                                                                                                             |
+| Lint           | `pnpm lint`      | `ChangeDetectorRef` and web storage are **banned identifiers**; `OnPush` is mandatory; every template string carries an `i18n` marker |
+| Tests          | `pnpm test`      | Components, stores, axe on every route, and the conventions suite                                                                     |
+| Build + budget | `pnpm build`     | The production build, then `scripts/bundle-budget.mjs`                                                                                |
+| SSR isolation  | `pnpm test:ssr`  | `scripts/ssr-isolation.test.mjs`, run by `pnpm build` once the bundle exists                                                          |
 
 ### The performance budget
 
 docs/plan/20 § Performance budget, "Enforced in CI, failing the build". `scripts/bundle-budget.mjs`
 gzips the emitted files and compares real bytes rather than the builder's estimate:
 
-| Metric | Budget | Actual |
-|---|---|---|
-| Initial JS, gzipped | < 250 KB | **178.6 KB** |
-| Largest route chunk, gzipped | < 120 KB | **0.5 KB** |
+| Metric                       | Budget   | Actual       |
+| ---------------------------- | -------- | ------------ |
+| Initial JS, gzipped          | < 250 KB | **178.6 KB** |
+| Largest route chunk, gzipped | < 120 KB | **0.5 KB**   |
 
 ⚠ The script also fails when the build emits **no** lazy chunk at all, because that means the lazy
 routes have been inlined and docs/plan/20's "Route-level code splitting is mandatory" has quietly
@@ -171,14 +171,14 @@ deployed process's bytes and response headers, not about an Angular API call.
 
 M1 is the shell. Everything below is named in docs/plan/20 and deliberately absent.
 
-| Not built | What it needs before it can be | Where it is specified |
-|---|---|---|
+| Not built             | What it needs before it can be                                                                                                                                                                                                                              | Where it is specified                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | **The form renderer** | The schema emitter's output contract — see the header of `libs/resource-forms/src/index.ts` for the six things it needs, of which the load-bearing one is that schemas are **fetched at runtime, never imported**, or 100 resource types land in the bundle | docs/plan/20 § The shape that makes 100 resource types affordable |
-| **Cost analysis** | The billing aggregates from docs/plan/22, plus forecast and budget models | docs/plan/20 § The pages that are not generated, 0.6 EM |
-| **Metrics explorer** | A query builder over the hot-tier pre-aggregates (docs/plan/16), and dashboards to pin to | 0.6 EM |
-| **Log search** | ClickHouse, and ⚠ a **server-side query cost preview** — docs/plan/20: "Needs a query cost preview or someone will run a 400-day scan". The portal cannot estimate this itself | 0.6 EM |
-| **Network topology** | The VPC/subnet/peering graph from docs/plan/14. `@xui/node-graph` is the easy half; the data shape is the work | 0.5 EM |
-| **`apps/admin`** | The platform-scope API from docs/plan/06, and a separate auth scope. It is a **separate app on purpose** — "so that a bug in tenant-facing code cannot reach admin functionality and vice versa" — so it is not a route away | docs/plan/20 § Admin app |
-| **Webmail** | docs/plan/17, and counted there rather than here | docs/plan/20 § The pages that are not generated |
+| **Cost analysis**     | The billing aggregates from docs/plan/22, plus forecast and budget models                                                                                                                                                                                   | docs/plan/20 § The pages that are not generated, 0.6 EM           |
+| **Metrics explorer**  | A query builder over the hot-tier pre-aggregates (docs/plan/16), and dashboards to pin to                                                                                                                                                                   | 0.6 EM                                                            |
+| **Log search**        | ClickHouse, and ⚠ a **server-side query cost preview** — docs/plan/20: "Needs a query cost preview or someone will run a 400-day scan". The portal cannot estimate this itself                                                                              | 0.6 EM                                                            |
+| **Network topology**  | The VPC/subnet/peering graph from docs/plan/14. `@xui/node-graph` is the easy half; the data shape is the work                                                                                                                                              | 0.5 EM                                                            |
+| **`apps/admin`**      | The platform-scope API from docs/plan/06, and a separate auth scope. It is a **separate app on purpose** — "so that a bug in tenant-facing code cannot reach admin functionality and vice versa" — so it is not a route away                                | docs/plan/20 § Admin app                                          |
+| **Webmail**           | docs/plan/17, and counted there rather than here                                                                                                                                                                                                            | docs/plan/20 § The pages that are not generated                   |
 
 See [docs/plan/20](../docs/plan/20-portal.md) and [docs/plan/03 § portal](../docs/plan/03-repository-layout.md).

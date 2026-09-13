@@ -22,5 +22,5 @@ import { sanitizeReturnUrl } from './return-url';
  */
 export const NAVIGATE = new InjectionToken<(url: string) => void>('cc.identity.navigate', {
   providedIn: 'root',
-  factory: () => (url: string) => window.location.assign(sanitizeReturnUrl(url)),
+  factory: () => (url: string) => window.location.assign(sanitizeReturnUrl(url))
 });

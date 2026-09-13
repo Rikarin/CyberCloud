@@ -1,7 +1,7 @@
 // @ts-check
 import eslint from '@eslint/js';
-import tseslint from 'typescript-eslint';
 import angular from 'angular-eslint';
+import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
@@ -16,8 +16,8 @@ export default tseslint.config(
       // The index document is not an Angular template; running the template rules over it flags
       // `<link rel>` and `<meta content>` as untranslated copy.
       'apps/portal/src/index.html',
-      'apps/identity/src/index.html',
-    ],
+      'apps/identity/src/index.html'
+    ]
   },
   {
     files: ['**/*.ts'],
@@ -25,18 +25,12 @@ export default tseslint.config(
       eslint.configs.recommended,
       ...tseslint.configs.recommended,
       ...tseslint.configs.stylistic,
-      ...angular.configs.tsRecommended,
+      ...angular.configs.tsRecommended
     ],
     processor: angular.processInlineTemplates,
     rules: {
-      '@angular-eslint/directive-selector': [
-        'error',
-        { type: 'attribute', prefix: 'cc', style: 'camelCase' },
-      ],
-      '@angular-eslint/component-selector': [
-        'error',
-        { type: 'element', prefix: 'cc', style: 'kebab-case' },
-      ],
+      '@angular-eslint/directive-selector': ['error', { type: 'attribute', prefix: 'cc', style: 'camelCase' }],
+      '@angular-eslint/component-selector': ['error', { type: 'element', prefix: 'cc', style: 'kebab-case' }],
 
       // ── docs/plan/20 § Live updates ────────────────────────────────────────────────────────
       // "Every stream is a `signal`; the templates are `OnPush` and zoneless. Since xUI is
@@ -55,13 +49,13 @@ export default tseslint.config(
           selector: 'TSTypeReference > Identifier[name="ChangeDetectorRef"]',
           message:
             'ChangeDetectorRef is banned in portal code — docs/plan/20 § Live updates. The portal ' +
-            'is zoneless and signal-based; derive state with signal()/computed() instead.',
+            'is zoneless and signal-based; derive state with signal()/computed() instead.'
         },
         {
           selector: 'CallExpression[callee.name="inject"] > Identifier[name="ChangeDetectorRef"]',
           message:
             'ChangeDetectorRef is banned in portal code — docs/plan/20 § Live updates. The portal ' +
-            'is zoneless and signal-based; derive state with signal()/computed() instead.',
+            'is zoneless and signal-based; derive state with signal()/computed() instead.'
         },
         // ── docs/plan/10 § Authentication inputs ─────────────────────────────────────────────
         // "Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie
@@ -70,14 +64,14 @@ export default tseslint.config(
           selector: 'MemberExpression[object.name=/^(localStorage|sessionStorage)$/]',
           message:
             'Web storage is banned in portal code — docs/plan/10 § Authentication inputs keeps ' +
-            'the access token in memory only. Use AccessTokenStore, which holds it in a signal.',
+            'the access token in memory only. Use AccessTokenStore, which holds it in a signal.'
         },
         {
           selector: 'MemberExpression[property.name=/^(localStorage|sessionStorage)$/]',
           message:
             'Web storage is banned in portal code — docs/plan/10 § Authentication inputs keeps ' +
-            'the access token in memory only. Use AccessTokenStore, which holds it in a signal.',
-        },
+            'the access token in memory only. Use AccessTokenStore, which holds it in a signal.'
+        }
       ],
 
       // OnPush everywhere. docs/plan/20 § Live updates.
@@ -86,13 +80,13 @@ export default tseslint.config(
       '@angular-eslint/use-lifecycle-interface': 'error',
 
       '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    },
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]
+    }
   },
   {
     // The SSR entries legitimately talk to Express and to Node globals.
     files: ['apps/portal/src/server.ts', 'apps/identity/src/server.ts', 'scripts/**/*.mjs'],
-    rules: { 'no-restricted-syntax': 'off' },
+    rules: { 'no-restricted-syntax': 'off' }
   },
   {
     // The web-storage assertions in the auth tests have to name the APIs they are asserting are
@@ -103,10 +97,10 @@ export default tseslint.config(
         'error',
         {
           selector: 'TSTypeReference > Identifier[name="ChangeDetectorRef"]',
-          message: 'ChangeDetectorRef is banned in portal code — docs/plan/20 § Live updates.',
-        },
-      ],
-    },
+          message: 'ChangeDetectorRef is banned in portal code — docs/plan/20 § Live updates.'
+        }
+      ]
+    }
   },
   {
     files: ['**/*.html'],
@@ -141,21 +135,44 @@ export default tseslint.config(
           checkAttributes: true,
           ignoreAttributes: [
             // Structural / non-linguistic HTML.
-            'charset', 'class', 'content', 'for', 'href', 'id', 'name', 'rel', 'src', 'style',
-            'tabindex', 'target', 'type', 'value',
+            'charset',
+            'class',
+            'content',
+            'for',
+            'href',
+            'id',
+            'name',
+            'rel',
+            'src',
+            'style',
+            'tabindex',
+            'target',
+            'type',
+            'value',
             // ⚠ Keyword-valued form attributes, added with the identity app's sign-in form.
             // `autocomplete="current-password"` and `inputmode="email"` are vocabulary the browser
             // and the password manager read, not copy a translator should touch — translating
             // either breaks autofill rather than localising anything.
-            'autocomplete', 'inputmode',
+            'autocomplete',
+            'inputmode',
             // ARIA whose value is a keyword, not prose.
-            'aria-hidden', 'aria-live', 'aria-atomic', 'role',
+            'aria-hidden',
+            'aria-live',
+            'aria-atomic',
+            'role',
             // xUI component configuration.
-            'color', 'hotkey', 'interactionKind', 'placement', 'size', 'variant', 'xuiButton',
-            'xuiDockContent', 'xuiPopover',
-          ],
-        },
-      ],
-    },
-  },
+            'color',
+            'hotkey',
+            'interactionKind',
+            'placement',
+            'size',
+            'variant',
+            'xuiButton',
+            'xuiDockContent',
+            'xuiPopover'
+          ]
+        }
+      ]
+    }
+  }
 );

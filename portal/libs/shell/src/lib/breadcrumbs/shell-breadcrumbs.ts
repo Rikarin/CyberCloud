@@ -38,13 +38,8 @@ import { TenantContextStore } from '../context/tenant-context';
   imports: [XuiBreadcrumbs],
   host: { class: 'flex items-center px-4 h-9 border-b border-border bg-surface-sunken shrink-0' },
   template: `
-    <xui-breadcrumbs
-      [items]="crumbs()"
-      [aria-label]="ariaLabel"
-      [minVisibleItems]="2"
-      (itemClick)="navigate($event)"
-    />
-  `,
+    <xui-breadcrumbs [items]="crumbs()" [aria-label]="ariaLabel" [minVisibleItems]="2" (itemClick)="navigate($event)" />
+  `
 })
 export class ShellBreadcrumbs {
   private readonly context = inject(TenantContextStore);
