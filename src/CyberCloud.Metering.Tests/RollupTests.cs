@@ -14,8 +14,11 @@ public sealed class RollupTests(MeteringCluster cluster) {
     // ── FAILURE CLASS: a redelivered event collapses ───────────────────────────────────────────
 
     /// <summary>
-    ///     docs/plan/22 § The pipeline: <i>"The key is deterministic … so a redelivery after a silo
-    ///     restart collapses. NATS is at-least-once and this is the only correct answer to that."</i>
+    ///     docs/plan/22 § The pipeline:
+    ///     <i>
+    ///         "The key is deterministic … so a redelivery after a silo
+    ///         restart collapses. NATS is at-least-once and this is the only correct answer to that."
+    ///     </i>
     /// </summary>
     [Fact]
     public async Task TheSameEventFedTwiceIsOneRow() {
@@ -203,7 +206,7 @@ public sealed class RollupTests(MeteringCluster cluster) {
 
         var expected = 0m;
         for (var i = 0; i < 12; i++) {
-            var record = Sample(subscription, Widget, hour.Start + (UsageWindow.SamplePeriod * i));
+            var record = Sample(subscription, Widget, hour.Start + UsageWindow.SamplePeriod * i);
             expected += record.Quantity;
             _ = await rollup.IngestAsync(record);
         }
@@ -392,16 +395,16 @@ public sealed class RollupTests(MeteringCluster cluster) {
         var window = UsageWindow.SampleAt(at);
 
         return UsageEvent.ForSample(
-                MeteringCluster.Tenant,
-                subscription,
-                resource,
-                "/tenants/t/subscriptions/s/resourceGroups/prod/providers/CyberCloud.Sample/widgets/w",
-                meter,
-                MeterCatalog.Accrue(meter, 4m, window.Length).GetValueOrThrow(),
-                window,
-                "eu-central",
-                at
-            )
+            MeteringCluster.Tenant,
+            subscription,
+            resource,
+            "/tenants/t/subscriptions/s/resourceGroups/prod/providers/CyberCloud.Sample/widgets/w",
+            meter,
+            MeterCatalog.Accrue(meter, 4m, window.Length).GetValueOrThrow(),
+            window,
+            "eu-central",
+            at
+        )
             .GetValueOrThrow();
     }
 

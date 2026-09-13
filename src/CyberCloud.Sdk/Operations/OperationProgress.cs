@@ -49,17 +49,20 @@ public sealed class OperationProgress {
     public int? PercentComplete { get; }
 
     internal static OperationProgress? TryRead(JsonElement element) {
-        if (element.ValueKind is not JsonValueKind.Object)
+        if (element.ValueKind is not JsonValueKind.Object) {
             return null;
+        }
 
         // `at` and `step` are the required members — openapi/2026-08-01.json § OperationProgress. An
         // entry missing either is skipped rather than surfaced with a default timestamp, because a
         // progress line claiming to have happened at 0001-01-01 is worse than one that is absent.
-        if (!element.TryGetProperty("at", out var at) || !at.TryGetDateTimeOffset(out var timestamp))
+        if (!element.TryGetProperty("at", out var at) || !at.TryGetDateTimeOffset(out var timestamp)) {
             return null;
+        }
 
-        if (!element.TryGetProperty("step", out var step) || step.ValueKind is not JsonValueKind.String)
+        if (!element.TryGetProperty("step", out var step) || step.ValueKind is not JsonValueKind.String) {
             return null;
+        }
 
         var message = element.TryGetProperty("message", out var m) && m.ValueKind is JsonValueKind.String
             ? m.GetString()
@@ -73,6 +76,6 @@ public sealed class OperationProgress {
     }
 
     /// <inheritdoc />
-    public override string ToString()
-        => PercentComplete is null ? $"{Step}: {Message}" : $"{PercentComplete}% {Step}: {Message}";
+    public override string ToString() =>
+        PercentComplete is null ? $"{Step}: {Message}" : $"{PercentComplete}% {Step}: {Message}";
 }

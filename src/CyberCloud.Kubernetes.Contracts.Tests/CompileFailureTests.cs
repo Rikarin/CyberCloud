@@ -75,11 +75,11 @@ public sealed class CompileFailureTests {
     [Fact]
     public void TheFullyQualifiedChainCanAlsoApplyAndDelete() {
         Errors(
-                """
-                        _ = KubeCommand.For(connection).WithTenantId(tenantId).WithResourceId(id).ApplyAsync();
-                        _ = KubeCommand.For(connection).WithTenantId(tenantId).WithResourceId(id).DeleteAsync(CascadePolicy.Foreground);
-                """
-            )
+            """
+                    _ = KubeCommand.For(connection).WithTenantId(tenantId).WithResourceId(id).ApplyAsync();
+                    _ = KubeCommand.For(connection).WithTenantId(tenantId).WithResourceId(id).DeleteAsync(CascadePolicy.Foreground);
+            """
+        )
             .ShouldBeEmpty();
     }
 
@@ -167,17 +167,17 @@ public sealed class CompileFailureTests {
         // appeared on them, some unlabelled command would become expressible even though Build()
         // stayed put — and the chain would be decorative.
         Errors(
-                """
-                        _ = KubeCommand.For(connection).InNamespace("ns");
-                """
-            )
+            """
+                    _ = KubeCommand.For(connection).InNamespace("ns");
+            """
+        )
             .ShouldContain(x => x.Id == "CS1061");
 
         Errors(
-                """
-                        _ = KubeCommand.For(connection).WithTenantId(tenantId).WithLabels(("a", "b"));
-                """
-            )
+            """
+                    _ = KubeCommand.For(connection).WithTenantId(tenantId).WithLabels(("a", "b"));
+            """
+        )
             .ShouldContain(x => x.Id == "CS1061");
     }
 
@@ -185,10 +185,10 @@ public sealed class CompileFailureTests {
     public void TheOrderIsFixedAndCannotBeReversed() {
         // WithResourceId is not on stage 1, so the two calls cannot be swapped.
         Errors(
-                """
-                        _ = KubeCommand.For(connection).WithResourceId(id);
-                """
-            )
+            """
+                    _ = KubeCommand.For(connection).WithResourceId(id);
+            """
+        )
             .ShouldContain(x => x.Id == "CS1061");
     }
 
@@ -251,7 +251,7 @@ public sealed class CompileFailureTests {
         // ⚠ Both assemblies, not just the one under test: CyberCloud.Core is the one that actually
         // went missing when the reference set was taken from the load context, and it goes missing
         // as the `using CyberCloud.Core;` in every snippet, not as a member-resolution failure.
-        foreach (var assembly in (Assembly[]) [typeof(KubeLabels).Assembly, typeof(ResourceId).Assembly]) {
+        foreach (var assembly in (Assembly[])[typeof(KubeLabels).Assembly, typeof(ResourceId).Assembly]) {
             References.ShouldContain(
                 x => x.Display != null
                     && x.Display.EndsWith(Path.GetFileName(assembly.Location), StringComparison.OrdinalIgnoreCase),
@@ -260,10 +260,10 @@ public sealed class CompileFailureTests {
         }
 
         Errors(
-                """
-                        _ = KubeLabels.ManagedByValue;
-                """
-            )
+            """
+                    _ = KubeLabels.ManagedByValue;
+            """
+        )
             .ShouldBeEmpty();
     }
 
@@ -299,9 +299,9 @@ public sealed class CompileFailureTests {
         // Belt and braces, and the documentation of what the probe source actually needs: the two
         // assemblies it names, anchored on types so the compiler — not a string — guarantees they
         // resolve. Deduplicated against the list above, which normally already has them.
-        Add(typeof(ResourceId).Assembly.Location);   // CyberCloud.Core
-        Add(typeof(KubeLabels).Assembly.Location);   // CyberCloud.Kubernetes.Contracts
-        Add(typeof(object).Assembly.Location);       // System.Private.CoreLib
+        Add(typeof(ResourceId).Assembly.Location); // CyberCloud.Core
+        Add(typeof(KubeLabels).Assembly.Location); // CyberCloud.Kubernetes.Contracts
+        Add(typeof(object).Assembly.Location); // System.Private.CoreLib
 
         return builder.ToImmutable();
     }

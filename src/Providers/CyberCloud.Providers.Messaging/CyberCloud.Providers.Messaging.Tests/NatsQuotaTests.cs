@@ -86,9 +86,8 @@ public sealed class NatsQuotaTests {
 
         var vcpu = registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!;
 
-        vcpu.Amount(body.RootElement).IsFailure.ShouldBeTrue(
-            "a body whose cpu quantity does not parse reserved an amount instead of refusing."
-        );
+        vcpu.Amount(body.RootElement)
+            .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
     }
 
     [Fact]
@@ -134,9 +133,7 @@ public sealed class NatsQuotaTests {
 
     static string WithSizing(string body, string cpu, string memory) {
         var node = JsonNode.Parse(body)!.AsObject();
-        node["properties"]!.AsObject()["sizing"] = new JsonObject {
-            ["cpu"] = cpu, ["memory"] = memory
-        };
+        node["properties"]!.AsObject()["sizing"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
 
         return node.ToJsonString();
     }

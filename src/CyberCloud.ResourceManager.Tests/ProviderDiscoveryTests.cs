@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceManager.Tests;
 ///     <c>Describe</c> run, and the same <see cref="ProviderRegistry" /> the silo builds.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This is the identity docs/plan/08 § The provider registry is about.</b> <i>"the same
-///     registry that generates the CLI is the one that validates the request body"</i> — so the test
+///     ⚠ <b>This is the identity docs/plan/08 § The provider registry is about.</b>
+///     <i>
+///         "the same
+///         registry that generates the CLI is the one that validates the request body"
+///     </i> — so the test
 ///     that matters here is not "discovery finds a type", it is that the object the emitter reads is
 ///     the object <c>ResourceSchema.Validate</c> reads. Both assertions are below, on the same
 ///     instance.
@@ -27,8 +30,9 @@ public sealed class ProviderDiscoveryTests {
     public void AProviderWithNoParameterlessConstructorFailsRatherThanBeingSkipped() {
         // A provider silently missing from the generated document has the same symptom as a provider
         // nobody wrote, and only one of the two has anybody looking for it.
-        var failure = Should.Throw<InvalidOperationException>(
-            () => ProviderDiscovery.FromTypes([typeof(UnconstructableProvider)])
+        var failure = Should.Throw<InvalidOperationException>(() => ProviderDiscovery.FromTypes(
+                [typeof(UnconstructableProvider)]
+            )
         );
 
         failure.Message.ShouldContain(nameof(UnconstructableProvider));
@@ -46,8 +50,8 @@ public sealed class ProviderDiscoveryTests {
 
         document["components"]!["schemas"]!["CyberCloud.Discovery.things"]!
             ["properties"]!["size"]!["type"]!
-            .GetValue<string>()
-            .ShouldBe("integer");
+                .GetValue<string>()
+                .ShouldBe("integer");
 
         // Half two: the very same object validates a body, and disagrees with nothing.
         registry.TryGetType(new(DiscoverableProvider.Namespace, "things"), out var registration).ShouldBeTrue();

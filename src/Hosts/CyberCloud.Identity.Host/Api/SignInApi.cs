@@ -32,8 +32,11 @@ public sealed record SignInApiResult(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A class rather than seven lambdas in the mapping file, because the properties that
-///         matter here are not observable from a route table.</b> "Every response carries a sanitized
+///         ⚠
+///         <b>
+///             A class rather than seven lambdas in the mapping file, because the properties that
+///             matter here are not observable from a route table.
+///         </b> "Every response carries a sanitized
 ///         return URL", "an unknown address is answered identically", "the failure string is
 ///         <c>UniformFailures.SignIn</c> verbatim" — each is a claim about what a handler returns,
 ///         and the host's test project deliberately has no <c>TestServer</c> (see its
@@ -103,8 +106,11 @@ public sealed class SignInApi(
     ///         <see cref="CredentialKind.Certificate" /> is M2.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The three OTP kinds are still absent, and the reason has changed from "nothing
-    ///         can deliver one" to "they are not first factors".</b> This remark used to say the seam
+    ///         ⚠
+    ///         <b>
+    ///             The three OTP kinds are still absent, and the reason has changed from "nothing
+    ///             can deliver one" to "they are not first factors".
+    ///         </b> This remark used to say the seam
     ///         was <c>UnavailableOtpDelivery</c> "in every host in this repository", and then that no
     ///         host registered an <c>IOtpDeliverySeam</c> at all and nothing called one. Both are now
     ///         out of date: <c>UserGrain.IssueOtpAsync</c> calls the seam, <c>CyberCloud.Silo.Host</c>
@@ -123,8 +129,7 @@ public sealed class SignInApi(
     ///         exactly this reason.
     ///     </para>
     /// </remarks>
-    public static IReadOnlyList<CredentialKind> Offered { get; } =
-        [CredentialKind.Passkey, CredentialKind.Password];
+    public static IReadOnlyList<CredentialKind> Offered { get; } = [CredentialKind.Passkey, CredentialKind.Password];
 
     /// <summary>
     ///     <c>POST /api/signin/begin</c> — which credentials to offer for an address.
@@ -185,8 +190,11 @@ public sealed class SignInApi(
     ///         step list". None of that is built.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The step that gates all of it — mailing the address to verify it — is no longer
-    ///         the blocker, and this paragraph used to say it was.</b> It read that nothing in the
+    ///         ⚠
+    ///         <b>
+    ///             The step that gates all of it — mailing the address to verify it — is no longer
+    ///             the blocker, and this paragraph used to say it was.
+    ///         </b> It read that nothing in the
     ///         tree called <c>IOtpDeliverySeam.DeliverAsync</c> and that no host registered an
     ///         implementation. Both were true and neither is now: <c>IUserGrain.IssueOtpAsync</c>
     ///         mints, records and delivers a code, and <see cref="OtpPurpose.Enrolment" /> is the
@@ -307,8 +315,11 @@ public sealed class SignInApi(
         // second email-index activation on an unauthenticated path for a value this method already
         // holds — and the two lookups could disagree if the address were reassigned between them.
         var enrolled = await ListPasskeysAsync(userId.Value);
-        var credential = enrolled.FirstOrDefault(
-            x => string.Equals(x.CredentialId, credentialId, StringComparison.Ordinal)
+        var credential = enrolled.FirstOrDefault(x => string.Equals(
+                x.CredentialId,
+                credentialId,
+                StringComparison.Ordinal
+            )
         );
 
         if (credential is null) {
@@ -433,8 +444,11 @@ public sealed class SignInApi(
     ///         cannot have: it is an Orleans client, it holds no state, and there are N of it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Neither the address nor the channel is a parameter, on the wire or on the grain
-    ///         call.</b> A caller holding a pending session has proven one factor; letting it name
+    ///         ⚠
+    ///         <b>
+    ///             Neither the address nor the channel is a parameter, on the wire or on the grain
+    ///             call.
+    ///         </b> A caller holding a pending session has proven one factor; letting it name
     ///         where the second factor is sent would let it send the second factor to itself.
     ///     </para>
     ///     <para>
@@ -561,8 +575,7 @@ public sealed class SignInApi(
     /// <summary>
     ///     The one failure. ⚠ Every rejecting path in this class returns this and nothing else.
     /// </summary>
-    static SignInApiResult Reject(string returnUrl) =>
-        new(new(false, false, returnUrl, UniformFailures.SignIn));
+    static SignInApiResult Reject(string returnUrl) => new(new(false, false, returnUrl, UniformFailures.SignIn));
 
     SignInApiResult Complete(Result<SignInOutcome> outcome, string returnUrl) {
         if (outcome.TryGetError(out _)) {
@@ -624,6 +637,5 @@ public sealed class SignInApi(
     // ⚠ TenantGrainFactory and not IGrainFactory, deliberately — CC1006's discriminator is the TYPE
     // rather than the syntax, so widening this helper would erase exactly what the analyzer reads and
     // turn every call above back into an unqualified reference. SignInService carries the same note.
-    TenantGrainFactory Tenant() =>
-        grains.ForTenant(options.TenantId.ToString("D", CultureInfo.InvariantCulture));
+    TenantGrainFactory Tenant() => grains.ForTenant(options.TenantId.ToString("D", CultureInfo.InvariantCulture));
 }

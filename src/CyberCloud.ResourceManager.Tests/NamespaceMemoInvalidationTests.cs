@@ -14,8 +14,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE MEMO HAS ALREADY HIDDEN ONE LIVE DEFECT FROM THIS SUITE, WHICH IS WHY THIS IS A
-///         DRIVER TEST AND NOT AN ENSURER TEST.</b> While the memo was invisible to the harness, an
+///         ⚠
+///         <b>
+///             THE MEMO HAS ALREADY HIDDEN ONE LIVE DEFECT FROM THIS SUITE, WHICH IS WHY THIS IS A
+///             DRIVER TEST AND NOT AN ENSURER TEST.
+///         </b> While the memo was invisible to the harness, an
 ///         ensure failure was hard-coded retryable and nothing noticed. What is under test here is
 ///         the wiring — that a pass coming back
 ///         <see cref="ErrorCode.ResourceNotFound" /> is read as evidence the namespace is gone — and
@@ -41,15 +44,15 @@ public sealed class NamespaceMemoInvalidationTests(ResourceManagerCluster cluste
         var address = ResourceManagerCluster.Address("memo-invalidated");
 
         var accepted = (await cluster.Manager.WriteAsync(
-            new() {
-                Path = address.Path,
-                ApiVersion = TestingProvider.V2026,
-                Verb = WriteVerb.Put,
-                Body = TestingProvider.Body(),
-                Caller = ResourceManagerCluster.Caller()
-            },
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow();
+                new() {
+                    Path = address.Path,
+                    ApiVersion = TestingProvider.V2026,
+                    Verb = WriteVerb.Put,
+                    Body = TestingProvider.Body(),
+                    Caller = ResourceManagerCluster.Caller()
+                },
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow();
 
         var connection = new CountingConnection(Cluster);
         var ensurer = new NamespaceEnsurer(TestClock.Instance);
@@ -110,15 +113,15 @@ public sealed class NamespaceMemoInvalidationTests(ResourceManagerCluster cluste
         var address = ResourceManagerCluster.Address("memo-kept");
 
         var accepted = (await cluster.Manager.WriteAsync(
-            new() {
-                Path = address.Path,
-                ApiVersion = TestingProvider.V2026,
-                Verb = WriteVerb.Put,
-                Body = TestingProvider.Body(),
-                Caller = ResourceManagerCluster.Caller()
-            },
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow();
+                new() {
+                    Path = address.Path,
+                    ApiVersion = TestingProvider.V2026,
+                    Verb = WriteVerb.Put,
+                    Body = TestingProvider.Body(),
+                    Caller = ResourceManagerCluster.Caller()
+                },
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow();
 
         var connection = new CountingConnection(Cluster);
         var driver = Driver(connection, new(TestClock.Instance));

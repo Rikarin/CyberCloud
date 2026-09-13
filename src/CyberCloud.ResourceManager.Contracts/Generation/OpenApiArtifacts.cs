@@ -247,15 +247,17 @@ public static class OpenApiArtifacts {
         };
 
         foreach (var document in report.Documents) {
-            lines.Add(string.Create(
-                CultureInfo.InvariantCulture,
-                // "differs" rather than "rewritten": this line is printed by the check-only run too,
-                // where nothing was written and claiming otherwise would be a lie in a build log.
-                $"  {(document.Drifted ? "±" : "=")} {document.FileName} — "
-                + $"{(document.Published ? document.Drifted ? "differs from the registry" : "unchanged" : "new")}, "
-                + $"{document.StructuralProblems.Length} structural problem(s), "
-                + $"{document.BreakingChanges.Length} breaking change(s)"
-            ));
+            lines.Add(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    // "differs" rather than "rewritten": this line is printed by the check-only run too,
+                    // where nothing was written and claiming otherwise would be a lie in a build log.
+                    $"  {(document.Drifted ? "±" : "=")} {document.FileName} — "
+                    + $"{(document.Published ? document.Drifted ? "differs from the registry" : "unchanged" : "new")}, "
+                    + $"{document.StructuralProblems.Length} structural problem(s), "
+                    + $"{document.BreakingChanges.Length} breaking change(s)"
+                )
+            );
         }
 
         foreach (var stale in report.Stale) {

@@ -8,13 +8,17 @@ namespace CyberCloud.Metering.Grains;
 ///     <see cref="IUsageLedgerGrain" /> — Coordinator, Durable, key <c>sub/{subscriptionId:N}</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Read <see cref="IUsageLedgerGrain" /> first: the absence of a mutator is the design, not
-///     an oversight.</b> This class holds to it in the only two places it could be broken —
+///     ⚠
+///     <b>
+///         Read <see cref="IUsageLedgerGrain" /> first: the absence of a mutator is the design, not
+///         an oversight.
+///     </b> This class holds to it in the only two places it could be broken —
 ///     <see cref="AppendAsync" /> and <see cref="AppendCorrectionAsync" /> both call
 ///     <c>state.State.Entries.Add</c> and nothing else ever touches the list.
 /// </remarks>
 public sealed class UsageLedgerGrain(
-    [PersistentState("usage-ledger", StorageTiers.Durable)] IPersistentState<UsageLedgerState> state,
+    [PersistentState("usage-ledger", StorageTiers.Durable)]
+    IPersistentState<UsageLedgerState> state,
     IClock clock
 )
     : Grain, IUsageLedgerGrain {
@@ -195,9 +199,7 @@ public sealed class UsageLedgerGrain(
 
     /// <inheritdoc />
     public Task<Result<decimal>> NetQuantityAsync(BillingMeter meter) =>
-        Task.FromResult(
-            Result<decimal>.Success(state.State.Entries.Where(x => x.Meter == meter).Sum(x => x.Quantity))
-        );
+        Task.FromResult(Result<decimal>.Success(state.State.Entries.Where(x => x.Meter == meter).Sum(x => x.Quantity)));
 
     /// <inheritdoc />
     public Task<Result<long>> CountAsync() => Task.FromResult(Result<long>.Success(state.State.Entries.Count));

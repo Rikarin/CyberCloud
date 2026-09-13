@@ -11,8 +11,11 @@ namespace CyberCloud.Providers.Cache.Conformance;
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>This file is the entire cost of putting the third provider under conformance.</b>
-///     docs/plan/03 § Providers: <i>"It is one xUnit theory that every provider must pass … A provider
-///     is not registered in the platform bundle until it passes."</i> Nothing in
+///     docs/plan/03 § Providers:
+///     <i>
+///         "It is one xUnit theory that every provider must pass … A provider
+///         is not registered in the platform bundle until it passes."
+///     </i> Nothing in
 ///     <c>test/CyberCloud.Conformance</c> changed for a type that renders one object where the last
 ///     one rendered two, or for an <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> that is
 ///     a containment test rather than a field comparison.
@@ -84,8 +87,11 @@ public sealed class ValkeyCacheConformance(ProviderTestCluster<ValkeyCase> clust
 
 /// <summary>The container-backed half, skipped loudly, against the managed-Valkey provider.</summary>
 /// <remarks>
-///     ⚠ <b>Still declared, even though this provider has a real <c>*.Cluster.Conformance</c> project
-///     that makes the same assertions against a real API server.</b> The skips are not redundant with
+///     ⚠
+///     <b>
+///         Still declared, even though this provider has a real <c>*.Cluster.Conformance</c> project
+///         that makes the same assertions against a real API server.
+///     </b> The skips are not redundant with
 ///     it: they run on a machine with no Docker daemon and say, by name, which criteria were not
 ///     checked. Deleting them here would make "conformance: green" readable as "the cluster-backed
 ///     criteria were met" on exactly the machines where they were not — which is the reading

@@ -9,12 +9,16 @@ namespace CyberCloud.Communication.Grains;
 ///     <see cref="ISuppressionListGrain" /> — Coordinator, Durable, key <c>res/{serviceId:N}</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Read <see cref="ISuppressionListGrain" /> first: the refusal in
-///     <see cref="ReleaseAsync" /> is the design, not a missing feature.</b> A tenant clearing a
+///     ⚠
+///     <b>
+///         Read <see cref="ISuppressionListGrain" /> first: the refusal in
+///         <see cref="ReleaseAsync" /> is the design, not a missing feature.
+///     </b> A tenant clearing a
 ///     complaint or an opt-out is the operation this list exists to prevent.
 /// </remarks>
 public sealed class SuppressionListGrain(
-    [PersistentState("suppression-list", StorageTiers.Durable)] IPersistentState<SuppressionListState> state,
+    [PersistentState("suppression-list", StorageTiers.Durable)]
+    IPersistentState<SuppressionListState> state,
     IClock clock
 )
     : Grain, ISuppressionListGrain {

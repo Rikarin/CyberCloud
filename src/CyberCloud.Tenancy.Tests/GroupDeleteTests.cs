@@ -11,8 +11,11 @@ namespace CyberCloud.Tenancy.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The seal is the only thing that closes the create-during-delete race, and it closes
-///         it because the check and the write are one grain turn.</b> A caller that listed the
+///         ⚠
+///         <b>
+///             The seal is the only thing that closes the create-during-delete race, and it closes
+///             it because the check and the write are one grain turn.
+///         </b> A caller that listed the
 ///         members and then sealed would leave exactly the window this exists to shut — an Orleans
 ///         grain is single-threaded, so putting both inside one method is not a convenience, it is
 ///         the mechanism.
@@ -85,9 +88,8 @@ public sealed class GroupDeleteTests(TenancyCluster cluster) {
 
         var refused = await group.BeginCreateAsync(latecomer);
 
-        refused.TryGetError(out var error).ShouldBeTrue(
-            "a create that lands inside a delete is the race the seal exists to close."
-        );
+        refused.TryGetError(out var error)
+            .ShouldBeTrue("a create that lands inside a delete is the race the seal exists to close.");
 
         error.Code.ShouldBe(ErrorCode.Conflict);
         (await group.ListAsync()).GetValueOrThrow().ShouldBeEmpty();
@@ -154,10 +156,11 @@ public sealed class GroupDeleteTests(TenancyCluster cluster) {
         await EmptyAsync(group, address);
         (await group.BeginGroupDeleteAsync()).IsSuccess.ShouldBeTrue();
 
-        (await group.ListClustersAsync()).GetValueOrThrow().Count.ShouldBe(
-            2,
-            "the seal must not forget them — they are what the reclaim that follows reads."
-        );
+        (await group.ListClustersAsync()).GetValueOrThrow()
+            .Count.ShouldBe(
+                2,
+                "the seal must not forget them — they are what the reclaim that follows reads."
+            );
 
         (await group.CompleteGroupDeleteAsync()).IsSuccess.ShouldBeTrue();
         (await group.ListClustersAsync()).GetValueOrThrow().ShouldBeEmpty();
@@ -206,7 +209,7 @@ public sealed class GroupDeleteTests(TenancyCluster cluster) {
         (await cluster.SubscriptionGrain(tenant, subscription).CreateAsync("prod")).IsSuccess.ShouldBeTrue();
 
         (await cluster.SubscriptionGrain(tenant, subscription)
-            .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
+                .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
 
         var address = new ResourceId(
             tenant,

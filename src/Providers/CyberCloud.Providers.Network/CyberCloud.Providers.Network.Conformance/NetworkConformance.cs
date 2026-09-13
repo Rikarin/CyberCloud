@@ -14,15 +14,21 @@ namespace CyberCloud.Providers.Network.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST CASE IN THE TREE WHOSE OBJECT IS CLUSTER-SCOPED, AND IT IS THE FIRST TO
-///         NEED A CHANGE TO <c>test/CyberCloud.Cluster.Conformance</c> SINCE THE CHILD-TYPE WORK.</b>
+///         ⚠
+///         <b>
+///             THE FIRST CASE IN THE TREE WHOSE OBJECT IS CLUSTER-SCOPED, AND IT IS THE FIRST TO
+///             NEED A CHANGE TO <c>test/CyberCloud.Cluster.Conformance</c> SINCE THE CHILD-TYPE WORK.
+///         </b>
 ///         Nine families' worth of evidence said the harness hosts a provider unchanged; this one
 ///         found the one axis on which that was not true. <c>ClusterConformanceHarness</c> derived a
 ///         CRD stub per custom kind and hard-coded <c>Scope = "Namespaced"</c>, so the definition it
 ///         installed served <c>/apis/kubeovn.io/v1/namespaces/{ns}/vpcs</c> while this provider
 ///         applies to <c>/apis/kubeovn.io/v1/vpcs</c> — a <c>404</c> on every cluster-facing
-///         assertion. The scope is now <b>derived from the case's own
-///         <c>ObjectRef.IsClusterScoped</c></b>, which is the same rule the harness already applies to
+///         assertion. The scope is now
+///         <b>
+///             derived from the case's own
+///             <c>ObjectRef.IsClusterScoped</c>
+///         </b>, which is the same rule the harness already applies to
 ///         group, version, kind and plural, and which changes nothing for the nine families whose
 ///         objects all carry a namespace. ⚠ The Docker-free half needed nothing.
 ///     </para>
@@ -34,8 +40,11 @@ namespace CyberCloud.Providers.Network.Conformance;
 ///         Kube-OVN's schema: the derived stub's schema is
 ///         <c>x-kubernetes-preserve-unknown-fields</c>, so a field Kube-OVN would refuse is accepted
 ///         here. And it cannot prove anything at all about the behaviour this family's
-///         <c>Matches</c> is built around, because <b>the thing that rewrites the spec is the
-///         controller</b>, and there is no controller. <c>NetworkMatchesTests</c> hand-writes the
+///         <c>Matches</c> is built around, because
+///         <b>
+///             the thing that rewrites the spec is the
+///             controller
+///         </b>, and there is no controller. <c>NetworkMatchesTests</c> hand-writes the
 ///         controller-shaped read-back for exactly that reason.
 ///     </para>
 /// </remarks>
@@ -157,8 +166,7 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
         };
 
     /// <inheritdoc />
-    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
-        [VirtualNetworkCase.ProviderCase];
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [VirtualNetworkCase.ProviderCase];
 
     /// <summary>A valid body with the required IPv4 prefix removed.</summary>
     /// <param name="body">A valid body.</param>
@@ -180,8 +188,11 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
 ///         discovered.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE INVALID BODY IS A PORT RATHER THAN A MISSING PROPERTY, AND THAT IS THE POINT OF
-///         THE TYPE.</b> Its two siblings drop a required property, because a required property is
+///         ⚠
+///         <b>
+///             THE INVALID BODY IS A PORT RATHER THAN A MISSING PROPERTY, AND THAT IS THE POINT OF
+///             THE TYPE.
+///         </b> Its two siblings drop a required property, because a required property is
 ///         all their schemas can refuse beyond a shape. This type has <b>no</b> required rule
 ///         property — an empty security group is the most restrictive one there is, so demanding a
 ///         rule would be demanding that a tenant open something to create a perimeter — and it
@@ -225,8 +236,7 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
         };
 
     /// <inheritdoc />
-    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
-        [VirtualNetworkCase.ProviderCase];
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [VirtualNetworkCase.ProviderCase];
 }
 
 /// <summary>
@@ -235,8 +245,11 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>NO <c>Ancestors</c>, WHICH IS THE STRUCTURAL DIFFERENCE FROM THE OTHER TWO
-///         ADDITIONS.</b> A subnet and a security group each declare the network's own case object so
+///         ⚠
+///         <b>
+///             NO <c>Ancestors</c>, WHICH IS THE STRUCTURAL DIFFERENCE FROM THE OTHER TWO
+///             ADDITIONS.
+///         </b> A subnet and a security group each declare the network's own case object so
 ///         the harness can create the parent first. An <c>OvnEip</c> names no VPC — it is allocated
 ///         from the operator's external subnet and attached later by a separate NAT object — so this
 ///         type is at <see cref="ResourceTypeName.Depth" /> 0 and there is nothing to create first.
@@ -245,13 +258,19 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
 ///         depth 0.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>ChangedBody</c> VARIES A PROPERTY THE SCHEMA MARKS <c>Immutable</c>, AND THAT IS
-///         NOT AN OVERSIGHT — IT IS THE ONLY AXIS THIS TYPE HAS.</b> Read firsthand in
+///         ⚠
+///         <b>
+///             <c>ChangedBody</c> VARIES A PROPERTY THE SCHEMA MARKS <c>Immutable</c>, AND THAT IS
+///             NOT AN OVERSIGHT — IT IS THE ONLY AXIS THIS TYPE HAS.
+///         </b> Read firsthand in
 ///         <c>pkg/controller/ovn_eip.go</c> at <c>v1.16.2</c>: <c>handleUpdateOvnEip</c> refuses a
 ///         changed <c>v4Ip</c>, <c>v6Ip</c>, <c>macAddress</c> and <c>type</c> — four errors, one per
 ///         field, each beginning <i>"not support change"</i> — and <c>handleAddOvnEip</c> returns
-///         early once <c>status.macAddress</c> is set. <b>Every field of an <c>OvnEip</c> is immutable
-///         once it is ready</b>, so there is no body change that both reaches the cluster and would
+///         early once <c>status.macAddress</c> is set.
+///         <b>
+///             Every field of an <c>OvnEip</c> is immutable
+///             once it is ready
+///         </b>, so there is no body change that both reaches the cluster and would
 ///         survive a real controller, and <c>ProviderConformanceCase.ChangedBody</c> is <c>required</c>
 ///         with no way to say so. What this case therefore proves is that the renderer's output
 ///         reaches the cluster on an update; what it does <b>not</b> prove is that the update takes
@@ -322,8 +341,11 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST CASE IN THIS FAMILY WHOSE <c>ObjectRef</c>s CARRY A NAMESPACE, WHICH IS THE
-///         AXIS THE HARNESS WAS CHANGED FOR AND IS NOW BEING EXERCISED IN THE OTHER DIRECTION.</b>
+///         ⚠
+///         <b>
+///             THE FIRST CASE IN THIS FAMILY WHOSE <c>ObjectRef</c>s CARRY A NAMESPACE, WHICH IS THE
+///             AXIS THE HARNESS WAS CHANGED FOR AND IS NOW BEING EXERCISED IN THE OTHER DIRECTION.
+///         </b>
 ///         <c>ClusterConformanceHarness</c> derives each CRD stub's scope from the case's own
 ///         <c>ObjectRef.IsClusterScoped</c> because this family's four Kube-OVN kinds are
 ///         <c>scope="Cluster"</c>. A <c>ConfigMap</c> and a <c>Deployment</c> are built-in and
@@ -331,8 +353,11 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
 ///         the refs are namespaced rather than leaving the difference to a reader.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>ChangedBody</c> ADDS A BACKEND, WHICH IS THE ONLY AXIS THAT REACHES BOTH
-///         OBJECTS.</b> The tempting change is the sizing preset — one field on the pod template, copied
+///         ⚠
+///         <b>
+///             <c>ChangedBody</c> ADDS A BACKEND, WHICH IS THE ONLY AXIS THAT REACHES BOTH
+///             OBJECTS.
+///         </b> The tempting change is the sizing preset — one field on the pod template, copied
 ///         straight through — and it would pass against a renderer that never regenerated the
 ///         configuration at all. A second backend address changes the <c>ConfigMap</c>'s <c>data</c>
 ///         <i>and</i> the pod template's config hash, which is the pair whose disagreement is this
@@ -347,8 +372,11 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
 ///         before the write path answers.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>ObjectMatchesDesired</c> READS <c>match.Namespace</c> AND <c>match.Id</c>, LIKE THE
-///         SUBNET AND UNLIKE THE OTHER THREE.</b> The pod template's
+///         ⚠
+///         <b>
+///             <c>ObjectMatchesDesired</c> READS <c>match.Namespace</c> AND <c>match.Id</c>, LIKE THE
+///             SUBNET AND UNLIKE THE OTHER THREE.
+///         </b> The pod template's
 ///         <c>ovn.kubernetes.io/logical_switch</c> is <c>{namespace}-{network}-{subnet}</c> — a name
 ///         built from the address — so a comparison without them would silently skip the field that
 ///         decides <b>which tenant's network this proxy is inside</b>. It is <c>spec.vpc</c>'s
@@ -389,15 +417,14 @@ public sealed class LoadBalancerCase : IProviderCaseSource {
         };
 
     /// <inheritdoc />
-    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
-        [VirtualNetworkCase.ProviderCase];
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [VirtualNetworkCase.ProviderCase];
 }
 
 /// <summary>The shared suite, run against the virtual-network provider.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class VirtualNetworkConformance(ProviderTestCluster<VirtualNetworkCase> cluster)
     : ProviderConformanceTests<VirtualNetworkCase>(cluster),
-        IClassFixture<ProviderTestCluster<VirtualNetworkCase>>;
+    IClassFixture<ProviderTestCluster<VirtualNetworkCase>>;
 
 /// <summary>
 ///     The <b>same</b> suite, run against the subnet child type.
@@ -409,7 +436,7 @@ public sealed class VirtualNetworkConformance(ProviderTestCluster<VirtualNetwork
 /// <param name="cluster">The harness.</param>
 public sealed class NetworkSubnetConformance(ProviderTestCluster<NetworkSubnetCase> cluster)
     : ProviderConformanceTests<NetworkSubnetCase>(cluster),
-        IClassFixture<ProviderTestCluster<NetworkSubnetCase>>;
+    IClassFixture<ProviderTestCluster<NetworkSubnetCase>>;
 
 /// <summary>
 ///     The <b>same</b> suite again, run against the security-group child type.
@@ -426,7 +453,7 @@ public sealed class NetworkSecurityGroupConformance(
 /// <param name="cluster">The harness.</param>
 public sealed class PublicIpAddressConformance(ProviderTestCluster<PublicIpAddressCase> cluster)
     : ProviderConformanceTests<PublicIpAddressCase>(cluster),
-        IClassFixture<ProviderTestCluster<PublicIpAddressCase>>;
+    IClassFixture<ProviderTestCluster<PublicIpAddressCase>>;
 
 /// <summary>
 ///     The <b>same</b> suite again, run against the load balancer — the family's second child-shaped
@@ -435,7 +462,7 @@ public sealed class PublicIpAddressConformance(ProviderTestCluster<PublicIpAddre
 /// <param name="cluster">The harness.</param>
 public sealed class LoadBalancerConformance(ProviderTestCluster<LoadBalancerCase> cluster)
     : ProviderConformanceTests<LoadBalancerCase>(cluster),
-        IClassFixture<ProviderTestCluster<LoadBalancerCase>>;
+    IClassFixture<ProviderTestCluster<LoadBalancerCase>>;
 
 /// <summary>The container-backed half, skipped loudly, against the virtual-network type.</summary>
 public sealed class VirtualNetworkClusterBackedConformance()
@@ -457,11 +484,17 @@ public sealed class PublicIpAddressClusterBackedConformance()
 ///     The container-backed half against the load balancer.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>THIS IS THE ONE CASE IN THE FAMILY THE CLUSTER-BACKED SUITE PROVES SOMETHING REAL
-///     ABOUT.</b> Its four siblings render Kube-OVN custom resources into a k3s that has no Kube-OVN,
+///     ⚠
+///     <b>
+///         THIS IS THE ONE CASE IN THE FAMILY THE CLUSTER-BACKED SUITE PROVES SOMETHING REAL
+///         ABOUT.
+///     </b> Its four siblings render Kube-OVN custom resources into a k3s that has no Kube-OVN,
 ///     so the derived CRD stub's schema is <c>x-kubernetes-preserve-unknown-fields</c> and a field the
-///     real fabric would refuse is accepted. A <c>ConfigMap</c> and a <c>Deployment</c> are <b>built
-///     in</b>: the API server validates them against its own schemas, defaults them, and would refuse
+///     real fabric would refuse is accepted. A <c>ConfigMap</c> and a <c>Deployment</c> are
+///     <b>
+///         built
+///         in
+///     </b>: the API server validates them against its own schemas, defaults them, and would refuse
 ///     a malformed pod template outright. ⚠ What it still cannot prove is the part that needs
 ///     Kube-OVN — that the <c>logical_switch</c> annotation puts the pod on a tenant's subnet — and
 ///     the pod will not schedule at all in that harness, which is why the assertions are about the
@@ -589,17 +622,13 @@ public sealed class NetworkSuiteShapeTests {
 
         group.Length.ShouldBe(1);
 
-        group[0].IsClusterScoped.ShouldBeTrue(
-            "a Kube-OVN SecurityGroup is +kubebuilder:resource:scope=\"Cluster\"."
-        );
+        group[0].IsClusterScoped.ShouldBeTrue("a Kube-OVN SecurityGroup is +kubebuilder:resource:scope=\"Cluster\".");
 
         var address = PublicIpAddressCase.ProviderCase.Objects(id, "ns");
 
         address.Length.ShouldBe(1);
 
-        address[0].IsClusterScoped.ShouldBeTrue(
-            "a Kube-OVN OvnEip is +kubebuilder:resource:scope=\"Cluster\"."
-        );
+        address[0].IsClusterScoped.ShouldBeTrue("a Kube-OVN OvnEip is +kubebuilder:resource:scope=\"Cluster\".");
 
         address[0].Kind.Plural.ShouldBe(
             "ovn-eips",
@@ -646,14 +675,11 @@ public sealed class NetworkSuiteShapeTests {
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>
-    static ImmutableArray<string> RunnableFactsOf(Type suite) =>
-        [
-            .. suite
-                .GetMethods(
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance
-                )
-                .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-                .Select(x => x.Name)
-                .OrderBy(x => x, StringComparer.Ordinal)
-        ];
+    static ImmutableArray<string> RunnableFactsOf(Type suite) => [
+        .. suite
+            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(x => x.Name)
+            .OrderBy(x => x, StringComparer.Ordinal)
+    ];
 }

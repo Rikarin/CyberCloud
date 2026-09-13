@@ -170,18 +170,27 @@ public sealed class ActionRoutingTests {
     // ── Soft delete's two verbs, which had no route at all ─────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A <c>POST</c> to <c>restore</c> or <c>purge</c> reaches the manager, which is what
-    ///     docs/plan/08 § Soft delete recorded as missing.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A <c>POST</c> to <c>restore</c> or <c>purge</c> reaches the manager, which is what
+    ///         docs/plan/08 § Soft delete recorded as missing.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         That section says <c>RestoreAsync</c> and <c>PurgeAsync</c> <i>"exist, are implemented
-    ///         on <c>ResourceManagerService</c>, and are covered by <c>SoftDeletePathTests</c> — and
-    ///         neither has an HTTP route"</i>. These two cases are the route.
+    ///         That section says <c>RestoreAsync</c> and <c>PurgeAsync</c>
+    ///         <i>
+    ///             "exist, are implemented
+    ///             on <c>ResourceManagerService</c>, and are covered by <c>SoftDeletePathTests</c> — and
+    ///             neither has an HTTP route"
+    ///         </i>. These two cases are the route.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Asserted on <c>Actions</c> rather than on the status, for the reason the
-    ///         <c>listKeys</c> cases above give.</b> The fake manager answers <c>202</c> to every write,
+    ///         ⚠
+    ///         <b>
+    ///             Asserted on <c>Actions</c> rather than on the status, for the reason the
+    ///             <c>listKeys</c> cases above give.
+    ///         </b> The fake manager answers <c>202</c> to every write,
     ///         so a status assertion would hold for a gateway that had routed this to <c>DELETE</c>.
     ///         The only evidence that dispatch was reached with this action name is the name arriving.
     ///     </para>
@@ -217,8 +226,11 @@ public sealed class ActionRoutingTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The gateway knows nothing about soft delete, and this is the assertion that keeps it
-    ///     that way.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The gateway knows nothing about soft delete, and this is the assertion that keeps it
+    ///         that way.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The two names above route because <see cref="IProviderRegistry" /> declares them —

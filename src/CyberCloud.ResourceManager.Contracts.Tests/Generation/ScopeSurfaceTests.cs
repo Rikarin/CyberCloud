@@ -8,8 +8,11 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The state this suite exists to refuse is not a broken surface, it is a silent
-///         one.</b> <c>RouteKind.Scope</c> has served <c>PUT</c> and <c>GET</c> on two addresses
+///         ⚠
+///         <b>
+///             The state this suite exists to refuse is not a broken surface, it is a silent
+///             one.
+///         </b> <c>RouteKind.Scope</c> has served <c>PUT</c> and <c>GET</c> on two addresses
 ///         since #1 and every generated surface was correct, complete, gated and unaware of them —
 ///         because all five were emitted from the provider registry and a scope has no provider. A
 ///         tenant could therefore create a subscription only by hand, which makes the first two steps
@@ -21,8 +24,7 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 ///     </para>
 /// </remarks>
 public sealed class ScopeSurfaceTests {
-    static JsonObject Document =>
-        OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
+    static JsonObject Document => OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
 
     [Fact]
     public void TheDocumentDeclaresTheAddressesTheGatewayServes() {
@@ -34,13 +36,15 @@ public sealed class ScopeSurfaceTests {
 
         paths.ShouldContainKey("/tenants/{tenantId}");
         paths.ShouldContainKey("/tenants/{tenantId}/subscriptions/{subscriptionId}");
-        paths.ShouldContainKey(
-            "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}");
+        paths.ShouldContainKey("/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}");
     }
 
     /// <summary>
-    ///     ⚠ <b>docs/plan/10 § Shape's "the scope API is the first four and six segments of the
-    ///     resource path" is a mechanism and not only a sentence.</b>
+    ///     ⚠
+    ///     <b>
+    ///         docs/plan/10 § Shape's "the scope API is the first four and six segments of the
+    ///         resource path" is a mechanism and not only a sentence.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     Every resource path is built from <c>ResourceGroupPathTemplate</c>, so the two cannot come
@@ -85,8 +89,11 @@ public sealed class ScopeSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The tenant has no <c>PUT</c> on any surface, and that is a decision rather than an
-    ///     omission.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The tenant has no <c>PUT</c> on any surface, and that is a decision rather than an
+    ///         omission.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     A request's tenant is resolved from its token and every path naming a different one is
@@ -114,8 +121,11 @@ public sealed class ScopeSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The flag that names what is being created is never the flag that remembers where you
-    ///     are working.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The flag that names what is being created is never the flag that remembers where you
+    ///         are working.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <c>{subscriptionId}</c> is filled by <c>--subscription</c> on every resource verb, and
@@ -146,9 +156,8 @@ public sealed class ScopeSurfaceTests {
 
         // …and the body property is a flag, which is the whole point of generating this rather than
         // telling people to use `cyc rest`.
-        DocumentReader.Text(
-            flags.Single(x => DocumentReader.Text(x?["name"]) == "--display-name")!["jsonPointer"]
-        ).ShouldBe("/" + ScopeBodyProperties.DisplayName);
+        DocumentReader.Text(flags.Single(x => DocumentReader.Text(x?["name"]) == "--display-name")!["jsonPointer"])
+            .ShouldBe("/" + ScopeBodyProperties.DisplayName);
     }
 
     /// <summary>
@@ -215,8 +224,11 @@ public sealed class ScopeSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The property names on the wire are <c>ScopeBodyProperties</c>', not spellings the
-    ///     emitters chose.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The property names on the wire are <c>ScopeBodyProperties</c>', not spellings the
+    ///         emitters chose.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     They lived on <c>ScopeManagerService</c>, in an assembly the generators cannot see. A CLI

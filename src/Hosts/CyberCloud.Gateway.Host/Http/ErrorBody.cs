@@ -9,8 +9,11 @@ namespace CyberCloud.Gateway.Host.Http;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Hand-written with <see cref="Utf8JsonWriter" />, and that is the safety property.</b>
-///         docs/plan/08 § Errors: <i>"No exception details, ever. A stack trace in an error body is
-///         an information leak and a support-cost multiplier."</i> A serializer pointed at an object
+///         docs/plan/08 § Errors:
+///         <i>
+///             "No exception details, ever. A stack trace in an error body is
+///             an information leak and a support-cost multiplier."
+///         </i> A serializer pointed at an object
 ///         graph writes whatever the graph grows next; this writer emits four names and cannot emit a
 ///         fifth. <see cref="Error" /> itself has no member that could hold a stack trace, so the two
 ///         defences are independent — and this one survives someone adding a member.

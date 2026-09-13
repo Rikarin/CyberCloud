@@ -6,10 +6,13 @@ namespace CyberCloud.Core.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/05 § Choosing a tier: <i>"every grain type in <c>durable-grains.txt</c> must
-///         bind its primary state to <c>Durable</c>, and any grain type not on the list that binds to
-///         <c>Durable</c> must carry <c>[DurableStateRationale("…")]</c>. The list is reviewed like a
-///         schema migration, because that is what it is."</i> The <c>Storage tier</c> gate in
+///         docs/plan/05 § Choosing a tier:
+///         <i>
+///             "every grain type in <c>durable-grains.txt</c> must
+///             bind its primary state to <c>Durable</c>, and any grain type not on the list that binds to
+///             <c>Durable</c> must carry <c>[DurableStateRationale("…")]</c>. The list is reviewed like a
+///             schema migration, because that is what it is."
+///         </i> The <c>Storage tier</c> gate in
 ///         <c>build/Build.Architecture.cs</c> is what makes that true.
 ///     </para>
 ///     <para>

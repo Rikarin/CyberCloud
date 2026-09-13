@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.Messaging;
@@ -12,21 +13,36 @@ namespace CyberCloud.Providers.Messaging;
 /// <remarks>
 ///     <para>
 ///         docs/plan/12 § The catalogue: <i>"Kafka — <c>CyberCloud.Messaging/kafkaClusters</c>"</i>,
-///         on Strimzi in KRaft mode, <i>"NATS — <c>CyberCloud.Messaging/natsClusters</c> · M1 ·
-///         0.8 EM"</i>, and <i>"RabbitMQ — <c>CyberCloud.Messaging/rabbitmqClusters</c> · M2 ·
-///         0.8 EM"</i> on the RabbitMQ Cluster Operator. ⚠ <b>The Kafka row is marked <c>M2</c>, not
-///         <c>M1</c></b> — the M1 rows of that table are PostgreSQL, Valkey and NATS. Kafka was built
+///         on Strimzi in KRaft mode,
+///         <i>
+///             "NATS — <c>CyberCloud.Messaging/natsClusters</c> · M1 ·
+///             0.8 EM"
+///         </i>, and
+///         <i>
+///             "RabbitMQ — <c>CyberCloud.Messaging/rabbitmqClusters</c> · M2 ·
+///             0.8 EM"
+///         </i> on the RabbitMQ Cluster Operator. ⚠
+///         <b>
+///             The Kafka row is marked <c>M2</c>, not
+///             <c>M1</c>
+///         </b> — the M1 rows of that table are PostgreSQL, Valkey and NATS. Kafka was built
 ///         ahead of its milestone deliberately and the milestone was recorded rather than quietly
 ///         changed; NATS closes the M1 gap that left. RabbitMQ is an M2 row built in its own
 ///         milestone.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS NAMESPACE IS NOW THE PLATFORM'S FIRST WITH THREE RESOURCE TYPES IN IT, AND THE
-///         THIRD MEASURED SOMETHING THE SECOND COULD ONLY PREDICT.</b> <c>MessagingSdkTests</c> named
+///         ⚠
+///         <b>
+///             THIS NAMESPACE IS NOW THE PLATFORM'S FIRST WITH THREE RESOURCE TYPES IN IT, AND THE
+///             THIRD MEASURED SOMETHING THE SECOND COULD ONLY PREDICT.
+///         </b> <c>MessagingSdkTests</c> named
 ///         <c>rabbitmqClusters</c> as the change most likely to break the generated surfaces, because
 ///         <c>SdkEmitter</c>'s first disambiguation tier prefixes the provider namespace and every
-///         type here shares one. ⚠ <b>The prediction was right about the hazard and wrong about the
-///         surface</b>: the SDK ladder is still not entered, because <c>Pascal("RabbitMQ cluster")</c>
+///         type here shares one. ⚠
+///         <b>
+///             The prediction was right about the hazard and wrong about the
+///             surface
+///         </b>: the SDK ladder is still not entered, because <c>Pascal("RabbitMQ cluster")</c>
 ///         is <c>RabbitMQCluster</c> and collides with neither sibling. What the third type <i>did</i>
 ///         exercise for the first time is <c>CliEmitter</c>'s group map at width three — a
 ///         <c>JsonObject</c> keyed by command name, whose indexer replaces silently — and that is now
@@ -55,8 +71,10 @@ namespace CyberCloud.Providers.Messaging;
 ///             a future third type in this namespace can break.
 ///         </item>
 ///         <item>
-///             <b>One <c>.Application</c> module, one <c>.Conformance</c> project and one
-///             <c>.Cluster.Conformance</c> project serve all three.</b> docs/plan/03's five-project
+///             <b>
+///                 One <c>.Application</c> module, one <c>.Conformance</c> project and one
+///                 <c>.Cluster.Conformance</c> project serve all three.
+///             </b> docs/plan/03's five-project
 ///             shape is per <i>namespace</i>, not per type, and this is the first evidence for that
 ///             rather than a restatement of it: a second type cost two case objects and four class
 ///             declarations, and no new project. ⚠ <b>The third cost the same again</b>, so the
@@ -67,8 +85,11 @@ namespace CyberCloud.Providers.Messaging;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>What was false: the reason <c>KafkaClusters</c> gives for declaring no sub-resources
-///         no longer holds, and it is refuted here rather than left to rot.</b> That type's remarks
+///         ⚠
+///         <b>
+///             What was false: the reason <c>KafkaClusters</c> gives for declaring no sub-resources
+///             no longer holds, and it is refuted here rather than left to rot.
+///         </b> That type's remarks
 ///         say <i>"this platform's resource-id grammar does not carry a parent instance"</i> and cite
 ///         <c>OpenApiEmitter</c> refusing Azure's interleaved shape. Both statements were true when
 ///         they were written and neither is true now: docs/plan/12 § Child resources landed on
@@ -79,17 +100,26 @@ namespace CyberCloud.Providers.Messaging;
 ///         § owed, <c>child-types</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The catalogue's sub-resources are not declared, and the reason is the platform's
-///         resource-id grammar rather than scope.</b> docs/plan/12 says <i>"Topics and users as
-///         sub-resources — Strimzi's <c>KafkaTopic</c> and <c>KafkaUser</c> CRDs map to resource
-///         types almost one to one, which is why this is 1.2 and not 2.5"</i>. The mapping is one to
+///         ⚠
+///         <b>
+///             The catalogue's sub-resources are not declared, and the reason is the platform's
+///             resource-id grammar rather than scope.
+///         </b> docs/plan/12 says
+///         <i>
+///             "Topics and users as
+///             sub-resources — Strimzi's <c>KafkaTopic</c> and <c>KafkaUser</c> CRDs map to resource
+///             types almost one to one, which is why this is 1.2 and not 2.5"
+///         </i>. The mapping is one to
 ///         one at the CRD; it is not one to one at the <i>address</i>. See the remarks on
 ///         <see cref="KafkaClusters" /> and src/Providers/README.md § What the third provider
 ///         measured for what a nested type would and would not be here.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What this provider owes against docs/plan/12 § The pattern, once's eight pieces is
-///         named rather than implied.</b> ⚠ Piece 5 — credential provisioning into the tenant's Vault
+///         ⚠
+///         <b>
+///             What this provider owes against docs/plan/12 § The pattern, once's eight pieces is
+///             named rather than implied.
+///         </b> ⚠ Piece 5 — credential provisioning into the tenant's Vault
 ///         — <b>is</b> built: <c>ISecretWriter</c> is the interface and <c>CyberCloud.Vault</c> ships
 ///         <c>OpenBaoSecretWriter</c>. <c>rabbitmqClusters</c> serves <c>listKeys</c> through
 ///         <c>RabbitmqClusterListKeysHandler</c>, reading the credential the cluster-operator
@@ -98,21 +128,29 @@ namespace CyberCloud.Providers.Messaging;
 ///         and no SASL mechanism on the listeners, no <c>authorization</c> block in nats.conf, so
 ///         neither has a credential to hand out — <c>actions-without-handlers.txt</c> carries both
 ///         lines. Piece 6 — the scrape object — is the case that document's own
-///         correction describes as the fallback: <b>Strimzi does not emit a <c>PodMonitor</c> or a
-///         <c>ServiceMonitor</c> of its own</b>, unlike CloudNativePG, so "ask the operator for the
+///         correction describes as the fallback:
+///         <b>
+///             Strimzi does not emit a <c>PodMonitor</c> or a
+///             <c>ServiceMonitor</c> of its own
+///         </b>, unlike CloudNativePG, so "ask the operator for the
 ///         scrape object wherever the operator accepts the request" has no request to make here. What
 ///         the operator does accept is <c>spec.kafkaExporter</c>, which makes the metrics <i>exist</i>;
 ///         the object that scrapes them is ours and is owed. That is the first time the second branch
 ///         of the corrected piece 6 has had a service to be true of.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason <c>CyberCloud.DBforPostgreSQL/servers</c>
-///         gives</b>: the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the
+///         ⚠
+///         <b>
+///             No <c>SupportsSoftDelete</c>, for the reason <c>CyberCloud.DBforPostgreSQL/servers</c>
+///             gives
+///         </b>: the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the
 ///         platform does not honour would be a promise made to the users most likely to test it.
 ///         <c>/properties/storage/deleteClaim</c> defaulting to <see langword="false" /> is the honest
 ///         partial answer — the volumes outlive a mistaken delete even though the resource does not. ⚠
-///         <b>THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED
-///         ONE.</b> docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks
+///         <b>
+///             THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED
+///             ONE.
+///         </b> docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks
 ///         the resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical
 ///         <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to the
 ///         subscription and drops its direct role assignments; a restore reverses it and a purge — under

@@ -7,8 +7,11 @@ namespace CyberCloud.Cli.Tests;
 ///     available — never a stack trace.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Every one of these is a question the binary can answer out of the tree it is already
-///     holding.</b> "Unknown api-version 2025-01-01" without the list turns a typo into a support
+///     ⚠
+///     <b>
+///         Every one of these is a question the binary can answer out of the tree it is already
+///         holding.
+///     </b> "Unknown api-version 2025-01-01" without the list turns a typo into a support
 ///     conversation, and a stack trace turns it into a bug report. The exit code is 2 in every case
 ///     and nothing is sent.
 /// </remarks>
@@ -50,9 +53,20 @@ public sealed class UnknownSurfaceTests {
         using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}")));
 
         var code = await host.RunAsync(
-            "sample", "widgets", "show",
-            "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t",
-            "--query", "properties[?tier ==");
+            "sample",
+            "widgets",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--query",
+            "properties[?tier =="
+        );
 
         code.ShouldBe((int)ExitCode.Usage);
         host.Stderr.ShouldContain("--query could not be parsed at offset");
@@ -63,9 +77,20 @@ public sealed class UnknownSurfaceTests {
         using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}")));
 
         var code = await host.RunAsync(
-            "sample", "widgets", "show",
-            "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t",
-            "--query", "reverse(@)");
+            "sample",
+            "widgets",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--query",
+            "reverse(@)"
+        );
 
         code.ShouldBe((int)ExitCode.Usage);
         host.Stderr.ShouldContain("sort_by");
@@ -76,7 +101,8 @@ public sealed class UnknownSurfaceTests {
         // ⚠ Forward compatibility, from the host's side. A tree emitted by a newer generator may
         // describe a flag shape this binary has never seen; the answer is "upgrade cyc", not a cast
         // exception halfway through building the command tree.
-        var tree = VerbTreeCatalog.Parse("""
+        var tree = VerbTreeCatalog.Parse(
+            """
             {
               "format": "1",
               "apiVersion": "2026-08-01",
@@ -97,7 +123,8 @@ public sealed class UnknownSurfaceTests {
                 }
               }
             }
-            """);
+            """
+        );
 
         using var host = TestHost.Create();
         var globals = GlobalOptions.For(VerbTreeCatalog.Of(tree));
@@ -112,13 +139,15 @@ public sealed class UnknownSurfaceTests {
     public void AGeneratedGroupMayNotShadowAHostCommand() {
         // ⚠ The emitter declares no reserved names. A provider namespace ending in `.Login` would
         // otherwise produce a `cyc login` that lists widgets.
-        var tree = VerbTreeCatalog.Parse("""
+        var tree = VerbTreeCatalog.Parse(
+            """
             {
               "format": "1",
               "apiVersion": "2026-08-01",
               "groups": { "login": { "name": "login", "commands": {} } }
             }
-            """);
+            """
+        );
 
         using var host = TestHost.Create();
         var globals = GlobalOptions.For(VerbTreeCatalog.Of(tree));
@@ -130,14 +159,16 @@ public sealed class UnknownSurfaceTests {
 
     [Fact]
     public void AGlobalFlagTheHostDoesNotImplementIsRefused() {
-        var tree = VerbTreeCatalog.Parse("""
+        var tree = VerbTreeCatalog.Parse(
+            """
             {
               "format": "1",
               "apiVersion": "2026-08-01",
               "globalFlags": [{ "name": "--colour", "type": "string" }],
               "groups": {}
             }
-            """);
+            """
+        );
 
         using var host = TestHost.Create();
         var globals = GlobalOptions.For(VerbTreeCatalog.Of(tree));

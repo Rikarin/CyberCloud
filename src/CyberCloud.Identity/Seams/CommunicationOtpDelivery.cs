@@ -7,13 +7,19 @@ using System.Text;
 namespace CyberCloud.Identity.Seams;
 
 /// <summary>
-///     Where the platform's own one-time codes are sent from — docs/plan/17's <i>"the platform
-///     itself is <c>CyberCloud.Communication</c>'s first customer"</i>.
+///     Where the platform's own one-time codes are sent from — docs/plan/17's
+///     <i>
+///         "the platform
+///         itself is <c>CyberCloud.Communication</c>'s first customer"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One service for every tenant's codes, and that is a decision with consequences worth
-///         stating.</b> A sign-in OTP is the <i>platform</i> notifying a person, not a tenant
+///         ⚠
+///         <b>
+///             One service for every tenant's codes, and that is a decision with consequences worth
+///             stating.
+///         </b> A sign-in OTP is the <i>platform</i> notifying a person, not a tenant
 ///         notifying their customer, so it goes through the platform's own communication service and
 ///         not through whatever the user's tenant happens to have configured. Three things follow,
 ///         and each of them is the right way round:
@@ -53,8 +59,11 @@ public sealed record OtpDeliveryRoute {
     ///     The template within that service to render, or empty for a free-text body.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Empty does not work for WhatsApp and the refusal comes from the module, not from
-    ///     here.</b> docs/plan/17 § The channel abstraction: business-initiated WhatsApp messages
+    ///     ⚠
+    ///     <b>
+    ///         Empty does not work for WhatsApp and the refusal comes from the module, not from
+    ///         here.
+    ///     </b> docs/plan/17 § The channel abstraction: business-initiated WhatsApp messages
     ///     require a pre-approved template, so <c>IMessageGrain</c> refuses a free-text send on that
     ///     channel. Duplicating that rule here would be a second copy of it that can drift.
     /// </remarks>
@@ -101,8 +110,11 @@ public sealed record OtpDeliveryRoute {
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>There is deliberately no clock in it, and the shape that would have had one is
-///         wrong in both directions.</b> A key of the form <c>otp-{user}-{purpose}-{window}</c> fails
+///         ⚠
+///         <b>
+///             There is deliberately no clock in it, and the shape that would have had one is
+///             wrong in both directions.
+///         </b> A key of the form <c>otp-{user}-{purpose}-{window}</c> fails
 ///         whichever way the window is cut. Too coarse and two genuinely distinct codes inside one
 ///         window collide: the second carries different content under the first one's key, so
 ///         <c>IMessageGrain</c> answers <c>Conflict</c> and the user's "resend" never arrives. Too
@@ -114,8 +126,11 @@ public sealed record OtpDeliveryRoute {
 ///         one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What putting a digest of a live code in a grain key costs, stated rather than
-///         hidden.</b> <see cref="SendRequest.IdempotencyKey" />'s own remarks say the value reaches
+///         ⚠
+///         <b>
+///             What putting a digest of a live code in a grain key costs, stated rather than
+///             hidden.
+///         </b> <see cref="SendRequest.IdempotencyKey" />'s own remarks say the value reaches
 ///         "every log line and trace that prints a grain id", and a six-digit code has a million
 ///         candidates — so somebody holding both the logs and the destination can grind the digest
 ///         back to the code within its validity window. It is here anyway, on the same reasoning
@@ -123,14 +138,19 @@ public sealed record OtpDeliveryRoute {
 ///         key sends twice; a clock window breaks resend), the module already keeps an unkeyed
 ///         SHA-256 of the message body — which <i>is</i> the code — in hot-tier state for thirty
 ///         days, and the exposure needs log access that this platform treats as privileged.
-///         <b>The honest follow-up is an HMAC under the same vault-resolved pepper
-///         <c>AddCyberCloudIdentity</c> already takes for Argon2id</b>, which costs the caller
+///         <b>
+///             The honest follow-up is an HMAC under the same vault-resolved pepper
+///             <c>AddCyberCloudIdentity</c> already takes for Argon2id
+///         </b>, which costs the caller
 ///         nothing and makes the digest useless without the vault.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THAT FOLLOW-UP IS STILL OWED, AND THE REASON IT WAS DEFERRED NO LONGER APPLIES —
-///         which is worth saying plainly rather than leaving the paragraph above to read as though
-///         it did.</b> The deferral was "plumbing a second use of the pepper through the host is a
+///         ⚠
+///         <b>
+///             THAT FOLLOW-UP IS STILL OWED, AND THE REASON IT WAS DEFERRED NO LONGER APPLIES —
+///             which is worth saying plainly rather than leaving the paragraph above to read as though
+///             it did.
+///         </b> The deferral was "plumbing a second use of the pepper through the host is a
 ///         change to the host's start-up contract". That plumbing now exists:
 ///         <c>AddCyberCloudIdentity</c> builds an <c>OtpCodeProtector</c> from the same span and
 ///         registers it, because <see cref="OtpPolicy" /> property 4 makes a keyed digest the
@@ -142,8 +162,11 @@ public sealed record OtpDeliveryRoute {
 ///         change — so it stays here, named, with the mechanism to fix it now in the same assembly.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every grain reference is <c>ForTenant</c>-qualified, and none of them is made
-///         here.</b> This type holds <see cref="IMessageSender" /> rather than an
+///         ⚠
+///         <b>
+///             Every grain reference is <c>ForTenant</c>-qualified, and none of them is made
+///             here.
+///         </b> This type holds <see cref="IMessageSender" /> rather than an
 ///         <c>IGrainFactory</c> for exactly the reason <c>IMessageSender</c>'s own remarks give:
 ///         identity is not a grain, so <c>Orleans.Multitenant</c>'s call filter never sees it, and
 ///         CC1006 means the qualification has to be written by hand. Writing it once, in
@@ -184,7 +207,11 @@ public sealed class CommunicationOtpDelivery(IMessageSender sender, OtpDeliveryR
             );
         }
 
-        var sent = await sender.SendAsync(route.TenantId, RequestFor(delivery, channel.GetValueOrThrow()), cancellationToken);
+        var sent = await sender.SendAsync(
+            route.TenantId,
+            RequestFor(delivery, channel.GetValueOrThrow()),
+            cancellationToken
+        );
 
         return sent.TryGetError(out var failure) ? Result.Failure(failure) : Result.Success;
     }
@@ -272,9 +299,7 @@ public sealed class CommunicationOtpDelivery(IMessageSender sender, OtpDeliveryR
         return string.IsNullOrWhiteSpace(route.TemplateName)
             // ⚠ The code goes in the body, and IMessageGrain never stores a body — only a digest of
             // one — precisely because the body of an OTP message IS the credential.
-            ? request with {
-                Body = string.Create(CultureInfo.InvariantCulture, $"{delivery.Code} is your code.")
-            }
+            ? request with { Body = string.Create(CultureInfo.InvariantCulture, $"{delivery.Code} is your code.") }
             : request with {
                 TemplateName = route.TemplateName,
                 Arguments = ImmutableArray.Create(

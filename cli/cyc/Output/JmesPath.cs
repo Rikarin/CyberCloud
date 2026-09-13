@@ -3,13 +3,19 @@ using System.Diagnostics;
 namespace CyberCloud.Cli.Output;
 
 /// <summary>
-///     <c>--query</c> — docs/plan/21 § Decisions: <i>"Azure CLI's convention; a huge productivity
-///     feature and a well-specified language."</i>
+///     <c>--query</c> — docs/plan/21 § Decisions:
+///     <i>
+///         "Azure CLI's convention; a huge productivity
+///         feature and a well-specified language."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A documented subset, not the whole language, and it says so when it hits the
-///         edge.</b> What is here covers what people actually type at a control plane: field access,
+///         ⚠
+///         <b>
+///             A documented subset, not the whole language, and it says so when it hits the
+///             edge.
+///         </b> What is here covers what people actually type at a control plane: field access,
 ///         indexing and slicing, list and object projections, filters, multiselect lists and hashes,
 ///         pipes, and the thirteen functions in <see cref="Functions" />. What is not here —
 ///         <c>map</c>, <c>merge</c>, <c>reverse</c>, arithmetic, <c>let</c> bindings — fails with the
@@ -25,8 +31,11 @@ namespace CyberCloud.Cli.Output;
 ///         wrong answer that typechecks is never investigated. See <see cref="FunctionNode" />.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Written here rather than taken from a package for the same reason as
-///         <see cref="YamlWriter" />:</b> every JMESPath library on NuGet evaluates against
+///         ⚠
+///         <b>
+///             Written here rather than taken from a package for the same reason as
+///             <see cref="YamlWriter" />:
+///         </b> every JMESPath library on NuGet evaluates against
 ///         <c>Newtonsoft.Json</c> or reflects over <c>object</c>, and this project's
 ///         <c>IsAotCompatible</c> makes either an IL2026. It evaluates over <see cref="Payload" />,
 ///         which is a closed union.
@@ -84,8 +93,9 @@ static class JmesPath {
         public override Payload Evaluate(Payload current) {
             var value = source.Evaluate(current);
 
-            if (!value.IsArray)
+            if (!value.IsArray) {
                 return Payload.Missing;
+            }
 
             var items = value.Items.ToList();
             var length = items.Count;
@@ -94,19 +104,22 @@ static class JmesPath {
             var taken = new List<Payload>();
 
             if (step > 0) {
-                for (var i = from; i < to; i += step)
+                for (var i = from; i < to; i += step) {
                     taken.Add(items[i]);
+                }
             } else {
-                for (var i = from; i > to; i += step)
+                for (var i = from; i > to; i += step) {
                     taken.Add(items[i]);
+                }
             }
 
             return Payload.Array(taken);
         }
 
         static int Clamp(int index, int length, int step) {
-            if (index < 0)
+            if (index < 0) {
                 index += length;
+            }
 
             var lower = step > 0 ? 0 : -1;
             var upper = step > 0 ? length : length - 1;
@@ -131,21 +144,24 @@ static class JmesPath {
         public override Payload Evaluate(Payload current) {
             var value = source.Evaluate(current);
 
-            if (!value.IsArray)
+            if (!value.IsArray) {
                 return Payload.Missing;
+            }
 
             var results = new List<Payload>();
 
             foreach (var item in value.Items) {
                 var result = projected.Evaluate(item);
 
-                if (result.IsMissing)
+                if (result.IsMissing) {
                     continue;
+                }
 
-                if (flatten && result.IsArray)
+                if (flatten && result.IsArray) {
                     results.AddRange(result.Items);
-                else
+                } else {
                     results.Add(result);
+                }
             }
 
             return Payload.Array(results);
@@ -177,16 +193,18 @@ static class JmesPath {
         public override Payload Evaluate(Payload current) {
             var value = source.Evaluate(current);
 
-            if (!value.IsArray)
+            if (!value.IsArray) {
                 return Payload.Missing;
+            }
 
             var flattened = new List<Payload>();
 
             foreach (var item in value.Items) {
-                if (item.IsArray)
+                if (item.IsArray) {
                     flattened.AddRange(item.Items);
-                else
+                } else {
                     flattened.Add(item);
+                }
             }
 
             return Payload.Array(flattened);
@@ -197,8 +215,9 @@ static class JmesPath {
         public override Payload Evaluate(Payload current) {
             var value = source.Evaluate(current);
 
-            if (!value.IsArray)
+            if (!value.IsArray) {
                 return Payload.Missing;
+            }
 
             return Payload.Array([.. value.Items.Where(item => predicate.Evaluate(item).IsTruthy)]);
         }
@@ -206,8 +225,9 @@ static class JmesPath {
 
     sealed class MultiSelectListNode(IReadOnlyList<Node> parts) : Node {
         public override Payload Evaluate(Payload current) {
-            if (current.IsMissing)
+            if (current.IsMissing) {
                 return Payload.Missing;
+            }
 
             return Payload.Array([.. parts.Select(x => Coalesce(x.Evaluate(current)))]);
         }
@@ -215,12 +235,15 @@ static class JmesPath {
 
     sealed class MultiSelectHashNode(IReadOnlyList<KeyValuePair<string, Node>> parts) : Node {
         public override Payload Evaluate(Payload current) {
-            if (current.IsMissing)
+            if (current.IsMissing) {
                 return Payload.Missing;
+            }
 
-            return Payload.Object([
-                .. parts.Select(x => new KeyValuePair<string, Payload>(x.Key, Coalesce(x.Value.Evaluate(current)))),
-            ]);
+            return Payload.Object(
+                [
+                    .. parts.Select(x => new KeyValuePair<string, Payload>(x.Key, Coalesce(x.Value.Evaluate(current))))
+                ]
+            );
         }
     }
 
@@ -238,15 +261,18 @@ static class JmesPath {
             // ⚠ Ordering comparisons are numbers only, and a mismatch is `null` rather than an error.
             // The spec says so, and it is what makes `[?replicas > `2`]` safe over a page where one
             // resource is missing the field.
-            if (a.AsNumber() is not { } x || b.AsNumber() is not { } y)
+            if (a.AsNumber() is not { } x || b.AsNumber() is not { } y) {
                 return Payload.Missing;
+            }
 
-            return Payload.Boolean(comparator switch {
-                "<" => x < y,
-                "<=" => x <= y,
-                ">" => x > y,
-                _ => x >= y,
-            });
+            return Payload.Boolean(
+                comparator switch {
+                    "<" => x < y,
+                    "<=" => x <= y,
+                    ">" => x > y,
+                    _ => x >= y,
+                }
+            );
         }
     }
 
@@ -286,8 +312,11 @@ static class JmesPath {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>An argument of the wrong type is a usage error, and an <i>absent</i> argument is
-    ///         not.</b> JMESPath's own rule is that every one of these functions raises
+    ///         ⚠
+    ///         <b>
+    ///             An argument of the wrong type is a usage error, and an <i>absent</i> argument is
+    ///             not.
+    ///         </b> JMESPath's own rule is that every one of these functions raises
     ///         <c>invalid-type</c> when handed something outside its signature, and the rule matters
     ///         here for a reason a query language rarely gets credit for: the alternative is a wrong
     ///         answer that looks right. <c>length(nextLink)</c> over a <c>null</c> answered <c>0</c> —
@@ -297,8 +326,11 @@ static class JmesPath {
     ///         string starts with <c>""</c>, so the filter matched every element.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A <see cref="Payload.Missing" /> argument propagates instead, and that is
-    ///         deliberate.</b> <c>[?starts_with(name, 'w')]</c> over a page where one resource has no
+    ///         ⚠
+    ///         <b>
+    ///             A <see cref="Payload.Missing" /> argument propagates instead, and that is
+    ///             deliberate.
+    ///         </b> <c>[?starts_with(name, 'w')]</c> over a page where one resource has no
     ///         <c>name</c> must not fail the whole query — the same property
     ///         <see cref="ComparisonNode" /> preserves for ordering comparisons, and the reason
     ///         <c>--query "[].{name:name, tier:properties.tier}"</c> works across resources that do not
@@ -313,17 +345,20 @@ static class JmesPath {
             // ⚠ The name is checked before anything else, because the propagation rule below returns
             // rather than throws: without this, `map(&name, value)` — a function this subset does not
             // have — would answer null instead of naming the ones it does.
-            if (!Functions.Contains(name, StringComparer.Ordinal))
+            if (!Functions.Contains(name, StringComparer.Ordinal)) {
                 throw new CycUsageException(
-                    $"'{name}' is not a function cyc's --query understands. Available: {string.Join(", ", Functions)}.");
+                    $"'{name}' is not a function cyc's --query understands. Available: {string.Join(", ", Functions)}."
+                );
+            }
 
             // ⚠ `not_null` is the one function whose whole job is to be handed absent values, and an
             // &expression reference is a function rather than a value — sort_by(value, &name)
             // evaluates its reference against each element, never against the document.
             if (name is not "not_null") {
                 for (var i = 0; i < values.Count; i++) {
-                    if (arguments[i] is not ExpressionReferenceNode && values[i].IsMissing)
+                    if (arguments[i] is not ExpressionReferenceNode && values[i].IsMissing) {
                         return Payload.Missing;
+                    }
                 }
             }
 
@@ -333,24 +368,29 @@ static class JmesPath {
 
                     // ⚠ Payload.Count answers 0 for a number, a boolean and a null, so the type test
                     // has to come first — that 0 was the defect this rule exists for.
-                    if (values[0].ValueKind is not (JsonValueKind.String or JsonValueKind.Array or JsonValueKind.Object))
+                    if (values[0].ValueKind is not (JsonValueKind.String
+                            or JsonValueKind.Array
+                            or JsonValueKind.Object)) {
                         throw TypeError(0, "a string, an array or an object", values[0]);
+                    }
 
                     return Payload.Number(values[0].Count);
 
                 case "keys":
                     Arity(1, values.Count);
 
-                    if (!values[0].IsObject)
+                    if (!values[0].IsObject) {
                         throw TypeError(0, "an object", values[0]);
+                    }
 
                     return Payload.Array([.. values[0].Members.Select(x => Payload.Text(x.Key))]);
 
                 case "values":
                     Arity(1, values.Count);
 
-                    if (!values[0].IsObject)
+                    if (!values[0].IsObject) {
                         throw TypeError(0, "an object", values[0]);
+                    }
 
                     return Payload.Array([.. values[0].Members.Select(x => x.Value)]);
 
@@ -359,17 +399,20 @@ static class JmesPath {
 
                     // Every type is legal here: to_string() is the escape hatch that makes a number or
                     // an object printable, so it is the one function with no signature to violate.
-                    return Payload.Text(values[0].ValueKind == JsonValueKind.String
-                        ? values[0].AsString()!
-                        : values[0].ToJson(indented: false));
+                    return Payload.Text(
+                        values[0].ValueKind == JsonValueKind.String
+                            ? values[0].AsString()!
+                            : values[0].ToJson(indented: false)
+                    );
 
                 case "join": {
                     Arity(2, values.Count);
 
                     var separator = values[0].AsString() ?? throw TypeError(0, "a string", values[0]);
 
-                    if (!values[1].IsArray)
+                    if (!values[1].IsArray) {
                         throw TypeError(1, "an array of strings", values[1]);
+                    }
 
                     var parts = new List<string>();
 
@@ -386,13 +429,15 @@ static class JmesPath {
                     Arity(2, values.Count);
 
                     if (values[0].ValueKind == JsonValueKind.String) {
-                        var needle = values[1].AsString() ?? throw TypeError(1, "a string when the subject is one", values[1]);
+                        var needle = values[1].AsString()
+                            ?? throw TypeError(1, "a string when the subject is one", values[1]);
 
                         return Payload.Boolean(values[0].AsString()!.Contains(needle, StringComparison.Ordinal));
                     }
 
-                    if (!values[0].IsArray)
+                    if (!values[0].IsArray) {
                         throw TypeError(0, "a string or an array", values[0]);
+                    }
 
                     return Payload.Boolean(values[0].Items.Any(x => x.SameAs(values[1])));
 
@@ -406,35 +451,43 @@ static class JmesPath {
                     var subject = values[0].AsString() ?? throw TypeError(0, "a string", values[0]);
                     var affix = values[1].AsString() ?? throw TypeError(1, "a string", values[1]);
 
-                    return Payload.Boolean(name == "starts_with"
-                        ? subject.StartsWith(affix, StringComparison.Ordinal)
-                        : subject.EndsWith(affix, StringComparison.Ordinal));
+                    return Payload.Boolean(
+                        name == "starts_with"
+                            ? subject.StartsWith(affix, StringComparison.Ordinal)
+                            : subject.EndsWith(affix, StringComparison.Ordinal)
+                    );
                 }
 
                 case "sort":
                     Arity(1, values.Count);
 
-                    if (!values[0].IsArray)
+                    if (!values[0].IsArray) {
                         throw TypeError(0, "an array", values[0]);
+                    }
 
                     return Payload.Array([.. Ordered([.. values[0].Items], x => x)]);
 
                 case "sort_by": {
                     Arity(2, values.Count);
 
-                    if (arguments[1] is not ExpressionReferenceNode reference)
-                        throw new CycUsageException("sort_by()'s second argument must be an expression reference, as in sort_by(@, &name).");
+                    if (arguments[1] is not ExpressionReferenceNode reference) {
+                        throw new CycUsageException(
+                            "sort_by()'s second argument must be an expression reference, as in sort_by(@, &name)."
+                        );
+                    }
 
-                    if (!values[0].IsArray)
+                    if (!values[0].IsArray) {
                         throw TypeError(0, "an array", values[0]);
+                    }
 
                     return Payload.Array([.. Ordered([.. values[0].Items], reference.Inner.Evaluate)]);
                 }
 
                 case "not_null":
                     foreach (var value in values) {
-                        if (!value.IsMissing && value.ValueKind != JsonValueKind.Null)
+                        if (!value.IsMissing && value.ValueKind != JsonValueKind.Null) {
                             return value;
+                        }
                     }
 
                     return Payload.Missing;
@@ -443,8 +496,9 @@ static class JmesPath {
                 case "max": {
                     Arity(1, values.Count);
 
-                    if (!values[0].IsArray)
+                    if (!values[0].IsArray) {
                         throw TypeError(0, "an array of numbers or an array of strings", values[0]);
+                    }
 
                     var sorted = Ordered([.. values[0].Items], x => x);
 
@@ -458,7 +512,8 @@ static class JmesPath {
                     // in Functions. Reaching it means Functions lists a name this switch does not
                     // implement, which is a mistake in this file rather than in anybody's query.
                     throw new UnreachableException(
-                        $"'{name}' is listed in {nameof(Functions)} but has no implementation.");
+                        $"'{name}' is listed in {nameof(Functions)} but has no implementation."
+                    );
             }
         }
 
@@ -475,42 +530,50 @@ static class JmesPath {
         List<Payload> Ordered(List<Payload> items, Func<Payload, Payload> key) {
             var keys = items.Select(key).ToList();
 
-            if (keys.TrueForAll(x => x.AsNumber() is not null))
-                return [.. items.Select((x, i) => (Item: x, Key: keys[i].AsNumber()!.Value)).OrderBy(x => x.Key).Select(x => x.Item)];
+            if (keys.TrueForAll(x => x.AsNumber() is not null)) {
+                return [
+                    .. items.Select((x, i) => (Item: x, Key: keys[i].AsNumber()!.Value))
+                        .OrderBy(x => x.Key)
+                        .Select(x => x.Item)
+                ];
+            }
 
-            if (keys.TrueForAll(x => x.AsString() is not null))
+            if (keys.TrueForAll(x => x.AsString() is not null)) {
                 return [
                     .. items
                         .Select((x, i) => (Item: x, Key: keys[i].AsString()!))
                         .OrderBy(x => x.Key, StringComparer.Ordinal)
-                        .Select(x => x.Item),
+                        .Select(x => x.Item)
                 ];
+            }
 
             throw new CycUsageException(
                 $"{name}() orders an array of numbers or an array of strings, and this one holds "
-                + $"{string.Join(", ", keys.Select(Describe).Distinct(StringComparer.Ordinal))}.");
+                + $"{string.Join(", ", keys.Select(Describe).Distinct(StringComparer.Ordinal))}."
+            );
         }
 
-        CycUsageException TypeError(int index, string expected, Payload actual)
-            => new($"{name}()'s argument {index + 1} must be {expected}, and this one is {Describe(actual)}.");
+        CycUsageException TypeError(int index, string expected, Payload actual) =>
+            new($"{name}()'s argument {index + 1} must be {expected}, and this one is {Describe(actual)}.");
 
         void Arity(int expected, int actual) {
-            if (expected != actual)
+            if (expected != actual) {
                 throw new CycUsageException($"{name}() takes {expected} argument(s), not {actual}.");
+            }
         }
     }
 
     /// <summary>The functions the subset implements, named in the error when one is not.</summary>
     static readonly string[] Functions = [
         "contains", "ends_with", "join", "keys", "length", "max", "min", "not_null", "sort", "sort_by",
-        "starts_with", "to_string", "values",
+        "starts_with", "to_string", "values"
     ];
 
     static Payload Coalesce(Payload value) => value.IsMissing ? Payload.Null : value;
 
     /// <summary>Names a value's type for an <c>invalid-type</c> message, in the words the message needs.</summary>
-    static string Describe(Payload value)
-        => value.ValueKind switch {
+    static string Describe(Payload value) =>
+        value.ValueKind switch {
             JsonValueKind.String => "a string",
             JsonValueKind.Number => "a number",
             JsonValueKind.Array => "an array",
@@ -536,8 +599,9 @@ static class JmesPath {
         public void ExpectEnd() {
             SkipSpace();
 
-            if (position < text.Length)
+            if (position < text.Length) {
                 throw Error($"unexpected '{text[position]}'");
+            }
         }
 
         public Node ParseExpression() => ParsePipe();
@@ -556,8 +620,9 @@ static class JmesPath {
         Node ParseOr() {
             var left = ParseAnd();
 
-            while (Match("||"))
+            while (Match("||")) {
                 left = new OrNode(left, ParseAnd());
+            }
 
             return left;
         }
@@ -565,8 +630,9 @@ static class JmesPath {
         Node ParseAnd() {
             var left = ParseNot();
 
-            while (Match("&&"))
+            while (Match("&&")) {
                 left = new AndNode(left, ParseNot());
+            }
 
             return left;
         }
@@ -589,8 +655,9 @@ static class JmesPath {
             SkipSpace();
 
             foreach (var comparator in Comparators) {
-                if (!Match(comparator))
+                if (!Match(comparator)) {
                     continue;
+                }
 
                 return new ComparisonNode(left, comparator, ParseChain(new CurrentNode(), root: true));
             }
@@ -619,8 +686,9 @@ static class JmesPath {
                     if (Peek('[')) {
                         node = ParseBracket(node, out var projection);
 
-                        if (projection)
+                        if (projection) {
                             return Project(node);
+                        }
 
                         continue;
                     }
@@ -639,8 +707,9 @@ static class JmesPath {
                 if (Peek('[')) {
                     node = ParseBracket(node, out var projection);
 
-                    if (projection)
+                    if (projection) {
                         return Project(node);
+                    }
 
                     continue;
                 }
@@ -654,8 +723,9 @@ static class JmesPath {
             SkipSpace();
 
             // Nothing after the projection: the projection itself is the answer.
-            if (position >= text.Length || text[position] is ']' or ')' or ',' or '}' || Peek('|'))
+            if (position >= text.Length || text[position] is ']' or ')' or ',' or '}' || Peek('|')) {
                 return source;
+            }
 
             var projected = ParseChain(new CurrentNode(), root: false);
 
@@ -665,8 +735,9 @@ static class JmesPath {
         Node ParsePrimary(Node current) {
             SkipSpace();
 
-            if (position >= text.Length)
+            if (position >= text.Length) {
                 throw Error("the expression ends where a value was expected");
+            }
 
             var character = text[position];
 
@@ -713,15 +784,17 @@ static class JmesPath {
                     return new FieldNode(current, ParseQuotedIdentifier());
             }
 
-            if (character is '-' || char.IsAsciiDigit(character))
+            if (character is '-' || char.IsAsciiDigit(character)) {
                 return new LiteralNode(Payload.Number(ParseNumber()));
+            }
 
             var name = ParseIdentifier();
 
             SkipSpace();
 
-            if (!Peek('('))
+            if (!Peek('(')) {
                 return new FieldNode(current, name);
+            }
 
             position++;
 
@@ -749,7 +822,8 @@ static class JmesPath {
             // ⚠ `[a, b]` is a multiselect list, `[0]` is an index and `[?…]` is a filter — three
             // meanings for one bracket, told apart by the first character after it. Anything that
             // starts an expression rather than a subscript opens a multiselect.
-            if (position < text.Length && (char.IsLetter(text[position]) || text[position] is '_' or '@' or '"' or '\'' or '`' or '{')) {
+            if (position < text.Length
+                && (char.IsLetter(text[position]) || text[position] is '_' or '@' or '"' or '\'' or '`' or '{')) {
                 var parts = new List<Node>();
 
                 do {
@@ -808,14 +882,16 @@ static class JmesPath {
             if (Match(":")) {
                 SkipSpace();
 
-                if (!Peek(']'))
+                if (!Peek(']')) {
                     step = (int)ParseNumber();
+                }
             }
 
             Expect(']');
 
-            if (step == 0)
+            if (step == 0) {
                 throw Error("a slice step of 0 does not terminate");
+            }
 
             projection = true;
 
@@ -845,21 +921,24 @@ static class JmesPath {
         ///     Runs a multiselect against whatever the chain has produced so far. When nothing has,
         ///     the multiselect is the whole expression and evaluates against the input directly.
         /// </summary>
-        static Node Rooted(Node source, Node selector)
-            => source is CurrentNode ? selector : new PipeNode(source, selector);
+        static Node Rooted(Node source, Node selector) =>
+            source is CurrentNode ? selector : new PipeNode(source, selector);
 
         int ParseNumber() {
             SkipSpace();
             var start = position;
 
-            if (Peek('-'))
+            if (Peek('-')) {
                 position++;
+            }
 
-            while (position < text.Length && char.IsAsciiDigit(text[position]))
+            while (position < text.Length && char.IsAsciiDigit(text[position])) {
                 position++;
+            }
 
-            if (position == start)
+            if (position == start) {
                 throw Error("a number was expected");
+            }
 
             return int.Parse(text.AsSpan(start, position - start), CultureInfo.InvariantCulture);
         }
@@ -872,8 +951,9 @@ static class JmesPath {
                 position++;
             }
 
-            if (position == start)
+            if (position == start) {
                 throw Error("an identifier was expected");
+            }
 
             return text[start..position];
         }
@@ -882,11 +962,13 @@ static class JmesPath {
             Expect('"');
             var start = position;
 
-            while (position < text.Length && text[position] != '"')
+            while (position < text.Length && text[position] != '"') {
                 position++;
+            }
 
-            if (position >= text.Length)
+            if (position >= text.Length) {
                 throw Error("a quoted identifier is not closed");
+            }
 
             var name = text[start..position];
             position++;
@@ -899,14 +981,16 @@ static class JmesPath {
             var value = new StringBuilder();
 
             while (position < text.Length && text[position] != '\'') {
-                if (text[position] == '\\' && position + 1 < text.Length)
+                if (text[position] == '\\' && position + 1 < text.Length) {
                     position++;
+                }
 
                 value.Append(text[position++]);
             }
 
-            if (position >= text.Length)
+            if (position >= text.Length) {
                 throw Error("a raw string is not closed");
+            }
 
             position++;
 
@@ -918,14 +1002,16 @@ static class JmesPath {
             var start = position;
 
             while (position < text.Length && text[position] != '`') {
-                if (text[position] == '\\' && position + 1 < text.Length)
+                if (text[position] == '\\' && position + 1 < text.Length) {
                     position++;
+                }
 
                 position++;
             }
 
-            if (position >= text.Length)
+            if (position >= text.Length) {
                 throw Error("a `literal` is not closed");
+            }
 
             var json = text[start..position].Replace("\\`", "`", StringComparison.Ordinal);
             position++;
@@ -941,8 +1027,9 @@ static class JmesPath {
         }
 
         void SkipSpace() {
-            while (position < text.Length && char.IsWhiteSpace(text[position]))
+            while (position < text.Length && char.IsWhiteSpace(text[position])) {
                 position++;
+            }
         }
 
         bool Peek(char character) {
@@ -951,14 +1038,15 @@ static class JmesPath {
             return position < text.Length && text[position] == character;
         }
 
-        bool PeekAt(int offset, char character)
-            => position + offset < text.Length && text[position + offset] == character;
+        bool PeekAt(int offset, char character) =>
+            position + offset < text.Length && text[position + offset] == character;
 
         bool Match(string token) {
             SkipSpace();
 
-            if (position + token.Length > text.Length || !text.AsSpan(position, token.Length).SequenceEqual(token))
+            if (position + token.Length > text.Length || !text.AsSpan(position, token.Length).SequenceEqual(token)) {
                 return false;
+            }
 
             position += token.Length;
 
@@ -968,13 +1056,14 @@ static class JmesPath {
         void Expect(char character) {
             SkipSpace();
 
-            if (position >= text.Length || text[position] != character)
+            if (position >= text.Length || text[position] != character) {
                 throw Error($"'{character}' was expected");
+            }
 
             position++;
         }
 
-        CycUsageException Error(string what)
-            => new($"--query could not be parsed at offset {position}: {what}. Expression: {text}");
+        CycUsageException Error(string what) =>
+            new($"--query could not be parsed at offset {position}: {what}. Expression: {text}");
     }
 }

@@ -8,8 +8,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The grain is driven directly here and through the write path in
-///         <see cref="SoftDeletePathTests" />, and the split is deliberate.</b> The end-to-end cases
+///         ⚠
+///         <b>
+///             The grain is driven directly here and through the write path in
+///             <see cref="SoftDeletePathTests" />, and the split is deliberate.
+///         </b> The end-to-end cases
 ///         prove the three call sites are wired — that a delete writes an entry, a restore clears it
 ///         and a purge clears it — which is the half that would silently stop being true if somebody
 ///         moved a line. This file proves the grain's own rules, several of which the write path
@@ -18,8 +21,11 @@ namespace CyberCloud.ResourceManager.Tests;
 ///         a create would mean building a resource the platform refuses to build.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Nothing here creates a resource, so nothing here spends the shared subscription's
-///         quota</b> — see <c>ResourceManagerCluster.IsolatedSubscription</c> on why that budget is a
+///         ⚠
+///         <b>
+///             Nothing here creates a resource, so nothing here spends the shared subscription's
+///             quota
+///         </b> — see <c>ResourceManagerCluster.IsolatedSubscription</c> on why that budget is a
 ///         coupling between unrelated classes. Each case uses a resource group name of its own, which
 ///         is what keeps two cases in one grain from being one case.
 ///     </para>

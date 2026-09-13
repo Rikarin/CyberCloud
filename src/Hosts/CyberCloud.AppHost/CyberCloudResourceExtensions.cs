@@ -165,15 +165,15 @@ public static class CyberCloudResourceExtensions {
             //     Set it via the POD_NAMESPACE environment variable
             // which names neither Aspire nor the environment that produced it. ADR-014 says this
             // AppHost IS local development, so it says so rather than hoping.
-            .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
-            .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
-            .WithEnvironment(
-                $"{ClusterPrefix}LocalhostSiloPort",
-                siloPort.ToString(CultureInfo.InvariantCulture)
-            )
-            .WithEnvironment(
-                $"{ClusterPrefix}LocalhostGatewayPort",
-                gatewayPort.ToString(CultureInfo.InvariantCulture)
-            );
+                .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
+                .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
+                .WithEnvironment(
+                    $"{ClusterPrefix}LocalhostSiloPort",
+                    siloPort.ToString(CultureInfo.InvariantCulture)
+                )
+                .WithEnvironment(
+                    $"{ClusterPrefix}LocalhostGatewayPort",
+                    gatewayPort.ToString(CultureInfo.InvariantCulture)
+                );
     }
 }

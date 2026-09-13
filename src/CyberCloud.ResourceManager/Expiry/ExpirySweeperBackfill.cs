@@ -25,8 +25,11 @@ public readonly record struct ExpiryBackfill(int Groups, int Armed, int Unreadab
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS EXISTS BECAUSE ARMING FROM THE WRITE PATH COVERS ONLY THE WINDOWS THAT OPEN
-///         AFTER IT SHIPS.</b> <c>IExpirySweeperGrain.ArmAsync</c> has two callers and both sit on a
+///         ⚠
+///         <b>
+///             THIS EXISTS BECAUSE ARMING FROM THE WRITE PATH COVERS ONLY THE WINDOWS THAT OPEN
+///             AFTER IT SHIPS.
+///         </b> <c>IExpirySweeperGrain.ArmAsync</c> has two callers and both sit on a
 ///         path that has just added a registry entry — <c>OperationGrain.ParkAsync</c> and
 ///         <c>ResourceManagerService.RepairParkedRegistryAsync</c>. So on the deploy that first
 ///         carries the sweeper, every resource already inside a recovery window has nothing driving
@@ -106,11 +109,9 @@ public sealed class ExpirySweeperBackfill(
                 covered.Armed,
                 covered.Unreadable
             );
-        }
-        catch (OperationCanceledException) {
+        } catch (OperationCanceledException) {
             // Shutdown.
-        }
-        catch (Exception error) {
+        } catch (Exception error) {
             logger.LogWarning(
                 error,
                 "The expiry-sweeper backfill did not complete, so a resource group whose recovery "
@@ -128,8 +129,11 @@ public sealed class ExpirySweeperBackfill(
     /// <param name="cancellationToken">The host's shutdown token.</param>
     /// <returns>What the pass covered.</returns>
     /// <remarks>
-    ///     ⚠ <b>Public and separate from <see cref="ExecuteAsync" /> for the reason
-    ///     <c>IExpirySweeperGrain.SweepAsync</c> is public:</b> a backfill nobody can run is a
+    ///     ⚠
+    ///     <b>
+    ///         Public and separate from <see cref="ExecuteAsync" /> for the reason
+    ///         <c>IExpirySweeperGrain.SweepAsync</c> is public:
+    ///     </b> a backfill nobody can run is a
     ///     backfill nobody can test without starting a host and waiting, and an operator who has just
     ///     restored a reminder table needs a way to re-cover the platform that is not "restart every
     ///     silo".
@@ -206,9 +210,7 @@ public sealed class ExpirySweeperBackfill(
                 foreach (var name in names.GetValueOrThrow()) {
                     groups++;
 
-                    var sweeper = tenant.GetGrain<IExpirySweeperGrain>(
-                        GrainKeys.ExpirySweeper(subscription, name)
-                    );
+                    var sweeper = tenant.GetGrain<IExpirySweeperGrain>(GrainKeys.ExpirySweeper(subscription, name));
 
                     var covered = await sweeper.ArmIfParkedAsync();
 
@@ -251,8 +253,11 @@ public sealed class ExpirySweeperBackfill(
 ///     Whether and when <see cref="ExpirySweeperBackfill" /> runs.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Off is for tests, and it is the same knob <c>TenancyRefreshOptions.RunBackgroundRefresh</c>
-///     is, for the same reason.</b> A suite that asserts on which resource groups are armed cannot
+///     ⚠
+///     <b>
+///         Off is for tests, and it is the same knob <c>TenancyRefreshOptions.RunBackgroundRefresh</c>
+///         is, for the same reason.
+///     </b> A suite that asserts on which resource groups are armed cannot
 ///     share a process with a loop that is quietly arming them, and the assertion would pass or fail
 ///     on timing. A harness turns this off and calls <see cref="ExpirySweeperBackfill.RunAsync" />
 ///     explicitly, which exercises the same method the host runs.

@@ -191,7 +191,6 @@ public static class ReferenceEvaluator {
     ) =>
         tuples
             .Where(x => x.Object == target
-                && string.Equals(x.Relation, relation, StringComparison.Ordinal)
-            )
+                && string.Equals(x.Relation, relation, StringComparison.Ordinal))
             .Select(x => x.Subject);
 }

@@ -12,9 +12,12 @@ namespace CyberCloud.Sdk;
 ///     <para>
 ///         ⚠ <b>This type is the mechanism behind docs/plan/21 § The .NET SDK's AOT claim.</b> That
 ///         section makes the CLI single-file AOT-published and makes the CLI depend on this SDK, and
-///         concludes: <i>"Owning the stack means owning the serialization: source-generated
-///         <c>System.Text.Json</c> throughout, and an AOT warning becomes a bug we can fix rather than
-///         a dependency we must live with."</i> Reflection-based
+///         concludes:
+///         <i>
+///             "Owning the stack means owning the serialization: source-generated
+///             <c>System.Text.Json</c> throughout, and an AOT warning becomes a bug we can fix rather than
+///             a dependency we must live with."
+///         </i> Reflection-based
 ///         <c>JsonSerializer.Deserialize&lt;T&gt;(json)</c> is exactly such a warning:
 ///         <c>IsAotCompatible</c> in the .csproj turns it into IL2026/IL3050 at the call site, so the
 ///         rule is enforced by the compiler rather than by review.

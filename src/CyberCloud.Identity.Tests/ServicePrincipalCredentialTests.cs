@@ -23,11 +23,7 @@ public sealed class ServicePrincipalCredentialTests(IdentityCluster cluster) {
     static readonly SecretRef Handle = new() { Path = "tenants/x/sp/ci", Field = "secret" };
 
     static ServicePrincipalDescriptor Valid() =>
-        new() {
-            DisplayName = "CI",
-            ApplicationId = Guid.NewGuid(),
-            CredentialSecretRef = Handle
-        };
+        new() { DisplayName = "CI", ApplicationId = Guid.NewGuid(), CredentialSecretRef = Handle };
 
     [Fact]
     public void TheDescriptorHasNowhereToPutASecretValue() {
@@ -42,7 +38,8 @@ public sealed class ServicePrincipalCredentialTests(IdentityCluster cluster) {
                 || x.Name.Contains("Password", StringComparison.OrdinalIgnoreCase)
                 || x.Name.Contains("Credential", StringComparison.OrdinalIgnoreCase)
                 || x.Name.Contains("Key", StringComparison.OrdinalIgnoreCase)
-                || x.Name.Contains("Token", StringComparison.OrdinalIgnoreCase))
+                || x.Name.Contains("Token", StringComparison.OrdinalIgnoreCase)
+            )
             .Select(x => x.Name)
             .ToList();
 
@@ -63,10 +60,8 @@ public sealed class ServicePrincipalCredentialTests(IdentityCluster cluster) {
         // principal pointing at a secret that does not exist, which fails at authentication time
         // rather than here.
         foreach (var empty in new[] {
-            new SecretRef(),
-            new SecretRef { Path = "tenants/x/sp/ci" },
-            new SecretRef { Field = "secret" }
-        }) {
+                     new SecretRef(), new SecretRef { Path = "tenants/x/sp/ci" }, new SecretRef { Field = "secret" }
+                 }) {
             var rotated = await principal.RotateCredentialAsync(empty);
 
             rotated.IsSuccess.ShouldBeFalse($"'{empty}' is an address that resolves to nothing");
@@ -126,11 +121,11 @@ public sealed class ServicePrincipalCredentialTests(IdentityCluster cluster) {
         var principal = cluster.ServicePrincipal(Guid.NewGuid());
 
         foreach (var (name, result) in new (string, Result)[] {
-            ("Get", (await principal.GetAsync()).ToResult()),
-            ("SetEnabled", (await principal.SetEnabledAsync(false)).ToResult()),
-            ("RotateCredential", (await principal.RotateCredentialAsync(Handle)).ToResult()),
-            ("Delete", await principal.DeleteAsync())
-        }) {
+                     ("Get", (await principal.GetAsync()).ToResult()),
+                     ("SetEnabled", (await principal.SetEnabledAsync(false)).ToResult()),
+                     ("RotateCredential", (await principal.RotateCredentialAsync(Handle)).ToResult()),
+                     ("Delete", await principal.DeleteAsync())
+                 }) {
             result.IsSuccess.ShouldBeFalse($"{name} on a principal that was never created");
             result.Error!.Code.ShouldBe(
                 ErrorCode.ResourceNotFound,

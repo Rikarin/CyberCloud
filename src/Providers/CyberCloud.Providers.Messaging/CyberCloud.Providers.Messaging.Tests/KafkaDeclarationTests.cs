@@ -126,7 +126,9 @@ public sealed class KafkaDeclarationTests {
                 // for a reader, so `"cpu" "1"    "memory"` has four spaces where `"cpu" "250m"` has
                 // one — a regex written against one row matches half the table and reports the other
                 // half as missing.
-                "\"" + Regex.Escape(preset) + "\"\\s+\\(dict\\s+\"cpu\"\\s+\"([^\"]+)\"\\s+\"memory\"\\s+\"([^\"]+)\"\\)",
+                "\""
+                + Regex.Escape(preset)
+                + "\"\\s+\\(dict\\s+\"cpu\"\\s+\"([^\"]+)\"\\s+\"memory\"\\s+\"([^\"]+)\"\\)",
                 RegexOptions.None,
                 TimeSpan.FromSeconds(5)
             );
@@ -160,8 +162,7 @@ public sealed class KafkaDeclarationTests {
 
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
 
-    static Regex Anchored(string pattern) =>
-        new("^(?:" + pattern + ")$", RegexOptions.None, TimeSpan.FromSeconds(1));
+    static Regex Anchored(string pattern) => new("^(?:" + pattern + ")$", RegexOptions.None, TimeSpan.FromSeconds(1));
 
     static decimal Cores(string quantity) =>
         quantity.EndsWith('m')

@@ -48,8 +48,9 @@ static class YamlWriter {
                 return;
             }
 
-            if (inline)
+            if (inline) {
                 writer.WriteLine();
+            }
 
             foreach (var member in members) {
                 writer.Write(pad);
@@ -70,8 +71,9 @@ static class YamlWriter {
                 return;
             }
 
-            if (inline)
+            if (inline) {
                 writer.WriteLine();
+            }
 
             foreach (var item in items) {
                 writer.Write(pad);
@@ -113,8 +115,8 @@ static class YamlWriter {
 
     static string Key(string name) => NeedsQuotes(name) ? Quote(name) : name;
 
-    static string Scalar(Payload value)
-        => value.ValueKind switch {
+    static string Scalar(Payload value) =>
+        value.ValueKind switch {
             JsonValueKind.Null or JsonValueKind.Undefined => "null",
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",
@@ -131,23 +133,29 @@ static class YamlWriter {
     ///     the boolean- and number-shaped words all qualify.
     /// </remarks>
     static bool NeedsQuotes(string value) {
-        if (value.Length == 0)
+        if (value.Length == 0) {
             return true;
+        }
 
-        if (char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1]))
+        if (char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1])) {
             return true;
+        }
 
-        if ("-?:,[]{}#&*!|>'\"%@`".Contains(value[0], StringComparison.Ordinal))
+        if ("-?:,[]{}#&*!|>'\"%@`".Contains(value[0], StringComparison.Ordinal)) {
             return true;
+        }
 
-        if (value.Contains(": ", StringComparison.Ordinal) || value.Contains(" #", StringComparison.Ordinal))
+        if (value.Contains(": ", StringComparison.Ordinal) || value.Contains(" #", StringComparison.Ordinal)) {
             return true;
+        }
 
-        if (value.AsSpan().ContainsAny(['\n', '\r', '\t']))
+        if (value.AsSpan().ContainsAny(['\n', '\r', '\t'])) {
             return true;
+        }
 
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _)) {
             return true;
+        }
 
         // ⚠ YAML 1.1's boolean spellings. `no` is a Norwegian country code and a false, which is the
         // reason this list exists rather than a `true`/`false` check.

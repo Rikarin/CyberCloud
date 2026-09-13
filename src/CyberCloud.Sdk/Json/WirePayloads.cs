@@ -185,8 +185,11 @@ public sealed class CliTokenPayload {
 
 /// <summary>
 ///     One entry of the persistent token cache. ⚠ Written to the OS keychain and nowhere else —
-///     docs/plan/21 § `cyc`: <i>"Never a plaintext file — that is how CI credentials leak into
-///     container images."</i>
+///     docs/plan/21 § `cyc`:
+///     <i>
+///         "Never a plaintext file — that is how CI credentials leak into
+///         container images."
+///     </i>
 /// </summary>
 public sealed record TokenCacheRecord {
     /// <summary>The refresh token, if the grant produced one.</summary>

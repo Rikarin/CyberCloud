@@ -31,8 +31,11 @@ public sealed record ParkedResource {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A PATH AND A GUID RATHER THAN A <c>ResourceId</c>, AND THAT IS A STORAGE
-    ///         CONSTRAINT BEFORE IT IS A STYLE.</b> This record is the registry's grain <i>state</i>
+    ///         ⚠
+    ///         <b>
+    ///             A PATH AND A GUID RATHER THAN A <c>ResourceId</c>, AND THAT IS A STORAGE
+    ///             CONSTRAINT BEFORE IT IS A STYLE.
+    ///         </b> This record is the registry's grain <i>state</i>
     ///         as well as its wire type. A <c>ResourceId</c> crosses a grain <i>call</i> perfectly
     ///         well — <c>ResourceIdSurrogate</c> is what makes that true — but grain state goes
     ///         through <c>IGrainStorageSerializer</c>, which is JSON, and JSON serialises every public
@@ -118,20 +121,29 @@ public sealed record ParkedResource {
 ///         <c>GrainKeys.ParkedResourceRegistry</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS EXISTS BECAUSE THE FILTER HAD AN EMPTY INPUT, NOT BECAUSE THE FILTER WAS
-///         MISSING.</b> docs/plan/08 § Soft delete predicted that "the soft-deleted collection is one
+///         ⚠
+///         <b>
+///             THIS EXISTS BECAUSE THE FILTER HAD AN EMPTY INPUT, NOT BECAUSE THE FILTER WAS
+///             MISSING.
+///         </b> docs/plan/08 § Soft delete predicted that "the soft-deleted collection is one
 ///         filter over whatever answers" a listing, and <c>IResourceManager.ListAsync</c> then landed
 ///         and made that testable — and false. A parked resource is <b>not</b> a member of its
 ///         resource group: <c>OperationGrain.ParkAsync</c> calls the <i>group's</i>
 ///         <c>CompleteDeleteAsync</c> deliberately, because a member left behind would put a name into
 ///         a listing whose every read is the canonical <c>404</c>, handing a caller who may list the
 ///         group but may not read the resource the "something is held here" signal § Soft delete
-///         refuses a <c>410 Gone</c> over. ⚠ <b>That decision is right and is not the one this
-///         reverses.</b> What was missing is a second collection, and this is it.
+///         refuses a <c>410 Gone</c> over. ⚠
+///         <b>
+///             That decision is right and is not the one this
+///             reverses.
+///         </b> What was missing is a second collection, and this is it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Three writes, at three call sites that already existed — and two more that re-ask
-///         the index.</b> Written by <c>OperationGrain.ParkAsync</c> where the soft delete unlists the
+///         ⚠
+///         <b>
+///             Three writes, at three call sites that already existed — and two more that re-ask
+///             the index.
+///         </b> Written by <c>OperationGrain.ParkAsync</c> where the soft delete unlists the
 ///         member; cleared by <c>ResourceManagerService.RestoreAsync</c> where the restore puts it
 ///         back; cleared by <c>ResourceManagerService.PurgeCoreAsync</c> where the purge releases the
 ///         name. The other two are <c>ResourceManagerService.RepairParkedRegistryAsync</c>, which
@@ -139,8 +151,11 @@ public sealed record ParkedResource {
 ///         below for what makes both legitimate.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE RULE IS NOT "NO FOURTH WRITER". IT IS "NO WRITER THAT DOES NOT RE-ASK THE
-///         INDEX".</b> This paragraph said the first of those until 2026-09-05, and it forbade the
+///         ⚠
+///         <b>
+///             THE RULE IS NOT "NO FOURTH WRITER". IT IS "NO WRITER THAT DOES NOT RE-ASK THE
+///             INDEX".
+///         </b> This paragraph said the first of those until 2026-09-05, and it forbade the
 ///         code that had to be written: a restore can be refused <i>permanently</i> — by a recovery
 ///         window that has passed — at a point below the clear, and an entry cleared for a restore
 ///         that then never happens is gone for good, because the delete operation that would re-park
@@ -152,8 +167,11 @@ public sealed record ParkedResource {
 ///         would be a claim about a recovery window made by something that does not hold one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>And the rule reads the same way in the other direction, which is what
-///         <c>ExpirySweeperGrain.SweepAsync</c> is (2026-09-05, issue #12).</b> It is a <i>fifth</i>
+///         ⚠
+///         <b>
+///             And the rule reads the same way in the other direction, which is what
+///             <c>ExpirySweeperGrain.SweepAsync</c> is (2026-09-05, issue #12).
+///         </b> It is a <i>fifth</i>
 ///         writer and it only ever <see cref="UnparkAsync" />s, and it does so only for an entry the
 ///         index has just told it is false — not <see cref="IndexEntryState.SoftDeleted" />, or
 ///         soft-deleted as a <i>different</i> resource GUID. That is this type's invariant read as a
@@ -164,8 +182,11 @@ public sealed record ParkedResource {
 ///         are where that mattered and where it is now written down.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE INVARIANT, WHICH IS WHAT FIXES THE ORDER OF ALL THREE:
-///         <i>an entry exists only while the index says <see cref="IndexEntryState.SoftDeleted" /></i>.</b>
+///         ⚠
+///         <b>
+///             THE INVARIANT, WHICH IS WHAT FIXES THE ORDER OF ALL THREE:
+///             <i>an entry exists only while the index says <see cref="IndexEntryState.SoftDeleted" /></i>.
+///         </b>
 ///         So the park is written <i>after</i> the index was parked and <i>before</i> the group's
 ///         member is removed, and both clears run <i>before</i> the index write that stops the entry
 ///         being true. Every crash window therefore leaves the registry <b>under</b>-reporting rather
@@ -255,8 +276,11 @@ public interface IParkedResourceRegistryGrain : IGrainWithStringKey {
     ///     Everything parked in this resource group, ordered by canonical path, ordinally.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Unfiltered and unpaged, like <c>IResourceGroupGrain.ListAsync</c> beside it, and for
-    ///     the same reason: this is the grain's own inventory rather than an endpoint.</b> The paging
+    ///     ⚠
+    ///     <b>
+    ///         Unfiltered and unpaged, like <c>IResourceGroupGrain.ListAsync</c> beside it, and for
+    ///         the same reason: this is the grain's own inventory rather than an endpoint.
+    ///     </b> The paging
     ///     and the per-entry <c>Check</c> belong to whatever serves a collection <c>GET</c> over it —
     ///     <c>ListRequest.MaxPageSize</c> is where the cost of one request stops being a number the
     ///     caller chooses.
@@ -277,16 +301,22 @@ public interface IParkedResourceRegistryGrain : IGrainWithStringKey {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A <c>ResourceCollectionId</c> and not a <c>ResourceTypeName</c>, because a nested
-    ///         type is not a type on its own.</b> A collection of <c>servers/databases</c> is
+    ///         ⚠
+    ///         <b>
+    ///             A <c>ResourceCollectionId</c> and not a <c>ResourceTypeName</c>, because a nested
+    ///             type is not a type on its own.
+    ///         </b> A collection of <c>servers/databases</c> is
     ///         addressed <c>…/servers/{serverName}/databases</c> and its ancestor's name is part of
     ///         the question — two servers in one group have two database collections. Taking the type
     ///         alone would answer both at once, and the caller would have no way to say which it
     ///         meant.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Resource-group-scoped and nothing wider, which is a boundary rather than a
-    ///         limitation to be lifted in passing.</b> docs/plan/08 § Soft delete: anything
+    ///         ⚠
+    ///         <b>
+    ///             Resource-group-scoped and nothing wider, which is a boundary rather than a
+    ///             limitation to be lifted in passing.
+    ///         </b> docs/plan/08 § Soft delete: anything
     ///         subscription-wide "is still the addressing question, because <c>ResourceId.ParsePath</c>
     ///         has <c>const int fixedPrefix = 8</c> and no subscription-scoped shape". A registry
     ///         method that took a subscription would have no address a caller could ask for and would

@@ -11,8 +11,11 @@ namespace CyberCloud.ResourceManager.Contracts.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Not a hand-rolled round trip, and this is the one thing the grain suite cannot
-///         check.</b> <c>CyberCloud.ResourceManager.Tests</c> runs against in-memory grain storage
+///         ⚠
+///         <b>
+///             Not a hand-rolled round trip, and this is the one thing the grain suite cannot
+///             check.
+///         </b> <c>CyberCloud.ResourceManager.Tests</c> runs against in-memory grain storage
 ///         (see its <c>.csproj</c> on why), which keeps the object graph rather than serializing it —
 ///         so a type with a missing codec, a member Orleans cannot round-trip, or an
 ///         <c>ImmutableArray</c> that comes back default would pass every test there and fail on the
@@ -31,10 +34,10 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
     public ResourceManagerSerializationTests() {
         var services = new ServiceCollection();
         services.AddSerializer(builder => builder
-            .AddAssembly(typeof(ResourceSnapshot).Assembly)
-            .AddAssembly(typeof(ProvisioningState).Assembly)
-            .AddAssembly(typeof(KubeCommand).Assembly)
-            .AddAssembly(typeof(ResultSurrogate).Assembly)
+                .AddAssembly(typeof(ResourceSnapshot).Assembly)
+                .AddAssembly(typeof(ProvisioningState).Assembly)
+                .AddAssembly(typeof(KubeCommand).Assembly)
+                .AddAssembly(typeof(ResultSurrogate).Assembly)
         );
 
         provider = services.BuildServiceProvider();
@@ -279,7 +282,9 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
                     ResourcePath = "/tenants/…/widgets/ghost",
                     Objects = [
                         new() {
-                            Kind = new() { Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments" },
+                            Kind = new() {
+                                Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments"
+                            },
                             Namespace = "ns",
                             Name = "ghost"
                         }
@@ -361,7 +366,9 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         // reach because they carry no [GenerateSerializer].
         var offenders = typeof(ResourceSnapshot).Assembly
             .GetTypes()
-            .Where(x => x.IsPublic && (x.IsEnum || x.GetCustomAttributes(typeof(GenerateSerializerAttribute), false).Length > 0))
+            .Where(x => x.IsPublic
+                && (x.IsEnum || x.GetCustomAttributes(typeof(GenerateSerializerAttribute), false).Length > 0)
+            )
             .Where(x => x.GetCustomAttributes(typeof(AliasAttribute), false).Length == 0)
             .Select(x => x.FullName)
             .ToArray();

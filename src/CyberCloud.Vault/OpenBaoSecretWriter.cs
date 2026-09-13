@@ -33,8 +33,11 @@ namespace CyberCloud.Vault;
 ///         after the first, which is every pass.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>cas</c> only works when the mount requires it or the request asks for it, and this
-///         asks.</b> A <c>kv-v2</c> mount has a <c>cas_required</c> setting that defaults to off;
+///         ⚠
+///         <b>
+///             <c>cas</c> only works when the mount requires it or the request asks for it, and this
+///             asks.
+///         </b> A <c>kv-v2</c> mount has a <c>cas_required</c> setting that defaults to off;
 ///         sending <c>options.cas</c> per request works either way, so nothing here depends on how the
 ///         mount was configured. Worth knowing while deploying: with <c>cas_required</c> off and this
 ///         field omitted, a write silently creates version 2 — which is exactly the rotation-shaped
@@ -192,13 +195,11 @@ public sealed class OpenBaoSecretWriter(
             }
 
             response = await http.SendAsync(request, cancellationToken);
-        }
-        catch (HttpRequestException exception) {
+        } catch (HttpRequestException exception) {
             return WriteOutcome.Failed(
                 VaultFailures.Unreachable($"{options.Address} could not be reached: {exception.Message}")
             );
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) {
+        } catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) {
             return WriteOutcome.Failed(
                 VaultFailures.Unreachable(
                     $"{options.Address} did not answer within {options.RequestTimeout.TotalSeconds:0.#}s "
@@ -253,8 +254,11 @@ public sealed class OpenBaoSecretWriter(
     ///     Whether a <c>400</c> is OpenBao saying the path already holds a secret.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Matched on the phrase OpenBao puts in <c>errors[]</c> — <c>check-and-set parameter did not
-    ///     match the current version</c> — because there is no code to match on. A string test is
+    ///     ⚠ Matched on the phrase OpenBao puts in <c>errors[]</c> —
+    ///     <c>
+    /// check-and-set parameter did not
+    ///     match the current version
+    ///     </c> — because there is no code to match on. A string test is
     ///     fragile and the alternative is worse: treating every <c>400</c> as "already there" would
     ///     turn a malformed payload into a silent success, and treating none as such would fail every
     ///     reconcile pass after the first.
@@ -267,8 +271,7 @@ public sealed class OpenBaoSecretWriter(
 
         try {
             body = await response.Content.ReadAsStringAsync(cancellationToken);
-        }
-        catch (HttpRequestException) {
+        } catch (HttpRequestException) {
             return false;
         }
 
@@ -283,10 +286,7 @@ public sealed class OpenBaoSecretWriter(
             data[pair.Key] = JsonValue.Create(pair.Value);
         }
 
-        return new JsonObject {
-            ["data"] = data,
-            ["options"] = new JsonObject { ["cas"] = 0 }
-        }.ToJsonString();
+        return new JsonObject { ["data"] = data, ["options"] = new JsonObject { ["cas"] = 0 } }.ToJsonString();
     }
 
     /// <summary>Builds the <c>kv-v2</c> write URL for a path.</summary>

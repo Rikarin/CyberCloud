@@ -5,8 +5,11 @@ using CyberCloud.Identity.Tests.Infrastructure;
 namespace CyberCloud.Identity.Tests;
 
 /// <summary>
-///     ADR-015: <i>"OpenIddict is a library: it handles the protocol, we own the stores, and the
-///     stores are grains."</i> <see cref="IApplicationGrain" /> is the store OpenIddict's application
+///     ADR-015:
+///     <i>
+///         "OpenIddict is a library: it handles the protocol, we own the stores, and the
+///         stores are grains."
+///     </i> <see cref="IApplicationGrain" /> is the store OpenIddict's application
 ///     store reads through, so these are assertions about the answers OpenIddict will get.
 /// </summary>
 /// <remarks>
@@ -172,8 +175,7 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
 
         var updated = await application.UpdateAsync(
             Valid("someone-elses-client-id") with {
-                DisplayName = "The portal, renamed",
-                RedirectUris = ["https://app.example.com/callback2"]
+                DisplayName = "The portal, renamed", RedirectUris = ["https://app.example.com/callback2"]
             }
         );
 

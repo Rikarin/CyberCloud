@@ -132,7 +132,8 @@ public sealed class ManagedClusterReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target)).ToHashSet(StringComparer.Ordinal);
+        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+            .ToHashSet(StringComparer.Ordinal);
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
 
         applied.Count.ShouldBe(3);
@@ -543,10 +544,7 @@ public sealed class ManagedClusterReconcilerTests {
     static string WithControlPlaneEndpoint(string objectJson, string host, int port) {
         var node = JsonNode.Parse(objectJson)!.AsObject();
 
-        node["spec"]!.AsObject()["controlPlaneEndpoint"] = new JsonObject {
-            ["host"] = host,
-            ["port"] = port
-        };
+        node["spec"]!.AsObject()["controlPlaneEndpoint"] = new JsonObject { ["host"] = host, ["port"] = port };
 
         return node.ToJsonString();
     }
@@ -556,11 +554,7 @@ public sealed class ManagedClusterReconcilerTests {
 
         node["status"] = new JsonObject {
             ["conditions"] = new JsonArray(
-                new JsonObject {
-                    ["type"] = "Ready",
-                    ["status"] = ready ? "True" : "False",
-                    ["message"] = message
-                }
+                new JsonObject { ["type"] = "Ready", ["status"] = ready ? "True" : "False", ["message"] = message }
             )
         };
 
@@ -594,12 +588,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
@@ -716,8 +712,11 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     Carries an existing object's <c>status</c> through an apply, as a real API server does.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>WITHOUT THIS THE FAKE IS WRONG IN THE ONE WAY THAT MATTERS TO THIS PROVIDER, AND IT
-    ///     MADE A REAL TEST GO GREEN FOR THE WRONG REASON.</b> <c>status</c> is a subresource: a
+    ///     ⚠
+    ///     <b>
+    ///         WITHOUT THIS THE FAKE IS WRONG IN THE ONE WAY THAT MATTERS TO THIS PROVIDER, AND IT
+    ///         MADE A REAL TEST GO GREEN FOR THE WRONG REASON.
+    ///     </b> <c>status</c> is a subresource: a
     ///     server-side apply of the main resource does not touch it, so a controller's report survives
     ///     every pass this reconciler makes. A dictionary that replaced the whole document would erase
     ///     the status on the apply at the top of each pass — and this is the only type in the tree
@@ -763,8 +762,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     objects that share a name across API groups, and a key without it would make the second
     ///     apply overwrite the first and every read-back return the wrong document.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

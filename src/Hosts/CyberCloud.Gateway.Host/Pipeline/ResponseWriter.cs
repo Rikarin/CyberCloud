@@ -8,8 +8,11 @@ namespace CyberCloud.Gateway.Host.Pipeline;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One writer is what makes three rules hold on every response rather than on most of
-///         them.</b> docs/plan/10 § Request pipeline puts <c>x-cybercloud-request-id</c> on every
+///         ⚠
+///         <b>
+///             One writer is what makes three rules hold on every response rather than on most of
+///             them.
+///         </b> docs/plan/10 § Request pipeline puts <c>x-cybercloud-request-id</c> on every
 ///         response; docs/plan/08 § Errors bans exception detail in every body; docs/plan/10
 ///         § Rate limiting wants the remaining-budget headers on successes as well as on the
 ///         <c>429</c>. Each of those is trivially true here and would be nine separate acts of care
@@ -18,8 +21,11 @@ namespace CyberCloud.Gateway.Host.Pipeline;
 ///     <para>
 ///         ⚠ <b>An error body is rendered by <see cref="ErrorBody" /> and cannot be anything else.</b>
 ///         The outcome carries an <see cref="Error" />, not a string, so there is no path by which a
-///         caught exception's <c>ToString()</c> reaches a caller — docs/plan/08 § Errors, <i>"No
-///         exception details, ever"</i>.
+///         caught exception's <c>ToString()</c> reaches a caller — docs/plan/08 § Errors,
+///         <i>
+///             "No
+///             exception details, ever"
+///         </i>.
 ///     </para>
 /// </remarks>
 static class ResponseWriter {

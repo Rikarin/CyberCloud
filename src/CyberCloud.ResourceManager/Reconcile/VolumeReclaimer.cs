@@ -10,8 +10,11 @@ namespace CyberCloud.ResourceManager.Reconcile;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS IS THE ONE PLACE IN THE PLATFORM THAT IS SUPPOSED TO DESTROY A TENANT'S DATA,
-///         WHICH MAKES PRECISION THE WHOLE JOB.</b> Everywhere else a wrong delete costs an object
+///         ⚠
+///         <b>
+///             THIS IS THE ONE PLACE IN THE PLATFORM THAT IS SUPPOSED TO DESTROY A TENANT'S DATA,
+///             WHICH MAKES PRECISION THE WHOLE JOB.
+///         </b> Everywhere else a wrong delete costs an object
 ///         that a reconcile pass puts back. Here there is nothing to put back: a
 ///         <c>PersistentVolumeClaim</c> removed under a <c>Delete</c> reclaim policy takes the
 ///         volume with it and the data is gone with no recovery. So this class never acts on a name.
@@ -21,13 +24,19 @@ namespace CyberCloud.ResourceManager.Reconcile;
 ///         disagreed — the moment one does not match.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Four refusals happen before a single read, and they are refusals rather than
-///         filters.</b> A claim addressed at the wrong kind, in the wrong namespace, with no name, or
+///         ⚠
+///         <b>
+///             Four refusals happen before a single read, and they are refusals rather than
+///             filters.
+///         </b> A claim addressed at the wrong kind, in the wrong namespace, with no name, or
 ///         with no ownership evidence is a provider getting it wrong in a way that a silent skip
 ///         would hide until an operator went looking for the disks. Each is a purge that fails with
-///         a reason, which is the actionable outcome — docs/plan/08 § The reconcile loop's <i>"a
-///         resource stuck forever is worse than a resource that failed, because a failure is
-///         actionable"</i>, applied to the one step whose mistakes are permanent.
+///         a reason, which is the actionable outcome — docs/plan/08 § The reconcile loop's
+///         <i>
+///             "a
+///             resource stuck forever is worse than a resource that failed, because a failure is
+///             actionable"
+///         </i>, applied to the one step whose mistakes are permanent.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Absence converges and is not an error.</b> A claim that is already gone is the
@@ -169,7 +178,7 @@ public static class VolumeReclaimer {
                 // ⚠ Background. A claim's dependents are the volume beneath it, which the
                 // StorageClass's reclaim policy disposes of on its own schedule and which no pass of
                 // ours can wait for.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
                 return ReconcileOutcome.Failed(deleteError, true);
@@ -272,8 +281,7 @@ public static class VolumeReclaimer {
 
         try {
             root = JsonNode.Parse(json);
-        }
-        catch (JsonException error) {
+        } catch (JsonException error) {
             return new(
                 ErrorCode.InternalError,
                 $"The API server's copy of '{volume.Claim}' did not parse as JSON, so its ownership "
@@ -342,6 +350,5 @@ public static class VolumeReclaimer {
     static string Count(int volumes) =>
         volumes == 1 ? "1 volume" : $"{volumes.ToString(System.Globalization.CultureInfo.InvariantCulture)} volumes";
 
-    static string Names(ImmutableArray<RetainedVolume> volumes) =>
-        string.Join(", ", volumes.Select(x => x.Claim.Name));
+    static string Names(ImmutableArray<RetainedVolume> volumes) => string.Join(", ", volumes.Select(x => x.Claim.Name));
 }

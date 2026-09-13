@@ -1,7 +1,4 @@
 using CyberCloud.Core.Time;
-using k8s;
-using k8s.Autorest;
-using k8s.Models;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Net;
@@ -9,6 +6,9 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Security.Authentication;
 using System.Text.Json;
+using k8s;
+using k8s.Autorest;
+using k8s.Models;
 
 namespace CyberCloud.Kubernetes.Apply;
 
@@ -113,21 +113,21 @@ public sealed class KubeApiClient(
         try {
             using var response = target.IsClusterScoped
                 ? await client.CustomObjects.GetClusterCustomObjectWithHttpMessagesAsync(
-                        target.Kind.Group,
-                        target.Kind.Version,
-                        target.Kind.Plural,
-                        target.Name,
-                        cancellationToken: cancellationToken
-                    )
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Kind.Plural,
+                    target.Name,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false)
                 : await client.CustomObjects.GetNamespacedCustomObjectWithHttpMessagesAsync(
-                        target.Kind.Group,
-                        target.Kind.Version,
-                        target.Namespace,
-                        target.Kind.Plural,
-                        target.Name,
-                        cancellationToken: cancellationToken
-                    )
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Namespace,
+                    target.Kind.Plural,
+                    target.Name,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false);
 
             var json = Serialize(response.Body);
@@ -196,27 +196,27 @@ public sealed class KubeApiClient(
         try {
             using var response = target.IsClusterScoped
                 ? await client.CustomObjects.PatchClusterCustomObjectWithHttpMessagesAsync(
-                        body,
-                        target.Kind.Group,
-                        target.Kind.Version,
-                        target.Kind.Plural,
-                        target.Name,
-                        fieldManager: command.FieldManager,
-                        force: command.Force,
-                        cancellationToken: cancellationToken
-                    )
+                    body,
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Kind.Plural,
+                    target.Name,
+                    fieldManager: command.FieldManager,
+                    force: command.Force,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false)
                 : await client.CustomObjects.PatchNamespacedCustomObjectWithHttpMessagesAsync(
-                        body,
-                        target.Kind.Group,
-                        target.Kind.Version,
-                        target.Namespace,
-                        target.Kind.Plural,
-                        target.Name,
-                        fieldManager: command.FieldManager,
-                        force: command.Force,
-                        cancellationToken: cancellationToken
-                    )
+                    body,
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Namespace,
+                    target.Kind.Plural,
+                    target.Name,
+                    fieldManager: command.FieldManager,
+                    force: command.Force,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false);
 
             var json = Serialize(response.Body);
@@ -300,23 +300,23 @@ public sealed class KubeApiClient(
         try {
             using var response = target.IsClusterScoped
                 ? await client.CustomObjects.DeleteClusterCustomObjectWithHttpMessagesAsync(
-                        target.Kind.Group,
-                        target.Kind.Version,
-                        target.Kind.Plural,
-                        target.Name,
-                        propagationPolicy: propagation,
-                        cancellationToken: cancellationToken
-                    )
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Kind.Plural,
+                    target.Name,
+                    propagationPolicy: propagation,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false)
                 : await client.CustomObjects.DeleteNamespacedCustomObjectWithHttpMessagesAsync(
-                        target.Kind.Group,
-                        target.Kind.Version,
-                        target.Namespace,
-                        target.Kind.Plural,
-                        target.Name,
-                        propagationPolicy: propagation,
-                        cancellationToken: cancellationToken
-                    )
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Namespace,
+                    target.Kind.Plural,
+                    target.Name,
+                    propagationPolicy: propagation,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false);
 
             return Result.Success;
@@ -354,11 +354,11 @@ public sealed class KubeApiClient(
         // stop covering whatever was added — which on this path reads as "the namespace does not
         // hold any of those".
         var core = await ReadAsync(
-                "v1",
-                () => client.CoreV1.GetAPIResourcesWithHttpMessagesAsync(cancellationToken: cancellationToken),
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+            "v1",
+            () => client.CoreV1.GetAPIResourcesWithHttpMessagesAsync(cancellationToken: cancellationToken),
+            cancellationToken
+        )
+                .ConfigureAwait(false);
 
         if (core.TryGetError(out var coreError)) {
             return Result<IReadOnlyList<GroupVersionKind>>.Failure(coreError);
@@ -393,15 +393,15 @@ public sealed class KubeApiClient(
             }
 
             var listed = await ReadAsync(
-                    group.Name + "/" + version,
-                    () => client.CustomObjects.GetAPIResourcesWithHttpMessagesAsync(
-                        group.Name,
-                        version,
-                        cancellationToken: cancellationToken
-                    ),
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+                group.Name + "/" + version,
+                () => client.CustomObjects.GetAPIResourcesWithHttpMessagesAsync(
+                    group.Name,
+                    version,
+                    cancellationToken: cancellationToken
+                ),
+                cancellationToken
+            )
+                    .ConfigureAwait(false);
 
             if (listed.TryGetError(out var groupError)) {
                 // ⚠ THE WHOLE DISCOVERY FAILS, AND THE COMMONEST CAUSE IS A GROUP NOBODY MISSES.
@@ -429,8 +429,7 @@ public sealed class KubeApiClient(
 
     /// <summary>The object a discovery refusal is reported against. There is no single object.</summary>
     static ObjectRef DiscoveryRef { get; } = new() {
-        Kind = new() { Group = "", Version = "v1", Kind = "APIResourceList", Plural = "apiresources" },
-        Name = "*"
+        Kind = new() { Group = "", Version = "v1", Kind = "APIResourceList", Plural = "apiresources" }, Name = "*"
     };
 
     /// <summary>
@@ -509,27 +508,27 @@ public sealed class KubeApiClient(
         try {
             using var response = string.IsNullOrEmpty(ns)
                 ? await client.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
-                        kind.Group,
-                        kind.Version,
-                        kind.Plural,
-                        continueParameter: continueToken,
-                        labelSelector: selector,
-                        limit: limit ?? DefaultListPageSize,
-                        resourceVersion: resourceVersion,
-                        cancellationToken: cancellationToken
-                    )
+                    kind.Group,
+                    kind.Version,
+                    kind.Plural,
+                    continueParameter: continueToken,
+                    labelSelector: selector,
+                    limit: limit ?? DefaultListPageSize,
+                    resourceVersion: resourceVersion,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false)
                 : await client.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
-                        kind.Group,
-                        kind.Version,
-                        ns,
-                        kind.Plural,
-                        continueParameter: continueToken,
-                        labelSelector: selector,
-                        limit: limit ?? DefaultListPageSize,
-                        resourceVersion: resourceVersion,
-                        cancellationToken: cancellationToken
-                    )
+                    kind.Group,
+                    kind.Version,
+                    ns,
+                    kind.Plural,
+                    continueParameter: continueToken,
+                    labelSelector: selector,
+                    limit: limit ?? DefaultListPageSize,
+                    resourceVersion: resourceVersion,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false);
 
             // ⚠ A BODY THAT WILL NOT PARSE IS A FAILURE AND NOT AN EMPTY PAGE. It used to be the
@@ -643,8 +642,11 @@ public sealed class KubeApiClient(
     /// <param name="newVersion">The <c>resourceVersion</c> after it.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The <c>resourceVersion</c> comparison this replaced answered a different
-    ///         question</b> — "did anyone write between our read and our write" — and any other
+    ///         ⚠
+    ///         <b>
+    ///             The <c>resourceVersion</c> comparison this replaced answered a different
+    ///             question
+    ///         </b> — "did anyone write between our read and our write" — and any other
     ///         writer inside that window made it wrong. Against a real k3s on an idle machine,
     ///         creating a <c>Deployment</c> and immediately re-applying the identical body reported
     ///         <see cref="ApplyResult.Updated" /> 4 times in 20, because the deployment controller
@@ -829,11 +831,16 @@ public sealed class KubeApiClient(
     ///         object and must not be reported to a tenant as "cannot reach your cluster".
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The "any 5xx" arm is wrong for one measured case and <see cref="KubeFailures" />
-    ///         carves it out before this predicate is consulted.</b> An apply whose body will not
+    ///         ⚠
+    ///         <b>
+    ///             The "any 5xx" arm is wrong for one measured case and <see cref="KubeFailures" />
+    ///             carves it out before this predicate is consulted.
+    ///         </b> An apply whose body will not
     ///         type-check — <c>.spec.replicas: "lots"</c> — comes back <b>500</b>, not 400:
-    ///         <c>failed to create typed patch object (…): expected numeric (int or float), got
-    ///         string</c>. Left to this predicate it reports as "cluster … did not answer", which is
+    ///         <c>
+    /// failed to create typed patch object (…): expected numeric (int or float), got
+    ///         string
+    ///         </c>. Left to this predicate it reports as "cluster … did not answer", which is
     ///         the exact outcome the paragraph above promises cannot happen. Verified against k3s
     ///         1.35 in <c>KubeFailureMappingTests</c>.
     ///     </para>

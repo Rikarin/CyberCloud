@@ -12,8 +12,11 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE PRODUCT IS AN INTERACTIVE SESSION AND A RESOURCE IS A CONVERGED OBJECT, AND
-///         EVERY DECISION BELOW IS THE SEAM BETWEEN THOSE TWO SENTENCES.</b> Eleven families before
+///         ⚠
+///         <b>
+///             THE PRODUCT IS AN INTERACTIVE SESSION AND A RESOURCE IS A CONVERGED OBJECT, AND
+///             EVERY DECISION BELOW IS THE SEAM BETWEEN THOSE TWO SENTENCES.
+///         </b> Eleven families before
 ///         this one reconcile a resource to a desired state and leave it: the tenant buys a thing that
 ///         keeps existing. A console is created, attached to, idled out and re-created, and the states
 ///         a person cares about are <i>attached</i> and <i>idle</i> — neither of which a reconciler
@@ -37,11 +40,15 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 ///             </description>
 ///         </item>
 ///         <item>
-///             <term><see cref="ServiceAccountRef" /></term>
+///             <term>
+///                 <see cref="ServiceAccountRef" />
+///             </term>
 ///             <description>The reconciler. Absent means the pod has no identity to run under.</description>
 ///         </item>
 ///         <item>
-///             <term><see cref="NetworkPolicyRef" /></term>
+///             <term>
+///                 <see cref="NetworkPolicyRef" />
+///             </term>
 ///             <description>
 ///                 The reconciler. ⚠ Absent means the shell reaches <b>everything</b> the cluster's
 ///                 default posture allows — see <see cref="NetworkPolicyJson" />, which is where this
@@ -49,7 +56,9 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 ///             </description>
 ///         </item>
 ///         <item>
-///             <term><see cref="PodRef" /></term>
+///             <term>
+///                 <see cref="PodRef" />
+///             </term>
 ///             <description>
 ///                 ⚠ <b>The <c>connect</c> action, and NEVER the reconciler.</b> Absent is the
 ///                 <i>ordinary, correct, billable-to-nobody</i> state of a console nobody is using. A
@@ -60,8 +69,11 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>SO <see cref="ReconcileOutcome.Converged" /> ON THIS TYPE MEANS "THE CONSOLE CAN BE
-///         ATTACHED TO", NOT "SOMEBODY IS ATTACHED".</b> The reconciler reads back the three durable
+///         ⚠
+///         <b>
+///             SO <see cref="ReconcileOutcome.Converged" /> ON THIS TYPE MEANS "THE CONSOLE CAN BE
+///             ATTACHED TO", NOT "SOMEBODY IS ATTACHED".
+///         </b> The reconciler reads back the three durable
 ///         objects and nothing else. It reads no <c>status</c> anywhere, which is deliberate and is
 ///         the lesson of the one type that does: <c>ManagedClusterReconciler</c> is the only
 ///         reconciler in the tree whose <c>Converged</c> reads a <c>status</c>, and doing so named a
@@ -69,8 +81,11 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 ///         status onto, which converges because neither conformance harness can produce anything else.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A <c>PersistentVolumeClaim</c> WOULD HAVE WALKED INTO THAT HOLE ON ITS FIRST DAY, AND
-///         THE SUBSTRATE IS WHY.</b> The obvious readiness gate for this row is
+///         ⚠
+///         <b>
+///             A <c>PersistentVolumeClaim</c> WOULD HAVE WALKED INTO THAT HOLE ON ITS FIRST DAY, AND
+///             THE SUBSTRATE IS WHY.
+///         </b> The obvious readiness gate for this row is
 ///         <c>status.phase == "Bound"</c>. It is unimplementable: the default provisioner in k3s —
 ///         which is what the cluster-backed suite runs, and what docs/plan/09 stands the bootstrap
 ///         cluster up on — binds with <c>volumeBindingMode: WaitForFirstConsumer</c>, so a claim with
@@ -88,21 +103,30 @@ namespace CyberCloud.Providers.Terminal.Contracts;
 ///         ⚠ <b>ONE CONSOLE IS ONE PRINCIPAL, AND docs/plan/19 IS CORRECTED ON HOW.</b> That document
 ///         says the pod runs as <i>"the invoking user's managed identity"</i> and gives the home volume
 ///         the name <c>home-{userId}</c>. Neither is expressible: a resource in this platform is
-///         addressed by (tenant, subscription, resource group, name) and has <b>no user dimension at
-///         all</b> — docs/plan/06 § The hierarchy — and an action handler cannot see who invoked it,
+///         addressed by (tenant, subscription, resource group, name) and has
+///         <b>
+///             no user dimension at
+///             all
+///         </b> — docs/plan/06 § The hierarchy — and an action handler cannot see who invoked it,
 ///         because <see cref="ActionContext" /> carries no <c>CallerContext</c>. So the identity is a
 ///         <i>property of the console</i>, <see cref="PrincipalIdPointer" />, immutable after create,
 ///         and the home volume is the console's own. What that buys is that "the shell runs as you" is
 ///         true by construction for a console you created; what it does not buy is enforcement that
 ///         the caller of <c>connect</c> is that principal, which is
 ///         <c>conformance.yaml § owed</c>, <c>connect-cannot-see-its-caller</c>. ⚠ Until that closes,
-///         the honest description of the ReBAC posture is: <b>anyone who may <c>connect</c> to a
-///         console gets a shell holding that console's identity.</b> One console per user is a
+///         the honest description of the ReBAC posture is:
+///         <b>
+///             anyone who may <c>connect</c> to a
+///             console gets a shell holding that console's identity.
+///         </b> One console per user is a
 ///         convention the portal follows, not a fact the schema enforces.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT THE PORTAL NEEDS FROM THIS TYPE IS <see cref="ConnectResponse" /> AND NOTHING
-///         ELSE.</b> docs/plan/20 § The pages that are not generated budgets 0.4 EM for
+///         ⚠
+///         <b>
+///             WHAT THE PORTAL NEEDS FROM THIS TYPE IS <see cref="ConnectResponse" /> AND NOTHING
+///             ELSE.
+///         </b> docs/plan/20 § The pages that are not generated budgets 0.4 EM for
 ///         <c>xterm.js</c> in a dockable panel and nobody had written down what it talks to. It is:
 ///         <c>POST …/connect</c> → the five fields of <see cref="ConnectResponse" />, then
 ///         <c>/hubs/terminal</c> with the returned <see cref="SessionIdField" />. The hub is already
@@ -143,8 +167,11 @@ public static class CloudConsoles {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>SYNCHRONOUS WITH A HANDLER, AND THE OTHER TWO KINDS ARE BOTH WRONG HERE RATHER
-    ///         THAN MERELY WORSE.</b> A <b>long-running</b> action answers <c>202</c> and re-runs the
+    ///         ⚠
+    ///         <b>
+    ///             SYNCHRONOUS WITH A HANDLER, AND THE OTHER TWO KINDS ARE BOTH WRONG HERE RATHER
+    ///             THAN MERELY WORSE.
+    ///         </b> A <b>long-running</b> action answers <c>202</c> and re-runs the
     ///         type's reconciler through <c>OperationGrain</c> — which on this type would converge the
     ///         three durable objects and never start a pod, so the caller would poll an operation to
     ///         success and still have no shell. A <b>synchronous action with no handler</b> is refused
@@ -172,8 +199,11 @@ public static class CloudConsoles {
 
     /// <summary><c>POST …/consoles/{name}/terminate</c> — end the session now.</summary>
     /// <remarks>
-    ///     ⚠ <b>The manual half of the idle policy, and it exists because the automatic half is
-    ///     owed.</b> docs/plan/19 gives the pod a 20-minute idle timeout enforced by the session
+    ///     ⚠
+    ///     <b>
+    ///         The manual half of the idle policy, and it exists because the automatic half is
+    ///         owed.
+    ///     </b> docs/plan/19 gives the pod a 20-minute idle timeout enforced by the session
     ///     grain, and that grain is not built. Until it is, this action is the only thing in the
     ///     platform that can stop a console's pod on purpose — <see cref="MaxDurationHoursPointer" />
     ///     is the only one that can stop it by accident. Both are named on this type rather than left
@@ -215,8 +245,11 @@ public static class CloudConsoles {
     /// <summary>The shell pod's object name, and the service account's.</summary>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>ONE POD PER CONSOLE, NAMED DETERMINISTICALLY, AND THAT IS WHAT MAKES <c>connect</c>
-    ///     IDEMPOTENT.</b> A second <c>connect</c> while a shell is running applies the same object
+    ///     ⚠
+    ///     <b>
+    ///         ONE POD PER CONSOLE, NAMED DETERMINISTICALLY, AND THAT IS WHAT MAKES <c>connect</c>
+    ///         IDEMPOTENT.
+    ///     </b> A second <c>connect</c> while a shell is running applies the same object
     ///     and gets it back unchanged, so re-joining a live session and starting a new one are the
     ///     same call. A generated per-attach name would make the second browser tab a second pod and a
     ///     second bill.
@@ -267,8 +300,11 @@ public static class CloudConsoles {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>NOTHING IN THIS REPOSITORY BUILDS THIS IMAGE, AND THE BUILD TARGET THAT WOULD IS
-    ///         BOTH UNABLE AND FORBIDDEN TO.</b> <c>build/Build.Images.cs</c> publishes
+    ///         ⚠
+    ///         <b>
+    ///             NOTHING IN THIS REPOSITORY BUILDS THIS IMAGE, AND THE BUILD TARGET THAT WOULD IS
+    ///             BOTH UNABLE AND FORBIDDEN TO.
+    ///         </b> <c>build/Build.Images.cs</c> publishes
     ///         <b>everything under <c>src/Hosts</c> that is publishable</b>, through
     ///         <c>dotnet publish -t:PublishContainer</c>, and its header says in as many words:
     ///         <i>"THERE IS NO DOCKERFILE IN THIS REPOSITORY, AND THERE MUST NOT BE ONE."</i> That
@@ -281,9 +317,15 @@ public static class CloudConsoles {
     ///         <c>charts/managed/cloud-shell/conformance.yaml § owed</c>, <c>no-image-pipeline</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What is decided here is only the reference, and it is a DIGEST rather than a
-    ///         tag</b>, because docs/plan/18 § Platform security says <i>"a pinned digest, never a
-    ///         tag"</i> and because a shell image resolved by tag would let a registry change what
+    ///         ⚠
+    ///         <b>
+    ///             What is decided here is only the reference, and it is a DIGEST rather than a
+    ///             tag
+    ///         </b>, because docs/plan/18 § Platform security says
+    ///         <i>
+    ///             "a pinned digest, never a
+    ///             tag"
+    ///         </i> and because a shell image resolved by tag would let a registry change what
     ///         every tenant's terminal is, silently, between two attaches of one session.
     ///     </para>
     /// </remarks>
@@ -292,8 +334,11 @@ public static class CloudConsoles {
     /// <summary>The two variants of docs/plan/19 § The image, and the digest each resolves to.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE DIGESTS ARE PLACEHOLDERS AND THEY ARE SPELLED SO THAT NOTHING CAN MISTAKE
-    ///         THEM FOR REAL ONES.</b> There is no image to take a digest of — see
+    ///         ⚠
+    ///         <b>
+    ///             THE DIGESTS ARE PLACEHOLDERS AND THEY ARE SPELLED SO THAT NOTHING CAN MISTAKE
+    ///             THEM FOR REAL ONES.
+    ///         </b> There is no image to take a digest of — see
     ///         <see cref="ImageRepository" /> — and a plausible-looking 64 hex characters here would
     ///         be a reference that fails to pull at the worst possible moment with nothing in the tree
     ///         to say why. <c>ConsoleDeclarationTests.TheImageDigestsAreVisiblyPlaceholders</c> asserts
@@ -302,8 +347,11 @@ public static class CloudConsoles {
     ///     </para>
     ///     <para>
     ///         ⚠ <b><c>minimal</c> exists for a reason about people rather than about bytes.</b>
-    ///         docs/plan/19: <i>"a 40-second cold start for someone who wants to run one command is
-    ///         the wrong trade"</i>. It is not the default, because a shell that lacks the tool you
+    ///         docs/plan/19:
+    ///         <i>
+    ///             "a 40-second cold start for someone who wants to run one command is
+    ///             the wrong trade"
+    ///         </i>. It is not the default, because a shell that lacks the tool you
     ///         need is worthless and the tenant who wants one command knows they do.
     ///     </para>
     /// </remarks>
@@ -315,8 +363,7 @@ public static class CloudConsoles {
 
     /// <summary>The image reference for a body's chosen variant.</summary>
     /// <param name="desired">The desired body.</param>
-    public static string Image(JsonElement desired) =>
-        ImageRepository + "@" + ImageDigests[ImageVariant(desired)];
+    public static string Image(JsonElement desired) => ImageRepository + "@" + ImageDigests[ImageVariant(desired)];
 
     // ── Sizing ────────────────────────────────────────────────────────────────────────────────
 
@@ -337,9 +384,7 @@ public static class CloudConsoles {
     /// </remarks>
     public static FrozenDictionary<string, (string Cpu, string Memory)> Presets { get; } =
         new Dictionary<string, (string Cpu, string Memory)>(StringComparer.Ordinal) {
-            ["c1.small"] = ("500m", "1Gi"),
-            ["c1.medium"] = ("1", "2Gi"),
-            ["c1.large"] = ("2", "4Gi")
+            ["c1.small"] = ("500m", "1Gi"), ["c1.medium"] = ("1", "2Gi"), ["c1.large"] = ("2", "4Gi")
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The CPU and memory a body's preset asks for.</summary>
@@ -351,8 +396,11 @@ public static class CloudConsoles {
     ///     The ephemeral storage a shell may use outside its home volume.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A CONSTANT AND NOT A SETTING, AND IT IS THE ONLY THING BETWEEN A <c>git clone</c> IN
-    ///     <c>/tmp</c> AND A FULL NODE.</b> docs/plan/19 § The pod asks for "ephemeral storage capped"
+    ///     ⚠
+    ///     <b>
+    ///         A CONSTANT AND NOT A SETTING, AND IT IS THE ONLY THING BETWEEN A <c>git clone</c> IN
+    ///         <c>/tmp</c> AND A FULL NODE.
+    ///     </b> docs/plan/19 § The pod asks for "ephemeral storage capped"
     ///     without a number. It is not a tenant choice because the failure it prevents is the
     ///     <i>node's</i> rather than the tenant's: an unbounded <c>emptyDir</c> fills the kubelet's
     ///     disk and evicts every pod on the machine, including other tenants'.
@@ -371,8 +419,11 @@ public static class CloudConsoles {
     ///     The annotation the idle reaper reads the timeout from.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>AN ANNOTATION ON THE POD RATHER THAN A NUMBER THE REAPER LOOKS UP, BECAUSE THE REAPER
-    ///     DOES NOT EXIST YET AND SOMETHING HAD TO OUTLIVE THAT.</b> A sweeper that had to resolve
+    ///     ⚠
+    ///     <b>
+    ///         AN ANNOTATION ON THE POD RATHER THAN A NUMBER THE REAPER LOOKS UP, BECAUSE THE REAPER
+    ///         DOES NOT EXIST YET AND SOMETHING HAD TO OUTLIVE THAT.
+    ///     </b> A sweeper that had to resolve
     ///     every pod back to a resource body to learn its timeout would be a sweeper that cannot run
     ///     without the resource manager; carrying the number on the object makes the reclaim decision
     ///     a property of the cluster, readable by <c>kubectl</c> and by whatever eventually sweeps.
@@ -382,8 +433,11 @@ public static class CloudConsoles {
     /// <summary>The annotation that says whether this session is being recorded.</summary>
     /// <remarks>
     ///     ⚠ On the pod so that it is visible from inside the cluster to an operator holding
-    ///     <c>kubectl</c> and nothing else. docs/plan/19 § Auditing wants recording to be <i>"loud in
-    ///     the UI when it is on"</i>; this is the same fact one layer down, where a person debugging a
+    ///     <c>kubectl</c> and nothing else. docs/plan/19 § Auditing wants recording to be
+    ///     <i>
+    ///         "loud in
+    ///         the UI when it is on"
+    ///     </i>; this is the same fact one layer down, where a person debugging a
     ///     tenant's shell can see it without asking the API.
     /// </remarks>
     public const string RecordingAnnotation = "cybercloud.io/session-recording";
@@ -391,8 +445,11 @@ public static class CloudConsoles {
     /// <summary>How long a shell may run before the kubelet stops it, in seconds.</summary>
     /// <param name="desired">The desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>THIS IS THE ONLY HALF OF docs/plan/19's SESSION POLICY THAT IS ENFORCED BY ANYTHING
-    ///     TODAY, AND IT IS ENFORCED BY THE KUBELET.</b> Rendered into <c>spec.activeDeadlineSeconds</c>,
+    ///     ⚠
+    ///     <b>
+    ///         THIS IS THE ONLY HALF OF docs/plan/19's SESSION POLICY THAT IS ENFORCED BY ANYTHING
+    ///         TODAY, AND IT IS ENFORCED BY THE KUBELET.
+    ///     </b> Rendered into <c>spec.activeDeadlineSeconds</c>,
     ///     it is a promise the cluster keeps with no platform component running at all: a console whose
     ///     session grain died, whose silo moved, or whose reaper was never written still stops burning
     ///     CPU at the cap. The <i>idle</i> timeout cannot be expressed this way and is not — a kubelet
@@ -409,8 +466,11 @@ public static class CloudConsoles {
 
     /// <summary>The two egress postures.</summary>
     /// <remarks>
-    ///     ⚠ <b>DECLARED ABOVE <see cref="Schema2026" /> AND IT HAS TO BE, WHICH IS A C# HAZARD RATHER
-    ///     THAN A STYLE PREFERENCE.</b> Static field initialisers run in <b>declaration order</b>, so
+    ///     ⚠
+    ///     <b>
+    ///         DECLARED ABOVE <see cref="Schema2026" /> AND IT HAS TO BE, WHICH IS A C# HAZARD RATHER
+    ///         THAN A STYLE PREFERENCE.
+    ///     </b> Static field initialisers run in <b>declaration order</b>, so
     ///     a collection this schema's <c>AllowedValues</c> reads must be initialised first. It was
     ///     declared below, once, and the consequence was not a crash: the enum was silently
     ///     <b>empty</b>, so the schema accepted any string at
@@ -425,8 +485,7 @@ public static class CloudConsoles {
 
     /// <summary>Whether this console records what is typed into it.</summary>
     /// <param name="desired">The desired body.</param>
-    public static bool SessionRecording(JsonElement desired) =>
-        Flag(desired, "audit", "sessionRecording", false);
+    public static bool SessionRecording(JsonElement desired) => Flag(desired, "audit", "sessionRecording", false);
 
     // ── Reading the body ──────────────────────────────────────────────────────────────────────
 
@@ -439,8 +498,7 @@ public static class CloudConsoles {
 
     /// <summary>The sizing preset a body chose.</summary>
     /// <param name="desired">The desired body.</param>
-    public static string SizingPreset(JsonElement desired) =>
-        Text(desired, "sizing", "preset", DefaultPreset);
+    public static string SizingPreset(JsonElement desired) => Text(desired, "sizing", "preset", DefaultPreset);
 
     /// <summary>The home volume's size.</summary>
     /// <param name="desired">The desired body.</param>
@@ -453,13 +511,11 @@ public static class CloudConsoles {
 
     /// <summary>Whether the shell may reach anything outside the cluster.</summary>
     /// <param name="desired">The desired body.</param>
-    public static string EgressMode(JsonElement desired) =>
-        Text(desired, "network", "egress", DefaultEgress);
+    public static string EgressMode(JsonElement desired) => Text(desired, "network", "egress", DefaultEgress);
 
     /// <summary>The principal the shell runs as.</summary>
     /// <param name="desired">The desired body.</param>
-    public static string PrincipalId(JsonElement desired) =>
-        Text(desired, "identity", "principalId", string.Empty);
+    public static string PrincipalId(JsonElement desired) => Text(desired, "identity", "principalId", string.Empty);
 
     // ── The schema ────────────────────────────────────────────────────────────────────────────
 
@@ -500,11 +556,7 @@ public static class CloudConsoles {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the shell and its home volume."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── Identity ───────────────────────────────────────────────────────────────────
                 new(
@@ -519,10 +571,7 @@ public static class CloudConsoles {
                     Description: "The managed identity every command in this shell acts as. It may "
                     + "not be changed: a console whose identity moved would have an audit trail "
                     + "describing a shell that no longer exists."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Immutable = true },
 
                 // ── The image ──────────────────────────────────────────────────────────────────
                 new("/properties/image", SchemaKind.Nested, Description: "Which shell image to run."),
@@ -564,22 +613,14 @@ public static class CloudConsoles {
                     Required: true,
                     Description: "The size of $HOME. It grows and never shrinks: a PersistentVolumeClaim "
                     + "refuses a decrease at the API."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"" + DefaultHomeSize + "\"",
-                    ExampleJson = "\"5Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"" + DefaultHomeSize + "\"", ExampleJson = "\"5Gi\"" },
                 new(
                     "/properties/home/retentionDays",
                     SchemaKind.WholeNumber,
                     Description: "How long $HOME is kept after the console was last attached to. "
                     + "⚠ Nothing sweeps on it yet — it is carried so that a console created today is "
                     + "swept correctly by whatever does."
-                ) {
-                    Minimum = 1,
-                    Maximum = 365,
-                    DefaultJson = "90"
-                },
+                ) { Minimum = 1, Maximum = 365, DefaultJson = "90" },
 
                 // ── The session ────────────────────────────────────────────────────────────────
                 new(
@@ -594,22 +635,14 @@ public static class CloudConsoles {
                     Description: "How long a shell may sit with nobody typing into it before it is "
                     + "reclaimed. The home volume survives; the pod does not. ⚠ There is no value "
                     + "meaning never — an idle terminal is a tenant paying for something they closed."
-                ) {
-                    Minimum = 5,
-                    Maximum = 120,
-                    DefaultJson = "20"
-                },
+                ) { Minimum = 5, Maximum = 120, DefaultJson = "20" },
                 new(
                     MaxDurationHoursPointer,
                     SchemaKind.WholeNumber,
                     Description: "The longest a single shell may run, busy or not. Enforced by the "
                     + "kubelet through the pod's own deadline, so it holds even when nothing of this "
                     + "platform is running."
-                ) {
-                    Minimum = 1,
-                    Maximum = 24,
-                    DefaultJson = "8"
-                },
+                ) { Minimum = 1, Maximum = 24, DefaultJson = "8" },
 
                 // ── The network ────────────────────────────────────────────────────────────────
                 new(
@@ -623,10 +656,7 @@ public static class CloudConsoles {
                     Description: "Internet lets the shell reach public addresses as well as this "
                     + "subscription's own workloads and DNS — a shell that cannot git clone is not a "
                     + "shell. TenantOnly removes the public half and leaves the rest."
-                ) {
-                    AllowedValues = EgressModes,
-                    DefaultJson = "\"" + DefaultEgress + "\""
-                },
+                ) { AllowedValues = EgressModes, DefaultJson = "\"" + DefaultEgress + "\"" },
 
                 // ── Auditing ───────────────────────────────────────────────────────────────────
                 new(
@@ -642,17 +672,17 @@ public static class CloudConsoles {
                     + "⚠ Off by default and immutable afterwards: a shell contains secrets, a keystroke "
                     + "log is a liability, and a recording that could be switched off mid-life would be "
                     + "worth nothing to the compliance requirement it exists for."
-                ) {
-                    Immutable = true,
-                    DefaultJson = "false"
-                }
+                ) { Immutable = true, DefaultJson = "false" }
             ]
         );
 
     /// <summary>What <see cref="ConnectAction" /> answers with.</summary>
     /// <remarks>
-    ///     ⚠ <b>THIS IS THE CONTRACT docs/plan/20's TERMINAL PANEL IS BUILT AGAINST AND NOBODY HAD
-    ///     WRITTEN IT DOWN.</b> Five fields, and each is there because the panel cannot proceed
+    ///     ⚠
+    ///     <b>
+    ///         THIS IS THE CONTRACT docs/plan/20's TERMINAL PANEL IS BUILT AGAINST AND NOBODY HAD
+    ///         WRITTEN IT DOWN.
+    ///     </b> Five fields, and each is there because the panel cannot proceed
     ///     without it: the hub to open, the session to name on it, and three numbers the panel must
     ///     show a person rather than discover by being disconnected.
     /// </remarks>
@@ -734,8 +764,7 @@ public static class CloudConsoles {
     public const string HubPath = "/hubs/terminal";
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── Rendering ─────────────────────────────────────────────────────────────────────────────
 
@@ -743,11 +772,17 @@ public static class CloudConsoles {
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>NO <c>storageClassName</c>, AND THAT IS A DECISION WITH A CONSEQUENCE THIS ROW CANNOT
-    ///     ESCAPE.</b> Omitting it takes the cluster's default class, which is the only portable
+    ///     ⚠
+    ///     <b>
+    ///         NO <c>storageClassName</c>, AND THAT IS A DECISION WITH A CONSEQUENCE THIS ROW CANNOT
+    ///         ESCAPE.
+    ///     </b> Omitting it takes the cluster's default class, which is the only portable
     ///     answer — the platform does not install a storage class and docs/plan/09's bundle does not
-    ///     name one. The consequence is that <b>a console's delete is irreversible whatever this
-    ///     provider does</b>: <c>persistentVolumeReclaimPolicy</c> lives on the PersistentVolume and
+    ///     name one. The consequence is that
+    ///     <b>
+    ///         a console's delete is irreversible whatever this
+    ///         provider does
+    ///     </b>: <c>persistentVolumeReclaimPolicy</c> lives on the PersistentVolume and
     ///     is defaulted from the StorageClass, so a claim cannot ask for its bytes to outlive it. That
     ///     is the counter-argument to this type declining soft delete, and it is recorded rather than
     ///     answered — <c>conformance.yaml § owed</c>, <c>delete-takes-the-home-directory</c>.
@@ -762,9 +797,7 @@ public static class CloudConsoles {
                 // see ShellName. RWX would be a promise about concurrent shells this row does not make
                 // and most storage classes cannot keep.
                 ["accessModes"] = new JsonArray { "ReadWriteOnce" },
-                ["resources"] = new JsonObject {
-                    ["requests"] = new JsonObject { ["storage"] = HomeSize(desired) }
-                }
+                ["resources"] = new JsonObject { ["requests"] = new JsonObject { ["storage"] = HomeSize(desired) } }
             }
         }.ToJsonString();
     }
@@ -773,8 +806,11 @@ public static class CloudConsoles {
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The desired body.</param>
     /// <remarks>
-    ///     ⚠ <b><c>automountServiceAccountToken: false</c> IS THE WHOLE OBJECT AND IT IS THE ANSWER TO
-    ///     "WHAT CAN THE POD REACH BY DEFAULT".</b> A pod with no <c>serviceAccountName</c> runs as
+    ///     ⚠
+    ///     <b>
+    ///         <c>automountServiceAccountToken: false</c> IS THE WHOLE OBJECT AND IT IS THE ANSWER TO
+    ///         "WHAT CAN THE POD REACH BY DEFAULT".
+    ///     </b> A pod with no <c>serviceAccountName</c> runs as
     ///     the namespace's <c>default</c> account with its token mounted at
     ///     <c>/var/run/secrets/kubernetes.io/serviceaccount</c>, and a shell containing
     ///     <c>kubectl</c> would find it on the first tab-completion. Whatever RBAC that account has
@@ -793,8 +829,7 @@ public static class CloudConsoles {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var account = new JsonObject {
-            ["metadata"] = new JsonObject { ["name"] = ShellName(name) },
-            ["automountServiceAccountToken"] = false
+            ["metadata"] = new JsonObject { ["name"] = ShellName(name) }, ["automountServiceAccountToken"] = false
         };
 
         if (PrincipalId(desired) is { Length: > 0 } principal) {
@@ -814,8 +849,11 @@ public static class CloudConsoles {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS FUNCTION IS THIS ROW'S ANSWER TO "WHAT CAN THE POD REACH WHEN THE TENANT ASKS
-    ///         FOR NOTHING", AND THE ANSWER IS ESTABLISHED HERE RATHER THAN INTENDED ELSEWHERE.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THIS FUNCTION IS THIS ROW'S ANSWER TO "WHAT CAN THE POD REACH WHEN THE TENANT ASKS
+    ///             FOR NOTHING", AND THE ANSWER IS ESTABLISHED HERE RATHER THAN INTENDED ELSEWHERE.
+    ///         </b>
     ///         With an empty <c>network</c> block the rendered policy is: <b>no ingress at all</b>;
     ///         egress to this console's own namespace; egress to any namespace labelled with this
     ///         tenant's id; egress to <c>kube-dns</c>; and egress to public addresses with RFC 1918,
@@ -823,21 +861,30 @@ public static class CloudConsoles {
     ///         platform's own namespaces, another tenant's workloads, or <c>169.254.169.254</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>docs/plan/19 ASKS FOR "a NetworkPolicy denying access to the platform's own
-    ///         namespaces" AND THAT IS NOT A POLICY THAT CAN BE WRITTEN.</b> A NetworkPolicy's
+    ///         ⚠
+    ///         <b>
+    ///             docs/plan/19 ASKS FOR "a NetworkPolicy denying access to the platform's own
+    ///             namespaces" AND THAT IS NOT A POLICY THAT CAN BE WRITTEN.
+    ///         </b> A NetworkPolicy's
     ///         <c>egress</c> rules are an allow-list — there is no <c>deny</c> — so "everything except
     ///         those namespaces" has no spelling: a rule allowing <c>0.0.0.0/0</c> allows the
     ///         platform's pods too, because their addresses are in the cluster CIDR, and
     ///         <c>ipBlock</c> may not be combined with a <c>namespaceSelector</c> in one peer. The
-    ///         document's requirement is therefore met the only way it can be — <b>by allowing the
-    ///         tenant's own namespaces positively and excising every private range from the public
-    ///         rule</b>, so the platform is excluded by construction rather than by exception. The
+    ///         document's requirement is therefore met the only way it can be —
+    ///         <b>
+    ///             by allowing the
+    ///             tenant's own namespaces positively and excising every private range from the public
+    ///             rule
+    ///         </b>, so the platform is excluded by construction rather than by exception. The
     ///         correction is worth stating because the natural reading of that sentence produces a
     ///         policy that silently allows what it was written to forbid.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE TENANT-WIDE RULE MATCHED NOTHING WHEN IT WAS WRITTEN, AND WAS RENDERED
-    ///         ANYWAY. That is why it works now without an api-version change.</b> It selects
+    ///         ⚠
+    ///         <b>
+    ///             THE TENANT-WIDE RULE MATCHED NOTHING WHEN IT WAS WRITTEN, AND WAS RENDERED
+    ///             ANYWAY. That is why it works now without an api-version change.
+    ///         </b> It selects
     ///         namespaces carrying <c>cybercloud.io/tenant-id</c>, and for the first eleven provider
     ///         families nothing in the repository created or labelled a namespace — so the reach was
     ///         the console's own resource group and no further, and docs/plan/24's M1 exit story did
@@ -845,8 +892,11 @@ public static class CloudConsoles {
     ///         path, now applies <c>{subscriptionId:N}-{resourceGroup}</c> with ADR-013's seven
     ///         labels before the first pass of any resource in the group, so this rule selects what
     ///         it was written to select — for every console already created, because the rule was in
-    ///         the rendered object all along. ⚠ <b>The reach is still bounded by two things and both
-    ///         are correct:</b> a namespace exists only where a resource in that group has actually
+    ///         the rendered object all along. ⚠
+    ///         <b>
+    ///             The reach is still bounded by two things and both
+    ///             are correct:
+    ///         </b> a namespace exists only where a resource in that group has actually
     ///         been reconciled, and a <c>NetworkPolicy</c> is per-cluster, so a shell does not reach
     ///         a group whose resources live on a different cluster.
     ///         <c>conformance.yaml § owed</c>, <c>namespaces-are-not-labelled</c>.
@@ -886,9 +936,7 @@ public static class CloudConsoles {
                 ["to"] = new JsonArray {
                     new JsonObject {
                         ["namespaceSelector"] = new JsonObject {
-                            ["matchLabels"] = new JsonObject {
-                                [KubeLabels.TenantId] = KubeLabels.GuidValue(tenantId)
-                            }
+                            ["matchLabels"] = new JsonObject { [KubeLabels.TenantId] = KubeLabels.GuidValue(tenantId) }
                         }
                     }
                 }
@@ -923,9 +971,7 @@ public static class CloudConsoles {
             egress.Add(
                 new JsonObject {
                     ["to"] = new JsonArray {
-                        new JsonObject {
-                            ["ipBlock"] = new JsonObject { ["cidr"] = "0.0.0.0/0", ["except"] = except }
-                        }
+                        new JsonObject { ["ipBlock"] = new JsonObject { ["cidr"] = "0.0.0.0/0", ["except"] = except } }
                     }
                 }
             );
@@ -980,8 +1026,11 @@ public static class CloudConsoles {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>EVERY FIELD IN THE SECURITY CONTEXT IS THERE BECAUSE ITS DEFAULT IS THE WRONG
-    ///         ONE.</b> docs/plan/19 § The pod asks for "non-root, read-only root filesystem except
+    ///         ⚠
+    ///         <b>
+    ///             EVERY FIELD IN THE SECURITY CONTEXT IS THERE BECAUSE ITS DEFAULT IS THE WRONG
+    ///             ONE.
+    ///         </b> docs/plan/19 § The pod asks for "non-root, read-only root filesystem except
     ///         <c>$HOME</c> and <c>/tmp</c>, no privilege escalation, seccomp RuntimeDefault, dropped
     ///         capabilities" — and a pod that omits all of it runs as whatever the image says, with
     ///         a writable root filesystem, with <c>allowPrivilegeEscalation</c> defaulting to
@@ -990,8 +1039,11 @@ public static class CloudConsoles {
     ///         those is a default, and this row's whole job is to have decided them.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>tcpdump</c> IS IN THE IMAGE AND WILL NOT RUN, AND THAT IS docs/plan/19's OWN
-    ///         DECISION HONOURED RATHER THAN A BUG.</b> It needs <c>NET_RAW</c>, which is in the
+    ///         ⚠
+    ///         <b>
+    ///             <c>tcpdump</c> IS IN THE IMAGE AND WILL NOT RUN, AND THAT IS docs/plan/19's OWN
+    ///             DECISION HONOURED RATHER THAN A BUG.
+    ///         </b> It needs <c>NET_RAW</c>, which is in the
     ///         dropped set below. The document says it should be "documented rather than silently
     ///         absent"; the honest consequence is that the tool is present and fails with
     ///         <c>Operation not permitted</c>.
@@ -1056,23 +1108,17 @@ public static class CloudConsoles {
                         },
                         ["resources"] = new JsonObject {
                             ["requests"] = new JsonObject {
-                                ["cpu"] = cpu,
-                                ["memory"] = memory,
-                                ["ephemeral-storage"] = EphemeralStorageLimit
+                                ["cpu"] = cpu, ["memory"] = memory, ["ephemeral-storage"] = EphemeralStorageLimit
                             },
                             ["limits"] = new JsonObject {
-                                ["cpu"] = cpu,
-                                ["memory"] = memory,
-                                ["ephemeral-storage"] = EphemeralStorageLimit
+                                ["cpu"] = cpu, ["memory"] = memory, ["ephemeral-storage"] = EphemeralStorageLimit
                             }
                         },
                         ["volumeMounts"] = new JsonArray {
                             new JsonObject { ["name"] = "home", ["mountPath"] = HomePath },
                             new JsonObject { ["name"] = "tmp", ["mountPath"] = "/tmp" }
                         },
-                        ["env"] = new JsonArray {
-                            new JsonObject { ["name"] = "HOME", ["value"] = HomePath }
-                        }
+                        ["env"] = new JsonArray { new JsonObject { ["name"] = "HOME", ["value"] = HomePath } }
                     }
                 },
                 ["volumes"] = new JsonArray {
@@ -1109,8 +1155,11 @@ public static class CloudConsoles {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>CONTAINMENT, NOT EQUALITY, AND ON CORE-GROUP OBJECTS THAT MATTERS MORE THAN ON A
-    ///         CRD.</b> Eleven families before this one compare custom resources, whose defaulting is
+    ///         ⚠
+    ///         <b>
+    ///             CONTAINMENT, NOT EQUALITY, AND ON CORE-GROUP OBJECTS THAT MATTERS MORE THAN ON A
+    ///             CRD.
+    ///         </b> Eleven families before this one compare custom resources, whose defaulting is
     ///         an operator's and is at least reviewable. These are built-in types, and the API server
     ///         defaults them itself, in the same request: a PersistentVolumeClaim comes back with
     ///         <c>volumeMode: Filesystem</c> and a <c>storageClassName</c> it chose; a Pod comes back
@@ -1129,9 +1178,12 @@ public static class CloudConsoles {
     ///     </para>
     ///     <para>
     ///         ⚠ Dispatches on <c>kind</c>, because a conformance case supplies one comparison over
-    ///         every object the resource owns and this resource owns three. ⚠ <b>A document with NO
-    ///         kind is <see langword="false" /> here, where two earlier families fold it into their
-    ///         one real object.</b> They can: they own one kind, so a kindless body is unambiguous.
+    ///         every object the resource owns and this resource owns three. ⚠
+    ///         <b>
+    ///             A document with NO
+    ///             kind is <see langword="false" /> here, where two earlier families fold it into their
+    ///             one real object.
+    ///         </b> They can: they own one kind, so a kindless body is unambiguous.
     ///         This one owns three, and guessing which a kindless document was would mean judging a
     ///         PersistentVolumeClaim by a NetworkPolicy's rules and reporting a match. Every object
     ///         that has been through <c>KubeCommandBuilder</c> carries a kind, so nothing legitimate
@@ -1220,8 +1272,7 @@ public static class CloudConsoles {
     static JsonObject? Document(string objectJson) {
         try {
             return JsonNode.Parse(objectJson) as JsonObject;
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             return null;
         }
     }
@@ -1263,8 +1314,7 @@ public static class CloudConsoles {
                 ["sizing"] = new JsonObject { ["preset"] = preset },
                 ["home"] = new JsonObject { ["size"] = homeSize, ["retentionDays"] = DefaultRetentionDays },
                 ["session"] = new JsonObject {
-                    ["idleTimeoutMinutes"] = DefaultIdleTimeoutMinutes,
-                    ["maxDurationHours"] = DefaultMaxDurationHours
+                    ["idleTimeoutMinutes"] = DefaultIdleTimeoutMinutes, ["maxDurationHours"] = DefaultMaxDurationHours
                 },
                 ["network"] = new JsonObject { ["egress"] = egress },
                 ["audit"] = new JsonObject { ["sessionRecording"] = recording }

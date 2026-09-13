@@ -45,7 +45,8 @@ namespace CyberCloud.Authorization.Grains;
 ///     </para>
 /// </remarks>
 public sealed class TupleStoreGrain(
-    [PersistentState("tuples", StorageTiers.Durable)] IPersistentState<TupleStoreState> state,
+    [PersistentState("tuples", StorageTiers.Durable)]
+    IPersistentState<TupleStoreState> state,
     AuthorizationSchema schema,
     IRelationWriteInterceptor interceptor
 )

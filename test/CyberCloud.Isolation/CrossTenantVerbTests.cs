@@ -5,9 +5,12 @@ namespace CyberCloud.Isolation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/07 § The enforcement seam: <i>"404, never 403, on a resource the caller cannot
-///         read. A 403 confirms the resource exists, which is an enumeration oracle: a competitor can
-///         discover a customer's resource names by probing."</i>
+///         docs/plan/07 § The enforcement seam:
+///         <i>
+///             "404, never 403, on a resource the caller cannot
+///             read. A 403 confirms the resource exists, which is an enumeration oracle: a competitor can
+///             discover a customer's resource names by probing."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Every attack in this class runs against a resource that genuinely exists.</b> A sweep
@@ -155,11 +158,12 @@ public sealed class CrossTenantVerbTests(IsolationCluster cluster) {
             .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(theirs))
             .GetAsync();
 
-        entry.GetValueOrThrow().State.ShouldBe(
-            IndexEntryState.Free,
-            "a refused cross-tenant create claimed a name in the victim's index — which is a "
-            + "denial-of-service on their namespace even though it leaked nothing"
-        );
+        entry.GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.Free,
+                "a refused cross-tenant create claimed a name in the victim's index — which is a "
+                + "denial-of-service on their namespace even though it leaked nothing"
+            );
     }
 
     [Theory]
@@ -234,8 +238,7 @@ public sealed class CrossTenantVerbTests(IsolationCluster cluster) {
     static CallerContext Attacker() =>
         IsolationCluster.Caller(IsolationCluster.Attacker, IsolationCluster.AttackerUser);
 
-    static CallerContext Victim() =>
-        IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser);
+    static CallerContext Victim() => IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser);
 
     /// <summary>Creates a real resource in the victim's tenant and returns its resolved address.</summary>
     async Task<ResourceId> VictimResourceAsync(IsolationTarget target, string name) {

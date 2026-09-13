@@ -6,9 +6,15 @@ namespace CyberCloud.Cli.Tests;
 ///     The two rows of docs/plan/21 § Decisions that are about trust rather than about function.
 /// </summary>
 /// <remarks>
-///     ⚠ <i>"Telemetry | <b>Opt-in, off by default, and asked once.</b> Opt-out telemetry in a
-///     developer tool is a trust cost that is never worth the data."</i> and <i>"Update check | Once a
-///     day, non-blocking, never auto-installs."</i> Both are easy to write down and easy to implement
+///     ⚠
+///     <i>
+///         "Telemetry | <b>Opt-in, off by default, and asked once.</b> Opt-out telemetry in a
+///         developer tool is a trust cost that is never worth the data."
+///     </i> and
+///     <i>
+///         "Update check | Once a
+///         day, non-blocking, never auto-installs."
+///     </i> Both are easy to write down and easy to implement
 ///     slightly wrong, which is what these assert.
 /// </remarks>
 public sealed class TelemetryAndUpdateTests {
@@ -41,11 +47,16 @@ public sealed class TelemetryAndUpdateTests {
 
         var settings = CycSettings.Resolve(host.Host.Config, host.Host.Environment, profileFlag: null);
 
-        TelemetryConsent.EnsureAsked(host.Host, settings, interactive: true, () => {
-            asked++;
+        TelemetryConsent.EnsureAsked(
+            host.Host,
+            settings,
+            interactive: true,
+            () => {
+                asked++;
 
-            return "y";
-        });
+                return "y";
+            }
+        );
 
         asked.ShouldBe(1);
         host.Stderr.ShouldContain("Send telemetry?");
@@ -54,15 +65,21 @@ public sealed class TelemetryAndUpdateTests {
         var after = CycSettings.Resolve(
             CycConfigFile.Read(Path.Combine(host.StateDirectory, "config")),
             host.Host.Environment,
-            profileFlag: null);
+            profileFlag: null
+        );
 
         TelemetryConsent.IsEnabled(after).ShouldBeTrue();
 
-        TelemetryConsent.EnsureAsked(host.Host, after, interactive: true, () => {
-            asked++;
+        TelemetryConsent.EnsureAsked(
+            host.Host,
+            after,
+            interactive: true,
+            () => {
+                asked++;
 
-            return "y";
-        });
+                return "y";
+            }
+        );
 
         asked.ShouldBe(1);
     }
@@ -82,7 +99,8 @@ public sealed class TelemetryAndUpdateTests {
         var after = CycSettings.Resolve(
             CycConfigFile.Read(Path.Combine(host.StateDirectory, "config")),
             host.Host.Environment,
-            profileFlag: null);
+            profileFlag: null
+        );
 
         TelemetryConsent.IsEnabled(after).ShouldBeFalse();
     }
@@ -131,7 +149,10 @@ public sealed class TelemetryAndUpdateTests {
     [Fact]
     public void TheUpdateCheckCanBeTurnedOffEntirely() {
         using var host = TestHost.Create(
-            environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CYC_NO_UPDATE_CHECK"] = "1" });
+            environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+                ["CYC_NO_UPDATE_CHECK"] = "1"
+            }
+        );
 
         UpdateCheck.Start(host.Host, "1.0.0", _ => throw new ShouldAssertException("the probe ran"));
 

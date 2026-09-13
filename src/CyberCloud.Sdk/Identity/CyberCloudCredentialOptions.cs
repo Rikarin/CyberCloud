@@ -51,7 +51,10 @@ public sealed class DefaultCyberCloudCredentialOptions : CyberCloudCredentialOpt
     /// </summary>
     public bool IncludeInteractiveCredential { get; set; }
 
-    /// <summary>Opens the browser for the interactive credential. Required when <see cref="IncludeInteractiveCredential" /> is set.</summary>
+    /// <summary>
+    ///     Opens the browser for the interactive credential. Required when <see cref="IncludeInteractiveCredential" /> is
+    ///     set.
+    /// </summary>
     public OpenBrowserCallback? OpenBrowser { get; set; }
 
     /// <summary>The OAuth client id the interactive and CLI credentials present.</summary>

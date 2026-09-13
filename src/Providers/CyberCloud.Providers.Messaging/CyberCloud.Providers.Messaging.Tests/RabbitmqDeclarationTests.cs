@@ -25,13 +25,11 @@ public sealed class RabbitmqDeclarationTests {
         var registry = ProviderRegistry.Build([new MessagingProvider()]);
 
         registry.TryGetType(RabbitmqClusters.Type, out var registration).ShouldBeTrue();
-        registry.TryGetType(KafkaClusters.Type, out _).ShouldBeTrue(
-            "adding the third type removed the first one from the registry"
-        );
+        registry.TryGetType(KafkaClusters.Type, out _)
+            .ShouldBeTrue("adding the third type removed the first one from the registry");
 
-        registry.TryGetType(NatsClusters.Type, out _).ShouldBeTrue(
-            "adding the third type removed the second one from the registry"
-        );
+        registry.TryGetType(NatsClusters.Type, out _)
+            .ShouldBeTrue("adding the third type removed the second one from the registry");
 
         registration.RequiresCluster.ShouldBeTrue();
         registration.ClusterIdPointer.ShouldBe(RabbitmqClusters.ClusterIdPointer);
@@ -67,7 +65,8 @@ public sealed class RabbitmqDeclarationTests {
 
         CliTokens.Collisions(
             registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
-        ).ShouldBeEmpty();
+        )
+            .ShouldBeEmpty();
 
         // ⚠ AND THE EMITTER IS ASKED THE SAME QUESTION SEPARATELY, because it is the half that can
         // disagree: CliEmitter.Emit builds the tree the CLI actually embeds, and a throw here is the
@@ -94,11 +93,12 @@ public sealed class RabbitmqDeclarationTests {
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
             foreach (var pointer in meter.Derivation.Reads) {
-                RabbitmqClusters.Schema2026.Declares(pointer).ShouldBeTrue(
-                    $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
-                    + "api-version's schema does not declare. A read set that names a property the "
-                    + "schema dropped is what an api-version bump has to be diffed against."
-                );
+                RabbitmqClusters.Schema2026.Declares(pointer)
+                    .ShouldBeTrue(
+                        $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
+                        + "api-version's schema does not declare. A read set that names a property the "
+                        + "schema dropped is what an api-version bump has to be diffed against."
+                    );
             }
         }
     }
@@ -117,10 +117,11 @@ public sealed class RabbitmqDeclarationTests {
                 Overridden(RabbitmqClusters.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
 
-            RabbitmqClusters.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
-                $"the declared default for '{property.JsonPointer}' does not validate inside an "
-                + "otherwise-valid body."
-            );
+            RabbitmqClusters.Schema2026.Validate(body.RootElement, allowTags: true)
+                .IsSuccess.ShouldBeTrue(
+                    $"the declared default for '{property.JsonPointer}' does not validate inside an "
+                    + "otherwise-valid body."
+                );
         }
     }
 
@@ -165,9 +166,7 @@ public sealed class RabbitmqDeclarationTests {
         // `advancedConfig` (Erlang terms, a different file entirely) or to `envConfig` would compile,
         // apply cleanly, and start a broker that ignored it.
         foreach (var queueType in RabbitmqClusters.QueueTypes) {
-            using var body = JsonDocument.Parse(
-                RabbitmqClusters.Body(ClusterId, defaultQueueType: queueType)
-            );
+            using var body = JsonDocument.Parse(RabbitmqClusters.Body(ClusterId, defaultQueueType: queueType));
 
             var spec = JsonNode.Parse(RabbitmqClusters.ClusterJson("events", body.RootElement))!["spec"]!
                 .AsObject();
@@ -175,10 +174,12 @@ public sealed class RabbitmqDeclarationTests {
             spec["rabbitmq"]!["additionalConfig"]!.GetValue<string>()
                 .ShouldContain("default_queue_type = " + queueType, Case.Sensitive, queueType);
 
-            spec["rabbitmq"]!.AsObject().ContainsKey("advancedConfig").ShouldBeFalse(
-                "the fragment moved to advancedConfig, which RabbitMQ reads as Erlang terms from a "
-                + "different file — the broker would start and ignore it."
-            );
+            spec["rabbitmq"]!.AsObject()
+                .ContainsKey("advancedConfig")
+                .ShouldBeFalse(
+                    "the fragment moved to advancedConfig, which RabbitMQ reads as Erlang terms from a "
+                    + "different file — the broker would start and ignore it."
+                );
         }
     }
 
@@ -221,11 +222,13 @@ public sealed class RabbitmqDeclarationTests {
         // in the operator's requiredPlugins, and the bare rabbitmq:{version} image ships the plugin
         // unenabled, so first boot would enable a plugin on every node instead of starting.
         foreach (var version in new[] { "4.0", "4.1" }) {
-            using var body = JsonDocument.Parse(Overridden(
-                RabbitmqClusters.Body(ClusterId),
-                "/properties/version",
-                "\"" + version + "\""
-            ));
+            using var body = JsonDocument.Parse(
+                Overridden(
+                    RabbitmqClusters.Body(ClusterId),
+                    "/properties/version",
+                    "\"" + version + "\""
+                )
+            );
 
             var spec = JsonNode.Parse(RabbitmqClusters.ClusterJson("events", body.RootElement))!["spec"]!
                 .AsObject();
@@ -248,7 +251,8 @@ public sealed class RabbitmqDeclarationTests {
         using var body = JsonDocument.Parse(RabbitmqClusters.Body(ClusterId));
 
         var resources = JsonNode.Parse(RabbitmqClusters.ClusterJson("events", body.RootElement))!["spec"]!
-            ["resources"]!.AsObject();
+            ["resources"]!
+            .AsObject();
 
         resources.ShouldNotBeNull(
             "no resources block was rendered, so the API server's own default applies — a Burstable "

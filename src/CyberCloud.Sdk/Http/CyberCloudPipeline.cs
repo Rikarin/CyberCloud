@@ -6,8 +6,11 @@ namespace CyberCloud.Sdk;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/10 § Request pipeline says of the gateway's own stages that <i>"order matters and
-///         each step is here for a named reason"</i>. The same is true of the client's, and the two
+///         docs/plan/10 § Request pipeline says of the gateway's own stages that
+///         <i>
+///             "order matters and
+///             each step is here for a named reason"
+///         </i>. The same is true of the client's, and the two
 ///         load-bearing placements are:
 ///     </para>
 ///     <list type="bullet">
@@ -22,8 +25,11 @@ namespace CyberCloud.Sdk;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The transport is an injection point, and that is how this SDK is tested against a
-///         gateway that does not exist yet.</b> <see cref="CyberCloudClientOptions.Transport" /> takes
+///         ⚠
+///         <b>
+///             The transport is an injection point, and that is how this SDK is tested against a
+///             gateway that does not exist yet.
+///         </b> <see cref="CyberCloudClientOptions.Transport" /> takes
 ///         any <see cref="HttpMessageHandler" />; the tests put a scripted one there and assert on the
 ///         requests it receives. Nothing in the SDK's own test suite opens a socket.
 ///     </para>
@@ -60,7 +66,10 @@ public sealed class CyberCloudPipeline : IDisposable {
     ///     instance passed here must not be reused by the caller either.
     /// </param>
     /// <param name="cancellationToken">The token. It is the only deadline the pipeline observes.</param>
-    public async ValueTask<Response> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken = default) {
+    public async ValueTask<Response> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(request);
 
         using var message = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
@@ -69,8 +78,8 @@ public sealed class CyberCloudPipeline : IDisposable {
         return await BufferedHttpResponse.CreateAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
-    static SocketsHttpHandler CreateDefaultTransport()
-        => new SocketsHttpHandler {
+    static SocketsHttpHandler CreateDefaultTransport() =>
+        new SocketsHttpHandler {
             // The control plane is chatty in bursts and idle between them; recycling the connection
             // every two minutes is what keeps a client that lives for days from pinning itself to a
             // gateway pod that has since been drained.
@@ -79,7 +88,7 @@ public sealed class CyberCloudPipeline : IDisposable {
             // no redirect), and following one silently would re-send the Authorization header to
             // whatever host the redirect named.
             AllowAutoRedirect = false,
-            AutomaticDecompression = DecompressionMethods.All,
+            AutomaticDecompression = DecompressionMethods.All
         };
 
     /// <inheritdoc />

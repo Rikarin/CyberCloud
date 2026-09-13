@@ -9,9 +9,15 @@ namespace CyberCloud.Providers.ContainerRegistry.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Not a row-by-row schema comparison, and the difference is ADR-012's fifth surface
-///         existing.</b> <c>build/Build.Charts.cs</c> calls <c>RunGenerator(write: true, charts:
-///         true)</c>, which drives <c>ChartSurfaces.Generate</c> and <c>ChartAnnotationEmitter</c>: the
+///         ⚠
+///         <b>
+///             Not a row-by-row schema comparison, and the difference is ADR-012's fifth surface
+///             existing.
+///         </b> <c>build/Build.Charts.cs</c> calls
+///         <c>
+/// RunGenerator(write: true, charts:
+///         true)
+///         </c>, which drives <c>ChartSurfaces.Generate</c> and <c>ChartAnnotationEmitter</c>: the
 ///         chart's non-<c>@internal</c> <c>@param</c> block is <i>generated</i> from
 ///         <see cref="ContainerRegistries.Schema2026" /> and byte-diffed. Comparing the two here would
 ///         be comparing a file with the file it was generated from.
@@ -144,10 +150,10 @@ public sealed partial class ContainerRegistryChartTests {
 
     static string Embedded(string name) {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
-                           ?? throw new InvalidOperationException(
-                               $"'{name}' is not embedded in this assembly. The .csproj's "
-                               + "EmbeddedResource list and this reader have to name the same file."
-                           );
+            ?? throw new InvalidOperationException(
+                $"'{name}' is not embedded in this assembly. The .csproj's "
+                + "EmbeddedResource list and this reader have to name the same file."
+            );
 
         using var reader = new StreamReader(stream);
 
@@ -222,7 +228,10 @@ public sealed partial class ContainerRegistryChartTests {
         }
     }
 
-    [GeneratedRegex("""^\s*"(?<preset>s1\.[a-z0-9]+)"\s*\(dict "cpu" "(?<cpu>[^"]+)"\s*"memory" "(?<memory>[^"]+)"\)""", RegexOptions.Multiline)]
+    [GeneratedRegex(
+        """^\s*"(?<preset>s1\.[a-z0-9]+)"\s*\(dict "cpu" "(?<cpu>[^"]+)"\s*"memory" "(?<memory>[^"]+)"\)""",
+        RegexOptions.Multiline
+    )]
     private static partial Regex PresetRow();
 
     [GeneratedRegex(@"^\s*""(?<minor>\d+\.\d+)"" ""(?<tag>v\d+\.\d+\.\d+)""", RegexOptions.Multiline)]

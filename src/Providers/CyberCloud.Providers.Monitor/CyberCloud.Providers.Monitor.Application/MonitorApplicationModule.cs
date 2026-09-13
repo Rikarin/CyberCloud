@@ -21,14 +21,20 @@ namespace CyberCloud.Providers.Monitor.Application;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers
-///         its resource types into <c>CyberCloud.ResourceManager</c>."</i> Both halves happen here —
+///         docs/plan/03 § Providers:
+///         <i>
+///             "Each is an ABP module (<c>[DependsOn]</c>), each registers
+///             its resource types into <c>CyberCloud.ResourceManager</c>."
+///         </i> Both halves happen here —
 ///         a host that <c>[DependsOn]</c> this module gets the provider, its reconciler and its
 ///         action handler, and there is no second call it can forget.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This module is one of two in the tree whose registration actually carries a
-///         handler</b>, and that makes the <i>single</i> <c>AddCyberCloudProvider</c> call load
+///         ⚠
+///         <b>
+///             This module is one of two in the tree whose registration actually carries a
+///             handler
+///         </b>, and that makes the <i>single</i> <c>AddCyberCloudProvider</c> call load
 ///         bearing in a way the other ten families cannot demonstrate. <c>DiscoveringProviderBuilder</c>
 ///         walks what <c>Describe</c> declared and registers both the reconciler type and every
 ///         <c>ActionRegistration.HandlerType</c> as singletons by concrete type. A host that loaded

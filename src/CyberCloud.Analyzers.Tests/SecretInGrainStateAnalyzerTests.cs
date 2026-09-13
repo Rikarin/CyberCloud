@@ -156,14 +156,20 @@ public sealed class SecretInGrainStateAnalyzerTests {
     ///     <para>
     ///         <b>This is the shape the non-negotiable asks for, not a hole in the rule.</b>
     ///         docs/plan/00 § Non-negotiables bans a member that holds a secret and prescribes the
-    ///         replacement in the same sentence: <i>"secrets are <c>SecretRef</c> handles resolved at
-    ///         the data plane"</i>. So the analyzer must fire on <c>ClientSecret</c> and must not
+    ///         replacement in the same sentence:
+    ///         <i>
+    ///             "secrets are <c>SecretRef</c> handles resolved at
+    ///             the data plane"
+    ///         </i>. So the analyzer must fire on <c>ClientSecret</c> and must not
     ///         fire on <c>ClientSecretRef</c> — a rule that reported both would be suppressed at
     ///         every correct site, and a rule suppressed everywhere protects nothing.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The consequence is worth stating plainly, because it is easy to assume the
-    ///         opposite:</b> CC1005 does not <i>cover</i>
+    ///         ⚠
+    ///         <b>
+    ///             The consequence is worth stating plainly, because it is easy to assume the
+    ///             opposite:
+    ///         </b> CC1005 does not <i>cover</i>
     ///         <c>ApplicationRegistration.ClientSecretRef</c>,
     ///         <c>ServicePrincipalDescriptor.CredentialSecretRef</c> or
     ///         <c>TotpEnrollment.SecretRef</c> — it is silent on all three and always has been. What

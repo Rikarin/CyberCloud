@@ -8,18 +8,17 @@
 // (docs/plan/08 § The provider registry), which means running a provider's Describe, which means
 // loading Orleans into somebody's process — and it must not be this one.
 
+using Nuke.Common;
+using Nuke.Common.IO;
+using Nuke.Common.Tools.DotNet;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Nuke.Common;
-using Nuke.Common.IO;
-using Nuke.Common.Tools.DotNet;
-using Serilog;
 
-partial class Build
-{
+partial class Build {
     /// <summary>The project that hosts ADR-012's emitters.</summary>
     const string GeneratorProject = "CyberCloud.ResourceManager.Generator";
 
@@ -92,7 +91,7 @@ partial class Build
     ///     on that.
     /// </remarks>
     IReadOnlyList<AbsolutePath> GeneratedSdkFiles =>
-        (DerivedSurfacesDirectory / SdkSurfaceDirectory) is var directory && directory.DirectoryExists()
+        DerivedSurfacesDirectory / SdkSurfaceDirectory is var directory && directory.DirectoryExists()
             ? directory.GlobFiles("*.cs").OrderBy(x => x.Name, StringComparer.Ordinal).ToList()
             : [];
 
@@ -108,8 +107,7 @@ partial class Build
     /// </remarks>
     // List rather than IReadOnlyList: CA1859 is an error here and this is a private helper — the
     // same reason Build.Architecture.cs § ShippingProjectFiles returns a Dictionary.
-    List<GeneratedSdkFile> CompiledGeneratedSdk()
-    {
+    List<GeneratedSdkFile> CompiledGeneratedSdk() {
         var references = new[] { AssemblyOf(SdkAssemblyName) };
 
         return GeneratedSdkFiles.Select(file => GeneratedSdkSurface.Compile(file, references)).ToList();
@@ -125,8 +123,8 @@ partial class Build
     ///     failing loudly for a reason that has nothing to do with the file it is inspecting, which
     ///     is how a reader learns to disbelieve it.
     /// </remarks>
-    string? GeneratedSdkBlocker()
-        => AssemblyOf(SdkAssemblyName).FileExists()
+    string? GeneratedSdkBlocker() =>
+        AssemblyOf(SdkAssemblyName).FileExists()
             ? null
             : $"{SdkAssemblyName} has no built assembly at {AssemblyOf(SdkAssemblyName)}, so the "
             + $"generated SDK cannot be compiled against the shapes it names — Response<T>, "
@@ -172,18 +170,18 @@ partial class Build
             .Select(x => (AbsolutePath)x.Path)
             .Where(project => project.Parent is not null
                 && ProvidersRoot is not null
-                && project.ToString().StartsWith(ProvidersRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                && project.ToString().StartsWith(ProvidersRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            )
             .Where(project => SuiteOwning(project) is null)
             .Where(project => !project.NameWithoutExtension.EndsWith(".Contracts", StringComparison.Ordinal)
-                && !project.NameWithoutExtension.EndsWith(".Application", StringComparison.Ordinal))
+                && !project.NameWithoutExtension.EndsWith(".Application", StringComparison.Ordinal)
+            )
             .OrderBy(project => project.NameWithoutExtension, StringComparer.Ordinal)
             .Select(project => AssemblyOf(project.NameWithoutExtension))
             .ToList();
 
-    void GenerateSurfaces()
-    {
-        if (!SolutionHasProjects)
-        {
+    void GenerateSurfaces() {
+        if (!SolutionHasProjects) {
             SkippingEmptySolution(nameof(Generate));
             return;
         }
@@ -198,10 +196,10 @@ partial class Build
             report.AssembliesScanned == 1 ? "y" : "ies",
             report.ResourceTypes,
             report.ApiVersions,
-            OpenApiDirectory.Name);
+            OpenApiDirectory.Name
+        );
 
-        if (report.Providers == 0)
-        {
+        if (report.Providers == 0) {
             // The same distinction Build.Architecture.cs draws with GateStatus.Vacuous: a run that
             // inspected nothing is not a run that found nothing wrong. It still wrote openapi/index.json
             // — a valid, empty OpenAPI document that says zero in three places — so "the generator did
@@ -209,59 +207,60 @@ partial class Build
             Log.Warning(
                 "Generate: no provider is registered, so there is no api-version to describe and "
                 + "openapi/index.json is the only document. That is a pass and it is worth nobody's "
-                + "trust yet — docs/plan/03 § Providers has twenty of them planned.");
+                + "trust yet — docs/plan/03 § Providers has twenty of them planned."
+            );
         }
 
         var failures = new List<string>();
 
-        foreach (var document in report.Documents)
-        {
-            foreach (var problem in document.StructuralProblems)
+        foreach (var document in report.Documents) {
+            foreach (var problem in document.StructuralProblems) {
                 failures.Add($"{document.File} is not a valid OpenAPI 3.1 document: {problem}");
-
-            foreach (var breaking in document.BreakingChanges)
-            {
-                failures.Add(
-                    $"{document.File} breaks api-version {document.ApiVersion}, which is published and "
-                    + $"immutable: {breaking}");
             }
 
-            if (document.Drifted && document.Published)
-            {
+            foreach (var breaking in document.BreakingChanges) {
+                failures.Add(
+                    $"{document.File} breaks api-version {document.ApiVersion}, which is published and "
+                    + $"immutable: {breaking}"
+                );
+            }
+
+            if (document.Drifted && document.Published) {
                 failures.Add(
                     $"{OpenApiDirectory.Name}/{document.File} was not what the provider registry "
                     + "generates. It has been rewritten in place — review the diff and commit it. "
-                    + "docs/plan/23 § The architecture gates, row Generated surfaces.");
+                    + "docs/plan/23 § The architecture gates, row Generated surfaces."
+                );
             }
         }
 
-        foreach (var stale in report.Stale)
-        {
+        foreach (var stale in report.Stale) {
             failures.Add(
                 $"{OpenApiDirectory.Name}/{stale} is checked in and this run did not produce it, so the "
                 + "api-version it describes has left the registry. Removing a version needs a 12-month "
-                + "notice window — docs/plan/08 § The provider registry.");
+                + "notice window — docs/plan/08 § The provider registry."
+            );
         }
 
-        foreach (var surface in report.Derived)
-        {
-            foreach (var problem in surface.Problems)
+        foreach (var surface in report.Derived) {
+            foreach (var problem in surface.Problems) {
                 failures.Add($"{DerivedSurfacesDirectory.Name}/{surface.File} is not usable: {problem}");
+            }
 
-            if (surface.Drifted && surface.Published)
-            {
+            if (surface.Drifted && surface.Published) {
                 failures.Add(
                     $"{DerivedSurfacesDirectory.Name}/{surface.File} was not what the OpenAPI document "
                     + "generates. It has been rewritten in place — review the diff and commit it. "
-                    + "docs/plan/23 § The architecture gates, row Generated surfaces.");
+                    + "docs/plan/23 § The architecture gates, row Generated surfaces."
+                );
             }
         }
 
-        foreach (var stale in report.DerivedStale)
-        {
+        foreach (var stale in report.DerivedStale) {
             failures.Add(
                 $"{DerivedSurfacesDirectory.Name}/{stale} is checked in and this run did not produce "
-                + "it. A generated surface nothing generates is one nobody can reproduce.");
+                + "it. A generated surface nothing generates is one nobody can reproduce."
+            );
         }
 
         // ⚠ THE .NET SDK IS COMPILED, HERE AND IN `Architecture` — issue #73. This target has just
@@ -271,22 +270,18 @@ partial class Build
         // sees green, commits, and learns from CI what the compiler already knew locally.
         List<GeneratedSdkFile> compiledSdk = [];
 
-        if (GeneratedSdkBlocker() is { } blocker)
-        {
+        if (GeneratedSdkBlocker() is { } blocker) {
             failures.Add(blocker);
-        }
-        else
-        {
+        } else {
             compiledSdk = CompiledGeneratedSdk();
 
-            foreach (var compiled in compiledSdk)
-            {
-                foreach (var error in compiled.Errors)
-                {
+            foreach (var compiled in compiledSdk) {
+                foreach (var error in compiled.Errors) {
                     failures.Add(
                         $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} does "
                         + $"not compile — {error}. The Generated surfaces comparison is byte-for-byte "
-                        + "and byte-identical is not valid; fix the emitter, not the file.");
+                        + "and byte-identical is not valid; fix the emitter, not the file."
+                    );
                 }
 
                 // ⚠ THE VACUITY GUARD, THE SAME ONE Build.Architecture.cs's `Generated SDK compiles`
@@ -294,13 +289,13 @@ partial class Build
                 // would say nothing about it and this target would pass over a surface the generator
                 // emitted empty. A row that reports success over an empty compilation is the defect
                 // issue #73 was filed about, one level up.
-                if (compiled.Types == 0)
-                {
+                if (compiled.Types == 0) {
                     failures.Add(
                         $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} "
                         + "declares no type at all, so it compiled clean by having nothing in it. A "
                         + "surface with no types is a generator that produced nothing, not an SDK "
-                        + "that is correct.");
+                        + "that is correct."
+                    );
                 }
             }
         }
@@ -308,30 +303,29 @@ partial class Build
         // ⚠ THE PORTAL'S CLIENT — issue #21. Reported against its own directory rather than folded
         // into the three above, because it is written to portal/libs/api and a message naming
         // generated/ would send a reader to look at the wrong tree.
-        foreach (var problem in report.TypeScriptProblems)
+        foreach (var problem in report.TypeScriptProblems) {
             failures.Add($"{PortalApiRelative} is not usable: {problem}");
+        }
 
-        foreach (var file in report.TypeScript)
-        {
-            if (file.Drifted && file.Published)
-            {
+        foreach (var file in report.TypeScript) {
+            if (file.Drifted && file.Published) {
                 failures.Add(
                     $"{PortalApiRelative}/{file.File} was not what the OpenAPI document generates. It "
                     + "has been rewritten in place — review the diff and commit it. docs/plan/23 § The "
-                    + "architecture gates, row Generated surfaces.");
+                    + "architecture gates, row Generated surfaces."
+                );
             }
         }
 
-        foreach (var stale in report.TypeScriptStale)
-        {
+        foreach (var stale in report.TypeScriptStale) {
             failures.Add(
                 $"{PortalApiRelative}/{stale} is checked in and this run did not produce it. "
                 + "docs/plan/03 § Assembly graph rules, rule 6 gives this directory to the generator, "
-                + "so a file it does not produce is a hand-written one.");
+                + "so a file it does not produce is a hand-written one."
+            );
         }
 
-        if (failures.Count == 0)
-        {
+        if (failures.Count == 0) {
             // ⚠ THE .NET SDK IS COUNTED HERE, NOT LEFT TO SILENCE — issue #73. The block above only
             // ever ADDS failures, so on an empty glob its loop never runs and a success line that
             // said nothing about the SDK would read exactly like one where every file compiled.
@@ -344,42 +338,45 @@ partial class Build
                 report.TypeScript.Count,
                 compiledSdk.Count,
                 compiledSdk.Sum(x => x.Types),
-                SdkAssemblyName);
+                SdkAssemblyName
+            );
 
             // ⚠ Zero files is news rather than silence, the same distinction Build.Charts.cs draws:
             // a run that emitted no client is not a run that emitted a correct one, and a portal
             // with nothing to import is issue #21's whole state.
-            if (report.TypeScript.Count == 0)
-            {
+            if (report.TypeScript.Count == 0) {
                 Log.Warning(
                     "Generate: the TypeScript client is empty, so portal/libs/api holds nothing the "
-                    + "portal can import and every page would hand-roll its calls — issue #21.");
+                    + "portal can import and every page would hand-roll its calls — issue #21."
+                );
             }
 
             // ⚠ And the same distinction for the surface this target has just rewritten. Zero here
             // is a glob that matched nothing — `SdkEmitter.DirectoryName` renamed out from under the
             // literal above, or a generator that wrote no SDK at all — and either way the compile
             // check said nothing because it had nothing to say, which is not the same as passing.
-            if (compiledSdk.Count == 0)
-            {
+            if (compiledSdk.Count == 0) {
                 Log.Warning(
                     "Generate: no api-version file was found under {Directory}/{Sdk}, so nothing was "
                     + "handed to a compiler. `Generated SDK compiles` reports ○ over the same "
                     + "count — issue #73.",
                     DerivedSurfacesDirectory.Name,
-                    SdkSurfaceDirectory);
+                    SdkSurfaceDirectory
+                );
             }
 
             return;
         }
 
-        foreach (var failure in failures)
+        foreach (var failure in failures) {
             Log.Error("Generate: {Failure}", failure);
+        }
 
         Assert.Fail(
             $"{failures.Count} generated-surface problem(s). Listed above. ADR-012's whole claim is that "
             + "a generated surface cannot drift from the registry, and a gate that does not fail is the "
-            + "claim without the mechanism.");
+            + "claim without the mechanism."
+        );
     }
 
     // ── Running the generator and reading its report ──────────────────────────────────────────
@@ -426,8 +423,11 @@ partial class Build
     /// <summary>
     ///     One action a provider declared, as the registry holds it.
     ///     <para>
-    ///         ⚠ <b>Read off the registry rather than off a generated surface, because none of the
-    ///         four carries it.</b> An action reaches <c>openapi/</c>, the <c>cyc</c> verb tree, the
+    ///         ⚠
+    ///         <b>
+    ///             Read off the registry rather than off a generated surface, because none of the
+    ///             four carries it.
+    ///         </b> An action reaches <c>openapi/</c>, the <c>cyc</c> verb tree, the
     ///         SDK and the portal form from its declaration alone; whether anything can serve it is
     ///         not part of any of those documents, so a document publishing an action nothing can run
     ///         is byte-identical to one publishing an action that works. <see cref="Handler" /> is
@@ -497,46 +497,50 @@ partial class Build
     ///     incompatible document is exit 0 plus a report saying so. The reason is on its <c>Main</c>:
     ///     two callers need the same facts and reach different verdicts about them.
     /// </remarks>
-    GenerationReport RunGenerator(bool write, bool charts = false)
-    {
+    GenerationReport RunGenerator(bool write, bool charts = false) {
         Assert.True(
             ShippingProjectFiles.TryGetValue(GeneratorProject, out var project),
             $"{GeneratorProject} is not in {SolutionFile.Name}. ADR-012's generation step cannot run, and "
-            + "the Generated surfaces gate would pass over an API surface nobody generated.");
+            + "the Generated surfaces gate would pass over an API surface nobody generated."
+        );
 
         Assert.FileExists(
             AssemblyOf(GeneratorProject),
             $"{GeneratorProject} has no built assembly. Run ./build.sh Compile first, in the same "
-            + $"configuration ({Configuration}).");
+            + $"configuration ({Configuration})."
+        );
 
-        var arguments = new List<string>
-        {
-            "--output", OpenApiDirectory,
-            "--derived-output", DerivedSurfacesDirectory,
+        var arguments = new List<string> {
+            "--output",
+            OpenApiDirectory,
+            "--derived-output",
+            DerivedSurfacesDirectory,
             // ⚠ Always, unlike --charts. The fifth surface is off by default because only `Charts`
             // forms a verdict about it; the TypeScript client is `Generate`'s own, exactly as the
             // three under generated/ are, and a run that skipped it would leave a checked-in client
             // that nothing regenerated — which is the state issue #21 describes with a client that
             // did not exist at all.
-            "--typescript", PortalApiDirectory,
-            "--report", GenerationReportFile
+            "--typescript",
+            PortalApiDirectory,
+            "--report",
+            GenerationReportFile
         };
 
-        if (charts)
-        {
+        if (charts) {
             arguments.Add("--charts");
             arguments.Add(ChartsDirectory);
         }
 
-        if (!write)
+        if (!write) {
             arguments.Add("--check");
+        }
 
-        foreach (var assembly in ProviderAssemblies)
-        {
+        foreach (var assembly in ProviderAssemblies) {
             Assert.FileExists(
                 assembly,
                 $"A provider project is in {SolutionFile.Name} and has no built assembly at {assembly}. "
-                + "The generated document would silently lose that provider's whole API surface.");
+                + "The generated document would silently lose that provider's whole API surface."
+            );
 
             arguments.Add("--provider-assembly");
             arguments.Add(assembly);
@@ -549,82 +553,92 @@ partial class Build
         // SetApplicationArguments takes the parts and quotes each one, which is also how
         // Build.Test.cs passes arguments to a test host.
         DotNetTasks.DotNetRun(s => s
-            .SetConfiguration(Configuration)
-            .EnableNoRestore()
-            .EnableNoBuild()
-            .EnableNoLaunchProfile()
-            .SetProjectFile(project)
-            .SetApplicationArguments(arguments.ToArray()));
+                .SetConfiguration(Configuration)
+                .EnableNoRestore()
+                .EnableNoBuild()
+                .EnableNoLaunchProfile()
+                .SetProjectFile(project)
+                .SetApplicationArguments(arguments.ToArray())
+        );
 
         return Parse(GenerationReportFile);
     }
 
-    static GenerationReport Parse(AbsolutePath reportFile)
-    {
+    static GenerationReport Parse(AbsolutePath reportFile) {
         Assert.FileExists(reportFile, $"{GeneratorProject} wrote no report at {reportFile}.");
 
         var root = JsonNode.Parse(reportFile.ReadAllBytes())?.AsObject()
-                   ?? throw new JsonException($"{reportFile} is not a JSON object.");
+            ?? throw new JsonException($"{reportFile} is not a JSON object.");
 
         var documents = (root["documents"] as JsonArray ?? new JsonArray())
             .Select(x => x!.AsObject())
             .Select(x => new GeneratedFile(
-                x["file"]!.GetValue<string>(),
-                x["apiVersion"]!.GetValue<string>(),
-                x["published"]!.GetValue<bool>(),
-                x["drifted"]!.GetValue<bool>(),
-                Strings(x["structuralProblems"]),
-                Strings(x["breakingChanges"])))
+                    x["file"]!.GetValue<string>(),
+                    x["apiVersion"]!.GetValue<string>(),
+                    x["published"]!.GetValue<bool>(),
+                    x["drifted"]!.GetValue<bool>(),
+                    Strings(x["structuralProblems"]),
+                    Strings(x["breakingChanges"])
+                )
+            )
             .OrderBy(x => x.File, StringComparer.Ordinal)
             .ToList();
 
         var derived = (root["derived"] as JsonArray ?? new JsonArray())
             .Select(x => x!.AsObject())
             .Select(x => new DerivedFile(
-                x["surface"]!.GetValue<string>(),
-                x["file"]!.GetValue<string>(),
-                x["apiVersion"]!.GetValue<string>(),
-                x["published"]!.GetValue<bool>(),
-                x["drifted"]!.GetValue<bool>(),
-                Strings(x["problems"])))
+                    x["surface"]!.GetValue<string>(),
+                    x["file"]!.GetValue<string>(),
+                    x["apiVersion"]!.GetValue<string>(),
+                    x["published"]!.GetValue<bool>(),
+                    x["drifted"]!.GetValue<bool>(),
+                    Strings(x["problems"])
+                )
+            )
             .OrderBy(x => x.File, StringComparer.Ordinal)
             .ToList();
 
         var chartAnnotations = (root["chartAnnotations"] as JsonArray ?? new JsonArray())
             .Select(x => x!.AsObject())
             .Select(x => new ChartAnnotationFile(
-                x["chart"]!.GetValue<string>(),
-                x["file"]!.GetValue<string>(),
-                x["resourceType"]!.GetValue<string>(),
-                x["apiVersion"]!.GetValue<string>(),
-                x["published"]!.GetValue<bool>(),
-                x["drifted"]!.GetValue<bool>(),
-                Strings(x["problems"]),
-                x["preservedInternalLines"]?.GetValue<int>() ?? 0))
+                    x["chart"]!.GetValue<string>(),
+                    x["file"]!.GetValue<string>(),
+                    x["resourceType"]!.GetValue<string>(),
+                    x["apiVersion"]!.GetValue<string>(),
+                    x["published"]!.GetValue<bool>(),
+                    x["drifted"]!.GetValue<bool>(),
+                    Strings(x["problems"]),
+                    x["preservedInternalLines"]?.GetValue<int>() ?? 0
+                )
+            )
             .OrderBy(x => x.File, StringComparer.Ordinal)
             .ToList();
 
         var typescript = (root["typescript"] as JsonArray ?? new JsonArray())
             .Select(x => x!.AsObject())
             .Select(x => new TypeScriptFile(
-                x["file"]!.GetValue<string>(),
-                x["apiVersion"]!.GetValue<string>(),
-                x["published"]!.GetValue<bool>(),
-                x["drifted"]!.GetValue<bool>()))
+                    x["file"]!.GetValue<string>(),
+                    x["apiVersion"]!.GetValue<string>(),
+                    x["published"]!.GetValue<bool>(),
+                    x["drifted"]!.GetValue<bool>()
+                )
+            )
             .OrderBy(x => x.File, StringComparer.Ordinal)
             .ToList();
 
         var actions = (root["actions"] as JsonArray ?? new JsonArray())
             .Select(x => x!.AsObject())
             .Select(x => new DeclaredAction(
-                x["type"]!.GetValue<string>(),
-                x["name"]!.GetValue<string>(),
-                x["longRunning"]!.GetValue<bool>(),
-                x["secret"]!.GetValue<bool>(),
-                // ⚠ A JSON null is a JsonNode that is absent from the object, not a JsonNull node —
-                // System.Text.Json.Nodes drops it — so both the missing key and the declared-null case
-                // arrive here the same way, which is what "the provider named no handler" means.
-                x["handler"] is { } handler ? handler.GetValue<string>() : null))
+                    x["type"]!.GetValue<string>(),
+                    x["name"]!.GetValue<string>(),
+                    x["longRunning"]!.GetValue<bool>(),
+                    x["secret"]!.GetValue<bool>(),
+                    // ⚠ A JSON null is a JsonNode that is absent from the object, not a JsonNull node —
+                    // System.Text.Json.Nodes drops it — so both the missing key and the declared-null case
+                    // arrive here the same way, which is what "the provider named no handler" means.
+                    x["handler"] is { } handler ? handler.GetValue<string>() : null
+                )
+            )
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .ThenBy(x => x.Name, StringComparer.Ordinal)
             .ToList();
@@ -645,7 +659,8 @@ partial class Build
             actions,
             typescript,
             Strings(root["typescriptProblems"]),
-            Strings(root["typescriptStale"]));
+            Strings(root["typescriptStale"])
+        );
     }
 
     static List<string> Strings(JsonNode? node) =>

@@ -27,7 +27,8 @@ namespace CyberCloud.Identity.Grains;
 ///     </para>
 /// </remarks>
 public sealed class ManagedIdentityGrain(
-    [PersistentState("managedIdentity", StorageTiers.Durable)] IPersistentState<ManagedIdentityGrainState> state,
+    [PersistentState("managedIdentity", StorageTiers.Durable)]
+    IPersistentState<ManagedIdentityGrainState> state,
     IClusterOidcDiscovery discovery,
     IProjectedTokenValidator validator,
     IClock clock
@@ -61,10 +62,7 @@ public sealed class ManagedIdentityGrain(
         }
 
         state.State.Descriptor = new() {
-            ManagedIdentityId = managedIdentityId,
-            TenantId = tenantId,
-            Name = name,
-            CreatedAt = clock.UtcNow
+            ManagedIdentityId = managedIdentityId, TenantId = tenantId, Name = name, CreatedAt = clock.UtcNow
         };
 
         await state.WriteStateAsync();
@@ -111,9 +109,7 @@ public sealed class ManagedIdentityGrain(
         }
 
         state.State.Descriptor = descriptor with {
-            Binding = valid.GetValueOrThrow(),
-            Issuer = issuer.GetValueOrThrow(),
-            BoundAt = clock.UtcNow
+            Binding = valid.GetValueOrThrow(), Issuer = issuer.GetValueOrThrow(), BoundAt = clock.UtcNow
         };
 
         await state.WriteStateAsync();
@@ -130,9 +126,7 @@ public sealed class ManagedIdentityGrain(
         // trusted key set attached to an identity that is bound to nothing, and the next bind would
         // silently inherit it — including if the next bind names a different cluster.
         state.State.Descriptor = descriptor with {
-            Binding = WorkloadBinding.None,
-            Issuer = ClusterOidcIssuer.None,
-            BoundAt = default
+            Binding = WorkloadBinding.None, Issuer = ClusterOidcIssuer.None, BoundAt = default
         };
 
         await state.WriteStateAsync();
@@ -233,8 +227,7 @@ public sealed class ManagedIdentityGrain(
         return Task.CompletedTask;
     }
 
-    static Task<Result<ExchangedSubject>> Rejected() =>
-        Task.FromResult(ManagedIdentityFailures.RejectExchange());
+    static Task<Result<ExchangedSubject>> Rejected() => Task.FromResult(ManagedIdentityFailures.RejectExchange());
 
     Result<ManagedIdentityDescriptor> NotFound() =>
         Result<ManagedIdentityDescriptor>.Failure(

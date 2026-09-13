@@ -6,8 +6,11 @@ using System.Globalization;
 namespace CyberCloud.ResourceManager;
 
 /// <summary>
-///     The enforcement seam. docs/plan/07 § The enforcement seam — <b>the one place in the request
-///     path that calls the engine</b>.
+///     The enforcement seam. docs/plan/07 § The enforcement seam —
+///     <b>
+///         the one place in the request
+///         path that calls the engine
+///     </b>.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -84,12 +87,17 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
     ///     The ReBAC object type of a subscription — what a soft-deleted resource hangs off.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Nothing wrote a <c>subscription:</c> tuple before soft delete, and that is why the id
-    ///     form is named here rather than spelled at the call site.</b> docs/plan/08 § Soft delete moves
+    ///     ⚠
+    ///     <b>
+    ///         Nothing wrote a <c>subscription:</c> tuple before soft delete, and that is why the id
+    ///         form is named here rather than spelled at the call site.
+    ///     </b> docs/plan/08 § Soft delete moves
     ///     a deleted resource's parent edge to <c>#parent@subscription:{sub}</c> so that
-    ///     <i>"the people who can see a deleted resource become the people who hold subscription-scoped
-    ///     rights, which is exactly who Azure gives <c>deletedVaults/read</c> and <c>purge/action</c>
-    ///     to"</i>. <c>CyberCloudSchema</c> already defines the type with the same
+    ///     <i>
+    ///         "the people who can see a deleted resource become the people who hold subscription-scoped
+    ///         rights, which is exactly who Azure gives <c>deletedVaults/read</c> and <c>purge/action</c>
+    ///         to"
+    ///     </i>. <c>CyberCloudSchema</c> already defines the type with the same
     ///     <c>owner</c>/<c>contributor</c>/<c>reader</c> rewrites a resource group has, so the walk
     ///     composes with no schema change and no <c>SchemaVersion</c> bump.
     /// </remarks>
@@ -177,9 +185,12 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
     /// <param name="id">The address being authorized. A <see cref="Guid.Empty" /> id means a create.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The branch is the whole of it, and it is what
-    ///         <c>OracleTests.TheObjectACheckIsAskedOnIsTheGroupForACreateAndTheResourceOtherwise</c>
-    ///         pins.</b> A create has no ReBAC object of its own, so it is checked against the group
+    ///         ⚠
+    ///         <b>
+    ///             The branch is the whole of it, and it is what
+    ///             <c>OracleTests.TheObjectACheckIsAskedOnIsTheGroupForACreateAndTheResourceOtherwise</c>
+    ///             pins.
+    ///         </b> A create has no ReBAC object of its own, so it is checked against the group
     ///         one level up — docs/plan/08 § The write path, end to end:
     ///         <c>Check(resource | parent rg, "write", caller)</c>. Collapsing the two arms into one
     ///         would either check a create against an object nobody holds a tuple on, which fails
@@ -187,8 +198,11 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
     ///         group, which grants on a resource whose own <c>#suspended</c> says otherwise.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The group's ReBAC id is the one <see cref="GroupObjectId" /> builds, not the bare
-    ///         name.</b> A group name is unique within its <b>subscription</b> and not within the
+    ///         ⚠
+    ///         <b>
+    ///             The group's ReBAC id is the one <see cref="GroupObjectId" /> builds, not the bare
+    ///             name.
+    ///         </b> A group name is unique within its <b>subscription</b> and not within the
     ///         tenant (docs/plan/06 § The hierarchy), so a bare name would merge the <c>prod</c> groups
     ///         of every subscription into one authorization object.
     ///     </para>
@@ -219,8 +233,11 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
 
     /// <summary>A subscription's ReBAC object id: the subscription GUID in the <c>N</c> form.</summary>
     /// <remarks>
-    ///     ⚠ <b>The bare GUID, with no tenant prefix, and unlike <see cref="GroupObjectId" /> it needs
-    ///     none.</b> A resource group's name is unique only within its subscription, which is why that
+    ///     ⚠
+    ///     <b>
+    ///         The bare GUID, with no tenant prefix, and unlike <see cref="GroupObjectId" /> it needs
+    ///         none.
+    ///     </b> A resource group's name is unique only within its subscription, which is why that
     ///     id is a pair; a subscription id is a GUID and is unique on its own. The tenant is already in
     ///     the grain key — every store this reaches is resolved through <c>ForTenant</c> — so putting it
     ///     in the object id as well would be a second tenant boundary that can disagree with the first.

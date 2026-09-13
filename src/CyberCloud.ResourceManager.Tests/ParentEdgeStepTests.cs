@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>What is under test here is the <i>ordering</i> and the <i>rollback</i>, not the
-///         tuple.</b> Whether the tuple <c>ReBacResourceRelationWriter</c> produces is one
+///         ⚠
+///         <b>
+///             What is under test here is the <i>ordering</i> and the <i>rollback</i>, not the
+///             tuple.
+///         </b> Whether the tuple <c>ReBacResourceRelationWriter</c> produces is one
 ///         <c>CyberCloudSchema</c> can actually walk is a question about the schema, and
 ///         <c>CyberCloud.Isolation</c>'s <c>ParentEdgeTests</c> answers it against the real engine.
 ///         What this suite owns is the write path: that the edge is written after the name is claimed
@@ -77,18 +80,17 @@ public sealed class ParentEdgeStepTests(ResourceManagerCluster cluster) {
             refused.IsFailure.ShouldBeTrue("the create succeeded despite the parent edge not being written");
 
             var index = await cluster.Index(address).GetAsync();
-            index.GetValueOrThrow().State.ShouldNotBe(
-                IndexEntryState.Confirmed,
-                "the name was permanently bound to a resource that was never created"
-            );
+            index.GetValueOrThrow()
+                .State.ShouldNotBe(
+                    IndexEntryState.Confirmed,
+                    "the name was permanently bound to a resource that was never created"
+                );
 
             // No resource grain took durable state. The GUID is not knowable from outside, so this
             // asserts the observable equivalent: the path resolves to nothing.
             var read = await cluster.Manager.ReadAsync(
                 new() {
-                    Path = address.Path,
-                    ApiVersion = TestingProvider.V2026,
-                    Caller = ResourceManagerCluster.Caller()
+                    Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller()
                 },
                 TestContext.Current.CancellationToken
             );
@@ -102,8 +104,7 @@ public sealed class ParentEdgeStepTests(ResourceManagerCluster cluster) {
             after.ExceptWith(before);
 
             after.ShouldBeEmpty("the refused create kept its quota lease");
-        }
-        finally {
+        } finally {
             RecordingRelationWriter.FailLink = false;
         }
     }
@@ -127,11 +128,7 @@ public sealed class ParentEdgeStepTests(ResourceManagerCluster cluster) {
         RecordingRelationWriter.Edges.ShouldContainKey(resourceId);
 
         var deleted = await cluster.Manager.DeleteAsync(
-            new() {
-                Path = address.Path,
-                ApiVersion = TestingProvider.V2026,
-                Caller = ResourceManagerCluster.Caller()
-            },
+            new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
             TestContext.Current.CancellationToken
         );
 
@@ -189,11 +186,7 @@ public sealed class ParentEdgeStepTests(ResourceManagerCluster cluster) {
         );
 
         var read = await cluster.Manager.ReadAsync(
-            new() {
-                Path = address.Path,
-                ApiVersion = TestingProvider.V2026,
-                Caller = ResourceManagerCluster.Caller()
-            },
+            new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
             TestContext.Current.CancellationToken
         );
 

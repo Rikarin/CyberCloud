@@ -5,8 +5,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///     authenticated and resolved the region.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A separate record from <see cref="WriteRequest" /> rather than a reuse of it, and the
-///     empty fields are the reason.</b> A <see cref="WriteRequest" /> carries an api-version that
+///     ⚠
+///     <b>
+///         A separate record from <see cref="WriteRequest" /> rather than a reuse of it, and the
+///         empty fields are the reason.
+///     </b> A <see cref="WriteRequest" /> carries an api-version that
 ///     selects a schema and a projection, an <c>If-Match</c> etag, and an action name — three fields a
 ///     scope has no meaning for. Reusing it would put three permanently-empty properties on the scope
 ///     path, and the next reader would have to determine, per field, whether "empty" meant "not
@@ -51,8 +54,11 @@ public sealed record ScopeRequest {
 public sealed record TenantCreateRequest {
     /// <summary>The tenant's GUID. ⚠ Supplied rather than minted — see the remarks.</summary>
     /// <remarks>
-    ///     ⚠ <b>The caller mints it, which makes a retry idempotent and is why this is not a
-    ///     platform-generated id.</b> docs/plan/06 § Tenant lifecycle makes tenant creation a
+    ///     ⚠
+    ///     <b>
+    ///         The caller mints it, which makes a retry idempotent and is why this is not a
+    ///         platform-generated id.
+    ///     </b> docs/plan/06 § Tenant lifecycle makes tenant creation a
     ///     long-running operation whose <i>"every step is idempotent and re-drivable"</i>, and
     ///     <c>ITenantGrain.CreateAsync</c> honours that by returning the existing descriptor for a
     ///     repeated call with the same arguments. A platform-minted id would make every retry a new
@@ -87,8 +93,11 @@ public sealed record TenantCreateRequest {
 
 /// <summary>A scope as the API renders it — the response body of a scope <c>PUT</c> or <c>GET</c>.</summary>
 /// <remarks>
-///     ⚠ <b>There is no <c>provisioningState</c> and no <c>202</c> anywhere on this path, which is
-///     the visible half of "a scope is not a resource".</b> docs/plan/06 § Two-phase create is about
+///     ⚠
+///     <b>
+///         There is no <c>provisioningState</c> and no <c>202</c> anywhere on this path, which is
+///         the visible half of "a scope is not a resource".
+///     </b> docs/plan/06 § Two-phase create is about
 ///     resources; a subscription and a resource group are records in one grain activation each, so
 ///     creating one converges before the call returns and there is nothing to poll. A
 ///     <see cref="WriteAccepted" /> here would advertise an <c>Azure-AsyncOperation</c> URL that
@@ -137,8 +146,11 @@ public sealed record ScopeSnapshot {
 ///     The properties a scope <c>PUT</c> body carries.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Here rather than on <c>ScopeManagerService</c>, because the generated surfaces are in
-///     this assembly and the service is not.</b> The service is where they were, and the day the
+///     ⚠
+///     <b>
+///         Here rather than on <c>ScopeManagerService</c>, because the generated surfaces are in
+///         this assembly and the service is not.
+///     </b> The service is where they were, and the day the
 ///     OpenAPI document grew a scope path (issue #63) that placement would have made them the
 ///     failure this repository keeps re-finding: two constants in assemblies that cannot see each
 ///     other, agreeing by hand. A CLI offering <c>--display-name</c> against a manager reading
@@ -169,8 +181,11 @@ public static class ScopeBodyProperties {
 ///     The three <c>type</c> strings a scope renders as, in Azure's shape.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Constants because they appear in a response body and in the CLI's and portal's parsing of
-///     one, and a fourth spelling would be a silent client break.</b> They are display strings and
+///     ⚠
+///     <b>
+///         Constants because they appear in a response body and in the CLI's and portal's parsing of
+///         one, and a fourth spelling would be a silent client break.
+///     </b> They are display strings and
 ///     <b>not</b> routing input: <c>GatewayRouter</c> resolves a scope from its path's shape, and
 ///     nothing anywhere matches on these. That is deliberate — the failure this repository has
 ///     actually shipped is a constant in one assembly that had to agree with a constant in another

@@ -66,16 +66,16 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster) {
             .GetValueOrThrow();
 
         (await cluster.DirectoryGrain()
-            .RegisterAsync(
-                new() {
-                    TenantId = tenant,
-                    Slug = "null-tenant-probe",
-                    HomeRegion = "eu-central",
-                    HotShard = assigned.HotHashTag,
-                    DurableShard = assigned.DurableShard,
-                    Status = TenantStatus.Active
-                }
-            )).IsSuccess.ShouldBeTrue();
+                .RegisterAsync(
+                    new() {
+                        TenantId = tenant,
+                        Slug = "null-tenant-probe",
+                        HomeRegion = "eu-central",
+                        HotShard = assigned.HotHashTag,
+                        DurableShard = assigned.DurableShard,
+                        Status = TenantStatus.Active
+                    }
+                )).IsSuccess.ShouldBeTrue();
 
         await cluster.ShardMapGrain().DeactivateAsync();
         await cluster.DirectoryGrain().DeactivateAsync();
@@ -85,7 +85,7 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster) {
             .ShouldBe(assigned);
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
             .Slug
-            .ShouldBe("null-tenant-probe");
+                .ShouldBe("null-tenant-probe");
     }
 
     [Fact]
@@ -95,14 +95,14 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster) {
 
         (await cluster.ShardMapGrain().AssignAsync(tenant, "eu-central")).IsSuccess.ShouldBeTrue();
         (await cluster.DirectoryGrain()
-            .RegisterAsync(
-                new() {
-                    TenantId = tenant,
-                    Slug = "null-tenant-rows",
-                    HomeRegion = "eu-central",
-                    Status = TenantStatus.Active
-                }
-            )).IsSuccess.ShouldBeTrue();
+                .RegisterAsync(
+                    new() {
+                        TenantId = tenant,
+                        Slug = "null-tenant-rows",
+                        HomeRegion = "eu-central",
+                        Status = TenantStatus.Active
+                    }
+                )).IsSuccess.ShouldBeTrue();
 
         (await CountKeys(TenancyCluster.PlatformShard, GrainKeys.ShardMap(), token))
             .ShouldBe(1L, "the shard map's row is in the platform shard.");

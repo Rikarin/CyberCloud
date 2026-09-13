@@ -36,11 +36,12 @@ public sealed class PartialSessionTests {
             SignInOutcome.Success(User, Session, AuthenticationMethod.Password, secondFactorRequired: true)
         );
 
-        IdentitySessionPrincipal.IsFullyAuthenticated(pending).ShouldBeFalse(
-            "A password sign-in that still owes a second factor produced a session that counts as "
-            + "whole. The authorization endpoint reads this, so a true here is a sign-in that "
-            + "completes with one factor."
-        );
+        IdentitySessionPrincipal.IsFullyAuthenticated(pending)
+            .ShouldBeFalse(
+                "A password sign-in that still owes a second factor produced a session that counts as "
+                + "whole. The authorization endpoint reads this, so a true here is a sign-in that "
+                + "completes with one factor."
+            );
 
         // It still names who is answering — that is the whole reason the cookie is issued at all.
         IdentitySessionPrincipal.UserId(pending).ShouldBe(User);

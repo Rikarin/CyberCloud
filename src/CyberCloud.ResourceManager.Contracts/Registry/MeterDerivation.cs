@@ -37,8 +37,10 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///         what the function is allowed to touch, and a reviewer can check the lambda against it.
 ///     </para>
 ///     <para>
-///         <b>Why a delegate is acceptable here when <c>IResourceTypeBuilder.Meter</c> argues against
-///         one.</b> That argument is that a delegate "validates and reserves but cannot be
+///         <b>
+///             Why a delegate is acceptable here when <c>IResourceTypeBuilder.Meter</c> argues against
+///             one.
+///         </b> That argument is that a delegate "validates and reserves but cannot be
 ///         <i>generated</i> from". It is right, and the repair is not to drop the delegate but to make
 ///         it carry its own description: <see cref="Expression" /> and <see cref="Reads" /> are
 ///         required, they are what <c>OpenApiEmitter</c> publishes, and a derivation therefore says in
@@ -76,8 +78,14 @@ public sealed record MeterDerivation {
     ///     The function itself: a body in, an amount or a stated refusal out.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Returning a failure is the point, and it is why this is not <c>Func&lt;JsonElement,
-    ///     decimal&gt;</c>.</b> A derivation that cannot resolve — a preset it does not know, a quantity
+    ///     ⚠
+    ///     <b>
+    ///         Returning a failure is the point, and it is why this is not
+    ///         <c>
+    /// Func&lt;JsonElement,
+    ///     decimal&gt;
+    ///         </c>.
+    ///     </b> A derivation that cannot resolve — a preset it does not know, a quantity
     ///     that does not parse, a property that was renamed out from under it — must be able to say so.
     ///     The alternative is reserving zero, and zero passes: the write succeeds, the resource
     ///     provisions, and nobody is charged. See <c>ResourceManagerService.AmountFor</c>, which refuses

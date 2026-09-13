@@ -33,8 +33,10 @@ namespace CyberCloud.Silo.Host.Hello;
     + "Silo host's bring-up path, so it is not schema and does not belong on the reviewed list."
 )]
 public sealed class HelloGrain(
-    [PersistentState("hello-hot", StorageTiers.Hot)] IPersistentState<HelloState> hot,
-    [PersistentState("hello-durable", StorageTiers.Durable)] IPersistentState<HelloState> durable,
+    [PersistentState("hello-hot", StorageTiers.Hot)]
+    IPersistentState<HelloState> hot,
+    [PersistentState("hello-durable", StorageTiers.Durable)]
+    IPersistentState<HelloState> durable,
     ILocalSiloDetails silo
 )
     : Grain, IHelloGrain {

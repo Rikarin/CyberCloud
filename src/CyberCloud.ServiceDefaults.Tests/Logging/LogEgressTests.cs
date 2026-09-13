@@ -47,8 +47,8 @@ public class LogEgressTests {
     /// <summary>Every host builder in the platform, by the name a failure should name.</summary>
     public static TheoryData<string> Hosts => ["silo", "client"];
 
-    static WebApplicationBuilder Build(string host, params string[] args)
-        => host == "silo"
+    static WebApplicationBuilder Build(string host, params string[] args) =>
+        host == "silo"
             ? OrleansApplication.CreateSilo([.. Args(args)])
             : OrleansApplication.CreateClient([.. Args(args)]);
 
@@ -80,11 +80,11 @@ public class LogEgressTests {
         services.GetRequiredService<ILoggerFactory>()
             .GetType()
             .FullName
-            .ShouldBe(
-                "Serilog.Extensions.Logging.SerilogLoggerFactory",
-                $"the {host} host's ILogger calls must all land in Serilog, which is the only pipeline "
-                + "SecretScrubbingSink is on"
-            );
+                .ShouldBe(
+                    "Serilog.Extensions.Logging.SerilogLoggerFactory",
+                    $"the {host} host's ILogger calls must all land in Serilog, which is the only pipeline "
+                    + "SecretScrubbingSink is on"
+                );
 
         // ClearProviders() as belt to that brace. The descriptors it removes are inert for the
         // reason above, so this is not what closes the hole — it keeps the service collection from
@@ -134,9 +134,7 @@ public class LogEgressTests {
         // Helm values override, because that is how every other Serilog setting is changed. It would
         // be added beside the wrapper rather than behind it and would export unredacted, and nothing
         // would have gone red.
-        var refusal = Should.Throw<InvalidOperationException>(
-            () => Build(host, "--Serilog:WriteTo:0:Name=Console")
-        );
+        var refusal = Should.Throw<InvalidOperationException>(() => Build(host, "--Serilog:WriteTo:0:Name=Console"));
 
         refusal.Message.ShouldContain("Serilog:WriteTo");
         refusal.Message.ShouldContain("docs/plan/18");
@@ -160,7 +158,8 @@ public class LogEgressTests {
         // destructuring are how an operator tunes logging in an incident, and a control that took
         // those away as collateral would be worked around rather than lived with.
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection([
+            .AddInMemoryCollection(
+                [
                     new("Serilog:MinimumLevel:Default", "Debug"),
                     new("Serilog:MinimumLevel:Override:Orleans", "Warning"),
                     new("Serilog:Properties:Application", "cybercloud")

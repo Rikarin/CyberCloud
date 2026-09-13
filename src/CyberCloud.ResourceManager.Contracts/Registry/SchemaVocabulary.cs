@@ -5,8 +5,11 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One place, because a wire string that appears twice is a wire string that will
-///         eventually differ.</b> A <see cref="SchemaFormat" /> is written into the OpenAPI document
+///         ⚠
+///         <b>
+///             One place, because a wire string that appears twice is a wire string that will
+///             eventually differ.
+///         </b> A <see cref="SchemaFormat" /> is written into the OpenAPI document
 ///         by the emitter, matched by the portal renderer's widget table, turned into a CLI flag's
 ///         help text and turned into an SDK member's type. Four <c>switch</c> statements over the
 ///         same enum is four chances to spell <c>date-time</c> as <c>datetime</c>, and the compiler
@@ -46,8 +49,11 @@ public static class SchemaVocabulary {
     /// <param name="widget">The declared hint.</param>
     /// <remarks>
     ///     The strings are docs/plan/20 § The shape that makes 100 resource types affordable's own —
-    ///     that document's widgets directory is named <c>region, cluster, storageclass, subnet, sku,
-    ///     secret-ref, cron, cidr, duration</c>, and the renderer keys on exactly these.
+    ///     that document's widgets directory is named
+    ///     <c>
+    /// region, cluster, storageclass, subnet, sku,
+    ///     secret-ref, cron, cidr, duration
+    ///     </c>, and the renderer keys on exactly these.
     /// </remarks>
     public static string Of(WidgetHint widget) =>
         widget switch {
@@ -89,8 +95,11 @@ public static class SchemaVocabulary {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This type exists because <c>SupportsTags</c> was a flag with no schema consequence,
-///         and that turned into the platform's first documented contract lie.</b>
+///         ⚠
+///         <b>
+///             This type exists because <c>SupportsTags</c> was a flag with no schema consequence,
+///             and that turned into the platform's first documented contract lie.
+///         </b>
 ///         <c>IResourceTypeBuilder.SupportsTags</c> made the write path accept a root-level
 ///         <c>tags</c> object; <see cref="ResourceSchema.Validate" /> grew an <c>allowTags</c>
 ///         parameter so it would stop refusing one; and the OpenAPI emitter declared neither, so the
@@ -127,8 +136,11 @@ public static class TagRules {
 ///     Where a resource says which cluster it is placed into — the other flag that had no shape.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Unlike <see cref="TagRules" />, this pointer belongs to the <i>provider</i> and only its
-///     default lives here.</b> The tag bag is the platform's and is identical for every type; a
+///     ⚠
+///     <b>
+///         Unlike <see cref="TagRules" />, this pointer belongs to the <i>provider</i> and only its
+///         default lives here.
+///     </b> The tag bag is the platform's and is identical for every type; a
 ///     cluster id is a property of the type's own body, which is why it is declared in the schema and
 ///     merely <i>named</i> by <c>RequiresCluster</c>. The default is the pointer
 ///     <c>ResourceManagerService</c> hard-coded before this existed, so every type that already worked
@@ -143,8 +155,11 @@ public static class ClusterPlacement {
 ///     The vocabulary of soft delete — docs/plan/08 § Soft delete.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The purge permission has a default and the recovery window does not, which is the right way
-///     round.</b> A window is a promise about a specific type's data and only its provider can say how
+///     ⚠
+///     <b>
+///         The purge permission has a default and the recovery window does not, which is the right way
+///         round.
+///     </b> A window is a promise about a specific type's data and only its provider can say how
 ///     long — <c>SupportsSoftDelete(7)</c> is a claim, not a formality. Who may end that window early is
 ///     the same question for every type that has one, so a default here means the nine providers that
 ///     eventually declare a window do not each invent a permission name, and the one that genuinely
@@ -166,8 +181,11 @@ public static class SoftDeletePolicy {
     /// <summary>The action a caller posts to bring a parked resource back.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>An action on the resource's own address, which is the one address a parked
-    ///         resource still has.</b> docs/plan/08 § Soft delete records that the alternative —
+    ///         ⚠
+    ///         <b>
+    ///             An action on the resource's own address, which is the one address a parked
+    ///             resource still has.
+    ///         </b> docs/plan/08 § Soft delete records that the alternative —
     ///         Key Vault's <c>deletedVaults</c> collection at subscription+location scope — cannot be
     ///         built here, because <c>ResourceId.ParsePath</c> has <c>const int fixedPrefix = 8</c> and
     ///         there is no subscription-scoped address for the collection to live at. A <c>POST</c> to

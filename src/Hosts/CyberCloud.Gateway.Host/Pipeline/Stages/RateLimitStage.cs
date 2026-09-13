@@ -11,8 +11,11 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>One of the two load-bearing stages, and the reason is its position.</b>
-///         docs/plan/10 § Request pipeline: <i>"Rate limiting before dispatch means a flood costs
-///         Redis <c>INCR</c>s, not grain activations."</i> Moving this after routing would put the
+///         docs/plan/10 § Request pipeline:
+///         <i>
+///             "Rate limiting before dispatch means a flood costs
+///             Redis <c>INCR</c>s, not grain activations."
+///         </i> Moving this after routing would put the
 ///         provider registry on a flood's path; moving it after dispatch would put grain activations
 ///         there. <see cref="GatewayTraceBuilder" /> refuses either.
 ///     </para>

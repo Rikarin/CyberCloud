@@ -5,8 +5,11 @@ namespace CyberCloud.Cli.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every assertion here is about a request that leaves the process, never about the
-///         verb tree alone.</b> The defect this suite closes was not that the tree lacked a member:
+///         ⚠
+///         <b>
+///             Every assertion here is about a request that leaves the process, never about the
+///             verb tree alone.
+///         </b> The defect this suite closes was not that the tree lacked a member:
 ///         it was that a flag could be declared, accepted and parsed and then <i>not sent</i>,
 ///         because <c>CliFlag</c> bound a body pointer or a path placeholder and nothing else. A test
 ///         reading the tree would have been green throughout.
@@ -49,9 +52,22 @@ public sealed class PagingTests {
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
-            "sample", "widgets", "list",
-            "--resource-group", "prod", "--subscription", "s", "--tenant", "t",
-            "--top", "3", "--skip-token", "a/b c", "--output", "none");
+            "sample",
+            "widgets",
+            "list",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--top",
+            "3",
+            "--skip-token",
+            "a/b c",
+            "--output",
+            "none"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
 
@@ -71,8 +87,18 @@ public sealed class PagingTests {
         using var host = TestHost.Create(transport);
 
         await host.RunAsync(
-            "sample", "widgets", "list",
-            "--resource-group", "prod", "--subscription", "s", "--tenant", "t", "--output", "none");
+            "sample",
+            "widgets",
+            "list",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--output",
+            "none"
+        );
 
         // The same rule the body builder follows: sending an untyped `$top` would replace the
         // platform's page size with whatever this build was generated against, and the platform
@@ -83,14 +109,26 @@ public sealed class PagingTests {
     [Fact]
     public async Task OnePageWithMoreBehindItSaysSoOnStderr() {
         var transport = new ScriptedTransport((_, _) => Responses.Json(
-            HttpStatusCode.OK,
-            """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/next?api-version=2026-08-01"}"""));
+                HttpStatusCode.OK,
+                """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/next?api-version=2026-08-01"}"""
+            )
+        );
 
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
-            "sample", "widgets", "list",
-            "--resource-group", "prod", "--subscription", "s", "--tenant", "t", "--output", "json");
+            "sample",
+            "widgets",
+            "list",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--output",
+            "json"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
         transport.RequestCount.ShouldBe(1);
@@ -106,12 +144,26 @@ public sealed class PagingTests {
 
     [Fact]
     public async Task OneCompletePageSaysNothing() {
-        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[{"name":"w1"}]}"""));
+        var transport = new ScriptedTransport((_, _) => Responses.Json(
+                HttpStatusCode.OK,
+                """{"value":[{"name":"w1"}]}"""
+            )
+        );
         using var host = TestHost.Create(transport);
 
         await host.RunAsync(
-            "sample", "widgets", "list",
-            "--resource-group", "prod", "--subscription", "s", "--tenant", "t", "--output", "none");
+            "sample",
+            "widgets",
+            "list",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--output",
+            "none"
+        );
 
         host.Stderr.ShouldNotContain("--all");
     }
@@ -119,20 +171,34 @@ public sealed class PagingTests {
     [Fact]
     public async Task AllFollowsNextLinkToTheEndAndPrintsOneList() {
         var transport = new ScriptedTransport((_, index) => index switch {
-            0 => Responses.Json(
-                HttpStatusCode.OK,
-                """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/p2?api-version=2026-08-01&$skipToken=w1"}"""),
-            1 => Responses.Json(
-                HttpStatusCode.OK,
-                """{"value":[{"name":"w2"}],"nextLink":"https://api.cybercloud.io/p3?api-version=2026-08-01&$skipToken=w2"}"""),
-            _ => Responses.Json(HttpStatusCode.OK, """{"value":[{"name":"w3"}]}"""),
-        });
+                0 => Responses.Json(
+                    HttpStatusCode.OK,
+                    """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/p2?api-version=2026-08-01&$skipToken=w1"}"""
+                ),
+                1 => Responses.Json(
+                    HttpStatusCode.OK,
+                    """{"value":[{"name":"w2"}],"nextLink":"https://api.cybercloud.io/p3?api-version=2026-08-01&$skipToken=w2"}"""
+                ),
+                _ => Responses.Json(HttpStatusCode.OK, """{"value":[{"name":"w3"}]}"""),
+            }
+        );
 
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
-            "sample", "widgets", "list",
-            "--resource-group", "prod", "--subscription", "s", "--tenant", "t", "--all", "--output", "json");
+            "sample",
+            "widgets",
+            "list",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--all",
+            "--output",
+            "json"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
         transport.RequestCount.ShouldBe(3);
@@ -157,18 +223,31 @@ public sealed class PagingTests {
     [Fact]
     public async Task AFailureOnALaterPageIsReportedRatherThanTruncatingTheList() {
         var transport = new ScriptedTransport((_, index) => index == 0
-            ? Responses.Json(
-                HttpStatusCode.OK,
-                """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/p2?api-version=2026-08-01"}""")
-            : Responses.Error(HttpStatusCode.Forbidden, "Forbidden", "The token no longer grants this."));
+                ? Responses.Json(
+                    HttpStatusCode.OK,
+                    """{"value":[{"name":"w1"}],"nextLink":"https://api.cybercloud.io/p2?api-version=2026-08-01"}"""
+                )
+                : Responses.Error(HttpStatusCode.Forbidden, "Forbidden", "The token no longer grants this.")
+        );
 
         using var host = TestHost.Create(transport);
 
         // ⚠ Exit non-zero rather than printing page one. A partial list that exits 0 is the failure
         // this whole issue is about, arrived at from the other direction.
         var code = await host.RunAsync(
-            "sample", "widgets", "list",
-            "--resource-group", "prod", "--subscription", "s", "--tenant", "t", "--all", "--output", "json");
+            "sample",
+            "widgets",
+            "list",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--all",
+            "--output",
+            "json"
+        );
 
         code.ShouldNotBe((int)ExitCode.Ok);
         host.Stdout.ShouldNotContain("w1");
@@ -185,14 +264,28 @@ public sealed class PagingTests {
         // Upgrade cyc" — advice no newer build could have satisfied. Five of the twenty-two types
         // are nested.
         var code = await host.RunAsync(
-            "network", "virtual-networks-subnets", "show",
-            "--name", "web", "--virtual-networks-name", "vnet1",
-            "--resource-group", "prod", "--subscription", "s", "--tenant", "t", "--output", "none");
+            "network",
+            "virtual-networks-subnets",
+            "show",
+            "--name",
+            "web",
+            "--virtual-networks-name",
+            "vnet1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--output",
+            "none"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
 
         transport.Requests[0].Uri.AbsolutePath.ShouldBe(
-            "/tenants/t/subscriptions/s/resourceGroups/prod/providers/CyberCloud.Network/virtualNetworks/vnet1/subnets/web");
+            "/tenants/t/subscriptions/s/resourceGroups/prod/providers/CyberCloud.Network/virtualNetworks/vnet1/subnets/web"
+        );
     }
 
     [Fact]
@@ -201,16 +294,28 @@ public sealed class PagingTests {
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
-            "network", "virtual-networks-subnets", "list",
-            "--virtual-networks-name", "vnet1",
-            "--resource-group", "prod", "--subscription", "s", "--tenant", "t", "--output", "none");
+            "network",
+            "virtual-networks-subnets",
+            "list",
+            "--virtual-networks-name",
+            "vnet1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--output",
+            "none"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
 
         // ⚠ Ends on the type rather than on a name, which is what makes it a collection address —
         // ResourceId.ParsePath refuses this and ResourceCollectionId.ParsePath requires it.
         transport.Requests[0].Uri.AbsolutePath.ShouldBe(
-            "/tenants/t/subscriptions/s/resourceGroups/prod/providers/CyberCloud.Network/virtualNetworks/vnet1/subnets");
+            "/tenants/t/subscriptions/s/resourceGroups/prod/providers/CyberCloud.Network/virtualNetworks/vnet1/subnets"
+        );
     }
 }
 
@@ -218,8 +323,11 @@ public sealed class PagingTests {
 ///     <c>cyc scope …</c> — the scope API on the CLI, issue #63.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>These are here rather than in the emitter's suite because the emitter's suite cannot
-///     answer the question.</b> The verb tree could describe the scope group perfectly and the host
+///     ⚠
+///     <b>
+///         These are here rather than in the emitter's suite because the emitter's suite cannot
+///         answer the question.
+///     </b> The verb tree could describe the scope group perfectly and the host
 ///     could still fail to build the URL or the body — which is exactly what happened to the five
 ///     nested resource types for as long as the host filled placeholders from a table of four. The
 ///     scope paths are the first this CLI has ever addressed that name no provider.
@@ -228,14 +336,26 @@ public sealed class ScopeCommandTests {
     [Fact]
     public async Task ASubscriptionIsCreatedAtTheAddressTheFlagNames() {
         var transport = new ScriptedTransport((_, _) => Responses.Json(
-            HttpStatusCode.Created,
-            """{"id":"/tenants/t/subscriptions/s1","name":"Platform","type":"CyberCloud.Resources/subscriptions"}"""));
+                HttpStatusCode.Created,
+                """{"id":"/tenants/t/subscriptions/s1","name":"Platform","type":"CyberCloud.Resources/subscriptions"}"""
+            )
+        );
 
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
-            "scope", "subscription", "create",
-            "--name", "s1", "--display-name", "Platform", "--tenant", "t", "--output", "json");
+            "scope",
+            "subscription",
+            "create",
+            "--name",
+            "s1",
+            "--display-name",
+            "Platform",
+            "--tenant",
+            "t",
+            "--output",
+            "json"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
 
@@ -260,14 +380,22 @@ public sealed class ScopeCommandTests {
 
         using var host = TestHost.Create(
             transport,
-            config: "[default]\ntenant = t\nsubscription = already-mine\n");
+            config: "[default]\ntenant = t\nsubscription = already-mine\n"
+        );
 
         // ⚠ THE WRITE NOBODY ASKED FOR. --subscription is profile-backed and optional on every
         // resource verb; if the scope's own segment reused it, this command line would have created
         // the subscription the profile points at. It is a usage error instead, and no request is
         // made at all.
         var code = await host.RunAsync(
-            "scope", "subscription", "create", "--display-name", "Platform", "--output", "none");
+            "scope",
+            "subscription",
+            "create",
+            "--display-name",
+            "Platform",
+            "--output",
+            "none"
+        );
 
         code.ShouldBe((int)ExitCode.Usage);
         transport.RequestCount.ShouldBe(0);
@@ -279,9 +407,20 @@ public sealed class ScopeCommandTests {
         using var host = TestHost.Create(transport);
 
         var code = await host.RunAsync(
-            "scope", "resource-group", "create",
-            "--name", "prod", "--location", "eu-central",
-            "--subscription", "s", "--tenant", "t", "--output", "none");
+            "scope",
+            "resource-group",
+            "create",
+            "--name",
+            "prod",
+            "--location",
+            "eu-central",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--output",
+            "none"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
         transport.Requests[0].Uri.AbsolutePath.ShouldBe("/tenants/t/subscriptions/s/resourceGroups/prod");
@@ -312,7 +451,16 @@ public sealed class ScopeCommandTests {
         // answers 404. The tree marks the verb longRunning: false and the host declares the pair
         // only from waitFlags, so the flag is not merely ignored — it does not parse.
         (await host.RunAsync(
-            "scope", "subscription", "create",
-            "--name", "s1", "--display-name", "P", "--tenant", "t", "--wait")).ShouldBe((int)ExitCode.Usage);
+                "scope",
+                "subscription",
+                "create",
+                "--name",
+                "s1",
+                "--display-name",
+                "P",
+                "--tenant",
+                "t",
+                "--wait"
+            )).ShouldBe((int)ExitCode.Usage);
     }
 }

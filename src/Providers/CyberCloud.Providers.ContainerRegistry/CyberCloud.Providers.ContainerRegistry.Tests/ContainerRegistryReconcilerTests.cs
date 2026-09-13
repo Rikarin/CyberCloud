@@ -70,13 +70,10 @@ public sealed class ContainerRegistryReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            ContainerRegistries.Body(ClusterId, replicas: 2, storageSize: "100Gi")
-        );
+        using var aliceBody =
+            JsonDocument.Parse(ContainerRegistries.Body(ClusterId, replicas: 2, storageSize: "100Gi"));
 
-        using var bobBody = JsonDocument.Parse(
-            ContainerRegistries.Body(ClusterId, replicas: 5, storageSize: "500Gi")
-        );
+        using var bobBody = JsonDocument.Parse(ContainerRegistries.Body(ClusterId, replicas: 5, storageSize: "500Gi"));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -150,7 +147,10 @@ public sealed class ContainerRegistryReconcilerTests {
 
         read.ShouldBe(
             applied,
-            "the reconciler applied " + applied.Count + " object(s) and read back " + read.Count
+            "the reconciler applied "
+            + applied.Count
+            + " object(s) and read back "
+            + read.Count
             + ". An object applied and not read back is one the loop reports Converged without ever "
             + "having observed."
         );
@@ -325,11 +325,12 @@ public sealed class ContainerRegistryReconcilerTests {
         var working = new RecordingConnection();
         (await Reconcile(working, body.RootElement, vault)).ShouldBe(ReconcileOutcome.Converged);
 
-        vault.Peek(path, ContainerRegistries.AdminPasswordField).ShouldBe(
-            minted,
-            "the recovery pass minted a second credential set, so a tenant who had already read the "
-            + "first password holds one Harbor never accepted"
-        );
+        vault.Peek(path, ContainerRegistries.AdminPasswordField)
+            .ShouldBe(
+                minted,
+                "the recovery pass minted a second credential set, so a tenant who had already read the "
+                + "first password holds one Harbor never accepted"
+            );
 
         vault.Writes.ShouldBe(1);
     }
@@ -418,9 +419,9 @@ public sealed class ContainerRegistryReconcilerTests {
                 + "fake cluster echoes back happily and a real API server refuses to type-check."
             );
 
-            entry!.AsObject()["name"]?.GetValue<string>().ShouldNotBeNullOrEmpty(
-                $"'{owner}' renders a {member} entry with no name"
-            );
+            entry!.AsObject()["name"]
+                ?.GetValue<string>()
+                .ShouldNotBeNullOrEmpty($"'{owner}' renders a {member} entry with no name");
         }
     }
 
@@ -499,12 +500,12 @@ public sealed class ContainerRegistryReconcilerTests {
         return node.ToJsonString();
     }
 
-    static int Replicas(string objectJson) =>
-        JsonNode.Parse(objectJson)!["spec"]!["replicas"]!.GetValue<int>();
+    static int Replicas(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!["replicas"]!.GetValue<int>();
 
     static string ClaimSize(string objectJson) =>
         JsonNode.Parse(objectJson)!["spec"]!["volumeClaimTemplates"]![0]!["spec"]!["resources"]!
-            ["requests"]!["storage"]!.GetValue<string>();
+            ["requests"]!["storage"]!
+            .GetValue<string>();
 
     static JsonObject Container(string objectJson) =>
         JsonNode.Parse(objectJson)!["spec"]!["template"]!["spec"]!["containers"]![0]!.AsObject();
@@ -538,9 +539,7 @@ public sealed class ContainerRegistryReconcilerTests {
                 connection,
                 store,
                 new NullLog()
-            ) {
-                SecretWriter = store
-            },
+            ) { SecretWriter = store },
             TestContext.Current.CancellationToken
         );
     }
@@ -562,9 +561,7 @@ public sealed class ContainerRegistryReconcilerTests {
             connection,
             store,
             new NullLog()
-        ) {
-            SecretWriter = store
-        };
+        ) { SecretWriter = store };
     }
 
     /// <summary>An address in a named tenant and its own subscription.</summary>
@@ -605,12 +602,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
@@ -729,8 +728,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     ⚠ Keyed by kind, namespace AND name. The namespace is in it because the cross-tenant test
     ///     puts the same resource name in two tenants.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

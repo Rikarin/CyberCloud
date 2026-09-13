@@ -49,8 +49,11 @@ namespace CyberCloud.ResourceManager;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>No quota, no index claim, no membership record, no desired state, no operation and no
-///         <c>202</c>.</b> Each of those absences is a property of a scope rather than an omission,
+///         ⚠
+///         <b>
+///             No quota, no index claim, no membership record, no desired state, no operation and no
+///             <c>202</c>.
+///         </b> Each of those absences is a property of a scope rather than an omission,
 ///         and <see cref="IScopeManager" /> names them one at a time so that a reader adding one back
 ///         has to disagree with a sentence rather than fill in a blank.
 ///     </para>
@@ -72,8 +75,11 @@ public sealed class ScopeManagerService(
     ///     The property name a resource group's region arrives under.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Read from <see cref="ScopeBodyProperties" /> rather than declared here, and the move
-    ///     is the point.</b> The generated surfaces live in the contracts assembly and cannot see
+    ///     ⚠
+    ///     <b>
+    ///         Read from <see cref="ScopeBodyProperties" /> rather than declared here, and the move
+    ///         is the point.
+    ///     </b> The generated surfaces live in the contracts assembly and cannot see
     ///     this one, so a copy here and a copy there would be two constants agreeing by hand — the
     ///     failure this repository keeps re-finding. Issue #63 is what made a second reader exist.
     /// </remarks>
@@ -372,9 +378,12 @@ public sealed class ScopeManagerService(
     ///     Creates a subscription in the caller's tenant.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The permission is <c>write</c> on the TENANT and not <c>delete</c> or a bespoke
-    ///     "createSubscription", and the reason is that the schema has four permissions and this is
-    ///     the one that means "change what is inside".</b> docs/plan/07 § Azure RBAC, expressed in it
+    ///     ⚠
+    ///     <b>
+    ///         The permission is <c>write</c> on the TENANT and not <c>delete</c> or a bespoke
+    ///         "createSubscription", and the reason is that the schema has four permissions and this is
+    ///         the one that means "change what is inside".
+    ///     </b> docs/plan/07 § Azure RBAC, expressed in it
     ///     maps <c>write</c> to <c>Rel(contributor)</c>, and Azure's own Contributor on a scope creates
     ///     children in it. Requiring <c>delete</c> — that is, <c>owner</c> — would be stricter than
     ///     Azure and would make "may create a subscription" and "may delete the tenant" the same
@@ -479,8 +488,11 @@ public sealed class ScopeManagerService(
     ///     Creates a resource group in a subscription.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The lock is read off the subscription's own descriptor rather than through
-    ///     <c>ILockResolver</c>, and the difference is one scope rather than a shortcut.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The lock is read off the subscription's own descriptor rather than through
+    ///         <c>ILockResolver</c>, and the difference is one scope rather than a shortcut.
+    ///     </b>
     ///     <c>ILockResolver.ResolveAsync</c> takes a <c>ResourceId</c> and walks resource → group →
     ///     subscription; a group being created has no resource below it and no group record of its own
     ///     yet, so the only link of that chain that exists is the subscription's. Calling the resolver
@@ -687,8 +699,7 @@ public sealed class ScopeManagerService(
                     $"The request body is a JSON {document.RootElement.ValueKind.ToString().ToLowerInvariant()}. "
                     + "A scope body is a JSON object."
                 );
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             // The parser's message describes the caller's own input, not our stack —
             // docs/plan/08 § Errors bans exception detail, and this is not any.
             return Result<JsonDocument>.Failure(

@@ -41,10 +41,11 @@ public sealed class ActionDispatchTests(ResourceManagerCluster cluster) {
         action.IsSuccess.ShouldBeTrue(action.Error?.Message);
         RestartHandler.Invocations.ShouldBe(before + 1, "the handler was never reached");
 
-        action.GetValueOrThrow().Completed.ShouldBeTrue(
-            "a synchronous action answers 200 with its own body; Completed is what the gateway keys "
-            + "its status code on"
-        );
+        action.GetValueOrThrow()
+            .Completed.ShouldBeTrue(
+                "a synchronous action answers 200 with its own body; Completed is what the gateway keys "
+                + "its status code on"
+            );
 
         action.GetValueOrThrow().ActionResponse.ShouldContain("restarted");
     }
@@ -201,9 +202,7 @@ public sealed class ActionDispatchTests(ResourceManagerCluster cluster) {
         try {
             var drifted = await Invoke(address, "listKeys");
 
-            drifted.IsFailure.ShouldBeTrue(
-                "a handler returning a body its provider never declared was accepted"
-            );
+            drifted.IsFailure.ShouldBeTrue("a handler returning a body its provider never declared was accepted");
 
             drifted.Error!.Code.ShouldBe(ErrorCode.InternalError);
             drifted.Error.Message.ShouldContain("listKeys");

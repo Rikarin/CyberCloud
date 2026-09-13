@@ -18,18 +18,27 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Contracts;
 ///         platform, so nothing here may lean on it.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Schema2026" /> is the authored side of the pair, and
-///         <c>charts/managed/postgres/values.yaml</c> is the other half.</b> ADR-010 § Which end
-///         authors the schema, DECIDED 2026-08-11: <i>"The C# <c>ResourceSchema</c> is authored. The
-///         chart's <c>@param</c> annotations are generated from it and diffed."</i> Every property
+///         ⚠
+///         <b>
+///             <see cref="Schema2026" /> is the authored side of the pair, and
+///             <c>charts/managed/postgres/values.yaml</c> is the other half.
+///         </b> ADR-010 § Which end
+///         authors the schema, DECIDED 2026-08-11:
+///         <i>
+///             "The C# <c>ResourceSchema</c> is authored. The
+///             chart's <c>@param</c> annotations are generated from it and diffed."
+///         </i> Every property
 ///         below whose pointer begins <c>/properties/</c> and is not <see cref="ClusterIdPointer" />
 ///         has a <c>@param</c> row in that file at the same pointer — the chart already emits
 ///         <c>x-cybercloud-pointer</c>, so the correspondence is checkable by eye today and by a
 ///         generator when one exists.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two properties here are deliberately <i>not</i> chart rows, and that is a third
-///         category ADR-010 does not name.</b> That ADR splits the chart into 26 API rows and 10
+///         ⚠
+///         <b>
+///             Two properties here are deliberately <i>not</i> chart rows, and that is a third
+///             category ADR-010 does not name.
+///         </b> That ADR splits the chart into 26 API rows and 10
 ///         <c>@internal</c> rendering inputs and concludes the two files "overlap on 26 rows". They
 ///         also diverge the other way: <see cref="ClusterIdPointer" /> and <c>/location</c> are body
 ///         properties with no Helm value behind them — a chart is rendered <i>into</i> a cluster and
@@ -53,10 +62,16 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Contracts;
 ///         the decision.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>/properties/bootstrap/password</c> is absent on purpose and the chart row moved to
-///         <c>@internal</c> to match.</b> Its own chart description already said the reconciler
-///         supplies it — <i>"Provisioned into the tenant's Vault and read back by ISecretResolver at
-///         render time"</i> — so it was never a tenant setting. Declaring it as a body property would
+///         ⚠
+///         <b>
+///             <c>/properties/bootstrap/password</c> is absent on purpose and the chart row moved to
+///             <c>@internal</c> to match.
+///         </b> Its own chart description already said the reconciler
+///         supplies it —
+///         <i>
+///             "Provisioned into the tenant's Vault and read back by ISecretResolver at
+///             render time"
+///         </i> — so it was never a tenant setting. Declaring it as a body property would
 ///         have been worse than redundant: nothing in the write path replaces a
 ///         <see cref="SchemaProperty.Secret" /> value with a <c>SecretRef</c> before the grain writes
 ///         desired state, so the plaintext would have been persisted, which
@@ -88,8 +103,11 @@ public static class PostgresServers {
     ///     piece 1.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A registry declaration, not a render path, and the two are different mechanisms with
-    ///     the same word on them.</b> <see cref="IResourceTypeBuilder.Chart" /> records which chart
+    ///     ⚠
+    ///     <b>
+    ///         A registry declaration, not a render path, and the two are different mechanisms with
+    ///         the same word on them.
+    ///     </b> <see cref="IResourceTypeBuilder.Chart" /> records which chart
     ///     describes this type; <c>IKubeCommandBuilder.Chart</c> asks
     ///     <c>CyberCloud.Kubernetes.Charts</c> to render one, and that assembly does not exist — the
     ///     builder answers with a named failure saying so. So the reconciler renders the same two
@@ -116,10 +134,16 @@ public static class PostgresServers {
 
     /// <summary>The action that hands a caller the connection credentials.</summary>
     /// <remarks>
-    ///     docs/plan/12 § Cross-cutting decisions, Credentials: <i>"<c>listKeys</c> is an action with
-    ///     its own permission, audited on every call"</i>. ⚠ <c>regenerateKeys</c> is named in the same
-    ///     paragraph and is <b>not</b> declared, because it is specified with <i>"a rolling grace
-    ///     period so rotation is not an outage"</i> and nothing in the platform can hold two live
+    ///     docs/plan/12 § Cross-cutting decisions, Credentials:
+    ///     <i>
+    ///         "<c>listKeys</c> is an action with
+    ///         its own permission, audited on every call"
+    ///     </i>. ⚠ <c>regenerateKeys</c> is named in the same
+    ///     paragraph and is <b>not</b> declared, because it is specified with
+    ///     <i>
+    ///         "a rolling grace
+    ///         period so rotation is not an outage"
+    ///     </i> and nothing in the platform can hold two live
     ///     credentials for one resource yet. An action whose contract cannot be honoured is worse than
     ///     an absent one.
     /// </remarks>
@@ -249,11 +273,7 @@ public static class PostgresServers {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the CloudNativePG objects."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -262,29 +282,20 @@ public static class PostgresServers {
                     Required: true,
                     Description: "Major PostgreSQL version. Minor upgrades are applied automatically "
                     + "in the maintenance window."
-                ) {
-                    AllowedValues = ["16", "17", "18"],
-                    DefaultJson = "\"17\""
-                },
+                ) { AllowedValues = ["16", "17", "18"], DefaultJson = "\"17\"" },
                 new(
                     "/properties/replicas",
                     SchemaKind.WholeNumber,
                     Required: true,
                     Description: "Number of instances, including the primary. One is a single point of "
                     + "failure and is offered for development only."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "2" },
                 new(
                     "/properties/synchronousReplication",
                     SchemaKind.Boolean,
                     Description: "Whether commits wait for a replica. Costs write latency and removes "
                     + "the window in which a failover loses transactions."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -314,19 +325,13 @@ public static class PostgresServers {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new("/properties/storage", SchemaKind.Nested, Description: "The data volume."),
                 new(
                     "/properties/storage/size",
@@ -334,29 +339,18 @@ public static class PostgresServers {
                     Required: true,
                     Description: "Data volume size in Kubernetes quantity form. Grows online; never "
                     + "shrinks."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"20Gi\"",
-                    ExampleJson = "\"20Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"20Gi\"", ExampleJson = "\"20Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name. Empty means the cluster default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage/walSize",
                     SchemaKind.Text,
                     Description: "Size of the separate write-ahead-log volume. Empty means the WAL "
                     + "shares the data volume."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/pooling",
                     SchemaKind.Nested,
@@ -368,27 +362,18 @@ public static class PostgresServers {
                     Description: "Whether to run a connection pooler. On by default — a managed "
                     + "Postgres without one fails at the first serverless workload, and adding it "
                     + "later changes the connection string."
-                ) {
-                    DefaultJson = "true"
-                },
+                ) { DefaultJson = "true" },
                 new(
                     "/properties/pooling/mode",
                     SchemaKind.Text,
                     Description: "PgBouncer pooling mode. Transaction pooling is the useful one and "
                     + "breaks session-scoped features such as prepared statements and advisory locks."
-                ) {
-                    AllowedValues = ["session", "transaction", "statement"],
-                    DefaultJson = "\"transaction\""
-                },
+                ) { AllowedValues = ["session", "transaction", "statement"], DefaultJson = "\"transaction\"" },
                 new(
                     "/properties/pooling/instances",
                     SchemaKind.WholeNumber,
                     Description: "Number of pooler pods."
-                ) {
-                    Minimum = 1,
-                    Maximum = 8,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 8, DefaultJson = "2" },
                 new(
                     "/properties/extensions",
                     SchemaKind.Array,
@@ -410,19 +395,13 @@ public static class PostgresServers {
                     "/properties/backup/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether continuous backup and WAL archiving run."
-                ) {
-                    DefaultJson = "true"
-                },
+                ) { DefaultJson = "true" },
                 new(
                     "/properties/backup/retentionDays",
                     SchemaKind.WholeNumber,
                     Description: "How long base backups and WAL are kept. The "
                     + "point-in-time-recovery window is this number of days."
-                ) {
-                    Minimum = 1,
-                    Maximum = 365,
-                    DefaultJson = "14"
-                },
+                ) { Minimum = 1, Maximum = 365, DefaultJson = "14" },
                 new(
                     "/properties/backup/destinationPath",
                     SchemaKind.Text,
@@ -444,20 +423,14 @@ public static class PostgresServers {
                     SchemaKind.Text,
                     Description: "Name of the application database created on first start."
                 ) {
-                    Pattern = IdentifierPattern,
-                    MinLength = 1,
-                    MaxLength = MaxIdentifierLength,
-                    DefaultJson = "\"app\""
+                    Pattern = IdentifierPattern, MinLength = 1, MaxLength = MaxIdentifierLength, DefaultJson = "\"app\""
                 },
                 new(
                     "/properties/bootstrap/owner",
                     SchemaKind.Text,
                     Description: "Role that owns the application database."
                 ) {
-                    Pattern = IdentifierPattern,
-                    MinLength = 1,
-                    MaxLength = MaxIdentifierLength,
-                    DefaultJson = "\"app\""
+                    Pattern = IdentifierPattern, MinLength = 1, MaxLength = MaxIdentifierLength, DefaultJson = "\"app\""
                 },
                 new(
                     "/properties/monitoring",
@@ -469,9 +442,7 @@ public static class PostgresServers {
                     SchemaKind.Boolean,
                     Description: "Whether CloudNativePG emits a PodMonitor for the platform's metrics "
                     + "stack."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -479,8 +450,11 @@ public static class PostgresServers {
     ///     What a <c>POST …/listKeys</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared even though no handler serves it, because an undeclared response is the one
-    ///     part of the API surface with no contract</b> — the reason
+    ///     ⚠
+    ///     <b>
+    ///         Declared even though no handler serves it, because an undeclared response is the one
+    ///         part of the API surface with no contract
+    ///     </b> — the reason
     ///     <c>CyberCloud.Providers.Sample</c> gives for declaring <c>ping</c>'s shapes. What leaves the
     ///     platform through a <c>secret: true</c> action is exactly the thing that should be written
     ///     down before it leaves.
@@ -502,8 +476,7 @@ public static class PostgresServers {
                     + "than a silent one."
                 ),
                 new("/port", SchemaKind.WholeNumber, Required: true, Description: "The TCP port.") {
-                    Minimum = 1,
-                    Maximum = 65535
+                    Minimum = 1, Maximum = 65535
                 },
                 new("/database", SchemaKind.Text, Required: true, Description: "The application database."),
                 new("/username", SchemaKind.Text, Required: true, Description: "The owning role."),
@@ -520,8 +493,11 @@ public static class PostgresServers {
 
     /// <summary>The sizing presets of docs/plan/12 § Sizing vocabulary, s1 family.</summary>
     /// <remarks>
-    ///     ⚠ <b>This table is a second copy of <c>charts/managed/postgres/templates/_helpers.tpl</c>'s
-    ///     <c>postgres.resources</c>, and the duplication is the cost of having no chart renderer.</b>
+    ///     ⚠
+    ///     <b>
+    ///         This table is a second copy of <c>charts/managed/postgres/templates/_helpers.tpl</c>'s
+    ///         <c>postgres.resources</c>, and the duplication is the cost of having no chart renderer.
+    ///     </b>
     ///     <c>CyberCloud.Kubernetes.Charts</c> does not exist (docs/plan/03 § src), so the objects are
     ///     built here; the moment it does, this table and the reconciler's use of it should go and the
     ///     chart's should stay, because the chart is the file a support engineer reads. Until then both
@@ -555,14 +531,20 @@ public static class PostgresServers {
     ///         <c>/properties/extensions</c> reaches <c>bootstrap.initdb.postInitApplicationSQL</c> as
     ///         an extension name and <c>spec.postgresql.shared_preload_libraries</c> as a library name,
     ///         and for two of the four values those are different strings — or, for two others, there
-    ///         is no library at all. Rendering the raw value into both produced a <c>CREATE
-    ///         EXTENSION pgvector</c> that fails, and asked the postmaster to preload <c>pgvector</c>
+    ///         is no library at all. Rendering the raw value into both produced a
+    ///         <c>
+    /// CREATE
+    ///         EXTENSION pgvector
+    ///         </c> that fails, and asked the postmaster to preload <c>pgvector</c>
     ///         and <c>postgis</c>, neither of which is a library. <c>conformance.yaml § owed</c>,
     ///         <c>extension-names-are-not-library-names</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A failed preload is a cluster that never starts, not an extension that is
-    ///         missing.</b> <c>shared_preload_libraries</c> is read by the postmaster before it accepts
+    ///         ⚠
+    ///         <b>
+    ///             A failed preload is a cluster that never starts, not an extension that is
+    ///             missing.
+    ///         </b> <c>shared_preload_libraries</c> is read by the postmaster before it accepts
     ///         a connection, so a name with no library behind it fails startup for every database on
     ///         the instance rather than for the one feature that wanted it.
     ///     </para>
@@ -577,8 +559,10 @@ public static class PostgresServers {
     ///             <item><c>postgis</c> installs as <c>postgis</c> and names no preload requirement.</item>
     ///             <item>
     ///                 <c>pg_stat_statements</c> is a contrib module whose documentation says it
-    ///                 <i>"must be loaded by adding pg_stat_statements to shared_preload_libraries …
-    ///                 because it requires additional shared memory"</i>, and the library is spelled
+    ///                 <i>
+    ///                     "must be loaded by adding pg_stat_statements to shared_preload_libraries …
+    ///                     because it requires additional shared memory"
+    ///                 </i>, and the library is spelled
     ///                 the same as the extension.
     ///             </item>
     ///             <item>
@@ -605,8 +589,7 @@ public static class PostgresServers {
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── Addressing ────────────────────────────────────────────────────────────────────────────
 
@@ -663,8 +646,11 @@ public static class PostgresServers {
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The validated desired body, for whether pooling is on.</param>
     /// <remarks>
-    ///     ⚠ <b>The pooler's when pooling is on, and that is a visible consequence rather than an
-    ///     implementation detail.</b> <see cref="ListKeysResponse" />'s <c>/host</c> says so in the
+    ///     ⚠
+    ///     <b>
+    ///         The pooler's when pooling is on, and that is a visible consequence rather than an
+    ///         implementation detail.
+    ///     </b> <see cref="ListKeysResponse" />'s <c>/host</c> says so in the
     ///     document a tenant reads: turning pooling off later changes this value, so a connection
     ///     string built once and stored is one that stops working — which is worth knowing before
     ///     rather than after. The read-write service is CloudNativePG's <c>{cluster}-rw</c>, which
@@ -718,8 +704,11 @@ public static class PostgresServers {
     ///         that could get them wrong.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The owner's password appears here as a <i>reference by name</i> and never as a
-    ///         value, and the <c>Secret</c> it names is not written by this reconciler.</b> CNPG's
+    ///         ⚠
+    ///         <b>
+    ///             The owner's password appears here as a <i>reference by name</i> and never as a
+    ///             value, and the <c>Secret</c> it names is not written by this reconciler.
+    ///         </b> CNPG's
     ///         <c>bootstrap.initdb.secret.name</c> is the seam that makes that possible: the operator
     ///         reads the password out of a <c>Secret</c> in the namespace, so the only component that
     ///         ever holds the plaintext is whatever writes that <c>Secret</c> — docs/plan/12 § The
@@ -812,9 +801,7 @@ public static class PostgresServers {
 
         if (cpu.Length > 0 && memory.Length > 0) {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
-            spec["resources"] = new JsonObject {
-                ["requests"] = quantities.DeepClone(), ["limits"] = quantities
-            };
+            spec["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
         }
 
         // ⚠ Absent rather than a `false`-valued block when replication is asynchronous. The CRD has
@@ -862,9 +849,7 @@ public static class PostgresServers {
                 ["cluster"] = new JsonObject { ["name"] = name },
                 ["instances"] = Number(desired, "pooling", "instances", 2),
                 ["type"] = "rw",
-                ["pgbouncer"] = new JsonObject {
-                    ["poolMode"] = Text(desired, "pooling", "mode", "transaction")
-                }
+                ["pgbouncer"] = new JsonObject { ["poolMode"] = Text(desired, "pooling", "mode", "transaction") }
             }
         }.ToJsonString();
     }

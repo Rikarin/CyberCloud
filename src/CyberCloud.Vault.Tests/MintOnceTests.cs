@@ -38,19 +38,21 @@ public sealed class MintOnceTests(OpenBaoFixture vault) {
     public async Task AMintWritesTheFieldsAndReportsThatItWrote() {
         var path = Unique();
 
-        var minted = await vault.Writer(await Minter()).MintAsync(
-            path,
-            Pair("AKIAFIRST", "first-secret"),
-            TestContext.Current.CancellationToken
-        );
+        var minted = await vault.Writer(await Minter())
+            .MintAsync(
+                path,
+                Pair("AKIAFIRST", "first-secret"),
+                TestContext.Current.CancellationToken
+            );
 
         minted.IsSuccess.ShouldBeTrue(minted.Error?.Message);
         minted.GetValueOrThrow().Minted.ShouldBeTrue();
 
-        var read = await vault.Resolver(await Reader()).ResolveAsync(
-            new() { Path = path, Field = "secretAccessKey" },
-            TestContext.Current.CancellationToken
-        );
+        var read = await vault.Resolver(await Reader())
+            .ResolveAsync(
+                new() { Path = path, Field = "secretAccessKey" },
+                TestContext.Current.CancellationToken
+            );
 
         read.IsSuccess.ShouldBeTrue(read.Error?.Message);
         read.GetValueOrThrow().ShouldBe("first-secret");
@@ -83,26 +85,29 @@ public sealed class MintOnceTests(OpenBaoFixture vault) {
 
         second.GetValueOrThrow().Minted.ShouldBeFalse();
 
-        var read = await vault.Resolver(await Reader()).ResolveAsync(
-            new() { Path = path, Field = "secretAccessKey" },
-            TestContext.Current.CancellationToken
-        );
+        var read = await vault.Resolver(await Reader())
+            .ResolveAsync(
+                new() { Path = path, Field = "secretAccessKey" },
+                TestContext.Current.CancellationToken
+            );
 
-        read.GetValueOrThrow().ShouldBe(
-            "first-secret",
-            "the second mint overwrote the credential the tenant is already using"
-        );
+        read.GetValueOrThrow()
+            .ShouldBe(
+                "first-secret",
+                "the second mint overwrote the credential the tenant is already using"
+            );
     }
 
     [Fact]
     public async Task AMintWithNoFieldsIsRefusedRatherThanOccupyingThePath() {
         // ⚠ An empty document is worse than no document: the path exists, every reader reports a
         // missing field, and cas=0 never fires again — so the credential could never be minted.
-        var minted = await vault.Writer(await Minter()).MintAsync(
-            Unique(),
-            new Dictionary<string, string>(StringComparer.Ordinal),
-            TestContext.Current.CancellationToken
-        );
+        var minted = await vault.Writer(await Minter())
+            .MintAsync(
+                Unique(),
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                TestContext.Current.CancellationToken
+            );
 
         minted.IsFailure.ShouldBeTrue();
     }
@@ -111,11 +116,12 @@ public sealed class MintOnceTests(OpenBaoFixture vault) {
     public async Task AnEmptyValueIsRefusedBecauseTheResolverWouldRefuseItComingBack() {
         // OpenBaoSecretResolver refuses an empty string on the way out — its last gate before a value
         // reaches a manifest. Writing one produces a secret nothing can ever read.
-        var minted = await vault.Writer(await Minter()).MintAsync(
-            Unique(),
-            Pair("AKIA", ""),
-            TestContext.Current.CancellationToken
-        );
+        var minted = await vault.Writer(await Minter())
+            .MintAsync(
+                Unique(),
+                Pair("AKIA", ""),
+                TestContext.Current.CancellationToken
+            );
 
         minted.IsFailure.ShouldBeTrue();
     }
@@ -126,11 +132,12 @@ public sealed class MintOnceTests(OpenBaoFixture vault) {
         // mount and the role in the operator's log and out of the caller's message.
         var reader = await Reader();
 
-        var minted = await vault.Writer(reader).MintAsync(
-            Unique(),
-            Pair("AKIA", "nope"),
-            TestContext.Current.CancellationToken
-        );
+        var minted = await vault.Writer(reader)
+            .MintAsync(
+                Unique(),
+                Pair("AKIA", "nope"),
+                TestContext.Current.CancellationToken
+            );
 
         minted.IsFailure.ShouldBeTrue("a read-only token minted a credential");
         minted.Error!.Message.ShouldNotContain(vault.Address, Case.Sensitive);
@@ -158,20 +165,20 @@ public sealed class MintOnceTests(OpenBaoFixture vault) {
         var resolver = vault.Resolver(await Reader());
 
         (await resolver.ResolveAsync(
-            new() { Path = first, Field = "secretAccessKey" },
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow().ShouldBe("one");
+                new() { Path = first, Field = "secretAccessKey" },
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow()
+            .ShouldBe("one");
 
         (await resolver.ResolveAsync(
-            new() { Path = second, Field = "secretAccessKey" },
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow().ShouldBe("two");
+                new() { Path = second, Field = "secretAccessKey" },
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow()
+            .ShouldBe("two");
     }
 
     static Dictionary<string, string> Pair(string keyId, string secret) =>
-        new(StringComparer.Ordinal) {
-            ["accessKeyId"] = keyId, ["secretAccessKey"] = secret
-        };
+        new(StringComparer.Ordinal) { ["accessKeyId"] = keyId, ["secretAccessKey"] = secret };
 
     /// <summary>A path no other test in this class has used.</summary>
     /// <remarks>

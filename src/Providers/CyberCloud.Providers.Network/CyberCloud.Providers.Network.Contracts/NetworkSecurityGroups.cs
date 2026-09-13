@@ -16,14 +16,20 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         is a question the text cannot answer.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="PortPattern" /> IS EXACT WHERE <see cref="Cidr.V4Pattern" /> IS DELIBERATELY
-///         LOOSE, AND THE DIFFERENCE IS NOT AN INCONSISTENCY.</b> A CIDR's exact grammar in a regular
+///         ⚠
+///         <b>
+///             <see cref="PortPattern" /> IS EXACT WHERE <see cref="Cidr.V4Pattern" /> IS DELIBERATELY
+///             LOOSE, AND THE DIFFERENCE IS NOT AN INCONSISTENCY.
+///         </b> A CIDR's exact grammar in a regular
 ///         expression is long, has embedded-v4 and <c>::</c> compression to get wrong, and is a known
 ///         backtracking hazard — so that family checks the <i>shape</i> at the API and the
 ///         <i>meaning</i> in <see cref="Cidr.TryParse" />. A port is a bounded decimal integer, so the
 ///         alternation below is six branches with disjoint leading digits, no nesting and no
-///         ambiguity, and it refuses <c>0</c>, <c>65536</c> and <c>99999</c> <b>at the API, with a
-///         JSON Pointer, before the write path answers <c>202</c></b>. Kube-OVN's own
+///         ambiguity, and it refuses <c>0</c>, <c>65536</c> and <c>99999</c>
+///         <b>
+///             at the API, with a
+///             JSON Pointer, before the write path answers <c>202</c>
+///         </b>. Kube-OVN's own
 ///         <c>validateSgRule</c> refuses the same values in the controller, which is after everything.
 ///         Enforcing what can be enforced is the whole of
 ///         <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>'s
@@ -67,8 +73,11 @@ public readonly record struct PortRange(int Low, int High) {
     ///     <see cref="ListPattern" />, or the empty string.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The optional wrapper, for the reason <see cref="Cidr.OptionalV4Pattern" /> carries in
-    ///     full</b>: <c>SchemaProperty.Incoherences</c> runs a declared <c>DefaultJson</c> through the
+    ///     ⚠
+    ///     <b>
+    ///         The optional wrapper, for the reason <see cref="Cidr.OptionalV4Pattern" /> carries in
+    ///         full
+    ///     </b>: <c>SchemaProperty.Incoherences</c> runs a declared <c>DefaultJson</c> through the
     ///     property's own constraints at <b>class initialisation</b>, so an optional property whose
     ///     default is <c>""</c> and whose pattern refuses <c>""</c> is a
     ///     <c>TypeInitializationException</c> at silo start rather than a validation that never fires.
@@ -187,8 +196,11 @@ public sealed record SecurityRule(
 ) {
     /// <summary>The rule in one sentence, for <c>POST …/showEffectiveRules</c>.</summary>
     /// <remarks>
-    ///     ⚠ <b>A sentence rather than four columns, and that is a registry limit showing through
-    ///     rather than a choice</b> — <c>SchemaProperty.ElementKind</c> refuses an array of objects on
+    ///     ⚠
+    ///     <b>
+    ///         A sentence rather than four columns, and that is a registry limit showing through
+    ///         rather than a choice
+    ///     </b> — <c>SchemaProperty.ElementKind</c> refuses an array of objects on
     ///     a response schema exactly as it does on a request one. It is the same flattening
     ///     <c>VirtualNetworks.ShowIsolationResponse</c> does to its limits table, and it is recorded
     ///     once, at <c>§ owed</c>, <c>an-array-of-objects-is-not-expressible</c>.
@@ -220,15 +232,23 @@ public sealed record SecurityRule(
 ///         should ask for. Until now that row pointed at something that did not exist.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE BLOCKER THIS TYPE WAS OWED FOR WAS REAL AND IT IS SOLVED BY RESHAPING, NOT BY
-///         SURRENDERING — THE SAME MOVE <c>addressSpace</c> MADE, ONE STEP FURTHER.</b>
+///         ⚠
+///         <b>
+///             THE BLOCKER THIS TYPE WAS OWED FOR WAS REAL AND IT IS SOLVED BY RESHAPING, NOT BY
+///             SURRENDERING — THE SAME MOVE <c>addressSpace</c> MADE, ONE STEP FURTHER.
+///         </b>
 ///         <c>NetworkProvider</c>'s remarks record it: <c>SecurityGroupSpec</c> is
 ///         <c>ingressRules</c>/<c>egressRules</c> of
-///         <c>SecurityGroupRule{ipVersion, protocol, priority, remoteType, remoteAddress,
-///         portRangeMin, portRangeMax, policy}</c> — an <b>array of objects</b>, which
-///         <c>SchemaProperty.ElementKind</c> refuses outright: <i>"an array element is a scalar … a
-///         nested or nested-array element would need its own pointer space, which is the flat-list
-///         property ResourceSchema is built on"</i>. That refusal is not worked around here and it is
+///         <c>
+/// SecurityGroupRule{ipVersion, protocol, priority, remoteType, remoteAddress,
+///         portRangeMin, portRangeMax, policy}
+///         </c> — an <b>array of objects</b>, which
+///         <c>SchemaProperty.ElementKind</c> refuses outright:
+///         <i>
+///             "an array element is a scalar … a
+///             nested or nested-array element would need its own pointer space, which is the flat-list
+///             property ResourceSchema is built on"
+///         </i>. That refusal is not worked around here and it is
 ///         not disputed. What changed is the <b>question</b>: docs/plan/14 asks for a security group,
 ///         not for a JSON transcription of Kube-OVN's <c>SecurityGroupRule</c>, and a security group
 ///         is expressible in scalars.
@@ -273,8 +293,11 @@ public sealed record SecurityRule(
 ///         be discovered.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AN EMPTY RULE SET DENIES EVERYTHING, AND THAT WAS ESTABLISHED FROM THE SUBSTRATE
-///         RATHER THAN ASSUMED — IT IS THE ONE QUESTION THIS TYPE HAD TO GET RIGHT.</b> Read in
+///         ⚠
+///         <b>
+///             AN EMPTY RULE SET DENIES EVERYTHING, AND THAT WAS ESTABLISHED FROM THE SUBSTRATE
+///             RATHER THAN ASSUMED — IT IS THE ONE QUESTION THIS TYPE HAD TO GET RIGHT.
+///         </b> Read in
 ///         <c>pkg/ovs/ovn-nb-acl.go</c>: <c>CreateSgDenyAllACL</c> installs
 ///         <c>outport == @{portGroup} &amp;&amp; ip</c> and <c>inport == @{portGroup} &amp;&amp; ip</c>
 ///         with action <b>drop</b> at <c>util.SecurityGroupDropPriority</c> (2003);
@@ -289,8 +312,11 @@ public sealed record SecurityRule(
 ///         substrate has already chosen it.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>allowSameGroupTraffic</c> DEFAULTS TO <c>false</c>, AND IT IS THE ONE PLACE A
-///         PERMISSIVE ANSWER COULD HAVE SLIPPED IN.</b> It is the single field on
+///         ⚠
+///         <b>
+///             <c>allowSameGroupTraffic</c> DEFAULTS TO <c>false</c>, AND IT IS THE ONE PLACE A
+///             PERMISSIVE ANSWER COULD HAVE SLIPPED IN.
+///         </b> It is the single field on
 ///         <c>SecurityGroupSpec</c> that grants traffic nobody wrote a rule for. Kube-OVN declares it
 ///         <c>bool</c> with <b>no</b> <c>+kubebuilder:default</c>, so an omitted field is Go's zero
 ///         value and already <c>false</c> — and it is nevertheless <b>sent explicitly</b>, because
@@ -299,8 +325,11 @@ public sealed record SecurityRule(
 ///         field that was sent.
 ///     </para>
 ///     <para>
-///         ⚠ <b>CLUSTER-SCOPED, LIKE THE REST OF THE FAMILY, AND THE PARENT EDGE IS THE PLATFORM'S
-///         RATHER THAN THE FABRIC'S — WHICH IS A DIFFERENCE FROM <c>subnets</c> WORTH KNOWING.</b>
+///         ⚠
+///         <b>
+///             CLUSTER-SCOPED, LIKE THE REST OF THE FAMILY, AND THE PARENT EDGE IS THE PLATFORM'S
+///             RATHER THAN THE FABRIC'S — WHICH IS A DIFFERENCE FROM <c>subnets</c> WORTH KNOWING.
+///         </b>
 ///         <c>pkg/apis/kubeovn/v1/security-group.go</c>:
 ///         <c>// +kubebuilder:resource:scope="Cluster",shortName="sg",path="security-groups",singular="security-group"</c>.
 ///         A <c>Subnet</c> binds to its parent through <c>spec.vpc</c>; a <c>SecurityGroup</c> has
@@ -316,8 +345,11 @@ public sealed record SecurityRule(
 ///         <c>the-parent-edge-is-not-enforced-by-the-fabric</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE FIRST OBJECT IN THIS FAMILY WHOSE SPEC THE CONTROLLER DOES <i>NOT</i> REWRITE, AND
-///         <see cref="Matches" /> IS STILL CONTAINMENT.</b> Checked rather than assumed:
+///         ⚠
+///         <b>
+///             THE FIRST OBJECT IN THIS FAMILY WHOSE SPEC THE CONTROLLER DOES <i>NOT</i> REWRITE, AND
+///             <see cref="Matches" /> IS STILL CONTAINMENT.
+///         </b> Checked rather than assumed:
 ///         <c>pkg/controller/security_group.go</c> writes through <c>patchSgStatus</c>, which is a
 ///         <c>MergePatchType</c> against the <b><c>"status"</c> subresource</b> — the object carries
 ///         <c>+kubebuilder:subresource:status</c> — and there is no <c>SecurityGroups().Update(...)</c>
@@ -327,8 +359,11 @@ public sealed record SecurityRule(
 ///         provider asked for, and an equality comparison would report one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No <c>SupportsSoftDelete</c> — and the reason every earlier file in this family gives
-///         is now WRONG and is corrected on <c>VirtualNetworks</c>.</b> The manager honours a recovery
+///         ⚠
+///         <b>
+///             No <c>SupportsSoftDelete</c> — and the reason every earlier file in this family gives
+///             is now WRONG and is corrected on <c>VirtualNetworks</c>.
+///         </b> The manager honours a recovery
 ///         window today. The reason this type does not declare one is that its rules <i>are</i> its
 ///         content, the content is small, and a group whose name is parked for a week while its ACLs
 ///         are gone is a perimeter a tenant would reasonably believe still exists.
@@ -365,8 +400,11 @@ public static class NetworkSecurityGroups {
     ///     Kube-OVN's spelling of the IPv4 family on a security-group rule.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Lower case, and the adjacent object in the same API group spells it the other
-    ///     way.</b> <c>Subnet.spec.protocol</c> is <c>IPv4</c>/<c>IPv6</c>/<c>Dual</c>;
+    ///     ⚠
+    ///     <b>
+    ///         Lower case, and the adjacent object in the same API group spells it the other
+    ///         way.
+    ///     </b> <c>Subnet.spec.protocol</c> is <c>IPv4</c>/<c>IPv6</c>/<c>Dual</c>;
     ///     <c>SecurityGroupRule.ipVersion</c> is <c>ipv4</c>/<c>ipv6</c>, enforced by
     ///     <c>validateSgRule</c> in the controller. A constant rather than a literal because the two
     ///     spellings sit forty lines apart in this family's own code.
@@ -389,8 +427,11 @@ public static class NetworkSecurityGroups {
     ///     The rule action every rule this type renders carries.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><c>allow</c>, and its two siblings are <c>drop</c> and <c>pass</c> — NOT
-    ///     <c>deny</c>.</b> The doc comment in the Go source says <i>"allow, pass or deny"</i> and the
+    ///     ⚠
+    ///     <b>
+    ///         <c>allow</c>, and its two siblings are <c>drop</c> and <c>pass</c> — NOT
+    ///         <c>deny</c>.
+    ///     </b> The doc comment in the Go source says <i>"allow, pass or deny"</i> and the
     ///     constants are <c>SgPolicyAllow</c>/<c>SgPolicyDrop</c>/<c>SgPolicyPass</c> bound to OVN ACL
     ///     actions, so the value is <c>drop</c>. That README-versus-code disagreement was recorded by
     ///     the previous pass over this family and is why the constant is here rather than typed
@@ -405,8 +446,11 @@ public static class NetworkSecurityGroups {
     ///     The priority every rule this type renders carries.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>One priority for every rule, and that is correct rather than lazy, because every rule
-    ///     is an <c>allow</c>.</b> Priority orders rules against each other, and a set of pure allows
+    ///     ⚠
+    ///     <b>
+    ///         One priority for every rule, and that is correct rather than lazy, because every rule
+    ///         is an <c>allow</c>.
+    ///     </b> Priority orders rules against each other, and a set of pure allows
     ///     over a default drop has no order — whichever matches, permits. It is sent explicitly
     ///     because Kube-OVN's <c>validateSgRule</c> refuses a priority outside
     ///     <c>SecurityGroupPriorityMin</c> (1) to <c>SecurityGroupPriorityMax</c> (16384), and an
@@ -425,9 +469,7 @@ public static class NetworkSecurityGroups {
     ///     <c>404</c> with a message about a missing operator.
     /// </remarks>
     public static GroupVersionKind SecurityGroupKind { get; } =
-        new() {
-            Group = "kubeovn.io", Version = "v1", Kind = "SecurityGroup", Plural = "security-groups"
-        };
+        new() { Group = "kubeovn.io", Version = "v1", Kind = "SecurityGroup", Plural = "security-groups" };
 
     /// <summary>
     ///     The name of the <c>SecurityGroup</c> a security group renders: its namespace, its network's
@@ -437,8 +479,11 @@ public static class NetworkSecurityGroups {
     /// <param name="id">The security group's address.</param>
     /// <exception cref="ArgumentException"><paramref name="id" /> carries no parent name.</exception>
     /// <remarks>
-    ///     ⚠ <b>Three components, exactly as <see cref="NetworkSubnets.ObjectNameOf(string, ResourceId)" /> — and here the
-    ///     third one is doing MORE work than it does there.</b> A <c>Subnet</c> at least names its
+    ///     ⚠
+    ///     <b>
+    ///         Three components, exactly as <see cref="NetworkSubnets.ObjectNameOf(string, ResourceId)" /> — and here the
+    ///         third one is doing MORE work than it does there.
+    ///     </b> A <c>Subnet</c> at least names its
     ///     <c>Vpc</c>, so a collision would be visible in the object. A <c>SecurityGroup</c> names
     ///     nothing, so this name is the <b>only</b> thing separating two networks' groups called
     ///     <c>web</c> — and a collision would merge two tenants' rule sets into one port group with no
@@ -467,8 +512,11 @@ public static class NetworkSecurityGroups {
 
     /// <summary>The action that reports the rules a body actually becomes.</summary>
     /// <remarks>
-    ///     ⚠ <b>IT EXISTS BECAUSE OF THE RESHAPE, AND IT IS THE HALF OF THE RESHAPE THAT MAKES IT
-    ///     HONEST.</b> A tenant writes six scalars and the fabric programs some number of rules; the
+    ///     ⚠
+    ///     <b>
+    ///         IT EXISTS BECAUSE OF THE RESHAPE, AND IT IS THE HALF OF THE RESHAPE THAT MAKES IT
+    ///         HONEST.
+    ///     </b> A tenant writes six scalars and the fabric programs some number of rules; the
     ///     mapping is documented on <see cref="Rules" /> and a document is not where somebody checks a
     ///     firewall. This returns the flattened list, in the order it is applied, from the resource's
     ///     own stored body — so "did <c>tcpPorts: 80,443</c> and two remotes really become four
@@ -495,19 +543,28 @@ public static class NetworkSecurityGroups {
     ///     The body shape at <see cref="V2026" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>SIX SCALARS PER DIRECTION AND NOT ONE ARRAY, WHICH IS THE WHOLE ARGUMENT OF THIS
-    ///     FILE</b> — see the remarks on this class for why that is a reshape rather than a
+    ///     ⚠
+    ///     <b>
+    ///         SIX SCALARS PER DIRECTION AND NOT ONE ARRAY, WHICH IS THE WHOLE ARGUMENT OF THIS
+    ///         FILE
+    ///     </b> — see the remarks on this class for why that is a reshape rather than a
     ///     concession, what it costs, and why an empty body is the safe one.
     ///     <para>
-    ///         ⚠ <b>Nothing here is <c>Required</c> beyond the platform's own three, and that is
-    ///         deliberate.</b> A required rule property would mean a security group could not be
+    ///         ⚠
+    ///         <b>
+    ///             Nothing here is <c>Required</c> beyond the platform's own three, and that is
+    ///             deliberate.
+    ///         </b> A required rule property would mean a security group could not be
     ///         created empty — and an empty security group is the <i>most</i> restrictive one there
     ///         is, so demanding a rule would be demanding that a tenant open something in order to
     ///         create a perimeter.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Nothing here is <c>Immutable</c> beyond the platform's own three either, and that
-    ///         is the difference from every other type in this family.</b> An address space and a
+    ///         ⚠
+    ///         <b>
+    ///             Nothing here is <c>Immutable</c> beyond the platform's own three either, and that
+    ///             is the difference from every other type in this family.
+    ///         </b> An address space and a
     ///         prefix are immutable because changing one renumbers a live network. A rule is exactly
     ///         the thing a tenant edits — closing a port they opened last week is the ordinary
     ///         operation, and an immutable rule set would make it a delete and a re-create of the
@@ -540,20 +597,14 @@ public static class NetworkSecurityGroups {
                     Required: true,
                     Description: "The cluster whose fabric carries the security group. Must be the "
                     + "cluster the network is in — nothing checks that."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
                     "/properties/allowSameGroupTraffic",
                     SchemaKind.Boolean,
                     Description: "Whether workloads that carry this same security group may reach each "
                     + "other without a rule. Off by default: it is the one setting here that permits "
                     + "traffic nobody wrote a rule for."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 // ── Inbound ───────────────────────────────────────────────────────────────────
                 new(
                     "/properties/ingress",
@@ -592,30 +643,20 @@ public static class NetworkSecurityGroups {
                     + "ports and ranges — for example 80,443,8000-8100. Empty means no TCP is allowed "
                     + "inbound. ⚠ There is no way to say 'every protocol'; 1-65535 says 'every TCP "
                     + "port'."
-                ) {
-                    Pattern = PortRange.OptionalListPattern,
-                    DefaultJson = "\"\"",
-                    ExampleJson = "\"80,443\""
-                },
+                ) { Pattern = PortRange.OptionalListPattern, DefaultJson = "\"\"", ExampleJson = "\"80,443\"" },
                 new(
                     "/properties/ingress/udpPorts",
                     SchemaKind.Text,
                     Description: "UDP ports inbound traffic may reach, in the same form as tcpPorts. "
                     + "Empty means no UDP is allowed inbound."
-                ) {
-                    Pattern = PortRange.OptionalListPattern,
-                    DefaultJson = "\"\"",
-                    ExampleJson = "\"53\""
-                },
+                ) { Pattern = PortRange.OptionalListPattern, DefaultJson = "\"\"", ExampleJson = "\"53\"" },
                 new(
                     "/properties/ingress/allowIcmp",
                     SchemaKind.Boolean,
                     Description: "Whether inbound ICMP is allowed from the remotes above. Off by "
                     + "default. ⚠ With this off, a workload in this group does not answer ping and "
                     + "does not receive path-MTU messages."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 // ── Outbound ──────────────────────────────────────────────────────────────────
                 new(
                     "/properties/egress",
@@ -651,42 +692,34 @@ public static class NetworkSecurityGroups {
                     SchemaKind.Text,
                     Description: "TCP ports outbound traffic may reach, in the same form as the "
                     + "inbound list. Empty means no outbound TCP."
-                ) {
-                    Pattern = PortRange.OptionalListPattern,
-                    DefaultJson = "\"\"",
-                    ExampleJson = "\"443\""
-                },
+                ) { Pattern = PortRange.OptionalListPattern, DefaultJson = "\"\"", ExampleJson = "\"443\"" },
                 new(
                     "/properties/egress/udpPorts",
                     SchemaKind.Text,
                     Description: "UDP ports outbound traffic may reach. Empty means no outbound UDP — "
                     + "which includes DNS on port 53."
-                ) {
-                    Pattern = PortRange.OptionalListPattern,
-                    DefaultJson = "\"\"",
-                    ExampleJson = "\"53\""
-                },
+                ) { Pattern = PortRange.OptionalListPattern, DefaultJson = "\"\"", ExampleJson = "\"53\"" },
                 new(
                     "/properties/egress/allowIcmp",
                     SchemaKind.Boolean,
                     Description: "Whether outbound ICMP is allowed to the remotes above. Off by "
                     + "default."
-                ) {
-                    DefaultJson = "false"
-                }
+                ) { DefaultJson = "false" }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showEffectiveRules</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><c>/rules</c> is an array of sentences for the reason
-    ///     <c>VirtualNetworks.ShowIsolationResponse</c>'s <c>/limits</c> is</b> —
+    ///     ⚠
+    ///     <b>
+    ///         <c>/rules</c> is an array of sentences for the reason
+    ///         <c>VirtualNetworks.ShowIsolationResponse</c>'s <c>/limits</c> is
+    ///     </b> —
     ///     <see cref="SchemaProperty.ElementKind" /> refuses an array of objects on a response schema
     ///     exactly as on a request one. Fourth sighting in this family, and the cheapest of the four:
     ///     a client that wanted the columns can split on spaces, and the sentence is the form a human
@@ -702,9 +735,7 @@ public static class NetworkSecurityGroups {
                     Description: "Every rule this security group's body becomes, in the order it is "
                     + "written to the fabric, one sentence each. An empty list means the group permits "
                     + "nothing, which is a valid and fully restrictive configuration."
-                ) {
-                    ElementKind = SchemaKind.Text
-                },
+                ) { ElementKind = SchemaKind.Text },
                 new(
                     "/count",
                     SchemaKind.WholeNumber,
@@ -749,26 +780,22 @@ public static class NetworkSecurityGroups {
     /// <summary>The IPv4 remote one direction declares, or empty.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <param name="direction"><see cref="Ingress" /> or <see cref="Egress" />.</param>
-    public static string RemoteV4(JsonElement desired, string direction) =>
-        Text(desired, direction, "remoteV4");
+    public static string RemoteV4(JsonElement desired, string direction) => Text(desired, direction, "remoteV4");
 
     /// <summary>The IPv6 remote one direction declares, or empty.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <param name="direction"><see cref="Ingress" /> or <see cref="Egress" />.</param>
-    public static string RemoteV6(JsonElement desired, string direction) =>
-        Text(desired, direction, "remoteV6");
+    public static string RemoteV6(JsonElement desired, string direction) => Text(desired, direction, "remoteV6");
 
     /// <summary>The TCP port list one direction declares, or empty.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <param name="direction"><see cref="Ingress" /> or <see cref="Egress" />.</param>
-    public static string TcpPorts(JsonElement desired, string direction) =>
-        Text(desired, direction, "tcpPorts");
+    public static string TcpPorts(JsonElement desired, string direction) => Text(desired, direction, "tcpPorts");
 
     /// <summary>The UDP port list one direction declares, or empty.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <param name="direction"><see cref="Ingress" /> or <see cref="Egress" />.</param>
-    public static string UdpPorts(JsonElement desired, string direction) =>
-        Text(desired, direction, "udpPorts");
+    public static string UdpPorts(JsonElement desired, string direction) => Text(desired, direction, "udpPorts");
 
     /// <summary>Whether one direction allows ICMP.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -821,8 +848,11 @@ public static class NetworkSecurityGroups {
     /// <param name="direction"><see cref="Ingress" /> or <see cref="Egress" />.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE EXPANSION, IN ONE PLACE, BECAUSE IT IS THE THING A READER MOST NEEDS TO BE
-    ///         ABLE TO CHECK.</b> A direction declares up to two remotes and up to two port lists, and
+    ///         ⚠
+    ///         <b>
+    ///             THE EXPANSION, IN ONE PLACE, BECAUSE IT IS THE THING A READER MOST NEEDS TO BE
+    ///             ABLE TO CHECK.
+    ///         </b> A direction declares up to two remotes and up to two port lists, and
     ///         the rules are the <b>cross product</b>: for each family whose remote is set, one rule
     ///         per TCP entry, then one rule per UDP entry, then one ICMP rule if asked. So
     ///         <c>remoteV4</c> and <c>remoteV6</c> both set with <c>tcpPorts: 80,443</c> is four
@@ -830,13 +860,19 @@ public static class NetworkSecurityGroups {
     ///         doing the arithmetic.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A remote with no protocols yields NOTHING, and that is the safe reading of an
-    ///         unfinished configuration rather than an oversight.</b> The alternative — treating
+    ///         ⚠
+    ///         <b>
+    ///             A remote with no protocols yields NOTHING, and that is the safe reading of an
+    ///             unfinished configuration rather than an oversight.
+    ///         </b> The alternative — treating
     ///         "a remote and no ports" as <c>protocol: all</c> — would make a half-typed body the
     ///         most permissive one the type can express. <c>charts/managed/kafka</c>'s
-    ///         <c>allowedCidrs</c> settled the same question the same way: <i>"an empty list with
-    ///         external exposure on renders a load balancer that accepts nothing, which is the safe
-    ///         reading of an unfinished configuration"</i>.
+    ///         <c>allowedCidrs</c> settled the same question the same way:
+    ///         <i>
+    ///             "an empty list with
+    ///             external exposure on renders a load balancer that accepts nothing, which is the safe
+    ///             reading of an unfinished configuration"
+    ///         </i>.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>A malformed port list yields nothing rather than throwing.</b> The reconciler
@@ -901,8 +937,11 @@ public static class NetworkSecurityGroups {
     ///         tier is what makes "whichever allow matches, permits" true.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>NO <c>remoteSecurityGroup</c>, <c>localAddress</c> or source port range on any
-    ///         rule.</b> The first is a cross-resource reference with no reader (rule 2); the other
+    ///         ⚠
+    ///         <b>
+    ///             NO <c>remoteSecurityGroup</c>, <c>localAddress</c> or source port range on any
+    ///             rule.
+    ///         </b> The first is a cross-resource reference with no reader (rule 2); the other
     ///         two are per-rule refinements this shape has no slot for and no evidence anybody needs
     ///         at M1. <c>§ owed</c>.
     ///     </para>
@@ -963,8 +1002,11 @@ public static class NetworkSecurityGroups {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>CONTAINMENT, AND FOR ONCE NOT BECAUSE THE CONTROLLER REWRITES THE SPEC — IT DOES
-    ///         NOT.</b> Checked in <c>pkg/controller/security_group.go</c>: every write it makes is
+    ///         ⚠
+    ///         <b>
+    ///             CONTAINMENT, AND FOR ONCE NOT BECAUSE THE CONTROLLER REWRITES THE SPEC — IT DOES
+    ///             NOT.
+    ///         </b> Checked in <c>pkg/controller/security_group.go</c>: every write it makes is
     ///         <c>patchSgStatus</c>, a merge patch against the <c>"status"</c> subresource, and there
     ///         is no update of a spec anywhere in the file. This is the first object in the family for
     ///         which the previous three files' argument does not hold. Containment is used anyway,
@@ -972,8 +1014,11 @@ public static class NetworkSecurityGroups {
     ///         or another field manager's addition is not drift in what this provider asked for.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The RULE ARRAYS are compared element by element on the fields this provider sends,
-    ///         and the COUNT must match.</b> A shorter array read back is a rule that was dropped and
+    ///         ⚠
+    ///         <b>
+    ///             The RULE ARRAYS are compared element by element on the fields this provider sends,
+    ///             and the COUNT must match.
+    ///         </b> A shorter array read back is a rule that was dropped and
     ///         a longer one is a rule somebody else added, and both are drift on the property that is
     ///         the whole subject of the resource. The arrays carry no <c>x-kubernetes-list-type</c>,
     ///         so they are atomic under server-side apply — which for <i>this</i> type is harmless
@@ -1075,8 +1120,11 @@ public static class NetworkSecurityGroups {
     /// <param name="allowSameGroupTraffic">Whether members reach each other without a rule.</param>
     /// <param name="location">The region.</param>
     /// <remarks>
-    ///     ⚠ <b>The default is a WEB TIER — inbound 80 and 443 from the whole internet, outbound 443
-    ///     to it — rather than the empty group, and the choice is deliberate.</b> An empty body is a
+    ///     ⚠
+    ///     <b>
+    ///         The default is a WEB TIER — inbound 80 and 443 from the whole internet, outbound 443
+    ///         to it — rather than the empty group, and the choice is deliberate.
+    ///     </b> An empty body is a
     ///     valid security group and is the one this type is proudest of, but it renders <b>zero</b>
     ///     rules, so a fixture built from it would make every assertion about the rendered object
     ///     vacuously true — <c>Matches</c> would compare two empty arrays and pass on a renderer that

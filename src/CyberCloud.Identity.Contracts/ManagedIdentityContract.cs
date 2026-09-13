@@ -33,8 +33,11 @@ public static class TokenExchange {
     ///     <c>system:serviceaccount:{namespace}:{name}</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The namespace and the name are read out of this string, so both must be
-    ///     colon-free.</b> <see cref="WorkloadBinding.Create" /> enforces that on the binding side,
+    ///     ⚠
+    ///     <b>
+    ///         The namespace and the name are read out of this string, so both must be
+    ///         colon-free.
+    ///     </b> <see cref="WorkloadBinding.Create" /> enforces that on the binding side,
     ///     and the parse below re-checks the segment count rather than splitting on the first two
     ///     colons and hoping — a namespace containing a colon would otherwise let one binding's
     ///     subject read as another's.
@@ -51,8 +54,11 @@ public static class TokenExchange {
 ///     docs/plan/11 § Managed identity: the bad answer to "this workload needs to read a vault
 ///     secret" is "a client secret in a Kubernetes <c>Secret</c>"; the good answer is that the
 ///     platform trusts <i>the cluster's own signature</i> over a token the kubelet projected. So the
-///     binding names who may present such a token and nothing else — <b>no secret is ever stored, on
-///     either side</b>.
+///     binding names who may present such a token and nothing else —
+///     <b>
+///         no secret is ever stored, on
+///         either side
+///     </b>.
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Identity.WorkloadBinding")]
@@ -73,8 +79,7 @@ public sealed record WorkloadBinding {
     public string ServiceAccount { get; init; } = string.Empty;
 
     /// <summary>Whether this binding names anything.</summary>
-    public bool IsEmpty =>
-        ClusterId == Guid.Empty || Namespace.Length == 0 || ServiceAccount.Length == 0;
+    public bool IsEmpty => ClusterId == Guid.Empty || Namespace.Length == 0 || ServiceAccount.Length == 0;
 
     /// <summary>
     ///     Builds a binding, or explains why the parts are not one.
@@ -83,8 +88,11 @@ public sealed record WorkloadBinding {
     /// <param name="namespace">The Kubernetes namespace.</param>
     /// <param name="serviceAccount">The service account name.</param>
     /// <remarks>
-    ///     ⚠ <b>Both names are validated as DNS-1123 labels, and the property that matters is that
-    ///     neither can contain a <c>':'</c>.</b> A projected token's subject is the flat string
+    ///     ⚠
+    ///     <b>
+    ///         Both names are validated as DNS-1123 labels, and the property that matters is that
+    ///         neither can contain a <c>':'</c>.
+    ///     </b> A projected token's subject is the flat string
     ///     <c>system:serviceaccount:{namespace}:{name}</c>, so a namespace spelled
     ///     <c>prod:default</c> would produce a subject that also reads as
     ///     <c>(prod, default:{name})</c> — one workload's token satisfying another workload's
@@ -162,8 +170,11 @@ public sealed record WorkloadBinding {
 
 /// <summary>
 ///     A tenant cluster's OIDC issuer, as read from its discovery document. docs/plan/11 § Managed
-///     identity, step 3: <i>"the platform records the cluster's OIDC issuer URL and JWKS (read once,
-///     refreshed)"</i>.
+///     identity, step 3:
+///     <i>
+///         "the platform records the cluster's OIDC issuer URL and JWKS (read once,
+///         refreshed)"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -174,8 +185,11 @@ public sealed record WorkloadBinding {
 ///         "no secret is ever stored, on either side" literally true rather than nearly true.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Issuer" /> is the value the discovery document itself claims, not the URL
-///         we fetched.</b> OIDC Discovery requires the two to match and the check is not
+///         ⚠
+///         <b>
+///             <see cref="Issuer" /> is the value the discovery document itself claims, not the URL
+///             we fetched.
+///         </b> OIDC Discovery requires the two to match and the check is not
 ///         decorative: without it, a cluster could publish a document claiming somebody else's issuer
 ///         and every token that issuer signed would validate against a key set the cluster chose.
 ///         <c>IClusterOidcDiscovery</c> is where that check happens, and it happens once — at
@@ -266,8 +280,7 @@ public sealed record ManagedIdentityDescriptor {
     public bool IsExchangeable => !Binding.IsEmpty && !Issuer.IsEmpty;
 
     /// <summary>This identity as a ReBAC subject — <c>managedIdentity:{id:N}</c>.</summary>
-    public SubjectRef Subject =>
-        SubjectRef.Of(SubjectTypes.ManagedIdentity, ManagedIdentityId);
+    public SubjectRef Subject => SubjectRef.Of(SubjectTypes.ManagedIdentity, ManagedIdentityId);
 }
 
 /// <summary>
@@ -351,8 +364,11 @@ public sealed record ValidatedServiceAccount(
 ///         ⚠ <b>THIS GRAIN HOLDS NO SECRET AND HAS NOWHERE TO PUT ONE.</b> docs/plan/11 § Managed
 ///         identity calls this "the feature that removes stored secrets" and says why it is worth 1.2
 ///         EM: "no secret is ever stored, on either side … it removes an entire incident class". The
-///         binding says <i>who may present a token</i>; the issuer record says <i>whose signature to
-///         trust</i>, and a JWKS is public. Compare <see cref="IServicePrincipalGrain" />, which holds
+///         binding says <i>who may present a token</i>; the issuer record says
+///         <i>
+///             whose signature to
+///             trust
+///         </i>, and a JWKS is public. Compare <see cref="IServicePrincipalGrain" />, which holds
 ///         a <see cref="SecretRef" /> — a handle rather than a value, which is the best a shared
 ///         secret can be, and still worse than not having one.
 ///     </para>
@@ -389,12 +405,18 @@ public interface IManagedIdentityGrain : IGrainWithStringKey {
     /// <param name="clusterIssuerUrl">The issuer URL the cluster advertises.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS WHERE AN UNREACHABLE CLUSTER IS REFUSED, AND THE DOCUMENT IS EXPLICIT
-    ///         THAT IT MUST BE HERE.</b> docs/plan/11 § Managed identity: the flow "requires the
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS WHERE AN UNREACHABLE CLUSTER IS REFUSED, AND THE DOCUMENT IS EXPLICIT
+    ///             THAT IT MUST BE HERE.
+    ///         </b> docs/plan/11 § Managed identity: the flow "requires the
     ///         tenant's cluster to expose a <b>publicly reachable</b> OIDC discovery document, or that
     ///         we fetch the JWKS through the <c>AgentInitiated</c> tunnel — for BYO clusters that is
-    ///         not automatic, <b>and the portal must say so at binding time rather than failing at
-    ///         token exchange</b>."
+    ///         not automatic,
+    ///         <b>
+    ///             and the portal must say so at binding time rather than failing at
+    ///             token exchange
+    ///         </b>."
     ///     </para>
     ///     <para>
     ///         The difference is the whole usability argument. A refusal here is a form that will not

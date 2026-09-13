@@ -1,5 +1,5 @@
-using System.Text.Json.Serialization;
 using CyberCloud.Sdk;
+using System.Text.Json.Serialization;
 
 namespace CyberCloud.Cli.Tests;
 
@@ -8,8 +8,11 @@ namespace CyberCloud.Cli.Tests;
 ///     that holds both ends.
 /// </summary>
 /// <remarks>
-///     ⚠ <c>CyberCloudCliCredential</c> runs exactly <c>cyc account get-access-token --output
-///     json</c>, deserialises the output into <c>CliTokenPayload</c>, and branches on the exit code —
+///     ⚠ <c>CyberCloudCliCredential</c> runs exactly
+///     <c>
+/// cyc account get-access-token --output
+///     json
+///     </c>, deserialises the output into <c>CliTokenPayload</c>, and branches on the exit code —
 ///     <b>3 means "not signed in, run cyc login"</b> and anything else means a different problem. Both
 ///     halves are asserted here, and the payload is round-tripped through the SDK's own type rather
 ///     than through a copy of its property names.

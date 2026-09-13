@@ -11,8 +11,11 @@ namespace CyberCloud.Vault;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/08 § What the resource manager deliberately does not do routes <c>Hold
-///         secrets</c> to <c>ISecretResolver → OpenBao</c>, and this is that arrow. A reconciler asks
+///         docs/plan/08 § What the resource manager deliberately does not do routes
+///         <c>
+/// Hold
+///         secrets
+///         </c> to <c>ISecretResolver → OpenBao</c>, and this is that arrow. A reconciler asks
 ///         for a handle it found in desired state, gets the value, puts it into a Kubernetes
 ///         <c>Secret</c> it is applying, and the value is gone when the pass returns.
 ///     </para>
@@ -39,14 +42,20 @@ namespace CyberCloud.Vault;
 ///         </item>
 ///         <item>
 ///             <b>Revocation stops working.</b> docs/plan/18's <c>getValue</c> is
-///             <c>FullyConsistent</c> on the ReBAC check because <i>"a revoked user reading a secret
-///             from a stale cache is exactly the incident this exists to prevent"</i>. A value cache
+///             <c>FullyConsistent</c> on the ReBAC check because
+///             <i>
+///                 "a revoked user reading a secret
+///                 from a stale cache is exactly the incident this exists to prevent"
+///             </i>. A value cache
 ///             on the platform's side of that check re-introduces the same staleness one layer down.
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The token <i>is</i> cached, which is the opposite decision, and the asymmetry is the
-///         point.</b> <see cref="IVaultTokenSource" /> holds a login for its lease, because the thing
+///         ⚠
+///         <b>
+///             The token <i>is</i> cached, which is the opposite decision, and the asymmetry is the
+///             point.
+///         </b> <see cref="IVaultTokenSource" /> holds a login for its lease, because the thing
 ///         being cached there is a lease OpenBao itself issued with a duration it chose — caching it
 ///         respects the vault's own statement about validity, where caching a value overrides it.
 ///         What that costs is bounded and named: a revoked token is not noticed until a read is
@@ -86,8 +95,11 @@ public sealed class OpenBaoSecretResolver(
     ///     <c>/sys/config/auditing/request-headers</c>; unlisted, it is dropped. So this is the
     ///     platform's half of a join that the vault's deployment has to complete, and
     ///     <c>deploy/</c> is where that belongs. Worth knowing while wiring it: OpenBao 2.4 refuses
-    ///     to enable an audit device over the API at all — <i>"cannot enable audit device via API;
-    ///     use declarative, config-based audit device management instead"</i> — so the device is part
+    ///     to enable an audit device over the API at all —
+    ///     <i>
+    ///         "cannot enable audit device via API;
+    ///         use declarative, config-based audit device management instead"
+    ///     </i> — so the device is part
     ///     of the server's configuration file, not something a bootstrap job turns on.
     /// </remarks>
     public const string CorrelationHeader = "X-Correlation-Id";
@@ -212,9 +224,7 @@ public sealed class OpenBaoSecretResolver(
         using (response) {
             switch ((int)response.StatusCode) {
                 case 404:
-                    return ReadOutcome.Failed(
-                        VaultFailures.NotFound(reference, options.Address, options.KvMountPath)
-                    );
+                    return ReadOutcome.Failed(VaultFailures.NotFound(reference, options.Address, options.KvMountPath));
 
                 case 403:
                     return ReadOutcome.Denied(
@@ -315,8 +325,11 @@ public sealed class OpenBaoSecretResolver(
     /// <summary>Builds the <c>kv-v2</c> read URL for a handle.</summary>
     /// <param name="reference">The handle.</param>
     /// <remarks>
-    ///     ⚠ <b>Each path segment is escaped separately, so the slashes survive and everything else
-    ///     does not.</b> A <see cref="SecretRef.Path" /> is hierarchical —
+    ///     ⚠
+    ///     <b>
+    ///         Each path segment is escaped separately, so the slashes survive and everything else
+    ///         does not.
+    ///     </b> A <see cref="SecretRef.Path" /> is hierarchical —
     ///     <c>tenants/{tenantId}/postgres/main</c> — so escaping the whole string would turn its
     ///     structure into <c>%2F</c> and address a single secret whose name contains slashes.
     ///     Escaping nothing would let a path segment carrying <c>?</c> or <c>#</c> rewrite the query

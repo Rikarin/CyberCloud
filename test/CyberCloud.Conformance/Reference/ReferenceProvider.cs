@@ -41,9 +41,12 @@ public static class Probes {
     /// <summary>The nested type's path. Its parent type is <see cref="TypePath" />.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This exists so the isolation suite can assert the shape of a <i>child's</i> parent
-    ///         edge against the real writer, the real authorizer and the real schema, and so the
-    ///         shared conformance suite has a child to run end to end.</b> No shipping provider
+    ///         ⚠
+    ///         <b>
+    ///             This exists so the isolation suite can assert the shape of a <i>child's</i> parent
+    ///             edge against the real writer, the real authorizer and the real schema, and so the
+    ///             shared conformance suite has a child to run end to end.
+    ///         </b> No shipping provider
     ///         declares a nested type yet — docs/plan/12 § The catalogue lists
     ///         <c>servers/databases</c> and its siblings as owed — and <c>TestingProvider</c>'s
     ///         <c>widgets/gadgets</c> lives in <c>CyberCloud.ResourceManager.Tests</c>, where both
@@ -51,8 +54,11 @@ public static class Probes {
     ///         believed in, which is exactly what a test of the edge's subject cannot use.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It is a FULL type — reconciler, cluster, action, tags — and it was not, and the
-    ///         difference is the whole of failure class (a).</b> It used to declare only a schema and
+    ///         ⚠
+    ///         <b>
+    ///             It is a FULL type — reconciler, cluster, action, tags — and it was not, and the
+    ///             difference is the whole of failure class (a).
+    ///         </b> It used to declare only a schema and
     ///         three permissions, because the only thing that addressed it was the parent-edge test.
     ///         A child registered that way cannot run the shared suite: it has no reconciler for
     ///         <c>TheTypeIsRegisteredWithAReconcilerAndAllThreePermissions</c>, owns no objects for
@@ -105,8 +111,11 @@ public static class Probes {
     /// </summary>
     /// <param name="id">The child's address.</param>
     /// <remarks>
-    ///     ⚠ <b>The parent's name is in the object name on purpose, and it is an assertion rather than
-    ///     a convention.</b> Two children of two different parents may share a name — the address
+    ///     ⚠
+    ///     <b>
+    ///         The parent's name is in the object name on purpose, and it is an assertion rather than
+    ///         a convention.
+    ///     </b> Two children of two different parents may share a name — the address
     ///     distinguishes them and <c>ReconcileDriver.NamespaceFor</c> does not, because a namespace is
     ///     per <c>(subscription, resource group)</c> and a parent is inside one. So a renderer that
     ///     ignored <see cref="ResourceId.ParentNames" /> would have the two children fighting over one
@@ -169,8 +178,7 @@ public static class Probes {
     /// <param name="desired">The desired body.</param>
     public static string ObjectJson(string name, JsonElement desired) =>
         new JsonObject {
-            ["metadata"] = new JsonObject { ["name"] = name },
-            ["data"] = new JsonObject { ["note"] = NoteOf(desired) }
+            ["metadata"] = new JsonObject { ["name"] = name }, ["data"] = new JsonObject { ["note"] = NoteOf(desired) }
         }.ToJsonString();
 
     /// <summary>Whether an object carries what a desired body asked for.</summary>
@@ -180,8 +188,8 @@ public static class Probes {
         using var desired = JsonDocument.Parse(desiredJson);
 
         return JsonNode.Parse(objectJson) is JsonObject document
-               && document["data"] is JsonObject data
-               && data["note"]?.GetValue<string>() == NoteOf(desired.RootElement);
+            && document["data"] is JsonObject data
+            && data["note"]?.GetValue<string>() == NoteOf(desired.RootElement);
     }
 }
 
@@ -222,8 +230,11 @@ public sealed class ReferenceProvider : IResourceProvider {
 ///     A conforming reconciler: idempotent, stateless, bounded, and it reads back.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The type it serves is a constructor argument rather than a constant, and the two concrete
-///     classes below are the reason.</b> <c>ProviderRegistry</c> stores each type's reconciler by
+///     ⚠
+///     <b>
+///         The type it serves is a constructor argument rather than a constant, and the two concrete
+///         classes below are the reason.
+///     </b> <c>ProviderRegistry</c> stores each type's reconciler by
 ///     CONCRETE TYPE and <c>ReconcileDriver</c> resolves it from the container by that type, so a
 ///     parent and its child cannot be served by one class however identical their work is — the
 ///     registry would have two registrations pointing at one singleton whose <see cref="Type" /> can
@@ -274,7 +285,10 @@ public abstract class ProbeReconcilerBase(IClock clock, ResourceTypeName type) :
         }
 
         if (!Probes.Matches(read.GetValueOrThrow().Json, context.Desired.GetRawText())) {
-            return ReconcileOutcome.InProgress("the probe does not carry the desired note yet", TimeSpan.FromSeconds(5));
+            return ReconcileOutcome.InProgress(
+                "the probe does not carry the desired note yet",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         context.Log.Report("ready", "the probe reads back as desired", 100);
@@ -331,15 +345,11 @@ public abstract class ProbeReconcilerBase(IClock clock, ResourceTypeName type) :
         return read.IsFailure
             ? new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "absent" }
             : new() {
-                Exists = true,
-                Json = read.GetValueOrThrow().Json,
-                ObservedAt = clock.UtcNow,
-                Summary = "present"
+                Exists = true, Json = read.GetValueOrThrow().Json, ObservedAt = clock.UtcNow, Summary = "present"
             };
     }
 
-    static ObjectRef Target(string ns, string name) =>
-        new() { Kind = Probes.Kind, Namespace = ns, Name = name };
+    static ObjectRef Target(string ns, string name) => new() { Kind = Probes.Kind, Namespace = ns, Name = name };
 }
 
 /// <summary>The reconciler for <c>probes</c>.</summary>

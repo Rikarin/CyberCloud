@@ -24,9 +24,7 @@ public sealed class OpenApiStructureTests {
                     ["parameters"] = new JsonArray { new JsonObject { ["$ref"] = "#/components/parameters/Name" } },
                     ["get"] = new JsonObject {
                         ["operationId"] = "Things_Get",
-                        ["responses"] = new JsonObject {
-                            ["200"] = new JsonObject { ["description"] = "The thing." }
-                        }
+                        ["responses"] = new JsonObject { ["200"] = new JsonObject { ["description"] = "The thing." } }
                     }
                 }
             },
@@ -58,7 +56,8 @@ public sealed class OpenApiStructureTests {
         document["components"]!["schemas"]!["Thing"]!["properties"]!["size"] =
             new JsonObject { ["$ref"] = "#/components/schemas/NoSuchThing" };
 
-        OpenApiStructure.Validate(document).ShouldContain(x => x.Contains("resolves to nothing", StringComparison.Ordinal));
+        OpenApiStructure.Validate(document)
+            .ShouldContain(x => x.Contains("resolves to nothing", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -68,7 +67,8 @@ public sealed class OpenApiStructureTests {
         var document = Sound();
         document["components"]!["schemas"]!["Thing"] = new JsonObject { ["$ref"] = "common.json#/Thing" };
 
-        OpenApiStructure.Validate(document).ShouldContain(x => x.Contains("not a local reference", StringComparison.Ordinal));
+        OpenApiStructure.Validate(document)
+            .ShouldContain(x => x.Contains("not a local reference", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -79,7 +79,8 @@ public sealed class OpenApiStructureTests {
         document["components"]!["schemas"]!.AsObject()["CyberCloud.X/servers"] =
             new JsonObject { ["type"] = "object" };
 
-        OpenApiStructure.Validate(document).ShouldContain(x => x.Contains("not a legal component key", StringComparison.Ordinal));
+        OpenApiStructure.Validate(document)
+            .ShouldContain(x => x.Contains("not a legal component key", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -111,7 +112,8 @@ public sealed class OpenApiStructureTests {
         var document = Sound();
         document["paths"]!.AsObject()["/others/{name}"] = document["paths"]!["/things/{name}"]!.DeepClone();
 
-        OpenApiStructure.Validate(document).ShouldContain(x => x.Contains("is already used by", StringComparison.Ordinal));
+        OpenApiStructure.Validate(document)
+            .ShouldContain(x => x.Contains("is already used by", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -120,7 +122,11 @@ public sealed class OpenApiStructureTests {
         document["components"]!["schemas"]!["Thing"]!["required"] = new JsonArray { "size", "colour" };
 
         OpenApiStructure.Validate(document)
-            .ShouldContain(x => x.Contains("'colour', which is not in this schema's properties", StringComparison.Ordinal));
+            .ShouldContain(x => x.Contains(
+                    "'colour', which is not in this schema's properties",
+                    StringComparison.Ordinal
+                )
+            );
     }
 
     [Fact]
@@ -156,7 +162,8 @@ public sealed class OpenApiStructureTests {
         var document = Sound();
         document["openapi"] = "3.0.3";
 
-        OpenApiStructure.Validate(document).ShouldContain(x => x.Contains("is not a 3.1 version", StringComparison.Ordinal));
+        OpenApiStructure.Validate(document)
+            .ShouldContain(x => x.Contains("is not a 3.1 version", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -165,7 +172,8 @@ public sealed class OpenApiStructureTests {
         var document = Sound();
         document.Remove("paths");
 
-        OpenApiStructure.Validate(document).ShouldContain(x => x.Contains("/paths — missing", StringComparison.Ordinal));
+        OpenApiStructure.Validate(document)
+            .ShouldContain(x => x.Contains("/paths — missing", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -6,8 +6,11 @@ namespace CyberCloud.Identity.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>ISSUANCE, STORAGE AND VERIFICATION ALL HAPPEN IN <see cref="IUserGrain" />, ON A
-///         SILO. THE IDENTITY HOST GENERATES NOTHING, STORES NOTHING AND COMPARES NOTHING.</b> This
+///         ⚠
+///         <b>
+///             ISSUANCE, STORAGE AND VERIFICATION ALL HAPPEN IN <see cref="IUserGrain" />, ON A
+///             SILO. THE IDENTITY HOST GENERATES NOTHING, STORES NOTHING AND COMPARES NOTHING.
+///         </b> This
 ///         paragraph is the answer to the question the shape of the code otherwise makes somebody
 ///         re-derive: the host is where <c>/api/signin/*</c> lives, so putting the code there looks
 ///         like the short path. It is wrong on all four properties a one-time code has to have, and
@@ -57,8 +60,11 @@ namespace CyberCloud.Identity.Contracts;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The denial-of-service rule that puts the lockout counter <i>outside</i> a grain does
-///         not reach this, and the difference is worth being precise about.</b> docs/plan/11
+///         ⚠
+///         <b>
+///             The denial-of-service rule that puts the lockout counter <i>outside</i> a grain does
+///             not reach this, and the difference is worth being precise about.
+///         </b> docs/plan/11
 ///         § Credentials calls "an authentication endpoint whose failure path costs a grain
 ///         activation" a denial-of-service amplifier, which is why <c>ILockoutCounter</c> is a hot-tier
 ///         <c>INCR</c> keyed by a digest an unauthenticated caller can drive. The amplifier exists
@@ -70,8 +76,11 @@ namespace CyberCloud.Identity.Contracts;
 ///         creates a new one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What follows for delivery, and it is the reason <c>AddCommunicationOtpDelivery</c>
-///         takes an <c>ISiloBuilder</c> rather than an <c>IServiceCollection</c>.</b>
+///         ⚠
+///         <b>
+///             What follows for delivery, and it is the reason <c>AddCommunicationOtpDelivery</c>
+///             takes an <c>ISiloBuilder</c> rather than an <c>IServiceCollection</c>.
+///         </b>
 ///         <c>IOtpDeliverySeam</c> is called from inside the grain, which is on a silo, which is
 ///         exactly the receiver that extension already has. The alternative — return the plaintext to
 ///         the host and let the host send it — would put a live credential on a grain response, in a
@@ -80,8 +89,11 @@ namespace CyberCloud.Identity.Contracts;
 ///         service rather than the tenant the user belongs to. See <c>CommunicationOtpDelivery</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>SMS and WhatsApp are not issuable yet, and the refusal is deliberate rather than
-///         missing.</b> docs/plan/11 § Credentials lists all three at M1, but the destination for a
+///         ⚠
+///         <b>
+///             SMS and WhatsApp are not issuable yet, and the refusal is deliberate rather than
+///             missing.
+///         </b> docs/plan/11 § Credentials lists all three at M1, but the destination for a
 ///         code has to be a <i>proven</i> one — sending to a number supplied on the request would let
 ///         anyone holding a half-authenticated session redirect a second factor to a phone they own.
 ///         <see cref="IUserGrain" /> holds a verified email address and no verified number, so
@@ -146,8 +158,11 @@ public static class OtpPolicy {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the one place the two are told apart, and getting it wrong breaks one of
-    ///         them.</b> A caller that timed out waiting for an issue and repeated the call must not
+    ///         ⚠
+    ///         <b>
+    ///             This is the one place the two are told apart, and getting it wrong breaks one of
+    ///             them.
+    ///         </b> A caller that timed out waiting for an issue and repeated the call must not
     ///         cause a second SMS; a person who did not receive the first message and pressed
     ///         "resend" must. Nothing in the two requests distinguishes them — that is the whole
     ///         difficulty — so the only available discriminator is how far apart they are.
@@ -162,8 +177,11 @@ public static class OtpPolicy {
     ///         inside any human's patience.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Redelivering the same code needs the plaintext, which only the live activation
-    ///         has</b> — grain state holds a keyed digest, by property 4 above. So an issue that
+    ///         ⚠
+    ///         <b>
+    ///             Redelivering the same code needs the plaintext, which only the live activation
+    ///             has
+    ///         </b> — grain state holds a keyed digest, by property 4 above. So an issue that
     ///         lands after the activation was collected mints a new code even inside this window,
     ///         which sends twice. That is the safe direction (the user gets a code either way) and it
     ///         is rare, because Orleans keeps an activation for its collection age and this window is

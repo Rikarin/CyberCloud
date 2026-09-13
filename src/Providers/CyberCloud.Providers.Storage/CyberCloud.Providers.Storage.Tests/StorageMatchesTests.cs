@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.Storage.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Checked against the CRD and the webhook rather than against the README, and the two
-///         answers are different.</b> <c>api/v1/seaweed_types.go</c> carries
+///         ⚠
+///         <b>
+///             Checked against the CRD and the webhook rather than against the README, and the two
+///             answers are different.
+///         </b> <c>api/v1/seaweed_types.go</c> carries
 ///         <c>+kubebuilder:default</c> on eight fields — <c>s3.replicas=1</c>, <c>s3.iam=true</c>,
 ///         <c>filer.iam=true</c>, <c>volume.kind=StatefulSet</c>, <c>persistence.enabled=false</c>,
 ///         <c>persistence.mountPath="/data"</c>, <c>persistence.subPath=""</c>,
@@ -18,8 +21,11 @@ namespace CyberCloud.Providers.Storage.Tests;
 ///         <c>charts/managed/kafka</c>'s equivalent check found the opposite about Strimzi.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The second reason has no precedent in the tree: the operator installs a MUTATING
-///         webhook whose defaulter is a scaffold.</b> <c>api/v1/seaweed_webhook.go</c> registers
+///         ⚠
+///         <b>
+///             The second reason has no precedent in the tree: the operator installs a MUTATING
+///             webhook whose defaulter is a scaffold.
+///         </b> <c>api/v1/seaweed_webhook.go</c> registers
 ///         <c>/mutate-seaweed-seaweedfs-com-v1-seaweed</c> on <c>create;update</c>, and the body of
 ///         <c>SeaweedCustomDefaulter.Default</c> is a log line and a <c>TODO</c>. It mutates nothing
 ///         today — so an equality comparison would pass against this release and break silently
@@ -50,9 +56,8 @@ public sealed class StorageMatchesTests {
 
         // And what the API server adds to every object.
         read["metadata"]!.AsObject()["generation"] = 1;
-        read["metadata"]!.AsObject()["managedFields"] = new JsonArray {
-            new JsonObject { ["manager"] = "cybercloud/cybercloud.storage" }
-        };
+        read["metadata"]!.AsObject()["managedFields"] =
+            new JsonArray { new JsonObject { ["manager"] = "cybercloud/cybercloud.storage" } };
 
         // And what the operator writes back into `.status`, which is a subresource this provider must
         // never compare against.
@@ -62,10 +67,11 @@ public sealed class StorageMatchesTests {
             ["s3"] = new JsonObject { ["replicas"] = 2, ["readyReplicas"] = 0 }
         };
 
-        StorageAccounts.Matches(read.ToJsonString(), desired.RootElement).ShouldBeTrue(
-            "a Seaweed read back with the fields its own CRD defaults was reported as drifted. That "
-            + "account would never leave InProgress while being perfectly correct."
-        );
+        StorageAccounts.Matches(read.ToJsonString(), desired.RootElement)
+            .ShouldBeTrue(
+                "a Seaweed read back with the fields its own CRD defaults was reported as drifted. That "
+                + "account would never leave InProgress while being perfectly correct."
+            );
     }
 
     [Fact]
@@ -99,9 +105,8 @@ public sealed class StorageMatchesTests {
         read["kind"] = "Seaweed";
         read["spec"]!["volume"]!["replicas"] = 3;
 
-        StorageAccounts.Matches(read.ToJsonString(), desired.RootElement).ShouldBeFalse(
-            "a Seaweed scaled away from the declared volume-server count read back as matching."
-        );
+        StorageAccounts.Matches(read.ToJsonString(), desired.RootElement)
+            .ShouldBeFalse("a Seaweed scaled away from the declared volume-server count read back as matching.");
     }
 
     [Fact]
@@ -128,11 +133,12 @@ public sealed class StorageMatchesTests {
         read["kind"] = "Seaweed";
         read["spec"]!["s3"]!.AsObject().Remove("configSecret");
 
-        StorageAccounts.Matches(read.ToJsonString(), desired.RootElement).ShouldBeFalse(
-            "a gateway with no identities file read back as matching. That is a publicly-spoken S3 "
-            + "endpoint on which every anonymous caller is an administrator, and it is the one drift "
-            + "that makes the resource look healthier rather than worse."
-        );
+        StorageAccounts.Matches(read.ToJsonString(), desired.RootElement)
+            .ShouldBeFalse(
+                "a gateway with no identities file read back as matching. That is a publicly-spoken S3 "
+                + "endpoint on which every anonymous caller is an administrator, and it is the one drift "
+                + "that makes the resource look healthier rather than worse."
+            );
     }
 
     [Fact]

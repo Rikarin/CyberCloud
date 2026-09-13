@@ -10,9 +10,12 @@ namespace CyberCloud.Providers.DBforMySQL.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The PostgreSQL row found that the true amount is <c>replicas × per-instance</c>, which
-///         is not one value at one pointer. This type is the sharper version of the same finding: the
-///         multiplier is not a number in the body AT ALL.</b> <c>MariaDbServers.GaleraReplicas</c>
+///         ⚠
+///         <b>
+///             The PostgreSQL row found that the true amount is <c>replicas × per-instance</c>, which
+///             is not one value at one pointer. This type is the sharper version of the same finding: the
+///             multiplier is not a number in the body AT ALL.
+///         </b> <c>MariaDbServers.GaleraReplicas</c>
 ///         explains why an instance count could not be a tenant-facing property — the CRD refuses an
 ///         even Galera count and <c>SchemaProperty</c> cannot spell "odd" — so the count is derived
 ///         from <c>/properties/highAvailability</c>, a <i>string naming a topology</i>. A
@@ -140,10 +143,11 @@ public sealed class MariaDbQuotaTests {
         // from. On this type that property is a topology string, which is the least obvious member of
         // any read set in the tree.
         foreach (var meter in new[] { QuotaMeter.Vcpu, QuotaMeter.MemoryGb, QuotaMeter.StorageGb }) {
-            Registration().Meters.Single(x => x.Meter == meter).Derivation!.Reads.ShouldContain(
-                "/properties/highAvailability",
-                meter.ToString()
-            );
+            Registration().Meters.Single(x => x.Meter == meter).Derivation!
+                .Reads.ShouldContain(
+                    "/properties/highAvailability",
+                    meter.ToString()
+                );
         }
     }
 

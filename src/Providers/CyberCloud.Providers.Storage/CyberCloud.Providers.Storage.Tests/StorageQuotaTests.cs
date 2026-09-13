@@ -13,8 +13,11 @@ namespace CyberCloud.Providers.Storage.Tests;
 ///     resource that reserves a third of what it costs provisions perfectly, reads back perfectly and
 ///     converges — and the subscription is billed for a third of it.
 ///     <para>
-///         ⚠ <b>This type is the first whose meters are a sum over components that are not the same
-///         size as each other.</b> <c>CyberCloud.DBforPostgreSQL/servers</c> established that an
+///         ⚠
+///         <b>
+///             This type is the first whose meters are a sum over components that are not the same
+///             size as each other.
+///         </b> <c>CyberCloud.DBforPostgreSQL/servers</c> established that an
 ///         amount is a quantity string rather than a number; <c>CyberCloud.Messaging/natsClusters</c>
 ///         added that it is a <i>product</i> of a replica count and one per-replica figure. A Seaweed
 ///         cluster is neither: the volume servers carry the tenant's preset and the masters, the filer
@@ -117,15 +120,12 @@ public sealed class StorageQuotaTests {
         var registry = ProviderRegistry.Build([new StorageProvider()]);
         registry.TryGetType(StorageAccounts.Type, out var registration).ShouldBeTrue();
 
-        using var body = JsonDocument.Parse(
-            WithSizing(StorageAccounts.Body(ClusterId), "not-a-quantity", "1Gi")
-        );
+        using var body = JsonDocument.Parse(WithSizing(StorageAccounts.Body(ClusterId), "not-a-quantity", "1Gi"));
 
         var vcpu = registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!;
 
-        vcpu.Amount(body.RootElement).IsFailure.ShouldBeTrue(
-            "a body whose cpu quantity does not parse reserved an amount instead of refusing."
-        );
+        vcpu.Amount(body.RootElement)
+            .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
     }
 
     [Fact]
@@ -176,9 +176,7 @@ public sealed class StorageQuotaTests {
 
     static string WithSizing(string body, string cpu, string memory) {
         var node = JsonNode.Parse(body)!.AsObject();
-        node["properties"]!.AsObject()["sizing"] = new JsonObject {
-            ["cpu"] = cpu, ["memory"] = memory
-        };
+        node["properties"]!.AsObject()["sizing"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
 
         return node.ToJsonString();
     }

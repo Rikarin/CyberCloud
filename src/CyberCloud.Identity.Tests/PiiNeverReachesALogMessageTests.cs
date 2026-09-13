@@ -25,8 +25,7 @@ public sealed class CapturingLogger<T> : ILogger<T> {
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull =>
-        null;
+        where TState : notnull => null;
 
     /// <inheritdoc />
     public bool IsEnabled(LogLevel logLevel) => true;
@@ -52,9 +51,12 @@ public sealed class CapturingLogger<T> : ILogger<T> {
 }
 
 /// <summary>
-///     docs/plan/11 § Auditing: <i>"no email, name or IP in a log <b>message</b>. They go in
-///     structured fields, which are subject to the retention and redaction policy; a message string
-///     is not."</i>
+///     docs/plan/11 § Auditing:
+///     <i>
+///         "no email, name or IP in a log <b>message</b>. They go in
+///         structured fields, which are subject to the retention and redaction policy; a message string
+///         is not."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>

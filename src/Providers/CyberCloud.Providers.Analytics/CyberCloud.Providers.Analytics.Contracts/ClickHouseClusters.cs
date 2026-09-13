@@ -12,29 +12,46 @@ namespace CyberCloud.Providers.Analytics.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE PLATFORM RUNS CLICKHOUSE AND THE PLATFORM'S CLICKHOUSE IS NOT ONE OF THESE, AND
-///         GETTING THAT BACKWARDS IS THE EXPENSIVE MISTAKE ON THIS ROW.</b>
-///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md) says <i>"We run
-///         ClickHouse for telemetry and metering"</i> and cites
+///         ⚠
+///         <b>
+///             THE PLATFORM RUNS CLICKHOUSE AND THE PLATFORM'S CLICKHOUSE IS NOT ONE OF THESE, AND
+///             GETTING THAT BACKWARDS IS THE EXPENSIVE MISTAKE ON THIS ROW.
+///         </b>
+///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md) says
+///         <i>
+///             "We run
+///             ClickHouse for telemetry and metering"
+///         </i> and cites
 ///         [16](../../../../docs/plan/16-observability.md) and
 ///         [22](../../../../docs/plan/22-billing-metering-and-quota.md). Both of those describe a
 ///         <b>platform-owned, per-region, database-per-tenant</b> store —
 ///         [05 § Every store](../../../../docs/plan/05-state-and-storage.md) spells it out in one row,
-///         <i>"ClickHouse · Logs, traces, metering rollups, resource graph · Per region;
-///         database-per-tenant; shard+replica"</i> — and this type is a <b>single-tenant cluster in a
-///         tenant's own namespace whose schema the tenant owns</b>. Four reasons they cannot be the
+///         <i>
+///             "ClickHouse · Logs, traces, metering rollups, resource graph · Per region;
+///             database-per-tenant; shard+replica"
+///         </i> — and this type is a
+///         <b>
+///             single-tenant cluster in a
+///             tenant's own namespace whose schema the tenant owns
+///         </b>. Four reasons they cannot be the
 ///         same thing, in the order that decides it:
 ///     </para>
 ///     <list type="number">
 ///         <item>
-///             <b>The tenancy shape is opposite.</b> docs/plan/16 § Ingest routes to <i>"ClickHouse
-///             (per-tenant database)"</i> on one cluster; this type gives one tenant one cluster. A
+///             <b>The tenancy shape is opposite.</b> docs/plan/16 § Ingest routes to
+///             <i>
+///                 "ClickHouse
+///                 (per-tenant database)"
+///             </i> on one cluster; this type gives one tenant one cluster. A
 ///             resource that held every tenant's logs would be a resource one tenant could delete.
 ///         </item>
 ///         <item>
 ///             <b>The schema owner is opposite, and it is this row's own scope boundary.</b>
-///             docs/plan/12: <i>"Schema is the tenant's problem and the resource does not manage
-///             tables."</i> The platform's store has platform-authored schema — docs/plan/22's
+///             docs/plan/12:
+///             <i>
+///                 "Schema is the tenant's problem and the resource does not manage
+///                 tables."
+///             </i> The platform's store has platform-authored schema — docs/plan/22's
 ///             <c>usage_raw</c> is a <c>ReplacingMergeTree</c> keyed on the idempotency key, and
 ///             docs/plan/08 § the resource-graph projection is another. A resource type that does not
 ///             manage tables cannot be the thing whose tables are the product.
@@ -47,10 +64,15 @@ namespace CyberCloud.Providers.Analytics.Contracts;
 ///             creating.
 ///         </item>
 ///         <item>
-///             <b>The tenant-facing resource for observability already exists and is a different
-///             one.</b> docs/plan/16 § <c>CyberCloud.Monitor/workspaces</c> is what a tenant buys to
-///             get logs and traces, and <i>"Platform telemetry uses the same machinery under a
-///             platform workspace. No separate stack."</i> A tenant who wants ClickHouse-the-log-store
+///             <b>
+///                 The tenant-facing resource for observability already exists and is a different
+///                 one.
+///             </b> docs/plan/16 § <c>CyberCloud.Monitor/workspaces</c> is what a tenant buys to
+///             get logs and traces, and
+///             <i>
+///                 "Platform telemetry uses the same machinery under a
+///                 platform workspace. No separate stack."
+///             </i> A tenant who wants ClickHouse-the-log-store
 ///             buys a workspace; a tenant who wants ClickHouse-the-database buys this.
 ///         </item>
 ///     </list>
@@ -85,9 +107,12 @@ namespace CyberCloud.Providers.Analytics.Contracts;
 ///         its replication log.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT THIS TYPE DELIBERATELY DOES NOT DO.</b> docs/plan/12: <i>"Schema is the tenant's
-///         problem and the resource does not manage tables. A managed ClickHouse that tries to own DDL
-///         is a migration tool nobody asked for."</i> So: no <c>databases</c> or <c>tables</c> child
+///         ⚠ <b>WHAT THIS TYPE DELIBERATELY DOES NOT DO.</b> docs/plan/12:
+///         <i>
+///             "Schema is the tenant's
+///             problem and the resource does not manage tables. A managed ClickHouse that tries to own DDL
+///             is a migration tool nobody asked for."
+///         </i> So: no <c>databases</c> or <c>tables</c> child
 ///         types, no <c>CREATE</c> on any path, and — the one that is not obvious —
 ///         <c>spec.configuration.clusters[].schemaPolicy</c> is <b>left unset</b>. That field tells the
 ///         operator how much of an existing replica's schema to copy onto a new one when a cluster is
@@ -96,8 +121,11 @@ namespace CyberCloud.Providers.Analytics.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>S3-BACKED COLD STORAGE IS THE ONE BULLET OF docs/plan/12's ROW THAT IS NOT BUILT</b>,
-///         and the reason is a seam rather than effort — <c>charts/managed/clickhouse/conformance.yaml
-///         § owed</c>, <c>s3-cold-tier</c>. It needs a bucket endpoint and an access-key pair, which is
+///         and the reason is a seam rather than effort —
+///         <c>
+/// charts/managed/clickhouse/conformance.yaml
+///         § owed
+///         </c>, <c>s3-cold-tier</c>. It needs a bucket endpoint and an access-key pair, which is
 ///         <c>CyberCloud.Storage/accounts</c>; a provider may not reference another provider (rule 2)
 ///         and the sanctioned route — a resource id through <c>CyberCloud.ResourceManager</c> — has no
 ///         reader a reconciler can call. ⚠ The credential half is <b>not</b> the blocker, though this
@@ -116,8 +144,11 @@ public static class ClickHouseClusters {
     /// <summary>The provider namespace, as docs/plan/12 § The catalogue spells it.</summary>
     /// <remarks>
     ///     ⚠ <b>A new family, and the sixth in the tree.</b> docs/plan/03 § Providers plans a
-    ///     <c>Data</c> namespace holding <i>"postgres, valkey, mongo, clickhouse, opensearch,
-    ///     qdrant"</i>; docs/plan/12 and
+    ///     <c>Data</c> namespace holding
+    ///     <i>
+    ///         "postgres, valkey, mongo, clickhouse, opensearch,
+    ///         qdrant"
+    ///     </i>; docs/plan/12 and
     ///     [01 § the parity catalogue](../../../../docs/plan/01-azure-parity-catalogue.md) both spell
     ///     this row <c>CyberCloud.Analytics/clickhouseClusters</c>, which is the Azure-parity shape
     ///     (Azure Data Explorer is <c>Microsoft.Kusto</c>, not <c>Microsoft.DBforPostgreSQL</c>). The
@@ -144,8 +175,11 @@ public static class ClickHouseClusters {
 
     /// <summary>The action that hands a caller the endpoints and a credential.</summary>
     /// <remarks>
-    ///     docs/plan/12 § Cross-cutting decisions: <i>"<c>listKeys</c> is an action with its own
-    ///     permission, audited on every call"</i>. ⚠ <c>regenerateKeys</c> is named in the same
+    ///     docs/plan/12 § Cross-cutting decisions:
+    ///     <i>
+    ///         "<c>listKeys</c> is an action with its own
+    ///         permission, audited on every call"
+    ///     </i>. ⚠ <c>regenerateKeys</c> is named in the same
     ///     paragraph and is <b>not</b> declared, for the reason the five providers before this one
     ///     give: it is specified with a rolling grace period and nothing in the platform can hold two
     ///     live credentials for one resource.
@@ -186,8 +220,11 @@ public static class ClickHouseClusters {
     ///     The <c>ClickHouseKeeperInstallation</c> — the Raft quorum the servers replicate through.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A DIFFERENT API GROUP FROM THE CLUSTER, WHICH IS WHY IT IS A SECOND STUB IN THE
-    ///     CLUSTER-BACKED SUITE RATHER THAN A SECOND KIND IN ONE.</b> It is
+    ///     ⚠
+    ///     <b>
+    ///         A DIFFERENT API GROUP FROM THE CLUSTER, WHICH IS WHY IT IS A SECOND STUB IN THE
+    ///         CLUSTER-BACKED SUITE RATHER THAN A SECOND KIND IN ONE.
+    ///     </b> It is
     ///     <c>clickhouse-keeper.altinity.com</c>, hyphen and all, and it is served by the <i>same</i>
     ///     operator binary. A reader who assumed one group would install one definition and get the
     ///     status-code-less <c>HttpOperationException</c> src/Providers/README.md § What the third
@@ -207,15 +244,21 @@ public static class ClickHouseClusters {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The <c>templates.volumeClaimTemplates</c> entries are shaped
-    ///         <c>{ name, spec }</c> with no <c>metadata</c> at all, so declaring this path adds one
-    ///         rather than editing one.</b> The Altinity operator's <c>VolumeClaimTemplate</c> carries
+    ///         ⚠
+    ///         <b>
+    ///             The <c>templates.volumeClaimTemplates</c> entries are shaped
+    ///             <c>{ name, spec }</c> with no <c>metadata</c> at all, so declaring this path adds one
+    ///             rather than editing one.
+    ///         </b> The Altinity operator's <c>VolumeClaimTemplate</c> carries
     ///         an <c>ObjectMeta</c> beside its <c>name</c> and its <c>spec</c>; the platform simply
     ///         never rendered it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What is proved here is weaker than for a native <c>StatefulSet</c>, and the
-    ///         difference is worth naming.</b> When the platform renders a <c>StatefulSet</c>, the
+    ///         ⚠
+    ///         <b>
+    ///             What is proved here is weaker than for a native <c>StatefulSet</c>, and the
+    ///             difference is worth naming.
+    ///         </b> When the platform renders a <c>StatefulSet</c>, the
     ///         Kubernetes StatefulSet controller creates the claims and copying a template's labels
     ///         onto them is its documented, measured behaviour. Here the platform renders a custom
     ///         resource and the <i>operator</i> derives the StatefulSets — so what this repository can
@@ -257,9 +300,12 @@ public static class ClickHouseClusters {
     /// </summary>
     /// <param name="name">The Keeper installation's name, which is the resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b><c>keeper-</c> is the operator's prefix and is the single most load-bearing string in
-    ///     this file, because getting it wrong produces a cluster that comes up, converges, serves
-    ///     <c>SELECT 1</c>, and cannot create a replicated table.</b> Taken from upstream's own
+    ///     ⚠
+    ///     <b>
+    ///         <c>keeper-</c> is the operator's prefix and is the single most load-bearing string in
+    ///         this file, because getting it wrong produces a cluster that comes up, converges, serves
+    ///         <c>SELECT 1</c>, and cannot create a replicated table.
+    ///     </b> Taken from upstream's own
     ///     <c>docs/chk-examples/01-chi-simple-with-keeper.yaml</c>, whose CHI names
     ///     <c>host: keeper-simple-1</c> against a CHK called <c>simple-1</c> with the comment
     ///     <i>"This is a service name of chk/simple-1"</i>. Nothing this provider applies creates that
@@ -293,10 +339,16 @@ public static class ClickHouseClusters {
     ///     The port ClickHouse serves its own Prometheus endpoint on when monitoring is asked for.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is docs/plan/12 § The pattern, once, piece 6 reaching an answer neither of its two
-    ///     branches describes, and it is worth stating rather than filing under the closest one.</b>
-    ///     Piece 6 says <i>"ask the operator for the scrape object wherever the operator accepts the
-    ///     request, and hand-write one into the chart only when there is no operator to ask."</i> There
+    ///     ⚠
+    ///     <b>
+    ///         This is docs/plan/12 § The pattern, once, piece 6 reaching an answer neither of its two
+    ///         branches describes, and it is worth stating rather than filing under the closest one.
+    ///     </b>
+    ///     Piece 6 says
+    ///     <i>
+    ///         "ask the operator for the scrape object wherever the operator accepts the
+    ///         request, and hand-write one into the chart only when there is no operator to ask."
+    ///     </i> There
     ///     <i>is</i> an operator here and it does not accept the request: the Altinity operator exports
     ///     metrics for every installation it manages through one cluster-wide exporter on its own pod,
     ///     and there is no per-installation <c>ServiceMonitor</c> switch on the CHI at all. What the
@@ -319,8 +371,11 @@ public static class ClickHouseClusters {
 
     /// <summary>The ClickHouse Keeper image, without a tag.</summary>
     /// <remarks>
-    ///     ⚠ <b>Tagged with the same version as the server, and that is a statement rather than a
-    ///     convenience.</b> Keeper and server share a release train and a wire protocol; a cluster
+    ///     ⚠
+    ///     <b>
+    ///         Tagged with the same version as the server, and that is a statement rather than a
+    ///         convenience.
+    ///     </b> Keeper and server share a release train and a wire protocol; a cluster
     ///     whose coordination is two majors ahead of its servers is a combination nobody tests. One
     ///     property, two images — which is also why <c>/properties/version</c> is described as the
     ///     cluster's version rather than the server's.
@@ -350,8 +405,11 @@ public static class ClickHouseClusters {
 
     /// <summary>The name of the single ClickHouse cluster inside the installation.</summary>
     /// <remarks>
-    ///     ⚠ <b>It reaches SQL, which is why it is a constant with a reason and not an incidental
-    ///     string.</b> A tenant writes <c>ON CLUSTER '{cluster}'</c> and <c>Distributed(...)</c> against
+    ///     ⚠
+    ///     <b>
+    ///         It reaches SQL, which is why it is a constant with a reason and not an incidental
+    ///         string.
+    ///     </b> A tenant writes <c>ON CLUSTER '{cluster}'</c> and <c>Distributed(...)</c> against
     ///     this name, so changing it later would break every DDL statement a tenant had written — and
     ///     the schema is theirs, so the platform would be breaking something it cannot see.
     ///     <c>default</c> is what upstream's own examples use and what a reader expects.
@@ -405,8 +463,11 @@ public static class ClickHouseClusters {
     ///     <c>CyberCloud.Storage/accounts</c> — which had to take the closest family and say so — this
     ///     type is the family's stated case.
     ///     <para>
-    ///         ⚠ <b>The values are the same eight rows <c>ValkeyCaches.Presets</c> carries, character
-    ///         for character, and that is correct rather than duplication to remove.</b> One vocabulary
+    ///         ⚠
+    ///         <b>
+    ///             The values are the same eight rows <c>ValkeyCaches.Presets</c> carries, character
+    ///             for character, and that is correct rather than duplication to remove.
+    ///         </b> One vocabulary
     ///         means one table of numbers; two providers in the same family agreeing is the property,
     ///         and a provider referencing another provider's table is what rule 2 forbids. What may not
     ///         be copied is the quantity <i>grammar</i> and its parser, which is why
@@ -459,11 +520,7 @@ public static class ClickHouseClusters {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the ClickHouse cluster."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -473,10 +530,7 @@ public static class ClickHouseClusters {
                     Description: "ClickHouse version, which is also the ClickHouse Keeper version — the "
                     + "two share a release train and a wire protocol. Only long-term-support lines are "
                     + "offered; a new api-version is what adds a third."
-                ) {
-                    AllowedValues = ["24.8", "25.3"],
-                    DefaultJson = "\"25.3\""
-                },
+                ) { AllowedValues = ["24.8", "25.3"], DefaultJson = "\"25.3\"" },
                 new(
                     "/properties/shards",
                     SchemaKind.WholeNumber,
@@ -485,11 +539,7 @@ public static class ClickHouseClusters {
                     + "data is split across shards and a query fans out to all of them. ⚠ Resharding an "
                     + "existing table is not something the operator or this resource does, so growing "
                     + "this moves new data only."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10,
-                    DefaultJson = "1"
-                },
+                ) { Minimum = 1, Maximum = 10, DefaultJson = "1" },
                 new(
                     "/properties/replicas",
                     SchemaKind.WholeNumber,
@@ -497,11 +547,7 @@ public static class ClickHouseClusters {
                     Description: "Number of replicas per shard. This is the availability axis, and it "
                     + "only applies to tables the tenant creates as Replicated — the resource does not "
                     + "manage tables. Total server count is shards times replicas."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "2" },
                 new(
                     "/properties/keeperNodes",
                     SchemaKind.WholeNumber,
@@ -510,11 +556,7 @@ public static class ClickHouseClusters {
                     + "is the smallest count that survives losing one and an even count tolerates no "
                     + "more failures than the odd count below it. One is offered for development and "
                     + "has no quorum at all."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "3" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -536,19 +578,13 @@ public static class ClickHouseClusters {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 8Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -560,21 +596,13 @@ public static class ClickHouseClusters {
                     Required: true,
                     Description: "Data volume size per ClickHouse server, in Kubernetes quantity form. "
                     + "Grows online; never shrinks."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"100Gi\"",
-                    ExampleJson = "\"100Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"100Gi\"", ExampleJson = "\"100Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name for the ClickHouse servers and the Keeper nodes. "
                     + "Empty means the cluster default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/monitoring",
                     SchemaKind.Nested,
@@ -588,9 +616,7 @@ public static class ClickHouseClusters {
                     + "health of is a black box they will not trust with production\". ⚠ It makes the "
                     + "metrics exist; the object that scrapes them is not built — see "
                     + "conformance.yaml § owed."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -598,8 +624,11 @@ public static class ClickHouseClusters {
     ///     What a <c>POST …/listKeys</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared even though no handler serves it, because an undeclared response is the one
-    ///     part of the API surface with no contract.</b> What leaves the platform through a
+    ///     ⚠
+    ///     <b>
+    ///         Declared even though no handler serves it, because an undeclared response is the one
+    ///         part of the API surface with no contract.
+    ///     </b> What leaves the platform through a
     ///     <c>secret: true</c> action is exactly the thing that should be written down before it
     ///     leaves. There is no request shape, for the reason <c>ActionRegistration</c> gives.
     /// </remarks>
@@ -646,8 +675,7 @@ public static class ClickHouseClusters {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -668,16 +696,18 @@ public static class ClickHouseClusters {
 
     /// <summary>The Keeper node count a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int KeeperNodes(JsonElement desired) =>
-        Number(desired, "keeperNodes", DefaultKeeperNodes);
+    public static int KeeperNodes(JsonElement desired) => Number(desired, "keeperNodes", DefaultKeeperNodes);
 
     /// <summary>
     ///     How many ClickHouse server pods a body asks for.
     /// </summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>A PRODUCT, AND THE ONE FACT ABOUT THIS TYPE THAT A DERIVATION COPIED FROM AN EARLIER
-    ///     PROVIDER GETS WRONG.</b> <c>spec.configuration.clusters[].layout</c> carries
+    ///     ⚠
+    ///     <b>
+    ///         A PRODUCT, AND THE ONE FACT ABOUT THIS TYPE THAT A DERIVATION COPIED FROM AN EARLIER
+    ///         PROVIDER GETS WRONG.
+    ///     </b> <c>spec.configuration.clusters[].layout</c> carries
     ///     <c>shardsCount</c> and <c>replicasCount</c> as two numbers, and the operator creates one
     ///     StatefulSet per <i>host</i> — which is one per (shard, replica) pair. A four-shard
     ///     three-replica cluster is twelve servers, not four and not seven. It is spelled once, here,
@@ -687,18 +717,15 @@ public static class ClickHouseClusters {
 
     /// <summary>The data-volume size per server a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string StorageSize(JsonElement desired) =>
-        Text(desired, "storage", "size", DefaultStorageSize);
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", DefaultStorageSize);
 
     /// <summary>The StorageClass a body asks for, or the empty string for the cluster default.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string StorageClass(JsonElement desired) =>
-        Text(desired, "storage", "class", string.Empty);
+    public static string StorageClass(JsonElement desired) => Text(desired, "storage", "class", string.Empty);
 
     /// <summary>Whether the desired body asks for ClickHouse's own Prometheus endpoint.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static bool MonitoringEnabled(JsonElement desired) =>
-        Flag(desired, "monitoring", "enabled", true);
+    public static bool MonitoringEnabled(JsonElement desired) => Flag(desired, "monitoring", "enabled", true);
 
     /// <summary>
     ///     The CPU and memory one ClickHouse server asks for: the explicit quantities when both are
@@ -738,16 +765,12 @@ public static class ClickHouseClusters {
         var container = new JsonObject {
             ["name"] = "clickhouse-keeper",
             ["image"] = KeeperImageRepository + ":" + Version(desired),
-            ["resources"] = new JsonObject {
-                ["requests"] = KeeperQuantities(), ["limits"] = KeeperQuantities()
-            }
+            ["resources"] = new JsonObject { ["requests"] = KeeperQuantities(), ["limits"] = KeeperQuantities() }
         };
 
         var claim = new JsonObject {
             ["accessModes"] = new JsonArray { "ReadWriteOnce" },
-            ["resources"] = new JsonObject {
-                ["requests"] = new JsonObject { ["storage"] = KeeperVolumeSize }
-            }
+            ["resources"] = new JsonObject { ["requests"] = new JsonObject { ["storage"] = KeeperVolumeSize } }
         };
 
         var storageClass = StorageClass(desired);
@@ -804,28 +827,46 @@ public static class ClickHouseClusters {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>spec.configuration.zookeeper.nodes</c> IS THE WHOLE REASON THIS TYPE RENDERS TWO
-    ///         OBJECTS</b>, and the host it names is a <c>Service</c> that <i>neither</i> object
+    ///         ⚠
+    ///         <b>
+    ///             <c>spec.configuration.zookeeper.nodes</c> IS THE WHOLE REASON THIS TYPE RENDERS TWO
+    ///             OBJECTS
+    ///         </b>, and the host it names is a <c>Service</c> that <i>neither</i> object
     ///         creates — the operator does, off the Keeper installation, with the <c>keeper-</c> prefix
     ///         <see cref="KeeperServiceName" /> records. Nothing in an apply, a read-back or an
     ///         admission check would notice that string being wrong. What notices is a tenant creating
     ///         their first <c>ReplicatedMergeTree</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>No <c>spec.configuration.users</c>, and the consequence is the opposite of the one
-    ///         <c>CyberCloud.Storage/accounts</c> records.</b> Piece 5 does not exist, so this provider
+    ///         ⚠
+    ///         <b>
+    ///             No <c>spec.configuration.users</c>, and the consequence is the opposite of the one
+    ///             <c>CyberCloud.Storage/accounts</c> records.
+    ///         </b> Piece 5 does not exist, so this provider
     ///         writes no credential — and a CHI with no <c>users</c> section is not open. The operator's
     ///         own hardening guide says it deploys <c>default</c> with an empty password behind a
-    ///         <c>host_regexp</c> and an explicit pod-IP allow-list covering <i>this cluster's pods and
-    ///         nothing else</i>, and <c>clickhouse_operator</c> behind the operator pod's IP. So the
-    ///         cluster comes up <b>authenticated and unreachable</b> rather than <b>unauthenticated and
-    ///         administrable</b>, which is the strictly better half of the same missing piece.
+    ///         <c>host_regexp</c> and an explicit pod-IP allow-list covering
+    ///         <i>
+    ///             this cluster's pods and
+    ///             nothing else
+    ///         </i>, and <c>clickhouse_operator</c> behind the operator pod's IP. So the
+    ///         cluster comes up <b>authenticated and unreachable</b> rather than
+    ///         <b>
+    ///             unauthenticated and
+    ///             administrable
+    ///         </b>, which is the strictly better half of the same missing piece.
     ///         <c>conformance.yaml § owed</c>, <c>listkeys-has-no-handler</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>No <c>schemaPolicy</c>, no <c>files</c> and no <c>settings</c> beyond the six
-    ///         Prometheus keys.</b> docs/plan/12's scope boundary — <i>"the resource does not manage
-    ///         tables"</i> — is a boundary about DDL, and <c>schemaPolicy</c> is the field where the
+    ///         ⚠
+    ///         <b>
+    ///             No <c>schemaPolicy</c>, no <c>files</c> and no <c>settings</c> beyond the six
+    ///             Prometheus keys.
+    ///         </b> docs/plan/12's scope boundary —
+    ///         <i>
+    ///             "the resource does not manage
+    ///             tables"
+    ///         </i> — is a boundary about DDL, and <c>schemaPolicy</c> is the field where the
     ///         operator asks the platform how much of a tenant's schema to copy when a replica is
     ///         added. Leaving it unset leaves that answer with the operator, where it is the operator's
     ///         business rather than the platform's opinion about somebody else's tables.
@@ -872,9 +913,7 @@ public static class ClickHouseClusters {
 
         var claim = new JsonObject {
             ["accessModes"] = new JsonArray { "ReadWriteOnce" },
-            ["resources"] = new JsonObject {
-                ["requests"] = new JsonObject { ["storage"] = StorageSize(desired) }
-            }
+            ["resources"] = new JsonObject { ["requests"] = new JsonObject { ["storage"] = StorageSize(desired) } }
         };
 
         var storageClass = StorageClass(desired);
@@ -885,9 +924,7 @@ public static class ClickHouseClusters {
         var configuration = new JsonObject {
             ["zookeeper"] = new JsonObject {
                 ["nodes"] = new JsonArray {
-                    new JsonObject {
-                        ["host"] = KeeperServiceName(name), ["port"] = KeeperClientPort
-                    }
+                    new JsonObject { ["host"] = KeeperServiceName(name), ["port"] = KeeperClientPort }
                 }
             },
             ["clusters"] = new JsonArray {
@@ -951,9 +988,12 @@ public static class ClickHouseClusters {
     /// <returns><c>true</c> when the fields this provider owns hold the desired values.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Containment, not equality — and the reason is NOT the one three of the five
-    ///         providers before this give, which is why it was checked in the CRD rather than assumed
-    ///         from the README.</b> <c>NatsClusters.Matches</c> is containment because built-in kinds
+    ///         ⚠
+    ///         <b>
+    ///             Containment, not equality — and the reason is NOT the one three of the five
+    ///             providers before this give, which is why it was checked in the CRD rather than assumed
+    ///             from the README.
+    ///         </b> <c>NatsClusters.Matches</c> is containment because built-in kinds
     ///         are the most heavily defaulted objects in Kubernetes; <c>StorageAccounts.Matches</c> is
     ///         containment because the seaweedfs CRD carries <c>+kubebuilder:default</c> markers.
     ///         <b>Neither Altinity CRD declares a single <c>default:</c> anywhere</b> — checked over
@@ -963,8 +1003,11 @@ public static class ClickHouseClusters {
     ///         webhook either. Structural defaulting is simply not the hazard here.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The hazard that IS here is that the operator merges other people's documents into
-    ///         this spec, by design and on request of somebody who is not this platform.</b>
+    ///         ⚠
+    ///         <b>
+    ///             The hazard that IS here is that the operator merges other people's documents into
+    ///             this spec, by design and on request of somebody who is not this platform.
+    ///         </b>
     ///         <c>spec.templating.policy: auto</c> makes the operator apply every
     ///         <c>ClickHouseInstallationTemplate</c> in the namespace whose <c>chiSelector</c> matches,
     ///         and the CHI's own <c>status.usedTemplates</c> exists to record that it happened. A
@@ -974,16 +1017,22 @@ public static class ClickHouseClusters {
     ///         ClickHouse cluster stuck in <c>InProgress</c> while its workload is perfectly correct.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And a third reason that is specific to this CRD: half of what this provider writes
-    ///         lands under <c>x-kubernetes-preserve-unknown-fields: true</c></b> —
+    ///         ⚠
+    ///         <b>
+    ///             And a third reason that is specific to this CRD: half of what this provider writes
+    ///             lands under <c>x-kubernetes-preserve-unknown-fields: true</c>
+    ///         </b> —
     ///         <c>configuration.settings</c>, and the <c>spec</c> of every entry in
     ///         <c>templates.podTemplates</c> and <c>templates.volumeClaimTemplates</c>. An equality
     ///         comparison over a subtree the API server does not prune is a comparison against JSON
     ///         this platform did not fully author.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Dispatches on the object's <c>kind</c> because this type owns TWO, and a conformance
-    ///         case supplies this as one function over every object the resource owns.</b> An
+    ///         ⚠
+    ///         <b>
+    ///             Dispatches on the object's <c>kind</c> because this type owns TWO, and a conformance
+    ///             case supplies this as one function over every object the resource owns.
+    ///         </b> An
     ///         unrecognised document is <c>false</c> rather than assumed — a <c>Matches</c> that
     ///         defaulted to <c>true</c> for a kind it did not know would report a Keeper that was never
     ///         applied as converged.
@@ -1050,8 +1099,11 @@ public static class ClickHouseClusters {
     ///     The name a read-back <c>ClickHouseInstallation</c> carries, for the ZooKeeper comparison.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Read off the object rather than passed in, and that is a limitation stated rather than
-    ///     hidden.</b> <c>ProviderConformanceCase.ObjectMatchesDesired</c> is
+    ///     ⚠
+    ///     <b>
+    ///         Read off the object rather than passed in, and that is a limitation stated rather than
+    ///         hidden.
+    ///     </b> <c>ProviderConformanceCase.ObjectMatchesDesired</c> is
     ///     <c>(objectJson, desiredJson) =&gt; bool</c> and carries no address — the finding
     ///     <c>StorageBuckets</c> records — so the only name available here is the one in the document.
     ///     That makes the comparison "the zookeeper host is derived from THIS object's own name", which
@@ -1065,8 +1117,7 @@ public static class ClickHouseClusters {
             : string.Empty;
 
     /// <summary>The single cluster entry's layout, or <see langword="null" />.</summary>
-    static JsonObject? Layout(JsonObject configuration) =>
-        First(configuration["clusters"])?["layout"] as JsonObject;
+    static JsonObject? Layout(JsonObject configuration) => First(configuration["clusters"])?["layout"] as JsonObject;
 
     /// <summary>The first volume-claim template's requested size, or <c>""</c>.</summary>
     static string ClaimStorage(JsonObject spec) =>
@@ -1096,8 +1147,7 @@ public static class ClickHouseClusters {
     ///     provider wrote is still the one it named in <c>spec.defaults.templates</c> — which is at
     ///     index 0 because the merge appends.
     /// </remarks>
-    static JsonObject? First(JsonNode? node) =>
-        node is JsonArray { Count: > 0 } array ? array[0] as JsonObject : null;
+    static JsonObject? First(JsonNode? node) => node is JsonArray { Count: > 0 } array ? array[0] as JsonObject : null;
 
     // ── A body, for tests, fixtures and the conformance case ──────────────────────────────────
 
@@ -1165,8 +1215,7 @@ public static class ClickHouseClusters {
 
     // ── Rendering helpers ─────────────────────────────────────────────────────────────────────
 
-    static JsonObject KeeperQuantities() =>
-        new() { ["cpu"] = KeeperCpu, ["memory"] = KeeperMemory };
+    static JsonObject KeeperQuantities() => new() { ["cpu"] = KeeperCpu, ["memory"] = KeeperMemory };
 
     // ── Reading one pointer out of a body ─────────────────────────────────────────────────────
 

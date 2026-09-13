@@ -164,9 +164,12 @@ public sealed class MeterDerivationTests {
     public void AFallbackThatIsNotAQuantityIsRefusedAtDeclarationTimeRatherThanAtReserveTime() {
         // Silo start is where a declaration bug belongs. The alternative is one that surfaces per
         // request, after the caller has been told the shape of the API.
-        Should.Throw<ArgumentException>(
-                () => MeterDerivation.Quantity("/properties/disk", QuantityUnit.Gibibytes, "10 gigs")
+        Should.Throw<ArgumentException>(() => MeterDerivation.Quantity(
+                "/properties/disk",
+                QuantityUnit.Gibibytes,
+                "10 gigs"
             )
+        )
             .Message.ShouldContain("Kubernetes quantity");
     }
 

@@ -6,8 +6,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>WHY THIS IS BESIDE <see cref="IResourceManager" /> AND NOT INSIDE IT. The decision is
-///         expensive to reverse, so the argument is here rather than in a commit message.</b>
+///         ⚠
+///         <b>
+///             WHY THIS IS BESIDE <see cref="IResourceManager" /> AND NOT INSIDE IT. The decision is
+///             expensive to reverse, so the argument is here rather than in a commit message.
+///         </b>
 ///     </para>
 ///     <para>
 ///         docs/plan/08 § The write path, end to end is twelve steps <i>for a resource</i>, and eight
@@ -92,8 +95,11 @@ public interface IScopeManager {
     ///         names what is in the way.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see cref="ScopeKind.Subscription" /> and <see cref="ScopeKind.Tenant" /> are
-    ///         refused, and those are gaps rather than decisions.</b> A subscription delete is every
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ScopeKind.Subscription" /> and <see cref="ScopeKind.Tenant" /> are
+    ///             refused, and those are gaps rather than decisions.
+    ///         </b> A subscription delete is every
     ///         group's delete plus the meter, the quota and the shard; a tenant's is that plus the
     ///         directory and the shard map. Neither is built, and both would be
     ///         <i>silently partial</i> if this method treated them as "the group case, wider".
@@ -104,8 +110,11 @@ public interface IScopeManager {
     ///         grain, one namespace per cluster, and a listing entry. There is no reconciler, no
     ///         operation grain and no progress to report. A group whose namespace refuses reclaim is
     ///         a failure with a reason rather than an operation that never converges, which
-    ///         docs/plan/08 § The reconcile loop prefers in both directions: <i>"a resource stuck
-    ///         forever is worse than a resource that failed, because a failure is actionable"</i>.
+    ///         docs/plan/08 § The reconcile loop prefers in both directions:
+    ///         <i>
+    ///             "a resource stuck
+    ///             forever is worse than a resource that failed, because a failure is actionable"
+    ///         </i>.
     ///     </para>
     /// </remarks>
     Task<Result> DeleteAsync(ScopeRequest request, CancellationToken cancellationToken = default);
@@ -131,9 +140,12 @@ public interface IScopeManager {
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>WHO MAY CREATE A TENANT: A PLATFORM OPERATOR, THROUGH A SEAM OUTSIDE THE REQUEST
-    ///         PIPELINE. The two rejected answers are worth more than the chosen one, so both are
-    ///         written down.</b>
+    ///         ⚠
+    ///         <b>
+    ///             WHO MAY CREATE A TENANT: A PLATFORM OPERATOR, THROUGH A SEAM OUTSIDE THE REQUEST
+    ///             PIPELINE. The two rejected answers are worth more than the chosen one, so both are
+    ///             written down.
+    ///         </b>
     ///     </para>
     ///     <para>
     ///         <b>Rejected — a <c>PUT /tenants/{newTenantId}</c> route.</b> It is not a design
@@ -243,13 +255,19 @@ public interface IScopeAuthorizer {
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <remarks>
     ///     ⚠ <b>Always fully consistent, and the implementation does not take the flag.</b>
-    ///     docs/plan/07 § Consistency wants a cache bypass for <i>"anything where a stale allow is a
-    ///     real incident"</i>, and a revoked platform operator creating tenants out of a warm cache is
+    ///     docs/plan/07 § Consistency wants a cache bypass for
+    ///     <i>
+    ///         "anything where a stale allow is a
+    ///         real incident"
+    ///     </i>, and a revoked platform operator creating tenants out of a warm cache is
     ///     the definition of one. It is also not a hot path: it is asked once per tenant ever created.
     ///     <para>
-    ///         ⚠ <b>Refusal is <see cref="ErrorCode.AuthorizationFailed" /> and <i>not</i> the
-    ///         canonical 404, which is the one place the scope path departs from
-    ///         <see cref="AuthorizeAsync" /> above.</b> The 404 rule exists because a 403 would confirm
+    ///         ⚠
+    ///         <b>
+    ///             Refusal is <see cref="ErrorCode.AuthorizationFailed" /> and <i>not</i> the
+    ///             canonical 404, which is the one place the scope path departs from
+    ///             <see cref="AuthorizeAsync" /> above.
+    ///         </b> The 404 rule exists because a 403 would confirm
     ///         that a named object exists. <c>platform:root</c> is a singleton whose existence is
     ///         documented, so there is nothing to leak, and answering "that does not exist" to an
     ///         operator whose grant has lapsed sends them to look for a missing tenant instead of at
@@ -269,9 +287,12 @@ public interface IScopeAuthorizer {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>NOTHING IN THE PLATFORM HAS EVER WRITTEN A SCOPE'S PARENT EDGE, AND THE CHAIN
-///         docs/plan/07 § Azure RBAC, expressed in it DESCRIBES THEREFORE STOPPED ONE LEVEL UP FROM
-///         WHERE IT WAS DOCUMENTED.</b> <c>ReBacResourceRelationWriter</c> writes
+///         ⚠
+///         <b>
+///             NOTHING IN THE PLATFORM HAS EVER WRITTEN A SCOPE'S PARENT EDGE, AND THE CHAIN
+///             docs/plan/07 § Azure RBAC, expressed in it DESCRIBES THEREFORE STOPPED ONE LEVEL UP FROM
+///             WHERE IT WAS DOCUMENTED.
+///         </b> <c>ReBacResourceRelationWriter</c> writes
 ///         <c>resource:{id}#parent@resourceGroup:{sub}-{rg}</c> and that was the whole of it: no
 ///         <c>resourceGroup:{sub}-{rg}#parent@subscription:{s}</c> and no
 ///         <c>subscription:{s}#parent@tenant:{t}</c> existed anywhere outside a test's own setup. So
@@ -296,8 +317,11 @@ public interface IScopeRelationWriter {
     /// <param name="scope">The scope. ⚠ <see cref="ScopeKind.Tenant" /> has no parent and is refused.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <remarks>
-    ///     ⚠ <b>Written <i>before</i> the scope's durable state, for the reason step 8 of
-    ///     docs/plan/08 § The write path, end to end gives.</b> After it, a failure leaves a scope
+    ///     ⚠
+    ///     <b>
+    ///         Written <i>before</i> the scope's durable state, for the reason step 8 of
+    ///         docs/plan/08 § The write path, end to end gives.
+    ///     </b> After it, a failure leaves a scope
     ///     that is durable and invisible to the person who just created it, and there is no operation
     ///     grain here to re-drive the work. Before it, a failure is a clean refusal with nothing
     ///     durable written. The residue of the chosen order is a <c>parent</c> tuple aimed at a scope
@@ -314,8 +338,11 @@ public interface IScopeRelationWriter {
     /// <param name="subjectId">The subject.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <remarks>
-    ///     ⚠ <b>Used for a tenant and for nothing else, and the asymmetry is the schema's rather than
-    ///     a choice.</b> A subscription and a resource group inherit <c>owner</c> through
+    ///     ⚠
+    ///     <b>
+    ///         Used for a tenant and for nothing else, and the asymmetry is the schema's rather than
+    ///         a choice.
+    ///     </b> A subscription and a resource group inherit <c>owner</c> through
     ///     <c>From("parent", "owner")</c>, so their creator — who had to hold a permission on the
     ///     parent to get this far — can already see what they made, and a direct tuple would be the
     ///     per-scope role row docs/plan/07 § The model's whole argument is against. A <c>tenant</c>

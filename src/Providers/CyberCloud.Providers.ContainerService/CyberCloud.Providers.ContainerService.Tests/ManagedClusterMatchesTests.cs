@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.ContainerService.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>EVERY TEST IN THIS FILE IS HAND-WRITTEN BECAUSE NO CONFORMANCE SUITE CAN CATCH WHAT IT
-///         CATCHES.</b> <c>ClusterConformanceHarness</c> derives its CRD stubs from the case's own
+///         ⚠
+///         <b>
+///             EVERY TEST IN THIS FILE IS HAND-WRITTEN BECAUSE NO CONFORMANCE SUITE CAN CATCH WHAT IT
+///             CATCHES.
+///         </b> <c>ClusterConformanceHarness</c> derives its CRD stubs from the case's own
 ///         <c>Objects</c> and a derived stub has an <b>open</b> schema — no required fields, no enums,
 ///         and, crucially, <b>no <c>+kubebuilder:default</c></b>. So an object read back in either
 ///         suite is byte-identical to the object applied, and an equality comparison passes.
@@ -48,28 +51,26 @@ public sealed class ManagedClusterMatchesTests {
         // with no defaults in it. This test is the whole defence.
         using var body = JsonDocument.Parse(ManagedClusters.Body(ClusterId));
 
-        var withDefaults = JsonNode.Parse(
-            ManagedClusters.ControlPlaneJson("prod", body.RootElement)
-        )!.AsObject();
+        var withDefaults = JsonNode.Parse(ManagedClusters.ControlPlaneJson("prod", body.RootElement))!.AsObject();
 
         var spec = withDefaults["spec"]!.AsObject();
 
         spec["registry"] = "registry.k8s.io";
         spec["kubelet"] = new JsonObject {
-            ["cgroupfs"] = "systemd",
-            ["preferredAddressTypes"] = new JsonArray("InternalIP", "ExternalIP", "Hostname")
+            ["cgroupfs"] = "systemd", ["preferredAddressTypes"] = new JsonArray("InternalIP", "ExternalIP", "Hostname")
         };
         spec["addons"] = new JsonObject { ["coreDNS"] = new JsonObject() };
 
         // ⚠ And a whole `status`, which every real object grows and no rendered document has.
         withDefaults["status"] = new JsonObject { ["initialized"] = true };
 
-        ManagedClusters.Matches(withDefaults.ToJsonString(), body.RootElement).ShouldBeTrue(
-            "the control plane is judged by EQUALITY. A real API server writes four keys back that this "
-            + "provider never sent, so every cluster would sit InProgress forever while being perfectly "
-            + "correct — and no conformance suite would catch it, because a derived CRD stub has no "
-            + "defaults."
-        );
+        ManagedClusters.Matches(withDefaults.ToJsonString(), body.RootElement)
+            .ShouldBeTrue(
+                "the control plane is judged by EQUALITY. A real API server writes four keys back that this "
+                + "provider never sent, so every cluster would sit InProgress forever while being perfectly "
+                + "correct — and no conformance suite would catch it, because a derived CRD stub has no "
+                + "defaults."
+            );
     }
 
     [Fact]
@@ -84,9 +85,8 @@ public sealed class ManagedClusterMatchesTests {
 
         cluster["spec"]!.AsObject()["availabilityGates"] = new JsonArray();
 
-        ManagedClusters.Matches(cluster.ToJsonString(), body.RootElement).ShouldBeTrue(
-            "an endpoint the Kamaji control-plane provider patched onto the Cluster reads as drift"
-        );
+        ManagedClusters.Matches(cluster.ToJsonString(), body.RootElement)
+            .ShouldBeTrue("an endpoint the Kamaji control-plane provider patched onto the Cluster reads as drift");
     }
 
     // ── The fields whose drift is real ──────────────────────────────────────────────────────────
@@ -99,9 +99,7 @@ public sealed class ManagedClusterMatchesTests {
         // SERVER — and every other field would still match.
         using var body = JsonDocument.Parse(ManagedClusters.Body(ClusterId));
 
-        var controlPlane = JsonNode.Parse(
-            ManagedClusters.ControlPlaneJson("prod", body.RootElement)
-        )!.AsObject();
+        var controlPlane = JsonNode.Parse(ManagedClusters.ControlPlaneJson("prod", body.RootElement))!.AsObject();
 
         controlPlane["spec"]!["network"]!.AsObject()["serviceType"] = "LoadBalancer";
 
@@ -115,9 +113,7 @@ public sealed class ManagedClusterMatchesTests {
     public void AChangedControlPlaneFieldIsDrift(string field) {
         using var body = JsonDocument.Parse(ManagedClusters.Body(ClusterId));
 
-        var controlPlane = JsonNode.Parse(
-            ManagedClusters.ControlPlaneJson("prod", body.RootElement)
-        )!.AsObject();
+        var controlPlane = JsonNode.Parse(ManagedClusters.ControlPlaneJson("prod", body.RootElement))!.AsObject();
 
         controlPlane["spec"]!.AsObject()[field] = field == "replicas" ? 9 : "something-else";
 
@@ -158,7 +154,8 @@ public sealed class ManagedClusterMatchesTests {
         ManagedClusters.Matches(
             new JsonObject { ["kind"] = "Deployment", ["spec"] = new JsonObject() }.ToJsonString(),
             body.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
 
         // ⚠ And a document with NO kind is false too, which is the difference from the five providers
         // that accept `null or "<TheirKind>"`. A type that owns three kinds cannot guess which one an
@@ -167,7 +164,8 @@ public sealed class ManagedClusterMatchesTests {
         ManagedClusters.Matches(
             new JsonObject { ["spec"] = new JsonObject() }.ToJsonString(),
             body.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
     }
 
     [Fact]
@@ -229,9 +227,7 @@ public sealed class ManagedClusterMatchesTests {
             new JsonObject {
                 ["kind"] = "Cluster",
                 ["spec"] = new JsonObject(),
-                ["status"] = new JsonObject {
-                    ["infrastructureReady"] = true, ["controlPlaneReady"] = false
-                }
+                ["status"] = new JsonObject { ["infrastructureReady"] = true, ["controlPlaneReady"] = false }
             }.ToJsonString()
         );
 
@@ -257,8 +253,7 @@ public sealed class ManagedClusterMatchesTests {
             ["status"] = new JsonObject {
                 ["conditions"] = new JsonArray(
                     [
-                        .. conditions.Select(
-                            x => (JsonNode)new JsonObject {
+                        .. conditions.Select(x => (JsonNode)new JsonObject {
                                 ["type"] = x.Type, ["status"] = x.Status, ["message"] = x.Message
                             }
                         )
@@ -289,9 +284,7 @@ public sealed class AgentPoolMatchesTests {
         // reader who checked only for CRD markers would conclude equality was safe here, and it is not.
         using var body = JsonDocument.Parse(AgentPools.Body(ClusterId));
 
-        var deployment = JsonNode.Parse(
-            AgentPools.MachineDeploymentJson(Address, body.RootElement)
-        )!.AsObject();
+        var deployment = JsonNode.Parse(AgentPools.MachineDeploymentJson(Address, body.RootElement))!.AsObject();
 
         var spec = deployment["spec"]!.AsObject();
 
@@ -304,10 +297,11 @@ public sealed class AgentPoolMatchesTests {
 
         deployment["status"] = new JsonObject { ["readyReplicas"] = 0 };
 
-        AgentPools.Matches(deployment.ToJsonString(), Address, body.RootElement).ShouldBeTrue(
-            "the MachineDeployment is judged by equality, so every pool sits InProgress forever the "
-            + "moment Cluster API's own defaulting webhook touches it"
-        );
+        AgentPools.Matches(deployment.ToJsonString(), Address, body.RootElement)
+            .ShouldBeTrue(
+                "the MachineDeployment is judged by equality, so every pool sits InProgress forever the "
+                + "moment Cluster API's own defaulting webhook touches it"
+            );
     }
 
     [Fact]
@@ -316,9 +310,7 @@ public sealed class AgentPoolMatchesTests {
         // different tenant's cluster, and every other field would still match.
         using var body = JsonDocument.Parse(AgentPools.Body(ClusterId));
 
-        var deployment = JsonNode.Parse(
-            AgentPools.MachineDeploymentJson(Address, body.RootElement)
-        )!.AsObject();
+        var deployment = JsonNode.Parse(AgentPools.MachineDeploymentJson(Address, body.RootElement))!.AsObject();
 
         deployment["spec"]!.AsObject()["clusterName"] = "somebody-elses-cluster";
 
@@ -332,9 +324,7 @@ public sealed class AgentPoolMatchesTests {
         // chart written the old way is accepted and its rollout policy silently vanishes.
         using var body = JsonDocument.Parse(AgentPools.Body(ClusterId));
 
-        var deployment = JsonNode.Parse(
-            AgentPools.MachineDeploymentJson(Address, body.RootElement)
-        )!.AsObject();
+        var deployment = JsonNode.Parse(AgentPools.MachineDeploymentJson(Address, body.RootElement))!.AsObject();
 
         var spec = deployment["spec"]!.AsObject();
         spec.Remove("rollout");
@@ -349,9 +339,7 @@ public sealed class AgentPoolMatchesTests {
     public void AChangedInstancetypeIsDriftAndSoIsAChangedRootDisk() {
         using var body = JsonDocument.Parse(AgentPools.Body(ClusterId));
 
-        var template = JsonNode.Parse(
-            AgentPools.MachineTemplateJson(Address, body.RootElement)
-        )!.AsObject();
+        var template = JsonNode.Parse(AgentPools.MachineTemplateJson(Address, body.RootElement))!.AsObject();
 
         var virtualMachine = template["spec"]!["template"]!["spec"]!["virtualMachineTemplate"]!["spec"]!
             .AsObject();

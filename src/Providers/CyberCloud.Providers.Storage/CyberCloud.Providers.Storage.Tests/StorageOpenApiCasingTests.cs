@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.Storage.Tests;
 ///         only in a log line.
 ///     </para>
 ///     <para>
-///         ⚠ <b>EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
-///         STAYED GREEN BECAUSE IT WAS NOT.</b> That version built the expected path from the same two
+///         ⚠
+///         <b>
+///             EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
+///             STAYED GREEN BECAUSE IT WAS NOT.
+///         </b> That version built the expected path from the same two
 ///         constants the emitter reads, so re-casing the constant left the whole suite green — two
 ///         things derived from one constant agree however that constant is spelled. The strings here
 ///         are typed out by hand, and they are the fourth independent copy after
@@ -25,8 +28,11 @@ namespace CyberCloud.Providers.Storage.Tests;
 ///         <c>cybercloud.io/resource-type</c> and <c>charts/managed/seaweedfs/conformance.yaml</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This type's casing risk is concentrated in three names whose lower-cased spelling is
-///         the ordinary English word.</b> <c>volumeServers</c>, <c>storageClassName</c>'s tenant-facing
+///         ⚠
+///         <b>
+///             This type's casing risk is concentrated in three names whose lower-cased spelling is
+///             the ordinary English word.
+///         </b> <c>volumeServers</c>, <c>storageClassName</c>'s tenant-facing
 ///         half <c>class</c>, and — the dangerous one — <c>replication</c>, because
 ///         <c>defaultReplication</c> is the correct spelling of the SeaweedFS <i>CR field</i> rendered
 ///         by this same provider. Two vocabularies, one of which is the API.
@@ -102,11 +108,12 @@ public sealed class StorageOpenApiCasingTests {
         // path through ResourceTypeName — which is case-INSENSITIVE. So a mis-cased document would
         // still route, and this test is not about routing: it is about what a generated client, a
         // portal breadcrumb and docs/plan/15's prose all copy.
-        StorageAccounts.Type.ToString().ShouldBe(
-            QualifiedType,
-            "the declared type is spelled differently from docs/plan/15 § The three kinds and from "
-            + "charts/managed/seaweedfs/Chart.yaml's cybercloud.io/resource-type annotation."
-        );
+        StorageAccounts.Type.ToString()
+            .ShouldBe(
+                QualifiedType,
+                "the declared type is spelled differently from docs/plan/15 § The three kinds and from "
+                + "charts/managed/seaweedfs/Chart.yaml's cybercloud.io/resource-type annotation."
+            );
 
         var paths = Paths();
 
@@ -115,12 +122,9 @@ public sealed class StorageOpenApiCasingTests {
             "no path carries the provider namespace and type as docs/plan/15 spells them"
         );
 
-        foreach (var path in paths.Where(
-                     x => x.Contains("storage/accounts", StringComparison.OrdinalIgnoreCase)
-                 )) {
-            path.Contains(QualifiedType, StringComparison.Ordinal).ShouldBeTrue(
-                $"'{path}' spells the type in a casing other than '{QualifiedType}'."
-            );
+        foreach (var path in paths.Where(x => x.Contains("storage/accounts", StringComparison.OrdinalIgnoreCase))) {
+            path.Contains(QualifiedType, StringComparison.Ordinal)
+                .ShouldBeTrue($"'{path}' spells the type in a casing other than '{QualifiedType}'.");
         }
     }
 
@@ -146,10 +150,11 @@ public sealed class StorageOpenApiCasingTests {
         var value = KubeLabels.ResourceTypeValue(StorageAccounts.Type);
 
         value.ShouldBe("cybercloud.storage_accounts");
-        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType).IsSuccess.ShouldBeTrue(
-            "the resource-type label value is not legal Kubernetes label syntax, so every object this "
-            + "provider applies would be refused at admission rather than at build time."
-        );
+        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType)
+            .IsSuccess.ShouldBeTrue(
+                "the resource-type label value is not legal Kubernetes label syntax, so every object this "
+                + "provider applies would be refused at admission rather than at build time."
+            );
     }
 
     /// <summary>The document the generator would write for this provider alone.</summary>

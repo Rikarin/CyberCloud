@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Registry;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The container has to know the reconcilers before the registry is built, and the
-///         registry is built after the container is finished. This resolves that.</b>
+///         ⚠
+///         <b>
+///             The container has to know the reconcilers before the registry is built, and the
+///             registry is built after the container is finished. This resolves that.
+///         </b>
 ///         <c>AddCyberCloudProvider</c> runs the provider's <c>Describe</c> a second time against
 ///         this collector, purely to learn the <c>Reconciler&lt;T&gt;()</c> calls so it can register
 ///         them. The real <c>Describe</c> — the one that produces the registrations — runs later,

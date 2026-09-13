@@ -10,8 +10,11 @@ namespace CyberCloud.ResourceManager.Reconcile;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE ORDER IS docs/plan/06 § Two-phase create IN REVERSE AND IT IS THE WHOLE
-///         DESIGN.</b> Seal the group, then the members, then the namespace last. Sealing first is
+///         ⚠
+///         <b>
+///             THE ORDER IS docs/plan/06 § Two-phase create IN REVERSE AND IT IS THE WHOLE
+///             DESIGN.
+///         </b> Seal the group, then the members, then the namespace last. Sealing first is
 ///         the only thing that closes the create-during-delete race — a resource created between the
 ///         reclaim's evidence and the namespace delete has its objects destroyed by a verdict that
 ///         was true when it was reached, and no amount of re-checking below the group can prevent
@@ -19,11 +22,17 @@ namespace CyberCloud.ResourceManager.Reconcile;
 ///         only the grain can check the members and set the seal in one turn.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ONE DEVIATION FROM THE RESOURCE ORDERING, AND IT IS DELIBERATE: THE NAME IS FREED
-///         LAST, NOT FIRST.</b> docs/plan/06 § Two-phase create says a delete should "release the
+///         ⚠
+///         <b>
+///             ONE DEVIATION FROM THE RESOURCE ORDERING, AND IT IS DELIBERATE: THE NAME IS FREED
+///             LAST, NOT FIRST.
+///         </b> docs/plan/06 § Two-phase create says a delete should "release the
 ///         index first (so the name is immediately reusable)". For a resource that is right. For a
-///         group it is the opposite of right, because a group's name is an <i>input to its namespace
-///         name</i> — <see cref="ReconcileDriver.NamespaceFor(Guid, string)" /> is
+///         group it is the opposite of right, because a group's name is an
+///         <i>
+///             input to its namespace
+///             name
+///         </i> — <see cref="ReconcileDriver.NamespaceFor(Guid, string)" /> is
 ///         <c>{subscriptionId:N}-{resourceGroup}</c>. Freeing it first lets a new group of the same
 ///         name be created, have <c>NamespaceEnsurer</c> apply the very same namespace, and then have
 ///         this delete remove it out from under the new group's first resource. So the subscription's
@@ -31,8 +40,11 @@ namespace CyberCloud.ResourceManager.Reconcile;
 ///         seconds a reclaim takes.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A refusal leaves the group SEALED, and that is the same rule
-///         <c>FailDeleteAsync</c> applies to a member.</b> A delete that began and did not finish
+///         ⚠
+///         <b>
+///             A refusal leaves the group SEALED, and that is the same rule
+///             <c>FailDeleteAsync</c> applies to a member.
+///         </b> A delete that began and did not finish
 ///         stays visible in <see cref="ProvisioningState.Deleting" /> rather than being quietly
 ///         returned to service. The whole choreography is idempotent, so an operator who clears
 ///         whatever the namespace refused over re-drives it and it finishes.

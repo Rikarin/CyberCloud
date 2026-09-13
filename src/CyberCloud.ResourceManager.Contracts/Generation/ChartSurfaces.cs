@@ -71,8 +71,11 @@ public sealed record ChartAnnotationReport(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The pairing is <see cref="ResourceTypeRegistration.Chart" />, and today it pairs
-///         nothing.</b> One provider is in the tree — <c>CyberCloud.Providers.Sample</c> — and it
+///         ⚠
+///         <b>
+///             The pairing is <see cref="ResourceTypeRegistration.Chart" />, and today it pairs
+///             nothing.
+///         </b> One provider is in the tree — <c>CyberCloud.Providers.Sample</c> — and it
 ///         declares no chart on purpose (its own <c>.csproj</c>: "renders no chart (a ConfigMap is one
 ///         object, and <c>CyberCloud.Kubernetes.Charts</c> does not exist)"). The one managed chart
 ///         declares <c>CyberCloud.DBforPostgreSQL/servers</c>, which no C# provider declares — it
@@ -81,8 +84,11 @@ public sealed record ChartAnnotationReport(
 ///         the two files.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Zero pairs is therefore a legitimate state and is reported as
-///         <see cref="ChartAnnotationReport.IsVacuous" /> rather than as success.</b> The failure this
+///         ⚠
+///         <b>
+///             Zero pairs is therefore a legitimate state and is reported as
+///             <see cref="ChartAnnotationReport.IsVacuous" /> rather than as success.
+///         </b> The failure this
 ///         guards against is the one <c>build/Build.Generate.cs</c> has already had once: a discovery
 ///         rule that quietly matched nothing, and a target that reported it as a pass with the first
 ///         provider sitting in the solution. Both halves of the mismatch are named individually in
@@ -187,13 +193,15 @@ public static class ChartSurfaces {
         };
 
         foreach (var annotation in report.Documents) {
-            lines.Add(string.Create(
-                CultureInfo.InvariantCulture,
-                $"  {(annotation.Drifted ? "±" : "=")} {DirectoryName}/{annotation.File} — "
-                + $"{annotation.ResourceType} at {annotation.ApiVersion}, "
-                + $"{(annotation.Published ? annotation.Drifted ? "differs from the registry" : "unchanged" : "new")}, "
-                + $"{annotation.Problems.Length} problem(s)"
-            ));
+            lines.Add(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"  {(annotation.Drifted ? "±" : "=")} {DirectoryName}/{annotation.File} — "
+                    + $"{annotation.ResourceType} at {annotation.ApiVersion}, "
+                    + $"{(annotation.Published ? annotation.Drifted ? "differs from the registry" : "unchanged" : "new")}, "
+                    + $"{annotation.Problems.Length} problem(s)"
+                )
+            );
         }
 
         foreach (var unpaired in report.Unpaired) {
@@ -248,7 +256,15 @@ public static class ChartSurfaces {
         }
 
         if (problems.Count > 0) {
-            return new(chart, type.Type.ToString(), declaredVersion ?? string.Empty, file, File.Exists(path), false, [.. problems]);
+            return new(
+                chart,
+                type.Type.ToString(),
+                declaredVersion ?? string.Empty,
+                file,
+                File.Exists(path),
+                false,
+                [.. problems]
+            );
         }
 
         // ⚠ The registration and not the schema is what says which property is placement. It is empty
@@ -313,11 +329,13 @@ public static class ChartSurfaces {
         return Directory
             .EnumerateFiles(root, "Chart.yaml", SearchOption.AllDirectories)
             .Where(x => !x.Contains(
-                Path.DirectorySeparatorChar + "templates" + Path.DirectorySeparatorChar,
-                StringComparison.Ordinal
-            ))
+                    Path.DirectorySeparatorChar + "templates" + Path.DirectorySeparatorChar,
+                    StringComparison.Ordinal
+                )
+            )
             .Select(x => Path.GetRelativePath(directory, Path.GetDirectoryName(x)!)
-                .Replace(Path.DirectorySeparatorChar, '/'))
+                    .Replace(Path.DirectorySeparatorChar, '/')
+            )
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();
     }
@@ -389,6 +407,5 @@ public static class ChartSurfaces {
         return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(normalised);
     }
 
-    static string Text(byte[] bytes) =>
-        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetString(bytes);
+    static string Text(byte[] bytes) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetString(bytes);
 }

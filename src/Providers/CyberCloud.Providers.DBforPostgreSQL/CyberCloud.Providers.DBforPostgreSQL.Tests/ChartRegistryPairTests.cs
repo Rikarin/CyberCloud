@@ -10,11 +10,17 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>CUT DOWN 2026-08-12, from six tests to three, and the four that went are the point of
-///         this note.</b> This class was written as "a stand-in for a build gate that does not exist",
+///         ⚠
+///         <b>
+///             CUT DOWN 2026-08-12, from six tests to three, and the four that went are the point of
+///             this note.
+///         </b> This class was written as "a stand-in for a build gate that does not exist",
 ///         on the premise that <c>Build.Charts.cs</c> "never opens a provider registry — the only two
-///         occurrences of <c>ResourceSchema</c> in that file are comments". <b>The premise was a grep
-///         and the conclusion was wrong.</b> <c>build/Build.Charts.cs</c> calls
+///         occurrences of <c>ResourceSchema</c> in that file are comments".
+///         <b>
+///             The premise was a grep
+///             and the conclusion was wrong.
+///         </b> <c>build/Build.Charts.cs</c> calls
 ///         <c>RunGenerator(write: true, charts: true)</c>, which drives <c>ChartSurfaces.Generate</c>
 ///         and <c>ChartAnnotationEmitter</c>: the target owns the verdict and delegates the emission,
 ///         exactly as <c>Build.Generate</c> does, so the registry is reached without the word ever
@@ -26,12 +32,15 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Tests;
 ///         disagree with its source.
 ///     </para>
 ///     <para>
-///         ⚠ <b>CORRECTED 2026-08-12, later the same day. This note went on to say that three of the
-///         deleted tests "had in fact become <i>false</i>" because they pinned
-///         <c>/properties/clusterId</c> as a body-only property with no chart row, "and the emitter
-///         gives it one, because it is under <c>/properties</c>, is not <c>ReadOnly</c>, and is
-///         therefore something the chart's caller sets". The tests were right and the emitter was
-///         incomplete.</b> Its rule had no word for placement, so the chart grew a
+///         ⚠
+///         <b>
+///             CORRECTED 2026-08-12, later the same day. This note went on to say that three of the
+///             deleted tests "had in fact become <i>false</i>" because they pinned
+///             <c>/properties/clusterId</c> as a body-only property with no chart row, "and the emitter
+///             gives it one, because it is under <c>/properties</c>, is not <c>ReadOnly</c>, and is
+///             therefore something the chart's caller sets". The tests were right and the emitter was
+///             incomplete.
+///         </b> Its rule had no word for placement, so the chart grew a
 ///         <c>clusterId: ""</c> row under <c>## @format uuid</c> — a default that is not a uuid, in a
 ///         chart whose own generated schema declares the format. <c>ChartAnnotationEmitter.Emit</c>
 ///         now takes <c>ResourceTypeRegistration.ClusterIdPointer</c> and skips it, so the deleted
@@ -98,9 +107,8 @@ public sealed partial class ChartRegistryPairTests {
         );
 
         foreach (var (preset, quantities) in chart) {
-            PostgresServers.Presets.TryGetValue(preset, out var mine).ShouldBeTrue(
-                $"'{preset}' is in templates/_helpers.tpl and not in PostgresServers.Presets"
-            );
+            PostgresServers.Presets.TryGetValue(preset, out var mine)
+                .ShouldBeTrue($"'{preset}' is in templates/_helpers.tpl and not in PostgresServers.Presets");
 
             mine.ShouldBe(quantities, preset);
         }
@@ -208,10 +216,11 @@ public sealed partial class ChartRegistryPairTests {
         );
 
         foreach (var (value, names) in chart) {
-            PostgresServers.ExtensionCatalogue.TryGetValue(value, out var mine).ShouldBeTrue(
-                $"'{value}' is in templates/cluster.yaml's `$catalogue` and not in "
-                + "PostgresServers.ExtensionCatalogue"
-            );
+            PostgresServers.ExtensionCatalogue.TryGetValue(value, out var mine)
+                .ShouldBeTrue(
+                    $"'{value}' is in templates/cluster.yaml's `$catalogue` and not in "
+                    + "PostgresServers.ExtensionCatalogue"
+                );
 
             mine.ShouldBe(names, value);
         }

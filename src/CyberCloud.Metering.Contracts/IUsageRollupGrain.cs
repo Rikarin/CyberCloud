@@ -32,8 +32,11 @@ namespace CyberCloud.Metering.Contracts;
 ///         the ledger is what makes the ledger's immutability affordable.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The seen-key set is bounded by a retention horizon and that horizon is a real
-///         limit.</b> Keys older than <c>UsageRollupGrain.DedupRetention</c> are pruned, so a
+///         ⚠
+///         <b>
+///             The seen-key set is bounded by a retention horizon and that horizon is a real
+///             limit.
+///         </b> Keys older than <c>UsageRollupGrain.DedupRetention</c> are pruned, so a
 ///         redelivery older than that would be accepted as new. The horizon is set to match
 ///         docs/plan/22 § The pipeline's own "JetStream, durable, 7-day retention": a message the
 ///         transport cannot still be holding cannot still be redelivered. Second defence: an hour

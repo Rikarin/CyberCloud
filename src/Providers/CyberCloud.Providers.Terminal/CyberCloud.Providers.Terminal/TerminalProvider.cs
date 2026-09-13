@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.Terminal;
@@ -11,22 +12,33 @@ namespace CyberCloud.Providers.Terminal;
 /// <remarks>
 ///     <para>
 ///         docs/plan/19 § <c>CyberCloud.Terminal/consoles</c>, M1 · 1.5 EM, and step 6 of
-///         docs/plan/24's M1 exit story: <i>"open the cloud terminal and <c>psql</c> into it using a
-///         managed identity"</i>.
+///         docs/plan/24's M1 exit story:
+///         <i>
+///             "open the cloud terminal and <c>psql</c> into it using a
+///             managed identity"
+///         </i>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE FIRST TYPE IN THE CATALOGUE WHOSE PRODUCT IS NOT A CONVERGED OBJECT, AND THE
-///         DECLARATION BELOW IS WHERE THAT COSTS SOMETHING.</b> What a tenant buys is an interactive
+///         ⚠
+///         <b>
+///             THE FIRST TYPE IN THE CATALOGUE WHOSE PRODUCT IS NOT A CONVERGED OBJECT, AND THE
+///             DECLARATION BELOW IS WHERE THAT COSTS SOMETHING.
+///         </b> What a tenant buys is an interactive
 ///         session; what the registry can describe is a resource. The split is drawn on
 ///         <see cref="CloudConsoles" /> and shows up here as two synchronous actions with handlers
 ///         where every other family has at most one, and as a meter set that deliberately omits the
 ///         two meters a reader would expect. Both are argued below.
 ///     </para>
 ///     <para>
-///         ⚠ <b>NO <c>SupportsSoftDelete</c>, AND THIS ROW HAD TO ARGUE IT RATHER THAN INHERIT
-///         IT.</b> The two precedents do not transfer. <c>ContainerService</c> declined because
-///         <i>"a soft-deleted cluster whose worker VMs are gone is not a cluster anybody can be handed
-///         back"</i>, and <c>Cache</c> declined because a cache's data is reconstructible. A console
+///         ⚠
+///         <b>
+///             NO <c>SupportsSoftDelete</c>, AND THIS ROW HAD TO ARGUE IT RATHER THAN INHERIT
+///             IT.
+///         </b> The two precedents do not transfer. <c>ContainerService</c> declined because
+///         <i>
+///             "a soft-deleted cluster whose worker VMs are gone is not a cluster anybody can be handed
+///             back"
+///         </i>, and <c>Cache</c> declined because a cache's data is reconstructible. A console
 ///         is neither: the session really is unrecoverable — a dead shell is dead, and no window
 ///         changes that — but the home volume is <b>data</b>, and docs/plan/06 § Tags, locks asks for
 ///         seven days on <i>"resources carrying data"</i>. So the honest position is:

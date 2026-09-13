@@ -34,9 +34,11 @@ public sealed class PasskeyChallengeCookieTests {
     static readonly DateTimeOffset Now = new(2026, 8, 20, 12, 0, 0, TimeSpan.Zero);
 
     static PasskeyChallengeTicket Ticket(DateTimeOffset? expiresAt = null) =>
-        new("{\"challenge\":\"abc\",\"allowCredentials\":[{\"id\":\"k1\"}]}",
+        new(
+            "{\"challenge\":\"abc\",\"allowCredentials\":[{\"id\":\"k1\"}]}",
             "someone@example.com",
-            expiresAt ?? Now.AddMinutes(5));
+            expiresAt ?? Now.AddMinutes(5)
+        );
 
     static (PasskeyChallengeCookie Cookie, FrozenClock Clock) Subject(
         IDataProtectionProvider? protection = null
@@ -157,18 +159,17 @@ public sealed class PasskeyChallengeCookieTests {
         var value = issued.Response.Headers.SetCookie.ToString().Split(';')[0].Split('=', 2)[1];
 
         foreach (var mangled in new[] {
-            value[..^4],
-            value + "AAAA",
-            "not-a-protected-payload",
-            string.Concat(value.AsSpan(0, value.Length - 1), value[^1] == 'A' ? "B" : "A")
-        }) {
+                     value[..^4], value + "AAAA", "not-a-protected-payload",
+                     string.Concat(value.AsSpan(0, value.Length - 1), value[^1] == 'A' ? "B" : "A")
+                 }) {
             var next = new DefaultHttpContext();
             next.Request.Headers.Cookie = $"{PasskeyChallengeCookie.CookieName}={mangled}";
 
-            cookie.Take(next).ShouldBeNull(
-                "an unprotect failure and an absent cookie must answer identically — a caller who "
-                + "could tell them apart would have an oracle over the key ring"
-            );
+            cookie.Take(next)
+                .ShouldBeNull(
+                    "an unprotect failure and an absent cookie must answer identically — a caller who "
+                    + "could tell them apart would have an oracle over the key ring"
+                );
         }
     }
 

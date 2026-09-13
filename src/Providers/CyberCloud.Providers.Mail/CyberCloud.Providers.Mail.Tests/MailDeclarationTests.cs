@@ -67,7 +67,8 @@ public sealed class MailDeclarationTests {
 
         CliTokens.Collisions(
             registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
-        ).ShouldBeEmpty();
+        )
+            .ShouldBeEmpty();
     }
 
     [Fact]
@@ -87,20 +88,11 @@ public sealed class MailDeclarationTests {
         var pointers = MailDomains.Schema2026.Properties.Select(x => x.JsonPointer).ToHashSet(StringComparer.Ordinal);
 
         foreach (var expected in new[] {
-            "/properties/domain",
-            "/properties/version",
-            "/properties/sizing/preset",
-            "/properties/sizing/cpu",
-            "/properties/sizing/memory",
-            "/properties/storage/size",
-            "/properties/storage/mailboxQuota",
-            "/properties/catchAll",
-            "/properties/relayHosts",
-            "/properties/dedicatedIp",
-            "/properties/filtering/rejectThreshold",
-            "/properties/filtering/antivirus",
-            "/properties/sieve"
-        }) {
+                     "/properties/domain", "/properties/version", "/properties/sizing/preset", "/properties/sizing/cpu",
+                     "/properties/sizing/memory", "/properties/storage/size", "/properties/storage/mailboxQuota",
+                     "/properties/catchAll", "/properties/relayHosts", "/properties/dedicatedIp",
+                     "/properties/filtering/rejectThreshold", "/properties/filtering/antivirus", "/properties/sieve"
+                 }) {
             pointers.ShouldContain(expected);
         }
     }
@@ -134,13 +126,9 @@ public sealed class MailDeclarationTests {
         // ⚠ CLAUSE 1. Two bodies naming the same relays in different orders must render identical
         // Postfix configuration, or every pass reports drift against the last one and the reconcile
         // loop never settles — the failure RabbitmqClusters.Plugins found once already.
-        using var first = JsonDocument.Parse(
-            """{"properties":{"relayHosts":["b.example","a.example","B.EXAMPLE"]}}"""
-        );
+        using var first = JsonDocument.Parse("""{"properties":{"relayHosts":["b.example","a.example","B.EXAMPLE"]}}""");
 
-        using var second = JsonDocument.Parse(
-            """{"properties":{"relayHosts":["a.example","b.example"]}}"""
-        );
+        using var second = JsonDocument.Parse("""{"properties":{"relayHosts":["a.example","b.example"]}}""");
 
         MailDomains.RelayHosts(first.RootElement).ShouldBe(MailDomains.RelayHosts(second.RootElement));
 

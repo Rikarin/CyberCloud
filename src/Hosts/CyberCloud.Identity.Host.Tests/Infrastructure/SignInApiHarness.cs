@@ -15,8 +15,11 @@ namespace CyberCloud.Identity.Host.Tests.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><see cref="RefusingGrainFactory" /> throws on every member, and that is the point
-///         rather than a shortcut.</b> Every path exercised by the suites in this project is one that
+///         ⚠
+///         <b>
+///             <see cref="RefusingGrainFactory" /> throws on every member, and that is the point
+///             rather than a shortcut.
+///         </b> Every path exercised by the suites in this project is one that
 ///         must answer <i>before</i> touching a grain — a malformed address, a passkey completion
 ///         with no issued challenge, a second factor with no session. Giving the harness a factory
 ///         that works would let one of those quietly acquire a grain reference and still pass; a
@@ -83,18 +86,15 @@ public sealed class RefusingGrainFactory : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithGuidKey =>
-        throw Refuse(typeof(TGrainInterface).Name);
+        where TGrainInterface : IGrainWithGuidKey => throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithIntegerKey =>
-        throw Refuse(typeof(TGrainInterface).Name);
+        where TGrainInterface : IGrainWithIntegerKey => throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(string primaryKey, string? grainClassNamePrefix = null)
-        where TGrainInterface : IGrainWithStringKey =>
-        throw Refuse(typeof(TGrainInterface).Name);
+        where TGrainInterface : IGrainWithStringKey => throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(
@@ -115,16 +115,13 @@ public sealed class RefusingGrainFactory : IGrainFactory {
         throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
-    public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey) =>
-        throw Refuse(grainInterfaceType.Name);
+    public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey) => throw Refuse(grainInterfaceType.Name);
 
     /// <inheritdoc />
-    public IGrain GetGrain(Type grainInterfaceType, long grainPrimaryKey) =>
-        throw Refuse(grainInterfaceType.Name);
+    public IGrain GetGrain(Type grainInterfaceType, long grainPrimaryKey) => throw Refuse(grainInterfaceType.Name);
 
     /// <inheritdoc />
-    public IGrain GetGrain(Type grainInterfaceType, string grainPrimaryKey) =>
-        throw Refuse(grainInterfaceType.Name);
+    public IGrain GetGrain(Type grainInterfaceType, string grainPrimaryKey) => throw Refuse(grainInterfaceType.Name);
 
     /// <inheritdoc />
     public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey, string keyExtension) =>
@@ -136,12 +133,10 @@ public sealed class RefusingGrainFactory : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
-        where TGrainInterface : IAddressable =>
-        throw Refuse(typeof(TGrainInterface).Name);
+        where TGrainInterface : IAddressable => throw Refuse(typeof(TGrainInterface).Name);
 
     /// <inheritdoc />
-    public IAddressable GetGrain(GrainId grainId) =>
-        throw Refuse(grainId.Type.ToString() ?? nameof(GrainId));
+    public IAddressable GetGrain(GrainId grainId) => throw Refuse(grainId.Type.ToString() ?? nameof(GrainId));
 
     /// <inheritdoc />
     public IAddressable GetGrain(Type interfaceType, IdSpan grainKey) => throw Refuse(interfaceType.Name);
@@ -160,8 +155,7 @@ public sealed class RefusingGrainFactory : IGrainFactory {
     // the default keeps that true without making the type lie about what it guards.
     /// <inheritdoc />
     public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver =>
-        default!;
+        where TGrainObserverInterface : IGrainObserver => default!;
 
     /// <inheritdoc />
     public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)

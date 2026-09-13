@@ -7,8 +7,11 @@ namespace CyberCloud.Providers.ContainerRegistry.Tests;
 ///     What a registry reserves, and the two copies that get it wrong.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The third sighting of a sum over HETEROGENEOUS components, and the first where one
-///     population is multiplied by a tenant-set replica count while two are fixed.</b>
+///     ⚠
+///     <b>
+///         The third sighting of a sum over HETEROGENEOUS components, and the first where one
+///         population is multiplied by a tenant-set replica count while two are fixed.
+///     </b>
 ///     <c>CyberCloud.DBforPostgreSQL/servers</c> found an amount is a quantity <i>string</i>;
 ///     <c>CyberCloud.Messaging/natsClusters</c> that it is a <i>product</i> of a replica count and one
 ///     figure; <c>CyberCloud.Storage/accounts</c> that it is a <i>sum</i> over components of different
@@ -61,7 +64,7 @@ public sealed class ContainerRegistryQuotaTests {
     public void MemoryFollowsTheSameTwoPopulationsInGibibytes() {
         // s1.small is 4 GiB; the control plane is 512Mi each. At two replicas: 4 + 8 × 0.5 = 8.
         Memory(replicas: 2).ShouldBe(8m);
-        Memory(replicas: 5).ShouldBe(4m + (17m * 0.5m));
+        Memory(replicas: 5).ShouldBe(4m + 17m * 0.5m);
     }
 
     [Fact]
@@ -113,8 +116,7 @@ public sealed class ContainerRegistryQuotaTests {
 
     static readonly Guid ClusterId = Guid.Parse("eeeeeeee-0000-4000-8000-00000000000c");
 
-    static decimal Vcpu(int replicas, string preset = "s1.small") =>
-        Draw(QuotaMeter.Vcpu, replicas, "100Gi", preset);
+    static decimal Vcpu(int replicas, string preset = "s1.small") => Draw(QuotaMeter.Vcpu, replicas, "100Gi", preset);
 
     static decimal Memory(int replicas, string preset = "s1.small") =>
         Draw(QuotaMeter.MemoryGb, replicas, "100Gi", preset);
@@ -143,9 +145,7 @@ public sealed class ContainerRegistryQuotaTests {
 
     static string WithPreset(string body, string preset) {
         var node = System.Text.Json.Nodes.JsonNode.Parse(body)!.AsObject();
-        node["properties"]!.AsObject()["sizing"] = new System.Text.Json.Nodes.JsonObject {
-            ["preset"] = preset
-        };
+        node["properties"]!.AsObject()["sizing"] = new System.Text.Json.Nodes.JsonObject { ["preset"] = preset };
 
         return node.ToJsonString();
     }

@@ -3,9 +3,12 @@ using System.Reflection;
 namespace CyberCloud.Metering.Contracts.Tests;
 
 /// <summary>
-///     docs/plan/22 § The pipeline: <i>"The ledger is durable-tier and append-only. Corrections are
-///     new entries with a reason and a link to the original, never edits. An adjustable ledger cannot
-///     be audited and cannot be defended in a dispute."</i>
+///     docs/plan/22 § The pipeline:
+///     <i>
+///         "The ledger is durable-tier and append-only. Corrections are
+///         new entries with a reason and a link to the original, never edits. An adjustable ledger cannot
+///         be audited and cannot be defended in a dispute."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>These assert that editing is structurally impossible, not that it is refused.</b> A

@@ -63,20 +63,20 @@ public sealed class GatewayIsolationTests {
     }
 
     /// <summary>
-    ///     docs/plan/10 § What the gateway must never do: <i>"A gateway with a <c>DbContext</c> is a
-    ///     second write path within a year."</i>
+    ///     docs/plan/10 § What the gateway must never do:
+    ///     <i>
+    ///         "A gateway with a <c>DbContext</c> is a
+    ///         second write path within a year."
+    ///     </i>
     /// </summary>
     [Fact]
     public void TheGatewayBindsNoDataAccessAssembly() {
         var referenced = Gateway.GetReferencedAssemblies().Select(x => x.Name ?? "").ToList();
 
         foreach (var forbidden in new[] {
-            "Microsoft.EntityFrameworkCore",
-            "Microsoft.EntityFrameworkCore.Relational",
-            "Npgsql",
-            "Npgsql.EntityFrameworkCore.PostgreSQL",
-            "Volo.Abp.EntityFrameworkCore"
-        }) {
+                     "Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Relational", "Npgsql",
+                     "Npgsql.EntityFrameworkCore.PostgreSQL", "Volo.Abp.EntityFrameworkCore"
+                 }) {
             referenced.ShouldNotContain(forbidden);
         }
     }
@@ -109,12 +109,8 @@ public sealed class GatewayIsolationTests {
             var code = Regex.Replace(text, @"^\s*(///|//).*$", "", RegexOptions.Multiline);
 
             foreach (var forbidden in new[] {
-                "ICheckGrain",
-                "CheckAsync(",
-                "IResourceAuthorizer",
-                "SubjectRef",
-                "ObjectRef.Resource"
-            }) {
+                         "ICheckGrain", "CheckAsync(", "IResourceAuthorizer", "SubjectRef", "ObjectRef.Resource"
+                     }) {
                 if (code.Contains(forbidden, StringComparison.Ordinal)) {
                     offenders.Add($"{Path.GetFileName(file)} contains '{forbidden}'");
                 }
@@ -160,8 +156,11 @@ public sealed class GatewayIsolationTests {
 
     /// <summary>
     ///     ⚠ <c>CC1006</c> only runs on projects that reference the analyzer, and docs/plan/00 § The
-    ///     tenant-separation row, corrected says adding it here <i>"is what makes this row true for
-    ///     the caller it is actually about"</i>. The <c>Analyzer coverage</c> architecture gate
+    ///     tenant-separation row, corrected says adding it here
+    ///     <i>
+    ///         "is what makes this row true for
+    ///         the caller it is actually about"
+    ///     </i>. The <c>Analyzer coverage</c> architecture gate
     ///     enforces it too; this asserts it from the test side so a local build says so as well.
     /// </summary>
     [Fact]
@@ -237,7 +236,10 @@ public sealed class GatewayIsolationTests {
             foreach (Match match in Regex.Matches(code, @"\.GetGrain<")) {
                 var before = code[..match.Index];
 
-                if (!before.EndsWith("ForTenant(caller.TenantId.ToString(\"D\", CultureInfo.InvariantCulture))", StringComparison.Ordinal)
+                if (!before.EndsWith(
+                        "ForTenant(caller.TenantId.ToString(\"D\", CultureInfo.InvariantCulture))",
+                        StringComparison.Ordinal
+                    )
                     && !before.Contains("ForTenant(", StringComparison.Ordinal)) {
                     offenders.Add($"{Path.GetFileName(file)} calls GetGrain without ForTenant");
                 }

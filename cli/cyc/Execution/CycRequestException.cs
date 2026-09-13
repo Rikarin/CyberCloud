@@ -5,8 +5,11 @@ namespace CyberCloud.Cli.Execution;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A wrapper rather than a subclass of the SDK's exception, because the status must
-///         survive.</b> <see cref="CyberCloudRequestFailedException" /> only sets
+///         ⚠
+///         <b>
+///             A wrapper rather than a subclass of the SDK's exception, because the status must
+///             survive.
+///         </b> <see cref="CyberCloudRequestFailedException" /> only sets
 ///         <see cref="CyberCloudRequestFailedException.Status" /> through its response constructor, so
 ///         re-throwing it with an added sentence would produce an exception with status <c>0</c> and
 ///         send every failure to exit code 1.
@@ -55,7 +58,7 @@ sealed class CycRequestException : Exception {
             Status = failure.Status,
             ErrorCode = failure.ErrorCode,
             Flag = flag,
-            ServiceRequestId = failure.ServiceRequestId,
+            ServiceRequestId = failure.ServiceRequestId
         };
     }
 
@@ -70,7 +73,7 @@ sealed class CycRequestException : Exception {
             // failure unless its error code says otherwise, which is what Program's mapping reads.
             Status = failure.Status == 200 ? 500 : failure.Status,
             ErrorCode = failure.ErrorCode,
-            ServiceRequestId = failure.ServiceRequestId,
+            ServiceRequestId = failure.ServiceRequestId
         };
     }
 }

@@ -41,8 +41,11 @@ readonly record struct TokenClaims(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is a seam, and the implementation that closes it lives in the identity host,
-///         which is a different component being built separately.</b> docs/plan/10 § Authentication
+///         ⚠
+///         <b>
+///             This is a seam, and the implementation that closes it lives in the identity host,
+///             which is a different component being built separately.
+///         </b> docs/plan/10 § Authentication
 ///         inputs describes five callers and one credential shape; nothing about that shape is the
 ///         gateway's to decide. What the gateway owns is everything <i>after</i> a token is known
 ///         good, and that half is complete and tested.
@@ -88,9 +91,12 @@ readonly record struct TokenClaims(
 ///             the flattened <c>act.sub</c> of RFC 8693 § 4.1 — carrying the operator's user GUID in
 ///             <c>N</c> form, and absent entirely on an ordinary token.
 ///             <para>
-///                 ⚠ <b>docs/plan/06 § Platform administration says the value travels as an
-///                 <c>X-CyberCloud-Impersonated-By</c> header, and read literally that is a doc
-///                 defect the gateway must not implement.</b> That header is caller-controlled on
+///                 ⚠
+///                 <b>
+///                     docs/plan/06 § Platform administration says the value travels as an
+///                     <c>X-CyberCloud-Impersonated-By</c> header, and read literally that is a doc
+///                     defect the gateway must not implement.
+///                 </b> That header is caller-controlled on
 ///                 every request this component serves, so honouring it would let anyone name any
 ///                 operator in the audit trail — defeating the second-operator approval, the 60-minute
 ///                 box and the tenant's notification in one line. The header is correct on the

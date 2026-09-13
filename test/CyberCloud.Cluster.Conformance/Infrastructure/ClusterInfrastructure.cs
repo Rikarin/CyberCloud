@@ -11,8 +11,11 @@ namespace CyberCloud.Cluster.Conformance.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Started once per test process, and <see cref="TryStartAsync" /> neither throws nor
-///         skips.</b> A start that threw would fail the class, which reads as "the provider is
+///         ⚠
+///         <b>
+///             Started once per test process, and <see cref="TryStartAsync" /> neither throws nor
+///             skips.
+///         </b> A start that threw would fail the class, which reads as "the provider is
 ///         broken"; a start that skipped would take the whole class out of the runner's output under
 ///         one message. Absence of Docker is a <i>reportable outcome</i> — it is the one outcome that
 ///         matters more than any assertion here, because a suite whose tests silently vanish without
@@ -30,9 +33,12 @@ namespace CyberCloud.Cluster.Conformance.Infrastructure;
 ///         wholesale would turn a missing daemon into a red build rather than into a visible skip.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The images are pinned, and the k3s one is pinned to
-///         <see cref="K3sImage" /> for the reason
-///         <c>CyberCloud.Kubernetes.Tests.Infrastructure.K3sFixture</c> gives at length:</b>
+///         ⚠
+///         <b>
+///             The images are pinned, and the k3s one is pinned to
+///             <see cref="K3sImage" /> for the reason
+///             <c>CyberCloud.Kubernetes.Tests.Infrastructure.K3sFixture</c> gives at length:
+///         </b>
 ///         <c>Testcontainers.K3s</c> 4.13.0 still defaults to Kubernetes 1.26, and the fabric is
 ///         written against <c>KubernetesClient</c> 19.0.2, whose models are generated from 1.35.
 ///         Testing an apply path against a nine-release-old server would leave the gap between what
@@ -125,7 +131,8 @@ public static class ClusterInfrastructure {
         + "This suite is present by name and skipped rather than absent, because \"conformance: "
         + "green\" must not be readable as \"criterion 3 is met\" on a machine that never ran the "
         + "check. docs/plan/03 § Providers, docs/plan/24 § Phase 1. "
-        + "What went wrong: " + Describe(reason ?? failure);
+        + "What went wrong: "
+        + Describe(reason ?? failure);
 
     static string Describe(Exception? ex) =>
         ex is null ? "no exception was recorded." : ex.GetType().Name + ": " + ex.Message;
@@ -146,14 +153,14 @@ public static class ClusterInfrastructure {
             // docs/plan/05 § Hot: noeviction. Set explicitly rather than inherited from the image,
             // for the reason CyberCloud.ServiceDefaults.Tests' StorageFixture gives — a default is
             // how one environment ends up with allkeys-lru and another with noeviction.
-            .WithCommand("--maxmemory-policy", "noeviction", "--appendonly", "yes")
-            .Build();
+                .WithCommand("--maxmemory-policy", "noeviction", "--appendonly", "yes")
+                .Build();
 
         await Task.WhenAll(
-                k3s.StartAsync(cancellationToken),
-                postgres.StartAsync(cancellationToken),
-                redis.StartAsync(cancellationToken)
-            )
+            k3s.StartAsync(cancellationToken),
+            postgres.StartAsync(cancellationToken),
+            redis.StartAsync(cancellationToken)
+        )
             .ConfigureAwait(false);
 
         var durable = postgres.GetConnectionString();
@@ -210,8 +217,11 @@ public static class ClusterSlot {
     ///     <see cref="ClusterInfrastructure" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This read "shared by every assembly that runs a cluster-backed suite" until the #77
-    ///     review, and #77 is precisely what made it false.</b>
+    ///     ⚠
+    ///     <b>
+    ///         This read "shared by every assembly that runs a cluster-backed suite" until the #77
+    ///         review, and #77 is precisely what made it false.
+    ///     </b>
     ///     <c>build/Build.Test.cs</c> § <c>StartsCluster</c> gives "cluster-backed suite" a
     ///     build-enforced meaning — seventeen suites, decided by what their output ships — and two of
     ///     the seventeen take no lock here at all. <see cref="ClusterInfrastructure" />'s remarks

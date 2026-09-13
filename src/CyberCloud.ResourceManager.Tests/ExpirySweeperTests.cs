@@ -11,8 +11,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>What <see cref="SoftDeletePathTests" /> already covers, and what is left for this
-///         file.</b> That suite drives the two <i>fronts</i> of purge:
+///         ⚠
+///         <b>
+///             What <see cref="SoftDeletePathTests" /> already covers, and what is left for this
+///             file.
+///         </b> That suite drives the two <i>fronts</i> of purge:
 ///         <c>SoftDeletePathTests.AnExpiredWindowIsEndedWithoutACallerAndAnUnexpiredOneIsNot</c>
 ///         calls <c>PurgeExpiredAsync</c> by hand and asserts that the deadline is a deadline, and
 ///         <c>SoftDeletePathTests.TheMechanismRefusesEverythingThatIsNotAnExpiredWindow</c> asserts
@@ -21,16 +24,22 @@ namespace CyberCloud.ResourceManager.Tests;
 ///         happens to the ones that do not, and what the sweep does to the registry it reads.
 ///     </para>
 ///     <para>
-///         ⚠ <b>EVERY CASE GETS ITS OWN RESOURCE GROUP, AND THAT IS A CORRECTNESS RULE HERE RATHER
-///         THAN TIDINESS.</b> A sweep is per resource group and acts on <i>everything</i> parked in
+///         ⚠
+///         <b>
+///             EVERY CASE GETS ITS OWN RESOURCE GROUP, AND THAT IS A CORRECTNESS RULE HERE RATHER
+///             THAN TIDINESS.
+///         </b> A sweep is per resource group and acts on <i>everything</i> parked in
 ///         it, so two cases sharing a group would have the first one's leftovers purged by the
 ///         second one's sweep — and the second case would go green on a report it did not produce.
 ///         The shared <c>prod</c> group in particular is where <see cref="SoftDeletePathTests" />
 ///         leaves parked resources on purpose, so nothing here may touch it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The reminder is not observable through the GRAIN, and <c>ExpirySweep.Disarmed</c>
-///         is what stands in for it here.</b> Orleans exposes <c>GetReminder</c> to the grain and to
+///         ⚠
+///         <b>
+///             The reminder is not observable through the GRAIN, and <c>ExpirySweep.Disarmed</c>
+///             is what stands in for it here.
+///         </b> Orleans exposes <c>GetReminder</c> to the grain and to
 ///         nobody else, so "armed exactly while there is something parked" cannot be asserted
 ///         through the contract. What can be asserted is the decision the grain took — it reports
 ///         whether the pass found an empty registry and stood down — and both directions of that
@@ -38,8 +47,11 @@ namespace CyberCloud.ResourceManager.Tests;
 ///         <c>ArmAsync</c>'s return exist because of the same limit.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE ROW ITSELF IS READABLE AFTER ALL, AND THIS FILE STILL DOES NOT READ IT
-///         (2026-09-06, #83).</b> This paragraph used to say the reminder was not observable from a
+///         ⚠
+///         <b>
+///             THE ROW ITSELF IS READABLE AFTER ALL, AND THIS FILE STILL DOES NOT READ IT
+///             (2026-09-06, #83).
+///         </b> This paragraph used to say the reminder was not observable from a
 ///         test at all and that <c>ResourceGroupGrain</c>'s reaper was in the same position; both
 ///         halves were wrong. <c>Orleans.IReminderTable</c> is public and is a singleton in the
 ///         silo's container wherever <c>UseInMemoryReminderService</c> is called — which
@@ -75,8 +87,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     static Guid Subscription => ResourceManagerCluster.IsolatedSubscription;
 
     /// <summary>
-    ///     ⚠ <b>A sweep ends an expired window with the authorizer denying everything and asked
-    ///     nothing.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A sweep ends an expired window with the authorizer denying everything and asked
+    ///         nothing.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -87,8 +102,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     ///         that had quietly grown a caller would fail here rather than pass with a comment.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The index is asserted <c>Free</c> and not merely "the entry is gone", because
-    ///         those are different claims and only one of them is the point.</b> Clearing a registry
+    ///         ⚠
+    ///         <b>
+    ///             The index is asserted <c>Free</c> and not merely "the entry is gone", because
+    ///             those are different claims and only one of them is the point.
+    ///         </b> Clearing a registry
     ///         entry is something a sweeper could do all by itself; releasing the name is something
     ///         only the purge does, and it is what returns the committed quota and lets the tenant
     ///         re-create at that address.
@@ -140,8 +158,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the case that decides whether the sweeper owns the deadline, and it is
-    ///         the one a plausible wrong implementation fails.</b> A sweep that read
+    ///         ⚠
+    ///         <b>
+    ///             This is the case that decides whether the sweeper owns the deadline, and it is
+    ///             the one a plausible wrong implementation fails.
+    ///         </b> A sweep that read
     ///         <c>IndexEntry.RecoverableUntil</c> out of <c>GetAsync</c> and compared it against its
     ///         own process's clock would pass the case above and would be wrong in the one direction
     ///         that cannot be recovered from — destroying a resource somebody could still have
@@ -201,14 +222,20 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A <c>CanNotDelete</c> lock stops the clock-driven purge exactly as it stops a typed
-    ///     one, and the sweep comes back for the resource once the lock is gone.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A <c>CanNotDelete</c> lock stops the clock-driven purge exactly as it stops a typed
+    ///         one, and the sweep comes back for the resource once the lock is gone.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
     ///         docs/plan/07 § Azure RBAC is explicit that this is the one refusal the mechanism
-    ///         inherits: a lock is <i>"a tenant's standing, visible refusal of destruction, and a
-    ///         clock that overruled it would make the lock mean 'until the platform disagrees'"</i>.
+    ///         inherits: a lock is
+    ///         <i>
+    ///             "a tenant's standing, visible refusal of destruction, and a
+    ///             clock that overruled it would make the lock mean 'until the platform disagrees'"
+    ///         </i>.
     ///         So a locked resource past its window stays parked — held past its window, which is
     ///         the thing being fixed, by a decision its owner made and can see.
     ///     </para>
@@ -257,8 +284,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         The flag's own two refusals say a resource <i>"cannot be purged <b>before</b> its
-    ///         recovery window ends"</i> and <i>"wait for the recovery window to end"</i>, and
+    ///         The flag's own two refusals say a resource
+    ///         <i>
+    ///             "cannot be purged <b>before</b> its
+    ///             recovery window ends"
+    ///         </i> and <i>"wait for the recovery window to end"</i>, and
     ///         docs/plan/07 § Azure RBAC records that the condition was once the flag alone — so a
     ///         purge-protected resource became permanently undestroyable the moment its window
     ///         closed. That defect is fixed in <c>PurgeCoreAsync</c> and
@@ -266,8 +296,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     ///         pins it for the typed front.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It is driven again here because the sweeper is what makes the flag's promise
-    ///         automatic, and because the two are separable.</b> The mechanism inherits the lock and
+    ///         ⚠
+    ///         <b>
+    ///             It is driven again here because the sweeper is what makes the flag's promise
+    ///             automatic, and because the two are separable.
+    ///         </b> The mechanism inherits the lock and
     ///         does <i>not</i> inherit purge protection, which is an asymmetry a reader could easily
     ///         get backwards — and a sweeper written to "skip anything protected" would look
     ///         defensive, pass every other case in this file, and leave exactly the resources the
@@ -293,14 +326,20 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A registry entry the index does not agree with is forgotten, and the resource it
-    ///     names is not touched.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A registry entry the index does not agree with is forgotten, and the resource it
+    ///         names is not touched.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>THE RECONCILE HALF, AND THE ORDER OF THE TWO ASSERTIONS IS THE POINT.</b> The
-    ///         registry's invariant is <i>an entry exists only while the index says
-    ///         <c>SoftDeleted</c></i>, so an entry naming a <b>live</b> resource is false. What a
+    ///         registry's invariant is
+    ///         <i>
+    ///             an entry exists only while the index says
+    ///             <c>SoftDeleted</c>
+    ///         </i>, so an entry naming a <b>live</b> resource is false. What a
     ///         sweep must do with it is remove it; what it must never do is act on it. A sweeper that
     ///         trusted the registry and handed every entry straight to <c>PurgeExpiredAsync</c> would
     ///         be one grain call away from destroying a resource nobody deleted — and the only thing
@@ -350,8 +389,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>An entry resurrected over a name the purge has already freed lives one sweep, not
-    ///     for ever — which is the half of the known race issue #12 was asked to close.</b>
+    ///     ⚠
+    ///     <b>
+    ///         An entry resurrected over a name the purge has already freed lives one sweep, not
+    ///         for ever — which is the half of the known race issue #12 was asked to close.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -373,8 +415,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     ///         <c>IExpirySweeperGrain.SweepPeriod</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The freed name is re-created afterwards, which is the assertion that would catch
-    ///         a "fix" that only hid the entry.</b> A stale entry over a free name is not merely
+    ///         ⚠
+    ///         <b>
+    ///             The freed name is re-created afterwards, which is the assertion that would catch
+    ///             a "fix" that only hid the entry.
+    ///         </b> A stale entry over a free name is not merely
     ///         untidy: while it stands, a listing of what is recoverable in the group offers a
     ///         restore of a resource that no longer exists, and it says the name is held to a caller
     ///         who may list the collection but may not read the resource — the enumeration oracle
@@ -454,8 +499,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A second arm does not rewrite the reminder row, because rewriting it would push the
-    ///     next tick a whole <c>SweepPeriod</c> out.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A second arm does not rewrite the reminder row, because rewriting it would push the
+    ///         next tick a whole <c>SweepPeriod</c> out.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -468,8 +516,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     ///         own sweep out for ever and never swept once.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What is asserted is the guard rather than the schedule, and that is the most a
-    ///         test out here can see.</b> A reminder's due time is not exposed to anything but the
+    ///         ⚠
+    ///         <b>
+    ///             What is asserted is the guard rather than the schedule, and that is the most a
+    ///             test out here can see.
+    ///         </b> A reminder's due time is not exposed to anything but the
     ///         reminder service, so "the tick did not move" is not observable; "the row was not
     ///         written again" is, now that <c>ArmAsync</c> answers whether it registered. Those are
     ///         the same statement given the implementation, which registers only when
@@ -509,8 +560,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A resource parked with nothing arming its group is picked up by the backfill, and by
-    ///     a hand sweep.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A resource parked with nothing arming its group is picked up by the backfill, and by
+    ///         a hand sweep.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -523,8 +577,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     ///         restored from a backup.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The registry is written directly here, and that is the faithful reproduction
-    ///         rather than a shortcut.</b> "Parked before the sweeper existed" is exactly an entry
+    ///         ⚠
+    ///         <b>
+    ///             The registry is written directly here, and that is the faithful reproduction
+    ///             rather than a shortcut.
+    ///         </b> "Parked before the sweeper existed" is exactly an entry
     ///         written by a writer that did not arm, which is what every writer was two commits ago.
     ///         Going through the delete path instead would arm on the way past and test nothing.
     ///     </para>
@@ -629,8 +686,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A group with more entries than one pass can take does not starve the ones past the
-    ///     cap, even when everything before them is refused on every tick.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A group with more entries than one pass can take does not starve the ones past the
+    ///         cap, even when everything before them is refused on every tick.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -650,8 +710,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     ///         happen.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The index is written directly rather than through a hundred creates and deletes,
-    ///         which is the difference between a test and a minute of cluster time.</b> What the
+    ///         ⚠
+    ///         <b>
+    ///             The index is written directly rather than through a hundred creates and deletes,
+    ///             which is the difference between a test and a minute of cluster time.
+    ///         </b> What the
     ///         sweep asks of each entry is <c>ResolveSoftDeletedAsync</c> and then
     ///         <c>PurgeExpiredAsync</c>, and both are answered by the path index — so a claimed,
     ///         confirmed and soft-deleted binding is the whole of what an entry needs to be true and
@@ -712,8 +775,11 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     /// <param name="address">The address, whose GUID is minted here.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE STATE THE #12 REVIEW IS ABOUT, AND IT IS REACHED BY WRITING THE TWO GRAINS A
-    ///         SOFT DELETE WRITES RATHER THAN BY RUNNING ONE.</b> A sweep asks each entry exactly two
+    ///         ⚠
+    ///         <b>
+    ///             THE STATE THE #12 REVIEW IS ABOUT, AND IT IS REACHED BY WRITING THE TWO GRAINS A
+    ///             SOFT DELETE WRITES RATHER THAN BY RUNNING ONE.
+    ///         </b> A sweep asks each entry exactly two
     ///         questions and the path index answers both — <c>ResolveSoftDeletedAsync</c>, for
     ///         whether the entry is still true, and (through <c>PurgeExpiredAsync</c>)
     ///         <c>ResolveExpiredAsync</c>, for whether the window has ended. A claimed, confirmed and
@@ -721,14 +787,20 @@ public sealed class ExpirySweeperTests(ResourceManagerCluster cluster) {
     ///         can see, and it is what a resource parked before this grain existed looks like.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Going through <c>ParkedVaultAsync</c> instead would arm the sweeper on the way
-    ///         past</b> — <c>OperationGrain.ParkAsync</c> is one of the two writers that arms — so
+    ///         ⚠
+    ///         <b>
+    ///             Going through <c>ParkedVaultAsync</c> instead would arm the sweeper on the way
+    ///             past
+    ///         </b> — <c>OperationGrain.ParkAsync</c> is one of the two writers that arms — so
     ///         every "was it armed" assertion would be vacuous, and a hundred of them would cost a
     ///         minute of cluster time each.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Ten years of window, so the entry is refused on every pass rather than purged on
-    ///         one.</b> This suite advances the shared <c>TestClock</c> by days, and a window it
+    ///         ⚠
+    ///         <b>
+    ///             Ten years of window, so the entry is refused on every pass rather than purged on
+    ///             one.
+    ///         </b> This suite advances the shared <c>TestClock</c> by days, and a window it
     ///         could cross would turn a "kept" assertion into a race with whichever case ran first.
     ///     </para>
     /// </remarks>

@@ -95,8 +95,11 @@ public interface IClusterConnectionGrain : IGrainWithStringKey {
     /// <param name="ns">The namespace to enumerate.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>It is a discovery plus a list per kind, and it is the most expensive call on this
-    ///         interface by an order of magnitude.</b> There is no single Kubernetes call that lists
+    ///         ⚠
+    ///         <b>
+    ///             It is a discovery plus a list per kind, and it is the most expensive call on this
+    ///             interface by an order of magnitude.
+    ///         </b> There is no single Kubernetes call that lists
     ///         a namespace's contents: the API server has to be asked which namespaced resources it
     ///         serves — the built-ins and every CRD the cluster happens to have — and then listed
     ///         once per kind. It is not on the reconcile path and must never be put there; its caller

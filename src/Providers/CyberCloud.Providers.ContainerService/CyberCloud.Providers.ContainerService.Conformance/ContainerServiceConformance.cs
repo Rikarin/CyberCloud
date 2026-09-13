@@ -18,12 +18,18 @@ namespace CyberCloud.Providers.ContainerService.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One case object and two class declarations, which is the tenth time that number has
-///         held — and the first time it held for a type whose product is not a workload.</b> Nine
+///         ⚠
+///         <b>
+///             One case object and two class declarations, which is the tenth time that number has
+///             held — and the first time it held for a type whose product is not a workload.
+///         </b> Nine
 ///         families had established the shape across object counts (one to five), API-group counts
 ///         (one to three), operator-ful and operator-less services, two milestones and two catalogue
-///         documents. What this one adds is a resource whose <i>correctness cannot be observed from
-///         the objects it applies</i>, and <c>test/CyberCloud.Conformance</c> still needed no change.
+///         documents. What this one adds is a resource whose
+///         <i>
+///             correctness cannot be observed from
+///             the objects it applies
+///         </i>, and <c>test/CyberCloud.Conformance</c> still needed no change.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>ONE THING IN THE HARNESS DID HAVE TO CHANGE, AND IT IS NOT ABOUT SHAPE.</b>
@@ -35,8 +41,11 @@ namespace CyberCloud.Providers.ContainerService.Conformance;
 ///         recorded the budget as a diagnostics problem; it is closed rather than diagnosed.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.ObjectMatchesDesired" /> is
-///         <c>ManagedClusters.Matches</c>, which is a claim about the REQUEST.</b> It cannot be
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> is
+///             <c>ManagedClusters.Matches</c>, which is a claim about the REQUEST.
+///         </b> It cannot be
 ///         anything else — the predicate takes an object and a body and returns a bool, and whether a
 ///         tenant has a working Kubernetes cluster is in neither. <c>ManagedClusters.Readiness</c> is
 ///         the other half, the reconciler consults it, and no assertion in this suite reaches it
@@ -108,9 +117,12 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
     /// <param name="ns">The namespace.</param>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>The <c>apiVersion</c> and <c>kind</c> are read off
-    ///     <see cref="ManagedClusters.ClusterKind" /> rather than written here, because this body had
-    ///     already drifted.</b> It said <c>cluster.x-k8s.io/v1beta1</c> while its own key —
+    ///     ⚠
+    ///     <b>
+    ///         The <c>apiVersion</c> and <c>kind</c> are read off
+    ///         <see cref="ManagedClusters.ClusterKind" /> rather than written here, because this body had
+    ///         already drifted.
+    ///     </b> It said <c>cluster.x-k8s.io/v1beta1</c> while its own key —
     ///     <see cref="ManagedClusters.ClusterRef" />, built from the same
     ///     <see cref="ManagedClusters.ClusterKind" /> — said <c>v1beta2</c>, as do both
     ///     <c>charts/managed/kubernetes</c> and <c>charts/managed/kubernetes-agentpool</c>. The
@@ -128,10 +140,7 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
             ["kind"] = ManagedClusters.ClusterKind.Kind,
             ["metadata"] = new JsonObject { ["name"] = name, ["namespace"] = ns },
             ["spec"] = new JsonObject {
-                ["controlPlaneEndpoint"] = new JsonObject {
-                    ["host"] = EndpointHost,
-                    ["port"] = EndpointPort
-                }
+                ["controlPlaneEndpoint"] = new JsonObject { ["host"] = EndpointHost, ["port"] = EndpointPort }
             }
         }.ToJsonString();
 
@@ -141,8 +150,11 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
     /// <param name="ns">The namespace.</param>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>A GENUINE CERTIFICATE, GENERATED HERE, AND THAT IS THE POINT OF THE FIXTURE RATHER
-    ///     THAN CEREMONY.</b> <c>ManagedClusters.CredentialExpiry</c> answers <c>/expiresAt</c> by
+    ///     ⚠
+    ///     <b>
+    ///         A GENUINE CERTIFICATE, GENERATED HERE, AND THAT IS THE POINT OF THE FIXTURE RATHER
+    ///         THAN CEREMONY.
+    ///     </b> <c>ManagedClusters.CredentialExpiry</c> answers <c>/expiresAt</c> by
     ///     opening the certificate and reading its <c>notAfter</c>; a fixture with a placeholder string
     ///     where the certificate goes would exercise the line scan and never the parse, and the parse
     ///     is the half that decides whether a caller gets a date or a refusal.
@@ -162,9 +174,7 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
             DateTimeOffset.UtcNow.AddHours(10)
         );
 
-        var pem = Convert.ToBase64String(
-            Encoding.UTF8.GetBytes(certificate.ExportCertificatePem())
-        );
+        var pem = Convert.ToBase64String(Encoding.UTF8.GetBytes(certificate.ExportCertificatePem()));
 
         // ⚠ Written as YAML text rather than through a serializer, because that is what the handler
         // meets: there is no YAML parser in this tree and CredentialExpiry scans for one line.
@@ -270,8 +280,7 @@ public sealed class AgentPoolCase : IProviderCaseSource {
         };
 
     /// <inheritdoc />
-    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
-        [ManagedClusterCase.ProviderCase];
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [ManagedClusterCase.ProviderCase];
 
     /// <summary>A valid body with the required root-volume size removed.</summary>
     /// <param name="body">A valid body.</param>
@@ -286,7 +295,7 @@ public sealed class AgentPoolCase : IProviderCaseSource {
 /// <param name="cluster">The harness.</param>
 public sealed class ManagedClusterConformance(ProviderTestCluster<ManagedClusterCase> cluster)
     : ProviderConformanceTests<ManagedClusterCase>(cluster),
-        IClassFixture<ProviderTestCluster<ManagedClusterCase>>;
+    IClassFixture<ProviderTestCluster<ManagedClusterCase>>;
 
 /// <summary>
 ///     The <b>same</b> suite, run against the node-pool child type.
@@ -393,14 +402,11 @@ public sealed class ContainerServiceSuiteShapeTests {
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>
-    static ImmutableArray<string> RunnableFactsOf(Type suite) =>
-        [
-            .. suite
-                .GetMethods(
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance
-                )
-                .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-                .Select(x => x.Name)
-                .OrderBy(x => x, StringComparer.Ordinal)
-        ];
+    static ImmutableArray<string> RunnableFactsOf(Type suite) => [
+        .. suite
+            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(x => x.Name)
+            .OrderBy(x => x, StringComparer.Ordinal)
+    ];
 }

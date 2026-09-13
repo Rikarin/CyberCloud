@@ -1,5 +1,4 @@
 global using ErrorCode = CyberCloud.Core.ErrorCode;
-
 global using CyberCloud.Core;
 global using CyberCloud.Core.Resources;
 global using CyberCloud.Gateway.Host;

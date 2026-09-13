@@ -1,6 +1,6 @@
 using CyberCloud.Conformance;
-using CyberCloud.Core.Resources;
 using CyberCloud.Conformance.Harness;
+using CyberCloud.Core.Resources;
 using CyberCloud.Providers.ContainerRegistry.Contracts;
 using Shouldly;
 using System.Text.Json;
@@ -13,15 +13,21 @@ namespace CyberCloud.Providers.ContainerRegistry.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One case object and two class declarations, for the twelfth family in a row — over the
-///         largest rendered object set in the catalogue.</b> The case's <c>Objects</c> member returns
+///         ⚠
+///         <b>
+///             One case object and two class declarations, for the twelfth family in a row — over the
+///             largest rendered object set in the catalogue.
+///         </b> The case's <c>Objects</c> member returns
 ///         <b>fifteen</b> references where the widest before it returned five, and
 ///         <c>test/CyberCloud.Conformance</c> needed no change. That is the claim the shape has been
 ///         making since the third provider, tested at three times the previous width.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND IT IS THE FIRST CASE WHOSE TYPE DECLARES A RECOVERY WINDOW, WHICH CHANGES WHAT ONE
-///         ASSERTION MEANS RATHER THAN ADDING ONE.</b>
+///         ⚠
+///         <b>
+///             AND IT IS THE FIRST CASE WHOSE TYPE DECLARES A RECOVERY WINDOW, WHICH CHANGES WHAT ONE
+///             ASSERTION MEANS RATHER THAN ADDING ONE.
+///         </b>
 ///         <c>ProviderConformanceTests.DeleteTearsDownTheDataPlaneAndTheResourceIsGone</c> asserts that
 ///         a <c>DELETE</c> removes every object in <c>Objects</c> and that the resource is no longer
 ///         addressable. Both still hold — a soft delete tears the data plane down and parks the
@@ -116,7 +122,7 @@ public sealed class ContainerRegistryCase : IProviderCaseSource {
 /// <param name="cluster">The harness.</param>
 public sealed class ContainerRegistryConformance(ProviderTestCluster<ContainerRegistryCase> cluster)
     : ProviderConformanceTests<ContainerRegistryCase>(cluster),
-        IClassFixture<ProviderTestCluster<ContainerRegistryCase>>;
+    IClassFixture<ProviderTestCluster<ContainerRegistryCase>>;
 
 /// <summary>The container-backed half, skipped loudly, against the managed container-registry provider.</summary>
 public sealed class ContainerRegistryClusterBackedConformance()

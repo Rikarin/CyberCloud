@@ -81,8 +81,9 @@ static class TelemetryConsent {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(readAnswer);
 
-        if (WasAsked(settings))
+        if (WasAsked(settings)) {
             return;
+        }
 
         try {
             if (!interactive) {
@@ -96,10 +97,12 @@ static class TelemetryConsent {
             host.Console.Note("this is the only time you will be asked. Send telemetry? [y/N] ");
 
             var answer = readAnswer();
-            var yes = answer is { Length: > 0 } && (answer[0] is 'y' or 'Y');
+            var yes = answer is { Length: > 0 } && answer[0] is 'y' or 'Y';
 
             Record(host, settings, yes);
-            host.Console.Note(yes ? "Telemetry is on. Turn it off with 'cyc config telemetry off'." : "Telemetry stays off.");
+            host.Console.Note(
+                yes ? "Telemetry is on. Turn it off with 'cyc config telemetry off'." : "Telemetry stays off."
+            );
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
             // Nowhere to write the answer. Ask again next time rather than failing this run.
         }

@@ -68,13 +68,13 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer {
         var compilation = context.Compilation;
 
         var taskTypes = new[] {
-                compilation.GetTypeByMetadataName(WellKnown.Task), compilation.GetTypeByMetadataName(WellKnown.TaskOfT),
-                compilation.GetTypeByMetadataName(WellKnown.ValueTask),
-                compilation.GetTypeByMetadataName(WellKnown.ValueTaskOfT)
-            }
-            .Where(x => x is not null)
-            .Select(x => x!)
-            .ToImmutableArray();
+            compilation.GetTypeByMetadataName(WellKnown.Task), compilation.GetTypeByMetadataName(WellKnown.TaskOfT),
+            compilation.GetTypeByMetadataName(WellKnown.ValueTask),
+            compilation.GetTypeByMetadataName(WellKnown.ValueTaskOfT)
+        }
+                .Where(x => x is not null)
+                .Select(x => x!)
+                .ToImmutableArray();
 
         if (taskTypes.IsEmpty) {
             return;

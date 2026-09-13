@@ -20,8 +20,11 @@ namespace CyberCloud.Providers.Network.Tests;
 ///         family, and it is bigger because this substrate rewrites more.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE USUAL ARGUMENT FOR CONTAINMENT IS FALSE HERE AND THE OBJECTS BELOW ARE WHY IT IS
-///         STILL MANDATORY.</b> Checked in <c>charts/kube-ovn/templates/kube-ovn-crd.yaml</c> and the
+///         ⚠
+///         <b>
+///             THE USUAL ARGUMENT FOR CONTAINMENT IS FALSE HERE AND THE OBJECTS BELOW ARE WHY IT IS
+///             STILL MANDATORY.
+///         </b> Checked in <c>charts/kube-ovn/templates/kube-ovn-crd.yaml</c> and the
 ///         Go types rather than in a README: across <c>Vpc</c>, <c>Subnet</c>, <c>SecurityGroup</c>,
 ///         <c>IptablesEIP</c> and <c>OvnEip</c> there is exactly <b>one</b>
 ///         <c>+kubebuilder:default</c> — <c>Vpc.spec.bfdPort.enabled=false</c> — and no
@@ -48,10 +51,11 @@ public sealed class NetworkMatchesTests {
         var applied = VirtualNetworks.VpcJson("ns", "net", desired.RootElement);
         var readBack = WithSpec(applied, spec => spec["bfdPort"] = new JsonObject { ["enabled"] = false });
 
-        VirtualNetworks.Matches(readBack, desired.RootElement).ShouldBeTrue(
-            "the CRD's own default came back on the object and Matches read it as drift, so the "
-            + "reconciler will answer InProgress on every pass for the life of the resource"
-        );
+        VirtualNetworks.Matches(readBack, desired.RootElement)
+            .ShouldBeTrue(
+                "the CRD's own default came back on the object and Matches read it as drift, so the "
+                + "reconciler will answer InProgress on every pass for the life of the resource"
+            );
 
         // And the equality mistake, made explicit, so the assertion above cannot be mistaken for a
         // tautology: the two documents are genuinely different strings.
@@ -72,16 +76,13 @@ public sealed class NetworkMatchesTests {
             spec => {
                 spec["namespaces"] = new JsonArray();
                 spec["staticRoutes"] = new JsonArray(
-                    new JsonObject {
-                        ["cidr"] = "0.0.0.0/0", ["nextHopIP"] = "10.0.0.1", ["policy"] = "policyDst"
-                    }
+                    new JsonObject { ["cidr"] = "0.0.0.0/0", ["nextHopIP"] = "10.0.0.1", ["policy"] = "policyDst" }
                 );
             }
         );
 
-        VirtualNetworks.Matches(readBack, desired.RootElement).ShouldBeTrue(
-            "the Kube-OVN controller's own spec write-back was read as drift"
-        );
+        VirtualNetworks.Matches(readBack, desired.RootElement)
+            .ShouldBeTrue("the Kube-OVN controller's own spec write-back was read as drift");
     }
 
     [Fact]
@@ -94,10 +95,11 @@ public sealed class NetworkMatchesTests {
         var applied = VirtualNetworks.VpcJson("ns", "net", desired.RootElement);
         var tampered = WithSpec(applied, spec => spec["enableExternal"] = true);
 
-        VirtualNetworks.Matches(tampered, desired.RootElement).ShouldBeFalse(
-            "somebody attached this tenant's router to the external network and the reconciler did "
-            + "not notice"
-        );
+        VirtualNetworks.Matches(tampered, desired.RootElement)
+            .ShouldBeFalse(
+                "somebody attached this tenant's router to the external network and the reconciler did "
+                + "not notice"
+            );
     }
 
     [Fact]
@@ -107,7 +109,8 @@ public sealed class NetworkMatchesTests {
         VirtualNetworks.Matches(
             """{"kind":"Subnet","spec":{"enableExternal":false}}""",
             desired.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
 
         VirtualNetworks.Matches("not json at all", desired.RootElement).ShouldBeFalse();
         VirtualNetworks.Matches("{}", desired.RootElement).ShouldBeFalse();
@@ -125,9 +128,7 @@ public sealed class NetworkMatchesTests {
         // A string comparison here reports drift on a perfectly converged subnet FOREVER: the
         // reconciler answers InProgress every pass, the resource never reaches Succeeded, and the
         // message says "does not yet carry the desired spec" while the cluster is exactly right.
-        using var desired = JsonDocument.Parse(
-            NetworkSubnets.Body(Cluster, prefixV4: "10.20.5.7/24")
-        );
+        using var desired = JsonDocument.Parse(NetworkSubnets.Body(Cluster, prefixV4: "10.20.5.7/24"));
 
         var applied = NetworkSubnets.SubnetJson("ns", Address("web", "net"), desired.RootElement);
 
@@ -136,10 +137,11 @@ public sealed class NetworkMatchesTests {
 
         var readBack = WithSpec(applied, spec => spec["cidrBlock"] = "10.20.5.0/24");
 
-        NetworkSubnets.MatchesBody(readBack, desired.RootElement).ShouldBeTrue(
-            "the controller canonicalized the CIDR and Matches compared strings, so this subnet will "
-            + "never report Succeeded"
-        );
+        NetworkSubnets.MatchesBody(readBack, desired.RootElement)
+            .ShouldBeTrue(
+                "the controller canonicalized the CIDR and Matches compared strings, so this subnet will "
+                + "never report Succeeded"
+            );
     }
 
     [Fact]
@@ -166,9 +168,8 @@ public sealed class NetworkMatchesTests {
             }
         );
 
-        NetworkSubnets.MatchesBody(readBack, desired.RootElement).ShouldBeTrue(
-            "the controller's own fields were read as drift"
-        );
+        NetworkSubnets.MatchesBody(readBack, desired.RootElement)
+            .ShouldBeTrue("the controller's own fields were read as drift");
     }
 
     [Fact]
@@ -186,9 +187,8 @@ public sealed class NetworkMatchesTests {
 
         var readBack = WithSpec(applied, spec => spec["cidrBlock"] = "10.20.1.0/24,fd00:20:1:0::/64");
 
-        NetworkSubnets.MatchesBody(readBack, desired.RootElement).ShouldBeTrue(
-            "the v6 half was re-spelled by the controller and the comparison did not survive it"
-        );
+        NetworkSubnets.MatchesBody(readBack, desired.RootElement)
+            .ShouldBeTrue("the v6 half was re-spelled by the controller and the comparison did not survive it");
     }
 
     [Fact]
@@ -198,18 +198,15 @@ public sealed class NetworkMatchesTests {
         var applied = NetworkSubnets.SubnetJson("ns", Address("web", "net"), desired.RootElement);
         var tampered = WithSpec(applied, spec => spec["cidrBlock"] = "10.99.9.0/24");
 
-        NetworkSubnets.MatchesBody(tampered, desired.RootElement).ShouldBeFalse(
-            "the parsed-network comparison has become an accept-everything comparison"
-        );
+        NetworkSubnets.MatchesBody(tampered, desired.RootElement)
+            .ShouldBeFalse("the parsed-network comparison has become an accept-everything comparison");
     }
 
     [Fact]
     public void ASubnetThatLostItsSecondFamilyDoesNotMatch() {
         // ⚠ The comparison is element-wise over a comma-separated list, so a dual-stack subnet that
         // came back single-stack is drift rather than a shorter spelling of the same thing.
-        using var desired = JsonDocument.Parse(
-            NetworkSubnets.Body(Cluster, prefixV6: "fd00:20:1::/64")
-        );
+        using var desired = JsonDocument.Parse(NetworkSubnets.Body(Cluster, prefixV6: "fd00:20:1::/64"));
 
         var applied = NetworkSubnets.SubnetJson("ns", Address("web", "net"), desired.RootElement);
         var tampered = WithSpec(applied, spec => spec["cidrBlock"] = "10.20.1.0/24");
@@ -229,13 +226,11 @@ public sealed class NetworkMatchesTests {
         var applied = NetworkSubnets.SubnetJson("ns", id, desired.RootElement);
         var tampered = WithSpec(applied, spec => spec["vpc"] = "ns-someone-elses-network");
 
-        NetworkSubnets.MatchesBody(tampered, desired.RootElement).ShouldBeTrue(
-            "the body half cannot see the address — that is the documented limit of MatchesBody"
-        );
+        NetworkSubnets.MatchesBody(tampered, desired.RootElement)
+            .ShouldBeTrue("the body half cannot see the address — that is the documented limit of MatchesBody");
 
-        NetworkSubnets.Matches(tampered, "ns", id, desired.RootElement).ShouldBeFalse(
-            "the full Matches CAN see the address and must refuse a rebound subnet"
-        );
+        NetworkSubnets.Matches(tampered, "ns", id, desired.RootElement)
+            .ShouldBeFalse("the full Matches CAN see the address and must refuse a rebound subnet");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────

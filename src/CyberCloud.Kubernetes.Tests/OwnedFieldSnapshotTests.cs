@@ -85,7 +85,11 @@ public sealed class OwnedFieldSnapshotTests {
         // Our manager name, our fields — but written to .status, which is never what an apply of the
         // main resource compares. Rewriting the controller's entry to carry our name must change
         // nothing.
-        var mine = Deployment(replicas: 1).Replace(@"""manager"": ""k3s""", $@"""manager"": ""{Ours}""", StringComparison.Ordinal);
+        var mine = Deployment(replicas: 1).Replace(
+            @"""manager"": ""k3s""",
+            $@"""manager"": ""{Ours}""",
+            StringComparison.Ordinal
+        );
 
         Capture(mine).ShouldBe(Capture(Deployment(replicas: 1)));
     }

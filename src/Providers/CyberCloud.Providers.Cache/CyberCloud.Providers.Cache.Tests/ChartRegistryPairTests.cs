@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.Cache.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Three tests, not the fifteen a row-by-row comparison would be, and the difference is
-///         ADR-012's fifth surface existing.</b> <c>build/Build.Charts.cs</c> calls
+///         ⚠
+///         <b>
+///             Three tests, not the fifteen a row-by-row comparison would be, and the difference is
+///             ADR-012's fifth surface existing.
+///         </b> <c>build/Build.Charts.cs</c> calls
 ///         <c>RunGenerator(write: true, charts: true)</c>, which drives <c>ChartSurfaces.Generate</c>
 ///         and <c>ChartAnnotationEmitter</c>: the chart's non-<c>@internal</c> <c>@param</c> block is
 ///         <i>generated</i> from <c>ValkeyCaches.Schema2026</c> and byte-diffed. Comparing the two here
@@ -121,9 +124,8 @@ public sealed partial class ChartRegistryPairTests {
         );
 
         foreach (var (preset, quantities) in chart) {
-            ValkeyCaches.Presets.TryGetValue(preset, out var mine).ShouldBeTrue(
-                $"'{preset}' is in templates/_helpers.tpl and not in ValkeyCaches.Presets"
-            );
+            ValkeyCaches.Presets.TryGetValue(preset, out var mine)
+                .ShouldBeTrue($"'{preset}' is in templates/_helpers.tpl and not in ValkeyCaches.Presets");
 
             mine.ShouldBe(quantities, preset);
         }

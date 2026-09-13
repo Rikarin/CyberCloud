@@ -97,10 +97,10 @@ public sealed class TenancyStateContractTests {
     public void TheIdManifestMatchesTheBaseline() {
         var actual = StateTypes
             .SelectMany(type => type
-                .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                .Where(x => x.id is not null)
-                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
+                    .GetMembers(BindingFlags.Public | BindingFlags.Instance)
+                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(x => x.id is not null)
+                    .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .ThenBy(x => x.Id)
@@ -117,9 +117,9 @@ public sealed class TenancyStateContractTests {
     public void EveryPublicMemberOfEveryStateTypeIsNumbered() {
         var unnumbered = StateTypes
             .SelectMany(type => type
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
-                .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
+                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
+                    .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();
@@ -174,7 +174,7 @@ public sealed class TenancyStateContractTests {
         // and in every backup; a secret there is a secret in every backup forever.
         StateTypes
             .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Select(p => $"{t.Name}.{p.Name}")
+                    .Select(p => $"{t.Name}.{p.Name}")
             )
             .Where(name =>
                 name.EndsWith("Password", StringComparison.OrdinalIgnoreCase)

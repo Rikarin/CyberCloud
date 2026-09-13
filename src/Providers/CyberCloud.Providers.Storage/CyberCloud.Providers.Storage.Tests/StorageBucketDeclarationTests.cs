@@ -113,7 +113,8 @@ public sealed class StorageBucketDeclarationTests {
 
         CliTokens.Collisions(
             registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
-        ).ShouldBeEmpty();
+        )
+            .ShouldBeEmpty();
 
         // ⚠ The half the derived check cannot make: that the short name is the word a person would
         // reach for, rather than merely a string nothing else has taken.
@@ -161,10 +162,11 @@ public sealed class StorageBucketDeclarationTests {
         ResourceNaming.MinLength.ShouldBe(1);
         StorageBuckets.MinimumS3NameLength.ShouldBe(3);
 
-        ResourceNaming.IsValid("ab").ShouldBeTrue(
-            "the platform's name rule now refuses a two-character name. If it refuses everything S3 "
-            + "does, delete this test and the owed entry it points at."
-        );
+        ResourceNaming.IsValid("ab")
+            .ShouldBeTrue(
+                "the platform's name rule now refuses a two-character name. If it refuses everything S3 "
+                + "does, delete this test and the owed entry it points at."
+            );
 
         "ab".Length.ShouldBeLessThan(
             StorageBuckets.MinimumS3NameLength,
@@ -183,10 +185,11 @@ public sealed class StorageBucketDeclarationTests {
                 Overridden(StorageBuckets.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
 
-            StorageBuckets.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
-                $"the declared default for '{property.JsonPointer}' does not validate inside an "
-                + "otherwise-valid body."
-            );
+            StorageBuckets.Schema2026.Validate(body.RootElement, allowTags: true)
+                .IsSuccess.ShouldBeTrue(
+                    $"the declared default for '{property.JsonPointer}' does not validate inside an "
+                    + "otherwise-valid body."
+                );
         }
     }
 
@@ -210,10 +213,11 @@ public sealed class StorageBucketDeclarationTests {
         // same fact, and the two would disagree the first time a body was sent under the wrong path.
         foreach (var property in StorageBuckets.Schema2026.Properties) {
             foreach (var forbidden in new[] { "account", "parent", "cluster ref", "clusterRef" }) {
-                property.Name.Contains(forbidden, StringComparison.OrdinalIgnoreCase).ShouldBeFalse(
-                    $"'{property.JsonPointer}' names the parent in the body. A child's parent lives in "
-                    + "its address, and ResourceId.Parent is the function that reads it."
-                );
+                property.Name.Contains(forbidden, StringComparison.OrdinalIgnoreCase)
+                    .ShouldBeFalse(
+                        $"'{property.JsonPointer}' names the parent in the body. A child's parent lives in "
+                        + "its address, and ResourceId.Parent is the function that reads it."
+                    );
             }
         }
     }

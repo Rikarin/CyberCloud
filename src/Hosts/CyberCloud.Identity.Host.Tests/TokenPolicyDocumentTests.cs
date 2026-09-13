@@ -22,8 +22,11 @@ namespace CyberCloud.Identity.Host.Tests;
 ///         is middleware, which is the honest limit of this file.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>/.well-known/cybercloud-token-policy</c> is a contract with something outside this
-///         repository.</b> docs/plan/11 § Hosts publishes it so the gateway does not hard-code token
+///         ⚠
+///         <b>
+///             <c>/.well-known/cybercloud-token-policy</c> is a contract with something outside this
+///             repository.
+///         </b> docs/plan/11 § Hosts publishes it so the gateway does not hard-code token
 ///         validation and so an operator can see a change to <see cref="AccessTokenPolicy" /> without
 ///         reading source. A document that drifted from the constants would be worse than no document
 ///         at all: it would be a wrong answer that looks authoritative.
@@ -163,12 +166,9 @@ public sealed class TokenPolicyDocumentTests {
         // these, and a rename on one side of that pair produces a 404 at runtime rather than a build
         // error — the same hazard the [JsonPropertyName] attributes on the request records exist for.
         foreach (var route in new[] {
-            "/api/signin/begin",
-            "/api/signin/password",
-            "/api/signup",
-            "/api/signin/passkey/begin",
-            "/api/signin/passkey/complete"
-        }) {
+                     "/api/signin/begin", "/api/signin/password", "/api/signup", "/api/signin/passkey/begin",
+                     "/api/signin/passkey/complete"
+                 }) {
             mapped.ShouldContain(route, $"the identity page calls {route}");
         }
 

@@ -14,7 +14,8 @@ namespace CyberCloud.Tenancy;
 ///     <c>sub/{subscriptionId:N}/rg/{name}</c>.
 /// </summary>
 public sealed class ResourceGroupGrain(
-    [PersistentState("resourceGroup", StorageTiers.Durable)] IPersistentState<ResourceGroupState> state,
+    [PersistentState("resourceGroup", StorageTiers.Durable)]
+    IPersistentState<ResourceGroupState> state,
     IClock clock,
     ILogger<ResourceGroupGrain> logger
 )
@@ -347,9 +348,8 @@ public sealed class ResourceGroupGrain(
             return Result.Success;
         }
 
-        state.State.Descriptor = descriptor with {
-            State = ProvisioningState.Deleting, Version = descriptor.Version + 1
-        };
+        state.State.Descriptor =
+            descriptor with { State = ProvisioningState.Deleting, Version = descriptor.Version + 1 };
 
         await state.WriteStateAsync();
         return Result.Success;
@@ -524,8 +524,11 @@ public sealed class ResourceGroupGrain(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Only while there is something to reap, and that is a cost decision with a
-    ///         correctness consequence.</b> A reminder per resource group platform-wide would be a
+    ///         ⚠
+    ///         <b>
+    ///             Only while there is something to reap, and that is a cost decision with a
+    ///             correctness consequence.
+    ///         </b> A reminder per resource group platform-wide would be a
     ///         standing row per group in the reminder table and a tick per group per period, forever,
     ///         to look at a list that is empty for all but a few seconds of a group's life. Arming it
     ///         off <c>CreatingSince</c> makes the reaper's cost proportional to the number of
@@ -534,8 +537,11 @@ public sealed class ResourceGroupGrain(
     ///         which is why it is one method rather than a call at each site.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE ARM READS <c>GetReminder</c> FIRST, AND WITHOUT THAT READ THE COST DECISION
-    ///         ABOVE TURNS INTO A REAPER THAT NEVER RAN (2026-09-06, #83).</b> Making every writer of
+    ///         ⚠
+    ///         <b>
+    ///             THE ARM READS <c>GetReminder</c> FIRST, AND WITHOUT THAT READ THE COST DECISION
+    ///             ABOVE TURNS INTO A REAPER THAT NEVER RAN (2026-09-06, #83).
+    ///         </b> Making every writer of
     ///         <c>CreatingSince</c> come through here is what keeps the reaper proportional to
     ///         in-flight creates — and it also means the arm is called once per create rather than
     ///         once per group. <c>RegisterOrUpdateReminder</c> rewrites an existing row with
@@ -620,8 +626,7 @@ public sealed class ResourceGroupGrain(
             if (await this.GetReminder(OrphanReminderName) is { } existing) {
                 await this.UnregisterReminder(existing);
             }
-        }
-        catch (InvalidOperationException error) {
+        } catch (InvalidOperationException error) {
             logger.LogWarning(
                 "Resource group '{Group}' could not arm the two-phase-create reaper because this "
                 + "silo has no reminder service: {Reason} Orphaned members will not be swept "

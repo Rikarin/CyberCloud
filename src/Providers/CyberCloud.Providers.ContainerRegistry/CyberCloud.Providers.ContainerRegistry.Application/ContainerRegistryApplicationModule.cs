@@ -22,14 +22,20 @@ namespace CyberCloud.Providers.ContainerRegistry.Application;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers its
-///         resource types into <c>CyberCloud.ResourceManager</c>."</i> Both halves happen here — a host
+///         docs/plan/03 § Providers:
+///         <i>
+///             "Each is an ABP module (<c>[DependsOn]</c>), each registers its
+///             resource types into <c>CyberCloud.ResourceManager</c>."
+///         </i> Both halves happen here — a host
 ///         that <c>[DependsOn]</c> this module gets the provider, its reconciler and its action
 ///         handler, and there is no second call it can forget.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A provider registered in one host and not the other is the failure
-///         <c>HostCompositionTests</c> exists for.</b> <c>TheSiloAndTheGatewayAgreeAboutWhatExists</c>
+///         ⚠
+///         <b>
+///             A provider registered in one host and not the other is the failure
+///             <c>HostCompositionTests</c> exists for.
+///         </b> <c>TheSiloAndTheGatewayAgreeAboutWhatExists</c>
 ///         fails on a difference and <c>TheSiloComposesEveryProviderModule</c> fails on an absence, so
 ///         the two <c>[DependsOn]</c> lists have to be edited together.
 ///     </para>

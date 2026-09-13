@@ -10,10 +10,16 @@ namespace CyberCloud.Providers.Messaging.Conformance;
 ///     <c>CyberCloud.Messaging/kafkaClusters</c>, registered into the shared provider suite.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>One case object and two class declarations, and that is the entire cost of putting the
-///     third provider under conformance.</b> docs/plan/03 § Providers: <i>"It is one xUnit theory
-///     that every provider must pass … A provider is not registered in the platform bundle until it
-///     passes."</i> Nothing in <c>test/CyberCloud.Conformance</c> changed to accommodate a type whose
+///     ⚠
+///     <b>
+///         One case object and two class declarations, and that is the entire cost of putting the
+///         third provider under conformance.
+///     </b> docs/plan/03 § Providers:
+///     <i>
+///         "It is one xUnit theory
+///         that every provider must pass … A provider is not registered in the platform bundle until it
+///         passes."
+///     </i> Nothing in <c>test/CyberCloud.Conformance</c> changed to accommodate a type whose
 ///     two objects are both custom resources and whose second is bound to the first by a label the
 ///     builder injects.
 /// </remarks>

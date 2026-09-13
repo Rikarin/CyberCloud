@@ -115,8 +115,7 @@ public sealed class StopKeywordTests {
         StopKeywords.IsStop(body, out _).ShouldBeFalse();
 
     [Fact]
-    public void ALongReplyIsNotExaminedAsAKeyword() =>
-        StopKeywords.IsStop(new('x', 500), out _).ShouldBeFalse();
+    public void ALongReplyIsNotExaminedAsAKeyword() => StopKeywords.IsStop(new('x', 500), out _).ShouldBeFalse();
 
     [Fact]
     public void TheKeywordListIsNotEmptyAndIsUpperCase() {

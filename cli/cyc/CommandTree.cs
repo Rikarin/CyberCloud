@@ -1,7 +1,7 @@
-using System.CommandLine;
 using CyberCloud.Cli.Commands;
 using CyberCloud.Cli.Execution;
 using CyberCloud.Cli.VerbTree;
+using System.CommandLine;
 
 namespace CyberCloud.Cli;
 
@@ -17,8 +17,11 @@ namespace CyberCloud.Cli;
 ///         description rather than C#.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This used to cite <c>cyc extension add</c> "adding groups from an assembly load
-///         context" as a third reason, and that mechanism cannot exist here.</b> A NativeAOT binary
+///         ⚠
+///         <b>
+///             This used to cite <c>cyc extension add</c> "adding groups from an assembly load
+///             context" as a third reason, and that mechanism cannot exist here.
+///         </b> A NativeAOT binary
 ///         cannot load a managed assembly — measured: every load path throws
 ///         <c>PlatformNotSupportedException</c>, and the call does not even compile in this project,
 ///         because <c>EnableAotAnalyzer</c> plus <c>TreatWarningsAsErrors</c> makes it
@@ -41,14 +44,17 @@ static class CommandTree {
     ///     The names the host owns, which no generated group may take.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The emitter declares no reserved names, so this list is the only thing standing
-    ///     between a provider called <c>CyberCloud.Login</c> and a CLI where <c>cyc login</c> means two
-    ///     things.</b> Checked rather than assumed — a collision fails loudly here instead of shadowing
+    ///     ⚠
+    ///     <b>
+    ///         The emitter declares no reserved names, so this list is the only thing standing
+    ///         between a provider called <c>CyberCloud.Login</c> and a CLI where <c>cyc login</c> means two
+    ///         things.
+    ///     </b> Checked rather than assumed — a collision fails loudly here instead of shadowing
     ///     sign-in at run time. Reported: the reserved list belongs in the generated tree, where the
     ///     generator can refuse the provider name instead.
     /// </remarks>
     static readonly string[] ReservedGroups = [
-        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version",
+        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version"
     ];
 
     /// <summary>
@@ -57,8 +63,11 @@ static class CommandTree {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The extension model's shadowing check reads this, and it has to include the
-    ///         generated half.</b> <see cref="ReservedGroups" /> is nine fixed names; the groups a
+    ///         ⚠
+    ///         <b>
+    ///             The extension model's shadowing check reads this, and it has to include the
+    ///             generated half.
+    ///         </b> <see cref="ReservedGroups" /> is nine fixed names; the groups a
     ///         release actually carries are whatever the provider registry emitted, and an extension
     ///         called <c>postgres</c> is exactly as unreachable as one called <c>login</c>. Reading
     ///         both from one place is what keeps <c>cyc extension add</c>'s refusal in step with the
@@ -96,46 +105,61 @@ static class CommandTree {
 
         var root = new RootCommand(
             "cyc — the Cyber Cloud command-line interface. docs/plan/21 § `cyc`."
-            + $"{Environment.NewLine}api-version {tree.ApiVersion}. Exit codes: 0 ok · 1 client · 2 usage · 3 auth · 4 server · 5 timeout.");
+            + $"{Environment.NewLine}api-version {tree.ApiVersion}. Exit codes: 0 ok · 1 client · 2 usage · 3 auth · 4 server · 5 timeout."
+        );
 
-        foreach (var option in globals.All)
+        foreach (var option in globals.All) {
             root.Options.Add(option);
+        }
 
-        foreach (var command in HostCommands.Build(host, globals, tree))
+        foreach (var command in HostCommands.Build(host, globals, tree)) {
             root.Subcommands.Add(command);
+        }
 
-        foreach (var group in tree.Groups.OrderBy(x => x.Key, StringComparer.Ordinal))
+        foreach (var group in tree.Groups.OrderBy(x => x.Key, StringComparer.Ordinal)) {
             root.Subcommands.Add(Group(host, globals, tree, group.Key, group.Value));
+        }
 
         return root;
     }
 
     static Command Group(CycHost host, GlobalOptions globals, VerbTreeDocument tree, string name, VerbTreeGroup group) {
-        if (ReservedGroups.Contains(name, StringComparer.Ordinal))
+        if (ReservedGroups.Contains(name, StringComparer.Ordinal)) {
             throw new CycUsageException(
                 $"The verb tree names a group '{name}', which is a command cyc owns "
                 + $"({string.Join(", ", ReservedGroups)}). The provider namespace has to change — a group "
-                + "that shadows 'cyc login' is a CLI nobody can sign in to.");
+                + "that shadows 'cyc login' is a CLI nobody can sign in to."
+            );
+        }
 
         var command = new Command(name, group.Summary);
 
-        foreach (var child in group.Commands.OrderBy(x => x.Key, StringComparer.Ordinal))
+        foreach (var child in group.Commands.OrderBy(x => x.Key, StringComparer.Ordinal)) {
             command.Subcommands.Add(Resource(host, globals, tree, child.Key, child.Value));
+        }
 
         return command;
     }
 
-    static Command Resource(CycHost host, GlobalOptions globals, VerbTreeDocument tree, string name, VerbTreeCommand resource) {
+    static Command Resource(
+        CycHost host,
+        GlobalOptions globals,
+        VerbTreeDocument tree,
+        string name,
+        VerbTreeCommand resource
+    ) {
         var summary = resource.Deprecated ? $"{resource.Summary} ⚠ Deprecated." : resource.Summary;
         var command = new Command(name, summary);
 
         // The generated short form — `cyc sample widget show` for `widgets`. Nothing here decides
         // what it is; the registry did.
-        if (resource.Alias is { Length: > 0 } alias && !string.Equals(alias, name, StringComparison.Ordinal))
+        if (resource.Alias is { Length: > 0 } alias && !string.Equals(alias, name, StringComparison.Ordinal)) {
             command.Aliases.Add(alias);
+        }
 
-        foreach (var verb in resource.Verbs.OrderBy(x => x.Key, StringComparer.Ordinal))
+        foreach (var verb in resource.Verbs.OrderBy(x => x.Key, StringComparer.Ordinal)) {
             command.Subcommands.Add(Verb(host, globals, tree, verb.Value));
+        }
 
         return command;
     }
@@ -144,26 +168,38 @@ static class CommandTree {
         var command = new Command(verb.Name, verb.Summary);
         var bindings = verb.Flags.Select(FlagBinding.Create).ToList();
 
-        foreach (var binding in bindings)
+        foreach (var binding in bindings) {
             command.Options.Add(binding.Option);
+        }
 
         var waitOptions = WaitFor(verb);
 
         if (waitOptions is not null) {
-            foreach (var option in waitOptions.Options)
+            foreach (var option in waitOptions.Options) {
                 command.Options.Add(option);
+            }
         }
 
         var pageOptions = PageFor(verb);
 
-        if (pageOptions is not null)
+        if (pageOptions is not null) {
             command.Options.Add(pageOptions.Option);
+        }
 
         command.SetAction((parse, cancellationToken) => {
-            var invocation = CycRunner.Bind(host, globals, tree, parse);
+                var invocation = CycRunner.Bind(host, globals, tree, parse);
 
-            return ResourceVerb.RunAsync(invocation, verb, bindings, waitOptions, pageOptions, parse, cancellationToken);
-        });
+                return ResourceVerb.RunAsync(
+                    invocation,
+                    verb,
+                    bindings,
+                    waitOptions,
+                    pageOptions,
+                    parse,
+                    cancellationToken
+                );
+            }
+        );
 
         return command;
     }
@@ -178,16 +214,18 @@ static class CommandTree {
     ///     emitter still marks paged but stops offering the flag for must stop offering it here.
     /// </remarks>
     static PageOptions? PageFor(VerbTreeVerb verb) {
-        if (!verb.Paged || verb.PageFlags.Count != 1)
+        if (!verb.Paged || verb.PageFlags.Count != 1) {
             return null;
+        }
 
         return new PageOptions(
             new Option<bool>(verb.PageFlags[0]) {
                 Description =
                     "Follow nextLink to the end and print every page as one list. ⚠ One request per "
                     + "page: this is N round trips, and a listing is filtered per member, so it is "
-                    + "what you may read rather than everything there is.",
-            });
+                    + "what you may read rather than everything there is."
+            }
+        );
     }
 
     /// <summary>
@@ -201,15 +239,16 @@ static class CommandTree {
     ///     here.
     /// </remarks>
     static WaitOptions? WaitFor(VerbTreeVerb verb) {
-        if (verb.WaitFlags.Count != 2)
+        if (verb.WaitFlags.Count != 2) {
             return null;
+        }
 
         var wait = new Option<bool>(verb.WaitFlags[0]) {
-            Description = "Wait for the operation to finish, streaming its progress to stderr. The default.",
+            Description = "Wait for the operation to finish, streaming its progress to stderr. The default."
         };
 
         var noWait = new Option<bool>(verb.WaitFlags[1]) {
-            Description = "Return as soon as the operation is accepted, printing its id.",
+            Description = "Return as soon as the operation is accepted, printing its id."
         };
 
         return new WaitOptions(wait, noWait);

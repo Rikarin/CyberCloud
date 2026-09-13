@@ -11,8 +11,11 @@ namespace CyberCloud.Providers.Terminal.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS FILE IS THE ENTIRE COST OF PUTTING THE TWELFTH PROVIDER UNDER CONFORMANCE, AND
-///         IT IS THE FIRST WHOSE PRODUCT THE SUITE CANNOT SEE.</b>
+///         ⚠
+///         <b>
+///             THIS FILE IS THE ENTIRE COST OF PUTTING THE TWELFTH PROVIDER UNDER CONFORMANCE, AND
+///             IT IS THE FIRST WHOSE PRODUCT THE SUITE CANNOT SEE.
+///         </b>
 ///         <c>test/CyberCloud.Conformance</c> was not touched for a type that renders three
 ///         core-group objects where the last one rendered a custom resource — which is the claim that
 ///         shape has always made. What is new is that the claim is now being made about a case that
@@ -99,10 +102,14 @@ public sealed class CloudConsoleConformance(ProviderTestCluster<CloudConsoleCase
 
 /// <summary>The container-backed half, skipped loudly, against the cloud-terminal provider.</summary>
 /// <remarks>
-///     ⚠ <b>Still declared, even though this provider has a real <c>*.Cluster.Conformance</c> project
-///     that makes the same assertions against a real API server.</b> The skips are not redundant with
+///     ⚠
+///     <b>
+///         Still declared, even though this provider has a real <c>*.Cluster.Conformance</c> project
+///         that makes the same assertions against a real API server.
+///     </b> The skips are not redundant with
 ///     it: they run on a machine with no Docker and say, by name, which criteria were not checked.
 ///     Deleting them here would make "conformance: green" readable as "the cluster-backed criteria
 ///     were met" on exactly the machines where they were not.
 /// </remarks>
-public sealed class CloudConsoleClusterBackedConformance() : ClusterBackedConformanceTests(CloudConsoleCase.ProviderCase);
+public sealed class CloudConsoleClusterBackedConformance() :
+    ClusterBackedConformanceTests(CloudConsoleCase.ProviderCase);

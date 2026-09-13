@@ -56,12 +56,12 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
         var resource = ObjectRef.Of(ObjectTypes.Resource, "resb");
 
         var direct = (await cluster.Check(tenant, resource)
-            .ListRoleAssignmentsAsync(false)).GetValueOrThrow();
+                .ListRoleAssignmentsAsync(false)).GetValueOrThrow();
 
         direct.ShouldBeEmpty("no role tuple is written at the resource");
 
         var effective = (await cluster.Check(tenant, resource)
-            .ListRoleAssignmentsAsync(true)).GetValueOrThrow();
+                .ListRoleAssignmentsAsync(true)).GetValueOrThrow();
 
         var owner = effective.ShouldHaveSingleItem();
         owner.RoleName.ShouldBe(Relations.Owner);
@@ -79,7 +79,7 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
         await cluster.WriteAsync(tenant, "resourceGroup:rgc#owner@user:alice");
 
         var view = (await cluster.Check(tenant, scope)
-            .ListRoleAssignmentsAsync(true)).GetValueOrThrow();
+                .ListRoleAssignmentsAsync(true)).GetValueOrThrow();
 
         var assignment = view.ShouldHaveSingleItem();
         assignment.Inherited.ShouldBeFalse();
@@ -103,7 +103,7 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
         check.GetValueOrThrow().Allowed.ShouldBeTrue();
 
         var view = (await cluster.Check(tenant, group)
-            .ListRoleAssignmentsAsync(false)).GetValueOrThrow();
+                .ListRoleAssignmentsAsync(false)).GetValueOrThrow();
 
         view.ShouldHaveSingleItem().Principal.ShouldBe(EngMembers);
     }
@@ -130,14 +130,20 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>The one separation of <c>purge</c> from <c>delete</c> this platform can express, and
-    ///     it was claimed as asserted while nothing asserted it.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The one separation of <c>purge</c> from <c>delete</c> this platform can express, and
+    ///         it was claimed as asserted while nothing asserted it.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/07 § Azure RBAC states it in as many words — <i>"a deny assignment removes
-    ///         <c>purge</c> while leaving <c>delete</c>, which is <c>notActions</c> with one row in
-    ///         it"</i> — and the only test in the repository shaped like this one ran against
+    ///         docs/plan/07 § Azure RBAC states it in as many words —
+    ///         <i>
+    ///             "a deny assignment removes
+    ///             <c>purge</c> while leaving <c>delete</c>, which is <c>notActions</c> with one row in
+    ///             it"
+    ///         </i> — and the only test in the repository shaped like this one ran against
     ///         <c>assignRole</c> on a <b>subscription</b>. <c>purge</c> is declared on
     ///         <c>resource</c> and on nothing else, so that test could not have covered it, and its
     ///         own comment still said <c>assignRole</c> was the only permission carrying the
@@ -145,16 +151,22 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
     ///         <c>SchemaVersion</c> 2.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Against the real <see cref="CyberCloudSchema" /> through the real grains, which
-    ///         is the whole point.</b> The defect that put <c>purge</c> into the schema was a
+    ///         ⚠
+    ///         <b>
+    ///             Against the real <see cref="CyberCloudSchema" /> through the real grains, which
+    ///             is the whole point.
+    ///         </b> The defect that put <c>purge</c> into the schema was a
     ///         permission nothing declared, evaluating false for ever, invisible because every purge
     ///         test in the repository ran against a doubled authorizer. An assertion about
     ///         <c>purge</c> written against a fixture schema would be the same mistake with the same
     ///         shape.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The second half is the gap rather than the feature, and it is asserted so that
-    ///         closing it is loud.</b> <c>contributor</c> holds neither verb and <c>owner</c> holds
+    ///         ⚠
+    ///         <b>
+    ///             The second half is the gap rather than the feature, and it is asserted so that
+    ///             closing it is loud.
+    ///         </b> <c>contributor</c> holds neither verb and <c>owner</c> holds
     ///         both, so the two permissions have <i>identical grant sets</i> and the deny is the only
     ///         separation there is. That is less than docs/plan/08 § Soft delete asks for — Azure's
     ///         Contributor holds <c>delete</c> and is refused <c>purge</c> — and it is why a

@@ -37,7 +37,9 @@ public sealed class RabbitmqSizingTests {
                 // for a reader, so `"cpu" "1"    "memory"` has four spaces where `"cpu" "250m"` has
                 // one — a regex written against one row matches half the table and reports the other
                 // half as missing.
-                "\"" + Regex.Escape(preset) + "\"\\s+\\(dict\\s+\"cpu\"\\s+\"([^\"]+)\"\\s+\"memory\"\\s+\"([^\"]+)\"\\)",
+                "\""
+                + Regex.Escape(preset)
+                + "\"\\s+\\(dict\\s+\"cpu\"\\s+\"([^\"]+)\"\\s+\"memory\"\\s+\"([^\"]+)\"\\)",
                 RegexOptions.None,
                 TimeSpan.FromSeconds(5)
             );
@@ -86,8 +88,11 @@ public sealed class RabbitmqSizingTests {
         // across passes and what makes two clusters diffable by eye.
         declared.ShouldBe(
             rendered,
-            "the chart's rabbitmq.conf fragment sets " + string.Join(", ", declared)
-            + " and the reconciler sets " + string.Join(", ", rendered) + "."
+            "the chart's rabbitmq.conf fragment sets "
+            + string.Join(", ", declared)
+            + " and the reconciler sets "
+            + string.Join(", ", rendered)
+            + "."
         );
 
         declared.ShouldContain("default_queue_type");

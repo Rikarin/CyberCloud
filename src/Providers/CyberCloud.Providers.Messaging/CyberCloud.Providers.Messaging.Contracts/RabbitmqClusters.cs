@@ -13,17 +13,25 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/12 § The catalogue, <i>"RabbitMQ — <c>CyberCloud.Messaging/rabbitmqClusters</c> ·
-///         M2 · 0.8 EM"</i>, on the <b>RabbitMQ Cluster Operator</b> (ADR-010 clause 1 names it in the
+///         docs/plan/12 § The catalogue,
+///         <i>
+///             "RabbitMQ — <c>CyberCloud.Messaging/rabbitmqClusters</c> ·
+///             M2 · 0.8 EM"
+///         </i>, on the <b>RabbitMQ Cluster Operator</b> (ADR-010 clause 1 names it in the
 ///         operator survey; ADR-011 clears the licence — the operator and the broker are both
 ///         Apache-2.0 / MPL-2.0 and neither is SSPL). It is the <b>third</b> type in this provider
 ///         namespace, after <see cref="KafkaClusters" /> and <see cref="NatsClusters" />.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT "QUORUM QUEUES BY DEFAULT" ACTUALLY COSTS, BECAUSE IT IS NOT A FIELD ON THE
-///         CUSTOM RESOURCE AND THE CATALOGUE SENTENCE READS AS IF IT WERE.</b> docs/plan/12 says
-///         <i>"Quorum queues by default — classic mirrored queues are deprecated upstream and
-///         default-to-deprecated is a trap"</i>. Checked against RabbitMQ and against the operator's
+///         ⚠
+///         <b>
+///             WHAT "QUORUM QUEUES BY DEFAULT" ACTUALLY COSTS, BECAUSE IT IS NOT A FIELD ON THE
+///             CUSTOM RESOURCE AND THE CATALOGUE SENTENCE READS AS IF IT WERE.
+///         </b> docs/plan/12 says
+///         <i>
+///             "Quorum queues by default — classic mirrored queues are deprecated upstream and
+///             default-to-deprecated is a trap"
+///         </i>. Checked against RabbitMQ and against the operator's
 ///         CRD rather than against that sentence, three things are true and the third is the one that
 ///         shapes this type:
 ///     </para>
@@ -35,16 +43,20 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 ///             run there is no mirrored queue to fall back to.
 ///         </item>
 ///         <item>
-///             <b>That makes the trap WORSE rather than moot, and this is the correction worth
-///             having.</b> The catalogue sentence reads as "the deprecated thing is the default".
+///             <b>
+///                 That makes the trap WORSE rather than moot, and this is the correction worth
+///                 having.
+///             </b> The catalogue sentence reads as "the deprecated thing is the default".
 ///             On 4.x the default queue type is <c>classic</c> and classic is now
 ///             <i>unreplicated</i> — a queue that lives on exactly one node and is lost with it. So
 ///             an unset default on a three-node cluster is not "replicated the deprecated way", it
 ///             is <b>not replicated at all</b>, on a cluster the tenant paid three nodes for.
 ///         </item>
 ///         <item>
-///             <b>The switch is a <c>rabbitmq.conf</c> line and the operator offers no spec field for
-///             it.</b> The key is <c>default_queue_type</c> — node-wide in <c>rabbitmq.conf</c>, and a
+///             <b>
+///                 The switch is a <c>rabbitmq.conf</c> line and the operator offers no spec field for
+///                 it.
+///             </b> The key is <c>default_queue_type</c> — node-wide in <c>rabbitmq.conf</c>, and a
 ///             per-vhost setting overrides it. The only way to set it through the CRD is
 ///             <c>spec.rabbitmq.additionalConfig</c>, a free-text INI string
 ///             (<c>maxLength: 100000</c>). So <see cref="DefaultQueueTypePointer" /> — the property
@@ -63,8 +75,11 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 ///         FerretDB as MongoDB.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Quorum queues are Raft groups, so the node count wants to be ODD and at least
-///         three — and the registry still cannot say "odd". THIRD SIGHTING.</b>
+///         ⚠
+///         <b>
+///             Quorum queues are Raft groups, so the node count wants to be ODD and at least
+///             three — and the registry still cannot say "odd". THIRD SIGHTING.
+///         </b>
 ///         <c>KafkaClusters</c> reports it for a KRaft quorum and <c>NatsClusters</c> for a JetStream
 ///         one; this is a third consensus protocol asking the same unexpressible thing.
 ///         <c>SchemaProperty.AllowedValues</c> is <see cref="SchemaKind.Text" />-only by construction
@@ -73,8 +88,11 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 ///         make it a property of the <i>catalogue</i> rather than of any one consensus protocol.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE OPERATOR'S CRD DECLARES <c>default:</c> VALUES, AND A MUTATING WEBHOOK WRITES
-///         <c>spec</c> — WHICH IS THE OPPOSITE OF WHAT STRIMZI DOES.</b> <see cref="Matches" /> is
+///         ⚠
+///         <b>
+///             THE OPERATOR'S CRD DECLARES <c>default:</c> VALUES, AND A MUTATING WEBHOOK WRITES
+///             <c>spec</c> — WHICH IS THE OPPOSITE OF WHAT STRIMZI DOES.
+///         </b> <see cref="Matches" /> is
 ///         containment for the <i>ordinary</i> reason here, and <c>KafkaClusters.Matches</c> is at
 ///         pains to say the ordinary reason is false for it. Verified against
 ///         <c>config/crd/bases/rabbitmq.com_rabbitmqclusters.yaml</c> rather than against the
@@ -91,11 +109,17 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 public static class RabbitmqClusters {
     /// <summary>The provider namespace, as docs/plan/12 § The catalogue spells it.</summary>
     /// <remarks>
-    ///     ⚠ <b>The same string as <see cref="KafkaClusters.ProviderNamespace" /> and
-    ///     <see cref="NatsClusters.ProviderNamespace" />, and this is the platform's first namespace
-    ///     with THREE resource types in it.</b> <c>MessagingSdkTests</c> predicted this type by name
-    ///     — <i>"that is the claim a third type in this namespace — <c>rabbitmqClusters</c> is next
-    ///     in docs/plan/12 — can break"</i> — and it is extended rather than restated.
+    ///     ⚠
+    ///     <b>
+    ///         The same string as <see cref="KafkaClusters.ProviderNamespace" /> and
+    ///         <see cref="NatsClusters.ProviderNamespace" />, and this is the platform's first namespace
+    ///         with THREE resource types in it.
+    ///     </b> <c>MessagingSdkTests</c> predicted this type by name
+    ///     —
+    ///     <i>
+    ///         "that is the claim a third type in this namespace — <c>rabbitmqClusters</c> is next
+    ///         in docs/plan/12 — can break"
+    ///     </i> — and it is extended rather than restated.
     /// </remarks>
     public const string ProviderNamespace = KafkaClusters.ProviderNamespace;
 
@@ -114,8 +138,11 @@ public static class RabbitmqClusters {
     ///     <c>cybercloud.io/api-version</c> annotation in <c>charts/managed/rabbitmq/Chart.yaml</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>It is the same date as the other two types in this namespace, and that is a
-    ///     constraint rather than a coincidence.</b> <c>OpenApiEmitter.ApiVersionsOf</c> returns the
+    ///     ⚠
+    ///     <b>
+    ///         It is the same date as the other two types in this namespace, and that is a
+    ///         constraint rather than a coincidence.
+    ///     </b> <c>OpenApiEmitter.ApiVersionsOf</c> returns the
     ///     set of dates a registry declares and <c>MessagingSdkTests</c> calls <c>Single()</c> on it;
     ///     more than that, docs/plan/10 emits one document per api-version, so a third date here
     ///     would split this namespace's three types across two documents for no gain.
@@ -176,9 +203,7 @@ public static class RabbitmqClusters {
     ///     </para>
     /// </remarks>
     public static GroupVersionKind ClusterKind { get; } =
-        new() {
-            Group = "rabbitmq.com", Version = "v1beta1", Kind = "RabbitmqCluster", Plural = "rabbitmqclusters"
-        };
+        new() { Group = "rabbitmq.com", Version = "v1beta1", Kind = "RabbitmqCluster", Plural = "rabbitmqclusters" };
 
     // ── Ports and names the operator owns ─────────────────────────────────────────────────────
 
@@ -187,9 +212,15 @@ public static class RabbitmqClusters {
 
     /// <summary>The management UI and HTTP API port.</summary>
     /// <remarks>
-    ///     ⚠ <b>docs/plan/12 puts this behind <i>"the portal's authenticated proxy rather than a
-    ///     public route"</i>, and the operator's own Service carries it next to AMQP
-    ///     unconditionally.</b> That single fact is why this type declares no external listener at
+    ///     ⚠
+    ///     <b>
+    ///         docs/plan/12 puts this behind
+    ///         <i>
+    ///             "the portal's authenticated proxy rather than a
+    ///             public route"
+    ///         </i>, and the operator's own Service carries it next to AMQP
+    ///         unconditionally.
+    ///     </b> That single fact is why this type declares no external listener at
     ///     all — see <c>charts/managed/rabbitmq/conformance.yaml § owed</c>,
     ///     <c>external-exposure-moves-three-ports</c>.
     /// </remarks>
@@ -197,8 +228,11 @@ public static class RabbitmqClusters {
 
     /// <summary>The Prometheus endpoint <c>rabbitmq_prometheus</c> serves <c>/metrics</c> on.</summary>
     /// <remarks>
-    ///     ⚠ <b>There is no switch for it, which is why this type declares no <c>monitoring</c>
-    ///     block.</b> The operator's <c>requiredPlugins</c> list is
+    ///     ⚠
+    ///     <b>
+    ///         There is no switch for it, which is why this type declares no <c>monitoring</c>
+    ///         block.
+    ///     </b> The operator's <c>requiredPlugins</c> list is
     ///     <c>rabbitmq_peer_discovery_k8s</c>, <c>rabbitmq_prometheus</c> and
     ///     <c>rabbitmq_management</c>, enabled on every cluster and not disableable through the CRD.
     ///     Declaring <c>monitoring.enabled</c> would be a property whose <see langword="false" />
@@ -227,20 +261,32 @@ public static class RabbitmqClusters {
     /// <summary>The <c>Secret</c> the operator writes the generated credentials into.</summary>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>This is the answer to "what does the operator do about the <c>guest</c> user", and it
-    ///     is the reason this row's <c>listKeys</c> gap costs LESS than the NATS one.</b> RabbitMQ
-    ///     ships with <c>guest</c>/<c>guest</c>, and a cluster this operator creates <b>never has a
-    ///     <c>guest</c> user at all</b>: it generates a random username
+    ///     ⚠
+    ///     <b>
+    ///         This is the answer to "what does the operator do about the <c>guest</c> user", and it
+    ///         is the reason this row's <c>listKeys</c> gap costs LESS than the NATS one.
+    ///     </b> RabbitMQ
+    ///     ships with <c>guest</c>/<c>guest</c>, and a cluster this operator creates
+    ///     <b>
+    ///         never has a
+    ///         <c>guest</c> user at all
+    ///     </b>: it generates a random username
     ///     (<c>default_user_</c> + 24 random bytes, base64) and a random 24-byte password, writes both
     ///     into this <c>Secret</c>, and mounts them as <c>/etc/rabbitmq/conf.d/11-default_user.conf</c>
     ///     — which the broker reads on <i>first boot</i> to seed its one user. Because that user is
     ///     not named <c>guest</c>, RabbitMQ's own <c>loopback_users.guest = true</c> never applies to
     ///     it and <c>guest</c> is never created to be restricted.
     ///     <para>
-    ///         ⚠ <b>So the gap is Kafka-shaped, not NATS-shaped, and the distinction is worth having
-    ///         in one place.</b> <c>charts/managed/nats/conformance.yaml § owed</c> records that
-    ///         <c>nats-server</c> with no <c>authorization</c> block <i>accepts every connection in
-    ///         the namespace</i>, so that service comes up open. This one comes up
+    ///         ⚠
+    ///         <b>
+    ///             So the gap is Kafka-shaped, not NATS-shaped, and the distinction is worth having
+    ///             in one place.
+    ///         </b> <c>charts/managed/nats/conformance.yaml § owed</c> records that
+    ///         <c>nats-server</c> with no <c>authorization</c> block
+    ///         <i>
+    ///             accepts every connection in
+    ///             the namespace
+    ///         </i>, so that service comes up open. This one comes up
     ///         <b>authenticated</b>, with a 24-byte password nobody chose, sitting in a namespaced
     ///         <c>Secret</c>. What the platform cannot do is <i>hand it out</i>: <c>listKeys</c> has a
     ///         declared response and no handler, and <c>ISecretResolver</c> has only a refusing
@@ -305,15 +351,21 @@ public static class RabbitmqClusters {
 
     /// <summary>The sizing presets of docs/plan/12 § Sizing vocabulary, <c>c1</c> family.</summary>
     /// <remarks>
-    ///     ⚠ <b>Its own table, not <see cref="KafkaClusters.Presets" /> and not
-    ///     <see cref="NatsClusters.Presets" />, for the reason the NATS one gives</b> — sharing them
+    ///     ⚠
+    ///     <b>
+    ///         Its own table, not <see cref="KafkaClusters.Presets" /> and not
+    ///         <see cref="NatsClusters.Presets" />, for the reason the NATS one gives
+    ///     </b> — sharing them
     ///     would make a change to one service's sizing a silent change to two others, and the three
     ///     rows have different reasons to move. <c>RabbitmqSizingTests</c> asserts this table against
     ///     the chart's <c>_helpers.tpl</c> and <c>RabbitmqDeclarationTests</c> asserts the ratio is
     ///     1:2 at every rung, which is what <c>c1</c> means.
     ///     <para>
-    ///         ⚠ <b>The <c>c1</c> family, and here the table is doing more work than it does on the
-    ///         other two rows.</b> The CRD's own <c>default:</c> for <c>spec.resources</c> is
+    ///         ⚠
+    ///         <b>
+    ///             The <c>c1</c> family, and here the table is doing more work than it does on the
+    ///             other two rows.
+    ///         </b> The CRD's own <c>default:</c> for <c>spec.resources</c> is
     ///         <c>{limits: {cpu: 2000m, memory: 2Gi}, requests: {cpu: 1000m, memory: 2Gi}}</c> —
     ///         requests below limits, which is Kubernetes' <b>Burstable</b> QoS class. docs/plan/12
     ///         § Sizing vocabulary calls <c>c1</c> <i>guaranteed</i>. So a body that rendered no
@@ -373,8 +425,11 @@ public static class RabbitmqClusters {
     ///     default <i>is</i> the YAML literal on the annotated line, and <c>ChartAnnotationEmitter</c>
     ///     writes that literal from <see cref="SchemaProperty.DefaultJson" />.
     ///     <para>
-    ///         ⚠ <b>THREE BLOCKS THE OTHER TWO TYPES IN THIS NAMESPACE HAVE AND THIS ONE DOES NOT,
-    ///         each declined with a reason rather than forgotten.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THREE BLOCKS THE OTHER TWO TYPES IN THIS NAMESPACE HAVE AND THIS ONE DOES NOT,
+    ///             each declined with a reason rather than forgotten.
+    ///         </b>
     ///     </para>
     ///     <list type="bullet">
     ///         <item>
@@ -388,10 +443,14 @@ public static class RabbitmqClusters {
     ///             <b>No <c>external</c>.</b> ⚠ THE ONE PLACE THIS ROW CONTRADICTS docs/plan/12
     ///             § Cross-cutting decisions, and it is that document contradicting itself rather
     ///             than this type declining a requirement. That section gives every service
-    ///             <i>"optional external exposure via a Kube-OVN floating IP plus a firewall
-    ///             allow-list"</i>; the RabbitMQ row four pages earlier says the management UI is
-    ///             <i>"exposed through the portal's authenticated proxy rather than a public
-    ///             route"</i>. The operator's client <c>Service</c> carries AMQP <b>5672</b>,
+    ///             <i>
+    ///                 "optional external exposure via a Kube-OVN floating IP plus a firewall
+    ///                 allow-list"
+    ///             </i>; the RabbitMQ row four pages earlier says the management UI is
+    ///             <i>
+    ///                 "exposed through the portal's authenticated proxy rather than a public
+    ///                 route"
+    ///             </i>. The operator's client <c>Service</c> carries AMQP <b>5672</b>,
     ///             management <b>15672</b> and Prometheus <b>15692</b> together, and
     ///             <c>spec.service.type</c> is one enum over the whole Service — there is no
     ///             per-port switch. So <c>external.enabled: true</c> would put a RabbitMQ management
@@ -428,11 +487,7 @@ public static class RabbitmqClusters {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the RabbitmqCluster."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -443,10 +498,7 @@ public static class RabbitmqClusters {
                     + "maintenance window; a major upgrade is an explicit update to this field. Only "
                     + "4.x is offered: classic queue mirroring was removed in 4.0, so on every "
                     + "version here the replicated queue type is the quorum queue."
-                ) {
-                    AllowedValues = ["4.0", "4.1"],
-                    DefaultJson = "\"4.1\""
-                },
+                ) { AllowedValues = ["4.0", "4.1"], DefaultJson = "\"4.1\"" },
                 new(
                     "/properties/nodes",
                     SchemaKind.WholeNumber,
@@ -455,11 +507,7 @@ public static class RabbitmqClusters {
                     + "quorum queue is a Raft group, so a group of two tolerates no failures and an "
                     + "even count buys nothing over the odd count below it. One is offered for "
                     + "development only and replicates nothing."
-                ) {
-                    Minimum = 1,
-                    Maximum = 7,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 7, DefaultJson = "3" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -480,19 +528,13 @@ public static class RabbitmqClusters {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -505,20 +547,12 @@ public static class RabbitmqClusters {
                     Description: "Message-store volume size per node, in Kubernetes quantity form. "
                     + "Grows online; never shrinks. A quorum queue keeps its whole Raft log on every "
                     + "member, so this is the same figure on every node rather than a share of one."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"20Gi\"",
-                    ExampleJson = "\"20Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"20Gi\"", ExampleJson = "\"20Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name. Empty means the cluster default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/queues",
                     SchemaKind.Nested,
@@ -533,10 +567,7 @@ public static class RabbitmqClusters {
                     + "not replicated at all, so leaving this unset would put a single-node queue on "
                     + "a cluster the tenant paid three nodes for. This is a node-wide fallback: a "
                     + "vhost created with its own default queue type overrides it."
-                ) {
-                    AllowedValues = [.. QueueTypes],
-                    DefaultJson = "\"quorum\""
-                },
+                ) { AllowedValues = [.. QueueTypes], DefaultJson = "\"quorum\"" },
                 new(
                     "/properties/limits",
                     SchemaKind.Nested,
@@ -548,11 +579,7 @@ public static class RabbitmqClusters {
                     Description: "Largest message a client may publish, in bytes. Raising it costs "
                     + "memory on every node that holds a copy, which for a quorum queue is all of "
                     + "them."
-                ) {
-                    Minimum = 65536,
-                    Maximum = 536870912,
-                    DefaultJson = "134217728"
-                },
+                ) { Minimum = 65536, Maximum = 536870912, DefaultJson = "134217728" },
                 new(
                     "/properties/plugins",
                     SchemaKind.Nested,
@@ -577,13 +604,19 @@ public static class RabbitmqClusters {
     ///     What a <c>POST …/listKeys</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared even though no handler serves it, because an undeclared response is the one
-    ///     part of the API surface with no contract.</b> What leaves the platform through a
+    ///     ⚠
+    ///     <b>
+    ///         Declared even though no handler serves it, because an undeclared response is the one
+    ///         part of the API surface with no contract.
+    ///     </b> What leaves the platform through a
     ///     <c>secret: true</c> action is exactly the thing that should be written down before it
     ///     leaves. There is no request shape, for the reason <c>ActionRegistration</c> gives.
     ///     <para>
-    ///         ⚠ <b>Every field here already exists in the cluster, which is not true of the NATS
-    ///         row.</b> The operator has written all four into
+    ///         ⚠
+    ///         <b>
+    ///             Every field here already exists in the cluster, which is not true of the NATS
+    ///             row.
+    ///         </b> The operator has written all four into
     ///         <see cref="DefaultUserSecretName" /> before the resource reaches Succeeded — it even
     ///         publishes a <c>connection_string</c> key of its own. So this response is a read the
     ///         platform cannot perform rather than a credential nobody has issued, and the handler
@@ -625,8 +658,7 @@ public static class RabbitmqClusters {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -643,8 +675,7 @@ public static class RabbitmqClusters {
 
     /// <summary>The message-store volume size per node a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string StorageSize(JsonElement desired) =>
-        Text(desired, "storage", "size", DefaultStorageSize);
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", DefaultStorageSize);
 
     /// <summary>The default queue type a body asks for. ⚠ The reason this row exists.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -728,8 +759,10 @@ public static class RabbitmqClusters {
     ///             <c>rabbitmq.conf.example</c> writes.
     ///         </item>
     ///         <item>
-    ///             <b>It layers ON TOP of the operator's own defaults rather than replacing them,
-    ///             and it does not do so by string concatenation.</b> ⚠ Checked against the
+    ///             <b>
+    ///                 It layers ON TOP of the operator's own defaults rather than replacing them,
+    ///                 and it does not do so by string concatenation.
+    ///             </b> ⚠ Checked against the
     ///             operator, because this is exactly the <c>spotahome</c>-prepends-to-<c>customConfig</c>
     ///             hazard <c>ValkeyCaches</c> found and it is <b>absent here</b>: the operator writes
     ///             <c>10-operatorDefaults.conf</c> and this block as
@@ -772,8 +805,11 @@ public static class RabbitmqClusters {
     ///         place a key and a value are syntax-checked.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>spec.image</c> IS WRITTEN, and on the other two types in this namespace the
-    ///         equivalent is left to the operator.</b> The reason is a mutating admission webhook:
+    ///         ⚠
+    ///         <b>
+    ///             <c>spec.image</c> IS WRITTEN, and on the other two types in this namespace the
+    ///             equivalent is left to the operator.
+    ///         </b> The reason is a mutating admission webhook:
     ///         this operator ships one, it is on unless <c>ENABLE_WEBHOOKS=false</c>, and it fills
     ///         <c>spec.image</c> from the operator's own build-time default when the field is unset.
     ///         So "leave it out and let the operator choose" is not "the tenant's version wins" — it
@@ -783,8 +819,11 @@ public static class RabbitmqClusters {
     ///         version back.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>spec.resources</c> IS WRITTEN WHENEVER IT CAN BE, AND OMITTING IT IS NOT
-    ///         NEUTRAL HERE.</b> On the Kafka and NATS rows an unresolvable preset renders no
+    ///         ⚠
+    ///         <b>
+    ///             <c>spec.resources</c> IS WRITTEN WHENEVER IT CAN BE, AND OMITTING IT IS NOT
+    ///             NEUTRAL HERE.
+    ///         </b> On the Kafka and NATS rows an unresolvable preset renders no
     ///         <c>resources</c> block and the workload gets no requests or limits at all — visible,
     ///         and BestEffort. This CRD <i>defaults</i> the field to
     ///         <c>{limits: {cpu: 2000m, memory: 2Gi}, requests: {cpu: 1000m, memory: 2Gi}}</c>, so
@@ -843,9 +882,7 @@ public static class RabbitmqClusters {
         var (cpu, memory) = Resources(desired);
         if (cpu.Length > 0 && memory.Length > 0) {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
-            spec["resources"] = new JsonObject {
-                ["requests"] = quantities.DeepClone(), ["limits"] = quantities
-            };
+            spec["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
         }
 
         return new JsonObject { ["metadata"] = new JsonObject { ["name"] = name }, ["spec"] = spec }
@@ -870,11 +907,17 @@ public static class RabbitmqClusters {
     /// <returns><c>true</c> when the fields this provider owns hold the desired values.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Containment, not equality — and unlike <c>KafkaClusters.Matches</c>, the ORDINARY
-    ///         reason is the true one here. Checked against the CRD rather than against the
-    ///         operator's README, which is where the two answers differ.</b> That type's remarks
-    ///         record that Strimzi's <c>Kafka</c> at <c>v1beta2</c> declares <b>no <c>default:</c>
-    ///         anywhere</b>, so "the API server defaults fields on write" was false for it and
+    ///         ⚠
+    ///         <b>
+    ///             Containment, not equality — and unlike <c>KafkaClusters.Matches</c>, the ORDINARY
+    ///             reason is the true one here. Checked against the CRD rather than against the
+    ///             operator's README, which is where the two answers differ.
+    ///         </b> That type's remarks
+    ///         record that Strimzi's <c>Kafka</c> at <c>v1beta2</c> declares
+    ///         <b>
+    ///             no <c>default:</c>
+    ///             anywhere
+    ///         </b>, so "the API server defaults fields on write" was false for it and
     ///         containment was kept for other reasons. <c>rabbitmq.com_rabbitmqclusters.yaml</c> at
     ///         <c>v1beta1</c> declares defaults on <c>spec.replicas</c> (<c>1</c>),
     ///         <c>spec.persistence</c> (<c>{storage: 10Gi}</c>), <c>spec.service</c>
@@ -886,8 +929,11 @@ public static class RabbitmqClusters {
     ///         resource, forever.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And a second mechanism the other two types do not meet at all: a MUTATING
-    ///         WEBHOOK.</b> The operator registers one at
+    ///         ⚠
+    ///         <b>
+    ///             And a second mechanism the other two types do not meet at all: a MUTATING
+    ///             WEBHOOK.
+    ///         </b> The operator registers one at
     ///         <c>/mutate-rabbitmq-com-v1beta1-rabbitmqcluster</c> with <c>failurePolicy: Fail</c>,
     ///         and it writes <c>spec.image</c>, <c>spec.imagePullSecrets</c> and — under Vault —
     ///         <c>spec.secretBackend.vault.defaultUserUpdaterImage</c>. So <c>spec</c> gains fields
@@ -904,8 +950,11 @@ public static class RabbitmqClusters {
     ///     <para>
     ///         ⚠ <b>What is compared, and one thing that deliberately is not.</b> The four fields
     ///         below are the ones a body decides and the operator does not touch. ⚠
-    ///         <c>spec.replicas</c> is compared and <b>reading it back proves less than it does on
-    ///         the sibling types</b>: this operator accepts a scale-DOWN at the API server, then
+    ///         <c>spec.replicas</c> is compared and
+    ///         <b>
+    ///             reading it back proves less than it does on
+    ///             the sibling types
+    ///         </b>: this operator accepts a scale-DOWN at the API server, then
     ///         refuses to perform it, recording the refusal only in
     ///         <c>status.conditions[ReconcileSuccess]</c> with an <c>UnsupportedOperation</c> event.
     ///         So a shrink reads back as converged while the StatefulSet keeps its old node count.
@@ -956,8 +1005,7 @@ public static class RabbitmqClusters {
 
     /// <summary>The one configuration line docs/plan/12's RabbitMQ row is about.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string QueueTypeLine(JsonElement desired) =>
-        "default_queue_type = " + DefaultQueueType(desired);
+    public static string QueueTypeLine(JsonElement desired) => "default_queue_type = " + DefaultQueueType(desired);
 
     // ── A body, for tests, fixtures and the conformance case ──────────────────────────────────
 

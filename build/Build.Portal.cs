@@ -32,19 +32,18 @@
 // zero charts as news worth printing; a run whose output carries no test count and no budget total
 // is the same news, one toolchain over.
 
+using Nuke.Common;
+using Nuke.Common.IO;
+using Nuke.Common.Tooling;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Nuke.Common;
-using Nuke.Common.IO;
-using Nuke.Common.Tooling;
-using Serilog;
 
-partial class Build
-{
+partial class Build {
     // ── The workspace ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>The pnpm workspace. docs/plan/03 § portal/, portal/README.md.</summary>
@@ -83,14 +82,14 @@ partial class Build
     ///         two toolchains to be independently invocable.
     ///     </para>
     /// </summary>
-    void BuildPortal()
-    {
+    void BuildPortal() {
         Assert.FileExists(
             PortalLockfile,
             $"{RootDirectory.GetRelativePathTo(PortalLockfile)} does not exist, so there is no pnpm "
             + "workspace to install and this target has nothing to gate. docs/plan/03 § portal/ "
             + "describes a committed workspace, so its absence is a broken checkout rather than an "
-            + "early stage of the project.");
+            + "early stage of the project."
+        );
 
         var pnpm = ResolvePnpm();
 
@@ -118,21 +117,24 @@ partial class Build
         var output = pnpm(
             entry,
             workingDirectory: PortalDirectory,
-            exitHandler: process => exitCode = process.ExitCode);
+            exitHandler: process => exitCode = process.ExitCode
+        );
 
         // The scripts are read for their numbers, not just their exit code, and colour codes would
         // sit between "Tests:" and the count. pnpm and jest emit none into a redirected pipe today;
         // stripping them costs one regex and removes the dependency on that staying true.
         var text = AnsiEscape.Replace(
             string.Join('\n', output.Select(x => x.Text ?? string.Empty)),
-            string.Empty);
+            string.Empty
+        );
 
         Assert.True(
             exitCode == 0,
             $"`pnpm {entry}` exited {exitCode} over portal/ — its output is above, and the failing "
             + "phase is the last one it printed. docs/plan/23 § Build, row `Portal`, gates a PR on "
             + "lint, the Jest suites, the production build, the performance budget and axe. "
-            + $"Reproduce with `pnpm {entry}` from portal/.");
+            + $"Reproduce with `pnpm {entry}` from portal/."
+        );
 
         Report(entry, text, axeSpecs.Count);
     }
@@ -149,20 +151,17 @@ partial class Build
     ///     exactly the one the lockfile describes. A different package manager over this workspace
     ///     resolves a different tree, which is a different gate wearing this one's name.
     /// </remarks>
-    static Tool ResolvePnpm()
-    {
-        try
-        {
+    static Tool ResolvePnpm() {
+        try {
             return ToolResolver.GetPathTool("pnpm");
-        }
-        catch (Exception exception)
-        {
+        } catch (Exception exception) {
             Assert.Fail(
                 "`pnpm` is not on PATH, so the portal workspace can neither be installed nor gated. "
                 + "portal/package.json pins `packageManager: pnpm@11.18.0`, so the way to get "
                 + "exactly that version is `corepack enable pnpm` on a Node 24 (portal/.nvmrc) — "
                 + "which is also what .github/workflows/gate.yml does. Underlying error: "
-                + $"{exception.Message}");
+                + $"{exception.Message}"
+            );
 
             throw;
         }
@@ -182,30 +181,31 @@ partial class Build
     ///     invoking one script instead of five: the composition lives in a file this target does not
     ///     own, so the coupling is checked rather than assumed.
     /// </remarks>
-    void AssertGateStillChainsTheRow(string entry)
-    {
+    void AssertGateStillChainsTheRow(string entry) {
         var scripts = PortalScripts();
 
         Assert.True(
             scripts.ContainsKey(entry),
             $"portal/package.json has no `{entry}` script, so there is nothing for this target to "
             + "invoke. Build.Portal.cs runs `gates` on CI and `verify` locally; if those were "
-            + "renamed, rename them here too.");
+            + "renamed, rename them here too."
+        );
 
         var reached = new HashSet<string>(StringComparer.Ordinal);
         var pending = new Stack<string>();
 
         pending.Push(entry);
 
-        while (pending.Count > 0)
-        {
+        while (pending.Count > 0) {
             var name = pending.Pop();
 
-            if (!reached.Add(name) || !scripts.TryGetValue(name, out var body))
+            if (!reached.Add(name) || !scripts.TryGetValue(name, out var body)) {
                 continue;
+            }
 
-            foreach (var reference in PnpmScriptReference.Matches(body).Select(x => x.Groups[1].Value))
+            foreach (var reference in PnpmScriptReference.Matches(body).Select(x => x.Groups[1].Value)) {
                 pending.Push(reference);
+            }
         }
 
         var missing = PortalPhases.Where(x => !reached.Contains(x)).ToList();
@@ -217,27 +217,30 @@ partial class Build
             + "budget, axe\", and this target runs that row by invoking one script rather than "
             + "restating it — so a phase dropped out of the chain is a phase that silently stops "
             + "running on every PR, with no exit code to show for it. Put it back, or change the "
-            + "row and Build.Portal.cs § PortalPhases together.");
+            + "row and Build.Portal.cs § PortalPhases together."
+        );
 
         Log.Information(
             "Portal: `pnpm {Entry}` reaches {Count} script(s) — {Scripts}",
             entry,
             reached.Count,
-            string.Join(", ", reached.OrderBy(x => x, StringComparer.Ordinal)));
+            string.Join(", ", reached.OrderBy(x => x, StringComparer.Ordinal))
+        );
     }
 
     /// <summary>The <c>scripts</c> block of portal/package.json.</summary>
-    Dictionary<string, string> PortalScripts()
-    {
+    Dictionary<string, string> PortalScripts() {
         using var manifest = JsonDocument.Parse(PortalManifest.ReadAllText());
 
         var scripts = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (!manifest.RootElement.TryGetProperty("scripts", out var block))
+        if (!manifest.RootElement.TryGetProperty("scripts", out var block)) {
             return scripts;
+        }
 
-        foreach (var script in block.EnumerateObject())
+        foreach (var script in block.EnumerateObject()) {
             scripts[script.Name] = script.Value.GetString() ?? string.Empty;
+        }
 
         return scripts;
     }
@@ -263,14 +266,15 @@ partial class Build
     /// <summary>
     ///     Fails if no spec imports axe, which would make the last word of the row decorative.
     /// </summary>
-    static void AssertAxeIsAsserted(List<AbsolutePath> axeSpecs)
-        => Assert.True(
+    static void AssertAxeIsAsserted(List<AbsolutePath> axeSpecs) =>
+        Assert.True(
             axeSpecs.Count > 0,
             "no Jest spec under portal/apps or portal/libs imports `axe-core` or `jest-axe`, so "
             + "`pnpm test` would pass without checking a single accessibility rule. docs/plan/23 "
             + "§ Build, row `Portal`, ends in \"axe\", and docs/plan/20 § Accessibility, i18n, "
             + "theming makes WCAG 2.2 AA \"a gate, not a goal\". ⚠ No exit code can catch this: "
-            + "deleting the one spec that runs axe leaves every remaining suite green.");
+            + "deleting the one spec that runs axe leaves every remaining suite green."
+        );
 
     // ── After the run: it was not a no-op ─────────────────────────────────────────────────────
 
@@ -286,8 +290,7 @@ partial class Build
     ///     failure names the pattern to fix, and the alternative is a target that reports a number
     ///     nobody can distinguish from a suite that stopped running.
     /// </remarks>
-    static void Report(string entry, string output, int axeSpecs)
-    {
+    static void Report(string entry, string output, int axeSpecs) {
         var suites = FirstNumber(JestSuiteTotal, output);
         var tests = FirstNumber(JestTestTotal, output);
         var budget = BudgetInitialTotal.Match(output);
@@ -298,14 +301,16 @@ partial class Build
             + "Either the test phase ran nothing — docs/plan/23 § Test layers puts Jest + Angular "
             + "TestBed on every PR — or jest stopped printing \"Tests: N total\" and "
             + "Build.Portal.cs § JestTestTotal needs updating. Both are worth stopping for; a "
-            + "target that cannot say how many tests ran cannot claim any ran.");
+            + "target that cannot say how many tests ran cannot claim any ran."
+        );
 
         Assert.True(
             budget.Success,
             $"`pnpm {entry}` exited 0, but portal/scripts/bundle-budget.mjs printed no initial-JS "
             + "TOTAL line. docs/plan/20 § Performance budget is enforced in CI \"failing the "
             + "build\", and a budget nobody can quote a number from was not applied. If the script's "
-            + "output changed, Build.Portal.cs § BudgetInitialTotal is the pattern to fix.");
+            + "output changed, Build.Portal.cs § BudgetInitialTotal is the pattern to fix."
+        );
 
         Log.Information(
             "Portal: {Tests} test(s) over {Suites} suite(s), {Specs} of which run axe; initial JS "
@@ -314,11 +319,11 @@ partial class Build
             suites,
             axeSpecs,
             budget.Groups[1].Value,
-            budget.Groups[2].Value);
+            budget.Groups[2].Value
+        );
     }
 
-    static int FirstNumber(Regex pattern, string output)
-    {
+    static int FirstNumber(Regex pattern, string output) {
         var match = pattern.Match(output);
 
         return match.Success
@@ -349,8 +354,10 @@ partial class Build
     ///     not read: the script exits non-zero on FAIL, and this target does not second-guess it.
     /// </summary>
     static readonly Regex BudgetInitialTotal =
-        new(@"^\s*TOTAL\s+(\S+ KB)\s+/\s+(\S+ KB)\s+(?:PASS|FAIL)",
-            RegexOptions.Multiline | RegexOptions.Compiled);
+        new(
+            @"^\s*TOTAL\s+(\S+ KB)\s+/\s+(\S+ KB)\s+(?:PASS|FAIL)",
+            RegexOptions.Multiline | RegexOptions.Compiled
+        );
 
     /// <summary>An SGR colour escape.</summary>
     static readonly Regex AnsiEscape = new(@"\x1B\[[0-9;]*m", RegexOptions.Compiled);

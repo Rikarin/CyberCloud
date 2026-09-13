@@ -10,15 +10,21 @@ namespace CyberCloud.Identity.Seams;
 ///     locks every user who enrols in it out of their own account, and the failure surfaces on the
 ///     second sign-in rather than at enrolment — which is the worst possible time to discover it.
 ///     <para>
-///         ⚠ <b>This is now a <i>wiring</i> failure rather than a missing feature, and the message
-///         says so.</b> <c>CyberCloud.Communication</c> exists and
+///         ⚠
+///         <b>
+///             This is now a <i>wiring</i> failure rather than a missing feature, and the message
+///             says so.
+///         </b> <c>CyberCloud.Communication</c> exists and
 ///         <see cref="CommunicationOtpDelivery" /> adapts onto it; reaching this type means the host
 ///         did not call <c>AddCommunicationOtpDelivery</c>. An operator reading this at 03:00 needs
 ///         the name of the call that is missing, not an essay about a module.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS SENTENCE IS REACHABLE, WHICH IT PREVIOUSLY WAS NOT, AND THAT IS WORTH RECORDING
-///         BECAUSE THREE PLACES USED TO CLAIM OTHERWISE.</b> The remarks here, on
+///         ⚠
+///         <b>
+///             THIS SENTENCE IS REACHABLE, WHICH IT PREVIOUSLY WAS NOT, AND THAT IS WORTH RECORDING
+///             BECAUSE THREE PLACES USED TO CLAIM OTHERWISE.
+///         </b> The remarks here, on
 ///         <c>SignInApi.Offered</c> and on <c>IdentityEndpoints</c> all said this type was "what
 ///         every host gets". The tree said something emptier: no host registered an
 ///         <c>IOtpDeliverySeam</c> at all, and nothing called one, so this refusal existed and could
@@ -52,8 +58,11 @@ public sealed class UnavailableOtpDelivery : IOtpDeliverySeam {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The same shape as <see cref="UnavailableOtpDelivery" /> and for the same reason, but
-///         it fails at a worse moment.</b> An unwired OTP delivery breaks a factor at enrolment. An
+///         ⚠
+///         <b>
+///             The same shape as <see cref="UnavailableOtpDelivery" /> and for the same reason, but
+///             it fails at a worse moment.
+///         </b> An unwired OTP delivery breaks a factor at enrolment. An
 ///         unwired secret resolver breaks TOTP <i>verification</i>, which is a factor the user has
 ///         already enrolled and is now relying on — so this is the difference between "I cannot turn
 ///         this on" and "I am locked out of my account". Both messages have to name the missing

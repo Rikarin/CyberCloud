@@ -21,16 +21,18 @@ static class TableWriter {
 
         var table = Flatten(value);
 
-        if (table.Rows.Count == 0)
+        if (table.Rows.Count == 0) {
             return;
+        }
 
         var widths = new int[table.Columns.Count];
 
         for (var column = 0; column < table.Columns.Count; column++) {
             widths[column] = table.Columns[column].Length;
 
-            foreach (var row in table.Rows)
+            foreach (var row in table.Rows) {
                 widths[column] = Math.Max(widths[column], row[column].Length);
+            }
         }
 
         if (table.HasHeader) {
@@ -38,8 +40,9 @@ static class TableWriter {
             writer.WriteLine(Line([.. widths.Select(x => new string('-', x))], widths));
         }
 
-        foreach (var row in table.Rows)
+        foreach (var row in table.Rows) {
             writer.WriteLine(Line(row, widths));
+        }
     }
 
     /// <summary>Writes tab-separated rows, with no header.</summary>
@@ -53,8 +56,9 @@ static class TableWriter {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(value);
 
-        foreach (var row in Flatten(value).Rows)
+        foreach (var row in Flatten(value).Rows) {
             writer.WriteLine(string.Join('\t', row.Select(Escape)));
+        }
     }
 
     /// <summary>
@@ -65,14 +69,16 @@ static class TableWriter {
     ///     table, one object is a two-column property list, and a scalar is one cell.
     /// </remarks>
     static (IReadOnlyList<string> Columns, List<string[]> Rows, bool HasHeader) Flatten(Payload value) {
-        if (value.IsMissing)
+        if (value.IsMissing) {
             return ([], [], false);
+        }
 
         if (value.IsArray) {
             var elements = value.Items.ToList();
 
-            if (elements.Count == 0)
+            if (elements.Count == 0) {
                 return ([], [], false);
+            }
 
             if (elements.TrueForAll(x => x.IsObject)) {
                 // Column order is first appearance, not alphabetical: the platform puts `name` and
@@ -81,8 +87,9 @@ static class TableWriter {
 
                 foreach (var element in elements) {
                     foreach (var member in element.Members) {
-                        if (!columns.Contains(member.Key, StringComparer.Ordinal))
+                        if (!columns.Contains(member.Key, StringComparer.Ordinal)) {
                             columns.Add(member.Key);
+                        }
                     }
                 }
 
@@ -109,8 +116,9 @@ static class TableWriter {
         var line = new StringBuilder();
 
         for (var i = 0; i < cells.Count; i++) {
-            if (i > 0)
+            if (i > 0) {
                 line.Append("  ");
+            }
 
             line.Append(i == cells.Count - 1 ? cells[i] : cells[i].PadRight(widths[i]));
         }
@@ -127,8 +135,8 @@ static class TableWriter {
     ///     keeps the row count equal to the record count, which is the property the pipeline relies
     ///     on.
     /// </remarks>
-    static string Escape(string cell)
-        => cell
+    static string Escape(string cell) =>
+        cell
             .Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("\t", "\\t", StringComparison.Ordinal)
             .Replace("\r", string.Empty, StringComparison.Ordinal)

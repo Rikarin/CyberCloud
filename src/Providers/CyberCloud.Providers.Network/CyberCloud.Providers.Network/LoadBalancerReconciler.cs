@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Network;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST RECONCILER IN THIS FAMILY THAT APPLIES A WORKLOAD RATHER THAN A ROW IN A
-///         DATABASE.</b> Its three siblings each apply one Kube-OVN custom resource and the fabric does
+///         ⚠
+///         <b>
+///             THE FIRST RECONCILER IN THIS FAMILY THAT APPLIES A WORKLOAD RATHER THAN A ROW IN A
+///             DATABASE.
+///         </b> Its three siblings each apply one Kube-OVN custom resource and the fabric does
 ///         the rest. This one applies a <c>ConfigMap</c> and a <c>Deployment</c> into the tenant's own
 ///         namespace, and the thing that carries traffic is a pod — which is why this type draws
 ///         <c>QuotaMeter.Vcpu</c> and <c>QuotaMeter.MemoryGb</c> where the rest of the family draws
@@ -155,8 +158,11 @@ public sealed class LoadBalancerReconciler(IClock clock) : IResourceReconciler {
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>THE PROXY FIRST AND THE CONFIGURATION SECOND, WHICH IS THE REVERSE OF THE APPLY
-    ///     ORDER.</b> A <c>ConfigMap</c> deleted underneath a running pod does not stop the pod —
+    ///     ⚠
+    ///     <b>
+    ///         THE PROXY FIRST AND THE CONFIGURATION SECOND, WHICH IS THE REVERSE OF THE APPLY
+    ///         ORDER.
+    ///     </b> A <c>ConfigMap</c> deleted underneath a running pod does not stop the pod —
     ///     HAProxy read the file at start and holds no reference to the object — but it does make the
     ///     pod unschedulable the moment the kubelet next restarts it, which is a load balancer that
     ///     works until it does not, on nobody's schedule. Removing the proxy first means a teardown
@@ -194,7 +200,7 @@ public sealed class LoadBalancerReconciler(IClock clock) : IResourceReconciler {
                 // marked and the pod behind it can still be accepting connections. A load balancer
                 // that stops being billed while traffic is still flowing through it is docs/plan/06
                 // § Two-phase create's "never silently gone while its pods still run".
-                .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError)
                 && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -228,8 +234,11 @@ public sealed class LoadBalancerReconciler(IClock clock) : IResourceReconciler {
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>THE DEPLOYMENT DECIDES <see cref="ObservedState.Exists" /> AND THE CONFIGURATION IS
-    ///     FOLDED INTO THE MATCH.</b> A load balancer whose <c>ConfigMap</c> was hand-deleted still has
+    ///     ⚠
+    ///     <b>
+    ///         THE DEPLOYMENT DECIDES <see cref="ObservedState.Exists" /> AND THE CONFIGURATION IS
+    ///         FOLDED INTO THE MATCH.
+    ///     </b> A load balancer whose <c>ConfigMap</c> was hand-deleted still has
     ///     a proxy in the cluster serving the last configuration it read, which is a drift the scanner
     ///     must repair rather than a resource that is gone — and reporting <c>Exists = false</c> would
     ///     make the manager treat it as absent.
@@ -248,9 +257,7 @@ public sealed class LoadBalancerReconciler(IClock clock) : IResourceReconciler {
         );
 
         if (proxy.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the proxy is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the proxy is absent" };
         }
 
         var found = proxy.GetValueOrThrow();

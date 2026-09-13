@@ -10,10 +10,16 @@ namespace CyberCloud.Tenancy.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Driven against the grain directly, and that is not merely convenient — it is the only
-///         place two of these refusals are reachable at all.</b> The resource manager mints a fresh
-///         GUID for every create, so a re-claim of a soft-deleted name <i>with the resource's own
-///         GUID</i> cannot be produced through the API; the guard against it is defence against a
+///         ⚠
+///         <b>
+///             Driven against the grain directly, and that is not merely convenient — it is the only
+///             place two of these refusals are reachable at all.
+///         </b> The resource manager mints a fresh
+///         GUID for every create, so a re-claim of a soft-deleted name
+///         <i>
+///             with the resource's own
+///             GUID
+///         </i> cannot be produced through the API; the guard against it is defence against a
 ///         direct grain caller, and a test that went through the manager would pass with the guard
 ///         deleted. That was measured rather than assumed: sabotaging
 ///         <c>IndexClaimMachine.TryClaim</c> to accept a soft-deleted entry left the whole resource
@@ -56,8 +62,11 @@ public sealed class SoftDeletedIndexEntryTests(TenancyCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A re-claim with the soft-deleted resource's <i>own</i> GUID is refused, and this is the
-    ///     case only a direct caller can reach.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A re-claim with the soft-deleted resource's <i>own</i> GUID is refused, and this is the
+    ///         case only a direct caller can reach.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <c>TryClaim</c> is idempotent for the same id against a <see cref="IndexEntryState.Claimed" />
@@ -262,7 +271,7 @@ public sealed class SoftDeletedIndexEntryTests(TenancyCluster cluster) {
             .ShouldBeTrue();
 
         (await cluster.SubscriptionGrain(tenant, subscription)
-            .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
+                .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
 
         return new(
             tenant,

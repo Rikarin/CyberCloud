@@ -18,14 +18,21 @@ namespace CyberCloud.Identity.Host.Api;
 
 /// <summary>The body of <c>POST /api/signin/begin</c>.</summary>
 /// <param name="Email">The address typed. Sent as-is; this host normalizes it.</param>
-public sealed record SignInBeginRequest([property: JsonPropertyName("email")] string? Email);
+public sealed record SignInBeginRequest(
+    [property: JsonPropertyName("email")]
+    string? Email);
 
 /// <summary>What <c>POST /api/signin/begin</c> answers.</summary>
 /// <param name="Offered">
-///     The credential kinds to offer, passkey first. ⚠ <b>Identical for an address with no
-///     account</b> — docs/plan/11 § Credentials.
+///     The credential kinds to offer, passkey first. ⚠
+///     <b>
+///         Identical for an address with no
+///         account
+///     </b> — docs/plan/11 § Credentials.
 /// </param>
-public sealed record SignInBeginResponse([property: JsonPropertyName("offered")] string[] Offered);
+public sealed record SignInBeginResponse(
+    [property: JsonPropertyName("offered")]
+    string[] Offered);
 
 /// <summary>The body of <c>POST /api/signin/password</c>.</summary>
 /// <param name="Email">The address typed.</param>
@@ -36,30 +43,41 @@ public sealed record SignInBeginResponse([property: JsonPropertyName("offered")]
 /// </param>
 /// <param name="ReturnUrl">Where to go afterwards. Sanitized before it appears in any response.</param>
 public sealed record SignInPasswordRequest(
-    [property: JsonPropertyName("email")] string? Email,
-    [property: JsonPropertyName("password")] string? Password,
-    [property: JsonPropertyName("returnUrl")] string? ReturnUrl
+    [property: JsonPropertyName("email")]
+    string? Email,
+    [property: JsonPropertyName("password")]
+    string? Password,
+    [property: JsonPropertyName("returnUrl")]
+    string? ReturnUrl
 );
 
 /// <summary>The body of <c>POST /api/signup</c>.</summary>
 /// <param name="Email">The address typed.</param>
 /// <param name="ReturnUrl">Where to go afterwards.</param>
 public sealed record SignUpRequest(
-    [property: JsonPropertyName("email")] string? Email,
-    [property: JsonPropertyName("returnUrl")] string? ReturnUrl
+    [property: JsonPropertyName("email")]
+    string? Email,
+    [property: JsonPropertyName("returnUrl")]
+    string? ReturnUrl
 );
 
 /// <summary>The body of <c>POST /api/signin/passkey/begin</c>.</summary>
 /// <param name="Email">The address typed.</param>
-public sealed record PasskeyBeginRequest([property: JsonPropertyName("email")] string? Email);
+public sealed record PasskeyBeginRequest(
+    [property: JsonPropertyName("email")]
+    string? Email);
 
 /// <summary>What <c>POST /api/signin/passkey/begin</c> answers.</summary>
 /// <param name="OptionsJson">
-///     The WebAuthn request options. ⚠ Handed to <c>navigator.credentials.get()</c> <b>without being
-///     parsed or rebuilt</b> — the challenge binding is the library's, and reserializing breaks it.
+///     The WebAuthn request options. ⚠ Handed to <c>navigator.credentials.get()</c>
+///     <b>
+///         without being
+///         parsed or rebuilt
+///     </b> — the challenge binding is the library's, and reserializing breaks it.
 /// </param>
 public sealed record PasskeyBeginResponse(
-    [property: JsonPropertyName("optionsJson")] string OptionsJson
+    [property: JsonPropertyName("optionsJson")]
+    string OptionsJson
 );
 
 /// <summary>The body of <c>POST /api/signin/passkey/complete</c>.</summary>
@@ -74,8 +92,10 @@ public sealed record PasskeyBeginResponse(
 ///     <see cref="PasskeyChallengeCookie" /> is where the issued challenge actually lives.
 /// </remarks>
 public sealed record PasskeyCompleteRequest(
-    [property: JsonPropertyName("assertionJson")] string? AssertionJson,
-    [property: JsonPropertyName("returnUrl")] string? ReturnUrl
+    [property: JsonPropertyName("assertionJson")]
+    string? AssertionJson,
+    [property: JsonPropertyName("returnUrl")]
+    string? ReturnUrl
 );
 
 /// <summary>The body of <c>POST /api/signin/otp/send</c>.</summary>
@@ -88,7 +108,8 @@ public sealed record PasskeyCompleteRequest(
 ///     from a request body — see <c>SignInApi.VerifyTotpAsync</c>.
 /// </remarks>
 public sealed record OtpSendRequest(
-    [property: JsonPropertyName("returnUrl")] string? ReturnUrl
+    [property: JsonPropertyName("returnUrl")]
+    string? ReturnUrl
 );
 
 /// <summary>
@@ -98,8 +119,10 @@ public sealed record OtpSendRequest(
 /// <param name="Code">The code typed.</param>
 /// <param name="ReturnUrl">Where to go afterwards.</param>
 public sealed record SecondFactorRequest(
-    [property: JsonPropertyName("code")] string? Code,
-    [property: JsonPropertyName("returnUrl")] string? ReturnUrl
+    [property: JsonPropertyName("code")]
+    string? Code,
+    [property: JsonPropertyName("returnUrl")]
+    string? ReturnUrl
 );
 
 /// <summary>
@@ -122,8 +145,12 @@ public sealed record SecondFactorRequest(
 ///     <c>UniformFailures.SignUp</c>. Empty on success.
 /// </param>
 public sealed record SignInResultResponse(
-    [property: JsonPropertyName("succeeded")] bool Succeeded,
-    [property: JsonPropertyName("secondFactorRequired")] bool SecondFactorRequired,
-    [property: JsonPropertyName("returnUrl")] string ReturnUrl,
-    [property: JsonPropertyName("message")] string Message
+    [property: JsonPropertyName("succeeded")]
+    bool Succeeded,
+    [property: JsonPropertyName("secondFactorRequired")]
+    bool SecondFactorRequired,
+    [property: JsonPropertyName("returnUrl")]
+    string ReturnUrl,
+    [property: JsonPropertyName("message")]
+    string Message
 );

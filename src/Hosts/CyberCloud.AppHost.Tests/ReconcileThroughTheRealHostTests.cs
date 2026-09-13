@@ -6,13 +6,13 @@ using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.Tenancy.Contracts;
-using k8s;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.Configuration;
 using Orleans.Multitenant;
 using System.Diagnostics;
 using System.Globalization;
+using k8s;
 using AuthObjectRef = CyberCloud.Authorization.Contracts.ObjectRef;
 
 namespace CyberCloud.AppHost.Tests;
@@ -27,8 +27,11 @@ namespace CyberCloud.AppHost.Tests;
 ///         reconciled a widget builds its own <c>TestCluster</c>, calls
 ///         <c>AddCyberCloudResourceManager</c> and <c>AddCyberCloudProvider</c> on it, substitutes
 ///         the authorizer (<c>SwitchableAuthorizer</c>, <c>PermissiveAuthorizer</c>) and the
-///         relation writer (<c>RecordingRelationWriter</c>), and then <b>pumps the operation by
-///         hand</b> — <c>ClusterConformanceTests.ConvergeAsync</c> is a loop over
+///         relation writer (<c>RecordingRelationWriter</c>), and then
+///         <b>
+///             pumps the operation by
+///             hand
+///         </b> — <c>ClusterConformanceTests.ConvergeAsync</c> is a loop over
 ///         <c>IOperationGrain.DriveAsync</c>. So a green conformance run says the reconciler
 ///         is correct and says nothing at all about whether the platform reconciles. It stayed green
 ///         through the period in which <c>CyberCloud.Silo.Host</c> composed no provider, and it would
@@ -336,13 +339,13 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
 
         read.GetValueOrThrow()
             .ProvisioningState
-            .ShouldBe(
-                ProvisioningState.Succeeded,
-                "the operation reported Succeeded and the resource did not follow it. "
-                + "OperationGrain.FinishResourceAsync is what moves the resource, and the two "
-                + "disagreeing means a caller polling the operation and a caller reading the resource "
-                + "get different answers."
-            );
+                .ShouldBe(
+                    ProvisioningState.Succeeded,
+                    "the operation reported Succeeded and the resource did not follow it. "
+                    + "OperationGrain.FinishResourceAsync is what moves the resource, and the two "
+                    + "disagreeing means a caller polling the operation and a caller reading the resource "
+                    + "get different answers."
+                );
     }
 
     // ── Waiting ──────────────────────────────────────────────────────────────────────────────────
@@ -425,8 +428,11 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     /// <param name="cancellationToken">The test's token.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A tenant record and one direct <c>tenant:{t}#owner</c> tuple. Everything below
-    ///         this line goes through the platform.</b> <c>CyberCloudSchema</c> gives <c>tenant</c>
+    ///         ⚠
+    ///         <b>
+    ///             A tenant record and one direct <c>tenant:{t}#owner</c> tuple. Everything below
+    ///             this line goes through the platform.
+    ///         </b> <c>CyberCloudSchema</c> gives <c>tenant</c>
     ///         no <c>parent</c> relation — nothing is above it — so no rewrite can produce a grant on
     ///         one and only a direct tuple can. That is not a gap in the platform; it is why
     ///         <c>IScopeManager.CreateTenantAsync</c> exists as a platform-operator seam off the
@@ -458,7 +464,8 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
                 .GetValueOrThrow(),
             Relations.Owner,
             subject
-        ).GetValueOrThrow();
+        )
+            .GetValueOrThrow();
 
         var written = await tenant
             .GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(Tenant))
@@ -479,8 +486,11 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     /// <param name="cancellationToken">The test's token.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THESE ARE THE FIRST TWO STEPS OF THE M1 EXIT STORY AND NOTHING HAD EVER RUN
-    ///         THEM.</b> <c>ISubscriptionGrain.CreateAsync</c> and <c>CreateResourceGroupAsync</c> had
+    ///         ⚠
+    ///         <b>
+    ///             THESE ARE THE FIRST TWO STEPS OF THE M1 EXIT STORY AND NOTHING HAD EVER RUN
+    ///             THEM.
+    ///         </b> <c>ISubscriptionGrain.CreateAsync</c> and <c>CreateResourceGroupAsync</c> had
     ///         no non-test caller in the tree, so every harness — including the version of this file
     ///         that carried a <c>SeedSubscriptionAsync</c> — created its scopes by reaching for the
     ///         grains. The platform can do it now, and this is where that is proved against the
@@ -489,8 +499,11 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     ///     <para>
     ///         ⚠ <b>Nothing here writes a role tuple, and the absence is the assertion.</b> The old
     ///         <c>GrantAsync</c> wrote <c>resourceGroup:{sub}-{rg}#owner@user:{subject}</c> directly,
-    ///         with remarks calling it <i>"the seeding a real deployment does when a subscription is
-    ///         created"</i>. It is not seeding any more: the only grant in this file is on the
+    ///         with remarks calling it
+    ///         <i>
+    ///             "the seeding a real deployment does when a subscription is
+    ///             created"
+    ///         </i>. It is not seeding any more: the only grant in this file is on the
     ///         <b>tenant</b>, and the two calls below are authorized through
     ///         <c>From("parent", "owner")</c> — the <c>subscription#parent@tenant</c> edge the first
     ///         call writes is what makes the second one legal. Step 3 of the widget's <c>PUT</c> then
@@ -550,8 +563,11 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     /// <param name="cancellationToken">The test's token.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>It attaches and does <i>not</i> ping, and the reason is a real property of the
-    ///         grain rather than an omission.</b> <c>ClusterConnectionGrain</c> is null-tenant, so
+    ///         ⚠
+    ///         <b>
+    ///             It attaches and does <i>not</i> ping, and the reason is a real property of the
+    ///             grain rather than an omission.
+    ///         </b> <c>ClusterConnectionGrain</c> is null-tenant, so
     ///         <c>EnsureCallerMayReach</c> is the only thing standing between two tenants — and it
     ///         admits the owning tenant's grains, other null-tenant grains and a platform operator,
     ///         and nothing else. An Orleans <i>client</i> is <c>CallerKind.Client</c> and is refused
@@ -565,8 +581,11 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     ///         in <c>OperationStatus.Error</c> — which <see cref="Diagnose" /> prints.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The credential reference is a <c>file:</c> URI and the silo is what decides
-    ///         whether to honour it.</b> <c>LocalKubeconfigFiles</c> refuses any path outside the root
+    ///         ⚠
+    ///         <b>
+    ///             The credential reference is a <c>file:</c> URI and the silo is what decides
+    ///             whether to honour it.
+    ///         </b> <c>LocalKubeconfigFiles</c> refuses any path outside the root
     ///         the AppHost configured, so this test cannot reach a kubeconfig the topology did not
     ///         write.
     ///     </para>
@@ -637,9 +656,7 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
             if (File.Exists(KubeconfigPath)) {
                 try {
                     var client = new k8s.Kubernetes(
-                        await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(
-                            new FileInfo(KubeconfigPath)
-                        )
+                        await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(new FileInfo(KubeconfigPath))
                     );
 
                     _ = await client.CoreV1.ListNamespaceAsync(limit: 1, cancellationToken: cancellationToken);

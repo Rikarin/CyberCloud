@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using CyberCloud.Sdk;
+using System.Collections.Concurrent;
 
 namespace CyberCloud.Cli.Tests;
 
@@ -37,16 +37,26 @@ sealed class ScriptedTransport : HttpMessageHandler {
     public int RequestCount => Volatile.Read(ref count);
 
     /// <inheritdoc />
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    ) {
         cancellationToken.ThrowIfCancellationRequested();
 
         var index = Interlocked.Increment(ref count) - 1;
 
-        recorded.Enqueue(new RecordedRequest(
-            request.Method,
-            request.RequestUri!,
-            request.Headers.ToDictionary(x => x.Key, x => string.Join(",", x.Value), StringComparer.OrdinalIgnoreCase),
-            request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken)));
+        recorded.Enqueue(
+            new RecordedRequest(
+                request.Method,
+                request.RequestUri!,
+                request.Headers.ToDictionary(
+                    x => x.Key,
+                    x => string.Join(",", x.Value),
+                    StringComparer.OrdinalIgnoreCase
+                ),
+                request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken)
+            )
+        );
 
         onRequest?.Invoke(index);
 
@@ -58,7 +68,11 @@ sealed class ScriptedTransport : HttpMessageHandler {
     /// <param name="Uri">The URL, api-version and all.</param>
     /// <param name="Headers">The request headers, as the pipeline left them.</param>
     /// <param name="Body">The request body.</param>
-    public sealed record RecordedRequest(HttpMethod Method, Uri Uri, IReadOnlyDictionary<string, string> Headers, string Body) {
+    public sealed record RecordedRequest(
+        HttpMethod Method,
+        Uri Uri,
+        IReadOnlyDictionary<string, string> Headers,
+        string Body) {
         /// <summary>One header's value.</summary>
         /// <param name="name">The header name.</param>
         public string? Header(string name) => Headers.GetValueOrDefault(name);
@@ -72,10 +86,13 @@ static class Responses {
     /// <param name="body">The body.</param>
     public static HttpResponseMessage Json(HttpStatusCode status, string body) {
         var response = new HttpResponseMessage(status) {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
 
-        response.Headers.TryAddWithoutValidation(CyberCloudHeaders.RequestId, "req-" + Guid.NewGuid().ToString("N")[..8]);
+        response.Headers.TryAddWithoutValidation(
+            CyberCloudHeaders.RequestId,
+            "req-" + Guid.NewGuid().ToString("N")[..8]
+        );
 
         return response;
     }

@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every amount a managed service actually meters is one of these, and none of them is a
-///         JSON number.</b> <c>CyberCloud.DBforPostgreSQL/servers</c> spells its vCPU as <c>500m</c>,
+///         ⚠
+///         <b>
+///             Every amount a managed service actually meters is one of these, and none of them is a
+///             JSON number.
+///         </b> <c>CyberCloud.DBforPostgreSQL/servers</c> spells its vCPU as <c>500m</c>,
 ///         its memory as <c>2Gi</c> and its data volume as <c>20Gi</c>, so a meter that could only read
 ///         a number could declare nothing but <see cref="QuotaMeter.Resources" /> — a count of one —
 ///         while the two things a customer buys stayed outside quota entirely. This type is the
@@ -23,8 +26,11 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///         writing its own.
 ///     </para>
 ///     <para>
-///         ⚠ <b>That paragraph used to end "so there is no second implementation to reconcile with",
-///         and a second implementation was written anyway.</b>
+///         ⚠
+///         <b>
+///             That paragraph used to end "so there is no second implementation to reconcile with",
+///             and a second implementation was written anyway.
+///         </b>
 ///         <c>ValkeyCaches.QuantityBytes</c> parsed the same grammar in <see langword="double" />,
 ///         truncated, and returned <see langword="null" /> where this refuses — written by an author
 ///         who could not see this file, because the Valkey one lived in a provider's
@@ -62,8 +68,11 @@ public static class KubeQuantity {
     ///     property's <c>Pattern</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The grammar lives beside the parser because separating them is how the platform got a
-    ///     second parser.</b> Each provider declared its own copy of this string, so
+    ///     ⚠
+    ///     <b>
+    ///         The grammar lives beside the parser because separating them is how the platform got a
+    ///         second parser.
+    ///     </b> Each provider declared its own copy of this string, so
     ///     <c>ValkeyCaches.QuantityPattern</c> was reachable from a provider that had never heard of
     ///     <see cref="KubeQuantity" /> — and the author who needed to turn one of these into a number
     ///     wrote the conversion where the pattern was. Anything that validates a quantity and anything

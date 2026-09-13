@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>These assertions are about names a compiler would refuse, not about text a reader
-///         would like.</b> Nothing in the .NET build compiles TypeScript and
+///         ⚠
+///         <b>
+///             These assertions are about names a compiler would refuse, not about text a reader
+///             would like.
+///         </b> Nothing in the .NET build compiles TypeScript and
 ///         <c>portal/eslint.config.mjs</c> ignores <c>libs/api/**</c>, so the real check is
 ///         <c>pnpm typecheck:api</c>, one toolchain over. What lives here is the part that can be
 ///         asserted from a document without a Node process — that every type the client names is one
@@ -29,8 +32,7 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 ///     </para>
 /// </remarks>
 public sealed class TypeScriptSurfaceTests {
-    static JsonObject Document =>
-        OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
+    static JsonObject Document => OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
 
     static ImmutableSortedDictionary<string, string> Client => TypeScriptEmitter.Emit(Document);
 
@@ -38,14 +40,16 @@ public sealed class TypeScriptSurfaceTests {
     public void ThePackageIsTheFilesTheReadmeAsksFor() {
         var files = Client;
 
-        files.Keys.ShouldBe([
-            "package.json",
-            "src/client.ts",
-            "src/index.ts",
-            "src/models.ts",
-            "src/transport.ts",
-            "tsconfig.json"
-        ]);
+        files.Keys.ShouldBe(
+            [
+                "package.json",
+                "src/client.ts",
+                "src/index.ts",
+                "src/models.ts",
+                "src/transport.ts",
+                "tsconfig.json"
+            ]
+        );
 
         TypeScriptEmitter.Problems(files).ShouldBeEmpty();
     }
@@ -176,7 +180,8 @@ public sealed class TypeScriptSurfaceTests {
             // Every `${…}` in a path expression is a call to the encoder and never a bare parameter.
             var scan = line;
 
-            for (var at = scan.IndexOf("${", StringComparison.Ordinal); at >= 0;
+            for (var at = scan.IndexOf("${", StringComparison.Ordinal);
+                 at >= 0;
                  at = scan.IndexOf("${", at + 2, StringComparison.Ordinal)) {
                 scan[at..].ShouldStartWith("${CyberCloudApi.segment(", customMessage: line.Trim());
             }
@@ -248,14 +253,16 @@ public sealed class TypeScriptSurfaceTests {
 
     /// <summary>A body with <c>mode</c> at two depths, both closed.</summary>
     static ResourceSchema CollidingEnums() =>
-        ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Required: true),
-            new("/properties/mode", SchemaKind.Text, Description: "The top-level one.") {
-                AllowedValues = ["Sentinel", "Standalone"]
-            },
-            new("/properties/persistence", SchemaKind.Nested),
-            new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one.") {
-                AllowedValues = ["None", "RDB", "AOF"]
-            }
-        ]);
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties/mode", SchemaKind.Text, Description: "The top-level one.") {
+                    AllowedValues = ["Sentinel", "Standalone"]
+                },
+                new("/properties/persistence", SchemaKind.Nested),
+                new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one.") {
+                    AllowedValues = ["None", "RDB", "AOF"]
+                }
+            ]
+        );
 }

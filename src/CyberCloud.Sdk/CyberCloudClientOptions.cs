@@ -3,8 +3,11 @@ namespace CyberCloud.Sdk;
 /// <summary>Options for <see cref="CyberCloudClient" />.</summary>
 public class CyberCloudClientOptions {
     /// <summary>
-    ///     The api-versions this SDK build can speak. docs/plan/10 § API versioning: <i>"Versions are
-    ///     dates and immutable"</i> — a member is never removed and never re-pointed.
+    ///     The api-versions this SDK build can speak. docs/plan/10 § API versioning:
+    ///     <i>
+    ///         "Versions are
+    ///         dates and immutable"
+    ///     </i> — a member is never removed and never re-pointed.
     /// </summary>
     /// <remarks>
     ///     ⚠ The generator adds a member per published api-version and the emitted clients select their
@@ -13,7 +16,7 @@ public class CyberCloudClientOptions {
     /// </remarks>
     public enum ServiceVersion {
         /// <summary>The first published api-version — <c>openapi/2026-08-01.json</c>.</summary>
-        V2026_08_01 = 1,
+        V2026_08_01 = 1
     }
 
     /// <summary>The newest api-version this build knows. New clients default to it.</summary>

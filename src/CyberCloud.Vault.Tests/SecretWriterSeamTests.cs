@@ -10,8 +10,11 @@ namespace CyberCloud.Vault.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FAILURE CLASS IS A WRITE SEAM THAT BECAME PERMISSIVE — AND ON THIS SEAM
-///         "PERMISSIVE" MEANS SILENTLY DOING NOTHING.</b> A resolver that went wrong hands back a
+///         ⚠
+///         <b>
+///             THE FAILURE CLASS IS A WRITE SEAM THAT BECAME PERMISSIVE — AND ON THIS SEAM
+///             "PERMISSIVE" MEANS SILENTLY DOING NOTHING.
+///         </b> A resolver that went wrong hands back a
 ///         value or refuses. A writer that went wrong can report success and write nothing, and the
 ///         reconciler then renders a data plane against a credential that does not exist. On
 ///         <c>CyberCloud.Storage/accounts</c> that is an S3 gateway with no identities file, which
@@ -19,8 +22,11 @@ namespace CyberCloud.Vault.Tests;
 ///         an administrator.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Shaped after <c>VaultSeamWiringTests</c>, which is itself shaped after
-///         <c>OtpSeamWiringTests</c>, because that suite exists because of a real defect.</b> Three
+///         ⚠
+///         <b>
+///             Shaped after <c>VaultSeamWiringTests</c>, which is itself shaped after
+///             <c>OtpSeamWiringTests</c>, because that suite exists because of a real defect.
+///         </b> Three
 ///         files claimed <c>UnavailableOtpDelivery</c> was what "every host in this repository" gets
 ///         while no host registered the seam at all. Every claim below is checked rather than
 ///         asserted in prose.
@@ -40,9 +46,7 @@ public sealed class SecretWriterSeamTests {
 
     [Fact]
     public void WiringOneHostDoesNotChangeWhatAnotherHostGets() {
-        var wired = Writer(
-            services => services.AddCyberCloudResourceManager().AddOpenBaoSecretResolver(Wired)
-        );
+        var wired = Writer(services => services.AddCyberCloudResourceManager().AddOpenBaoSecretResolver(Wired));
 
         var unwired = Writer(services => services.AddCyberCloudResourceManager());
 

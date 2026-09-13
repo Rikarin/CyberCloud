@@ -9,8 +9,11 @@ namespace CyberCloud.Authorization.Contracts.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FAILURE CLASS THIS SUITE EXISTS FOR IS ONE CHARACTER OF CASING, AND IT HAS
-///         ALREADY HAPPENED HERE ONCE.</b> <c>resourcegroup</c> where the schema says
+///         ⚠
+///         <b>
+///             THE FAILURE CLASS THIS SUITE EXISTS FOR IS ONE CHARACTER OF CASING, AND IT HAS
+///             ALREADY HAPPENED HERE ONCE.
+///         </b> <c>resourcegroup</c> where the schema says
 ///         <c>resourceGroup</c> once failed <i>every create in the platform</i> and surfaced as a 404
 ///         whose real reason was in a log line —
 ///         <c>ReBacResourceAuthorizer.CheckedObject</c>'s remarks carry that account. Relation names
@@ -29,8 +32,11 @@ namespace CyberCloud.Authorization.Contracts.Tests;
 ///         which is the point.
 ///     </para>
 ///     <para>
-///         ⚠ <b>These four classes changed assemblies, and that is the other reason this file
-///         exists.</b> <c>ObjectTypes</c>, <c>Relations</c> and <c>Permissions</c> came from
+///         ⚠
+///         <b>
+///             These four classes changed assemblies, and that is the other reason this file
+///             exists.
+///         </b> <c>ObjectTypes</c>, <c>Relations</c> and <c>Permissions</c> came from
 ///         <c>CyberCloud.Authorization</c>; <c>SubjectTypes</c> came from
 ///         <c>CyberCloud.Identity.Contracts</c>. A move is the moment a literal is retyped, and it is
 ///         also the moment a wire alias is dropped — see
@@ -171,7 +177,9 @@ public sealed class AuthorizationVocabularyTests {
         // [GenerateSerializer] or [Alias] can meaningfully be put on. This asserts that rather than
         // assuming it — a future member that was a record, or a class that grew an [Alias], would be
         // a wire type that had quietly changed assemblies.
-        foreach (var type in (Type[])[typeof(ObjectTypes), typeof(Relations), typeof(Permissions), typeof(SubjectTypes)]) {
+        foreach (var type in (Type[])[
+                     typeof(ObjectTypes), typeof(Relations), typeof(Permissions), typeof(SubjectTypes)
+                 ]) {
             type.IsAbstract.ShouldBeTrue(type.Name);
             type.IsSealed.ShouldBeTrue($"{type.Name} should be a static class");
 
@@ -197,8 +205,7 @@ public sealed class AuthorizationVocabularyTests {
 
     /// <summary>Every <c>public const string</c> declared on a vocabulary class.</summary>
     /// <param name="type">The class.</param>
-    static IReadOnlyList<string> Literals(Type type) =>
-    [
+    static IReadOnlyList<string> Literals(Type type) => [
         .. type.GetFields(BindingFlags.Public | BindingFlags.Static)
             .Where(x => x.IsLiteral && x.FieldType == typeof(string))
             .Select(x => (string)x.GetRawConstantValue()!)

@@ -122,7 +122,9 @@ public sealed class LongRunningOperationTests {
 
         // The pair is what makes Operation<T> and `--wait` standard rather than bespoke.
         response.Header(GatewayHeaders.AsyncOperation)
-            .ShouldBe($"https://api.cybercloud.io/operations/{TheOperation:D}?api-version={OneTypeRegistry.TheVersion}");
+            .ShouldBe(
+                $"https://api.cybercloud.io/operations/{TheOperation:D}?api-version={OneTypeRegistry.TheVersion}"
+            );
 
         response.Header(GatewayHeaders.RetryAfter).ShouldBe("10");
     }
@@ -164,16 +166,20 @@ public sealed class LongRunningOperationTests {
     public async Task TheOperationEndpointReturnsTheProgressArray() {
         var gateway = new GatewayHarness();
 
-        gateway.Operations.OnRead = id => Result<OperationStatus>.Success(new() {
-            OperationId = id,
-            State = OperationState.Running,
-            PercentComplete = 40,
-            ResourcePath = GatewayHarness.ResourcePath(GatewayHarness.TenantA),
-            StartedAt = gateway.Clock.UtcNow,
-            Progress = [
-                new() { At = gateway.Clock.UtcNow, Step = "etcd", Detail = "etcd cluster ready", PercentComplete = 40 }
-            ]
-        });
+        gateway.Operations.OnRead = id => Result<OperationStatus>.Success(
+            new() {
+                OperationId = id,
+                State = OperationState.Running,
+                PercentComplete = 40,
+                ResourcePath = GatewayHarness.ResourcePath(GatewayHarness.TenantA),
+                StartedAt = gateway.Clock.UtcNow,
+                Progress = [
+                    new() {
+                        At = gateway.Clock.UtcNow, Step = "etcd", Detail = "etcd cluster ready", PercentComplete = 40
+                    }
+                ]
+            }
+        );
 
         var response = await gateway.SendAsync(
             "GET",
@@ -195,12 +201,14 @@ public sealed class LongRunningOperationTests {
     public async Task ATerminalOperationDoesNotAskTheCallerToKeepPolling() {
         var gateway = new GatewayHarness();
 
-        gateway.Operations.OnRead = id => Result<OperationStatus>.Success(new() {
-            OperationId = id,
-            State = OperationState.Succeeded,
-            PercentComplete = 100,
-            ResourcePath = GatewayHarness.ResourcePath(GatewayHarness.TenantA)
-        });
+        gateway.Operations.OnRead = id => Result<OperationStatus>.Success(
+            new() {
+                OperationId = id,
+                State = OperationState.Succeeded,
+                PercentComplete = 100,
+                ResourcePath = GatewayHarness.ResourcePath(GatewayHarness.TenantA)
+            }
+        );
 
         var response = await gateway.SendAsync(
             "GET",
@@ -260,11 +268,7 @@ public sealed class LongRunningOperationTests {
         var manager = new RecordingResourceManager();
         var reader = new TenantScopedOperationReader(manager);
 
-        var caller = new CallerContext {
-            TenantId = GatewayHarness.TenantA,
-            SubjectType = "user",
-            SubjectId = "alice"
-        };
+        var caller = new CallerContext { TenantId = GatewayHarness.TenantA, SubjectType = "user", SubjectId = "alice" };
 
         var status = await reader.ReadAsync(caller, TheOperation, TestContext.Current.CancellationToken);
 

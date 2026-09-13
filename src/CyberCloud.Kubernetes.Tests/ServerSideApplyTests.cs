@@ -437,11 +437,11 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
         );
 
         var page = (await k3s.Api.ListAsync(
-            Deployments,
-            K3sFixture.Namespace,
-            KubeLabels.ManagedBySelector,
-            cancellationToken: token
-        )).GetValueOrThrow();
+                Deployments,
+                K3sFixture.Namespace,
+                KubeLabels.ManagedBySelector,
+                cancellationToken: token
+            )).GetValueOrThrow();
 
         page.ResourceVersion.ShouldNotBeEmpty("a list must yield a watch cursor.");
         page.Items.ShouldContain(x => x.Contains("\"ssa-ours\"", StringComparison.Ordinal));
@@ -510,9 +510,9 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
         );
 
         var outcome = (await k3s.Api.ApplyAsync(
-            Command(name, 1, ConfigMaps, $$"""{ "metadata": { "name": "{{name}}" }, "data": { "k": "ours" } }"""),
-            token
-        )).GetValueOrThrow();
+                Command(name, 1, ConfigMaps, $$"""{ "metadata": { "name": "{{name}}" }, "data": { "k": "ours" } }"""),
+                token
+            )).GetValueOrThrow();
 
         outcome.Result.ShouldBe(ApplyResult.Conflict);
         (await k3s.ReadFieldAsync("configmaps", name, "", "v1", "data", "k"))

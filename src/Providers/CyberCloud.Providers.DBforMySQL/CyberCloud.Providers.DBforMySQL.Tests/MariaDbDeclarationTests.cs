@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.DBforMySQL.Tests;
 ///     What only this provider can be wrong about in its declaration.
 /// </summary>
 /// <remarks>
-///     The lifecycle — create, poll, read back, tag, lock, delete, drift, <b>and the parent ReBAC
-///     edge</b> — is <c>CyberCloud.Providers.DBforMySQL.Conformance</c>'s, because those are the
+///     The lifecycle — create, poll, read back, tag, lock, delete, drift,
+///     <b>
+///         and the parent ReBAC
+///         edge
+///     </b> — is <c>CyberCloud.Providers.DBforMySQL.Conformance</c>'s, because those are the
 ///     <i>shared</i> suite's assertions and a per-provider copy is the drift docs/plan/03 § Providers
 ///     warns about.
 /// </remarks>
@@ -91,9 +94,8 @@ public sealed class MariaDbDeclarationTests {
 
         parsed.Type.Namespace.ShouldBe("CyberCloud.DBforMySQL");
         parsed.Type.Type.ShouldBe("servers");
-        registry.TryGetType(parsed.Type, out _).ShouldBeTrue(
-            "a path that round-tripped through the gateway's own parser no longer finds the type"
-        );
+        registry.TryGetType(parsed.Type, out _)
+            .ShouldBeTrue("a path that round-tripped through the gateway's own parser no longer finds the type");
     }
 
     [Fact]
@@ -148,10 +150,22 @@ public sealed class MariaDbDeclarationTests {
     ///     is the FIRST problem found.
     /// </remarks>
     [Theory]
-    [InlineData("""{"properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"11.4","storage":{"size":"20Gi"}}}""", "/location")]
-    [InlineData("""{"location":"eu-central","properties":{"version":"11.4","storage":{"size":"20Gi"}}}""", "/properties/clusterId")]
-    [InlineData("""{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","storage":{"size":"20Gi"}}}""", "/properties/version")]
-    [InlineData("""{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"11.4"}}""", "/properties/storage/size")]
+    [InlineData(
+        """{"properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"11.4","storage":{"size":"20Gi"}}}""",
+        "/location"
+    )]
+    [InlineData(
+        """{"location":"eu-central","properties":{"version":"11.4","storage":{"size":"20Gi"}}}""",
+        "/properties/clusterId"
+    )]
+    [InlineData(
+        """{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","storage":{"size":"20Gi"}}}""",
+        "/properties/version"
+    )]
+    [InlineData(
+        """{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"11.4"}}""",
+        "/properties/storage/size"
+    )]
     public void EveryRequiredPropertyIsActuallyRequired(string body, string expectedTarget) {
         using var document = JsonDocument.Parse(body);
 
@@ -165,8 +179,11 @@ public sealed class MariaDbDeclarationTests {
     ///     Values the API must refuse, at the pointer that must refuse them.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The alternative to each of these is a body that validates and then produces a MariaDB
-    ///     the API server or the operator refuses AFTER the caller was told <c>202</c>.</b> A tenant
+    ///     ⚠
+    ///     <b>
+    ///         The alternative to each of these is a body that validates and then produces a MariaDB
+    ///         the API server or the operator refuses AFTER the caller was told <c>202</c>.
+    ///     </b> A tenant
     ///     reads that as "the platform accepted my request and lost it", and the reason is in an
     ///     operator's event stream rather than in the operation's error.
     /// </remarks>
@@ -240,9 +257,8 @@ public sealed class MariaDbDeclarationTests {
         // documented values.
         using var document = JsonDocument.Parse(BodyWith(jsonPointer, literal));
 
-        MariaDbServers.Schema2026.Validate(document.RootElement).IsSuccess.ShouldBeTrue(
-            $"'{jsonPointer}' refused {literal}"
-        );
+        MariaDbServers.Schema2026.Validate(document.RootElement)
+            .IsSuccess.ShouldBeTrue($"'{jsonPointer}' refused {literal}");
     }
 
     [Fact]
@@ -320,9 +336,7 @@ public sealed class MariaDbDeclarationTests {
     ///     somebody else owns.
     /// </remarks>
     static string BodyWith(string pointer, string literal) {
-        var body = JsonNode.Parse(
-            MariaDbServers.Body(Guid.Parse("7b6a5c4d-0000-4000-8000-000000000001"))
-        )!.AsObject();
+        var body = JsonNode.Parse(MariaDbServers.Body(Guid.Parse("7b6a5c4d-0000-4000-8000-000000000001")))!.AsObject();
 
         Place(body, pointer, JsonNode.Parse(literal));
         return body.ToJsonString();

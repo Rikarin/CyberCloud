@@ -11,7 +11,8 @@ namespace CyberCloud.Identity.Grains;
 ///     it handles the protocol, we own the stores, and the stores are grains."
 /// </remarks>
 public sealed class ApplicationGrain(
-    [PersistentState("application", StorageTiers.Durable)] IPersistentState<ApplicationGrainState> state,
+    [PersistentState("application", StorageTiers.Durable)]
+    IPersistentState<ApplicationGrainState> state,
     IClock clock
 )
     : Grain, IApplicationGrain {
@@ -45,9 +46,7 @@ public sealed class ApplicationGrain(
         // application would otherwise write one grain's state under another's identity — and the body
         // is caller-supplied on a control-plane endpoint.
         state.State.Registration = validated.GetValueOrThrow() with {
-            ApplicationId = applicationId,
-            TenantId = tenantId,
-            CreatedAt = clock.UtcNow
+            ApplicationId = applicationId, TenantId = tenantId, CreatedAt = clock.UtcNow
         };
 
         await state.WriteStateAsync();

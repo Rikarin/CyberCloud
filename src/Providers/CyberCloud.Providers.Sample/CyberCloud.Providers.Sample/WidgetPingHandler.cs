@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Text.Json;
@@ -13,8 +14,10 @@ namespace CyberCloud.Providers.Sample;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>The reference provider's action, and the reason it now has a handler is that it is the
-///         reference.</b> This action exists so the conformance suite has a real <c>POST</c> to
+///         <b>
+///             The reference provider's action, and the reason it now has a handler is that it is the
+///             reference.
+///         </b> This action exists so the conformance suite has a real <c>POST</c> to
 ///         drive — docs/plan/08 § The write path, end to end makes <c>POST</c> "appear only for
 ///         actions on an existing resource … never for creation", and a suite with no action
 ///         registered cannot check the second half. It did that job while doing nothing, which was
@@ -65,17 +68,14 @@ public sealed class WidgetPingHandler(IClock clock) : IResourceActionHandler {
         CancellationToken cancellationToken = default
     ) {
         var echo = context.Body.ValueKind == JsonValueKind.Object
-                   && context.Body.TryGetProperty("echo", out var sent)
-                   && sent.ValueKind == JsonValueKind.String
-            ? sent.GetString() ?? DefaultEcho
-            : DefaultEcho;
+            && context.Body.TryGetProperty("echo", out var sent)
+            && sent.ValueKind == JsonValueKind.String
+                ? sent.GetString() ?? DefaultEcho
+                : DefaultEcho;
 
         return Task.FromResult(
             Result<string>.Success(
-                new JsonObject {
-                    ["echo"] = echo,
-                    ["at"] = clock.UtcNow.ToString("O")
-                }.ToJsonString()
+                new JsonObject { ["echo"] = echo, ["at"] = clock.UtcNow.ToString("O") }.ToJsonString()
             )
         );
     }

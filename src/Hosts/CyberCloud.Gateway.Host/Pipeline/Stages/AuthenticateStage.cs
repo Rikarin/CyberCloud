@@ -27,8 +27,11 @@ sealed class AuthenticateStage(ICallerContextResolver resolver) : IGatewayStage 
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>An anonymous route is not an unlimited one.</b> These two are the only requests that
-    ///     reach stage 5 with no tenant, which is what makes docs/plan/10 § Rate limiting's <i>per IP,
-    ///     unauthenticated</i> bucket reachable at all — see the defect note in
+    ///     reach stage 5 with no tenant, which is what makes docs/plan/10 § Rate limiting's
+    ///     <i>
+    ///         per IP,
+    ///         unauthenticated
+    ///     </i> bucket reachable at all — see the defect note in
     ///     <c>GatewayRateLimiter</c>. Both are public documents by design: the OpenAPI document is
     ///     the generated API surface and the discovery document is OIDC's, and neither says anything
     ///     about a tenant.

@@ -21,8 +21,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         Kube-OVN <c>Vpc</c> carries no CIDR — <see cref="VirtualNetworks.Schema2026" />'s
 ///         <c>addressSpace</c> is a declaration the platform checks and does not render. This
 ///         property <i>is</i> rendered, it is what an address is allocated from, and it is therefore
-///         the one the reserved-range check most needs to run against. ⚠ <b>Nothing checks it against
-///         its parent's declared address space</b>, because that is a relation between two resources'
+///         the one the reserved-range check most needs to run against. ⚠
+///         <b>
+///             Nothing checks it against
+///             its parent's declared address space
+///         </b>, because that is a relation between two resources'
 ///         bodies and <c>ResourceSchema</c> validates each property against constants — the same shape
 ///         as <c>charts/managed/seaweedfs-bucket</c>'s
 ///         <c>bucket-cluster-may-differ-from-its-accounts</c>. So a subnet may legally sit outside the
@@ -39,8 +42,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <see cref="VpcRefOf" /> and <see cref="ObjectNameOf(string, ResourceId)" />, both of which take the id.
 ///     </para>
 ///     <para>
-///         ⚠ <b>CLUSTER-SCOPED, LIKE ITS PARENT, AND THE NAME HAS TO CARRY THREE THINGS RATHER THAN
-///         TWO.</b> <c>pkg/apis/kubeovn/v1/subnet.go</c>:
+///         ⚠
+///         <b>
+///             CLUSTER-SCOPED, LIKE ITS PARENT, AND THE NAME HAS TO CARRY THREE THINGS RATHER THAN
+///             TWO.
+///         </b> <c>pkg/apis/kubeovn/v1/subnet.go</c>:
 ///         <c>// +kubebuilder:resource:scope="Cluster",shortName="subnet",path="subnets"</c>. So
 ///         <see cref="ObjectNameOf(string, ResourceId)" /> folds in the namespace <i>and</i> the parent network's name —
 ///         the namespace because two subscriptions must not collide, and the parent's name because two
@@ -50,8 +56,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <c>StorageBuckets.ObjectNameOf</c>'s hazard with one more level on it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE CONTROLLER REWRITES THIS OBJECT'S SPEC MORE THAN ANY OTHER IN THE FAMILY, AND
-///         <see cref="Matches" /> IS BUILT AROUND THAT FACT RATHER THAN AROUND DEFAULTING.</b>
+///         ⚠
+///         <b>
+///             THE CONTROLLER REWRITES THIS OBJECT'S SPEC MORE THAN ANY OTHER IN THE FAMILY, AND
+///             <see cref="Matches" /> IS BUILT AROUND THAT FACT RATHER THAN AROUND DEFAULTING.
+///         </b>
 ///         <c>pkg/controller/subnet.go</c>'s <c>formatSubnet</c> and <c>formatAddress</c>, read
 ///         firsthand, do all of the following on an object this provider applied and then issue a full
 ///         <c>Subnets().Update(...)</c>:
@@ -60,8 +69,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <item>
 ///             <b><c>cidrBlock</c> is CANONICALIZED</b> — each comma-separated element goes through
 ///             Go's <c>net.ParseCIDR</c> and is written back as <c>ipNet.String()</c>. A tenant who
-///             sends <c>10.20.5.7/24</c> gets <c>10.20.5.0/24</c> stored. ⚠ <b>A string comparison
-///             here is the bug</b>: it reports drift on a perfectly converged subnet, forever. This is
+///             sends <c>10.20.5.7/24</c> gets <c>10.20.5.0/24</c> stored. ⚠
+///             <b>
+///                 A string comparison
+///                 here is the bug
+///             </b>: it reports drift on a perfectly converged subnet, forever. This is
 ///             why <see cref="Cidr.Canonical" /> exists and why <see cref="Matches" /> compares parsed
 ///             networks.
 ///         </item>
@@ -85,11 +97,17 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>And all of that is quite separate from the usual containment argument, which is FALSE
-///         here.</b> The <c>Subnet</c> CRD declares <b>zero</b> <c>default:</c> values — the
+///         ⚠
+///         <b>
+///             And all of that is quite separate from the usual containment argument, which is FALSE
+///             here.
+///         </b> The <c>Subnet</c> CRD declares <b>zero</b> <c>default:</c> values — the
 ///         <c>default:</c> lines in its schema are a property <i>named</i> <c>default</c>
-///         (<c>SubnetSpec.Default bool</c>), which is a trap worth naming — and Kube-OVN ships <b>no
-///         mutating webhook at all</b>; its only webhook is a validating one that is off in a default
+///         (<c>SubnetSpec.Default bool</c>), which is a trap worth naming — and Kube-OVN ships
+///         <b>
+///             no
+///             mutating webhook at all
+///         </b>; its only webhook is a validating one that is off in a default
 ///         install. Three families argue containment from structural defaulting and it would not have
 ///         applied here; the reason containment is nonetheless mandatory is the controller, which is a
 ///         third mechanism and the hardest of the three to see.
@@ -100,8 +118,11 @@ public static class NetworkSubnets {
     public const string ProviderNamespace = VirtualNetworks.ProviderNamespace;
 
     /// <summary>
-    ///     The type path. ⚠ <b><c>virtualNetworks/subnets</c>, interleaved — not a flattened
-    ///     <c>subnets</c>.</b>
+    ///     The type path. ⚠
+    ///     <b>
+    ///         <c>virtualNetworks/subnets</c>, interleaved — not a flattened
+    ///         <c>subnets</c>.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     docs/plan/12 § Child resources chose <c>…/virtualNetworks/{network}/subnets/{subnet}</c>
@@ -190,8 +211,11 @@ public static class NetworkSubnets {
     /// <param name="network">The virtual network's name.</param>
     /// <param name="subnet">The subnet's name.</param>
     /// <remarks>
-    ///     ⚠ <b>It exists so that a second type can name a subnet without spelling this joining
-    ///     again</b>, which is the rule <see cref="VpcRefOf" /> states in the other direction:
+    ///     ⚠
+    ///     <b>
+    ///         It exists so that a second type can name a subnet without spelling this joining
+    ///         again
+    ///     </b>, which is the rule <see cref="VpcRefOf" /> states in the other direction:
     ///     <c>LoadBalancers.LogicalSwitchOf</c> puts a proxy pod on this object through
     ///     <c>ovn.kubernetes.io/logical_switch</c>, and a second spelling of the name would put it on a
     ///     switch that does not exist the day this one changes — a pod that never schedules, reported
@@ -202,15 +226,17 @@ public static class NetworkSubnets {
     ///         subnet resource id to build, only a name out of a body and a parent out of an address.
     ///     </para>
     /// </remarks>
-    public static string ObjectNameOf(string ns, string network, string subnet) =>
-        ns + "-" + network + "-" + subnet;
+    public static string ObjectNameOf(string ns, string network, string subnet) => ns + "-" + network + "-" + subnet;
 
     /// <summary>The <c>Vpc</c> object name a subnet binds to.</summary>
     /// <param name="ns">The resource's namespace, used as a name component.</param>
     /// <param name="id">The subnet's address.</param>
     /// <remarks>
-    ///     ⚠ <b>Read off the ADDRESS and never off the body, and composed through
-    ///     <see cref="VirtualNetworks.ObjectNameOf" /> rather than spelled again here.</b> The parent's
+    ///     ⚠
+    ///     <b>
+    ///         Read off the ADDRESS and never off the body, and composed through
+    ///         <see cref="VirtualNetworks.ObjectNameOf" /> rather than spelled again here.
+    ///     </b> The parent's
     ///     object name is the parent's business; a second spelling of it in this file would be the
     ///     thing that silently stops agreeing the day the parent's naming changes, and the symptom
     ///     would be a subnet bound to a VPC that does not exist — which Kube-OVN treats as a subnet of
@@ -242,8 +268,11 @@ public static class NetworkSubnets {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>TWO PREFIX PROPERTIES RATHER THAN ONE COMMA-SEPARATED STRING, AND THE SUBSTRATE
-    ///         WANTS THE COMMA.</b> Kube-OVN spells dual-stack as
+    ///         ⚠
+    ///         <b>
+    ///             TWO PREFIX PROPERTIES RATHER THAN ONE COMMA-SEPARATED STRING, AND THE SUBSTRATE
+    ///             WANTS THE COMMA.
+    ///         </b> Kube-OVN spells dual-stack as
     ///         <c>cidrBlock: "10.20.1.0/24,fd00:20:1::/64"</c> — one string, IPv4 first, split on
     ///         <c>,</c> by <c>util.CheckProtocol</c>. Exposing that spelling in the API would make the
     ///         property unpatternable in practice and would put the ordering rule in a description
@@ -252,8 +281,11 @@ public static class NetworkSubnets {
     ///         first" a fact of <see cref="CidrBlock" /> rather than of a tenant's typing.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>natOutgoing</c> DEFAULTS TO <c>false</c>, WHICH IS THE OPPOSITE OF KUBE-OVN'S
-    ///         OWN CONVENTION AND IS THE SECURITY DECISION.</b> Kube-OVN's default subnet has NAT on,
+    ///         ⚠
+    ///         <b>
+    ///             <c>natOutgoing</c> DEFAULTS TO <c>false</c>, WHICH IS THE OPPOSITE OF KUBE-OVN'S
+    ///             OWN CONVENTION AND IS THE SECURITY DECISION.
+    ///         </b> Kube-OVN's default subnet has NAT on,
     ///         because a cluster pod network is expected to reach the internet. A tenant subnet is
     ///         not: docs/plan/12 § Cross-cutting decisions defaults external exposure to off across
     ///         the platform, and a subnet that silently egresses to the internet is the same class of
@@ -263,18 +295,27 @@ public static class NetworkSubnets {
     ///         inferred from the JSON.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>private</c> IS DECLARED AND <c>allowSubnets</c> IS NOT, WHICH IS HALF A FEATURE
-    ///         AND IS DELIBERATE.</b> <c>spec.private</c> isolates a subnet from every other subnet;
-    ///         <c>spec.allowSubnets</c> then punches named holes in that. The holes name <i>other
-    ///         subnets' CIDRs</i>, which is an array of strings referring to sibling resources — a
+    ///         ⚠
+    ///         <b>
+    ///             <c>private</c> IS DECLARED AND <c>allowSubnets</c> IS NOT, WHICH IS HALF A FEATURE
+    ///             AND IS DELIBERATE.
+    ///         </b> <c>spec.private</c> isolates a subnet from every other subnet;
+    ///         <c>spec.allowSubnets</c> then punches named holes in that. The holes name
+    ///         <i>
+    ///             other
+    ///             subnets' CIDRs
+    ///         </i>, which is an array of strings referring to sibling resources — a
     ///         cross-resource reference with no reader (rule 2), and an array whose per-element pattern
     ///         ADR-012's fifth surface refuses. So the isolation switch ships and the exception list
     ///         does not, and the honest reading of <c>private: true</c> in this api-version is "no
     ///         traffic from other subnets at all". <c>§ owed</c>, <c>private-has-no-exceptions</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>NO <c>protocol</c> PROPERTY, AND ITS ABSENCE IS LOAD-BEARING RATHER THAN AN
-    ///         OVERSIGHT.</b> Kube-OVN's <c>spec.protocol</c> is <c>IPv4</c>/<c>IPv6</c>/<c>Dual</c>,
+    ///         ⚠
+    ///         <b>
+    ///             NO <c>protocol</c> PROPERTY, AND ITS ABSENCE IS LOAD-BEARING RATHER THAN AN
+    ///             OVERSIGHT.
+    ///         </b> Kube-OVN's <c>spec.protocol</c> is <c>IPv4</c>/<c>IPv6</c>/<c>Dual</c>,
     ///         and the controller recomputes it from the CIDR on every pass, unconditionally,
     ///         discarding whatever was sent. A property here would be a control that does nothing —
     ///         the worst of the three possible outcomes, because the document would promise it and the
@@ -316,11 +357,7 @@ public static class NetworkSubnets {
                     Description: "The cluster whose fabric carries the subnet. Must be the cluster the "
                     + "network is in — nothing checks that, and a subnet placed elsewhere binds to a "
                     + "Vpc that does not exist there."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
                     "/properties/addressPrefix",
                     SchemaKind.Nested,
@@ -368,33 +405,26 @@ public static class NetworkSubnets {
                     + "surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure "
                     + "to off. It also requires the network's enableExternal to be on; without it the "
                     + "flag is accepted and nothing egresses."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/private",
                     SchemaKind.Boolean,
                     Description: "Whether the subnet refuses traffic from other subnets. Off by "
                     + "default. ⚠ In this api-version it has no exception list, so on means no traffic "
                     + "from any other subnet in the network at all."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/enableDhcp",
                     SchemaKind.Boolean,
                     Description: "Whether the fabric answers DHCP in this subnet. Off by default: an "
                     + "address is assigned to a workload's port when the port is created, and DHCP is "
                     + "for guests that insist on asking — a virtual machine rather than a container."
-                ) {
-                    DefaultJson = "false"
-                }
+                ) { DefaultJson = "false" }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/listAddressUsage</c> returns.
@@ -403,8 +433,11 @@ public static class NetworkSubnets {
     ///     ⚠ <b>Counts are per family and are reported separately rather than summed.</b> A
     ///     dual-stack subnet that has exhausted its IPv4 range and has 2^64 IPv6 addresses left is
     ///     <i>full</i> for anything that needs a v4 address, and a single total would say the opposite
-    ///     in the most confident possible way. docs/plan/14 § IPv6's warning that <i>"every provider's
-    ///     connectivity code handles two families"</i> is the same point arriving on a response shape.
+    ///     in the most confident possible way. docs/plan/14 § IPv6's warning that
+    ///     <i>
+    ///         "every provider's
+    ///         connectivity code handles two families"
+    ///     </i> is the same point arriving on a response shape.
     ///     <para>
     ///         ⚠ <c>v6</c> figures are <see cref="SchemaKind.Text" /> and the <c>v4</c> ones are
     ///         numbers, which looks inconsistent and is correct: a /64 holds 18 446 744 073 709 551 616
@@ -463,9 +496,7 @@ public static class NetworkSubnets {
                     Description: "When the fabric last reported these figures, RFC 3339. ⚠ Returned "
                     + "because a count with no timestamp is a count a caller will read as live, and "
                     + "these come from the Subnet object's status rather than from a live query."
-                ) {
-                    Format = SchemaFormat.DateTime
-                }
+                ) { Format = SchemaFormat.DateTime }
             ]
         );
 
@@ -555,8 +586,11 @@ public static class NetworkSubnets {
     ///         <i>port annotation</i>, which is per-pod and carries no such reach.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>NO <c>protocol</c>, NO <c>gateway</c>, NO <c>excludeIps</c>, NO
-    ///         <c>gatewayType</c>, NO <c>provider</c>.</b> Every one of them is written by the
+    ///         ⚠
+    ///         <b>
+    ///             NO <c>protocol</c>, NO <c>gateway</c>, NO <c>excludeIps</c>, NO
+    ///             <c>gatewayType</c>, NO <c>provider</c>.
+    ///         </b> Every one of them is written by the
     ///         controller — see the remarks on this class — so sending them is at best redundant and
     ///         at worst a value that is overwritten one pass later while the resource reports it as
     ///         desired. <c>vpc</c> IS sent, because the controller only fills it when empty and
@@ -608,8 +642,11 @@ public static class NetworkSubnets {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE SPLIT EXISTS FOR THE REASON <c>StorageBuckets.MatchesBody</c> RECORDS — SECOND
-    ///         SIGHTING, AND THE FIRST WHERE IT WAS PREDICTED RATHER THAN DISCOVERED BY A RED SUITE.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THE SPLIT EXISTS FOR THE REASON <c>StorageBuckets.MatchesBody</c> RECORDS — SECOND
+    ///             SIGHTING, AND THE FIRST WHERE IT WAS PREDICTED RATHER THAN DISCOVERED BY A RED SUITE.
+    ///         </b>
     ///         <c>ProviderConformanceCase.ObjectMatchesDesired</c> is
     ///         <c>(objectJson, desiredJson) =&gt; bool</c> and carries <b>no address</b>, so the
     ///         predicate the shared suite can evaluate for a child is strictly smaller than the one the
@@ -741,6 +778,5 @@ public static class NetworkSubnets {
             ? value.GetString() ?? string.Empty
             : string.Empty;
 
-    static bool Flag(JsonElement desired, string name) =>
-        Root(desired, name) is { ValueKind: JsonValueKind.True };
+    static bool Flag(JsonElement desired, string name) => Root(desired, name) is { ValueKind: JsonValueKind.True };
 }

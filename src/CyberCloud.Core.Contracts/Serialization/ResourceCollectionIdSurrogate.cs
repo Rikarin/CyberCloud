@@ -9,8 +9,11 @@ namespace CyberCloud.Core.Contracts.Serialization;
 ///     <para>
 ///         <b>Why a collection address travels at all.</b> It did not, until
 ///         <c>IParkedResourceRegistryGrain.ListOfTypeAsync</c> — docs/plan/08 § Soft delete's
-///         per-resource-group registry of parked resources, whose question is <i>"what is recoverable
-///         in this group, of this type"</i>. That question is a <see cref="ResourceCollectionId" />
+///         per-resource-group registry of parked resources, whose question is
+///         <i>
+///             "what is recoverable
+///             in this group, of this type"
+///         </i>. That question is a <see cref="ResourceCollectionId" />
 ///         and nothing else: passing the four components loose would let a caller assemble a pair the
 ///         type's own constructor refuses (a nested type with no ancestor name), and passing a
 ///         <c>string</c> path would put <c>ResourceCollectionId.ParsePath</c> on the far side of a

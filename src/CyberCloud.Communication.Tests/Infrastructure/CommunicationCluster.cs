@@ -101,8 +101,7 @@ public sealed class CommunicationCluster : IAsyncLifetime {
 
     /// <summary>A tenant-qualified grain factory.</summary>
     /// <param name="tenant">The tenant.</param>
-    public TenantGrainFactory For(Guid tenant) =>
-        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>The service resource grain.</summary>
     /// <param name="service">The service's resource id.</param>
@@ -188,7 +187,10 @@ public sealed class CommunicationCluster : IAsyncLifetime {
     ///     Creates a service with one channel configured, which is the setup nearly every test needs.
     /// </summary>
     /// <param name="channel">Which channel.</param>
-    /// <param name="messagesPerWindow">The message cap. Generous by default so a test asserting something else does not trip it.</param>
+    /// <param name="messagesPerWindow">
+    ///     The message cap. Generous by default so a test asserting something else does not trip
+    ///     it.
+    /// </param>
     /// <param name="spendPerWindow">The spend cap.</param>
     /// <param name="unitCost">What each message is estimated to cost.</param>
     /// <param name="senderId">A registered sender to require, or <see cref="Guid.Empty" />.</param>
@@ -208,20 +210,18 @@ public sealed class CommunicationCluster : IAsyncLifetime {
         (await service.CreateAsync(tenant ?? Tenant, "primary")).IsSuccess.ShouldBeTrue();
 
         (await service.ConfigureChannelAsync(
-            new() {
-                Channel = channel,
-                Provider = "in-memory",
-                Credentials = new() { Mode = CredentialMode.PlatformAccount },
-                Limits = new() {
-                    MaxMessagesPerWindow = messagesPerWindow,
-                    MaxSpendPerWindow = spendPerWindow,
-                    Currency = "EUR"
-                },
-                EstimatedUnitCost = unitCost,
-                Enabled = true,
-                SenderId = senderId
-            }
-        )).IsSuccess.ShouldBeTrue();
+                new() {
+                    Channel = channel,
+                    Provider = "in-memory",
+                    Credentials = new() { Mode = CredentialMode.PlatformAccount },
+                    Limits = new() {
+                        MaxMessagesPerWindow = messagesPerWindow, MaxSpendPerWindow = spendPerWindow, Currency = "EUR"
+                    },
+                    EstimatedUnitCost = unitCost,
+                    Enabled = true,
+                    SenderId = senderId
+                }
+            )).IsSuccess.ShouldBeTrue();
 
         return serviceId;
     }

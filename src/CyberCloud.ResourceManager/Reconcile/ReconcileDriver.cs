@@ -29,9 +29,11 @@ public readonly record struct ReconcilePass(
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Clause 3 is enforced here and not trusted.</b> docs/plan/08 § The reconcile loop:
-///         <i>"Bounded. Returns within 30 seconds or returns <c>InProgress</c>. A reconciler that
-///         blocks on a four-minute cluster creation blocks that grain's turn, and Orleans grains are
-///         single-threaded."</i> The driver passes a token that cancels at
+///         <i>
+///             "Bounded. Returns within 30 seconds or returns <c>InProgress</c>. A reconciler that
+///             blocks on a four-minute cluster creation blocks that grain's turn, and Orleans grains are
+///             single-threaded."
+///         </i> The driver passes a token that cancels at
 ///         <see cref="PassBudget" /> and turns an overrun into a retryable failure naming the
 ///         reconciler. A reconciler that ignores its token can still block the turn — nothing inside
 ///         a single-threaded activation can pre-empt it — but it does so <i>visibly</i>, with an
@@ -45,8 +47,11 @@ public readonly record struct ReconcilePass(
 ///         against. The <i>conformance suite</i> is what turns the claim into a check.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The driver creates the namespace and never deletes it, and the second half stays
-///         true now that something else does.</b> <see cref="NamespaceFor(ResourceId)" /> derives the
+///         ⚠
+///         <b>
+///             The driver creates the namespace and never deletes it, and the second half stays
+///             true now that something else does.
+///         </b> <see cref="NamespaceFor(ResourceId)" /> derives the
 ///         name and <see cref="NamespaceEnsurer" /> applies it with ADR-013's seven labels before the
 ///         pass. Removing it belongs to <c>ResourceGroupReclaimer</c>, on the group's own delete,
 ///         because a pass over one resource knows one member's state and nothing about the others —
@@ -55,8 +60,11 @@ public readonly record struct ReconcilePass(
 ///         <c>PersistentVolumeClaim</c>, a <c>Secret</c> an operator added, a <c>StatefulSet</c> from
 ///         a chart nobody registered.
 ///         <para>
-///             ⚠ <b>What the driver DOES do about the namespace after a pass is invalidate its own
-///             memo on a <see cref="ErrorCode.ResourceNotFound" />.</b> The memo is per silo and has
+///             ⚠
+///             <b>
+///                 What the driver DOES do about the namespace after a pass is invalidate its own
+///                 memo on a <see cref="ErrorCode.ResourceNotFound" />.
+///             </b> The memo is per silo and has
 ///             no broadcast, so a namespace removed by an operator or by a group delete on another
 ///             silo would otherwise be believed in here for the rest of
 ///             <c>NamespaceEnsurer.RecheckAfter</c> — an hour of applies answering <c>404</c> naming
@@ -190,9 +198,8 @@ public sealed class ReconcileDriver(
             Result<NamespaceEnsured> namespaceReady;
             try {
                 namespaceReady = await namespaces.EnsureAsync(id, ns, connection, namespaceBudget.Token);
-            }
-            catch (OperationCanceledException) when (namespaceBudget.IsCancellationRequested
-                && !cancellationToken.IsCancellationRequested) {
+            } catch (OperationCanceledException) when (namespaceBudget.IsCancellationRequested
+                                                       && !cancellationToken.IsCancellationRequested) {
                 namespaceReady = Result<NamespaceEnsured>.Failure(
                     ErrorCode.ProvisioningFailed,
                     $"Creating the namespace '{ns}' on cluster {reconcileInput.ClusterId:D} did not "
@@ -298,13 +305,13 @@ public sealed class ReconcileDriver(
             secrets,
             log
         ) {
-            // ⚠ The one place the host's writer reaches a pass. Everything else that builds a context
-            // — a test, a conformance harness — gets RefusingSecretWriter and has to say otherwise.
-            SecretWriter = secretWriter,
-            // ⚠ COLLECTED HERE AND ACTED ON BELOW, WHICH IS WHAT KEEPS THE ATTACH BEHIND THE
-            // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
-            ClusterConnections = produced
-        };
+                // ⚠ The one place the host's writer reaches a pass. Everything else that builds a context
+                // — a test, a conformance harness — gets RefusingSecretWriter and has to say otherwise.
+                SecretWriter = secretWriter,
+                // ⚠ COLLECTED HERE AND ACTED ON BELOW, WHICH IS WHAT KEEPS THE ATTACH BEHIND THE
+                // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
+                ClusterConnections = produced
+            };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(PassBudget);
@@ -314,8 +321,8 @@ public sealed class ReconcileDriver(
             outcome = tearingDown
                 ? await reconciler.DeleteAsync(context, budget.Token)
                 : await reconciler.ReconcileAsync(context, budget.Token);
-        }
-        catch (OperationCanceledException) when (budget.IsCancellationRequested && !cancellationToken.IsCancellationRequested) {
+        } catch (OperationCanceledException) when (budget.IsCancellationRequested
+                                                   && !cancellationToken.IsCancellationRequested) {
             // Clause 3, violated. Retryable, because the next pass may find the slow thing finished —
             // but the message names the type so the violation is attributable rather than ambient.
             return new(
@@ -364,10 +371,7 @@ public sealed class ReconcileDriver(
             // cluster under its own tenant, or to register itself under a tenant that does not own
             // it. The grain checks the owner on every later call, so what is written here is what
             // every subsequent tenancy decision about this cluster is made against.
-            var descriptor = reported with {
-                ClusterId = id.Id,
-                OwningTenantId = spec.TenantId
-            };
+            var descriptor = reported with { ClusterId = id.Id, OwningTenantId = spec.TenantId };
 
             var attached = await clusterRegistrar.AttachAsync(descriptor, cancellationToken);
 
@@ -407,7 +411,8 @@ public sealed class ReconcileDriver(
         // round trip that would defeat the memo. Forgetting when the namespace was fine costs one
         // idempotent apply; not forgetting when it was gone costs an hour of failed reconciles.
         if (connection is not null
-            && outcome.Error is { Code: var failed } && failed == ErrorCode.ResourceNotFound
+            && outcome.Error is { Code: var failed }
+            && failed == ErrorCode.ResourceNotFound
             && namespaces.Forget(connection.ClusterId, ns)) {
             log.Report(
                 "ensuring-namespace",
@@ -437,17 +442,26 @@ public sealed class ReconcileDriver(
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Its own entry point rather than a phase of <see cref="RunAsync" />, because it
-    ///         runs at a different <i>time</i> and not merely with a different flag.</b> A pass is
+    ///         ⚠
+    ///         <b>
+    ///             Its own entry point rather than a phase of <see cref="RunAsync" />, because it
+    ///             runs at a different <i>time</i> and not merely with a different flag.
+    ///         </b> A pass is
     ///         driven until the reconciler converges; this runs once, after it has, and only on the
     ///         two operation kinds that end a resource for good. Folding it into the pass would mean
     ///         a soft delete's teardown could reach it, and a soft delete's whole job is to leave
-    ///         these claims standing — docs/plan/08 § Soft delete, <i>"what a restore restores from is
-    ///         the half a teardown never touches"</i>.
+    ///         these claims standing — docs/plan/08 § Soft delete,
+    ///         <i>
+    ///             "what a restore restores from is
+    ///             the half a teardown never touches"
+    ///         </i>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The resolution below repeats <see cref="RunAsync" />'s prologue and every one of
-    ///         its endings is different, which is why it is repeated rather than shared.</b> A
+    ///         ⚠
+    ///         <b>
+    ///             The resolution below repeats <see cref="RunAsync" />'s prologue and every one of
+    ///             its endings is different, which is why it is repeated rather than shared.
+    ///         </b> A
     ///         resource grain that is already empty converges a teardown pass and here means the
     ///         desired body that <i>names the claims</i> is gone; a type with no reconciler has no
     ///         claims to name; and a missing cluster connection converges a teardown and must never
@@ -525,9 +539,7 @@ public sealed class ReconcileDriver(
             clusters.Connect(reconcileInput.ClusterId),
             secrets,
             log
-        ) {
-            SecretWriter = secretWriter
-        };
+        ) { SecretWriter = secretWriter };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(PassBudget);
@@ -535,8 +547,8 @@ public sealed class ReconcileDriver(
         try {
             var outcome = await VolumeReclaimer.ReclaimAsync(reconciler, context, budget.Token);
             return new(outcome, log.Drain(), true);
-        }
-        catch (OperationCanceledException) when (budget.IsCancellationRequested && !cancellationToken.IsCancellationRequested) {
+        } catch (OperationCanceledException) when (budget.IsCancellationRequested
+                                                   && !cancellationToken.IsCancellationRequested) {
             return new(
                 ReconcileOutcome.Failed(
                     new Error(
@@ -581,8 +593,7 @@ public sealed class ReconcileDriver(
             if (observed is not null) {
                 await resource.ReportObservedAsync(observed);
             }
-        }
-        catch (OperationCanceledException) {
+        } catch (OperationCanceledException) {
             // Swallowed on purpose — see the remarks.
         }
     }
@@ -614,8 +625,11 @@ public sealed class ReconcileDriver(
     /// <param name="subscriptionId">The owning subscription.</param>
     /// <param name="resourceGroup">The group's name.</param>
     /// <remarks>
-    ///     ⚠ <b>The group delete needs this and has no resource to derive it from — every member is
-    ///     gone by then, which is its precondition.</b> It is an overload rather than a second rule
+    ///     ⚠
+    ///     <b>
+    ///         The group delete needs this and has no resource to derive it from — every member is
+    ///         gone by then, which is its precondition.
+    ///     </b> It is an overload rather than a second rule
     ///     for the reason the rule is here at all: two spellings of "what namespace does this group
     ///     map to" is how a delete comes to address a namespace nothing was ever applied into,
     ///     report a clean reclaim, and leave the real one behind.
@@ -640,8 +654,7 @@ public sealed class ReconcileDriver(
         try {
             using var document = JsonDocument.Parse(json);
             return document.RootElement.Clone();
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             // Desired state that will not parse is a bug on the write path, not on this one. An empty
             // object keeps the pass running so the reconciler can report what it sees, rather than
             // throwing out of a reminder where nobody catches it.

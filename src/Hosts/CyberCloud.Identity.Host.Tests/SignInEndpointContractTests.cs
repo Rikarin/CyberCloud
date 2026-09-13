@@ -12,9 +12,12 @@ namespace CyberCloud.Identity.Host.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><c>ReturnUrlTests</c> in <c>CyberCloud.Identity.Tests</c> asserts that the validator
-///         is correct. This suite asserts that the endpoints <i>call</i> it, which is a different
-///         claim and the one that has actually been got wrong in shipped software.</b> A perfect
+///         ⚠
+///         <b>
+///             <c>ReturnUrlTests</c> in <c>CyberCloud.Identity.Tests</c> asserts that the validator
+///             is correct. This suite asserts that the endpoints <i>call</i> it, which is a different
+///             claim and the one that has actually been got wrong in shipped software.
+///         </b> A perfect
 ///         validator next to one handler that returns <c>request.ReturnUrl</c> is an open redirect,
 ///         and it is invisible to every test of the validator.
 ///     </para>
@@ -43,8 +46,7 @@ public sealed class SignInEndpointContractTests {
     ///     backslash spellings a browser normalizes, and the control characters a browser strips
     ///     before parsing. See <c>ReturnUrl</c> for why the rule is an allow-list of one shape.
     /// </remarks>
-    public static TheoryData<string> Hostile =>
-    [
+    public static TheoryData<string> Hostile => [
         "https://evil.example",
         "https://evil.example/signin",
         "HTTPS://EVIL.EXAMPLE",
@@ -65,8 +67,7 @@ public sealed class SignInEndpointContractTests {
     ];
 
     /// <summary>Return URLs that are same-origin paths and must survive unchanged.</summary>
-    public static TheoryData<string> Safe =>
-    [
+    public static TheoryData<string> Safe => [
         "/",
         "/signin",
         "/authorize?client_id=portal&response_type=code",
@@ -118,14 +119,11 @@ public sealed class SignInEndpointContractTests {
         // can vary one — registered-looking, absent, malformed, empty, absurd — and the answer may
         // not vary with any of them.
         var answers = new[] {
-                "someone@example.com",
-                "nobody-has-this-address@example.com",
-                "not-an-address",
-                "",
-                new string('x', 400) + "@example.com"
-            }
-            .Select(x => SignInApi.Begin(new(x)).Offered)
-            .ToList();
+            "someone@example.com", "nobody-has-this-address@example.com", "not-an-address", "",
+            new string('x', 400) + "@example.com"
+        }
+                .Select(x => SignInApi.Begin(new(x)).Offered)
+                .ToList();
 
         foreach (var offered in answers) {
             offered.ShouldBe(
@@ -185,19 +183,27 @@ public sealed class SignInEndpointContractTests {
         var api = SignInApiHarness.Build();
 
         var failures = new[] {
-            (Endpoint: "password", Result: await api.SignInWithPasswordAsync(
-                new("not-an-address", "hunter2", "/"), new(), Ct)),
-            (Endpoint: "passkey/complete (no challenge)", Result: await api.CompletePasskeyAsync(
-                new("{}", "/"), null, new(), Ct)),
-            (Endpoint: "totp (no session)", Result: await api.VerifyTotpAsync(
-                new("000000", "/"), new ClaimsPrincipal(new ClaimsIdentity()), Ct)),
-            (Endpoint: "recovery-code (no session)", Result: await api.RedeemRecoveryCodeAsync(
-                new("aaaa-bbbb", "/"), new ClaimsPrincipal(new ClaimsIdentity()), Ct)),
+            (Endpoint: "password",
+                Result: await api.SignInWithPasswordAsync(new("not-an-address", "hunter2", "/"), new(), Ct)),
+            (Endpoint: "passkey/complete (no challenge)",
+                Result: await api.CompletePasskeyAsync(new("{}", "/"), null, new(), Ct)),
+            (Endpoint: "totp (no session)",
+                Result: await api.VerifyTotpAsync(new("000000", "/"), new ClaimsPrincipal(new ClaimsIdentity()), Ct)),
+            (Endpoint: "recovery-code (no session)",
+                Result: await api.RedeemRecoveryCodeAsync(
+                    new("aaaa-bbbb", "/"),
+                    new ClaimsPrincipal(new ClaimsIdentity()),
+                    Ct
+                )),
             // ⚠ The delivered code joins the same list rather than getting its own wording. A wrong
             // code, an expired one, one whose five attempts are spent and one that was never issued
             // are four facts inside IUserGrain and one string out here.
-            (Endpoint: "otp (no session)", Result: await api.VerifyEmailOtpAsync(
-                new("000000", "/"), new ClaimsPrincipal(new ClaimsIdentity()), Ct))
+            (Endpoint: "otp (no session)",
+                Result: await api.VerifyEmailOtpAsync(
+                    new("000000", "/"),
+                    new ClaimsPrincipal(new ClaimsIdentity()),
+                    Ct
+                ))
         };
 
         foreach (var (endpoint, result) in failures) {
@@ -301,19 +307,16 @@ public sealed class SignInEndpointContractTests {
         // passkey completion with no issued challenge, a second factor with no session. That is what
         // lets the harness refuse to hand out grain references.
         return [
-            ("/api/signin/password", (await api.SignInWithPasswordAsync(
-                new("not-an-address", "hunter2", candidate), new(), Ct)).Response),
+            ("/api/signin/password",
+                (await api.SignInWithPasswordAsync(new("not-an-address", "hunter2", candidate), new(), Ct)).Response),
             ("/api/signup", (await api.SignUpAsync(new("not-an-address", candidate), Ct)).Response),
-            ("/api/signin/passkey/complete", (await api.CompletePasskeyAsync(
-                new("{}", candidate), null, new(), Ct)).Response),
-            ("/api/signin/totp", (await api.VerifyTotpAsync(
-                new("000000", candidate), anonymous, Ct)).Response),
-            ("/api/signin/recovery-code", (await api.RedeemRecoveryCodeAsync(
-                new("code", candidate), anonymous, Ct)).Response),
-            ("/api/signin/otp", (await api.VerifyEmailOtpAsync(
-                new("000000", candidate), anonymous, Ct)).Response),
-            ("/api/signin/otp/send", (await api.SendEmailOtpAsync(
-                new(candidate), anonymous, Ct)).Response)
+            ("/api/signin/passkey/complete",
+                (await api.CompletePasskeyAsync(new("{}", candidate), null, new(), Ct)).Response),
+            ("/api/signin/totp", (await api.VerifyTotpAsync(new("000000", candidate), anonymous, Ct)).Response),
+            ("/api/signin/recovery-code",
+                (await api.RedeemRecoveryCodeAsync(new("code", candidate), anonymous, Ct)).Response),
+            ("/api/signin/otp", (await api.VerifyEmailOtpAsync(new("000000", candidate), anonymous, Ct)).Response),
+            ("/api/signin/otp/send", (await api.SendEmailOtpAsync(new(candidate), anonymous, Ct)).Response)
         ];
     }
 }

@@ -44,15 +44,15 @@ sealed class CycConsole {
     public bool IsErrorRedirected { get; }
 
     /// <summary>The real console.</summary>
-    public static CycConsole System()
-        => new(Console.Out, Console.Error, Console.IsOutputRedirected, Console.IsErrorRedirected);
+    public static CycConsole System() =>
+        new(Console.Out, Console.Error, Console.IsOutputRedirected, Console.IsErrorRedirected);
 
     /// <summary>A console backed by two writers — what the tests read their assertions from.</summary>
     /// <param name="output">Receives stdout.</param>
     /// <param name="error">Receives stderr.</param>
     /// <param name="redirected">Whether both streams should claim to be redirected.</param>
-    public static CycConsole For(TextWriter output, TextWriter error, bool redirected = true)
-        => new(output, error, redirected, redirected);
+    public static CycConsole For(TextWriter output, TextWriter error, bool redirected = true) =>
+        new(output, error, redirected, redirected);
 
     /// <summary>Writes one line to stderr and flushes it.</summary>
     /// <param name="line">The line. Written whole, so two threads cannot interleave halves of it.</param>

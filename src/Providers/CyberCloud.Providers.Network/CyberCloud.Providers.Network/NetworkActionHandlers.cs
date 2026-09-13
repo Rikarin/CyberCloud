@@ -2,6 +2,7 @@
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play — the same note StorageProvider
 // carries.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Globalization;
@@ -16,8 +17,11 @@ namespace CyberCloud.Providers.Network;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS ACTION WAS DECLARED WITH NO HANDLER AND THEREFORE ANSWERED A <c>500</c>, AND
-///         THAT IS WORSE HERE THAN IT WOULD BE ANYWHERE ELSE IN THE CATALOGUE.</b> When this family
+///         ⚠
+///         <b>
+///             THIS ACTION WAS DECLARED WITH NO HANDLER AND THEREFORE ANSWERED A <c>500</c>, AND
+///             THAT IS WORSE HERE THAN IT WOULD BE ANYWHERE ELSE IN THE CATALOGUE.
+///         </b> When this family
 ///         shipped, no provider in the tree had a handler and there was nowhere to put one — the
 ///         declaration reached the OpenAPI document, the SDK and the CLI, and nothing could run it.
 ///         The seam exists now (<c>IResourceActionHandler</c>, <c>ActionDispatcher</c>), and a
@@ -50,8 +54,11 @@ public sealed class ShowIsolationHandler : IResourceActionHandler {
     ///     The substrate named in every response.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Named because docs/plan/14 requires that <i>"the marketing must not claim more than the
-    ///     substrate delivers"</i>, and a tenant's own security review cannot assess a claim whose
+    ///     ⚠ Named because docs/plan/14 requires that
+    ///     <i>
+    ///         "the marketing must not claim more than the
+    ///         substrate delivers"
+    ///     </i>, and a tenant's own security review cannot assess a claim whose
     ///     enforcement mechanism is unnamed. The parenthetical is the part that matters: the
     ///     separation is enforced in a userspace-and-kernel datapath on shared nodes.
     /// </remarks>
@@ -71,17 +78,13 @@ public sealed class ShowIsolationHandler : IResourceActionHandler {
         var limits = new JsonArray();
 
         foreach (var limit in VirtualNetworks.IsolationLimits) {
-            limits.Add(
-                $"Not claimed: {limit.NotClaimed} Why: {limit.Because} Instead: {limit.Instead}"
-            );
+            limits.Add($"Not claimed: {limit.NotClaimed} Why: {limit.Because} Instead: {limit.Instead}");
         }
 
         return Task.FromResult(
             Result<string>.Success(
                 new JsonObject {
-                    ["claim"] = VirtualNetworks.IsolationClaim,
-                    ["limits"] = limits,
-                    ["substrate"] = Substrate
+                    ["claim"] = VirtualNetworks.IsolationClaim, ["limits"] = limits, ["substrate"] = Substrate
                 }.ToJsonString()
             )
         );
@@ -93,16 +96,22 @@ public sealed class ShowIsolationHandler : IResourceActionHandler {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIGURES COME OFF THE OBJECT'S <c>status</c>, WHICH IS THE ONLY PLACE THEY
-///         EXIST.</b> Kube-OVN's <c>SubnetStatus</c> carries <c>v4availableIPs</c>,
+///         ⚠
+///         <b>
+///             THE FIGURES COME OFF THE OBJECT'S <c>status</c>, WHICH IS THE ONLY PLACE THEY
+///             EXIST.
+///         </b> Kube-OVN's <c>SubnetStatus</c> carries <c>v4availableIPs</c>,
 ///         <c>v4usingIPs</c> and their v6 counterparts, maintained by the controller as ports come
 ///         and go. This handler reads the <c>Subnet</c> and reports them; it does not count anything
 ///         itself, because a second opinion about how many addresses are free is a second opinion
 ///         that will disagree with the allocator.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>total</c> IS <c>using + available</c> AND NOT AN ARITHMETIC FUNCTION OF THE
-///         PREFIX, AND THAT IS THE DECISION IN THIS FILE.</b> A <c>/24</c> holds 256 addresses, of
+///         ⚠
+///         <b>
+///             <c>total</c> IS <c>using + available</c> AND NOT AN ARITHMETIC FUNCTION OF THE
+///             PREFIX, AND THAT IS THE DECISION IN THIS FILE.
+///         </b> A <c>/24</c> holds 256 addresses, of
 ///         which the network address, the broadcast address and the gateway are not allocatable — and
 ///         so is every entry the controller appended to <c>excludeIps</c>, which it does silently and
 ///         which this platform never sees. Computing <c>2^(32-prefix) - 3</c> would produce a number
@@ -111,8 +120,11 @@ public sealed class ShowIsolationHandler : IResourceActionHandler {
 ///         allocator itself publishes cannot drift from the allocator.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE v6 FIGURES ARE READ AS RAW JSON TEXT AND NEVER THROUGH AN INTEGER, WHICH IS A
-///         CORRECTNESS REQUIREMENT RATHER THAN A STYLE.</b> Kube-OVN types these counts as
+///         ⚠
+///         <b>
+///             THE v6 FIGURES ARE READ AS RAW JSON TEXT AND NEVER THROUGH AN INTEGER, WHICH IS A
+///             CORRECTNESS REQUIREMENT RATHER THAN A STYLE.
+///         </b> Kube-OVN types these counts as
 ///         <c>internal.BigInt</c>, which marshals as an unbounded JSON number: a <c>/64</c> reports
 ///         <c>18446744073709551616</c>, which does not fit in <c>Int64</c>, and a <c>/63</c> is twice
 ///         that. <c>NetworkSubnets.AddressUsageResponse</c> declares the v6 figures as
@@ -121,8 +133,11 @@ public sealed class ShowIsolationHandler : IResourceActionHandler {
 ///         <c>Int64</c> as the schema's <see cref="SchemaKind.WholeNumber" /> requires.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>sampledAt</c> IS WHEN THE PLATFORM READ THE OBJECT, NOT WHEN THE FABRIC WROTE
-///         IT.</b> <c>SubnetStatus</c> carries no timestamp on the counts — only
+///         ⚠
+///         <b>
+///             <c>sampledAt</c> IS WHEN THE PLATFORM READ THE OBJECT, NOT WHEN THE FABRIC WROTE
+///             IT.
+///         </b> <c>SubnetStatus</c> carries no timestamp on the counts — only
 ///         <c>status.conditions[]</c> are stamped, and those are about readiness rather than about
 ///         these numbers. So the value here is the read time, which is an upper bound on the age of
 ///         the figures rather than their age. The field exists at all because a count with no
@@ -180,9 +195,7 @@ public sealed class ListAddressUsageHandler(IClock clock) : IResourceActionHandl
         return Result<string>.Success(
             new JsonObject {
                 ["v4"] = new JsonObject {
-                    ["total"] = v4Used + v4Available,
-                    ["used"] = v4Used,
-                    ["available"] = v4Available
+                    ["total"] = v4Used + v4Available, ["used"] = v4Used, ["available"] = v4Available
                 },
                 ["v6"] = new JsonObject {
                     // ⚠ The v6 total is the SUM OF TWO ARBITRARY-PRECISION DECIMALS, which is why it
@@ -192,8 +205,7 @@ public sealed class ListAddressUsageHandler(IClock clock) : IResourceActionHandl
                     // schema promises for /v6/total is "how many the prefix contains", and the honest
                     // answer this handler has is the available count; the total is reported only when
                     // nothing is used, where the two are equal.
-                    ["total"] = v6Used == "0" ? v6Available : string.Empty,
-                    ["available"] = v6Available
+                    ["total"] = v6Used == "0" ? v6Available : string.Empty, ["available"] = v6Available
                 },
                 ["sampledAt"] = clock.UtcNow.ToString("O", CultureInfo.InvariantCulture)
             }.ToJsonString()
@@ -242,16 +254,22 @@ public sealed class ListAddressUsageHandler(IClock clock) : IResourceActionHandl
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>IT EXISTS BECAUSE OF THE RESHAPE, AND WITHOUT IT THE RESHAPE WOULD BE A
-///         DOCUMENTATION PROMISE.</b> <c>NetworkSecurityGroups</c> expresses a rule list as six
+///         ⚠
+///         <b>
+///             IT EXISTS BECAUSE OF THE RESHAPE, AND WITHOUT IT THE RESHAPE WOULD BE A
+///             DOCUMENTATION PROMISE.
+///         </b> <c>NetworkSecurityGroups</c> expresses a rule list as six
 ///         scalars per direction, because <c>SchemaProperty.ElementKind</c> refuses an array of
 ///         objects. The cost is that the mapping from those scalars to Kube-OVN's rules — a cross
 ///         product of remotes against port entries — is arithmetic a tenant has to do in their head
 ///         to answer "what did I just open". This returns the answer, in the order the fabric gets it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT REPORTS WHAT THE PLATFORM ASKS FOR, NOT WHAT OVN HOLDS, AND EVERY RESPONSE SAYS
-///         SO.</b> The rules are derived from <c>ActionContext.Desired</c> — the resource's stored
+///         ⚠
+///         <b>
+///             IT REPORTS WHAT THE PLATFORM ASKS FOR, NOT WHAT OVN HOLDS, AND EVERY RESPONSE SAYS
+///             SO.
+///         </b> The rules are derived from <c>ActionContext.Desired</c> — the resource's stored
 ///         body — so a group whose reconcile has not converged reports the rules it is converging
 ///         towards. The alternative, reading the <c>SecurityGroup</c> back, would report the same
 ///         thing one round trip later for a converged group and would report <i>nothing</i> for a
@@ -260,8 +278,11 @@ public sealed class ListAddressUsageHandler(IClock clock) : IResourceActionHandl
 ///         of the schema.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>defaultAction</c> IS A CONSTANT AND IT IS THE MOST IMPORTANT FIELD IN THE
-///         RESPONSE.</b> A list of allow rules with no statement of what happens to everything else is
+///         ⚠
+///         <b>
+///             <c>defaultAction</c> IS A CONSTANT AND IT IS THE MOST IMPORTANT FIELD IN THE
+///             RESPONSE.
+///         </b> A list of allow rules with no statement of what happens to everything else is
 ///         ambiguous in the direction that gets people hurt. It is <c>drop</c> because Kube-OVN's
 ///         <c>CreateSgDenyAllACL</c> installs <c>outport == @{pg} &amp;&amp; ip</c> and
 ///         <c>inport == @{pg} &amp;&amp; ip</c> at <c>SecurityGroupDropPriority</c> beneath every
@@ -327,8 +348,11 @@ public sealed class ShowEffectiveRulesHandler : IResourceActionHandler {
 ///         is "why is nothing reaching my workload".
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT IS NOT HERE IS PER-SERVER HEALTH, AND THAT IS A LIMIT RATHER THAN AN
-///         OMISSION.</b> Which backends HAProxy currently believes are up lives in its runtime API, on
+///         ⚠
+///         <b>
+///             WHAT IS NOT HERE IS PER-SERVER HEALTH, AND THAT IS A LIMIT RATHER THAN AN
+///             OMISSION.
+///         </b> Which backends HAProxy currently believes are up lives in its runtime API, on
 ///         a UNIX socket inside the pod. Reaching it needs an exec seam <c>ActionContext</c> does not
 ///         have — it carries a cluster connection, and a connection reads objects rather than running
 ///         commands in containers. <c>charts/managed/haproxy/conformance.yaml § owed</c>,
@@ -440,8 +464,11 @@ public sealed class ShowBackendsHandler(IClock clock) : IResourceActionHandler {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS IS THE ONLY ACTION IN THE CATALOGUE THAT RETURNS THE RESOURCE'S OWN REASON FOR
-///         EXISTING.</b> Every other one reports a refinement — how full a subnet is, what a rule set
+///         ⚠
+///         <b>
+///             THIS IS THE ONLY ACTION IN THE CATALOGUE THAT RETURNS THE RESOURCE'S OWN REASON FOR
+///             EXISTING.
+///         </b> Every other one reports a refinement — how full a subnet is, what a rule set
 ///         expands to, what the isolation claim does not cover. A public address <i>is</i> the value
 ///         the fabric picked: it is not in the body, because the body is what was asked for, and it is
 ///         derivable from nothing. Without this action a tenant would have to read
@@ -456,8 +483,11 @@ public sealed class ShowBackendsHandler(IClock clock) : IResourceActionHandler {
 ///         a few seconds too early; the flag without the address is a spinner. Both, always.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>attachedTo</c> IS <c>status.nat</c> AND IT IS EMPTY FOR EVERY ADDRESS IN THIS
-///         API-VERSION.</b> It names the NAT rule using the address — an <c>OvnFip</c>,
+///         ⚠
+///         <b>
+///             <c>attachedTo</c> IS <c>status.nat</c> AND IT IS EMPTY FOR EVERY ADDRESS IN THIS
+///             API-VERSION.
+///         </b> It names the NAT rule using the address — an <c>OvnFip</c>,
 ///         <c>OvnDnatRule</c> or <c>OvnSnatRule</c> — and nothing in this platform creates one yet, so
 ///         "I allocated an address and nothing happens" is the question this type will be asked most
 ///         often. Returning the field empty answers it honestly rather than leaving the tenant to
@@ -465,14 +495,20 @@ public sealed class ShowBackendsHandler(IClock clock) : IResourceActionHandler {
 ///         a rule still names.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>sampledAt</c> IS WHEN THE PLATFORM READ THE OBJECT, NOT WHEN THE FABRIC WROTE
-///         IT</b>, for <see cref="ListAddressUsageHandler" />'s reason: <c>OvnEipStatus</c> carries no
+///         ⚠
+///         <b>
+///             <c>sampledAt</c> IS WHEN THE PLATFORM READ THE OBJECT, NOT WHEN THE FABRIC WROTE
+///             IT
+///         </b>, for <see cref="ListAddressUsageHandler" />'s reason: <c>OvnEipStatus</c> carries no
 ///         timestamp on the allocation, only <c>conditions[]</c>, and those are about readiness rather
 ///         than about these values.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An address whose controller has not run yet reports empties and <c>ready: false</c>
-///         rather than refusing.</b> An <c>OvnEip</c> that was applied a moment ago has no
+///         ⚠
+///         <b>
+///             An address whose controller has not run yet reports empties and <c>ready: false</c>
+///             rather than refusing.
+///         </b> An <c>OvnEip</c> that was applied a moment ago has no
 ///         <c>status</c> at all, and a <c>404</c> or an error there would read as "your address is
 ///         gone" at the one moment it is most likely to be asked for.
 ///     </para>

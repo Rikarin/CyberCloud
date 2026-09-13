@@ -16,9 +16,7 @@ namespace CyberCloud.Vault.Tests;
 public sealed class VaultWiringValidationTests {
     [Fact]
     public void AVaultWithNoAddressIsRefusedAtComposition() {
-        var thrown = Should.Throw<InvalidOperationException>(
-            () => Compose(new() { Role = "cc-silo" })
-        );
+        var thrown = Should.Throw<InvalidOperationException>(() => Compose(new() { Role = "cc-silo" }));
 
         thrown.Message.ShouldContain("CyberCloud:Vault:Address");
         thrown.Message.ShouldContain(
@@ -31,9 +29,8 @@ public sealed class VaultWiringValidationTests {
 
     [Fact]
     public void AVaultWithNoRoleIsRefusedAtComposition() {
-        Should.Throw<InvalidOperationException>(
-            () => Compose(new() { Address = "https://openbao.cc-vault.svc:8200" })
-        ).Message.ShouldContain("CyberCloud:Vault:Role");
+        Should.Throw<InvalidOperationException>(() => Compose(new() { Address = "https://openbao.cc-vault.svc:8200" }))
+            .Message.ShouldContain("CyberCloud:Vault:Role");
     }
 
     [Theory]
@@ -48,17 +45,14 @@ public sealed class VaultWiringValidationTests {
         // ⚠ docs/plan/18 § Platform security opens with "TLS 1.3 everywhere". A vault reached over
         // plaintext hands every secret it serves to anything on the path, and that is a worse
         // exposure than not having a vault at all — the unwired silo at least fails loudly.
-        Should.Throw<InvalidOperationException>(
-            () => Compose(new() { Address = "http://openbao.cc-vault.svc:8200", Role = "r" })
-        ).Message.ShouldContain("AllowInsecureTransport");
+        Should.Throw<InvalidOperationException>(() => Compose(
+                new() { Address = "http://openbao.cc-vault.svc:8200", Role = "r" }
+            )
+        )
+            .Message.ShouldContain("AllowInsecureTransport");
 
-        Should.NotThrow(
-            () => Compose(
-                new() {
-                    Address = "http://openbao.cc-vault.svc:8200",
-                    Role = "r",
-                    AllowInsecureTransport = true,
-                }
+        Should.NotThrow(() => Compose(
+                new() { Address = "http://openbao.cc-vault.svc:8200", Role = "r", AllowInsecureTransport = true }
             )
         );
     }

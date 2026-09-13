@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The write path used to compare the path's tenant against the caller's and never look
-///         at the subscription at all.</b> <c>/tenants/{mine}/subscriptions/{anything}/…</c> parsed,
+///         ⚠
+///         <b>
+///             The write path used to compare the path's tenant against the caller's and never look
+///             at the subscription at all.
+///         </b> <c>/tenants/{mine}/subscriptions/{anything}/…</c> parsed,
 ///         passed, and ran the whole path against a GUID nobody had checked. It leaked nothing,
 ///         because every grain below step 1 is reached through <c>ForTenant(caller)</c> — so the
 ///         quota, the index and the resource all landed in the caller's own tenant under a

@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`, which EnsurePasswordAsync returns. `CyberCloud.Core.Resources` is global
 // here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Collections.Immutable;
@@ -41,8 +42,11 @@ namespace CyberCloud.Providers.Cache;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>Converged here means "the CR is applied and reads back", not "Valkey is answering
-///         PING".</b> The honest stronger check is the operator's own readiness, and it is not made
+///         ⚠
+///         <b>
+///             Converged here means "the CR is applied and reads back", not "Valkey is answering
+///             PING".
+///         </b> The honest stronger check is the operator's own readiness, and it is not made
 ///         because nothing in this repository can produce it: the Docker-free harness is a dictionary
 ///         and no operator runs anywhere either suite reaches. A readiness gate written against a world
 ///         that never sets the condition would make every resource in every test hang and then fail.
@@ -62,13 +66,19 @@ namespace CyberCloud.Providers.Cache;
 ///         spotahome generates nothing: <c>service/k8s/util.go</c>'s <c>GetRedisPassword</c> reads
 ///         <c>secret.Data["password"]</c> out of the namespace and returns an error when the object is
 ///         not there, so a <c>RedisFailover</c> applied ahead of its <c>Secret</c> is a cache whose
-///         pods fail from the first reconcile the operator performs. This is <b>the one data type in
-///         the tree whose credential this platform mints</b> rather than reads back from an operator —
+///         pods fail from the first reconcile the operator performs. This is
+///         <b>
+///             the one data type in
+///             the tree whose credential this platform mints
+///         </b> rather than reads back from an operator —
 ///         see <c>ValkeyCaches.RedisFailoverJson</c> for why the exception is spotahome's doing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A SECOND PASS MUST NOT ROTATE THE PASSWORD, AND THAT IS WHAT
-///         <see cref="EnsurePasswordAsync" /> IS FOR.</b> <see cref="ValkeyCaches.GeneratePassword" />
+///         ⚠
+///         <b>
+///             A SECOND PASS MUST NOT ROTATE THE PASSWORD, AND THAT IS WHAT
+///             <see cref="EnsurePasswordAsync" /> IS FOR.
+///         </b> <see cref="ValkeyCaches.GeneratePassword" />
 ///         answers differently every call; what reaches the rendered <c>Secret</c> is never that value
 ///         but what <see cref="ISecretResolver.ResolveAsync" /> returns afterwards, which is the value
 ///         the <i>first</i> pass minted, on every pass. A reconciler that rendered its own candidate
@@ -76,8 +86,11 @@ namespace CyberCloud.Providers.Cache;
 ///         reminder, forever — and every surface would report success.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced</b>, and on this type the rival is plausibly the operator itself: spotahome's
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced
+///         </b>, and on this type the rival is plausibly the operator itself: spotahome's
 ///         <c>Validate()</c> fills in images, ports and exporter images and prepends its own
 ///         <c>replica-priority 100</c> to <c>spec.redis.customConfig</c>. ADR-013 makes a conflict "a
 ///         drift event with a name"; forcing would take a list field back from the controller that
@@ -184,8 +197,11 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
-    ///         IDEMPOTENT.</b> <see cref="ValkeyCaches.GeneratePassword" /> produces a different value
+    ///         ⚠
+    ///         <b>
+    ///             THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
+    ///             IDEMPOTENT.
+    ///         </b> <see cref="ValkeyCaches.GeneratePassword" /> produces a different value
     ///         every call — it has to, or a credential would be derivable from a resource id. What
     ///         reaches the rendered <c>Secret</c> is never that value: it is what
     ///         <see cref="ISecretResolver.ResolveAsync" /> returns afterwards, which is the password
@@ -409,16 +425,22 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
     /// <inheritdoc />
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>One claim per Valkey replica, named the OPERATOR's way rather than this
-    ///         platform's</b> — see <see cref="ValkeyCaches.RetainedClaims" />. This provider renders
+    ///         ⚠
+    ///         <b>
+    ///             One claim per Valkey replica, named the OPERATOR's way rather than this
+    ///             platform's
+    ///         </b> — see <see cref="ValkeyCaches.RetainedClaims" />. This provider renders
     ///         a custom resource and no <c>StatefulSet</c>, so the set whose
     ///         <c>volumeClaimTemplate</c> made the claims is spotahome's; its name and its selector
     ///         labels are read out of the operator's source and are recorded there with the reason
     ///         that is safe here and would not be elsewhere.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>ProviderConformanceTests</c> cannot cover this family and skips it with a
-    ///         reason.</b> Its retained-volume case plants claims read out of the
+    ///         ⚠
+    ///         <b>
+    ///             <c>ProviderConformanceTests</c> cannot cover this family and skips it with a
+    ///             reason.
+    ///         </b> Its retained-volume case plants claims read out of the
     ///         <c>volumeClaimTemplates</c> of the documents a provider <i>applied</i>, and the
     ///         document this provider applies is a <c>RedisFailover</c> — the templates exist only
     ///         after a controller this platform does not run has expanded it. So the naming is
@@ -464,9 +486,7 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the RedisFailover is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the RedisFailover is absent" };
         }
 
         var found = read.GetValueOrThrow();

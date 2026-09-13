@@ -235,11 +235,11 @@ public static class LabelSyntax {
         for (var i = 0; i < value.Length; i++) {
             var c = value[i];
             if (c is not (>= 'a' and <= 'z'
-                or >= 'A' and <= 'Z'
-                or >= '0' and <= '9'
-                or '-'
-                or '_'
-                or '.')) {
+                    or >= 'A' and <= 'Z'
+                    or >= '0' and <= '9'
+                    or '-'
+                    or '_'
+                    or '.')) {
                 return Describe(c)
                     + " at position "
                     + Int(i)

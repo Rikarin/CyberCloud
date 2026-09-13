@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Messaging.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE ORDINARY REASON IS THE TRUE ONE HERE, WHICH IS THE OPPOSITE OF WHAT THE KAFKA ROW
-///         FOUND — AND THAT IS WHY THE CRD WAS READ RATHER THAN THE README.</b>
+///         ⚠
+///         <b>
+///             THE ORDINARY REASON IS THE TRUE ONE HERE, WHICH IS THE OPPOSITE OF WHAT THE KAFKA ROW
+///             FOUND — AND THAT IS WHY THE CRD WAS READ RATHER THAN THE README.
+///         </b>
 ///         <c>KafkaClusters.Matches</c> records that Strimzi's <c>Kafka</c> at <c>v1beta2</c> declares
 ///         <b>no <c>default:</c> anywhere</b>, so "the API server defaults fields on write" was false
 ///         for it and containment was kept for other reasons. <c>rabbitmq.com_rabbitmqclusters.yaml</c>
@@ -20,8 +23,11 @@ namespace CyberCloud.Providers.Messaging.Tests;
 ///         real cluster would.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Each case is written as a SABOTAGE of the desired body rather than of the read-back
-///         wherever it can be</b>, because a test that only ever perturbs the object it also built
+///         ⚠
+///         <b>
+///             Each case is written as a SABOTAGE of the desired body rather than of the read-back
+///             wherever it can be
+///         </b>, because a test that only ever perturbs the object it also built
 ///         proves the comparison is not <c>true</c> and nothing else.
 ///     </para>
 /// </remarks>
@@ -38,10 +44,11 @@ public sealed class RabbitmqMatchesTests {
 
         var read = AsClusterWouldReturn(RabbitmqClusters.ClusterJson("events", body.RootElement));
 
-        RabbitmqClusters.Matches(read, body.RootElement).ShouldBeTrue(
-            "a read-back carrying only the API server's own defaults and the operator's own writes "
-            + "was reported as drift, so every resource of this type would sit in InProgress forever."
-        );
+        RabbitmqClusters.Matches(read, body.RootElement)
+            .ShouldBeTrue(
+                "a read-back carrying only the API server's own defaults and the operator's own writes "
+                + "was reported as drift, so every resource of this type would sit in InProgress forever."
+            );
     }
 
     [Fact]
@@ -61,9 +68,8 @@ public sealed class RabbitmqMatchesTests {
         document["spec"]!["terminationGracePeriodSeconds"] = 604800;
         document["spec"]!["delayStartSeconds"] = 30;
 
-        RabbitmqClusters.Matches(document.ToJsonString(), body.RootElement).ShouldBeTrue(
-            "an object carrying the CRD's own object-level defaults was reported as drift."
-        );
+        RabbitmqClusters.Matches(document.ToJsonString(), body.RootElement)
+            .ShouldBeTrue("an object carrying the CRD's own object-level defaults was reported as drift.");
     }
 
     [Fact]
@@ -73,9 +79,8 @@ public sealed class RabbitmqMatchesTests {
 
         var read = AsClusterWouldReturn(RabbitmqClusters.ClusterJson("events", other.RootElement));
 
-        RabbitmqClusters.Matches(read, desired.RootElement).ShouldBeFalse(
-            "a cluster running three nodes read back as carrying a desired five."
-        );
+        RabbitmqClusters.Matches(read, desired.RootElement)
+            .ShouldBeFalse("a cluster running three nodes read back as carrying a desired five.");
     }
 
     [Fact]
@@ -89,9 +94,8 @@ public sealed class RabbitmqMatchesTests {
 
         var read = AsClusterWouldReturn(RabbitmqClusters.ClusterJson("events", other.RootElement));
 
-        RabbitmqClusters.Matches(read, desired.RootElement).ShouldBeFalse(
-            "a cluster running rabbitmq:4.0-management read back as carrying a desired 4.1."
-        );
+        RabbitmqClusters.Matches(read, desired.RootElement)
+            .ShouldBeFalse("a cluster running rabbitmq:4.0-management read back as carrying a desired 4.1.");
     }
 
     [Fact]
@@ -110,20 +114,17 @@ public sealed class RabbitmqMatchesTests {
         // free-text string, so a cluster still running `classic` and a body asking for `quorum` differ
         // by eleven characters buried in one spec property — and if this comparison missed it, the
         // resource would report Succeeded while replicating nothing.
-        using var desired = JsonDocument.Parse(
-            RabbitmqClusters.Body(ClusterId, defaultQueueType: "quorum")
-        );
+        using var desired = JsonDocument.Parse(RabbitmqClusters.Body(ClusterId, defaultQueueType: "quorum"));
 
-        using var other = JsonDocument.Parse(
-            RabbitmqClusters.Body(ClusterId, defaultQueueType: "classic")
-        );
+        using var other = JsonDocument.Parse(RabbitmqClusters.Body(ClusterId, defaultQueueType: "classic"));
 
         var read = AsClusterWouldReturn(RabbitmqClusters.ClusterJson("events", other.RootElement));
 
-        RabbitmqClusters.Matches(read, desired.RootElement).ShouldBeFalse(
-            "a cluster whose default queue type is `classic` — unreplicated on 4.x — read back as "
-            + "carrying a desired `quorum`."
-        );
+        RabbitmqClusters.Matches(read, desired.RootElement)
+            .ShouldBeFalse(
+                "a cluster whose default queue type is `classic` — unreplicated on 4.x — read back as "
+                + "carrying a desired `quorum`."
+            );
     }
 
     [Fact]
@@ -138,9 +139,8 @@ public sealed class RabbitmqMatchesTests {
         var config = document["spec"]!["rabbitmq"]!["additionalConfig"]!.GetValue<string>();
         document["spec"]!["rabbitmq"]!["additionalConfig"] = config + "consumer_timeout = 1800000\n";
 
-        RabbitmqClusters.Matches(document.ToJsonString(), body.RootElement).ShouldBeTrue(
-            "a config block that gained a line it did not lose was reported as drift."
-        );
+        RabbitmqClusters.Matches(document.ToJsonString(), body.RootElement)
+            .ShouldBeTrue("a config block that gained a line it did not lose was reported as drift.");
     }
 
     [Fact]
@@ -152,10 +152,11 @@ public sealed class RabbitmqMatchesTests {
         var document = JsonNode.Parse(RabbitmqClusters.ClusterJson("events", body.RootElement))!.AsObject();
         document["spec"]!["rabbitmq"]!["additionalConfig"] = "max_message_size = 134217728\n";
 
-        RabbitmqClusters.Matches(document.ToJsonString(), body.RootElement).ShouldBeFalse(
-            "an object whose config no longer sets a default queue type at all was reported as "
-            + "carrying the desired spec."
-        );
+        RabbitmqClusters.Matches(document.ToJsonString(), body.RootElement)
+            .ShouldBeFalse(
+                "an object whose config no longer sets a default queue type at all was reported as "
+                + "carrying the desired spec."
+            );
     }
 
     [Fact]
@@ -198,9 +199,7 @@ public sealed class RabbitmqMatchesTests {
         };
 
         metadata["managedFields"] = new JsonArray {
-            new JsonObject {
-                ["manager"] = "cybercloud/cybercloud.messaging", ["operation"] = "Apply"
-            },
+            new JsonObject { ["manager"] = "cybercloud/cybercloud.messaging", ["operation"] = "Apply" },
             new JsonObject { ["manager"] = "rabbitmq-cluster-operator", ["operation"] = "Update" }
         };
 

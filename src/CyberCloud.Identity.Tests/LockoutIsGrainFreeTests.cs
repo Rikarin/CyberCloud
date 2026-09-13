@@ -5,9 +5,12 @@ using CyberCloud.Identity.Tests.Infrastructure;
 namespace CyberCloud.Identity.Tests;
 
 /// <summary>
-///     docs/plan/11 § Credentials: <i>"the lockout counter lives in the hot tier keyed by the user
-///     id, so it is a Redis <c>INCR</c>, not a grain call. An authentication endpoint whose failure
-///     path costs a grain activation is a denial-of-service amplifier."</i>
+///     docs/plan/11 § Credentials:
+///     <i>
+///         "the lockout counter lives in the hot tier keyed by the user
+///         id, so it is a Redis <c>INCR</c>, not a grain call. An authentication endpoint whose failure
+///         path costs a grain activation is a denial-of-service amplifier."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -54,7 +57,9 @@ public sealed class LockoutIsGrainFreeTests(IdentityCluster cluster) {
                 IdentityCluster.Tenant,
                 email,
                 "anything",
-                new(), Ct);
+                new(),
+                Ct
+            );
 
             attempt.IsFailure.ShouldBeTrue();
             attempt.Error!.Message.ShouldBe(UniformFailures.SignIn);
@@ -84,7 +89,9 @@ public sealed class LockoutIsGrainFreeTests(IdentityCluster cluster) {
                 IdentityCluster.Tenant,
                 candidate,
                 "anything",
-                new(), Ct);
+                new(),
+                Ct
+            );
 
             attempt.IsFailure.ShouldBeTrue();
             attempt.Error!.Message.ShouldBe(UniformFailures.SignIn);
@@ -105,7 +112,9 @@ public sealed class LockoutIsGrainFreeTests(IdentityCluster cluster) {
             IdentityCluster.Tenant,
             "unknown-for-incr@example.com",
             "anything",
-            new(), Ct);
+            new(),
+            Ct
+        );
 
         recorder.Asked.ShouldBe(["IEmailIndexGrain"]);
         recorder.References.ShouldBe(
@@ -133,10 +142,11 @@ public sealed class LockoutIsGrainFreeTests(IdentityCluster cluster) {
         // should be longest. This is the assertion that would catch that regression: every large
         // failure count must produce the cap, and none may produce something small.
         foreach (var failures in new[] { 20, 33, 40, 64, 100, 1_000, int.MaxValue }) {
-            LockoutPolicy.DelayFor(failures).ShouldBe(
-                LockoutPolicy.MaximumDelay,
-                $"{failures} failures must produce the cap. A shift-count wrap would produce a short delay here."
-            );
+            LockoutPolicy.DelayFor(failures)
+                .ShouldBe(
+                    LockoutPolicy.MaximumDelay,
+                    $"{failures} failures must produce the cap. A shift-count wrap would produce a short delay here."
+                );
         }
     }
 

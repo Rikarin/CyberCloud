@@ -6,8 +6,11 @@ namespace CyberCloud.ResourceManager.Tests;
 ///     An action's declared request shape, enforced by the write path.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The point of this file is that the emitted document and the running API agree about an
-///     action.</b> Before <c>ActionRegistration.Request</c> existed, the generated OpenAPI said
+///     ⚠
+///     <b>
+///         The point of this file is that the emitted document and the running API agree about an
+///         action.
+///     </b> Before <c>ActionRegistration.Request</c> existed, the generated OpenAPI said
 ///     <c>schema: {}</c> for every action and the manager checked nothing — an action was the one
 ///     part of the API surface with no contract at all. Declaring the shape without checking it would
 ///     be worse: a published constraint the API does not apply.

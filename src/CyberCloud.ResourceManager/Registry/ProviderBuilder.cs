@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Registry;
 ///     Collects one provider's <c>Describe</c> into <see cref="ResourceTypeRegistration" />s.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The builder and the type builder are one object, which is what makes docs/plan/08's
-///     example compile.</b> That example ends one type's declaration by starting the next one on the
+///     ⚠
+///     <b>
+///         The builder and the type builder are one object, which is what makes docs/plan/08's
+///         example compile.
+///     </b> That example ends one type's declaration by starting the next one on the
 ///     same chain, so <see cref="IResourceTypeBuilder" /> extends <see cref="IProviderBuilder" /> and
 ///     this class implements both. The consequence to be aware of is that
 ///     <see cref="ResourceType" /> is the only thing that closes a type: everything else appends to
@@ -227,10 +230,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         // would make declaring the shape a prerequisite for having the action at all.
         draft.Actions.Add(
             new(name, kind, permission, secret) {
-                Request = request,
-                Response = response,
-                LongRunning = longRunning,
-                HandlerType = handler
+                Request = request, Response = response, LongRunning = longRunning, HandlerType = handler
             }
         );
 
@@ -372,11 +372,17 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
     /// <returns>The declared actions unchanged, or those actions followed by the two.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS THE WHOLE OF THE HTTP BINDING FOR SOFT DELETE, AND IT IS A REGISTRY FACT
-    ///         RATHER THAN A ROUTE.</b> docs/plan/08 § Soft delete records that
-    ///         <c>RestoreAsync</c> and <c>PurgeAsync</c> <i>"exist, are implemented on
-    ///         <c>ResourceManagerService</c>, and are covered by <c>SoftDeletePathTests</c> — and
-    ///         neither has an HTTP route"</i>. Two lines here give them one, because a <c>POST</c> to
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS THE WHOLE OF THE HTTP BINDING FOR SOFT DELETE, AND IT IS A REGISTRY FACT
+    ///             RATHER THAN A ROUTE.
+    ///         </b> docs/plan/08 § Soft delete records that
+    ///         <c>RestoreAsync</c> and <c>PurgeAsync</c>
+    ///         <i>
+    ///             "exist, are implemented on
+    ///             <c>ResourceManagerService</c>, and are covered by <c>SoftDeletePathTests</c> — and
+    ///             neither has an HTTP route"
+    ///         </i>. Two lines here give them one, because a <c>POST</c> to
     ///         <c>{resource}/{action}</c> already routes: <c>GatewayRouter.ResolveAction</c> parses the
     ///         path, <c>RouteStage</c> answers <c>404</c> unless
     ///         <see cref="ResourceTypeRegistration.TryGetAction" /> knows the name, and
@@ -384,24 +390,33 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
     ///         names is what opens all three, for exactly the types that have a window.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And it reaches ADR-012's four surfaces without any of them learning what soft
-    ///         delete is.</b> <c>OpenApiEmitter</c> emits one path per entry in this array,
+    ///         ⚠
+    ///         <b>
+    ///             And it reaches ADR-012's four surfaces without any of them learning what soft
+    ///             delete is.
+    ///         </b> <c>OpenApiEmitter</c> emits one path per entry in this array,
     ///         <c>DocumentReader</c> reads them back off <c>x-cybercloud-action</c>, and the CLI verb,
     ///         the SDK method and the portal's action button follow. Adding paths to a published
     ///         api-version is additive, so the compatibility gate has nothing to say — it refuses
     ///         removals, not additions.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Both are long-running and neither names a handler, which is what
-    ///         <see cref="Action" />'s own refusal requires.</b> A restore starts an
+    ///         ⚠
+    ///         <b>
+    ///             Both are long-running and neither names a handler, which is what
+    ///             <see cref="Action" />'s own refusal requires.
+    ///         </b> A restore starts an
     ///         <c>OperationKind.Restore</c> over the stored body and a purge starts an
     ///         <c>OperationKind.Purge</c>; both answer <c>202</c> with an operation to poll. There is no
     ///         handler to name because neither runs on the action path at all — see
     ///         <see cref="SoftDeletePolicy.RestoreAction" />.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The permissions are the type's own and are deliberately different from each
-    ///         other.</b> A restore takes <c>WritePermission</c> — it puts a resource back — and a purge
+    ///         ⚠
+    ///         <b>
+    ///             The permissions are the type's own and are deliberately different from each
+    ///             other.
+    ///         </b> A restore takes <c>WritePermission</c> — it puts a resource back — and a purge
     ///         takes <c>PurgePermission</c>, which
     ///         <see cref="SoftDeletePolicy.DefaultPurgePermission" /> keeps out of <c>delete</c> so that
     ///         the window protects against the caller who could already delete. Publishing them under
@@ -427,8 +442,11 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The same check <see cref="CheckClusterPlacement" /> is, for the same reason, and the
-    ///         failure it prevents is quieter.</b> A cluster pointer that names nothing fails every
+    ///         ⚠
+    ///         <b>
+    ///             The same check <see cref="CheckClusterPlacement" /> is, for the same reason, and the
+    ///             failure it prevents is quieter.
+    ///         </b> A cluster pointer that names nothing fails every
     ///         reconcile, loudly, one resource at a time. A purge-protection pointer that names nothing
     ///         reads as <see langword="false" /> forever: the flag can never be set, so protection never
     ///         engages, so nothing ever fails — the resource is simply purgeable when its owner believes

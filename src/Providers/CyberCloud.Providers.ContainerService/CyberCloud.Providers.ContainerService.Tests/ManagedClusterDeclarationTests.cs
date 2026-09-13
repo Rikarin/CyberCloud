@@ -65,10 +65,10 @@ public sealed class ManagedClusterDeclarationTests {
         // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
-            ProviderRegistry.Build([new ContainerServiceProvider()]).Types.Select(
-                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
-            )
-        ).ShouldBeEmpty();
+            ProviderRegistry.Build([new ContainerServiceProvider()])
+                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        )
+            .ShouldBeEmpty();
     }
 
     // ── The meters ──────────────────────────────────────────────────────────────────────────────
@@ -268,8 +268,7 @@ public sealed class ManagedClusterDeclarationTests {
         // resources in two groups and both came from one operator binary; these three come from three
         // separate upstream projects, versioned independently.
         var groups = new[] {
-            ManagedClusters.ClusterKind.Group,
-            ManagedClusters.ControlPlaneKind.Group,
+            ManagedClusters.ClusterKind.Group, ManagedClusters.ControlPlaneKind.Group,
             ManagedClusters.InfrastructureKind.Group
         };
 
@@ -288,9 +287,7 @@ public sealed class ManagedClusterDeclarationTests {
     [Fact]
     public void ThePoolsThreeObjectsAreAlsoInThreeApiGroupsAndTwoOfThemAreNotTheClustersGroups() {
         var groups = new[] {
-            AgentPools.MachineDeploymentKind.Group,
-            AgentPools.BootstrapKind.Group,
-            AgentPools.MachineTemplateKind.Group
+            AgentPools.MachineDeploymentKind.Group, AgentPools.BootstrapKind.Group, AgentPools.MachineTemplateKind.Group
         };
 
         groups.Distinct(StringComparer.Ordinal).Count().ShouldBe(3);
@@ -370,12 +367,13 @@ public sealed class ManagedClusterDeclarationTests {
         infrastructure["metadata"]!["annotations"]!["cluster.x-k8s.io/managed-by"]!.GetValue<string>()
             .ShouldBe("kamaji");
 
-        infrastructure["spec"]!.AsObject().Count.ShouldBe(
-            0,
-            "the KubevirtCluster gained a spec. Everything KubevirtClusterSpec offers is either the "
-            + "Kamaji provider's to patch, generated per machine, or for running VMs in a different "
-            + "cluster than the management one — see ManagedClusters.InfrastructureJson."
-        );
+        infrastructure["spec"]!.AsObject()
+            .Count.ShouldBe(
+                0,
+                "the KubevirtCluster gained a spec. Everything KubevirtClusterSpec offers is either the "
+                + "Kamaji provider's to patch, generated per machine, or for running VMs in a different "
+                + "cluster than the management one — see ManagedClusters.InfrastructureJson."
+            );
     }
 
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────
@@ -383,7 +381,8 @@ public sealed class ManagedClusterDeclarationTests {
     static readonly Guid ClusterId = Guid.Parse("eeeeeeee-0000-4000-8000-000000000006");
 
     static ResourceTypeRegistration Registration(ResourceTypeName type) {
-        ProviderRegistry.Build([new ContainerServiceProvider()]).TryGetType(type, out var registration)
+        ProviderRegistry.Build([new ContainerServiceProvider()])
+            .TryGetType(type, out var registration)
             .ShouldBeTrue();
 
         return registration;
@@ -392,6 +391,5 @@ public sealed class ManagedClusterDeclarationTests {
     static IReadOnlyList<MeterRegistration> Derived(ResourceTypeName type) =>
         [.. Registration(type).Meters.Where(x => x.Derivation is not null)];
 
-    static System.Text.Json.Nodes.JsonNode Node(string json) =>
-        System.Text.Json.Nodes.JsonNode.Parse(json)!;
+    static System.Text.Json.Nodes.JsonNode Node(string json) => System.Text.Json.Nodes.JsonNode.Parse(json)!;
 }

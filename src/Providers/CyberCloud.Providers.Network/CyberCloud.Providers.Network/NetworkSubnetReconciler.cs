@@ -9,16 +9,22 @@ namespace CyberCloud.Providers.Network;
 ///     <para>
 ///         ⚠ <b>IT NEVER LOOKS ITS NETWORK UP, AND THAT IS THE MOST IMPORTANT LINE IN THIS FILE.</b>
 ///         docs/plan/12 § Child resources makes the parent a pure function of the address, and
-///         docs/plan/08 § Deleting a parent resource that has children says the platform <i>"must not
-///         re-check the parent on every write to a child"</i> — the check belongs on the create, in
+///         docs/plan/08 § Deleting a parent resource that has children says the platform
+///         <i>
+///             "must not
+///             re-check the parent on every write to a child"
+///         </i> — the check belongs on the create, in
 ///         <c>ResourceManagerService.ResolveAsync</c>, where it runs before the enforcement seam and
 ///         answers the same <c>404</c> as an unauthorized read. The only thing this reconciler takes
 ///         from the parent is its <i>name</i>, off the address, in
 ///         <see cref="NetworkSubnets.VpcRefOf" />.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT REFUSES A BODY THE API ALREADY ACCEPTED, AND HERE IT MATTERS MORE THAN ON THE
-///         PARENT.</b> A virtual network's address space is a declaration; <b>this</b> prefix is what
+///         ⚠
+///         <b>
+///             IT REFUSES A BODY THE API ALREADY ACCEPTED, AND HERE IT MATTERS MORE THAN ON THE
+///             PARENT.
+///         </b> A virtual network's address space is a declaration; <b>this</b> prefix is what
 ///         the fabric programs, so a subnet overlapping the platform's underlay is the one that
 ///         actually breaks routing for the node it lands on. Same mechanism, same terminal
 ///         <c>ReconcileOutcome.Failed</c>, same reason it cannot run at the API — see
@@ -49,9 +55,12 @@ namespace CyberCloud.Providers.Network;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>Its own <c>Type</c> is a separate class from
-///         <see cref="VirtualNetworkReconciler" /> even though the work rhymes, and that is forced
-///         rather than chosen.</b> <c>ProviderRegistry</c> stores each type's reconciler by CONCRETE
+///         ⚠
+///         <b>
+///             Its own <c>Type</c> is a separate class from
+///             <see cref="VirtualNetworkReconciler" /> even though the work rhymes, and that is forced
+///             rather than chosen.
+///         </b> <c>ProviderRegistry</c> stores each type's reconciler by CONCRETE
 ///         TYPE and <c>ReconcileDriver</c> resolves it from the container by that type, so one class
 ///         cannot serve two registrations — its <see cref="Type" /> can only name one of them, and
 ///         <c>ProviderRegistry.Build</c> refuses exactly that.
@@ -95,10 +104,10 @@ public sealed class NetworkSubnetReconciler(IClock clock) : IResourceReconciler 
             .WithTenantId(context.Id.TenantId)
             .WithResourceId(context.Id)
             // ⚠ Cluster-scoped: no `InNamespace`. The namespace is inside `name`.
-            .WithKind(NetworkSubnets.SubnetKind)
-            .WithApiVersion(context.ApiVersion)
-            .ObjectJson(NetworkSubnets.SubnetJson(context.Namespace, context.Id, context.Desired))
-            .ApplyAsync(cancellationToken);
+                .WithKind(NetworkSubnets.SubnetKind)
+                .WithApiVersion(context.ApiVersion)
+                .ObjectJson(NetworkSubnets.SubnetJson(context.Namespace, context.Id, context.Desired))
+                .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
             return ReconcileOutcome.FromFailure(applyError);
@@ -181,7 +190,7 @@ public sealed class NetworkSubnetReconciler(IClock clock) : IResourceReconciler 
             // ⚠ THE NETWORK'S Vpc IS NOT TOUCHED. Deleting a subnet removes one object; a delete that
             // also tidied up the parent — or that waited for it — would be this type reaching outside
             // its own resource.
-            .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(deleteError);

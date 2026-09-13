@@ -1,5 +1,5 @@
-using System.CommandLine;
 using CyberCloud.Cli.Output;
+using System.CommandLine;
 
 namespace CyberCloud.Cli;
 
@@ -8,8 +8,11 @@ namespace CyberCloud.Cli;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Declared here rather than read out of the verb tree, and the difference is what a
-///         flag <i>does</i>.</b> The tree's <c>globalFlags</c> array carries <c>--output</c>,
+///         ⚠
+///         <b>
+///             Declared here rather than read out of the verb tree, and the difference is what a
+///             flag <i>does</i>.
+///         </b> The tree's <c>globalFlags</c> array carries <c>--output</c>,
 ///         <c>--query</c> and <c>--api-version</c> with their help text and their choices — which is
 ///         everything a generator can know — but "apply this JMESPath to the response" is host
 ///         behaviour that no OpenAPI document describes. <see cref="AssertMatchesTree" /> is what
@@ -27,37 +30,38 @@ sealed class GlobalOptions {
     GlobalOptions(IReadOnlyList<string> apiVersions, string newest) {
         Output = new Option<string>("--output", "-o") {
             Description = $"How to print the answer: {string.Join(", ", OutputFormats.Names)}. Defaults to table.",
-            DefaultValueFactory = _ => "table",
+            DefaultValueFactory = _ => "table"
         };
 
         Output.AcceptOnlyFromAmong([.. OutputFormats.Names]);
 
         Query = new Option<string>("--query") {
-            Description = "A JMESPath expression over the response — docs/plan/21 § Decisions.",
+            Description = "A JMESPath expression over the response — docs/plan/21 § Decisions."
         };
 
         ApiVersion = new Option<string>("--api-version") {
             Description =
                 $"The api-version to speak. One of {string.Join(", ", apiVersions)}; defaults to {newest}. "
-                + "There is no 'latest' — docs/plan/10 § API versioning.",
+                + "There is no 'latest' — docs/plan/10 § API versioning."
         };
 
         ApiVersion.AcceptOnlyFromAmong([.. apiVersions]);
 
         Profile = new Option<string>("--profile") {
-            Description = "The profile in ~/.cyc/config to read settings from. Also CYC_PROFILE.",
+            Description = "The profile in ~/.cyc/config to read settings from. Also CYC_PROFILE."
         };
 
         Verbose = new Option<bool>("--verbose") {
-            Description = "Trace each request and response to stderr. ⚠ Credentials are never traced.",
+            Description = "Trace each request and response to stderr. ⚠ Credentials are never traced."
         };
 
         Timeout = new Option<int>("--timeout") {
-            Description = "Give up after this many seconds and exit 5. Covers waiting on a long-running operation.",
+            Description = "Give up after this many seconds and exit 5. Covers waiting on a long-running operation."
         };
 
-        foreach (var option in All)
+        foreach (var option in All) {
             option.Recursive = true;
+        }
     }
 
     /// <summary><c>--output</c>.</summary>
@@ -100,7 +104,8 @@ sealed class GlobalOptions {
             parse.GetValue(ApiVersion),
             parse.GetValue(Profile),
             parse.GetValue(Verbose),
-            parse.GetValue(Timeout) is var seconds && seconds > 0 ? TimeSpan.FromSeconds(seconds) : null);
+            parse.GetValue(Timeout) is var seconds && seconds > 0 ? TimeSpan.FromSeconds(seconds) : null
+        );
     }
 
     /// <summary>
@@ -115,14 +120,17 @@ sealed class GlobalOptions {
         for (var i = 0; i < arguments.Count; i++) {
             var argument = arguments[i];
 
-            if (argument.StartsWith("--api-version=", StringComparison.Ordinal))
+            if (argument.StartsWith("--api-version=", StringComparison.Ordinal)) {
                 return argument["--api-version=".Length..];
+            }
 
-            if (!string.Equals(argument, "--api-version", StringComparison.Ordinal))
+            if (!string.Equals(argument, "--api-version", StringComparison.Ordinal)) {
                 continue;
+            }
 
-            if (i + 1 >= arguments.Count)
+            if (i + 1 >= arguments.Count) {
                 throw new CycUsageException("--api-version was given with no value after it.");
+            }
 
             return arguments[i + 1];
         }
@@ -144,10 +152,12 @@ sealed class GlobalOptions {
         var declared = All.Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
         var missing = tree.GlobalFlags.Select(x => x.Name).Where(x => !declared.Contains(x)).ToList();
 
-        if (missing.Count > 0)
+        if (missing.Count > 0) {
             throw new CycUsageException(
                 $"The verb tree for {tree.ApiVersion} declares global flag(s) this build of cyc does not "
-                + $"implement: {string.Join(", ", missing)}. Upgrade cyc.");
+                + $"implement: {string.Join(", ", missing)}. Upgrade cyc."
+            );
+        }
     }
 }
 

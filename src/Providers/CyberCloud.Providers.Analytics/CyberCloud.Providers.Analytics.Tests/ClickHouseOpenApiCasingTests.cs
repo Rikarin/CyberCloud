@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.Analytics.Tests;
 ///         only in a log line.
 ///     </para>
 ///     <para>
-///         ⚠ <b>EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
-///         STAYED GREEN BECAUSE IT WAS NOT.</b> That version built the expected path from the same two
+///         ⚠
+///         <b>
+///             EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
+///             STAYED GREEN BECAUSE IT WAS NOT.
+///         </b> That version built the expected path from the same two
 ///         constants the emitter reads, so re-casing the constant left the whole suite green — two
 ///         things derived from one constant agree however that constant is spelled. The strings here
 ///         are typed out by hand, and they are the fourth independent copy after docs/plan/12 § The
@@ -109,11 +112,12 @@ public sealed class ClickHouseOpenApiCasingTests {
         // path through ResourceTypeName — which is case-INSENSITIVE. So a mis-cased document would
         // still route, and this test is not about routing: it is about what a generated client, a
         // portal breadcrumb and docs/plan/12's prose all copy.
-        ClickHouseClusters.Type.ToString().ShouldBe(
-            QualifiedType,
-            "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
-            + "charts/managed/clickhouse/Chart.yaml's cybercloud.io/resource-type annotation."
-        );
+        ClickHouseClusters.Type.ToString()
+            .ShouldBe(
+                QualifiedType,
+                "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
+                + "charts/managed/clickhouse/Chart.yaml's cybercloud.io/resource-type annotation."
+            );
 
         var paths = Paths();
 
@@ -122,12 +126,13 @@ public sealed class ClickHouseOpenApiCasingTests {
             "no path carries the provider namespace and type as docs/plan/12 spells them"
         );
 
-        foreach (var path in paths.Where(
-                     x => x.Contains("analytics/clickhouseclusters", StringComparison.OrdinalIgnoreCase)
+        foreach (var path in paths.Where(x => x.Contains(
+                         "analytics/clickhouseclusters",
+                         StringComparison.OrdinalIgnoreCase
+                     )
                  )) {
-            path.Contains(QualifiedType, StringComparison.Ordinal).ShouldBeTrue(
-                $"'{path}' spells the type in a casing other than '{QualifiedType}'."
-            );
+            path.Contains(QualifiedType, StringComparison.Ordinal)
+                .ShouldBeTrue($"'{path}' spells the type in a casing other than '{QualifiedType}'.");
         }
 
         // ⚠ THE PLAUSIBLE TYPO, NAMED. `clickHouseClusters` is how the C# class is spelled and is what
@@ -161,10 +166,11 @@ public sealed class ClickHouseOpenApiCasingTests {
         var value = KubeLabels.ResourceTypeValue(ClickHouseClusters.Type);
 
         value.ShouldBe("cybercloud.analytics_clickhouseclusters");
-        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType).IsSuccess.ShouldBeTrue(
-            "the resource-type label value is not legal Kubernetes label syntax, so every object this "
-            + "provider applies would be refused at admission rather than at build time."
-        );
+        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType)
+            .IsSuccess.ShouldBeTrue(
+                "the resource-type label value is not legal Kubernetes label syntax, so every object this "
+                + "provider applies would be refused at admission rather than at build time."
+            );
     }
 
     /// <summary>The document the generator would write for this provider alone.</summary>

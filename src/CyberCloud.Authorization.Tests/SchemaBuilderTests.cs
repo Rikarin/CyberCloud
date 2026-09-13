@@ -58,8 +58,9 @@ public sealed class SchemaBuilderTests {
         // is the earliest a compiled schema can fail.
         CyberCloudSchema.Instance.Version.ShouldBe(CyberCloudSchema.SchemaVersion);
         CyberCloudSchema.Instance.TypeNames.ShouldContain(ObjectTypes.ResourceGroup);
-        CyberCloudSchema.Instance.Type(ObjectTypes.Subscription)!.Roles
-            .ShouldBe([Relations.Contributor, Relations.Owner, Relations.Reader]);
+        CyberCloudSchema.Instance.Type(ObjectTypes.Subscription)!
+            .Roles
+                .ShouldBe([Relations.Contributor, Relations.Owner, Relations.Reader]);
     }
 
     // ── ⚠ The negation rules. Each of these MUST fail to build. ────────────────────────────────

@@ -46,17 +46,17 @@ sealed class RedisRateLimitCounters(
     ///     <c>Retry-After</c> honest.
     /// </remarks>
     const string SlidingWindowScript = """
-        local now = tonumber(ARGV[1])
-        local window = tonumber(ARGV[2])
-        redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, now - window)
-        redis.call('ZADD', KEYS[1], now, ARGV[3])
-        redis.call('PEXPIRE', KEYS[1], window)
-        local count = redis.call('ZCARD', KEYS[1])
-        local oldest = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
-        local first = now
-        if oldest[2] then first = tonumber(oldest[2]) end
-        return { count, first }
-        """;
+                                       local now = tonumber(ARGV[1])
+                                       local window = tonumber(ARGV[2])
+                                       redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, now - window)
+                                       redis.call('ZADD', KEYS[1], now, ARGV[3])
+                                       redis.call('PEXPIRE', KEYS[1], window)
+                                       local count = redis.call('ZCARD', KEYS[1])
+                                       local oldest = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+                                       local first = now
+                                       if oldest[2] then first = tonumber(oldest[2]) end
+                                       return { count, first }
+                                       """;
 
     /// <inheritdoc />
     public async Task<WindowCount> CountAsync(
@@ -71,15 +71,16 @@ sealed class RedisRateLimitCounters(
         var windowMilliseconds = (long)window.TotalMilliseconds;
 
         try {
-            var result = (RedisResult[]?)await redis.GetDatabase().ScriptEvaluateAsync(
-                SlidingWindowScript,
-                [key],
-                [
-                    now.ToString(CultureInfo.InvariantCulture),
-                    windowMilliseconds.ToString(CultureInfo.InvariantCulture),
-                    Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)
-                ]
-            );
+            var result = (RedisResult[]?)await redis.GetDatabase()
+                .ScriptEvaluateAsync(
+                    SlidingWindowScript,
+                    [key],
+                    [
+                        now.ToString(CultureInfo.InvariantCulture),
+                        windowMilliseconds.ToString(CultureInfo.InvariantCulture),
+                        Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)
+                    ]
+                );
 
             if (result is not [var count, var oldest]) {
                 return new(1, TimeSpan.Zero);
@@ -88,8 +89,7 @@ sealed class RedisRateLimitCounters(
             var expiresIn = (long)oldest + windowMilliseconds - now;
 
             return new((long)count, TimeSpan.FromMilliseconds(Math.Max(expiresIn, 0)));
-        }
-        catch (RedisException exception) {
+        } catch (RedisException exception) {
             logger.LogWarning(
                 exception,
                 "Rate-limit counter '{Key}' could not be updated; the request is admitted. "

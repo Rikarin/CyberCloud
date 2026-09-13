@@ -67,9 +67,7 @@ public sealed class OpenApiEmitterTests {
         // properties a no-op in the diff instead of a wall of moved lines.
         var forwards = Fixtures.PostgresWith(Fixtures.ServerSchema());
 
-        var backwards = Fixtures.PostgresWith(
-            ResourceSchema.Of([.. Fixtures.ServerSchema().Properties.Reverse()])
-        );
+        var backwards = Fixtures.PostgresWith(ResourceSchema.Of([.. Fixtures.ServerSchema().Properties.Reverse()]));
 
         DeterministicJson.ToBytes(Emit(backwards)).ShouldBe(DeterministicJson.ToBytes(Emit(forwards)));
     }
@@ -288,7 +286,7 @@ public sealed class OpenApiEmitterTests {
     public void ReadOnlyAndSecretBecomeReadOnlyAndWriteOnly() {
         var properties =
             Emit(Fixtures.Postgres())["components"]!["schemas"]!["CyberCloud.DBforPostgreSQL.servers"]!
-                ["properties"]!["properties"]!["properties"]!;
+            ["properties"]!["properties"]!["properties"]!;
 
         // The server owns it, so it never appears in a request.
         properties["provisioningState"]!["readOnly"]!.GetValue<bool>().ShouldBeTrue();
@@ -317,8 +315,8 @@ public sealed class OpenApiEmitterTests {
 
         Emit(loose)["components"]!["schemas"]!["CyberCloud.DBforPostgreSQL.servers"]!
             ["additionalProperties"]!
-            .GetValue<bool>()
-            .ShouldBeTrue();
+                .GetValue<bool>()
+                .ShouldBeTrue();
     }
 
     [Fact]
@@ -368,7 +366,8 @@ public sealed class OpenApiEmitterTests {
 
         // ⚠ And the three that came from no provider are named, not just counted. A count of 8 is
         // also what a document with three duplicated collection paths would have.
-        DocumentReader.ScopesOf(document).Select(x => x.Kind)
+        DocumentReader.ScopesOf(document)
+            .Select(x => x.Kind)
             .ShouldBe(["tenant", "subscription", "resourceGroup"]);
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforMySQL.servers");
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforPostgreSQL.servers");
@@ -423,9 +422,7 @@ public sealed class OpenApiEmitterTests {
     public void AnOrphanPropertyIsRefused() {
         // /properties/sku/name declared and /properties/sku not: ResourceSchema.Validate refuses the
         // undeclared parent, so every request fails whatever it sends. It fails here instead.
-        var broken = Fixtures.PostgresWith(
-            ResourceSchema.Of([new("/properties/sku/name", SchemaKind.Text)])
-        );
+        var broken = Fixtures.PostgresWith(ResourceSchema.Of([new("/properties/sku/name", SchemaKind.Text)]));
 
         Should.Throw<InvalidOperationException>(() => Emit(broken))
             .Message.ShouldContain("but not its parent");
@@ -434,10 +431,12 @@ public sealed class OpenApiEmitterTests {
     [Fact]
     public void APropertyInsideANonObjectIsRefused() {
         var broken = Fixtures.PostgresWith(
-            ResourceSchema.Of([
-                new("/properties", SchemaKind.Text),
-                new("/properties/sku", SchemaKind.Text)
-            ])
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Text),
+                    new("/properties/sku", SchemaKind.Text)
+                ]
+            )
         );
 
         Should.Throw<InvalidOperationException>(() => Emit(broken)).Message.ShouldContain("not an object");

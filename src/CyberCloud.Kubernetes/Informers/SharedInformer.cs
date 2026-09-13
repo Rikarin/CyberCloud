@@ -308,13 +308,13 @@ public sealed class SharedInformer {
 
         do {
             var page = await api.ListAsync(
-                    Kind,
-                    ns,
-                    LabelSelector,
-                    resourceVersion,
-                    continueToken,
-                    cancellationToken: cancellationToken
-                )
+                Kind,
+                ns,
+                LabelSelector,
+                resourceVersion,
+                continueToken,
+                cancellationToken: cancellationToken
+            )
                 .ConfigureAwait(false);
 
             if (page.TryGetError(out var error)) {

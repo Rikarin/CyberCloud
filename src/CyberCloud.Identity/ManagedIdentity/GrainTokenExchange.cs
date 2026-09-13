@@ -16,8 +16,11 @@ namespace CyberCloud.Identity.ManagedIdentity;
 ///         anything here would be a second place the answer could be different.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The tenant comes from the caller, and that is safe only because it is not a
-///         credential.</b> The <c>/token</c> endpoint gets it from the request, so a caller can name
+///         ⚠
+///         <b>
+///             The tenant comes from the caller, and that is safe only because it is not a
+///             credential.
+///         </b> The <c>/token</c> endpoint gets it from the request, so a caller can name
 ///         any tenant they like — and learns nothing by doing so, because the identity in that tenant
 ///         either has a binding whose cluster signed the presented token or it does not. Naming the
 ///         wrong tenant produces the same refusal as naming the right one with the wrong token, which

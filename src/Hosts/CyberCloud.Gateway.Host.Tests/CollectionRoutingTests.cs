@@ -81,8 +81,11 @@ public sealed class CollectionRoutingTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>There is no bulk write and no bulk delete: a collection path is a <c>GET</c> and
-    ///     nothing else.</b>
+    ///     ⚠
+    ///     <b>
+    ///         There is no bulk write and no bulk delete: a collection path is a <c>GET</c> and
+    ///         nothing else.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -92,8 +95,11 @@ public sealed class CollectionRoutingTests {
     ///         verb does not, which is one more fact than a malformed path earns.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Asserted on dispatch, because a status assertion would pass for the wrong
-    ///         reason.</b> A <c>DELETE</c> routed to a collection would reach the fake's
+    ///         ⚠
+    ///         <b>
+    ///             Asserted on dispatch, because a status assertion would pass for the wrong
+    ///             reason.
+    ///         </b> A <c>DELETE</c> routed to a collection would reach the fake's
     ///         <c>OnWrite</c> and answer <c>202</c> — which is neither 200 nor 404, so a
     ///         <c>ShouldNotBe</c> on either would hold while a bulk delete was wide open.
     ///     </para>
@@ -119,8 +125,11 @@ public sealed class CollectionRoutingTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>A collection of a type the registry does not serve is the canonical <c>404</c>, and
-    ///     it is refused at stage 6 rather than by the manager.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A collection of a type the registry does not serve is the canonical <c>404</c>, and
+    ///         it is refused at stage 6 rather than by the manager.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     Stage 6 owns "is this a path this gateway serves", and it looks a collection's type up the
@@ -144,8 +153,11 @@ public sealed class CollectionRoutingTests {
     }
 
     /// <summary>
-    ///     ⚠ <b><c>$top</c> and <c>$skipToken</c> reach the manager, and a <c>$top</c> that is not a
-    ///     number is ignored rather than refused.</b>
+    ///     ⚠
+    ///     <b>
+    ///         <c>$top</c> and <c>$skipToken</c> reach the manager, and a <c>$top</c> that is not a
+    ///         number is ignored rather than refused.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The page size is a hint the platform clamps — <c>ListRequest.PageSize</c> — so refusing a
@@ -178,8 +190,11 @@ public sealed class CollectionRoutingTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>A page with a continuation renders a <c>nextLink</c>; a page without one renders no
-    ///     <c>nextLink</c> member at all.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A page with a continuation renders a <c>nextLink</c>; a page without one renders no
+    ///         <c>nextLink</c> member at all.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     An empty-string <c>nextLink</c> is a URL a polite client will happily request, which is
@@ -214,8 +229,11 @@ public sealed class CollectionRoutingTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The <c>nextLink</c> carries every parameter that shaped the page it came from, and
-    ///     <c>$top</c> is the one it did not (#76).</b>
+    ///     ⚠
+    ///     <b>
+    ///         The <c>nextLink</c> carries every parameter that shaped the page it came from, and
+    ///         <c>$top</c> is the one it did not (#76).
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -226,8 +244,11 @@ public sealed class CollectionRoutingTests {
     ///         link is a parameter that applied to page one alone.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Asserted on the body's text and not on a parsed URL, because the body is what a
-    ///         client receives.</b> <c>Utf8JsonWriter</c>'s default encoder rewrites the query
+    ///         ⚠
+    ///         <b>
+    ///             Asserted on the body's text and not on a parsed URL, because the body is what a
+    ///             client receives.
+    ///         </b> <c>Utf8JsonWriter</c>'s default encoder rewrites the query
     ///         separators into their <c>\u00</c>-escaped form, so they are not searched for;
     ///         <c>$top=10</c> and <c>$skipToken=</c> pass through unescaped and are.
     ///     </para>
@@ -262,8 +283,11 @@ public sealed class CollectionRoutingTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>And it invents no page size when the caller expressed none — including when what they
-    ///     sent was not a number.</b>
+    ///     ⚠
+    ///     <b>
+    ///         And it invents no page size when the caller expressed none — including when what they
+    ///         sent was not a number.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     A <c>$top</c> the gateway wrote itself would be the platform's own default frozen into a

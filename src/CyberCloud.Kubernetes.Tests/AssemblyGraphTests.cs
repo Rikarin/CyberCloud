@@ -100,27 +100,27 @@ public sealed class AssemblyGraphTests {
                 && !x.Namespace.StartsWith("CyberCloud.Kubernetes.Apply", StringComparison.Ordinal)
             )
             .SelectMany(type => type
-                .GetMembers(
-                    BindingFlags.Public
-                    | BindingFlags.NonPublic
-                    | BindingFlags.Instance
-                    | BindingFlags.Static
-                    | BindingFlags.DeclaredOnly
-                )
-                .OfType<MethodInfo>()
-                .Where(m => (m.ReturnType.Namespace ?? string.Empty).StartsWith(
-                        "k8s",
-                        StringComparison.OrdinalIgnoreCase
+                    .GetMembers(
+                        BindingFlags.Public
+                        | BindingFlags.NonPublic
+                        | BindingFlags.Instance
+                        | BindingFlags.Static
+                        | BindingFlags.DeclaredOnly
                     )
-                    || m.GetParameters()
-                        .Any(p =>
-                            (p.ParameterType.Namespace ?? string.Empty).StartsWith(
-                                "k8s",
-                                StringComparison.OrdinalIgnoreCase
-                            )
+                    .OfType<MethodInfo>()
+                    .Where(m => (m.ReturnType.Namespace ?? string.Empty).StartsWith(
+                            "k8s",
+                            StringComparison.OrdinalIgnoreCase
                         )
-                )
-                .Select(m => $"{type.FullName}.{m.Name}")
+                        || m.GetParameters()
+                            .Any(p =>
+                                (p.ParameterType.Namespace ?? string.Empty).StartsWith(
+                                    "k8s",
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            )
+                    )
+                    .Select(m => $"{type.FullName}.{m.Name}")
             )
             .Where(x => !x.Contains('<'))
             .ToList();

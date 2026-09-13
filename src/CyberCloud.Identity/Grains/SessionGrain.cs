@@ -22,7 +22,8 @@ namespace CyberCloud.Identity.Grains;
 ///     </para>
 /// </remarks>
 public sealed class SessionGrain(
-    [PersistentState("session", StorageTiers.Hot)] IPersistentState<SessionGrainState> state,
+    [PersistentState("session", StorageTiers.Hot)]
+    IPersistentState<SessionGrainState> state,
     IClock clock
 )
     : Grain, ISessionGrain {
@@ -133,7 +134,8 @@ public sealed class SessionGrain(
 
         var now = clock.UtcNow;
 
-        if (now >= state.State.RefreshExpiresAt || now >= state.State.CreatedAt + AccessTokenPolicy.AbsoluteSessionLifetime) {
+        if (now >= state.State.RefreshExpiresAt
+            || now >= state.State.CreatedAt + AccessTokenPolicy.AbsoluteSessionLifetime) {
             await RevokeInternalAsync(RevocationReason.Expired);
             return Rejected();
         }

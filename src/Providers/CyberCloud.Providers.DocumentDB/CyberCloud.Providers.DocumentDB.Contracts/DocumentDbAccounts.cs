@@ -13,29 +13,40 @@ namespace CyberCloud.Providers.DocumentDB.Contracts;
 /// <remarks>
 ///     <para>
 ///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md):
-///         <i>"MongoDB-compatible — <c>CyberCloud.DocumentDB/accounts</c> · M2 · 1.2 EM. <b>FerretDB</b>
-///         (Apache-2.0) over a CloudNativePG cluster. ADR-011: real MongoDB is SSPL and cannot be
-///         offered as a service."</i>
+///         <i>
+///             "MongoDB-compatible — <c>CyberCloud.DocumentDB/accounts</c> · M2 · 1.2 EM. <b>FerretDB</b>
+///             (Apache-2.0) over a CloudNativePG cluster. ADR-011: real MongoDB is SSPL and cannot be
+///             offered as a service."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THIS IS A COMPATIBILITY LAYER AND EVERY NAME A HUMAN READS SAYS SO.</b> ADR-011's rule
 ///         for <c>CyberCloud.Cache/redis</c> — <i>"say Valkey on the product page"</i> — applies here
 ///         with more force, because the gap between the substitute and the original is behavioural
-///         rather than only nominal. docs/plan/12's own sentence: <i>"Selling it as 'MongoDB' produces
-///         a churn event at the first <c>$lookup</c>. Selling it as 'MongoDB-compatible document
-///         database, here is exactly what works' produces a happy customer with a smaller use
-///         case."</i> <see cref="UnsupportedCommands" /> is that table, in the type, so that the
+///         rather than only nominal. docs/plan/12's own sentence:
+///         <i>
+///             "Selling it as 'MongoDB' produces
+///             a churn event at the first <c>$lookup</c>. Selling it as 'MongoDB-compatible document
+///             database, here is exactly what works' produces a happy customer with a smaller use
+///             case."
+///         </i> <see cref="UnsupportedCommands" /> is that table, in the type, so that the
 ///         supported-subset statement is a thing the CLI and the portal can print rather than a
 ///         paragraph in a document nobody ships.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THERE IS NO FERRETDB OPERATOR, AND ADR-010 CLAUSE 1's SURVEY NAMES ONE.</b> That
-///         clause lists <i>"…, RabbitMQ Cluster Operator, OpenSearch operator, <b>FerretDB</b>,
-///         Qdrant, …"</i> in a sentence about <i>"the operator selection per managed service"</i>.
+///         clause lists
+///         <i>
+///             "…, RabbitMQ Cluster Operator, OpenSearch operator, <b>FerretDB</b>,
+///             Qdrant, …"
+///         </i> in a sentence about <i>"the operator selection per managed service"</i>.
 ///         Checked on 2026-08-12 against the GitHub API rather than against a README: the
 ///         <c>FerretDB</c> organisation contains <c>FerretDB</c>, <c>documentdb</c>, <c>dance</c>,
-///         <c>deps</c>, language examples and marketplace forks, and <b>no operator, no CRD and no
-///         Helm chart</b>. The documented Kubernetes install is a <c>Deployment</c> and a
+///         <c>deps</c>, language examples and marketplace forks, and
+///         <b>
+///             no operator, no CRD and no
+///             Helm chart
+///         </b>. The documented Kubernetes install is a <c>Deployment</c> and a
 ///         <c>Service</c> applied with <c>kubectl</c>. ⚠ <b>SECOND SIGHTING</b> —
 ///         <c>charts/managed/nats</c> found the same thing about that row (<c>nats-operator</c>
 ///         archived 2025-04-10), so ADR-010 clause 1 is a survey of <i>software</i> and only
@@ -43,8 +54,11 @@ namespace CyberCloud.Providers.DocumentDB.Contracts;
 ///         rather than of either service. <c>charts/managed/ferretdb/SOURCE</c> records the check.
 ///     </para>
 ///     <para>
-///         ⚠ <b>SO THE ROW IS HALF OPERATOR-BACKED AND HALF NOT, WHICH NOTHING IN THE CATALOGUE HAS
-///         BEEN BEFORE.</b> The Postgres half is a CloudNativePG <c>Cluster</c> — an operator answers
+///         ⚠
+///         <b>
+///             SO THE ROW IS HALF OPERATOR-BACKED AND HALF NOT, WHICH NOTHING IN THE CATALOGUE HAS
+///             BEEN BEFORE.
+///         </b> The Postgres half is a CloudNativePG <c>Cluster</c> — an operator answers
 ///         for HA, failover, backup and the scrape object. The FerretDB half is a plain
 ///         <c>Deployment</c>, a <c>Service</c> and a hand-written <c>PodMonitor</c>. See
 ///         <see cref="PodMonitorJson" />: this is the first row where docs/plan/12 § The pattern,
@@ -53,8 +67,11 @@ namespace CyberCloud.Providers.DocumentDB.Contracts;
 ///         written by this provider.
 ///     </para>
 ///     <para>
-///         ⚠ <b>docs/plan/12 SAYS THE POSTGRES HALF IS "ALREADY BUILT FOR THE ROW ABOVE" AND NO LINE
-///         OF IT IS REUSABLE.</b> That row is <c>CyberCloud.DBforPostgreSQL/servers</c> and
+///         ⚠
+///         <b>
+///             docs/plan/12 SAYS THE POSTGRES HALF IS "ALREADY BUILT FOR THE ROW ABOVE" AND NO LINE
+///             OF IT IS REUSABLE.
+///         </b> That row is <c>CyberCloud.DBforPostgreSQL/servers</c> and
 ///         <c>src/Providers/README.md § Hard rule</c> forbids a <c>Providers.*</c> assembly
 ///         referencing another, deliberately. So <see cref="ClusterJson" /> is a second, independent
 ///         rendering of the same CRD. ⚠ <b>Writing it found a live defect in the first one</b> —
@@ -64,13 +81,21 @@ namespace CyberCloud.Providers.DocumentDB.Contracts;
 ///         not.
 ///     </para>
 ///     <para>
-///         ⚠ <b>NOTHING HERE MINTS, AND WHAT MAKES THAT SAFE IS THE ENGINE RATHER THAN THE
-///         PLATFORM.</b> CloudNativePG generates the credential itself, and FerretDB neither stores
-///         nor invents one: checked in <c>website/docs/security/authentication.md</c>, <i>"FerretDB
-///         does not store authentication information (usernames and passwords) itself. Instead, it
-///         relies entirely on PostgreSQL's authentication mechanisms"</i>, and an anonymous client
-///         <i>"may still connect to FerretDB without authentication, but they cannot access or
-///         perform actions on the database"</i>. So the service works and an unauthenticated caller
+///         ⚠
+///         <b>
+///             NOTHING HERE MINTS, AND WHAT MAKES THAT SAFE IS THE ENGINE RATHER THAN THE
+///             PLATFORM.
+///         </b> CloudNativePG generates the credential itself, and FerretDB neither stores
+///         nor invents one: checked in <c>website/docs/security/authentication.md</c>,
+///         <i>
+///             "FerretDB
+///             does not store authentication information (usernames and passwords) itself. Instead, it
+///             relies entirely on PostgreSQL's authentication mechanisms"
+///         </i>, and an anonymous client
+///         <i>
+///             "may still connect to FerretDB without authentication, but they cannot access or
+///             perform actions on the database"
+///         </i>. So the service works and an unauthenticated caller
 ///         gets nothing. ⚠ The paragraph that stood here said piece 5 was not built and that
 ///         <c>listKeys</c> had nowhere to read the password from. Both have been false since
 ///         <c>ISecretWriter</c> and <c>DocumentDbAccountListKeysHandler</c> landed: the handler reads
@@ -112,8 +137,11 @@ public static class DocumentDbAccounts {
 
     /// <summary>The action that hands a caller the endpoint and a credential.</summary>
     /// <remarks>
-    ///     docs/plan/12 § Cross-cutting decisions makes it <i>"an action with its own permission,
-    ///     audited on every call"</i>. ⚠ <c>regenerateKeys</c> is named in the same paragraph and is
+    ///     docs/plan/12 § Cross-cutting decisions makes it
+    ///     <i>
+    ///         "an action with its own permission,
+    ///         audited on every call"
+    ///     </i>. ⚠ <c>regenerateKeys</c> is named in the same paragraph and is
     ///     <b>not</b> declared, for the reason the five providers before this one give: it is specified
     ///     with a rolling grace period and nothing in the platform can hold two live credentials for
     ///     one resource.
@@ -135,10 +163,16 @@ public static class DocumentDbAccounts {
 
     /// <summary>The CloudNativePG <c>Cluster</c> that holds the data.</summary>
     /// <remarks>
-    ///     ⚠ <b>The same group, version and kind <c>CyberCloud.DBforPostgreSQL/servers</c> renders,
-    ///     declared again because it must be.</b> <c>src/Providers/README.md § Hard rule</c> forbids
-    ///     the reference; <c>module-layering.txt</c> records that a line between two providers <i>"would
-    ///     fail rule 2 and be deleted, not honoured"</i>. Two rows sharing one operator is the case that
+    ///     ⚠
+    ///     <b>
+    ///         The same group, version and kind <c>CyberCloud.DBforPostgreSQL/servers</c> renders,
+    ///         declared again because it must be.
+    ///     </b> <c>src/Providers/README.md § Hard rule</c> forbids
+    ///     the reference; <c>module-layering.txt</c> records that a line between two providers
+    ///     <i>
+    ///         "would
+    ///         fail rule 2 and be deleted, not honoured"
+    ///     </i>. Two rows sharing one operator is the case that
     ///     rule had not met before.
     /// </remarks>
     public static GroupVersionKind ClusterKind { get; } =
@@ -166,9 +200,7 @@ public static class DocumentDbAccounts {
     ///     derives a definition stub from.
     /// </remarks>
     public static GroupVersionKind PodMonitorKind { get; } =
-        new() {
-            Group = "monitoring.coreos.com", Version = "v1", Kind = "PodMonitor", Plural = "podmonitors"
-        };
+        new() { Group = "monitoring.coreos.com", Version = "v1", Kind = "PodMonitor", Plural = "podmonitors" };
 
     // ── Ports, names and images ───────────────────────────────────────────────────────────────
 
@@ -219,9 +251,12 @@ public static class DocumentDbAccounts {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS RENDERS TO <c>spec.postgresql.shared_preload_libraries</c> — A LIST, A SIBLING
-    ///         OF <c>parameters</c> — AND THE ROW ABOVE PUT IT <i>INSIDE</i> <c>parameters</c> UNTIL
-    ///         2026-08-12, WHICH CLOUDNATIVEPG REFUSES.</b> Checked in that operator's source rather
+    ///         ⚠
+    ///         <b>
+    ///             THIS RENDERS TO <c>spec.postgresql.shared_preload_libraries</c> — A LIST, A SIBLING
+    ///             OF <c>parameters</c> — AND THE ROW ABOVE PUT IT <i>INSIDE</i> <c>parameters</c> UNTIL
+    ///             2026-08-12, WHICH CLOUDNATIVEPG REFUSES.
+    ///         </b> Checked in that operator's source rather
     ///         than inferred:
     ///         <c>api/v1/cluster_types.go</c> declares
     ///         <c>AdditionalLibraries []string `json:"shared_preload_libraries,omitempty"`</c> on
@@ -236,8 +271,11 @@ public static class DocumentDbAccounts {
     ///         no non-empty list can ever equal it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The consequence for the other row was a real defect, and it is fixed since
-    ///         2026-08-12.</b>
+    ///         ⚠
+    ///         <b>
+    ///             The consequence for the other row was a real defect, and it is fixed since
+    ///             2026-08-12.
+    ///         </b>
     ///         <c>src/Providers/CyberCloud.Providers.DBforPostgreSQL/…/PostgresServers.cs</c>'s
     ///         <c>ClusterJson</c> wrote <c>parameters["shared_preload_libraries"]</c> whenever
     ///         <c>/properties/extensions</c> was non-empty, and
@@ -269,8 +307,11 @@ public static class DocumentDbAccounts {
 
     /// <summary>The database FerretDB connects to and the extension is installed in.</summary>
     /// <remarks>
-    ///     ⚠ <b><c>postgres</c>, which is CloudNativePG's <i>maintenance</i> database rather than the
-    ///     application one, and that is upstream's shape rather than a preference.</b>
+    ///     ⚠
+    ///     <b>
+    ///         <c>postgres</c>, which is CloudNativePG's <i>maintenance</i> database rather than the
+    ///         application one, and that is upstream's shape rather than a preference.
+    ///     </b>
     ///     <c>spec.bootstrap.initdb.postInitSQL</c> is documented in <c>api/v1/cluster_types.go</c> as
     ///     <i>"executed as a superuser in the <c>postgres</c> database"</i>, and installing an
     ///     extension needs a superuser. Putting it in the application database instead —
@@ -286,14 +327,20 @@ public static class DocumentDbAccounts {
     /// <summary>Whether the rendered <c>Cluster</c> asks CloudNativePG for a superuser secret.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>true</c>, and <c>spec.enableSuperuserAccess</c> defaults to <c>false</c>, so
-    ///         this is written on every apply rather than inherited.</b> The extension lives in the
+    ///         ⚠
+    ///         <b>
+    ///             <c>true</c>, and <c>spec.enableSuperuserAccess</c> defaults to <c>false</c>, so
+    ///             this is written on every apply rather than inherited.
+    ///         </b> The extension lives in the
     ///         <c>postgres</c> database (<see cref="Database" />) and the application owner has no
     ///         rights there, so the superuser role is the only one that can serve a client.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It is part of <see cref="Matches" />, and it is the one field here whose absence is
-    ///         invisible from everywhere else.</b> <c>internal/controller/cluster_create.go</c> creates
+    ///         ⚠
+    ///         <b>
+    ///             It is part of <see cref="Matches" />, and it is the one field here whose absence is
+    ///             invisible from everywhere else.
+    ///         </b> <c>internal/controller/cluster_create.go</c> creates
     ///         the secret only <c>if cluster.GetEnableSuperuserAccess()</c>, and the operator
     ///         <i>deletes</i> it again when the flag is taken away — <c>api/v1/cluster_types.go</c>:
     ///         <i>"the operator will ignore the SuperuserSecret content, delete it"</i>. A
@@ -395,8 +442,11 @@ public static class DocumentDbAccounts {
     ///         <see cref="EnableSuperuserAccess" /> is on and no <c>spec.superuserSecret</c> is given.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>This row mints nothing into the vault, and the reason is not that piece 5 is
-    ///         missing.</b> docs/plan/12 § The pattern, once, piece 5 is built — <c>ISecretWriter</c>
+    ///         ⚠
+    ///         <b>
+    ///             This row mints nothing into the vault, and the reason is not that piece 5 is
+    ///             missing.
+    ///         </b> docs/plan/12 § The pattern, once, piece 5 is built — <c>ISecretWriter</c>
     ///         is the interface and <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>. The
     ///         reason is the paragraph above: CloudNativePG has already put a password in the database
     ///         by the time this reconciler could write one, so a minted credential would be a password
@@ -404,8 +454,11 @@ public static class DocumentDbAccounts {
     ///         <c>DocumentDbAccountListKeysHandler</c> reads these two keys instead.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The <c>uri</c> key of THIS secret is unusable and the <c>uri</c> key of the
-    ///         application secret is not — a distinction that costs a non-starting pod to learn.</b>
+    ///         ⚠
+    ///         <b>
+    ///             The <c>uri</c> key of THIS secret is unusable and the <c>uri</c> key of the
+    ///             application secret is not — a distinction that costs a non-starting pod to learn.
+    ///         </b>
     ///         <c>pkg/specs/secrets.go</c> builds every generated secret's <c>uri</c> from a
     ///         <c>dbname</c>, and <c>cluster_create.go</c> passes <c>"*"</c> for the superuser one. So
     ///         <c>{name}-pg-superuser</c>'s <c>uri</c> is
@@ -467,8 +520,11 @@ public static class DocumentDbAccounts {
     ///     so anchoring it here would produce <c>^(?:^…$)$</c> in every generated surface.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Character for character the pattern <c>CyberCloud.DBforPostgreSQL/servers</c> declares,
-    ///     and it is a SECOND copy rather than a shared constant</b> — the hard rule that forbids the
+    ///     ⚠
+    ///     <b>
+    ///         Character for character the pattern <c>CyberCloud.DBforPostgreSQL/servers</c> declares,
+    ///         and it is a SECOND copy rather than a shared constant
+    ///     </b> — the hard rule that forbids the
     ///     assembly reference forbids reaching for the string too. It is spelled out here so that a
     ///     reviewer diffing the two sees one line rather than a call into another provider's
     ///     namespace, which is the trade <c>src/Providers/README.md § Hard rule</c> makes deliberately.
@@ -478,14 +534,23 @@ public static class DocumentDbAccounts {
     public const string BackupDestinationPattern = @"(s3://[a-z0-9][a-z0-9.\-]*[a-z0-9](/[^\s]*)?)?";
 
     /// <summary>
-    ///     The sizing presets of docs/plan/12 § Sizing vocabulary, <c>s1</c> family — <i>"1:4 ·
-    ///     General — most databases"</i>.
+    ///     The sizing presets of docs/plan/12 § Sizing vocabulary, <c>s1</c> family —
+    ///     <i>
+    ///         "1:4 ·
+    ///         General — most databases"
+    ///     </i>.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE PLATFORM HAS TWO <c>s1</c> TABLES ALREADY AND THEY DISAGREE RUNG FOR RUNG.
-    ///         THIS IS THE THIRD.</b> docs/plan/12 § Sizing vocabulary opens <i>"One table, defined
-    ///         once, used by every service and every VM"</i>, and there is no such table:
+    ///         ⚠
+    ///         <b>
+    ///             THE PLATFORM HAS TWO <c>s1</c> TABLES ALREADY AND THEY DISAGREE RUNG FOR RUNG.
+    ///             THIS IS THE THIRD.
+    ///         </b> docs/plan/12 § Sizing vocabulary opens
+    ///         <i>
+    ///             "One table, defined
+    ///             once, used by every service and every VM"
+    ///         </i>, and there is no such table:
     ///         <c>PostgresServers.Presets</c> spells <c>s1.small</c> as <c>(500m, 2Gi)</c> and
     ///         <c>StorageAccounts.Presets</c> spells it <c>(1, 4Gi)</c>. The two are the same ratio one
     ///         rung apart, so a tenant who reads <c>s1.small</c> on two products gets two different
@@ -541,15 +606,17 @@ public static class DocumentDbAccounts {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Two members, because FerretDB has no long-term branch.</b> The same shape
-    ///         <c>charts/managed/seaweedfs</c> records: <i>"docs/plan/12's 'supported major versions'
-    ///         is a shape this project does not have"</i>. These are the two most recent releases as
+    ///         <c>charts/managed/seaweedfs</c> records:
+    ///         <i>
+    ///             "docs/plan/12's 'supported major versions'
+    ///             is a shape this project does not have"
+    ///         </i>. These are the two most recent releases as
     ///         of 2026-08-12, and a third is a new api-version rather than an edit to this one.
     ///     </para>
     /// </remarks>
     public static FrozenDictionary<string, (string Gateway, string Postgres)> Versions { get; } =
         new Dictionary<string, (string Gateway, string Postgres)>(StringComparer.Ordinal) {
-            ["2.5"] = ("2.5.0", "17-0.106.0-ferretdb-2.5.0"),
-            ["2.7"] = ("2.7.0", "17-0.107.0-ferretdb-2.7.0")
+            ["2.5"] = ("2.5.0", "17-0.106.0-ferretdb-2.5.0"), ["2.7"] = ("2.7.0", "17-0.107.0-ferretdb-2.7.0")
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
@@ -557,8 +624,11 @@ public static class DocumentDbAccounts {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS docs/plan/12's SUPPORTED-SUBSET TABLE, AND IT IS IN THE TYPE BECAUSE A
-    ///         PRODUCT PAGE IS NOT A PLACE A BUILD CAN FAIL.</b> That document requires the row to
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS docs/plan/12's SUPPORTED-SUBSET TABLE, AND IT IS IN THE TYPE BECAUSE A
+    ///             PRODUCT PAGE IS NOT A PLACE A BUILD CAN FAIL.
+    ///         </b> That document requires the row to
     ///         <i>"say so, with a supported-subset table"</i> and warns that selling it as MongoDB
     ///         <i>"produces a churn event at the first <c>$lookup</c>"</i>. Declared here, the list
     ///         reaches the type's summary, the CLI help and the portal through the same generation the
@@ -574,8 +644,11 @@ public static class DocumentDbAccounts {
     ///         find out.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Change streams are NOT in this list and their absence is honest rather than a
-    ///         claim.</b> docs/plan/12's paragraph names them as a gap; upstream's compatibility page
+    ///         ⚠
+    ///         <b>
+    ///             Change streams are NOT in this list and their absence is honest rather than a
+    ///             claim.
+    ///         </b> docs/plan/12's paragraph names them as a gap; upstream's compatibility page
     ///         has no row for them either way, and a search of that documentation tree for
     ///         <c>changeStream</c> returns nothing. Listing them would be repeating a claim this
     ///         provider could not check, and omitting them silently would be worse — so
@@ -583,19 +656,18 @@ public static class DocumentDbAccounts {
     ///         question rather than either answer.
     ///     </para>
     /// </remarks>
-    public static ImmutableArray<string> UnsupportedCommands { get; } =
-        [
-            "commitTransaction",
-            "abortTransaction",
-            "bulkWrite",
-            "convertToCapped",
-            "createRole",
-            "dropRole",
-            "grantRolesToUser",
-            "revokeRolesFromUser",
-            "setParameter",
-            "profile"
-        ];
+    public static ImmutableArray<string> UnsupportedCommands { get; } = [
+        "commitTransaction",
+        "abortTransaction",
+        "bulkWrite",
+        "convertToCapped",
+        "createRole",
+        "dropRole",
+        "grantRolesToUser",
+        "revokeRolesFromUser",
+        "setParameter",
+        "profile"
+    ];
 
     /// <summary>The one-line compatibility statement every generated surface carries.</summary>
     /// <remarks>
@@ -636,11 +708,7 @@ public static class DocumentDbAccounts {
                     Required: true,
                     Description: "The cluster whose namespace holds the PostgreSQL cluster and the "
                     + "FerretDB gateway."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -652,10 +720,7 @@ public static class DocumentDbAccounts {
                     + "matched pair and a mismatched pair is a proxy talking to an extension it does "
                     + "not know. FerretDB maintains no long-term branch, so the two values here are "
                     + "the two most recent releases and a third is a new api-version."
-                ) {
-                    AllowedValues = [.. Versions.Keys.Order(StringComparer.Ordinal)],
-                    DefaultJson = "\"2.7\""
-                },
+                ) { AllowedValues = [.. Versions.Keys.Order(StringComparer.Ordinal)], DefaultJson = "\"2.7\"" },
                 new(
                     "/properties/postgres",
                     SchemaKind.Nested,
@@ -669,11 +734,7 @@ public static class DocumentDbAccounts {
                     + "single point of failure and is offered for development only. Failover, "
                     + "replication and point-in-time recovery are CloudNativePG's, which is why this "
                     + "row costs 1.2 engineer-months rather than a rebuild of them."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "2" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -696,19 +757,13 @@ public static class DocumentDbAccounts {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -721,21 +776,13 @@ public static class DocumentDbAccounts {
                     Description: "Data volume size per PostgreSQL instance, in Kubernetes quantity "
                     + "form. Every instance carries a full copy, so raw consumption is this times the "
                     + "instance count. Grows online; never shrinks."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"20Gi\"",
-                    ExampleJson = "\"20Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"20Gi\"", ExampleJson = "\"20Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name for the PostgreSQL volumes. Empty means the "
                     + "cluster default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/gateway",
                     SchemaKind.Nested,
@@ -748,11 +795,7 @@ public static class DocumentDbAccounts {
                     Description: "Number of FerretDB pods. The gateway is stateless — it translates "
                     + "and forwards, and every byte is in PostgreSQL — so this is a throughput and "
                     + "availability setting rather than a topology one."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 10, DefaultJson = "2" },
                 new(
                     "/properties/backup",
                     SchemaKind.Nested,
@@ -767,19 +810,13 @@ public static class DocumentDbAccounts {
                     + "and only because there is no destination to default to: turning it on without "
                     + "a destinationPath below renders no backup configuration at all rather than an "
                     + "empty one, so the two properties have to be set together."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/backup/retentionDays",
                     SchemaKind.WholeNumber,
                     Description: "How long base backups and WAL are kept. The point-in-time-recovery "
                     + "window is this number of days."
-                ) {
-                    Minimum = 1,
-                    Maximum = 365,
-                    DefaultJson = "14"
-                },
+                ) { Minimum = 1, Maximum = 365, DefaultJson = "14" },
                 new(
                     "/properties/backup/destinationPath",
                     SchemaKind.Text,
@@ -804,9 +841,7 @@ public static class DocumentDbAccounts {
                     + "over the FerretDB pods because FerretDB has no operator to ask. On by default "
                     + "— docs/plan/12: \"a managed service the tenant cannot see the health of is a "
                     + "black box they will not trust with production\"."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -865,8 +900,7 @@ public static class DocumentDbAccounts {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -895,8 +929,7 @@ public static class DocumentDbAccounts {
 
     /// <summary>The PostgreSQL instance count a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int Instances(JsonElement desired) =>
-        Number(desired, "postgres", "instances", DefaultInstances);
+    public static int Instances(JsonElement desired) => Number(desired, "postgres", "instances", DefaultInstances);
 
     /// <summary>The FerretDB pod count a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -905,8 +938,7 @@ public static class DocumentDbAccounts {
 
     /// <summary>The data-volume size per PostgreSQL instance a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string StorageSize(JsonElement desired) =>
-        Text(desired, "storage", "size", DefaultStorageSize);
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", DefaultStorageSize);
 
     /// <summary>Whether the desired body asks for scrape objects.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -962,13 +994,19 @@ public static class DocumentDbAccounts {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>shared_preload_libraries</c> is a SIBLING of <c>parameters</c>, not a key in
-    ///         it.</b> See <see cref="SharedPreloadLibraries" /> for the CRD field, the webhook that
+    ///         ⚠
+    ///         <b>
+    ///             <c>shared_preload_libraries</c> is a SIBLING of <c>parameters</c>, not a key in
+    ///             it.
+    ///         </b> See <see cref="SharedPreloadLibraries" /> for the CRD field, the webhook that
     ///         refuses the other spelling, and the row above that uses it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>cron.database_name</c> has to name the same database the extension is installed
-    ///         in.</b> <c>pg_cron</c> schedules its jobs in exactly one database and defaults to
+    ///         ⚠
+    ///         <b>
+    ///             <c>cron.database_name</c> has to name the same database the extension is installed
+    ///             in.
+    ///         </b> <c>pg_cron</c> schedules its jobs in exactly one database and defaults to
     ///         <c>postgres</c>; the DocumentDB extension registers background jobs through it. The two
     ///         agree here because <see cref="Database" /> is <c>postgres</c> — written out rather than
     ///         left to the default, so that moving the extension to the application database is one
@@ -1022,9 +1060,7 @@ public static class DocumentDbAccounts {
 
         if (cpu.Length > 0 && memory.Length > 0) {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
-            spec["resources"] = new JsonObject {
-                ["requests"] = quantities.DeepClone(), ["limits"] = quantities
-            };
+            spec["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
         }
 
         if (BackupEnabled(desired)) {
@@ -1050,8 +1086,11 @@ public static class DocumentDbAccounts {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>FERRETDB_LISTEN_ADDR</c> AND <c>FERRETDB_DEBUG_ADDR</c> ARE WRITTEN OUT EVEN
-    ///         THOUGH THE IMAGE ALREADY SETS THEM, AND THAT IS THE POINT.</b> The binary's own
+    ///         ⚠
+    ///         <b>
+    ///             <c>FERRETDB_LISTEN_ADDR</c> AND <c>FERRETDB_DEBUG_ADDR</c> ARE WRITTEN OUT EVEN
+    ///             THOUGH THE IMAGE ALREADY SETS THEM, AND THAT IS THE POINT.
+    ///         </b> The binary's own
     ///         defaults are <c>127.0.0.1:27017</c> and <c>127.0.0.1:8088</c> —
     ///         <c>cmd/ferretdb/main.go</c>, kong tags — and only
     ///         <c>build/ferretdb/production.Dockerfile</c>'s <c>ENV FERRETDB_LISTEN_ADDR=:27017</c> and
@@ -1065,16 +1104,22 @@ public static class DocumentDbAccounts {
     ///         all.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The DSN is assembled from two <c>secretKeyRef</c>s rather than projecting the
-    ///         secret's own <c>uri</c> key.</b> See <see cref="SuperuserSecretName" />: the superuser
+    ///         ⚠
+    ///         <b>
+    ///             The DSN is assembled from two <c>secretKeyRef</c>s rather than projecting the
+    ///             secret's own <c>uri</c> key.
+    ///         </b> See <see cref="SuperuserSecretName" />: the superuser
     ///         secret's <c>uri</c> names the database <c>*</c>. The assembly uses Kubernetes'
     ///         <c>$(VAR)</c> expansion over two earlier entries in the same <c>env</c> list, and it is
     ///         safe to interpolate without escaping for a checkable reason — CloudNativePG generates
     ///         the password with zero symbols.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The probes ask two different questions and the readiness one is the interesting
-    ///         one.</b> <c>/debug/readyz</c> reports that PostgreSQL is reachable <i>and</i> the
+    ///         ⚠
+    ///         <b>
+    ///             The probes ask two different questions and the readiness one is the interesting
+    ///             one.
+    ///         </b> <c>/debug/readyz</c> reports that PostgreSQL is reachable <i>and</i> the
     ///         DocumentDB extension is installed; <c>/debug/livez</c> reports only that the process
     ///         accepts connections. Using <c>readyz</c> for liveness would restart every gateway pod
     ///         whenever CloudNativePG failed over, which is the moment they are least useful to
@@ -1098,18 +1143,16 @@ public static class DocumentDbAccounts {
         var container = new JsonObject {
             ["name"] = "ferretdb",
             ["image"] = GatewayImage(desired),
-            ["ports"] = new JsonArray {
-                ContainerPort("mongodb", MongoPort), ContainerPort("debug", DebugPort)
-            },
+            ["ports"] = new JsonArray { ContainerPort("mongodb", MongoPort), ContainerPort("debug", DebugPort) },
             ["env"] = new JsonArray {
                 SecretEnv("FERRETDB_PGUSER", secret, "username"),
                 SecretEnv("FERRETDB_PGPASSWORD", secret, "password"),
                 new JsonObject {
                     ["name"] = "FERRETDB_POSTGRESQL_URL",
                     ["value"] = "postgres://$(FERRETDB_PGUSER):$(FERRETDB_PGPASSWORD)@"
-                    + PostgresServiceName(name)
-                    + ":5432/"
-                    + Database
+                        + PostgresServiceName(name)
+                        + ":5432/"
+                        + Database
                 },
                 // ⚠ Written out — see the remarks. The image sets both and the binary defaults both
                 // to loopback.
@@ -1118,8 +1161,7 @@ public static class DocumentDbAccounts {
                     ["value"] = ":" + MongoPort.ToString(CultureInfo.InvariantCulture)
                 },
                 new JsonObject {
-                    ["name"] = "FERRETDB_DEBUG_ADDR",
-                    ["value"] = ":" + DebugPort.ToString(CultureInfo.InvariantCulture)
+                    ["name"] = "FERRETDB_DEBUG_ADDR", ["value"] = ":" + DebugPort.ToString(CultureInfo.InvariantCulture)
                 },
                 // ⚠ Telemetry is a call home and a managed service does not make one on a tenant's
                 // behalf. `disable` is the documented value; leaving it `undecided` sends a beacon an
@@ -1128,9 +1170,7 @@ public static class DocumentDbAccounts {
             },
             ["readinessProbe"] = Probe("/debug/readyz", 5, 3),
             ["livenessProbe"] = Probe("/debug/livez", 10, 5),
-            ["resources"] = new JsonObject {
-                ["requests"] = GatewayQuantities(), ["limits"] = GatewayQuantities()
-            }
+            ["resources"] = new JsonObject { ["requests"] = GatewayQuantities(), ["limits"] = GatewayQuantities() }
         };
 
         return new JsonObject {
@@ -1180,10 +1220,7 @@ public static class DocumentDbAccounts {
                 ["selector"] = Selector(name),
                 ["ports"] = new JsonArray {
                     new JsonObject {
-                        ["name"] = "mongodb",
-                        ["port"] = MongoPort,
-                        ["targetPort"] = "mongodb",
-                        ["protocol"] = "TCP"
+                        ["name"] = "mongodb", ["port"] = MongoPort, ["targetPort"] = "mongodb", ["protocol"] = "TCP"
                     }
                 }
             }
@@ -1194,18 +1231,26 @@ public static class DocumentDbAccounts {
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>docs/plan/12 § The pattern, once, piece 6's SECOND branch — and this row takes
-    ///         BOTH branches at once, which nothing before it has.</b> The corrected piece 6 reads
-    ///         <i>"ask the operator for the scrape object wherever the operator accepts the request,
-    ///         and hand-write one into the chart only when there is no operator to ask."</i>
+    ///         ⚠
+    ///         <b>
+    ///             docs/plan/12 § The pattern, once, piece 6's SECOND branch — and this row takes
+    ///             BOTH branches at once, which nothing before it has.
+    ///         </b> The corrected piece 6 reads
+    ///         <i>
+    ///             "ask the operator for the scrape object wherever the operator accepts the request,
+    ///             and hand-write one into the chart only when there is no operator to ask."
+    ///         </i>
     ///         CloudNativePG accepts the request for the PostgreSQL half —
     ///         <c>spec.monitoring.enablePodMonitor</c>, rendered by <see cref="ClusterJson" /> — and
     ///         there is no FerretDB operator at all, so this half is hand-written. One resource, one
     ///         <c>monitoring.enabled</c> flag, two mechanisms.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And the hazard the second branch exists to warn about cannot arise here, for
-    ///         exactly the reason <c>charts/managed/nats</c> proved.</b> That warning is that a
+    ///         ⚠
+    ///         <b>
+    ///             And the hazard the second branch exists to warn about cannot arise here, for
+    ///             exactly the reason <c>charts/managed/nats</c> proved.
+    ///         </b> That warning is that a
     ///         hand-written scrape hard-codes somebody else's pod labels and goes quiet without failing
     ///         when the operator moves one. The labels this selector matches are written by
     ///         <see cref="DeploymentJson" /> onto pods created by <see cref="DeploymentJson" />. Both
@@ -1214,8 +1259,11 @@ public static class DocumentDbAccounts {
     ///     </para>
     ///     <para>
     ///         ⚠ <c>path</c> is <c>/debug/metrics</c> and not <c>/metrics</c> — see
-    ///         <see cref="MetricsPath" />. ⚠ And upstream says <i>"the set of metrics is not stable
-    ///         yet"</i>, which is a dashboard problem rather than a scrape problem and is recorded at
+    ///         <see cref="MetricsPath" />. ⚠ And upstream says
+    ///         <i>
+    ///             "the set of metrics is not stable
+    ///             yet"
+    ///         </i>, which is a dashboard problem rather than a scrape problem and is recorded at
     ///         <c>conformance.yaml § owed</c>, <c>grafana-dashboard</c>.
     ///     </para>
     /// </remarks>
@@ -1226,9 +1274,8 @@ public static class DocumentDbAccounts {
             ["metadata"] = new JsonObject { ["name"] = name },
             ["spec"] = new JsonObject {
                 ["selector"] = new JsonObject { ["matchLabels"] = Selector(name) },
-                ["podMetricsEndpoints"] = new JsonArray {
-                    new JsonObject { ["port"] = "debug", ["path"] = MetricsPath }
-                }
+                ["podMetricsEndpoints"] =
+                    new JsonArray { new JsonObject { ["port"] = "debug", ["path"] = MetricsPath } }
             }
         }.ToJsonString();
     }
@@ -1241,8 +1288,11 @@ public static class DocumentDbAccounts {
     /// <returns><c>true</c> when the fields this provider owns hold the desired values.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Containment, not equality, and this type needs it for THREE independent reasons
-    ///         because it renders objects from three different worlds.</b> Checked against each one
+    ///         ⚠
+    ///         <b>
+    ///             Containment, not equality, and this type needs it for THREE independent reasons
+    ///             because it renders objects from three different worlds.
+    ///         </b> Checked against each one
     ///         rather than assumed from the pattern:
     ///     </para>
     ///     <list type="number">
@@ -1255,8 +1305,10 @@ public static class DocumentDbAccounts {
     ///             equality comparison on that list fails on the first read-back of a correct cluster.
     ///         </item>
     ///         <item>
-    ///             <b>The <c>Deployment</c> and the <c>Service</c> are the most heavily defaulted
-    ///             objects in Kubernetes.</b> <c>strategy</c>, <c>revisionHistoryLimit</c>,
+    ///             <b>
+    ///                 The <c>Deployment</c> and the <c>Service</c> are the most heavily defaulted
+    ///                 objects in Kubernetes.
+    ///             </b> <c>strategy</c>, <c>revisionHistoryLimit</c>,
     ///             <c>progressDeadlineSeconds</c>, <c>terminationMessagePath</c>,
     ///             <c>imagePullPolicy</c>, <c>dnsPolicy</c>, <c>clusterIP</c>, <c>ipFamilies</c>,
     ///             <c>sessionAffinity</c> — none of them sent, all of them returned. This is
@@ -1264,8 +1316,10 @@ public static class DocumentDbAccounts {
     ///             provider renders it.
     ///         </item>
     ///         <item>
-    ///             <b>The <c>PodMonitor</c> is a custom resource whose CRD may or may not default
-    ///             anything, and this provider does not depend on knowing which.</b>
+    ///             <b>
+    ///                 The <c>PodMonitor</c> is a custom resource whose CRD may or may not default
+    ///                 anything, and this provider does not depend on knowing which.
+    ///             </b>
     ///             <c>charts/managed/kafka</c> found Strimzi declares no defaults and
     ///             <c>charts/managed/seaweedfs</c> found the opposite about its operator, so the safe
     ///             reading is the one that is right either way.
@@ -1277,10 +1331,16 @@ public static class DocumentDbAccounts {
     ///         <c>false</c> rather than assumed.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What it deliberately does NOT compare is anything derived from the resource's
-    ///         ADDRESS.</b> The signature carries an object and a body and no id, so the object names,
-    ///         the selector labels and the <c>Secret</c> reference are checked for <i>presence and
-    ///         shape</i> rather than for value. <c>DocumentDbReconcilerTests</c> asserts the values
+    ///         ⚠
+    ///         <b>
+    ///             What it deliberately does NOT compare is anything derived from the resource's
+    ///             ADDRESS.
+    ///         </b> The signature carries an object and a body and no id, so the object names,
+    ///         the selector labels and the <c>Secret</c> reference are checked for
+    ///         <i>
+    ///             presence and
+    ///             shape
+    ///         </i> rather than for value. <c>DocumentDbReconcilerTests</c> asserts the values
     ///         against a real address, including two accounts in one resource group.
     ///     </para>
     /// </remarks>
@@ -1318,9 +1378,8 @@ public static class DocumentDbAccounts {
         && spec["enableSuperuserAccess"]?.GetValue<bool>() == EnableSuperuserAccess
         // ⚠ CONTAINMENT ON THE LIBRARY LIST, because the operator ADDS its own to it.
         && spec["postgresql"] is JsonObject postgresql
-        && SharedPreloadLibraries.All(
-            library => postgresql["shared_preload_libraries"] is JsonArray declared
-                && declared.Any(x => x?.GetValue<string>() == library)
+        && SharedPreloadLibraries.All(library => postgresql["shared_preload_libraries"] is JsonArray declared
+            && declared.Any(x => x?.GetValue<string>() == library)
         );
 
     static bool MatchesDeployment(JsonObject spec, JsonElement desired) =>
@@ -1336,8 +1395,8 @@ public static class DocumentDbAccounts {
 
     static bool MatchesPodMonitor(JsonObject spec) =>
         (spec["podMetricsEndpoints"] as JsonArray)
-        ?.OfType<JsonObject>()
-        .Any(x => x["path"]?.GetValue<string>() == MetricsPath)
+            ?.OfType<JsonObject>()
+            .Any(x => x["path"]?.GetValue<string>() == MetricsPath)
         == true;
 
     // ── A body, for tests, fixtures and the conformance case ──────────────────────────────────
@@ -1410,8 +1469,7 @@ public static class DocumentDbAccounts {
             ["app.kubernetes.io/managed-by"] = "cybercloud"
         };
 
-    static JsonObject GatewayQuantities() =>
-        new() { ["cpu"] = GatewayCpu, ["memory"] = GatewayMemory };
+    static JsonObject GatewayQuantities() => new() { ["cpu"] = GatewayCpu, ["memory"] = GatewayMemory };
 
     static JsonObject ContainerPort(string portName, int port) =>
         new() { ["name"] = portName, ["containerPort"] = port, ["protocol"] = "TCP" };
@@ -1419,9 +1477,7 @@ public static class DocumentDbAccounts {
     static JsonObject SecretEnv(string variable, string secret, string key) =>
         new() {
             ["name"] = variable,
-            ["valueFrom"] = new JsonObject {
-                ["secretKeyRef"] = new JsonObject { ["name"] = secret, ["key"] = key }
-            }
+            ["valueFrom"] = new JsonObject { ["secretKeyRef"] = new JsonObject { ["name"] = secret, ["key"] = key } }
         };
 
     static JsonObject Probe(string path, int period, int failureThreshold) =>

@@ -3,6 +3,7 @@
 // reason CyberCloud.Identity.csproj referenced it — the only module-to-implementation edge in the
 // tree outside providers. The vocabulary moved to .Contracts; see
 // CyberCloud.Authorization.Contracts/AuthorizationVocabulary.cs.
+
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
@@ -16,8 +17,11 @@ namespace CyberCloud.Identity.Grains;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE STATE HOLDS NO MEMBERS. Look at <see cref="GroupGrainState" /> — there is nowhere
-///         to put one.</b> docs/plan/11 § The object model: membership is <c>group:X#member@user:Y</c>
+///         ⚠
+///         <b>
+///             THE STATE HOLDS NO MEMBERS. Look at <see cref="GroupGrainState" /> — there is nowhere
+///             to put one.
+///         </b> docs/plan/11 § The object model: membership is <c>group:X#member@user:Y</c>
 ///         in ReBAC, "so nesting, inheritance and <c>ListObjects</c> come free", and a member list
 ///         here "would be a second source of truth and a hot spot for large groups".
 ///     </para>
@@ -53,7 +57,8 @@ namespace CyberCloud.Identity.Grains;
 ///     </para>
 /// </remarks>
 public sealed class GroupGrain(
-    [PersistentState("group", StorageTiers.Durable)] IPersistentState<GroupGrainState> state,
+    [PersistentState("group", StorageTiers.Durable)]
+    IPersistentState<GroupGrainState> state,
     IGrainFactory grains,
     IClock clock
 )
@@ -182,11 +187,7 @@ public sealed class GroupGrain(
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
     RelationTuple MembershipTuple(SubjectRef subject) =>
-        new() {
-            Object = ObjectRef.Of(ObjectTypes.Group, GroupId()),
-            Relation = Relations.Member,
-            Subject = subject
-        };
+        new() { Object = ObjectRef.Of(ObjectTypes.Group, GroupId()), Relation = Relations.Member, Subject = subject };
 
     ITupleStoreGrain TupleStore() =>
         grains.ForTenant(TenantKey()).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenantId));
@@ -207,9 +208,7 @@ public sealed class GroupGrain(
         };
 
     Result<T> NotFound<T>()
-        where T : notnull =>
-        Result<T>.Failure(ErrorCode.ResourceNotFound, $"Group {groupId:D} does not exist.");
+        where T : notnull => Result<T>.Failure(ErrorCode.ResourceNotFound, $"Group {groupId:D} does not exist.");
 
-    Result NotFound() =>
-        Result.Failure(ErrorCode.ResourceNotFound, $"Group {groupId:D} does not exist.");
+    Result NotFound() => Result.Failure(ErrorCode.ResourceNotFound, $"Group {groupId:D} does not exist.");
 }

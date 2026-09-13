@@ -39,10 +39,12 @@ sealed class InMemoryRateLimitCounters(IClock clock) : IRateLimitCounters {
             var oldest = stamps.Peek();
             var retryAfter = oldest + window - now;
 
-            return Task.FromResult(new WindowCount(
-                stamps.Count,
-                retryAfter < TimeSpan.Zero ? TimeSpan.Zero : retryAfter
-            ));
+            return Task.FromResult(
+                new WindowCount(
+                    stamps.Count,
+                    retryAfter < TimeSpan.Zero ? TimeSpan.Zero : retryAfter
+                )
+            );
         }
     }
 }

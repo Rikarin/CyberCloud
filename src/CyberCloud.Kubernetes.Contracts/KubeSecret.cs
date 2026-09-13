@@ -8,8 +8,10 @@ namespace CyberCloud.Kubernetes.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Every managed service in the catalogue whose credential an operator generates needs
-///         this, and each of them was about to grow its own.</b> CloudNativePG writes
+///         <b>
+///             Every managed service in the catalogue whose credential an operator generates needs
+///             this, and each of them was about to grow its own.
+///         </b> CloudNativePG writes
 ///         <c>{cluster}-app</c>, mariadb-operator writes <c>{server}-password</c>, the RabbitMQ
 ///         cluster-operator writes <c>{cluster}-default-user</c>, opensearch-operator writes
 ///         <c>{cluster}-admin-password</c>, Cluster API writes <c>{cluster}-kubeconfig</c>. A
@@ -43,8 +45,7 @@ public static class KubeSecret {
     /// <summary>Addresses a <c>Secret</c> by namespace and name.</summary>
     /// <param name="ns">The namespace the resource lives in.</param>
     /// <param name="name">The secret's own name.</param>
-    public static ObjectRef Ref(string ns, string name) =>
-        new() { Kind = Kind, Namespace = ns, Name = name };
+    public static ObjectRef Ref(string ns, string name) => new() { Kind = Kind, Namespace = ns, Name = name };
 
     /// <summary>Reads one key's value out of a <c>Secret</c> read back from a cluster.</summary>
     /// <param name="secret">The object <c>IKubeClusterConnection.GetAsync</c> returned.</param>

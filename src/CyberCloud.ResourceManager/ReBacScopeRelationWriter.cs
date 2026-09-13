@@ -11,8 +11,11 @@ namespace CyberCloud.ResourceManager;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE EDGES THIS WRITES DID NOT EXIST, AND THEIR ABSENCE MADE docs/plan/07 § Azure
-///         RBAC, expressed in it's FIRST ROW GRANT NOTHING ON A REAL SILO.</b> That table maps
+///         ⚠
+///         <b>
+///             THE EDGES THIS WRITES DID NOT EXIST, AND THEIR ABSENCE MADE docs/plan/07 § Azure
+///             RBAC, expressed in it's FIRST ROW GRANT NOTHING ON A REAL SILO.
+///         </b> That table maps
 ///         <i>Owner on subscription S for user U</i> to <c>subscription:S#owner@user:U</c> and says
 ///         inheritance sub → rg → resource is <i>"the <c>From("parent", …)</c> rewrites"</i>.
 ///         <c>ReBacResourceRelationWriter</c> writes the last hop of that chain and nothing wrote the
@@ -24,8 +27,11 @@ namespace CyberCloud.ResourceManager;
 ///         narrower question than it appears to, which is this engine's most-shipped defect.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Through <see cref="ITupleStoreGrain" /> and never through
-///         <c>IObjectRelationsGrain</c> directly</b>, for the reason
+///         ⚠
+///         <b>
+///             Through <see cref="ITupleStoreGrain" /> and never through
+///             <c>IObjectRelationsGrain</c> directly
+///         </b>, for the reason
 ///         <see cref="ReBacResourceRelationWriter" /> gives: a tuple written straight into the forward
 ///         index is one the reverse index never learns about and does not bump the tenant's relation
 ///         version, so no consistency token covers it and no check cache is invalidated.

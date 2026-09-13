@@ -10,16 +10,22 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///     <para>
 ///         ⚠ <b>The impersonation half is a security property and not a mapping test.</b> docs/plan/06
 ///         § Platform administration builds impersonation out of four controls — a second operator's
-///         approval for a production tenant, a 60-minute box, an audit record, and <i>"the tenant sees
-///         a notification"</i>. Every one of them is a property of the <b>grant</b>, and every one is
+///         approval for a production tenant, a 60-minute box, an audit record, and
+///         <i>
+///             "the tenant sees
+///             a notification"
+///         </i>. Every one of them is a property of the <b>grant</b>, and every one is
 ///         defeated by a caller who can name an operator themselves: the approval is skipped, the box
 ///         is unbounded, the audit names whoever was typed, and the notification either never fires or
 ///         accuses the wrong person.
 ///     </para>
 ///     <para>
-///         ⚠ <b>docs/plan/06 § Platform administration says the value rides in an
-///         <c>X-CyberCloud-Impersonated-By</c> header, and at this edge that sentence is a doc
-///         defect.</b> The header is right on the internal hop — gateway to resource manager, where
+///         ⚠
+///         <b>
+///             docs/plan/06 § Platform administration says the value rides in an
+///             <c>X-CyberCloud-Impersonated-By</c> header, and at this edge that sentence is a doc
+///             defect.
+///         </b> The header is right on the internal hop — gateway to resource manager, where
 ///         <c>CallerContext.ImpersonatedBy</c> already is — and wrong on the one the public writes to.
 ///         These tests spell the header on the request and assert it changes nothing.
 ///     </para>
@@ -145,9 +151,7 @@ public sealed class ImpersonationAndSubjectTypeTests {
         // docs/plan/07 § The model makes user:abc and servicePrincipal:abc two different subjects, so
         // a gateway holding only the id would be guessing which one it had.
         var caller = new CallerContext {
-            TenantId = GatewayHarness.TenantA,
-            SubjectType = "servicePrincipal",
-            SubjectId = "abc"
+            TenantId = GatewayHarness.TenantA, SubjectType = "servicePrincipal", SubjectId = "abc"
         };
 
         caller.SubjectId.ShouldNotContain(":");

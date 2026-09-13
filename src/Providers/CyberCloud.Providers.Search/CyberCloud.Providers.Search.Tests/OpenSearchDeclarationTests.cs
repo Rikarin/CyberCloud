@@ -82,11 +82,12 @@ public sealed class OpenSearchDeclarationTests {
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
             foreach (var pointer in meter.Derivation.Reads) {
-                OpenSearchServices.Schema2026.Declares(pointer).ShouldBeTrue(
-                    $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
-                    + "api-version's schema does not declare. A read set that names a property the "
-                    + "schema dropped is what an api-version bump has to be diffed against."
-                );
+                OpenSearchServices.Schema2026.Declares(pointer)
+                    .ShouldBeTrue(
+                        $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
+                        + "api-version's schema does not declare. A read set that names a property the "
+                        + "schema dropped is what an api-version bump has to be diffed against."
+                    );
             }
         }
 
@@ -98,9 +99,7 @@ public sealed class OpenSearchDeclarationTests {
             var reads = registration.Meters.Single(x => x.Meter == meter).Derivation!.Reads;
 
             foreach (var pointer in new[] {
-                         "/properties/dataNodes",
-                         "/properties/masterNodes",
-                         "/properties/coordinatingNodes"
+                         "/properties/dataNodes", "/properties/masterNodes", "/properties/coordinatingNodes"
                      }) {
                 reads.ShouldContain(pointer, meter + " does not declare that it reads " + pointer);
             }
@@ -119,10 +118,11 @@ public sealed class OpenSearchDeclarationTests {
                 Overridden(OpenSearchServices.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
 
-            OpenSearchServices.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
-                $"the declared default for '{property.JsonPointer}' does not validate inside an "
-                + "otherwise-valid body."
-            );
+            OpenSearchServices.Schema2026.Validate(body.RootElement, allowTags: true)
+                .IsSuccess.ShouldBeTrue(
+                    $"the declared default for '{property.JsonPointer}' does not validate inside an "
+                    + "otherwise-valid body."
+                );
         }
     }
 
@@ -210,10 +210,10 @@ public sealed class OpenSearchDeclarationTests {
         // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
-            ProviderRegistry.Build([new SearchProvider()]).Types.Select(
-                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
-            )
-        ).ShouldBeEmpty();
+            ProviderRegistry.Build([new SearchProvider()])
+                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        )
+            .ShouldBeEmpty();
 
         // ⚠ THE HALF THE DERIVED CHECK CANNOT MAKE, KEPT FROM THE TEST THAT HELD THE LISTS. Uniqueness
         // says the short name reaches this type; it does not say the short name is the word a person
@@ -239,9 +239,7 @@ public sealed class OpenSearchDeclarationTests {
 
     [Fact]
     public void AskingForCoordinatingNodesAddsAThirdPoolAtTheEnd() {
-        using var body = JsonDocument.Parse(
-            OpenSearchServices.Body(ClusterId, coordinatingNodes: 2)
-        );
+        using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, coordinatingNodes: 2));
 
         var pools = JsonNode.Parse(OpenSearchServices.NodePoolsJson(body.RootElement))!.AsArray();
 
@@ -263,9 +261,7 @@ public sealed class OpenSearchDeclarationTests {
         // A node whose roles OpenSearch fails to parse joins as a DEFAULT node — data AND
         // cluster-manager — which is the exact opposite of coordinating, and it reports itself
         // healthy while holding shards nobody meant it to hold.
-        using var body = JsonDocument.Parse(
-            OpenSearchServices.Body(ClusterId, coordinatingNodes: 1)
-        );
+        using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, coordinatingNodes: 1));
 
         var coordinators = JsonNode.Parse(OpenSearchServices.NodePoolsJson(body.RootElement))!
             .AsArray()
@@ -295,7 +291,8 @@ public sealed class OpenSearchDeclarationTests {
             .AsArray()
             .Single(x => x!["component"]!.GetValue<string>() == "masters")!;
 
-        masters["roles"]!.AsArray().Select(x => x!.GetValue<string>())
+        masters["roles"]!.AsArray()
+            .Select(x => x!.GetValue<string>())
             .ShouldBe(["cluster_manager"]);
 
         // ⚠ And a cluster-manager node gets a volume, because the cluster metadata is the only copy of
@@ -313,9 +310,7 @@ public sealed class OpenSearchDeclarationTests {
         // a cluster, so the symptom is a set of pods that all pass their readiness probes and never
         // discover each other.
         foreach (var coordinating in new[] { 0, 3 }) {
-            using var body = JsonDocument.Parse(
-                OpenSearchServices.Body(ClusterId, coordinatingNodes: coordinating)
-            );
+            using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, coordinatingNodes: coordinating));
 
             var tls = JsonNode.Parse(OpenSearchServices.ClusterJson("logs", body.RootElement))!
                 ["spec"]!["security"]!["tls"]!;
@@ -346,7 +341,8 @@ public sealed class OpenSearchDeclarationTests {
         using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId));
 
         var security = JsonNode.Parse(OpenSearchServices.ClusterJson("logs", body.RootElement))!
-            ["spec"]!["security"]!.AsObject();
+            ["spec"]!["security"]!
+            .AsObject();
 
         security["config"].ShouldBeNull(
             "a spec.security.config referencing an adminCredentialsSecret was rendered. Nothing in "
@@ -364,7 +360,8 @@ public sealed class OpenSearchDeclarationTests {
         using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId));
 
         var general = JsonNode.Parse(OpenSearchServices.ClusterJson("logs", body.RootElement))!
-            ["spec"]!["general"]!.AsObject();
+            ["spec"]!["general"]!
+            .AsObject();
 
         general["serviceName"]!.GetValue<string>().ShouldBe("logs");
         general["httpPort"]!.GetValue<int>().ShouldBe(9200);
@@ -395,9 +392,7 @@ public sealed class OpenSearchDeclarationTests {
         // object wherever the operator accepts the request". The operator accepts it as
         // spec.general.monitoring.enable, so this provider renders no monitoring object at all.
         using var on = JsonDocument.Parse(OpenSearchServices.Body(ClusterId));
-        using var off = JsonDocument.Parse(
-            WithMonitoring(OpenSearchServices.Body(ClusterId), false)
-        );
+        using var off = JsonDocument.Parse(WithMonitoring(OpenSearchServices.Body(ClusterId), false));
 
         OpenSearchServices.ClusterJson("logs", on.RootElement).ShouldContain("\"monitoring\"");
         OpenSearchServices.ClusterJson("logs", off.RootElement).ShouldNotContain("monitoring");
@@ -414,8 +409,7 @@ public sealed class OpenSearchDeclarationTests {
     }
 
     /// <summary>The <c>component</c> of each pool, in order.</summary>
-    static string[] Components(JsonArray pools) =>
-        [.. pools.Select(x => x!["component"]!.GetValue<string>())];
+    static string[] Components(JsonArray pools) => [.. pools.Select(x => x!["component"]!.GetValue<string>())];
 
     /// <summary>A body with one pointer replaced by a raw JSON value.</summary>
     static string Overridden(string body, string pointer, string valueJson) {

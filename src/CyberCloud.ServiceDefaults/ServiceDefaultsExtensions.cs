@@ -66,8 +66,11 @@ public static class ServiceDefaultsExtensions {
     ///     gateway (docs/plan/04 § Silo composition), which looks like working tracing until somebody needs it.
     /// </remarks>
     /// <remarks>
-    ///     ⚠ <b>TRACES AND METRICS ONLY, AND THE LOGS LINE THAT USED TO BE HERE HAD NEVER EXPORTED
-    ///     ANYTHING.</b> This method opened with <c>builder.Logging.AddOpenTelemetry(…)</c>, setting
+    ///     ⚠
+    ///     <b>
+    ///         TRACES AND METRICS ONLY, AND THE LOGS LINE THAT USED TO BE HERE HAD NEVER EXPORTED
+    ///         ANYTHING.
+    ///     </b> This method opened with <c>builder.Logging.AddOpenTelemetry(…)</c>, setting
     ///     <c>IncludeFormattedMessage</c> and <c>IncludeScopes</c>, which reads as "log records are
     ///     exported by OpenTelemetry". They were not, and neither setting had any effect:
     ///     <c>OrleansApplication.ConfigureHost</c> calls <c>AddSerilog</c>, which replaces
@@ -94,18 +97,18 @@ public static class ServiceDefaultsExtensions {
                 )
             )
             .WithMetrics(metrics => metrics
-                .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentation()
-                .AddMeter("Microsoft.Orleans")
-                .AddMeter($"{TelemetrySourcePrefix}.*")
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation()
+                    .AddMeter("Microsoft.Orleans")
+                    .AddMeter($"{TelemetrySourcePrefix}.*")
             )
             .WithTracing(tracing => tracing
-                .AddSource("Microsoft.Orleans.Runtime")
-                .AddSource("Microsoft.Orleans.Application")
-                .AddSource($"{TelemetrySourcePrefix}.*")
-                .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
+                    .AddSource("Microsoft.Orleans.Runtime")
+                    .AddSource("Microsoft.Orleans.Application")
+                    .AddSource($"{TelemetrySourcePrefix}.*")
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
             );
 
         if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"])) {
@@ -226,7 +229,7 @@ public static class ServiceDefaultsExtensions {
         "Design",
         "CA1062:Validate arguments of public methods",
         Justification = "app is dereferenced immediately; a null there is a null-reference at the "
-            + "call site, which is the same diagnostic one line earlier."
+        + "call site, which is the same diagnostic one line earlier."
     )]
     public static IEndpointRouteBuilder MapDefaultEndpoints(this IEndpointRouteBuilder app) {
         ArgumentNullException.ThrowIfNull(app);

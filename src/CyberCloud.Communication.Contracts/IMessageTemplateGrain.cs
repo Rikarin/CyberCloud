@@ -4,9 +4,12 @@ namespace CyberCloud.Communication.Contracts;
 
 /// <summary>
 ///     One named template and every version of it — docs/plan/17 § The parts that are actually the
-///     work: <i>"Named, versioned, localised, with typed parameters. Because WhatsApp requires
-///     pre-approved templates, and because the alternative is string concatenation in twenty
-///     providers."</i>
+///     work:
+///     <i>
+///         "Named, versioned, localised, with typed parameters. Because WhatsApp requires
+///         pre-approved templates, and because the alternative is string concatenation in twenty
+///         providers."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -107,13 +110,19 @@ public interface IMessageTemplateGrain : IGrainWithStringKey {
 ///         reason the message key is: a receipt finds its entry in one grain call with no scan.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Hot and TTL'd to exactly the same horizon as <see cref="IMessageGrain.Retention" />,
-///         and it must not outlive it.</b> An index entry pointing at an expired message grain would
+///         ⚠
+///         <b>
+///             Hot and TTL'd to exactly the same horizon as <see cref="IMessageGrain.Retention" />,
+///             and it must not outlive it.
+///         </b> An index entry pointing at an expired message grain would
 ///         resurrect an empty activation on every late webhook.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An unknown id activates an empty grain, which is the cost of this design and is
-///         bounded deliberately.</b> Webhooks arrive late, twice, and for messages we have forgotten
+///         ⚠
+///         <b>
+///             An unknown id activates an empty grain, which is the cost of this design and is
+///             bounded deliberately.
+///         </b> Webhooks arrive late, twice, and for messages we have forgotten
 ///         (docs/plan/17 § The parts that are actually the work), so an empty activation on an
 ///         unrecognised id is the expected path rather than an error. It is also, in principle, an
 ///         activation-per-request amplifier — which is why the webhook endpoint is per service and

@@ -5,8 +5,11 @@ namespace CyberCloud.Cli.Execution;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The strongest guarantee here is structural, not textual: <c>cyc</c> never holds the
-///         token.</b> <c>BearerTokenHandler</c> attaches <c>Authorization</c> <i>inside</i> the SDK's
+///         ⚠
+///         <b>
+///             The strongest guarantee here is structural, not textual: <c>cyc</c> never holds the
+///             token.
+///         </b> <c>BearerTokenHandler</c> attaches <c>Authorization</c> <i>inside</i> the SDK's
 ///         pipeline, below anything this CLI can see, so the request object the CLI traces has no
 ///         credential on it to leak. This type is the belt to that pair of braces — it exists so that
 ///         a future header the CLI does set, or a response header the platform starts sending, cannot
@@ -30,7 +33,7 @@ static class Redaction {
         "x-api-key",
         "api-key",
         "x-amz-security-token",
-        "www-authenticate",
+        "www-authenticate"
     ];
 
     /// <summary>Renders one header for a trace line.</summary>
@@ -48,8 +51,9 @@ static class Redaction {
         ArgumentNullException.ThrowIfNull(name);
 
         foreach (var candidate in Secretish) {
-            if (string.Equals(name, candidate, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(name, candidate, StringComparison.OrdinalIgnoreCase)) {
                 return true;
+            }
         }
 
         // ⚠ `www-authenticate` above is not a secret; it is redacted because a claims challenge
@@ -70,8 +74,9 @@ static class Redaction {
     public static string Url(Uri uri) {
         ArgumentNullException.ThrowIfNull(uri);
 
-        if (uri.Query.Length == 0)
+        if (uri.Query.Length == 0) {
             return uri.ToString();
+        }
 
         var parts = new List<string>();
 

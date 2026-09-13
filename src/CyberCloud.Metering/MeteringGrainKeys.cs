@@ -23,8 +23,11 @@ namespace CyberCloud.Metering;
 ///         key, so an unparseable one means our own code composed it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every grain here is keyed <c>sub/{subscriptionId:N}</c> and none adds a key
-///         shape.</b> <c>GrainKeys</c> accepts a closed set of shapes and adding one would be a
+///         ⚠
+///         <b>
+///             Every grain here is keyed <c>sub/{subscriptionId:N}</c> and none adds a key
+///             shape.
+///         </b> <c>GrainKeys</c> accepts a closed set of shapes and adding one would be a
 ///         change to <c>CyberCloud.Core</c> reviewed like a schema change. Nothing here needs one:
 ///         the sampler, the rollup and the ledger are each per-subscription, which is a key that
 ///         already exists. A rollup keyed per (subscription, hour) was considered and rejected for

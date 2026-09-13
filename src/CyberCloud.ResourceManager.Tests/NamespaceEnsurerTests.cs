@@ -136,9 +136,7 @@ public sealed class NamespaceEnsurerTests {
             KubeLabels.GuidValue(NamespaceEnsurer.IdFor(Subscription, Group))
         );
 
-        command.Labels[KubeLabels.ResourceType].ShouldBe(
-            KubeLabels.ResourceTypeValue(NamespaceEnsurer.GroupType)
-        );
+        command.Labels[KubeLabels.ResourceType].ShouldBe(KubeLabels.ResourceTypeValue(NamespaceEnsurer.GroupType));
 
         command.Labels[KubeLabels.ResourceId].ShouldNotBe(
             KubeLabels.GuidValue(Guid.Empty),
@@ -616,10 +614,10 @@ public sealed class NamespaceEnsurerTests {
         var inventory = new ConnectionNamespaceInventory(new OneConnectionFactory(new ListingConnection(Cluster)));
 
         var occupants = (await inventory.ListAllAsync(
-            Cluster,
-            Namespace,
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow();
+                Cluster,
+                Namespace,
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow();
 
         occupants.Length.ShouldBe(2);
         occupants.Single(x => x.Name == "ours").IsManaged.ShouldBeTrue();
@@ -827,7 +825,6 @@ public sealed class NamespaceEnsurerTests {
 
     /// <summary>Hands out one connection, exactly as <c>GrainClusterConnectionFactory</c> does.</summary>
     sealed class OneConnectionFactory(IKubeClusterConnection connection) : IClusterConnectionFactory {
-        public IKubeClusterConnection? Connect(Guid clusterId) =>
-            clusterId == connection.ClusterId ? connection : null;
+        public IKubeClusterConnection? Connect(Guid clusterId) => clusterId == connection.ClusterId ? connection : null;
     }
 }

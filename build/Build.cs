@@ -10,19 +10,18 @@
 // § Build is the authority on which targets exist, and the two disagreeing is how a target goes
 // missing.
 
-using System.Collections.Generic;
-using System.Linq;
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.ProjectModel;
 using Serilog;
+using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 ///     The Cyber Cloud build. <c>./build.sh &lt;Target&gt;</c> is the single entry point for every
 ///     build action, locally and in CI — docs/plan/23 § Build.
 /// </summary>
-sealed partial class Build : NukeBuild
-{
+sealed partial class Build : NukeBuild {
     public static int Main() => Execute<Build>(x => x.Compile);
 
     // ── Parameters ────────────────────────────────────────────────────────────────────────────
@@ -45,7 +44,8 @@ sealed partial class Build : NukeBuild
     /// </summary>
     // `= null!` because Nuke assigns injected fields by reflection after construction, and
     // .editorconfig makes CS8618 (uninitialised non-nullable field) an error.
-    [Solution] readonly Solution Solution = null!;
+    [Solution]
+    readonly Solution Solution = null!;
 
     AbsolutePath SolutionFile => Solution.Path!;
 
@@ -105,28 +105,33 @@ sealed partial class Build : NukeBuild
     // * `Publish` does not depend on `E2E`/`Chaos`/`Load`, even though a release is gated on them —
     //   see Build.Publish.cs. They run against the deployed candidate, which is after the gate.
 
-    Target Clean => _ => _
-        .Description("Delete every build output. Never touches references/.")
-        .Executes(CleanOutputs);
+    Target Clean =>
+        _ => _
+            .Description("Delete every build output. Never touches references/.")
+            .Executes(CleanOutputs);
 
-    Target Restore => _ => _
-        .Description("dotnet restore over CyberCloud.slnx, with CPM.")
-        .Executes(RestoreSolution);
+    Target Restore =>
+        _ => _
+            .Description("dotnet restore over CyberCloud.slnx, with CPM.")
+            .Executes(RestoreSolution);
 
-    Target Compile => _ => _
-        .Description("dotnet build over CyberCloud.slnx — deterministic, warnings are errors.")
-        .DependsOn(Restore)
-        .Executes(CompileSolution);
+    Target Compile =>
+        _ => _
+            .Description("dotnet build over CyberCloud.slnx — deterministic, warnings are errors.")
+            .DependsOn(Restore)
+            .Executes(CompileSolution);
 
-    Target Test => _ => _
-        .Description("Unit and grain tests. docs/plan/23 § Test layers.")
-        .DependsOn(Compile)
-        .Executes(RunTests);
+    Target Test =>
+        _ => _
+            .Description("Unit and grain tests. docs/plan/23 § Test layers.")
+            .DependsOn(Compile)
+            .Executes(RunTests);
 
-    Target Generate => _ => _
-        .Description("Provider registry → OpenAPI → CLI verbs → SDK → portal forms (ADR-012). Fails on drift.")
-        .DependsOn(Compile)
-        .Executes(GenerateSurfaces);
+    Target Generate =>
+        _ => _
+            .Description("Provider registry → OpenAPI → CLI verbs → SDK → portal forms (ADR-012). Fails on drift.")
+            .DependsOn(Compile)
+            .Executes(GenerateSurfaces);
 
     // ⚠ The count is INTERPOLATED, not typed, and issue #81 is why. This line read "The ten
     // architecture gates" while ArchitectureGates held seventeen — the ten docs/plan/23 lists plus
@@ -135,56 +140,66 @@ sealed partial class Build : NukeBuild
     // counts. Build.Architecture.cs § ArchitectureGates is the list the target actually walks, so its
     // Length is the one number that cannot disagree with the run. The header CheckArchitecture logs
     // is already written this way, which is how the two came to disagree in the first place.
-    Target Architecture => _ => _
-        .Description(
-            $"The {ArchitectureGates.Length} architecture gates — the ten in docs/plan/23 "
-            + "§ The architecture gates, plus the ones this build adds. Build.Architecture.cs "
-            + "§ ArchitectureGates names every one.")
-        .DependsOn(Compile)
-        .Executes(CheckArchitecture);
+    Target Architecture =>
+        _ => _
+            .Description(
+                $"The {ArchitectureGates.Length} architecture gates — the ten in docs/plan/23 "
+                + "§ The architecture gates, plus the ones this build adds. Build.Architecture.cs "
+                + "§ ArchitectureGates names every one."
+            )
+            .DependsOn(Compile)
+            .Executes(CheckArchitecture);
 
-    Target Charts => _ => _
-        .Description("Registry → chart @param block, helm lint, values.schema.json, drift check, package.")
-        // ⚠ This edge landed with ADR-012's fifth surface. A chart's @param block is now generated
-        // from the provider registry (ADR-010 § Which end authors the schema), and building that
-        // registry means running each provider's Describe — so this target needs the same compiled
-        // assemblies Generate does. Before that, `Charts` needed only `helm`.
-        .DependsOn(Compile)
-        .Executes(BuildCharts);
+    Target Charts =>
+        _ => _
+            .Description("Registry → chart @param block, helm lint, values.schema.json, drift check, package.")
+            // ⚠ This edge landed with ADR-012's fifth surface. A chart's @param block is now generated
+            // from the provider registry (ADR-010 § Which end authors the schema), and building that
+            // registry means running each provider's Describe — so this target needs the same compiled
+            // assemblies Generate does. Before that, `Charts` needed only `helm`.
+            .DependsOn(Compile)
+            .Executes(BuildCharts);
 
-    Target Images => _ => _
-        .Description("Container images, SBOM (Syft), signatures (cosign), push by digest.")
-        .DependsOn(Compile)
-        .Executes(BuildImages);
+    Target Images =>
+        _ => _
+            .Description("Container images, SBOM (Syft), signatures (cosign), push by digest.")
+            .DependsOn(Compile)
+            .Executes(BuildImages);
 
-    Target Licence => _ => _
-        .Description("ADR-011 licence scan over charts and images.")
-        .DependsOn(Charts, Images)
-        .Executes(ScanLicences);
+    Target Licence =>
+        _ => _
+            .Description("ADR-011 licence scan over charts and images.")
+            .DependsOn(Charts, Images)
+            .Executes(ScanLicences);
 
-    Target Portal => _ => _
-        .Description("pnpm install/lint/test/build over portal/, performance budget, axe.")
-        .Executes(BuildPortal);
+    Target Portal =>
+        _ => _
+            .Description("pnpm install/lint/test/build over portal/, performance budget, axe.")
+            .Executes(BuildPortal);
 
-    Target E2E => _ => _
-        .Description("Playwright + `cyc` against a real deployment. docs/plan/23 § Test layers.")
-        .DependsOn(Compile)
-        .Executes(RunE2ETests);
+    Target E2E =>
+        _ => _
+            .Description("Playwright + `cyc` against a real deployment. docs/plan/23 § Test layers.")
+            .DependsOn(Compile)
+            .Executes(RunE2ETests);
 
-    Target Chaos => _ => _
-        .Description("The seven chaos invariants against a real deployment. docs/plan/23.")
-        .DependsOn(Compile)
-        .Executes(RunChaosTests);
+    Target Chaos =>
+        _ => _
+            .Description("The seven chaos invariants against a real deployment. docs/plan/23.")
+            .DependsOn(Compile)
+            .Executes(RunChaosTests);
 
-    Target Load => _ => _
-        .Description("The six load scenarios against a real deployment. docs/plan/23.")
-        .DependsOn(Compile)
-        .Executes(RunLoadTests);
+    Target Load =>
+        _ => _
+            .Description("The six load scenarios against a real deployment. docs/plan/23.")
+            .DependsOn(Compile)
+            .Executes(RunLoadTests);
 
-    Target Publish => _ => _
-        .Description("NuGet, npm, charts and `cyc` binaries per RID, behind the full gate.")
-        .DependsOn(Test, Generate, Architecture, Portal, Licence)
-        .Executes(PublishArtefacts);
+    Target Publish =>
+        _ => _
+            .Description("NuGet, npm, charts and `cyc` binaries per RID, behind the full gate.")
+            .DependsOn(Test, Generate, Architecture, Portal, Licence)
+            .Executes(PublishArtefacts);
 
     // ── Shared helpers ────────────────────────────────────────────────────────────────────────
 
@@ -192,8 +207,7 @@ sealed partial class Build : NukeBuild
     ///     Logs that a target is wired but not implemented, naming where the work is tracked, and
     ///     returns normally. See the note on the target graph above for why this does not throw.
     /// </summary>
-    static void NotImplementedYet(string target, string what, string trackedIn)
-    {
+    static void NotImplementedYet(string target, string what, string trackedIn) {
         // No "{Target}:" prefix on the warning — Nuke already prefixes the target name in both the
         // "Errors & Warnings" summary and the build.log line format, and three copies of it on one
         // line reads like a bug.
@@ -215,10 +229,11 @@ sealed partial class Build : NukeBuild
     /// </summary>
     bool SolutionHasProjects => Solution.AllProjects.Count > 0;
 
-    void SkippingEmptySolution(string target)
-        => Log.Information(
+    void SkippingEmptySolution(string target) =>
+        Log.Information(
             "{Target}: {Solution} contains no projects yet — nothing to do, and that is a pass, not a "
             + "skipped gate. docs/plan/03 § Top level.",
             target,
-            SolutionFile.Name);
+            SolutionFile.Name
+        );
 }

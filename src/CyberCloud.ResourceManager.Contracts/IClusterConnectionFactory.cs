@@ -5,8 +5,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A seam rather than a direct dependency, and the reason is
-///         docs/plan/03 § Assembly graph rules, rule 3.</b> The production implementation is a thin
+///         ⚠
+///         <b>
+///             A seam rather than a direct dependency, and the reason is
+///             docs/plan/03 § Assembly graph rules, rule 3.
+///         </b> The production implementation is a thin
 ///         handle over <c>IClusterConnectionGrain</c> and lives in <c>CyberCloud.Kubernetes</c> — the
 ///         one assembly allowed to reference <c>KubernetesClient</c>. Taking a direct dependency on it
 ///         here would put <c>k8s.Models</c> in the compile-time closure of the resource manager, and
@@ -16,9 +19,12 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Returning <see langword="null" /> is a legitimate answer and not a failure.</b>
-///         docs/plan/08 § What the resource manager deliberately does not do: the manager <i>"must
-///         work for a provider with no cluster at all (a DNS zone, a mail domain, a role
-///         assignment)"</i>. A resource with no <c>clusterId</c> gets <see langword="null" /> and its
+///         docs/plan/08 § What the resource manager deliberately does not do: the manager
+///         <i>
+///             "must
+///             work for a provider with no cluster at all (a DNS zone, a mail domain, a role
+///             assignment)"
+///         </i>. A resource with no <c>clusterId</c> gets <see langword="null" /> and its
 ///         reconciler never looks. A resource whose type declared <c>RequiresCluster</c> and got
 ///         <see langword="null" /> is a wiring failure, and the driver says so by name rather than
 ///         handing the reconciler a null it will dereference.

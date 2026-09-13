@@ -352,12 +352,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
@@ -472,8 +474,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     cross-tenant test puts the same resource name in two tenants, which is the only shape in
     ///     which one singleton reconciler serving both can be caught mixing them.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

@@ -14,8 +14,11 @@ namespace CyberCloud.Tenancy.Tests;
 ///         ⚠ <b>Why the counter lives on the index grain at all.</b> docs/plan/08 recorded the refusal
 ///         as decided-but-unbuilt because <c>IResourceIndexGrain</c> is path→GUID and one-way, and the
 ///         only enumeration available was the resource-graph projection, which is eventually
-///         consistent: <i>"a delete gate reading a stale index either orphans a child it did not see
-///         or refuses over a child that is already gone"</i>. The two honest options it names are a
+///         consistent:
+///         <i>
+///             "a delete gate reading a stale index either orphans a child it did not see
+///             or refuses over a child that is already gone"
+///         </i>. The two honest options it names are a
 ///         counter "maintained transactionally where the index claim and release already happen" or a
 ///         strongly-consistent child index keyed on the parent's address. Putting the counter on the
 ///         parent's own index grain is both at once: one activation per parent address, single
@@ -39,10 +42,11 @@ public sealed class ChildCounterTests(TenancyCluster cluster) {
     public async Task AFreshAddressHasNoChildren() {
         var index = cluster.ResourceIndexGrain(Address("counter-empty"));
 
-        (await index.ChildrenAsync()).GetValueOrThrow().ShouldBeEmpty(
-            "an address nobody has registered a child against must read as empty rather than as "
-            + "absent — every delete in the platform goes through this read"
-        );
+        (await index.ChildrenAsync()).GetValueOrThrow()
+            .ShouldBeEmpty(
+                "an address nobody has registered a child against must read as empty rather than as "
+                + "absent — every delete in the platform goes through this read"
+            );
     }
 
     [Fact]
@@ -115,10 +119,11 @@ public sealed class ChildCounterTests(TenancyCluster cluster) {
 
         await index.AddChildAsync(Databases);
 
-        (await index.ChildrenAsync()).GetValueOrThrow()[0].Count.ShouldBe(
-            1,
-            "the count went negative under the repeated decrements, so one child now reads as none"
-        );
+        (await index.ChildrenAsync()).GetValueOrThrow()[0]
+            .Count.ShouldBe(
+                1,
+                "the count went negative under the repeated decrements, so one child now reads as none"
+            );
     }
 
     [Fact]
@@ -167,9 +172,8 @@ public sealed class ChildCounterTests(TenancyCluster cluster) {
 
         (await index.ReleaseAsync(address.Id)).IsSuccess.ShouldBeTrue();
 
-        (await index.ChildrenAsync()).GetValueOrThrow().ShouldBeEmpty(
-            "a released name carried its child counts into the next resource that takes the address"
-        );
+        (await index.ChildrenAsync()).GetValueOrThrow()
+            .ShouldBeEmpty("a released name carried its child counts into the next resource that takes the address");
     }
 
     [Fact]
@@ -185,10 +189,11 @@ public sealed class ChildCounterTests(TenancyCluster cluster) {
 
         (await index.ReleaseAsync(Guid.NewGuid())).IsFailure.ShouldBeTrue();
 
-        (await index.ChildrenAsync()).GetValueOrThrow().ShouldNotBeEmpty(
-            "a release that was refused cleared the counts anyway, so a caller who guessed a GUID "
-            + "could strip a resource's protection against being deleted with live children"
-        );
+        (await index.ChildrenAsync()).GetValueOrThrow()
+            .ShouldNotBeEmpty(
+                "a release that was refused cleared the counts anyway, so a caller who guessed a GUID "
+                + "could strip a resource's protection against being deleted with live children"
+            );
     }
 
     [Fact]

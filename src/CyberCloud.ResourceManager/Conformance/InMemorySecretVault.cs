@@ -8,8 +8,11 @@ namespace CyberCloud.ResourceManager.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>NEVER REGISTER THIS IN A HOST. IT HOLDS EVERY CREDENTIAL IT HAS EVER SEEN, IN
-///         PLAINTEXT, IN PROCESS MEMORY, WITH NO POLICY, NO AUDIT AND NO EXPIRY.</b> It exists
+///         ⚠
+///         <b>
+///             NEVER REGISTER THIS IN A HOST. IT HOLDS EVERY CREDENTIAL IT HAS EVER SEEN, IN
+///             PLAINTEXT, IN PROCESS MEMORY, WITH NO POLICY, NO AUDIT AND NO EXPIRY.
+///         </b> It exists
 ///         because <see cref="ISecretWriter" />'s only real implementation talks to OpenBao over
 ///         HTTP, and a provider whose reconciler mints a credential cannot converge in any suite
 ///         without something that answers. <c>UnavailableSecretWriter</c> stays the
@@ -26,8 +29,11 @@ namespace CyberCloud.ResourceManager.Conformance;
 ///         this assembly.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It implements the mint-once rule for real, which is the only reason it is worth
-///         having.</b> A double that overwrote on every call would make the idempotence assertion
+///         ⚠
+///         <b>
+///             It implements the mint-once rule for real, which is the only reason it is worth
+///             having.
+///         </b> A double that overwrote on every call would make the idempotence assertion
 ///         pass against a writer that does not have the property — the test would be measuring
 ///         itself. <see cref="MintAsync" /> uses <c>TryAdd</c> on a concurrent dictionary, which is
 ///         the in-memory shape of OpenBao's <c>cas=0</c>: first writer wins, everybody else is told
@@ -87,9 +93,7 @@ public sealed class InMemorySecretVault : ISecretResolver, ISecretWriter {
         ArgumentNullException.ThrowIfNull(reference);
 
         if (reference.IsEmpty) {
-            return Task.FromResult(
-                Result<string>.Failure(ErrorCode.InternalError, $"'{reference}' names nothing.")
-            );
+            return Task.FromResult(Result<string>.Failure(ErrorCode.InternalError, $"'{reference}' names nothing."));
         }
 
         return Task.FromResult(

@@ -76,11 +76,11 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
         // docs/plan/06 § Identifiers — an id parsed from a path carries Guid.Empty until the index resolves it.
         // Guid.Empty here is a value, not an absence, and must not be confused with default(ResourceId).
         ResourceId.TryParsePath(
-                "/tenants/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
-                + "/subscriptions/6f0f1f0e-1234-4c8b-9a3d-aabbccddeeff"
-                + "/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/orders-db",
-                out var parsed
-            )
+            "/tenants/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
+            + "/subscriptions/6f0f1f0e-1234-4c8b-9a3d-aabbccddeeff"
+            + "/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/orders-db",
+            out var parsed
+        )
             .ShouldBeTrue();
 
         var round = orleans.RoundTrip(parsed);

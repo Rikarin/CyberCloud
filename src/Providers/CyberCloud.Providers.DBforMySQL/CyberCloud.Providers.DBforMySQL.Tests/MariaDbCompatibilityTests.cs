@@ -10,12 +10,18 @@ namespace CyberCloud.Providers.DBforMySQL.Tests;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>This file is this row's central obligation rather than a nicety.</b> docs/plan/12
-///         line 310: <i>"Positioned as MySQL-compatible; the same honesty rule as FerretDB applies to
-///         the compatibility claim."</i> Line 262, the rule it points at: <i>"⚠ This is a
-///         compatibility layer and the product page must say so, with a supported-subset table. …
-///         Selling it as 'MongoDB' produces a churn event at the first <c>$lookup</c>. Selling it as
-///         'MongoDB-compatible document database, here is exactly what works' produces a happy
-///         customer with a smaller use case."</i>
+///         line 310:
+///         <i>
+///             "Positioned as MySQL-compatible; the same honesty rule as FerretDB applies to
+///             the compatibility claim."
+///         </i> Line 262, the rule it points at:
+///         <i>
+///             "⚠ This is a
+///             compatibility layer and the product page must say so, with a supported-subset table. …
+///             Selling it as 'MongoDB' produces a churn event at the first <c>$lookup</c>. Selling it as
+///             'MongoDB-compatible document database, here is exactly what works' produces a happy
+///             customer with a smaller use case."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The failure this guards against is an EDIT, not a bug.</b> Nothing breaks if the
@@ -80,11 +86,12 @@ public sealed class MariaDbCompatibilityTests {
         var subset = MariaDbServers.SupportedSubset;
 
         subset.Count(x => x.Supported).ShouldBeGreaterThan(0, "the table says nothing works");
-        subset.Count(x => !x.Supported).ShouldBeGreaterThan(
-            2,
-            "the table names fewer than three limits, which for two engines that diverged in 2012 is "
-            + "not a subset table — it is a reassurance."
-        );
+        subset.Count(x => !x.Supported)
+            .ShouldBeGreaterThan(
+                2,
+                "the table names fewer than three limits, which for two engines that diverged in 2012 is "
+                + "not a subset table — it is a reassurance."
+            );
 
         foreach (var note in subset) {
             note.Id.ShouldNotBeNullOrWhiteSpace();

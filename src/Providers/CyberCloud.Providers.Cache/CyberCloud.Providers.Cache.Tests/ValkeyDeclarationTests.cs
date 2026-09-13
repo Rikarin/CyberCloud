@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.Cache.Tests;
 ///     What only this provider can be wrong about in its declaration.
 /// </summary>
 /// <remarks>
-///     The lifecycle — create, poll, read back, tag, lock, delete, drift, <b>and the parent ReBAC
-///     edge</b> — is <c>CyberCloud.Providers.Cache.Conformance</c>'s, because those are the
+///     The lifecycle — create, poll, read back, tag, lock, delete, drift,
+///     <b>
+///         and the parent ReBAC
+///         edge
+///     </b> — is <c>CyberCloud.Providers.Cache.Conformance</c>'s, because those are the
 ///     <i>shared</i> suite's assertions and a per-provider copy is the drift docs/plan/03 § Providers
 ///     warns about. ⚠ The ReBAC one is worth naming rather than leaving to "the lifecycle": created
 ///     resources were once invisible to their creator because the <c>parent</c> edge was never
@@ -63,9 +66,8 @@ public sealed class ValkeyDeclarationTests {
 
         parsed.Type.Namespace.ShouldBe("CyberCloud.Cache");
         parsed.Type.Type.ShouldBe("redis");
-        registry.TryGetType(parsed.Type, out _).ShouldBeTrue(
-            "a path that round-tripped through the gateway's own parser no longer finds the type"
-        );
+        registry.TryGetType(parsed.Type, out _)
+            .ShouldBeTrue("a path that round-tripped through the gateway's own parser no longer finds the type");
     }
 
     [Fact]
@@ -121,10 +123,19 @@ public sealed class ValkeyDeclarationTests {
     ///     is the FIRST problem found.
     /// </remarks>
     [Theory]
-    [InlineData("""{"properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"8","replicas":3}}""", "/location")]
+    [InlineData(
+        """{"properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"8","replicas":3}}""",
+        "/location"
+    )]
     [InlineData("""{"location":"eu-central","properties":{"version":"8","replicas":3}}""", "/properties/clusterId")]
-    [InlineData("""{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","replicas":3}}""", "/properties/version")]
-    [InlineData("""{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"8"}}""", "/properties/replicas")]
+    [InlineData(
+        """{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","replicas":3}}""",
+        "/properties/version"
+    )]
+    [InlineData(
+        """{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"8"}}""",
+        "/properties/replicas"
+    )]
     public void EveryRequiredPropertyIsActuallyRequired(string body, string expectedTarget) {
         using var document = JsonDocument.Parse(body);
 
@@ -138,9 +149,12 @@ public sealed class ValkeyDeclarationTests {
     ///     Values the API must refuse, at the pointer that must refuse them.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The alternative to each of these is a body that validates and then produces a
-    ///     RedisFailover the API server or the operator refuses AFTER the caller was told
-    ///     <c>202</c>.</b> A tenant reads that as "the platform accepted my request and lost it", and
+    ///     ⚠
+    ///     <b>
+    ///         The alternative to each of these is a body that validates and then produces a
+    ///         RedisFailover the API server or the operator refuses AFTER the caller was told
+    ///         <c>202</c>.
+    ///     </b> A tenant reads that as "the platform accepted my request and lost it", and
     ///     the reason is in an operator's event stream rather than in the operation's error.
     /// </remarks>
     [Theory]
@@ -186,9 +200,8 @@ public sealed class ValkeyDeclarationTests {
         // documented values.
         using var document = JsonDocument.Parse(BodyWith(jsonPointer, literal));
 
-        ValkeyCaches.Schema2026.Validate(document.RootElement).IsSuccess.ShouldBeTrue(
-            $"'{jsonPointer}' refused {literal}"
-        );
+        ValkeyCaches.Schema2026.Validate(document.RootElement)
+            .IsSuccess.ShouldBeTrue($"'{jsonPointer}' refused {literal}");
     }
 
     [Fact]
@@ -233,9 +246,7 @@ public sealed class ValkeyDeclarationTests {
     ///     somebody else owns.
     /// </remarks>
     static string BodyWith(string pointer, string literal) {
-        var body = JsonNode.Parse(
-            ValkeyCaches.Body(Guid.Parse("7b6a5c4d-0000-4000-8000-000000000001"))
-        )!.AsObject();
+        var body = JsonNode.Parse(ValkeyCaches.Body(Guid.Parse("7b6a5c4d-0000-4000-8000-000000000001")))!.AsObject();
 
         Place(body, pointer, JsonNode.Parse(literal));
         return body.ToJsonString();

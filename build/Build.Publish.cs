@@ -1,18 +1,17 @@
 // Publish — docs/plan/23 § Build, row `Publish`: "NuGet, npm, charts, CLI binaries per RID".
 // docs/plan/23 § CI shape, row `release.yml`: "Tag | Full gate, publish everything, staged rollout".
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Tools.Git;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
-partial class Build
-{
+partial class Build {
     /// <summary>
     ///     The version stamped on everything this target pushes.
     /// </summary>
@@ -75,8 +74,7 @@ partial class Build
     ///         it appears here only underneath <c>Licence</c>, as something scanned.
     ///     </para>
     /// </summary>
-    void PublishArtefacts()
-    {
+    void PublishArtefacts() {
         var packages = PackableProjects;
         var charts = ChartPackageDirectory.DirectoryExists()
             ? ChartPackageDirectory.GlobFiles("*.tgz").ToList()
@@ -91,7 +89,8 @@ partial class Build
             packages.Count,
             npm.Count,
             charts.Count,
-            CliRuntimeIdentifiers.Length);
+            CliRuntimeIdentifiers.Length
+        );
 
         var preconditions = new TargetPreconditions(nameof(Publish));
 
@@ -99,40 +98,45 @@ partial class Build
             !string.IsNullOrWhiteSpace(version),
             "there is no version to publish — --version was not passed and HEAD carries no tag",
             "pass --version 1.2.0, or run on a tagged commit. docs/plan/23 § CI shape triggers "
-            + "release.yml on a tag, so the tag is normally the answer");
+            + "release.yml on a tag, so the tag is normally the answer"
+        );
 
         preconditions.Require(
             !string.IsNullOrWhiteSpace(NuGetFeed) && !string.IsNullOrWhiteSpace(NuGetApiKey),
             "no NuGet feed or API key is configured",
             "pass --nuget-feed and --nuget-api-key. ⚠ Neither has a default on purpose: a default "
-            + "feed is how a pre-release build ends up on nuget.org");
+            + "feed is how a pre-release build ends up on nuget.org"
+        );
 
         preconditions.Require(
             !string.IsNullOrWhiteSpace(ChartRegistry),
             "no chart registry is configured",
             "pass --chart-registry oci://…. docs/plan/23 § Build, row Publish lists charts among the "
-            + "four things a release pushes");
+            + "four things a release pushes"
+        );
 
         preconditions.Require(
             CycProject is not null,
             "there is no `cyc` project under cli/, so there are no CLI binaries to publish",
             "build the CLI under cli/ — docs/plan/03 § cli/, docs/plan/21 § The CLI. Until it "
-            + "exists, one of doc 23's four Publish outputs does not exist to be published");
+            + "exists, one of doc 23's four Publish outputs does not exist to be published"
+        );
 
         preconditions.AssertSatisfied(
             "docs/plan/23 § Build, row Publish: \"NuGet, npm, charts, CLI binaries per RID\", behind "
-            + "docs/plan/23 § CI shape's single release.yml job.");
+            + "docs/plan/23 § CI shape's single release.yml job."
+        );
 
         // ⚠ Reported, not failed on, and the difference is which of the four is missing. A release
         // with no npm package is a real release of the other three — docs/plan/21 § Other SDKs says
         // the TypeScript client is not written, and every package.json under portal/ is `private`.
         // A release with no CLI is not, which is why that one is a precondition above.
-        if (npm.Count == 0)
-        {
+        if (npm.Count == 0) {
             Log.Warning(
                 "Publish: 0 npm package(s). Every package.json under portal/ is marked private, and "
                 + "docs/plan/21 § Other SDKs has the generated TypeScript client unwritten — so the "
-                + "npm column of docs/plan/23 § Build, row Publish has nothing behind it yet. ○, not ✔.");
+                + "npm column of docs/plan/23 § Build, row Publish has nothing behind it yet. ○, not ✔."
+            );
         }
 
         PublishPackages(packages, version!);
@@ -151,14 +155,13 @@ partial class Build
     /// <summary>
     ///     Every <c>package.json</c> under <c>portal/</c> that is not <c>private</c>.
     /// </summary>
-    IReadOnlyList<AbsolutePath> PublishableNpmPackages
-    {
-        get
-        {
+    IReadOnlyList<AbsolutePath> PublishableNpmPackages {
+        get {
             var portal = RootDirectory / "portal";
 
-            if (!portal.DirectoryExists())
+            if (!portal.DirectoryExists()) {
                 return [];
+            }
 
             return portal
                 .GlobFiles("apps/**/package.json", "libs/**/package.json")
@@ -174,10 +177,8 @@ partial class Build
     ///     ⚠ Exactly one. Two tags on the same commit means two candidate versions and no way to pick,
     ///     and picking the first alphabetically would publish <c>1.10.0</c> as <c>1.2.0</c>.
     /// </remarks>
-    string? TagOnHead
-    {
-        get
-        {
+    string? TagOnHead {
+        get {
             var tags = GitTasks
                 .Git("tag --points-at HEAD", RootDirectory, logOutput: false, logInvocation: false)
                 .Select(x => x.Text.Trim())
@@ -197,38 +198,37 @@ partial class Build
     ///     without it the re-run fails on the first already-pushed package with a 409 — leaving the
     ///     release permanently half-published, because the only remedy a feed offers is unlisting.
     /// </remarks>
-    void PublishPackages(IReadOnlyList<AbsolutePath> projects, string version)
-    {
-        if (projects.Count == 0)
-        {
+    void PublishPackages(IReadOnlyList<AbsolutePath> projects, string version) {
+        if (projects.Count == 0) {
             Log.Warning(
                 "Publish: 0 NuGet package(s). Nothing in {Solution} sets <IsPackable>true</IsPackable>. "
                 + "○, not ✔.",
-                SolutionFile.Name);
+                SolutionFile.Name
+            );
 
             return;
         }
 
         PackageDirectory.CreateOrCleanDirectory();
 
-        foreach (var project in projects)
-        {
+        foreach (var project in projects) {
             DotNetTasks.DotNetPack(s => s
-                .SetProject(project)
-                .SetConfiguration(Configuration)
-                .EnableNoRestore()
-                .EnableNoBuild()
-                .SetVersion(version)
-                .SetOutputDirectory(PackageDirectory));
+                    .SetProject(project)
+                    .SetConfiguration(Configuration)
+                    .EnableNoRestore()
+                    .EnableNoBuild()
+                    .SetVersion(version)
+                    .SetOutputDirectory(PackageDirectory)
+            );
         }
 
-        foreach (var package in PackageDirectory.GlobFiles("*.nupkg"))
-        {
+        foreach (var package in PackageDirectory.GlobFiles("*.nupkg")) {
             DotNetTasks.DotNetNuGetPush(s => s
-                .SetTargetPath(package)
-                .SetSource(NuGetFeed)
-                .SetApiKey(NuGetApiKey)
-                .EnableSkipDuplicate());
+                    .SetTargetPath(package)
+                    .SetSource(NuGetFeed)
+                    .SetApiKey(NuGetApiKey)
+                    .EnableSkipDuplicate()
+            );
         }
 
         Log.Information("Publish: {Count} NuGet package(s) at {Version} → {Feed}", projects.Count, version, NuGetFeed);
@@ -244,22 +244,22 @@ partial class Build
     ///     would publish bytes nothing in the gate ever saw.
     /// </remarks>
     // List rather than IReadOnlyList: CA1859 is an error here and this is a private helper.
-    void PublishCharts(List<AbsolutePath> charts)
-    {
-        if (charts.Count == 0)
-        {
+    void PublishCharts(List<AbsolutePath> charts) {
+        if (charts.Count == 0) {
             Log.Warning(
                 "Publish: 0 chart package(s) in {Directory}. `Charts` runs before this target and "
                 + "packages every chart it finds, so an empty directory means it found none. ○, not ✔.",
-                RootDirectory.GetRelativePathTo(ChartPackageDirectory));
+                RootDirectory.GetRelativePathTo(ChartPackageDirectory)
+            );
 
             return;
         }
 
         var helm = ResolveHelm();
 
-        foreach (var chart in charts)
+        foreach (var chart in charts) {
             helm($"push {chart} {ChartRegistry}", workingDirectory: RootDirectory);
+        }
 
         Log.Information("Publish: {Count} chart(s) → {Registry}", charts.Count, ChartRegistry);
     }
@@ -275,26 +275,26 @@ partial class Build
     ///     discovered by their users. The fix is a matrix job per OS in `release.yml`, each passing
     ///     the RIDs it can actually produce.
     /// </remarks>
-    void PublishCli(string version)
-    {
+    void PublishCli(string version) {
         CliBinaryDirectory.CreateOrCleanDirectory();
 
-        foreach (var rid in CliRuntimeIdentifiers)
-        {
+        foreach (var rid in CliRuntimeIdentifiers) {
             DotNetTasks.DotNetPublish(s => s
-                .SetProject(CycProject)
-                .SetConfiguration(Configuration)
-                .SetRuntime(rid)
-                .SetSelfContained(true)
-                .SetVersion(version)
-                .SetPublishSingleFile(true)
-                .SetOutput(CliBinaryDirectory / rid));
+                    .SetProject(CycProject)
+                    .SetConfiguration(Configuration)
+                    .SetRuntime(rid)
+                    .SetSelfContained(true)
+                    .SetVersion(version)
+                    .SetPublishSingleFile(true)
+                    .SetOutput(CliBinaryDirectory / rid)
+            );
         }
 
         Log.Information(
             "Publish: `cyc` {Version} for {Count} RID(s) → {Directory}",
             version,
             CliRuntimeIdentifiers.Length,
-            RootDirectory.GetRelativePathTo(CliBinaryDirectory));
+            RootDirectory.GetRelativePathTo(CliBinaryDirectory)
+        );
     }
 }

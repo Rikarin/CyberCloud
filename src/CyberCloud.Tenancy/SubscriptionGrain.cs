@@ -11,7 +11,8 @@ namespace CyberCloud.Tenancy;
 ///     <see cref="ISubscriptionGrain" /> — Entity, Durable, key <c>sub/{subscriptionId:N}</c>.
 /// </summary>
 public sealed class SubscriptionGrain(
-    [PersistentState("subscription", StorageTiers.Durable)] IPersistentState<SubscriptionState> state,
+    [PersistentState("subscription", StorageTiers.Durable)]
+    IPersistentState<SubscriptionState> state,
     IClock clock
 )
     : Grain, ISubscriptionGrain {

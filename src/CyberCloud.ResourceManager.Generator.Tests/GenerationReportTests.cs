@@ -165,54 +165,55 @@ public sealed class GenerationReportTests {
         var read = new List<object>();
 
         Should.NotThrow(() => {
-            read.Add(report["providers"]!.GetValue<int>());
-            read.Add(report["resourceTypes"]!.GetValue<int>());
-            read.Add(report["apiVersions"]!.GetValue<int>());
-            read.Add(report["assembliesScanned"]!.GetValue<int>());
-            read.Add(report["clean"]!.GetValue<bool>());
+                read.Add(report["providers"]!.GetValue<int>());
+                read.Add(report["resourceTypes"]!.GetValue<int>());
+                read.Add(report["apiVersions"]!.GetValue<int>());
+                read.Add(report["assembliesScanned"]!.GetValue<int>());
+                read.Add(report["clean"]!.GetValue<bool>());
 
-            foreach (var document in report["documents"]!.AsArray()) {
-                var value = document!.AsObject();
+                foreach (var document in report["documents"]!.AsArray()) {
+                    var value = document!.AsObject();
 
-                read.Add(value["file"]!.GetValue<string>());
-                read.Add(value["apiVersion"]!.GetValue<string>());
-                read.Add(value["published"]!.GetValue<bool>());
-                read.Add(value["drifted"]!.GetValue<bool>());
-                read.AddRange(value["structuralProblems"]!.AsArray().Select(x => x!.GetValue<string>()));
-                read.AddRange(value["breakingChanges"]!.AsArray().Select(x => x!.GetValue<string>()));
+                    read.Add(value["file"]!.GetValue<string>());
+                    read.Add(value["apiVersion"]!.GetValue<string>());
+                    read.Add(value["published"]!.GetValue<bool>());
+                    read.Add(value["drifted"]!.GetValue<bool>());
+                    read.AddRange(value["structuralProblems"]!.AsArray().Select(x => x!.GetValue<string>()));
+                    read.AddRange(value["breakingChanges"]!.AsArray().Select(x => x!.GetValue<string>()));
+                }
+
+                foreach (var surface in report["derived"]!.AsArray()) {
+                    var value = surface!.AsObject();
+
+                    read.Add(value["surface"]!.GetValue<string>());
+                    read.Add(value["file"]!.GetValue<string>());
+                    read.Add(value["apiVersion"]!.GetValue<string>());
+                    read.Add(value["published"]!.GetValue<bool>());
+                    read.Add(value["drifted"]!.GetValue<bool>());
+                    read.AddRange(value["problems"]!.AsArray().Select(x => x!.GetValue<string>()));
+                }
+
+                foreach (var action in report["actions"]!.AsArray()) {
+                    var value = action!.AsObject();
+
+                    read.Add(value["type"]!.GetValue<string>());
+                    read.Add(value["name"]!.GetValue<string>());
+                    read.Add(value["longRunning"]!.GetValue<bool>());
+                    read.Add(value["secret"]!.GetValue<bool>());
+
+                    // ⚠ `handler` is the ONE nullable member of the report, and Parse reads it with a
+                    // pattern rather than a null-forgiving indexer for that reason. A JSON null is not a
+                    // JsonNull node — System.Text.Json.Nodes drops the property — so "the provider named
+                    // no handler" and "the key is missing" arrive identically, and the read must survive
+                    // both. `ping` names one, so what is exercised here is the non-null branch; the null
+                    // branch is what every row of actions-without-handlers.txt is.
+                    read.Add(value["handler"] is { } handler ? handler.GetValue<string>() : "(none)");
+                }
+
+                read.AddRange(report["stale"]!.AsArray().Select(x => x!.GetValue<string>()));
+                read.AddRange(report["derivedStale"]!.AsArray().Select(x => x!.GetValue<string>()));
             }
-
-            foreach (var surface in report["derived"]!.AsArray()) {
-                var value = surface!.AsObject();
-
-                read.Add(value["surface"]!.GetValue<string>());
-                read.Add(value["file"]!.GetValue<string>());
-                read.Add(value["apiVersion"]!.GetValue<string>());
-                read.Add(value["published"]!.GetValue<bool>());
-                read.Add(value["drifted"]!.GetValue<bool>());
-                read.AddRange(value["problems"]!.AsArray().Select(x => x!.GetValue<string>()));
-            }
-
-            foreach (var action in report["actions"]!.AsArray()) {
-                var value = action!.AsObject();
-
-                read.Add(value["type"]!.GetValue<string>());
-                read.Add(value["name"]!.GetValue<string>());
-                read.Add(value["longRunning"]!.GetValue<bool>());
-                read.Add(value["secret"]!.GetValue<bool>());
-
-                // ⚠ `handler` is the ONE nullable member of the report, and Parse reads it with a
-                // pattern rather than a null-forgiving indexer for that reason. A JSON null is not a
-                // JsonNull node — System.Text.Json.Nodes drops the property — so "the provider named
-                // no handler" and "the key is missing" arrive identically, and the read must survive
-                // both. `ping` names one, so what is exercised here is the non-null branch; the null
-                // branch is what every row of actions-without-handlers.txt is.
-                read.Add(value["handler"] is { } handler ? handler.GetValue<string>() : "(none)");
-            }
-
-            read.AddRange(report["stale"]!.AsArray().Select(x => x!.GetValue<string>()));
-            read.AddRange(report["derivedStale"]!.AsArray().Select(x => x!.GetValue<string>()));
-        });
+        );
 
         // 5 root values + 2 documents × 4 scalars + 3 derived surfaces × 5 scalars + 1 action × 5.
         read.Count.ShouldBe(33);

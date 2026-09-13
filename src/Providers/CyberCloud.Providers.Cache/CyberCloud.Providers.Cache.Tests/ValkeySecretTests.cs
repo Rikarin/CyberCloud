@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.Cache.Tests;
 /// <remarks>
 ///     <para>
 ///         docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row; docs/plan/12
-///         § Cross-cutting decisions, Credentials: <i>"Generated at create, written to the tenant's
-///         Vault path, never in grain state."</i> <c>CC1005</c> is the compile-time half and polices
+///         § Cross-cutting decisions, Credentials:
+///         <i>
+///             "Generated at create, written to the tenant's
+///             Vault path, never in grain state."
+///         </i> <c>CC1005</c> is the compile-time half and polices
 ///         <c>[Id]</c>-annotated members named <c>*Password</c>/<c>*Secret</c>/<c>*Token</c>/
 ///         <c>*Key</c>; nothing in this provider declares one, and a <c>[SuppressMessage]</c> here
 ///         would be a failure rather than a fix.
@@ -22,8 +25,11 @@ namespace CyberCloud.Providers.Cache.Tests;
 ///         that mirrored it as a body property would have put a plaintext password into the resource
 ///         grain's desired state through a JSON string no analyzer reads. <c>Secret</c> would not have
 ///         saved it: nothing on the write path substitutes a <c>SecretRef</c> before the grain persists
-///         the body — <c>SchemaProperty</c>'s own remarks now say so outright, ending <i>"until the
-///         substitution exists, don't mark a body property Secret"</i>. All the flag buys is that a
+///         the body — <c>SchemaProperty</c>'s own remarks now say so outright, ending
+///         <i>
+///             "until the
+///             substitution exists, don't mark a body property Secret"
+///         </i>. All the flag buys is that a
 ///         read withholds the property, which keeps a secret out of the API's answers and not out of
 ///         PostgreSQL.
 ///     </para>
@@ -46,11 +52,12 @@ public sealed class ValkeySecretTests {
             );
 
             foreach (var word in new[] { "password", "secret", "token", "key" }) {
-                property.Name.Contains(word, StringComparison.OrdinalIgnoreCase).ShouldBeFalse(
-                    $"'{property.JsonPointer}' is named like a credential. CC1005 bans the shape on "
-                    + "[Id]-annotated members; a JSON pointer is the same hazard with no analyzer "
-                    + "watching it."
-                );
+                property.Name.Contains(word, StringComparison.OrdinalIgnoreCase)
+                    .ShouldBeFalse(
+                        $"'{property.JsonPointer}' is named like a credential. CC1005 bans the shape on "
+                        + "[Id]-annotated members; a JSON pointer is the same hazard with no analyzer "
+                        + "watching it."
+                    );
             }
         }
     }
@@ -87,10 +94,11 @@ public sealed class ValkeySecretTests {
 
         // ⚠ `secretPath` is the only legal mention of the word in the document, so this checks the
         // whole rendering rather than the one block a reader would look at.
-        rendered.Contains("password", StringComparison.OrdinalIgnoreCase).ShouldBeFalse(
-            "the rendered RedisFailover mentions a password. The only legal mention is a Secret "
-            + "reference by name, and that is spelled 'secretPath'."
-        );
+        rendered.Contains("password", StringComparison.OrdinalIgnoreCase)
+            .ShouldBeFalse(
+                "the rendered RedisFailover mentions a password. The only legal mention is a Secret "
+                + "reference by name, and that is spelled 'secretPath'."
+            );
     }
 
     [Fact]
@@ -104,7 +112,8 @@ public sealed class ValkeySecretTests {
         using var desired = JsonDocument.Parse(ValkeyCaches.Body(Guid.NewGuid()));
 
         JsonNode.Parse(ValkeyCaches.RedisFailoverJson("unauthenticated", desired.RootElement))!
-            ["spec"]!["auth"]!["secretPath"]!.GetValue<string>()
+            ["spec"]!["auth"]!["secretPath"]!
+            .GetValue<string>()
             .ShouldBe("unauthenticated-auth");
     }
 
@@ -135,9 +144,8 @@ public sealed class ValkeySecretTests {
         secret["metadata"]!["name"]!.GetValue<string>().ShouldBe(reference.Name);
         secret["type"]!.GetValue<string>().ShouldBe("Opaque");
         secret["data"]!.AsObject().Select(x => x.Key).ShouldBe(["password"]);
-        secret["data"]!["password"]!.GetValue<string>().ShouldBe(
-            Convert.ToBase64String(Encoding.UTF8.GetBytes("hunter2"))
-        );
+        secret["data"]!["password"]!.GetValue<string>()
+            .ShouldBe(Convert.ToBase64String(Encoding.UTF8.GetBytes("hunter2")));
     }
 
     [Fact]
@@ -154,9 +162,8 @@ public sealed class ValkeySecretTests {
             password.Length.ShouldBe(ValkeyCaches.PasswordLength);
 
             foreach (var symbol in password) {
-                char.IsAsciiLetterOrDigit(symbol).ShouldBeTrue(
-                    $"'{symbol}' is not alphanumeric, and redis.conf reads it as syntax"
-                );
+                char.IsAsciiLetterOrDigit(symbol)
+                    .ShouldBeTrue($"'{symbol}' is not alphanumeric, and redis.conf reads it as syntax");
             }
         }
 

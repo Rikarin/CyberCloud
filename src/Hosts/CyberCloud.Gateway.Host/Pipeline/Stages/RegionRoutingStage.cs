@@ -27,8 +27,8 @@ sealed class RegionRoutingStage(GatewayOptions options, IRegionProxy proxy) : IG
             GatewayHeaders.ForwardedByRegion,
             out var header
         )
-            ? header.ToString()
-            : "";
+                ? header.ToString()
+                : "";
 
         var decision = RegionRouting.Decide(
             context.Tenant?.HomeRegion ?? "",

@@ -34,14 +34,18 @@ static class CompletionCommand {
         var shell = new Argument<string>("shell") { Description = $"One of {string.Join(", ", Shells)}." };
         shell.AcceptOnlyFromAmong([.. Shells]);
 
-        var command = new Command("completion", "Print a shell completion script. Add it to your shell's start-up file.") { shell };
+        var command = new Command(
+            "completion",
+            "Print a shell completion script. Add it to your shell's start-up file."
+        ) { shell };
 
         command.SetAction(parse => {
-            host.Console.Out.WriteLine(Script(parse.GetRequiredValue(shell)));
-            host.Console.Out.Flush();
+                host.Console.Out.WriteLine(Script(parse.GetRequiredValue(shell)));
+                host.Console.Out.Flush();
 
-            return (int)ExitCode.Ok;
-        });
+                return (int)ExitCode.Ok;
+            }
+        );
 
         return command;
     }
@@ -56,24 +60,26 @@ static class CompletionCommand {
         ArgumentNullException.ThrowIfNull(host);
 
         var words = new Argument<string[]>("words") {
-            Description = "The command line typed so far, after the executable name.",
-            Arity = ArgumentArity.ZeroOrMore,
+            Description = "The command line typed so far, after the executable name.", Arity = ArgumentArity.ZeroOrMore
         };
 
-        var command = new Command("complete", "Print completions for a partial command line. Called by the shell shims.") {
-            words,
-        };
+        var command = new Command(
+            "complete",
+            "Print completions for a partial command line. Called by the shell shims."
+        ) { words };
 
         command.Hidden = true;
 
         command.SetAction(parse => {
-            foreach (var completion in Complete(root(), parse.GetValue(words) ?? []))
-                host.Console.Out.WriteLine(completion);
+                foreach (var completion in Complete(root(), parse.GetValue(words) ?? [])) {
+                    host.Console.Out.WriteLine(completion);
+                }
 
-            host.Console.Out.Flush();
+                host.Console.Out.Flush();
 
-            return (int)ExitCode.Ok;
-        });
+                return (int)ExitCode.Ok;
+            }
+        );
 
         return command;
     }
@@ -84,8 +90,11 @@ static class CompletionCommand {
     /// <param name="root">The command surface, built from the verb tree.</param>
     /// <param name="words">The words typed so far, the partial one last.</param>
     /// <remarks>
-    ///     ⚠ <b>The value branch is here because <c>System.CommandLine</c> 2.0.10 does not take
-    ///     it.</b> <see cref="ParseResult.GetCompletions" /> on <c>… create --tier ⎵</c> answers with
+    ///     ⚠
+    ///     <b>
+    ///         The value branch is here because <c>System.CommandLine</c> 2.0.10 does not take
+    ///         it.
+    ///     </b> <see cref="ParseResult.GetCompletions" /> on <c>… create --tier ⎵</c> answers with
     ///     the <i>sibling flag names</i> — <c>--allowed-cidrs</c>, <c>--api-version</c>, … — rather
     ///     than with <c>free basic standard premium</c>. Measured against 2.0.10, not assumed. That
     ///     would throw away the most useful completion the platform has: <c>CliEmitter</c> carries a
@@ -102,19 +111,21 @@ static class CompletionCommand {
         var context = parse.GetCompletionContext();
 
         // `--tier ⎵` and `--tier fr⎵`: the option is the word before the cursor.
-        if (words.Count >= 2 && TakesAValue(parse, words[^2]) is { } pending)
+        if (words.Count >= 2 && TakesAValue(parse, words[^2]) is { } pending) {
             return Values(pending, context, words[^1]);
+        }
 
         // `--tier⎵` with no trailing word, which is what a shell that does not append an empty token
         // sends.
-        if (words.Count >= 1 && TakesAValue(parse, words[^1]) is { } named)
+        if (words.Count >= 1 && TakesAValue(parse, words[^1]) is { } named) {
             return Values(named, context, string.Empty);
+        }
 
         return parse.GetCompletions().Select(x => x.Label);
     }
 
-    static IEnumerable<string> Values(Option option, CompletionContext context, string prefix)
-        => option
+    static IEnumerable<string> Values(Option option, CompletionContext context, string prefix) =>
+        option
             .GetCompletions(context)
             .Select(x => x.Label)
             .Where(x => x.StartsWith(prefix, StringComparison.Ordinal));
@@ -127,16 +138,22 @@ static class CompletionCommand {
     ///     <c>--api-version</c> is found from anywhere in the tree.
     /// </remarks>
     static Option? TakesAValue(ParseResult parse, string word) {
-        if (!word.StartsWith('-'))
+        if (!word.StartsWith('-')) {
             return null;
+        }
 
-        for (var command = parse.CommandResult.Command; command is not null; command = command.Parents.OfType<Command>().FirstOrDefault()) {
+        for (var command = parse.CommandResult.Command;
+             command is not null;
+             command = command.Parents.OfType<Command>().FirstOrDefault()) {
             foreach (var option in command.Options) {
-                if (option.Arity.MaximumNumberOfValues == 0)
+                if (option.Arity.MaximumNumberOfValues == 0) {
                     continue;
+                }
 
-                if (string.Equals(option.Name, word, StringComparison.Ordinal) || option.Aliases.Contains(word, StringComparer.Ordinal))
+                if (string.Equals(option.Name, word, StringComparison.Ordinal)
+                    || option.Aliases.Contains(word, StringComparer.Ordinal)) {
                     return option;
+                }
             }
         }
 
@@ -146,52 +163,54 @@ static class CompletionCommand {
     /// <summary>The shim for one shell.</summary>
     /// <param name="shell">The shell's name.</param>
     /// <exception cref="CycUsageException">The shell is not one of <see cref="Shells" />.</exception>
-    public static string Script(string shell)
-        => shell switch {
+    public static string Script(string shell) =>
+        shell switch {
             "bash" => Bash,
             "zsh" => Zsh,
             "fish" => Fish,
             "pwsh" => PowerShell,
-            _ => throw new CycUsageException($"'{shell}' has no completion script. Available: {string.Join(", ", Shells)}."),
+            _ => throw new CycUsageException(
+                $"'{shell}' has no completion script. Available: {string.Join(", ", Shells)}."
+            ),
         };
 
     const string Bash = """
-        # cyc completion for bash. Add to ~/.bashrc:  source <(cyc completion bash)
-        _cyc_complete() {
-            local words
-            words=("${COMP_WORDS[@]:1:$COMP_CWORD}")
-            COMPREPLY=($(cyc complete -- "${words[@]}" 2>/dev/null))
-        }
-        complete -F _cyc_complete cyc
-        """;
+                        # cyc completion for bash. Add to ~/.bashrc:  source <(cyc completion bash)
+                        _cyc_complete() {
+                            local words
+                            words=("${COMP_WORDS[@]:1:$COMP_CWORD}")
+                            COMPREPLY=($(cyc complete -- "${words[@]}" 2>/dev/null))
+                        }
+                        complete -F _cyc_complete cyc
+                        """;
 
     const string Zsh = """
-        # cyc completion for zsh. Add to ~/.zshrc:  source <(cyc completion zsh)
-        _cyc_complete() {
-            local -a completions
-            completions=(${(f)"$(cyc complete -- ${words[2,$CURRENT]} 2>/dev/null)"})
-            compadd -a completions
-        }
-        compdef _cyc_complete cyc
-        """;
+                       # cyc completion for zsh. Add to ~/.zshrc:  source <(cyc completion zsh)
+                       _cyc_complete() {
+                           local -a completions
+                           completions=(${(f)"$(cyc complete -- ${words[2,$CURRENT]} 2>/dev/null)"})
+                           compadd -a completions
+                       }
+                       compdef _cyc_complete cyc
+                       """;
 
     const string Fish = """
-        # cyc completion for fish. Add to ~/.config/fish/config.fish:  cyc completion fish | source
-        function __cyc_complete
-            set -l tokens (commandline -opc) (commandline -ct)
-            cyc complete -- $tokens[2..-1] 2>/dev/null
-        end
-        complete -c cyc -f -a '(__cyc_complete)'
-        """;
+                        # cyc completion for fish. Add to ~/.config/fish/config.fish:  cyc completion fish | source
+                        function __cyc_complete
+                            set -l tokens (commandline -opc) (commandline -ct)
+                            cyc complete -- $tokens[2..-1] 2>/dev/null
+                        end
+                        complete -c cyc -f -a '(__cyc_complete)'
+                        """;
 
     const string PowerShell = """
-        # cyc completion for PowerShell. Add to $PROFILE:  cyc completion pwsh | Out-String | Invoke-Expression
-        Register-ArgumentCompleter -Native -CommandName cyc -ScriptBlock {
-            param($wordToComplete, $commandAst, $cursorPosition)
-            $words = $commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.ToString() }
-            cyc complete -- @words 2>$null | ForEach-Object {
-                [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
-            }
-        }
-        """;
+                              # cyc completion for PowerShell. Add to $PROFILE:  cyc completion pwsh | Out-String | Invoke-Expression
+                              Register-ArgumentCompleter -Native -CommandName cyc -ScriptBlock {
+                                  param($wordToComplete, $commandAst, $cursorPosition)
+                                  $words = $commandAst.CommandElements | Select-Object -Skip 1 | ForEach-Object { $_.ToString() }
+                                  cyc complete -- @words 2>$null | ForEach-Object {
+                                      [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+                                  }
+                              }
+                              """;
 }

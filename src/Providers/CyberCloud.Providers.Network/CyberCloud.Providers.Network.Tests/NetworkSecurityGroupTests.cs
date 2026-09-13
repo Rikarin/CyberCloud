@@ -98,9 +98,7 @@ public sealed class NetworkSecurityGroupTests {
         // apply and Matches compares them element by element, so a renderer that sorted or used a
         // hash set would report drift on a converged group forever — and the symptom is a resource
         // that never leaves InProgress, not a wrong rule.
-        rules.Select(x => $"{x.IpVersion}:{x.Ports}").ShouldBe(
-            ["ipv4:80", "ipv4:443", "ipv6:80", "ipv6:443"]
-        );
+        rules.Select(x => $"{x.IpVersion}:{x.Ports}").ShouldBe(["ipv4:80", "ipv4:443", "ipv6:80", "ipv6:443"]);
     }
 
     [Fact]
@@ -119,9 +117,7 @@ public sealed class NetworkSecurityGroupTests {
         // ⚠ `8000-8100` is 101 ports and ONE rule. A renderer that expanded a range would produce 101
         // ACL rows for one line of configuration, which is how an OVN northbound database gets slow
         // enough to be somebody else's incident.
-        using var body = JsonDocument.Parse(
-            WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "8000-8100")
-        );
+        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "8000-8100"));
 
         var rules = NetworkSecurityGroups.Rules(body.RootElement, NetworkSecurityGroups.Ingress);
 
@@ -147,9 +143,7 @@ public sealed class NetworkSecurityGroupTests {
 
     [Fact]
     public void EveryRuleUsesLowercaseIpVersionAndAllowRatherThanDeny() {
-        using var body = JsonDocument.Parse(
-            WithIngress(remoteV4: "10.0.0.0/8", remoteV6: "fd00::/8", tcpPorts: "443")
-        );
+        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", remoteV6: "fd00::/8", tcpPorts: "443"));
 
         foreach (var node in SpecOf(body.RootElement)["ingressRules"]!.AsArray()) {
             var rule = node!.AsObject();
@@ -209,9 +203,7 @@ public sealed class NetworkSecurityGroupTests {
         // constraints and there is no per-element bounds member — and ADR-012's fifth surface refuses
         // `@pattern` on an array outright. So a patterned string validates strictly more, at the API,
         // with a JSON Pointer, before the write path answers 202.
-        using var body = JsonDocument.Parse(
-            NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: ports)
-        );
+        using var body = JsonDocument.Parse(NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: ports));
 
         var validated = NetworkSecurityGroups.Schema2026.Validate(body.RootElement);
 
@@ -227,9 +219,7 @@ public sealed class NetworkSecurityGroupTests {
     [InlineData("53,80,443,8000-8100,9090")]
     [InlineData("1-65535")]
     public void TheSchemaAcceptsAPortListAKubeOvnRuleWouldAccept(string ports) {
-        using var body = JsonDocument.Parse(
-            NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: ports)
-        );
+        using var body = JsonDocument.Parse(NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: ports));
 
         NetworkSecurityGroups.Schema2026.Validate(body.RootElement).IsSuccess.ShouldBeTrue(ports);
     }
@@ -241,15 +231,14 @@ public sealed class NetworkSecurityGroupTests {
         // wrong, which no SchemaProperty constraint sees because every one of them compares one value
         // against a constant. So the schema accepts it and PortProblem refuses it, terminally, in the
         // reconciler.
-        using var body = JsonDocument.Parse(
-            NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "443-80")
-        );
+        using var body = JsonDocument.Parse(NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "443-80"));
 
-        NetworkSecurityGroups.Schema2026.Validate(body.RootElement).IsSuccess.ShouldBeTrue(
-            "a backwards range is two well-formed ports, so the pattern cannot refuse it — if this "
-            + "goes red the pattern started encoding a relation and § owed's "
-            + "`a-backwards-port-range-is-refused-after-202` can be closed"
-        );
+        NetworkSecurityGroups.Schema2026.Validate(body.RootElement)
+            .IsSuccess.ShouldBeTrue(
+                "a backwards range is two well-formed ports, so the pattern cannot refuse it — if this "
+                + "goes red the pattern started encoding a relation and § owed's "
+                + "`a-backwards-port-range-is-refused-after-202` can be closed"
+            );
 
         var problem = NetworkSecurityGroups.PortProblem(body.RootElement);
 
@@ -277,7 +266,8 @@ public sealed class NetworkSecurityGroupTests {
                  ]) {
             using var parsed = JsonDocument.Parse(body);
 
-            NetworkSecurityGroups.PortProblem(parsed.RootElement).ShouldNotBeNull(pointer)
+            NetworkSecurityGroups.PortProblem(parsed.RootElement)
+                .ShouldNotBeNull(pointer)
                 .ShouldContain(pointer);
         }
     }
@@ -292,14 +282,11 @@ public sealed class NetworkSecurityGroupTests {
         // Kube-OVN adds, or another field manager's addition is not drift in what was asked for.
         using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "443"));
 
-        var document = JsonNode.Parse(
-            NetworkSecurityGroups.SecurityGroupJson("ns", Address(), body.RootElement)
-        )!.AsObject();
+        var document = JsonNode.Parse(NetworkSecurityGroups.SecurityGroupJson("ns", Address(), body.RootElement))!
+            .AsObject();
 
         document["spec"]!["tier"] = 0;
-        document["status"] = new JsonObject {
-            ["portGroup"] = "ovn.sg.ns_net_web", ["ingressMd5"] = "abc"
-        };
+        document["status"] = new JsonObject { ["portGroup"] = "ovn.sg.ns_net_web", ["ingressMd5"] = "abc" };
         document["metadata"]!["finalizers"] = new JsonArray("kubeovn.io/sg");
 
         NetworkSecurityGroups.Matches(document.ToJsonString(), body.RootElement).ShouldBeTrue();
@@ -307,9 +294,7 @@ public sealed class NetworkSecurityGroupTests {
 
     [Fact]
     public void MatchesRejectsARuleThatWasAddedRemovedOrRewritten() {
-        using var body = JsonDocument.Parse(
-            WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "80,443")
-        );
+        using var body = JsonDocument.Parse(WithIngress(remoteV4: "10.0.0.0/8", tcpPorts: "80,443"));
 
         var rendered = NetworkSecurityGroups.SecurityGroupJson("ns", Address(), body.RootElement);
 
@@ -318,18 +303,19 @@ public sealed class NetworkSecurityGroupTests {
         // ⚠ ONE MORE RULE. A longer array is a rule somebody else added — on a firewall, silently
         // accepting that is the worst available outcome.
         var extra = JsonNode.Parse(rendered)!.AsObject();
-        extra["spec"]!["ingressRules"]!.AsArray().Add(
-            new JsonObject {
-                ["ipVersion"] = "ipv4",
-                ["protocol"] = "tcp",
-                ["priority"] = 1,
-                ["remoteType"] = "address",
-                ["remoteAddress"] = "0.0.0.0/0",
-                ["policy"] = "allow",
-                ["portRangeMin"] = 22,
-                ["portRangeMax"] = 22
-            }
-        );
+        extra["spec"]!["ingressRules"]!.AsArray()
+            .Add(
+                new JsonObject {
+                    ["ipVersion"] = "ipv4",
+                    ["protocol"] = "tcp",
+                    ["priority"] = 1,
+                    ["remoteType"] = "address",
+                    ["remoteAddress"] = "0.0.0.0/0",
+                    ["policy"] = "allow",
+                    ["portRangeMin"] = 22,
+                    ["portRangeMax"] = 22
+                }
+            );
 
         NetworkSecurityGroups.Matches(extra.ToJsonString(), body.RootElement).ShouldBeFalse();
 
@@ -367,9 +353,8 @@ public sealed class NetworkSecurityGroupTests {
         // group report drift forever, which is the reconciler never leaving InProgress.
         using var body = JsonDocument.Parse(Empty());
 
-        var document = JsonNode.Parse(
-            NetworkSecurityGroups.SecurityGroupJson("ns", Address(), body.RootElement)
-        )!.AsObject();
+        var document = JsonNode.Parse(NetworkSecurityGroups.SecurityGroupJson("ns", Address(), body.RootElement))!
+            .AsObject();
 
         document["spec"]!.AsObject().Remove("ingressRules");
         document["spec"]!.AsObject().Remove("egressRules");
@@ -387,7 +372,8 @@ public sealed class NetworkSecurityGroupTests {
         NetworkSecurityGroups.Matches(
             new JsonObject { ["kind"] = "Subnet", ["spec"] = new JsonObject() }.ToJsonString(),
             body.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
     }
 
     // ── The object's name, which is the only thing separating two networks' groups ───────────────
@@ -510,9 +496,7 @@ public sealed class NetworkSecurityGroupTests {
         );
 
     static JsonObject SpecOf(JsonElement desired) =>
-        JsonNode.Parse(
-            NetworkSecurityGroups.SecurityGroupJson("ns", Address(), desired)
-        )!["spec"]!.AsObject();
+        JsonNode.Parse(NetworkSecurityGroups.SecurityGroupJson("ns", Address(), desired))!["spec"]!.AsObject();
 
     static JsonObject SpecOf(string body) {
         using var parsed = JsonDocument.Parse(body);
@@ -536,7 +520,8 @@ public sealed class NetworkSecurityGroupTests {
         string tcpPorts = "",
         string udpPorts = "",
         bool allowIcmp = false
-    ) => Section(NetworkSecurityGroups.Ingress, remoteV4, remoteV6, tcpPorts, udpPorts, allowIcmp);
+    ) =>
+        Section(NetworkSecurityGroups.Ingress, remoteV4, remoteV6, tcpPorts, udpPorts, allowIcmp);
 
     /// <summary>A body whose outbound section is exactly the arguments and whose inbound is empty.</summary>
     static string WithEgress(
@@ -545,7 +530,8 @@ public sealed class NetworkSecurityGroupTests {
         string tcpPorts = "",
         string udpPorts = "",
         bool allowIcmp = false
-    ) => Section(NetworkSecurityGroups.Egress, remoteV4, remoteV6, tcpPorts, udpPorts, allowIcmp);
+    ) =>
+        Section(NetworkSecurityGroups.Egress, remoteV4, remoteV6, tcpPorts, udpPorts, allowIcmp);
 
     static string Section(
         string direction,

@@ -12,11 +12,17 @@ namespace CyberCloud.Providers.Search.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md): <i>"OpenSearch —
-///         <c>CyberCloud.Search/services</c> · M3 · 1.0 EM. <b>OpenSearch operator</b> (Apache-2.0,
-///         ADR-011 — Elasticsearch is not available to us). Data/master/coordinating node roles, ISM
-///         policies, snapshot repository into the tenant's bucket."</i> ⚠ <b>Read that sentence whole:
-///         it names <i>four</i> things and this type delivers <i>one</i> of them.</b> The role split is
+///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md):
+///         <i>
+///             "OpenSearch —
+///             <c>CyberCloud.Search/services</c> · M3 · 1.0 EM. <b>OpenSearch operator</b> (Apache-2.0,
+///             ADR-011 — Elasticsearch is not available to us). Data/master/coordinating node roles, ISM
+///             policies, snapshot repository into the tenant's bucket."
+///         </i> ⚠
+///         <b>
+///             Read that sentence whole:
+///             it names <i>four</i> things and this type delivers <i>one</i> of them.
+///         </b> The role split is
 ///         built and is the interesting half; ISM policies and the snapshot repository are named at
 ///         <c>charts/managed/opensearch/conformance.yaml § owed</c> with what each actually needs, and
 ///         neither is a matter of effort. ⚠ Neither is blocked on piece 5 either, though this
@@ -25,15 +31,24 @@ namespace CyberCloud.Providers.Search.Contracts;
 ///         across providers — two different missing things, neither of them the vault.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ADR-011 is why this row is OpenSearch, and it is the only row in docs/plan/12 whose
-///         operator choice and whose <i>engine</i> choice come from different ADRs.</b> ADR-010
+///         ⚠
+///         <b>
+///             ADR-011 is why this row is OpenSearch, and it is the only row in docs/plan/12 whose
+///             operator choice and whose <i>engine</i> choice come from different ADRs.
+///         </b> ADR-010
 ///         clause 1's survey names the <i>"OpenSearch operator"</i>; ADR-011's table is what makes the
-///         engine OpenSearch rather than Elasticsearch — <i>"Elasticsearch | SSPL/Elastic | ✗ —
-///         <b>OpenSearch</b> (Apache-2.0)"</i>. Valkey, OpenBao and FerretDB are the same shape and this
+///         engine OpenSearch rather than Elasticsearch —
+///         <i>
+///             "Elasticsearch | SSPL/Elastic | ✗ —
+///             <b>OpenSearch</b> (Apache-2.0)"
+///         </i>. Valkey, OpenBao and FerretDB are the same shape and this
 ///         is the fourth. What is different here is that the substitution is not a compatibility
 ///         <i>claim</i>: OpenSearch is a fork of Elasticsearch 7.10 and has diverged since, so unlike
-///         <c>CyberCloud.Cache/redis</c> — where <i>"the connection string works with every Redis
-///         client"</i> — a 8.x Elasticsearch client is not promised anything here. Said in the
+///         <c>CyberCloud.Cache/redis</c> — where
+///         <i>
+///             "the connection string works with every Redis
+///             client"
+///         </i> — a 8.x Elasticsearch client is not promised anything here. Said in the
 ///         <c>version</c> property's own description rather than in a README.
 ///     </para>
 ///     <para>
@@ -46,10 +61,16 @@ namespace CyberCloud.Providers.Search.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE GROUP IS DEPRECATED UPSTREAM AND IS SHIPPED ANYWAY, WITH THE DATE.</b>
-///         <c>api/v1/groupversion_info.go</c> carries <c>GroupVersion = schema.GroupVersion{Group:
-///         "opensearch.opster.io", Version: "v1"}</c> and a package comment saying <i>"The
-///         opensearch.opster.io API group is deprecated and will be removed in a future release. Please
-///         migrate to opensearch.org/v1"</i>. Both groups exist in the tree today —
+///         <c>api/v1/groupversion_info.go</c> carries
+///         <c>
+/// GroupVersion = schema.GroupVersion{Group:
+///         "opensearch.opster.io", Version: "v1"}
+///         </c> and a package comment saying
+///         <i>
+///             "The
+///             opensearch.opster.io API group is deprecated and will be removed in a future release. Please
+///             migrate to opensearch.org/v1"
+///         </i>. Both groups exist in the tree today —
 ///         <c>api/opensearch.org/v1/groupversion_info.go</c> registers <c>Group: "opensearch.org"</c>.
 ///         <see cref="ClusterKind" /> names the <b>deprecated</b> one deliberately: it is the group the
 ///         operator releases in <c>charts/bundle/</c> would serve today, and a provider that rendered
@@ -59,8 +80,11 @@ namespace CyberCloud.Providers.Search.Contracts;
 ///         <c>conformance.yaml § owed</c>, <c>api-group-is-deprecated</c>, says so.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT THE OPERATOR DOES ABOUT CREDENTIALS IS NOT WHAT THE CATALOGUE'S OTHER SERVICES
-///         DO, AND THE ASSUMPTION WORTH CHECKING TURNED OUT TO BE FALSE.</b> OpenSearch ships the
+///         ⚠
+///         <b>
+///             WHAT THE OPERATOR DOES ABOUT CREDENTIALS IS NOT WHAT THE CATALOGUE'S OTHER SERVICES
+///             DO, AND THE ASSUMPTION WORTH CHECKING TURNED OUT TO BE FALSE.
+///         </b> OpenSearch ships the
 ///         security plugin on by default and the obvious worry is
 ///         <c>CyberCloud.Storage/accounts</c>' one — an engine that treats "no credentials configured"
 ///         as "authenticate nobody". It does not.
@@ -68,15 +92,24 @@ namespace CyberCloud.Providers.Search.Contracts;
 ///         returns the tenant's secret when <c>spec.security.config.adminCredentialsSecret.Name</c> is
 ///         set and otherwise <i>generates</i> one — <c>randomPassword := GenerateSecurePassword()</c>
 ///         into a Secret with <c>username: admin</c> and that password. So this service degrades the
-///         way <c>CyberCloud.DBforPostgreSQL/servers</c> does: it comes up <b>authenticated with a
-///         credential the platform cannot hand out</b>, not open. <see cref="Schema2026" /> therefore
+///         way <c>CyberCloud.DBforPostgreSQL/servers</c> does: it comes up
+///         <b>
+///             authenticated with a
+///             credential the platform cannot hand out
+///         </b>, not open. <see cref="Schema2026" /> therefore
 ///         declares no credential reference at all, and <see cref="ListKeysAction" /> has a response
 ///         shape and no handler.
 ///         <para>
-///             ⚠ <b>The upstream <i>documentation</i> says the opposite of the upstream code, and the
-///             disagreement is recorded rather than resolved.</b>
-///             <c>docs/userguide/main.md</c> says <i>"By default the operator will use the included
-///             demo securityconfig with default users"</i> and names <c>admin / admin</c>. Both can be
+///             ⚠
+///             <b>
+///                 The upstream <i>documentation</i> says the opposite of the upstream code, and the
+///                 disagreement is recorded rather than resolved.
+///             </b>
+///             <c>docs/userguide/main.md</c> says
+///             <i>
+///                 "By default the operator will use the included
+///                 demo securityconfig with default users"
+///             </i> and names <c>admin / admin</c>. Both can be
 ///             true at once — the demo <i>securityconfig</i> supplies the roles and role-mappings while
 ///             the admin <i>password</i> is generated — and which one a given release does is the
 ///             difference between a cluster nobody can log into and a cluster everybody can.
@@ -86,12 +119,21 @@ namespace CyberCloud.Providers.Search.Contracts;
 ///         </para>
 ///     </para>
 ///     <para>
-///         ⚠ <b>TLS IS THE HAZARD THIS TYPE OWNS, AND IT IS THE ONE THING THE OPERATOR WILL NOT DO
-///         UNASKED.</b> <c>pkg/reconcilers/tls.go</c> begins <c>if r.instance.Spec.Security == nil ||
+///         ⚠
+///         <b>
+///             TLS IS THE HAZARD THIS TYPE OWNS, AND IT IS THE ONE THING THE OPERATOR WILL NOT DO
+///             UNASKED.
+///         </b> <c>pkg/reconcilers/tls.go</c> begins
+///         <c>
+/// if r.instance.Spec.Security == nil ||
 ///         r.instance.Spec.Security.Tls == nil { r.logger.Info("No security specified. Not doing
-///         anything"); return ctrl.Result{}, nil }</c> — so an <c>OpenSearchCluster</c> with no
-///         <c>spec.security.tls</c> gets <b>no certificates generated, no secrets created and no volume
-///         mounts configured</b>, and OpenSearch's security plugin requires transport TLS to form a
+///         anything"); return ctrl.Result{}, nil }
+///         </c> — so an <c>OpenSearchCluster</c> with no
+///         <c>spec.security.tls</c> gets
+///         <b>
+///             no certificates generated, no secrets created and no volume
+///             mounts configured
+///         </b>, and OpenSearch's security plugin requires transport TLS to form a
 ///         cluster at all. <see cref="ClusterJson" /> writes <c>generate: true</c> on both the transport
 ///         and the HTTP listener unconditionally. It is not a property, because "turn off TLS between
 ///         the nodes of your search cluster" is not a setting a managed service should have.
@@ -99,8 +141,11 @@ namespace CyberCloud.Providers.Search.Contracts;
 ///     <para>
 ///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the five providers before this one give</b>:
 ///         the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the platform
-///         does not honour would be a promise made to the users most likely to test it. ⚠ <b>THAT REASON
-///         HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED ONE.</b>
+///         does not honour would be a promise made to the users most likely to test it. ⚠
+///         <b>
+///             THAT REASON
+///             HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED ONE.
+///         </b>
 ///         docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks the
 ///         resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical
 ///         <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to the
@@ -144,8 +189,11 @@ public static class OpenSearchServices {
 
     /// <summary>The action that hands a caller the endpoint and the admin credential.</summary>
     /// <remarks>
-    ///     docs/plan/12 § Cross-cutting decisions makes this <i>"an action with its own permission,
-    ///     audited on every call"</i>. ⚠ <c>regenerateKeys</c> is named in the same paragraph and is
+    ///     docs/plan/12 § Cross-cutting decisions makes this
+    ///     <i>
+    ///         "an action with its own permission,
+    ///         audited on every call"
+    ///     </i>. ⚠ <c>regenerateKeys</c> is named in the same paragraph and is
     ///     <b>not</b> declared, for the reason the five providers before this one give: it is specified
     ///     with a rolling grace period and nothing in the platform can hold two live credentials for one
     ///     resource.
@@ -182,10 +230,7 @@ public static class OpenSearchServices {
     /// </remarks>
     public static GroupVersionKind ClusterKind { get; } =
         new() {
-            Group = "opensearch.opster.io",
-            Version = "v1",
-            Kind = "OpenSearchCluster",
-            Plural = "opensearchclusters"
+            Group = "opensearch.opster.io", Version = "v1", Kind = "OpenSearchCluster", Plural = "opensearchclusters"
         };
 
     // ── Ports, names and node-pool vocabulary the operator owns ───────────────────────────────
@@ -253,8 +298,11 @@ public static class OpenSearchServices {
     ///     a knob worth publishing. What it is not is free — a service with three of them runs three
     ///     JVMs before a document is indexed. <c>SearchProvider</c>'s derivations carry the sum.
     ///     <para>
-    ///         ⚠ <b>It is larger than <c>CyberCloud.Storage/accounts</c>' <c>250m</c>/<c>512Mi</c> and
-    ///         that is not a preference.</b> A SeaweedFS master is a Go binary; this is a JVM, and
+    ///         ⚠
+    ///         <b>
+    ///             It is larger than <c>CyberCloud.Storage/accounts</c>' <c>250m</c>/<c>512Mi</c> and
+    ///             that is not a preference.
+    ///         </b> A SeaweedFS master is a Go binary; this is a JVM, and
     ///         512 MiB is below what OpenSearch's own startup heap check passes. A control-plane share
     ///         copied from that provider would produce a pool that CrashLoopBackOffs before it ever
     ///         joins, which reads as a cluster that will not form rather than as a sizing mistake.
@@ -267,8 +315,11 @@ public static class OpenSearchServices {
 
     /// <summary>The image repository, without a tag.</summary>
     /// <remarks>
-    ///     ⚠ <b>Not written into <c>spec.general.image</c>, unlike every other provider in the
-    ///     tree.</b> <c>GeneralConfig</c> embeds an <c>*ImageSpec</c> <i>and</i> carries
+    ///     ⚠
+    ///     <b>
+    ///         Not written into <c>spec.general.image</c>, unlike every other provider in the
+    ///         tree.
+    ///     </b> <c>GeneralConfig</c> embeds an <c>*ImageSpec</c> <i>and</i> carries
     ///     <c>Version string</c>, and the operator composes the reference from the version when the
     ///     image is empty. That is the opposite of <c>charts/managed/seaweedfs</c>' finding — there
     ///     <c>applyVersion</c> returns an empty image unchanged and a <c>Seaweed</c> with no
@@ -290,9 +341,15 @@ public static class OpenSearchServices {
     /// </summary>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>Not an object this provider applies, and it is here because <see cref="Endpoint" />
-    ///     needs it.</b> <c>GeneralConfig.ServiceName</c> is the one field in that struct with <b>no
-    ///     <c>omitempty</c></b> — the operator names the Service after it and every node's
+    ///     ⚠
+    ///     <b>
+    ///         Not an object this provider applies, and it is here because <see cref="Endpoint" />
+    ///         needs it.
+    ///     </b> <c>GeneralConfig.ServiceName</c> is the one field in that struct with
+    ///     <b>
+    ///         no
+    ///         <c>omitempty</c>
+    ///     </b> — the operator names the Service after it and every node's
     ///     <c>discovery.seed_hosts</c> resolves through it, so a cluster that left it unset would not
     ///     form. <see cref="ClusterJson" /> writes the resource's own name into it, which makes the
     ///     Service name and the object name the same string on purpose: two names for one cluster is
@@ -304,8 +361,11 @@ public static class OpenSearchServices {
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The operator's name and not this platform's, which is what makes it worth writing
-    ///         down here.</b> <c>pkg/helpers/helpers.go</c>'s <c>EnsureAdminCredentialsSecret</c>
+    ///         ⚠
+    ///         <b>
+    ///             The operator's name and not this platform's, which is what makes it worth writing
+    ///             down here.
+    ///         </b> <c>pkg/helpers/helpers.go</c>'s <c>EnsureAdminCredentialsSecret</c>
     ///         builds it from the cluster's own name when <c>spec.security.config</c> leaves
     ///         <c>adminCredentialsSecret</c> unset — which <see cref="ClusterJson" /> deliberately
     ///         does, for the reason this type's remarks give. Nothing in this repository creates the
@@ -313,9 +373,12 @@ public static class OpenSearchServices {
     ///         named constant rather than a string inside one handler.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The prose on <see cref="ClusterJson" /> used to end "and the platform simply
-    ///         cannot hand the credential out", and that was true of the platform rather than of the
-    ///         cluster.</b> The credential is a <c>Secret</c> in the tenant's namespace and the
+    ///         ⚠
+    ///         <b>
+    ///             The prose on <see cref="ClusterJson" /> used to end "and the platform simply
+    ///             cannot hand the credential out", and that was true of the platform rather than of the
+    ///             cluster.
+    ///         </b> The credential is a <c>Secret</c> in the tenant's namespace and the
     ///         reconcile path could always reach it; what did not exist was anywhere to put the read.
     ///         <c>OpenSearchServiceListKeysHandler</c> is that place.
     ///     </para>
@@ -432,11 +495,7 @@ public static class OpenSearchServices {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the search service."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -448,10 +507,7 @@ public static class OpenSearchServices {
                     + "diverged since, so an Elasticsearch 8 client is not promised anything here. "
                     + "Upgrades between the values below are online and in the maintenance window; a "
                     + "third value is a new api-version."
-                ) {
-                    AllowedValues = ["2.19.0", "3.1.0"],
-                    DefaultJson = "\"3.1.0\""
-                },
+                ) { AllowedValues = ["2.19.0", "3.1.0"], DefaultJson = "\"3.1.0\"" },
                 new(
                     "/properties/dataNodes",
                     SchemaKind.WholeNumber,
@@ -459,11 +515,7 @@ public static class OpenSearchServices {
                     Description: "Number of data nodes. This is the capacity axis: total raw capacity "
                     + "is this count times the disk size below, before replicas. Every data node also "
                     + "carries the ingest role, so an indexing pipeline needs no separate pool."
-                ) {
-                    Minimum = 1,
-                    Maximum = 20,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 20, DefaultJson = "3" },
                 new(
                     "/properties/masterNodes",
                     SchemaKind.WholeNumber,
@@ -473,11 +525,7 @@ public static class OpenSearchServices {
                     + "is offered for development and has no quorum at all. An even count is worse "
                     + "than the odd count below it and the API cannot say so — see the service's own "
                     + "documentation."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "3" },
                 new(
                     "/properties/coordinatingNodes",
                     SchemaKind.WholeNumber,
@@ -486,11 +534,7 @@ public static class OpenSearchServices {
                     + "cluster state and exist to fan a search out and merge the results. Zero is the "
                     + "default and is right until a query pattern makes one data node the bottleneck "
                     + "for every search. They are sized by the same preset as the data nodes."
-                ) {
-                    Minimum = 0,
-                    Maximum = 10,
-                    DefaultJson = "0"
-                },
+                ) { Minimum = 0, Maximum = 10, DefaultJson = "0" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -517,19 +561,13 @@ public static class OpenSearchServices {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 8Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -542,21 +580,13 @@ public static class OpenSearchServices {
                     Description: "Disk size per data node, in Kubernetes quantity form. Grows online; "
                     + "never shrinks. The cluster-manager and coordinating nodes get a fixed 10Gi that "
                     + "is not configurable and is counted against the storage quota anyway."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"100Gi\"",
-                    ExampleJson = "\"100Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"100Gi\"", ExampleJson = "\"100Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name for every node pool. Empty means the cluster "
                     + "default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/monitoring",
                     SchemaKind.Nested,
@@ -571,9 +601,7 @@ public static class OpenSearchServices {
                     + "the prometheus-exporter plugin, which the operator installs into every node on "
                     + "the first reconcile after this is turned on — so turning it on restarts the "
                     + "pods and turning it off does not remove the plugin."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -581,13 +609,19 @@ public static class OpenSearchServices {
     ///     What a <c>POST …/listKeys</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared even though no handler serves it, because an undeclared response is the one
-    ///     part of the API surface with no contract.</b> What leaves the platform through a
+    ///     ⚠
+    ///     <b>
+    ///         Declared even though no handler serves it, because an undeclared response is the one
+    ///         part of the API surface with no contract.
+    ///     </b> What leaves the platform through a
     ///     <c>secret: true</c> action is exactly the thing that should be written down before it
     ///     leaves. There is no request shape, for the reason <c>ActionRegistration</c> gives.
     ///     <para>
-    ///         ⚠ <b>The credential this returns already exists, and that is why nothing here mints
-    ///         one.</b> The operator generates it — see this file's header on
+    ///         ⚠
+    ///         <b>
+    ///             The credential this returns already exists, and that is why nothing here mints
+    ///             one.
+    ///         </b> The operator generates it — see this file's header on
     ///         <c>EnsureAdminCredentialsSecret</c> — so a credential minted afterwards would be one
     ///         the cluster never accepted. <c>OpenSearchServiceListKeysHandler</c> reads it instead,
     ///         which is the <c>CyberCloud.DBforPostgreSQL/servers</c> shape.
@@ -626,8 +660,7 @@ public static class OpenSearchServices {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -644,14 +677,16 @@ public static class OpenSearchServices {
 
     /// <summary>The cluster-manager-node count a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int MasterNodes(JsonElement desired) =>
-        Number(desired, "masterNodes", DefaultMasterNodes);
+    public static int MasterNodes(JsonElement desired) => Number(desired, "masterNodes", DefaultMasterNodes);
 
     /// <summary>The coordinating-node count a body asks for. ⚠ May legitimately be zero.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>Zero is the default and it is the reason <see cref="NodePoolsJson" /> renders two pools
-    ///     rather than three on an ordinary body.</b> <c>NodePool.Replicas</c> has no
+    ///     ⚠
+    ///     <b>
+    ///         Zero is the default and it is the reason <see cref="NodePoolsJson" /> renders two pools
+    ///         rather than three on an ordinary body.
+    ///     </b> <c>NodePool.Replicas</c> has no
     ///     <c>omitempty</c>, so a pool declared with <c>replicas: 0</c> is a StatefulSet the operator
     ///     creates, scales to nothing, and then waits on in every readiness roll-up it does. The pool is
     ///     omitted instead.
@@ -661,13 +696,11 @@ public static class OpenSearchServices {
 
     /// <summary>The disk size per data node a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string StorageSize(JsonElement desired) =>
-        Text(desired, "storage", "size", DefaultStorageSize);
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", DefaultStorageSize);
 
     /// <summary>Whether the desired body asks for the operator's scrape object.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static bool MonitoringEnabled(JsonElement desired) =>
-        Flag(desired, "monitoring", "enabled", true);
+    public static bool MonitoringEnabled(JsonElement desired) => Flag(desired, "monitoring", "enabled", true);
 
     /// <summary>
     ///     The CPU and memory one data or coordinating node asks for: the explicit quantities when both
@@ -698,25 +731,37 @@ public static class OpenSearchServices {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS docs/plan/12's <i>"Data/master/coordinating node roles"</i> AND IT IS AN
-    ///         ARRAY, WHICH IS THE PART THAT COSTS.</b> Server-side apply merges a list of objects by
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS docs/plan/12's <i>"Data/master/coordinating node roles"</i> AND IT IS AN
+    ///             ARRAY, WHICH IS THE PART THAT COSTS.
+    ///         </b> Server-side apply merges a list of objects by
     ///         its merge key or replaces it wholesale, and <c>spec.nodePools</c> has no listMapKey in
     ///         the operator's CRD — so the whole array is one atomic field this provider owns. That
     ///         makes the <i>order</i> load-bearing in a way a map is not: masters, data, coordinators,
     ///         always, so that a body which changed nothing renders bytes that changed nothing.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The coordinating pool is OMITTED at zero rather than declared with
-    ///         <c>replicas: 0</c>.</b> See <see cref="CoordinatingNodes" /> — a zero-replica pool is a
+    ///         ⚠
+    ///         <b>
+    ///             The coordinating pool is OMITTED at zero rather than declared with
+    ///             <c>replicas: 0</c>.
+    ///         </b> See <see cref="CoordinatingNodes" /> — a zero-replica pool is a
     ///         real StatefulSet the operator then waits on.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The data pool carries <c>ingest</c> as well as <c>data</c>, and the coordinating
-    ///         pool carries <c>ingest</c> alone.</b> A pool with an <i>empty</i> roles list is the
+    ///         ⚠
+    ///         <b>
+    ///             The data pool carries <c>ingest</c> as well as <c>data</c>, and the coordinating
+    ///             pool carries <c>ingest</c> alone.
+    ///         </b> A pool with an <i>empty</i> roles list is the
     ///         textbook spelling of a coordinating-only node and it is not what is written here:
     ///         <c>pkg/builders/cluster.go</c> filters <c>node.Roles</c> against its own
-    ///         <c>availableRoles</c> and then does <c>nodeRolesValue := strings.Join(selectedRoles,
-    ///         ",")</c> with <c>if len(selectedRoles) == 0 { nodeRolesValue = "[]" }</c> — it renders
+    ///         <c>availableRoles</c> and then does
+    ///         <c>
+    /// nodeRolesValue := strings.Join(selectedRoles,
+    ///         ",")
+    ///         </c> with <c>if len(selectedRoles) == 0 { nodeRolesValue = "[]" }</c> — it renders
     ///         the two-character <i>string</i> <c>[]</c> into an environment variable that OpenSearch
     ///         parses as a node-roles list. That path exists and nothing in the operator's tests or
     ///         documentation exercises it, and a node whose roles OpenSearch failed to parse joins as
@@ -774,24 +819,36 @@ public static class OpenSearchServices {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>spec.security.tls.transport.generate</c> AND <c>…http.generate</c> ARE WRITTEN
-    ///         UNCONDITIONALLY, AND THIS IS THE ONE FIELD SET WHOSE ABSENCE BREAKS THE SERVICE
-    ///         SILENTLY.</b> <c>pkg/reconcilers/tls.go</c> returns immediately when
-    ///         <c>Spec.Security</c> or <c>Spec.Security.Tls</c> is nil — <i>"No security specified. Not
-    ///         doing anything"</i> — generating no certificates, creating no secrets and mounting no
+    ///         ⚠
+    ///         <b>
+    ///             <c>spec.security.tls.transport.generate</c> AND <c>…http.generate</c> ARE WRITTEN
+    ///             UNCONDITIONALLY, AND THIS IS THE ONE FIELD SET WHOSE ABSENCE BREAKS THE SERVICE
+    ///             SILENTLY.
+    ///         </b> <c>pkg/reconcilers/tls.go</c> returns immediately when
+    ///         <c>Spec.Security</c> or <c>Spec.Security.Tls</c> is nil —
+    ///         <i>
+    ///             "No security specified. Not
+    ///             doing anything"
+    ///         </i> — generating no certificates, creating no secrets and mounting no
     ///         volumes. OpenSearch's security plugin requires transport TLS to form a cluster, so a
     ///         service rendered without this is a set of nodes that never discover each other.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>perNode: true</c> on the transport listener, which is not the cheaper
-    ///         option.</b> One certificate shared by every node would also satisfy the plugin. A
+    ///         ⚠
+    ///         <b>
+    ///             <c>perNode: true</c> on the transport listener, which is not the cheaper
+    ///             option.
+    ///         </b> One certificate shared by every node would also satisfy the plugin. A
     ///         per-node certificate is what makes the transport layer's peer check identify the
     ///         <i>node</i> rather than the cluster, and a shared key means one compromised pod can
     ///         impersonate the cluster manager.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>No <c>spec.security.config</c>, and that is the decision this type is most likely
-    ///         to be second-guessed on.</b> Leaving <c>adminCredentialsSecret</c> unset makes the
+    ///         ⚠
+    ///         <b>
+    ///             No <c>spec.security.config</c>, and that is the decision this type is most likely
+    ///             to be second-guessed on.
+    ///         </b> Leaving <c>adminCredentialsSecret</c> unset makes the
     ///         operator <i>generate</i> a random admin password —
     ///         <c>helpers.EnsureAdminCredentialsSecret</c> — so the service comes up authenticated and
     ///         the platform simply cannot hand the credential out. Rendering a reference to a Secret
@@ -806,8 +863,11 @@ public static class OpenSearchServices {
     ///         expose, authenticate and patch. <c>conformance.yaml § owed</c>, <c>dashboards</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>No <c>spec.general.snapshotRepositories</c>, which is one of the four things
-    ///         docs/plan/12's row names.</b> A repository into the tenant's bucket needs
+    ///         ⚠
+    ///         <b>
+    ///             No <c>spec.general.snapshotRepositories</c>, which is one of the four things
+    ///             docs/plan/12's row names.
+    ///         </b> A repository into the tenant's bucket needs
     ///         <c>s3.client.default.access_key</c> and <c>…secret_key</c> in the OpenSearch keystore,
     ///         which is piece 5 with an extra step. Declared owed rather than half-rendered: a snapshot
     ///         repository that cannot authenticate is a backup policy that reports success until it is
@@ -842,9 +902,7 @@ public static class OpenSearchServices {
                 ["general"] = general,
                 ["security"] = new JsonObject {
                     ["tls"] = new JsonObject {
-                        ["transport"] = new JsonObject {
-                            ["generate"] = true, ["perNode"] = true
-                        },
+                        ["transport"] = new JsonObject { ["generate"] = true, ["perNode"] = true },
                         ["http"] = new JsonObject { ["generate"] = true }
                     }
                 },
@@ -861,8 +919,11 @@ public static class OpenSearchServices {
     /// <returns><c>true</c> when the fields this provider owns hold the desired values.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Containment, not equality, and the evidence is the CRD rather than a README —
-    ///         which is the check the three providers before this one each had to make separately.</b>
+    ///         ⚠
+    ///         <b>
+    ///             Containment, not equality, and the evidence is the CRD rather than a README —
+    ///             which is the check the three providers before this one each had to make separately.
+    ///         </b>
     ///         <c>api/v1/opensearch_types.go</c> carries <c>+kubebuilder:default=9200</c> on
     ///         <c>GeneralConfig.HttpPort</c>, <c>+kubebuilder:default=true</c> on
     ///         <c>GeneralConfig.SetVMMaxMapCount</c>, and — the one that decides it —
@@ -918,9 +979,8 @@ public static class OpenSearchServices {
         foreach (var expected in JsonNode.Parse(NodePoolsJson(desired))!.AsArray()) {
             var component = expected!["component"]!.GetValue<string>();
 
-            var found = pools.FirstOrDefault(
-                x => (x as JsonObject)?["component"]?.GetValue<string>() == component
-            ) as JsonObject;
+            var found = pools.FirstOrDefault(x => (x as JsonObject)?["component"]?.GetValue<string>() == component)
+                as JsonObject;
 
             if (found is null
                 || found["replicas"]?.GetValue<int>() != expected["replicas"]!.GetValue<int>()
@@ -1026,8 +1086,7 @@ public static class OpenSearchServices {
             // cluster's default class.
             pool["persistence"] = new JsonObject {
                 ["pvc"] = new JsonObject {
-                    ["storageClass"] = storageClass,
-                    ["accessModes"] = new JsonArray { "ReadWriteOnce" }
+                    ["storageClass"] = storageClass, ["accessModes"] = new JsonArray { "ReadWriteOnce" }
                 }
             };
         }
@@ -1038,9 +1097,7 @@ public static class OpenSearchServices {
     static bool RolesMatch(JsonArray? found, JsonArray expected) =>
         found is not null
         && found.Count == expected.Count
-        && expected.All(
-            x => found.Any(y => y?.GetValue<string>() == x!.GetValue<string>())
-        );
+        && expected.All(x => found.Any(y => y?.GetValue<string>() == x!.GetValue<string>()));
 
     // ── Reading one pointer out of a body ─────────────────────────────────────────────────────
 

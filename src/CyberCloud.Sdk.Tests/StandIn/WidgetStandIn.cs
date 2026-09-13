@@ -30,7 +30,9 @@ namespace CyberCloud.Sdk.Tests;
 
 /// <summary>The body of a <c>CyberCloud.Sample/widgets</c> — openapi/2026-08-01.json § CyberCloud.Sample.widgets.</summary>
 public sealed partial class WidgetData {
-    public WidgetData(string location) => Location = location;
+    public WidgetData(string location) {
+        Location = location;
+    }
 
     [JsonPropertyName("location")]
     public string Location { get; init; }
@@ -136,8 +138,9 @@ public sealed partial class WidgetCollection {
         using var request = context.CreateRequest(HttpMethod.Get, Path(name));
         var response = await context.Pipeline.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        if (response.IsError)
+        if (response.IsError) {
             throw CyberCloudClientContext.CreateFailure(response);
+        }
 
         var data = JsonSerializer.Deserialize(response.Content.Span, WidgetJsonContext.Default.WidgetData)!;
 
@@ -145,15 +148,20 @@ public sealed partial class WidgetCollection {
     }
 
     /// <summary>The <c>GetIfExists</c> shape — a <c>404</c> is an answer, not an exception.</summary>
-    public async Task<NullableResponse<WidgetResource>> GetIfExistsAsync(string name, CancellationToken cancellationToken = default) {
+    public async Task<NullableResponse<WidgetResource>> GetIfExistsAsync(
+        string name,
+        CancellationToken cancellationToken = default
+    ) {
         using var request = context.CreateRequest(HttpMethod.Get, Path(name));
         var response = await context.Pipeline.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        if (response.Status == 404)
+        if (response.Status == 404) {
             return NullableResponse<WidgetResource>.FromNoValue(response);
+        }
 
-        if (response.IsError)
+        if (response.IsError) {
             throw CyberCloudClientContext.CreateFailure(response);
+        }
 
         var data = JsonSerializer.Deserialize(response.Content.Span, WidgetJsonContext.Default.WidgetData)!;
 
@@ -164,32 +172,39 @@ public sealed partial class WidgetCollection {
         WaitUntil waitUntil,
         string name,
         WidgetData data,
-        CancellationToken cancellationToken = default) {
+        CancellationToken cancellationToken = default
+    ) {
         var uri = new Uri(context.Endpoint, Path(name));
 
         using var request = context.CreateRequest(HttpMethod.Put, uri);
-        CyberCloudClientContext.SetJsonBody(request, JsonSerializer.SerializeToUtf8Bytes(data, WidgetJsonContext.Default.WidgetData));
+        CyberCloudClientContext.SetJsonBody(
+            request,
+            JsonSerializer.SerializeToUtf8Bytes(data, WidgetJsonContext.Default.WidgetData)
+        );
 
         var response = await context.Pipeline.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        if (response.IsError)
+        if (response.IsError) {
             throw CyberCloudClientContext.CreateFailure(response);
+        }
 
         var operation = new Operation<WidgetResource>(
             new WidgetOperationSource(context, uri),
             context,
             uri,
             response,
-            "Widgets.CreateOrUpdate");
+            "Widgets.CreateOrUpdate"
+        );
 
-        if (waitUntil == WaitUntil.Completed)
+        if (waitUntil == WaitUntil.Completed) {
             await operation.WaitForCompletionAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         return operation;
     }
 
-    public AsyncPageable<WidgetData> GetAll(CancellationToken cancellationToken = default)
-        => AsyncPageable<WidgetData>.Create(
+    public AsyncPageable<WidgetData> GetAll(CancellationToken cancellationToken = default) =>
+        AsyncPageable<WidgetData>.Create(
             async (continuationToken, pageSizeHint, token) => {
                 using var request = continuationToken is null
                     ? context.CreateRequest(HttpMethod.Get, $"{scope}/providers/CyberCloud.Sample/widgets")
@@ -197,12 +212,14 @@ public sealed partial class WidgetCollection {
 
                 var response = await context.Pipeline.SendAsync(request, token).ConfigureAwait(false);
 
-                if (response.IsError)
+                if (response.IsError) {
                     throw CyberCloudClientContext.CreateFailure(response);
+                }
 
                 var page = JsonSerializer.Deserialize(response.Content.Span, WidgetJsonContext.Default.WidgetListPage)!;
 
                 return new Page<WidgetData>(page.Value, page.NextLink, response);
             },
-            cancellationToken);
+            cancellationToken
+        );
 }

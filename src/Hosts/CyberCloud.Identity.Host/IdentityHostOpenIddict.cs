@@ -99,8 +99,11 @@ public static class IdentityHostOpenIddict {
     ///         case where a confidential client's secret has leaked but its code has not.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The signing and encryption keys here are ephemeral, and that is a hole with a
-    ///         name.</b> docs/plan/11 § Protocol wants "a rotating key set (30-day rotation, both keys
+    ///         ⚠
+    ///         <b>
+    ///             The signing and encryption keys here are ephemeral, and that is a hole with a
+    ///             name.
+    ///         </b> docs/plan/11 § Protocol wants "a rotating key set (30-day rotation, both keys
     ///         published for 60)", which needs the keys to live somewhere every silo can read and
     ///         somewhere a rotation job can write — that is <c>CyberCloud.Vault</c> (docs/plan/18),
     ///         which does not exist. Ephemeral keys mean every process restart invalidates every
@@ -115,8 +118,7 @@ public static class IdentityHostOpenIddict {
 
         services
             .AddOpenIddict()
-            .AddServer(
-                options => {
+            .AddServer(options => {
                     options
                         .SetAuthorizationEndpointUris(AuthorizationPath)
                         .SetTokenEndpointUris(TokenPath)

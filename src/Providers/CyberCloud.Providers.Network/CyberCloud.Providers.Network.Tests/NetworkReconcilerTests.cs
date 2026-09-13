@@ -57,9 +57,7 @@ public sealed class NetworkReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "443")
-        );
+        using var aliceBody = JsonDocument.Parse(NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "443"));
 
         using var bobBody = JsonDocument.Parse(
             NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "5432", allowSameGroupTraffic: true)
@@ -126,9 +124,7 @@ public sealed class NetworkReconcilerTests {
         var reconciler = new NetworkSecurityGroupReconciler(new FixedClock());
         var connection = new RecordingConnection();
 
-        using var body = JsonDocument.Parse(
-            NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "443-80")
-        );
+        using var body = JsonDocument.Parse(NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "443-80"));
 
         var outcome = await PassGroup(
             reconciler,
@@ -190,9 +186,7 @@ public sealed class NetworkReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            VirtualNetworks.Body(ClusterId, addressSpaceV4: "10.20.0.0/16")
-        );
+        using var aliceBody = JsonDocument.Parse(VirtualNetworks.Body(ClusterId, addressSpaceV4: "10.20.0.0/16"));
 
         using var bobBody = JsonDocument.Parse(
             VirtualNetworks.Body(ClusterId, addressSpaceV4: "10.20.0.0/16", enableExternal: true)
@@ -241,9 +235,7 @@ public sealed class NetworkReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            NetworkSubnets.Body(ClusterId, prefixV4: "10.20.1.0/24")
-        );
+        using var aliceBody = JsonDocument.Parse(NetworkSubnets.Body(ClusterId, prefixV4: "10.20.1.0/24"));
 
         using var bobBody = JsonDocument.Parse(
             NetworkSubnets.Body(ClusterId, prefixV4: "10.20.2.0/24", natOutgoing: true)
@@ -312,9 +304,7 @@ public sealed class NetworkReconcilerTests {
         var reconciler = new VirtualNetworkReconciler(new FixedClock());
         var connection = new RecordingConnection();
 
-        using var body = JsonDocument.Parse(
-            VirtualNetworks.Body(ClusterId, addressSpaceV4: "10.96.0.0/12")
-        );
+        using var body = JsonDocument.Parse(VirtualNetworks.Body(ClusterId, addressSpaceV4: "10.96.0.0/12"));
 
         var outcome = await Pass(
             reconciler,
@@ -337,9 +327,7 @@ public sealed class NetworkReconcilerTests {
         var reconciler = new NetworkSubnetReconciler(new FixedClock());
         var connection = new RecordingConnection();
 
-        using var body = JsonDocument.Parse(
-            NetworkSubnets.Body(ClusterId, prefixV4: "10.16.5.0/24")
-        );
+        using var body = JsonDocument.Parse(NetworkSubnets.Body(ClusterId, prefixV4: "10.16.5.0/24"));
 
         var outcome = await PassSubnet(
             reconciler,
@@ -550,12 +538,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A cluster connection that records what it was asked to do.</summary>
@@ -666,8 +656,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     object is cluster-scoped — so the NAME is doing all the separating, which is exactly what
     ///     the cross-tenant tests are checking.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

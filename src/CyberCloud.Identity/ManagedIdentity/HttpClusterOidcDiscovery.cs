@@ -9,12 +9,17 @@ namespace CyberCloud.Identity.ManagedIdentity;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is the component that decides whether a managed identity can exist for a given
-///         cluster at all, and it runs at BINDING TIME.</b> docs/plan/11 § Managed identity:
-///         <i>"it requires the tenant's cluster to expose a publicly reachable OIDC discovery
-///         document, or that we fetch the JWKS through the <c>AgentInitiated</c> tunnel
-///         (docs/plan/09). For BYO clusters that is not automatic, and the portal must say so at
-///         binding time rather than failing at token exchange."</i>
+///         ⚠
+///         <b>
+///             This is the component that decides whether a managed identity can exist for a given
+///             cluster at all, and it runs at BINDING TIME.
+///         </b> docs/plan/11 § Managed identity:
+///         <i>
+///             "it requires the tenant's cluster to expose a publicly reachable OIDC discovery
+///             document, or that we fetch the JWKS through the <c>AgentInitiated</c> tunnel
+///             (docs/plan/09). For BYO clusters that is not automatic, and the portal must say so at
+///             binding time rather than failing at token exchange."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The <c>AgentInitiated</c> path is M2 and is not implemented here.</b> A cluster that
@@ -88,9 +93,7 @@ public sealed class HttpClusterOidcDiscovery(HttpClient http, IClock clock) : IC
         // removes "the discovery document can point key fetching at an arbitrary host" from a path
         // that ends in an authentication decision.
         if (!string.Equals(keySet.Host, issuer.Host, StringComparison.OrdinalIgnoreCase)) {
-            return Unreachable(
-                $"its 'jwks_uri' is served by '{keySet.Host}' rather than by the issuer itself"
-            );
+            return Unreachable($"its 'jwks_uri' is served by '{keySet.Host}' rather than by the issuer itself");
         }
 
         var keys = await ReadJsonAsync(keySet, cancellationToken).ConfigureAwait(false);

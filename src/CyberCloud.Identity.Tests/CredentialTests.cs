@@ -100,9 +100,9 @@ public sealed class CredentialTests {
         var hasher = CheapArgon2.Hasher;
 
         foreach (var junk in new[] {
-            "", "not-a-hash", "$argon2id$v=19$", "$argon2id$v=19$m=x,t=3,p=4$aaaa$bbbb",
-            "$argon2id$v=19$m=8192,t=1,p=1$!!!not-base64!!!$bbbb", "$2b$12$bcrypt.style.hash.value"
-        }) {
+                     "", "not-a-hash", "$argon2id$v=19$", "$argon2id$v=19$m=x,t=3,p=4$aaaa$bbbb",
+                     "$argon2id$v=19$m=8192,t=1,p=1$!!!not-base64!!!$bbbb", "$2b$12$bcrypt.style.hash.value"
+                 }) {
             hasher.Verify("anything", junk).ShouldBeFalse($"'{junk}' must answer no, not throw");
         }
     }

@@ -118,8 +118,7 @@ static class TenantSmuggling {
         JsonDocument document;
         try {
             document = JsonDocument.Parse(body);
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             // Not a smuggling attempt — an unparseable body. Stage 7 reports it as a 400, and
             // answering 404 here would turn every typo into a mystery.
             return false;

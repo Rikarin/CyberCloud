@@ -140,10 +140,7 @@ public sealed class OtpDeliveryTests(OtpDeliveryCluster cluster) {
         // the second delivery a "retry" of the first and send Bob nothing.
         var alice = Sms(NewUser(), "424242");
 
-        var bob = alice with {
-            TenantId = OtpDeliveryCluster.OtherTenant,
-            Destination = "+420777999999"
-        };
+        var bob = alice with { TenantId = OtpDeliveryCluster.OtherTenant, Destination = "+420777999999" };
 
         (await cluster.Delivery.DeliverAsync(alice, Ct)).IsSuccess.ShouldBeTrue();
         (await cluster.Delivery.DeliverAsync(bob, Ct)).IsSuccess.ShouldBeTrue();
@@ -195,8 +192,10 @@ public sealed class OtpDeliveryTests(OtpDeliveryCluster cluster) {
             Ct
         );
 
-        refused.IsFailure.ShouldBeTrue("a delivery that did not say why would share one key space "
-            + "with every other reason a code goes to that user");
+        refused.IsFailure.ShouldBeTrue(
+            "a delivery that did not say why would share one key space "
+            + "with every other reason a code goes to that user"
+        );
 
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
         cluster.Sms.Calls.ShouldBe(0);
@@ -222,10 +221,7 @@ public sealed class OtpDeliveryTests(OtpDeliveryCluster cluster) {
 
         var bySms = Sms(NewUser(), "424242");
 
-        var byEmail = bySms with {
-            Kind = CredentialKind.EmailOtp,
-            Destination = "alice@example.com"
-        };
+        var byEmail = bySms with { Kind = CredentialKind.EmailOtp, Destination = "alice@example.com" };
 
         (await cluster.Delivery.DeliverAsync(bySms, Ct)).IsSuccess.ShouldBeTrue();
         (await cluster.Delivery.DeliverAsync(byEmail, Ct)).IsSuccess.ShouldBeTrue();
@@ -340,19 +336,15 @@ public sealed class OtpDeliveryCluster : IAsyncLifetime {
 
         foreach (var channel in (ChannelKind[])[ChannelKind.Sms, ChannelKind.Email]) {
             (await service.ConfigureChannelAsync(
-                new() {
-                    Channel = channel,
-                    Provider = "in-memory",
-                    Credentials = new() { Mode = CredentialMode.PlatformAccount },
-                    Limits = new() {
-                        MaxMessagesPerWindow = 1000,
-                        MaxSpendPerWindow = 1000m,
-                        Currency = "EUR"
-                    },
-                    EstimatedUnitCost = 0.05m,
-                    Enabled = true
-                }
-            )).IsSuccess.ShouldBeTrue();
+                    new() {
+                        Channel = channel,
+                        Provider = "in-memory",
+                        Credentials = new() { Mode = CredentialMode.PlatformAccount },
+                        Limits = new() { MaxMessagesPerWindow = 1000, MaxSpendPerWindow = 1000m, Currency = "EUR" },
+                        EstimatedUnitCost = 0.05m,
+                        Enabled = true
+                    }
+                )).IsSuccess.ShouldBeTrue();
         }
     }
 

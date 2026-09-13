@@ -123,7 +123,8 @@ public sealed class ClusterOidcDiscoveryTests {
         // host. Requiring it costs nothing legitimate and removes "the discovery document can point
         // key fetching at an arbitrary host" from a path that ends in an authentication decision.
         var discovery = Discovery(
-            (Issuer + "/.well-known/openid-configuration", Json(Document(jwksUri: "https://keys.elsewhere.example/jwks"))),
+            (Issuer + "/.well-known/openid-configuration",
+                Json(Document(jwksUri: "https://keys.elsewhere.example/jwks"))),
             ("https://keys.elsewhere.example/jwks", Json(KeySet))
         );
 
@@ -156,7 +157,9 @@ public sealed class ClusterOidcDiscoveryTests {
                 new(HttpStatusCode.OK) { Content = new StringContent("<html>login</html>") })
         );
 
-        (await notJson.DiscoverAsync(Issuer, TestContext.Current.CancellationToken)).Error!.Message.ShouldContain("did not return JSON");
+        (await notJson.DiscoverAsync(Issuer, TestContext.Current.CancellationToken)).Error!.Message.ShouldContain(
+            "did not return JSON"
+        );
 
         var forbidden = Discovery(
             (Issuer + "/.well-known/openid-configuration", new HttpResponseMessage(HttpStatusCode.Forbidden))
@@ -165,7 +168,9 @@ public sealed class ClusterOidcDiscoveryTests {
         // ⚠ A 403 is the shape of "the endpoint exists but is not anonymous", which is the second
         // most common BYO misconfiguration after "not routable". The number is in the message
         // because it is what the administrator will search their own logs for.
-        (await forbidden.DiscoverAsync(Issuer, TestContext.Current.CancellationToken)).Error!.Message.ShouldContain("answered 403");
+        (await forbidden.DiscoverAsync(Issuer, TestContext.Current.CancellationToken)).Error!.Message.ShouldContain(
+            "answered 403"
+        );
     }
 
     [Fact]
@@ -177,7 +182,9 @@ public sealed class ClusterOidcDiscoveryTests {
                 Json("{\"issuer\":\"" + Issuer + "\",\"pad\":\"" + new string('x', 200_000) + "\"}"))
         );
 
-        (await discovery.DiscoverAsync(Issuer, TestContext.Current.CancellationToken)).Error!.Message.ShouldContain("more than");
+        (await discovery.DiscoverAsync(Issuer, TestContext.Current.CancellationToken)).Error!.Message.ShouldContain(
+            "more than"
+        );
     }
 
     /// <summary>Answers from a table and records what was asked for. Nothing leaves the process.</summary>

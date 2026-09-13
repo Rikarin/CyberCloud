@@ -301,11 +301,13 @@ public sealed class PostgresReconcilerTests {
 
         // ⚠ AND NO PRELOAD LIST AT ALL. pgvector needs no `shared_preload_libraries` entry, and a
         // name with no library behind it fails the postmaster's startup rather than one feature.
-        spec["postgresql"]!.AsObject().ContainsKey("shared_preload_libraries").ShouldBeFalse(
-            "a body naming only pgvector rendered a shared_preload_libraries entry. There is no "
-            + "pgvector library to preload, and an unresolvable entry there stops the instance from "
-            + "starting at all."
-        );
+        spec["postgresql"]!.AsObject()
+            .ContainsKey("shared_preload_libraries")
+            .ShouldBeFalse(
+                "a body naming only pgvector rendered a shared_preload_libraries entry. There is no "
+                + "pgvector library to preload, and an unresolvable entry there stops the instance from "
+                + "starting at all."
+            );
     }
 
     [Fact]
@@ -331,12 +333,14 @@ public sealed class PostgresReconcilerTests {
 
         spec["bootstrap"]!["initdb"]!["postInitApplicationSQL"]!.AsArray()
             .Select(x => x!.GetValue<string>())
-            .ShouldBe([
-                "CREATE EXTENSION IF NOT EXISTS vector;",
-                "CREATE EXTENSION IF NOT EXISTS postgis;",
-                "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;",
-                "CREATE EXTENSION IF NOT EXISTS timescaledb;"
-            ]);
+            .ShouldBe(
+                [
+                    "CREATE EXTENSION IF NOT EXISTS vector;",
+                    "CREATE EXTENSION IF NOT EXISTS postgis;",
+                    "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;",
+                    "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+                ]
+            );
 
         spec["postgresql"]!["shared_preload_libraries"]!.AsArray()
             .Select(x => x!.GetValue<string>())
@@ -396,7 +400,8 @@ public sealed class PostgresReconcilerTests {
         using var desired = JsonDocument.Parse(body.ToJsonString());
 
         var postgresql = JsonNode.Parse(PostgresServers.ClusterJson("orders", desired.RootElement))!
-            ["spec"]!["postgresql"]!.AsObject();
+            ["spec"]!["postgresql"]!
+            .AsObject();
 
         // ⚠ `timescaledb` alone: pgvector is in the body and needs no preload entry. Which values
         // reach this list is AnExtensionNameIsNotALibraryName's assertion; this one is about where.
@@ -404,11 +409,13 @@ public sealed class PostgresReconcilerTests {
             .Select(x => x!.GetValue<string>())
             .ShouldBe(["timescaledb"]);
 
-        postgresql["parameters"]!.AsObject().ContainsKey("shared_preload_libraries").ShouldBeFalse(
-            "shared_preload_libraries was written under spec.postgresql.parameters, where "
-            + "CloudNativePG's validating webhook refuses it as a fixed configuration parameter. The "
-            + "Cluster is rejected at admission and the caller has already been told 202."
-        );
+        postgresql["parameters"]!.AsObject()
+            .ContainsKey("shared_preload_libraries")
+            .ShouldBeFalse(
+                "shared_preload_libraries was written under spec.postgresql.parameters, where "
+                + "CloudNativePG's validating webhook refuses it as a fixed configuration parameter. The "
+                + "Cluster is rejected at admission and the caller has already been told 202."
+            );
 
         // ⚠ The one key that IS a parameter stays one. Checked so that a fix which moved the whole
         // block out of `parameters` would fail here rather than silently drop max_connections.
@@ -441,15 +448,17 @@ public sealed class PostgresReconcilerTests {
         using var desired = JsonDocument.Parse(body.ToJsonString());
 
         var parameters = JsonNode.Parse(PostgresServers.ClusterJson("orders", desired.RootElement))!
-            ["spec"]!["postgresql"]!["parameters"]!.AsObject();
+            ["spec"]!["postgresql"]!["parameters"]!
+            .AsObject();
 
         parameters.ShouldNotBeEmpty("the renderer wrote no `parameters` block, so this checks nothing");
 
         foreach (var key in refused) {
-            parameters.ContainsKey(key).ShouldBeFalse(
-                $"'{key}' is in CloudNativePG's FixedConfigurationParameters and reached "
-                + "spec.postgresql.parameters, where its validating webhook refuses it."
-            );
+            parameters.ContainsKey(key)
+                .ShouldBeFalse(
+                    $"'{key}' is in CloudNativePG's FixedConfigurationParameters and reached "
+                    + "spec.postgresql.parameters, where its validating webhook refuses it."
+                );
         }
     }
 
@@ -674,8 +683,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     same resource name in two tenants, which is the only shape in which one singleton
     ///     reconciler serving both can be caught mixing them.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

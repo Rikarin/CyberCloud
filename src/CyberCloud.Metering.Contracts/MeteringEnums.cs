@@ -5,8 +5,11 @@ namespace CyberCloud.Metering.Contracts;
 ///     most bugs.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Choosing the wrong one is not a style error, it is a revenue error, and it is wrong in a
-///     different direction each way.</b> An event-based treatment of a state-based meter "would miss
+///     ⚠
+///     <b>
+///         Choosing the wrong one is not a style error, it is a revenue error, and it is wrong in a
+///         different direction each way.
+///     </b> An event-based treatment of a state-based meter "would miss
 ///     a resource that exists but never changes" — a disk nobody has touched since it was created
 ///     produces no events and is billed at zero. A sampled treatment of an event-based meter "would
 ///     miss everything between samples" — 4 999 of every 5 000 requests. The catalogue

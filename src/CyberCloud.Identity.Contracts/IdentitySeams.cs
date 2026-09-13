@@ -137,8 +137,11 @@ public sealed record PasskeyAssertionChallenge {
 ///         that is arithmetic over a JWS and a stored key set.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The reachability constraint did not go away; it moved to where the document puts
-///         it.</b> docs/plan/11 § Managed identity: the flow "requires the tenant's cluster to expose
+///         ⚠
+///         <b>
+///             The reachability constraint did not go away; it moved to where the document puts
+///             it.
+///         </b> docs/plan/11 § Managed identity: the flow "requires the tenant's cluster to expose
 ///         a <b>publicly reachable</b> OIDC discovery document, or that we fetch the JWKS through the
 ///         <c>AgentInitiated</c> tunnel", and "for BYO clusters that is not automatic, and the portal
 ///         must say so <b>at binding time</b> rather than failing at token exchange". The tunnel is
@@ -225,11 +228,17 @@ public interface IOtpDeliverySeam {
 ///         the container and called in-process; nothing about it crosses a silo.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Why this is a record rather than four parameters, and it is the whole reason the
-///         signature changed.</b> An implementation over <c>CyberCloud.Communication</c> has to
+///         ⚠
+///         <b>
+///             Why this is a record rather than four parameters, and it is the whole reason the
+///             signature changed.
+///         </b> An implementation over <c>CyberCloud.Communication</c> has to
 ///         supply an idempotency key, and docs/plan/17 § The parts that are actually the work makes
-///         that key the mechanism rather than a detail: <i>"a retry after a timeout must not send
-///         twice"</i>. The key has to be a function of <b>the thing being notified about</b>, so
+///         that key the mechanism rather than a detail:
+///         <i>
+///             "a retry after a timeout must not send
+///             twice"
+///         </i>. The key has to be a function of <b>the thing being notified about</b>, so
 ///         everything that distinguishes one notification from the next has to be on this type.
 ///         <c>(kind, destination, code)</c> alone was not enough to name a tenant, which
 ///         <c>IMessageSender.SendAsync</c> requires, and not enough to keep a sign-in code apart
@@ -267,8 +276,11 @@ public sealed record OtpDelivery {
     ///     The six digits.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This value is what tells a retry apart from a resend, and it is the only thing on
-    ///     this type that does.</b> <see cref="TenantId" />, <see cref="UserId" />,
+    ///     ⚠
+    ///     <b>
+    ///         This value is what tells a retry apart from a resend, and it is the only thing on
+    ///         this type that does.
+    ///     </b> <see cref="TenantId" />, <see cref="UserId" />,
     ///     <see cref="Purpose" />, <see cref="Kind" /> and <see cref="Destination" /> are all
     ///     unchanged between one user's first code and their next one; a clock reading is not
     ///     repeatable across the retry. So an implementation deriving an idempotency key has exactly
@@ -284,8 +296,11 @@ public sealed record OtpDelivery {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A seam declared here rather than a reuse of <c>ISecretResolver</c>, and the reason is
-///         the assembly graph rather than taste.</b> That interface lives in
+///         ⚠
+///         <b>
+///             A seam declared here rather than a reuse of <c>ISecretResolver</c>, and the reason is
+///             the assembly graph rather than taste.
+///         </b> That interface lives in
 ///         <c>CyberCloud.ResourceManager.Contracts</c>, and reaching for it would drag the resource
 ///         manager — and through it the Kubernetes and tenancy contracts — into identity for one
 ///         method. The header of <c>IdentityWireTypes</c> records the same trade being made
@@ -293,8 +308,11 @@ public sealed record OtpDelivery {
 ///         <c>ISecretResolver</c>; that adapter belongs in a host that already references both.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The value comes back to the caller, which is the opposite of how a
-///         <see cref="SecretRef" /> is normally used</b>, and it is unavoidable: RFC 6238 is a shared
+///         ⚠
+///         <b>
+///             The value comes back to the caller, which is the opposite of how a
+///             <see cref="SecretRef" /> is normally used
+///         </b>, and it is unavoidable: RFC 6238 is a shared
 ///         secret, so verifying a code means holding the secret at the moment of verification. What
 ///         follows from that is where the verification may happen — in a host, in memory, for one
 ///         call. ⚠ An implementation that logged, cached or persisted the returned value would put a

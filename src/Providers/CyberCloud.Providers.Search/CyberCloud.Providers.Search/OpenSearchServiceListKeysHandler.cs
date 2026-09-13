@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
@@ -37,8 +38,11 @@ namespace CyberCloud.Providers.Search;
 ///         asymmetry that survives an upstream change silently.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The endpoint's certificate is the operator's own CA and the caller still has to trust
-///         it.</b> <see cref="OpenSearchServices.Endpoint" /> is genuinely <c>https</c>, and the CA
+///         ⚠
+///         <b>
+///             The endpoint's certificate is the operator's own CA and the caller still has to trust
+///             it.
+///         </b> <see cref="OpenSearchServices.Endpoint" /> is genuinely <c>https</c>, and the CA
 ///         bundle is <b>not</b> part of this response —
 ///         <c>charts/managed/opensearch/conformance.yaml § owed</c>,
 ///         <c>ca-bundle-is-not-handed-out</c>. Returning a credential over an endpoint whose trust

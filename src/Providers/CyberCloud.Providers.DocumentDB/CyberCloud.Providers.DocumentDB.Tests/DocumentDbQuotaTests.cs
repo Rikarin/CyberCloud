@@ -78,9 +78,8 @@ public sealed class DocumentDbQuotaTests {
 
         // ⚠ And the gateway pods add nothing to it. FerretDB writes nothing durable, which is the same
         // reason it is a Deployment rather than a StatefulSet.
-        using var manyGateways = JsonDocument.Parse(
-            DocumentDbAccounts.Body(ClusterId, instances: 1, gatewayReplicas: 10)
-        );
+        using var manyGateways =
+            JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId, instances: 1, gatewayReplicas: 10));
 
         Amount(storage, manyGateways.RootElement).ShouldBe(20m);
     }

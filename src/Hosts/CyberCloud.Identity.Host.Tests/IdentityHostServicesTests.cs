@@ -14,8 +14,11 @@ namespace CyberCloud.Identity.Host.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The failure this exists for is a start-up crash, and it is the one this host has
-///         already had.</b> Before <c>Program.cs</c> moved to
+///         ⚠
+///         <b>
+///             The failure this exists for is a start-up crash, and it is the one this host has
+///             already had.
+///         </b> Before <c>Program.cs</c> moved to
 ///         <c>OrleansApplication.CreateClient</c> there was no <see cref="IGrainFactory" /> in the
 ///         container at all, so <see cref="SignInService" /> could not be constructed and the
 ///         endpoints could not exist — which is why they were documented and not mapped. A missing
@@ -23,8 +26,11 @@ namespace CyberCloud.Identity.Host.Tests;
 ///         nothing else in this project would notice.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="IGrainFactory" /> and data protection are supplied here rather than
-///         asserted.</b> They come from <c>OrleansApplication.CreateClient</c> and from
+///         ⚠
+///         <b>
+///             <see cref="IGrainFactory" /> and data protection are supplied here rather than
+///             asserted.
+///         </b> They come from <c>OrleansApplication.CreateClient</c> and from
 ///         <c>WebApplicationBuilder</c> respectively, so a test that registered neither would be
 ///         asserting that <c>AddIdentityHostApi</c> provides things it must not. What is under test
 ///         is that <b>everything else</b> the endpoints need is in that one call.
@@ -41,7 +47,8 @@ public sealed class IdentityHostServicesTests {
         services.AddSingleton<IGrainFactory, RefusingGrainFactory>();
 
         services.AddIdentityHostApi(
-            new ConfigurationBuilder().AddInMemoryCollection(configuration.ToDictionary(x => x.Key, x => x.Value)).Build()
+            new ConfigurationBuilder().AddInMemoryCollection(configuration.ToDictionary(x => x.Key, x => x.Value))
+                .Build()
         );
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = false });
@@ -66,7 +73,9 @@ public sealed class IdentityHostServicesTests {
 
     [Fact]
     public void TheTenantComesFromConfiguration() {
-        using var provider = Build(($"{IdentityHostOptions.SectionName}:TenantId", "6f2b7c14-9a3d-4e58-b061-7c2d5e8f9a10"));
+        using var provider = Build(
+            ($"{IdentityHostOptions.SectionName}:TenantId", "6f2b7c14-9a3d-4e58-b061-7c2d5e8f9a10")
+        );
 
         provider
             .GetRequiredService<Microsoft.Extensions.Options.IOptions<IdentityHostOptions>>()
@@ -97,11 +106,12 @@ public sealed class IdentityHostServicesTests {
         // resolves one. Recovery codes are unaffected — they are hashed in the grain.
         var seam = provider.GetRequiredService<ITotpSecretSeam>();
 
-        seam.GetType().Name.ShouldBe(
-            "UnavailableTotpSecrets",
-            "A real ITotpSecretSeam is wired. Delete this assertion, and re-read "
-            + "SignInApi.VerifyTotpAsync — its vault-failure branch is no longer the common case."
-        );
+        seam.GetType()
+            .Name.ShouldBe(
+                "UnavailableTotpSecrets",
+                "A real ITotpSecretSeam is wired. Delete this assertion, and re-read "
+                + "SignInApi.VerifyTotpAsync — its vault-failure branch is no longer the common case."
+            );
     }
 
     [Fact]

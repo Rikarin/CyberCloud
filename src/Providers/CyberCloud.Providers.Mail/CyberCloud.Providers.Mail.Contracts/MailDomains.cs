@@ -1,4 +1,5 @@
 // ⚠ For SecretRef, which the DKIM block below hands to ISecretWriter and ISecretResolver.
+
 using CyberCloud.Core.Contracts;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
@@ -18,28 +19,46 @@ namespace CyberCloud.Providers.Mail.Contracts;
 /// <remarks>
 ///     <para>
 ///         [17 § <c>CyberCloud.Mail</c>](../../../../docs/plan/17-communication-and-email.md) · M2 ·
-///         3.5 EM. ⚠ <b>Azure has no equivalent, and doc 17 says why in a sentence worth keeping in
-///         front of anyone changing this file</b>: <i>"email hosting is mostly a reputation and
-///         abuse-management problem"</i>, and <i>"software is maybe 30 % of this product"</i>. Nothing
+///         3.5 EM. ⚠
+///         <b>
+///             Azure has no equivalent, and doc 17 says why in a sentence worth keeping in
+///             front of anyone changing this file
+///         </b>:
+///         <i>
+///             "email hosting is mostly a reputation and
+///             abuse-management problem"
+///         </i>, and <i>"software is maybe 30 % of this product"</i>. Nothing
 ///         in this assembly is the hard part of the row it belongs to.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE ROW WAS GATED ON AN OPERATIONAL COMMITMENT AND THAT COMMITMENT IS MADE.</b>
 ///         docs/plan/25 row 2 closed on 2026-08-11: the abuse desk is staffed, and doc 17 requires
-///         <c>abuse@</c> monitored by a human <b>with the authority to suspend a tenant within the
-///         hour</b>. That is not a thing this code can assert, and it is the condition under which
+///         <c>abuse@</c> monitored by a human
+///         <b>
+///             with the authority to suspend a tenant within the
+///             hour
+///         </b>. That is not a thing this code can assert, and it is the condition under which
 ///         this code is allowed to exist at all — docs/plan/25 § R7 is explicit that building the
 ///         module without staffing the desk is the one path that ends with the platform's address
 ///         blocks listed and its <i>own</i> transactional email — OTPs, alerts, invoices — failing
 ///         with them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>DOVECOT, NOT CYRUS, AND THE OPEN QUESTION THIS ROW IS FILED UNDER DOES NOT ACTUALLY
-///         BLOCK IT.</b> docs/plan/25 row 4 still reads as open and its "blocks" column says
+///         ⚠
+///         <b>
+///             DOVECOT, NOT CYRUS, AND THE OPEN QUESTION THIS ROW IS FILED UNDER DOES NOT ACTUALLY
+///             BLOCK IT.
+///         </b> docs/plan/25 row 4 still reads as open and its "blocks" column says
 ///         <i>"the mail module's shape"</i>. Doc 17 answers the question in the other direction and
-///         says so twice: <i>"This is a recommendation, not a countermand — if there is a reason for
-///         Cyrus that is not visible here, the rest of the design is unchanged, <b>because the seam
-///         is LMTP and IMAP either way</b>"</i>, and docs/plan/25's own § Corrections lists
+///         says so twice:
+///         <i>
+///             "This is a recommendation, not a countermand — if there is a reason for
+///             Cyrus that is not visible here, the rest of the design is unchanged,
+///             <b>
+///                 because the seam
+///                 is LMTP and IMAP either way
+///             </b>"
+///         </i>, and docs/plan/25's own § Corrections lists
 ///         <i>"Cyrus → Dovecot"</i> among six decisions it calls <b>settled</b>. So the row is open
 ///         as a preference and closed as a constraint: what a Cyrus answer would change is
 ///         <see cref="ImapImageRepository" /> and the <c>ConfigMap</c>'s contents, and nothing else
@@ -48,17 +67,32 @@ namespace CyberCloud.Providers.Mail.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>SHARED FRONT DOORS, PER-TENANT BACK ENDS — AND ONLY THE BACK END IS THIS TYPE.</b>
-///         doc 17 § Topology answers the brief's <i>"standalone instance per tenant? It would need
-///         separate IP due to ports"</i> with: per-tenant instance yes, separate IP <b>only for
-///         outbound and only above a volume threshold</b>. Inbound port 25, submission and IMAP are
+///         doc 17 § Topology answers the brief's
+///         <i>
+///             "standalone instance per tenant? It would need
+///             separate IP due to ports"
+///         </i> with: per-tenant instance yes, separate IP
+///         <b>
+///             only for
+///             outbound and only above a volume threshold
+///         </b>. Inbound port 25, submission and IMAP are
 ///         all SHARED pools, because the recipient domain and the authenticated credential already
-///         disambiguate the tenant. A resource of this type is therefore the <i>Dovecot back end and
-///         its per-tenant volume</i>, reachable over LMTP from the shared inbound pool. ⚠ <b>The
-///         shared pools are not built and are not this type</b> — see § What is not built below.
+///         disambiguate the tenant. A resource of this type is therefore the
+///         <i>
+///             Dovecot back end and
+///             its per-tenant volume
+///         </i>, reachable over LMTP from the shared inbound pool. ⚠
+///         <b>
+///             The
+///             shared pools are not built and are not this type
+///         </b> — see § What is not built below.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE DKIM KEYPAIR IS THE ONE THING HERE THAT COULD NOT BE GENERATED IN A RECONCILE
-///         PASS, AND IT IS THE MOST IMPORTANT SENTENCE IN THIS FILE.</b> A reconciler is called
+///         ⚠
+///         <b>
+///             THE DKIM KEYPAIR IS THE ONE THING HERE THAT COULD NOT BE GENERATED IN A RECONCILE
+///             PASS, AND IT IS THE MOST IMPORTANT SENTENCE IN THIS FILE.
+///         </b> A reconciler is called
 ///         repeatedly and must be idempotent (docs/plan/08 § The reconcile loop, clause 1). A key
 ///         generated per pass would be a different key each pass: the <c>Secret</c> would never
 ///         converge, and — far worse — the public key already published in the tenant's DNS would
@@ -86,10 +120,19 @@ namespace CyberCloud.Providers.Mail.Contracts;
 ///             interleaved shape already.
 ///         </item>
 ///         <item>
-///             ⚠ <b><c>verify</c> cannot be declared honestly, and that is a finding rather than a
-///             deferral.</b> The action would answer <i>"do this domain's SPF, DKIM, DMARC and MX
-///             records resolve"</i>, which requires asking the public DNS — and <b>this repository
-///             has no DNS resolution seam at all</b>. <c>actions-without-handlers.txt</c> is not the
+///             ⚠
+///             <b>
+///                 <c>verify</c> cannot be declared honestly, and that is a finding rather than a
+///                 deferral.
+///             </b> The action would answer
+///             <i>
+///                 "do this domain's SPF, DKIM, DMARC and MX
+///                 records resolve"
+///             </i>, which requires asking the public DNS — and
+///             <b>
+///                 this repository
+///                 has no DNS resolution seam at all
+///             </b>. <c>actions-without-handlers.txt</c> is not the
 ///             escape hatch: its rule is explicit that a line there is allowed only when the
 ///             action's api-version is <i>already published</i>, and <c>2026-08-01</c> of this type
 ///             is published by this very change. So the choice is a handler or no declaration, and
@@ -121,8 +164,11 @@ public static class MailDomains {
     /// <summary>The resource type. docs/plan/17 § Resource model.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE RESOURCE'S NAME IS NOT THE MAIL DOMAIN, AND doc 17'S MODEL CANNOT BE BUILT AS
-    ///         IT IS WRITTEN.</b> That document spells this type <c>domains/{domain}</c> — the address
+    ///         ⚠
+    ///         <b>
+    ///             THE RESOURCE'S NAME IS NOT THE MAIL DOMAIN, AND doc 17'S MODEL CANNOT BE BUILT AS
+    ///             IT IS WRITTEN.
+    ///         </b> That document spells this type <c>domains/{domain}</c> — the address
     ///         segment <i>is</i> the domain. It cannot be. <c>ResourceNaming</c> applies the
     ///         Kubernetes <b>DNS-1123 label</b> rule to every resource name on this platform:
     ///         <c>[a-z0-9]([-a-z0-9]*[a-z0-9])?</c>, 1–63 characters, <b>no dots</b> — because the
@@ -246,8 +292,7 @@ public static class MailDomains {
 
     const int PasswordLength = 32;
 
-    static ReadOnlySpan<char> PasswordAlphabet =>
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    static ReadOnlySpan<char> PasswordAlphabet => "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     /// <summary>The type, namespace and path together.</summary>
     public static ResourceTypeName Type { get; } = new(ProviderNamespace, TypePath);
@@ -268,8 +313,11 @@ public static class MailDomains {
 
     /// <summary>The <c>StatefulSet</c> that runs Dovecot, Postfix and Rspamd.</summary>
     /// <remarks>
-    ///     ⚠ <b>A <c>StatefulSet</c> and not a <c>Deployment</c>, and the reason is the mail store
-    ///     rather than the ordinal.</b> A mailbox is a filesystem: two pods mounting one volume would
+    ///     ⚠
+    ///     <b>
+    ///         A <c>StatefulSet</c> and not a <c>Deployment</c>, and the reason is the mail store
+    ///         rather than the ordinal.
+    ///     </b> A mailbox is a filesystem: two pods mounting one volume would
     ///     both write the same <c>mdbox</c> index, and Dovecot's own documentation is explicit that
     ///     concurrent access from separate hosts without a director corrupts it. A
     ///     <c>StatefulSet</c> with one replica and a claim template is one pod per volume by
@@ -310,8 +358,11 @@ public static class MailDomains {
     /// <summary>IMAP, in-cluster and plaintext. ⚠ TLS is terminated at the shared front door.</summary>
     /// <remarks>
     ///     ⚠ <b>993 is deliberately not on this Service.</b> doc 17 § Topology puts IMAP behind a
-    ///     shared front door <i>"with SNI per tenant domain. TLS certificates from cert-manager per
-    ///     verified domain"</i>, so the certificate belongs to that pool. A back end that also
+    ///     shared front door
+    ///     <i>
+    ///         "with SNI per tenant domain. TLS certificates from cert-manager per
+    ///         verified domain"
+    ///     </i>, so the certificate belongs to that pool. A back end that also
     ///     terminated TLS would need the tenant's certificate mounted here, which is a second copy of
     ///     a private key for no gain.
     /// </remarks>
@@ -410,13 +461,22 @@ public static class MailDomains {
     ///     constant and is not repeated.
     /// </remarks>
     /// <remarks>
-    ///     ⚠ <b>NO LOOKAHEAD, AND THAT IS A HARD CONSTRAINT ON EVERY PATTERN IN THIS PLATFORM RATHER
-    ///     THAN A STYLE NOTE.</b> This constant began as
+    ///     ⚠
+    ///     <b>
+    ///         NO LOOKAHEAD, AND THAT IS A HARD CONSTRAINT ON EVERY PATTERN IN THIS PLATFORM RATHER
+    ///         THAN A STYLE NOTE.
+    ///     </b> This constant began as
     ///     <c>^(?=.{1,253}$)([A-Za-z0-9]…</c> — the standard way to bound a hostname's total length
     ///     while validating its labels. `./build.sh Charts` generates <c>values.schema.json</c> from
-    ///     this schema and then runs <c>helm lint --strict</c>, and <b>Helm validates with Go's
-    ///     regexp, which is RE2 and has no lookahead at all</b>: <i>"invalid or unsupported Perl
-    ///     syntax: `(?=`"</i>. JSON Schema's own specification says ECMA-262, so a lookahead is legal
+    ///     this schema and then runs <c>helm lint --strict</c>, and
+    ///     <b>
+    ///         Helm validates with Go's
+    ///         regexp, which is RE2 and has no lookahead at all
+    ///     </b>:
+    ///     <i>
+    ///         "invalid or unsupported Perl
+    ///         syntax: `(?=`"
+    ///     </i>. JSON Schema's own specification says ECMA-262, so a lookahead is legal
     ///     in the document and unusable by the one tool that reads it here.
     ///     <para>
     ///         ⚠ It is the only lookahead the tree has ever contained — every other provider's
@@ -448,8 +508,11 @@ public static class MailDomains {
 
     /// <summary>The same, but accepting the empty string. ⚠ What <c>catchAll</c> is declared with.</summary>
     /// <remarks>
-    ///     ⚠ <b>A pattern is applied to the WHOLE value, so a property whose default is <c>""</c> must
-    ///     have a pattern that accepts <c>""</c>.</b> Declaring
+    ///     ⚠
+    ///     <b>
+    ///         A pattern is applied to the WHOLE value, so a property whose default is <c>""</c> must
+    ///         have a pattern that accepts <c>""</c>.
+    ///     </b> Declaring
     ///     <see cref="LocalPartPattern" /> on <c>catchAll</c> made the type unloadable —
     ///     <c>ResourceSchema.Of</c> refused it as an incoherent declaration, at static
     ///     construction, which is the same check <c>OptionalQuantityPattern</c> exists to satisfy for
@@ -481,11 +544,7 @@ public static class MailDomains {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the mail back end."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -522,10 +581,7 @@ public static class MailDomains {
                     Required: true,
                     Description: "Dovecot version. Minor upgrades are applied automatically in the "
                     + "maintenance window; a major upgrade is an explicit update to this field."
-                ) {
-                    AllowedValues = [.. Versions],
-                    DefaultJson = "\"" + DefaultVersion + "\""
-                },
+                ) { AllowedValues = [.. Versions], DefaultJson = "\"" + DefaultVersion + "\"" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -546,19 +602,13 @@ public static class MailDomains {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -570,19 +620,13 @@ public static class MailDomains {
                     Required: true,
                     Description: "The mail volume size, in Kubernetes quantity form. Holds every "
                     + "mailbox in the domain. Grows online; never shrinks."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"" + DefaultStorageSize + "\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"" + DefaultStorageSize + "\"" },
                 new(
                     "/properties/storage/mailboxQuota",
                     SchemaKind.Text,
                     Description: "The default per-mailbox quota, in Kubernetes quantity form. A "
                     + "mailbox may override it. Enforced by Dovecot, not by the volume."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"" + DefaultMailboxQuota + "\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"" + DefaultMailboxQuota + "\"" },
                 new(
                     "/properties/catchAll",
                     SchemaKind.Text,
@@ -590,10 +634,7 @@ public static class MailDomains {
                     + "Empty means unrouted mail is rejected at RCPT TO, which is the default and "
                     + "the better answer for deliverability: a catch-all accepts every dictionary "
                     + "attack and turns the domain into a backscatter source."
-                ) {
-                    Pattern = OptionalLocalPartPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalLocalPartPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/relayHosts",
                     SchemaKind.Array,
@@ -603,8 +644,7 @@ public static class MailDomains {
                     // ⚠ Without ElementKind the array reaches an SDK as `object[]` and a CLI cannot
                     // type a repeated flag from it — ResourceSchema.Of refuses the declaration
                     // outright, which is how this was found.
-                    ElementKind = SchemaKind.Text,
-                    DefaultJson = "[]"
+                    ElementKind = SchemaKind.Text, DefaultJson = "[]"
                 },
                 new(
                     "/properties/dedicatedIp",
@@ -612,9 +652,7 @@ public static class MailDomains {
                     Description: "Request a dedicated outbound IP with a warm-up schedule, rather "
                     + "than sharing the platform's warmed pool. Subject to a volume threshold and "
                     + "to approval; requesting it here does not by itself allocate one."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/filtering",
                     SchemaKind.Nested,
@@ -625,27 +663,19 @@ public static class MailDomains {
                     SchemaKind.WholeNumber,
                     Description: "The Rspamd score at or above which a message is rejected outright "
                     + "rather than filed as junk."
-                ) {
-                    Minimum = 5,
-                    Maximum = 30,
-                    DefaultJson = "15"
-                },
+                ) { Minimum = 5, Maximum = 30, DefaultJson = "15" },
                 new(
                     "/properties/filtering/antivirus",
                     SchemaKind.Boolean,
                     Description: "Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of "
                     + "resident memory for the signature database."
-                ) {
-                    DefaultJson = "true"
-                },
+                ) { DefaultJson = "true" },
                 new(
                     "/properties/sieve",
                     SchemaKind.Boolean,
                     Description: "Server-side rules through Dovecot's Pigeonhole, editable over "
                     + "ManageSieve."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -678,8 +708,7 @@ public static class MailDomains {
     public static string Version(JsonElement desired) => Root(desired, "version", DefaultVersion);
 
     /// <summary>The mail volume size a body asks for.</summary>
-    public static string StorageSize(JsonElement desired) =>
-        Text(desired, "storage", "size", DefaultStorageSize);
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", DefaultStorageSize);
 
     /// <summary>The default per-mailbox quota a body asks for.</summary>
     public static string MailboxQuota(JsonElement desired) =>
@@ -693,20 +722,21 @@ public static class MailDomains {
         Number(desired, "filtering", "rejectThreshold", DefaultRejectThreshold);
 
     /// <summary>Whether the body asks for ClamAV.</summary>
-    public static bool AntivirusEnabled(JsonElement desired) =>
-        Flag(desired, "filtering", "antivirus", true);
+    public static bool AntivirusEnabled(JsonElement desired) => Flag(desired, "filtering", "antivirus", true);
 
     /// <summary>Whether the body asks for Pigeonhole.</summary>
     public static bool SieveEnabled(JsonElement desired) => RootFlag(desired, "sieve", true);
 
     /// <summary>Whether the body asks for a dedicated outbound IP.</summary>
-    public static bool DedicatedIpRequested(JsonElement desired) =>
-        RootFlag(desired, "dedicatedIp", false);
+    public static bool DedicatedIpRequested(JsonElement desired) => RootFlag(desired, "dedicatedIp", false);
 
     /// <summary>The smart hosts a body asks to relay through, sorted and de-duplicated.</summary>
     /// <remarks>
-    ///     ⚠ <b>Sorted, so that two bodies naming the same hosts in different orders render the same
-    ///     document.</b> Without it the rendered Postfix configuration would differ by ordering
+    ///     ⚠
+    ///     <b>
+    ///         Sorted, so that two bodies naming the same hosts in different orders render the same
+    ///         document.
+    ///     </b> Without it the rendered Postfix configuration would differ by ordering
     ///     alone and every pass would report drift against the last one — the clause-1 failure this
     ///     platform has already found once, in <c>RabbitmqClusters.Plugins</c>.
     /// </remarks>
@@ -751,8 +781,11 @@ public static class MailDomains {
     /// <returns>
     ///     <see langword="true" /> when the key parsed and the records could be derived.
     ///     <para>
-    ///         ⚠ <b>A <c>Try</c> rather than a <c>Result&lt;T&gt;</c>, and that is the .Contracts
-    ///         split rather than a style preference.</b> <c>Result&lt;T&gt;</c> and
+    ///         ⚠
+    ///         <b>
+    ///             A <c>Try</c> rather than a <c>Result&lt;T&gt;</c>, and that is the .Contracts
+    ///             split rather than a style preference.
+    ///         </b> <c>Result&lt;T&gt;</c> and
     ///         <c>ErrorCode</c> both live in <c>CyberCloud.Core</c>, which no provider's
     ///         <c>.Contracts</c> references — the failure <i>vocabulary</i> belongs to the
     ///         implementation assembly, and this one stays a pure derivation over its arguments.
@@ -762,8 +795,14 @@ public static class MailDomains {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A PURE FUNCTION OF ITS THREE ARGUMENTS, WHICH IS WHAT LETS DOC 17'S <i>"with the
-    ///         exact records to add"</i> BE ANSWERED WITHOUT A DNS QUERY.</b> Everything the tenant
+    ///         ⚠
+    ///         <b>
+    ///             A PURE FUNCTION OF ITS THREE ARGUMENTS, WHICH IS WHAT LETS DOC 17'S
+    ///             <i>
+    ///                 "with the
+    ///                 exact records to add"
+    ///             </i> BE ANSWERED WITHOUT A DNS QUERY.
+    ///         </b> Everything the tenant
     ///         has to publish is derivable; only the reading-back is not, and that is the half this
     ///         repository has no seam for — see the type's own remarks on <c>verify</c>.
     ///     </para>
@@ -775,8 +814,11 @@ public static class MailDomains {
     ///         tells receivers to accept forgeries would give the gate nothing to protect.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The DMARC policy is <c>quarantine</c> rather than <c>reject</c>, and that is the
-    ///         one place here that is deliberately weaker than it could be.</b> A domain publishing
+    ///         ⚠
+    ///         <b>
+    ///             The DMARC policy is <c>quarantine</c> rather than <c>reject</c>, and that is the
+    ///             one place here that is deliberately weaker than it could be.
+    ///         </b> A domain publishing
     ///         <c>p=reject</c> on day one loses legitimate mail from every forwarder and mailing list
     ///         it uses, which is the failure mode that makes an operator turn DMARC off entirely.
     ///         The honest default is a policy that quarantines, with the reports going somewhere a
@@ -936,8 +978,11 @@ public static class MailDomains {
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>The mail volume is the strongest case in the catalogue for retention and the entry is
-    ///     deliberately unconditional.</b> Every other type offering a <c>deleteClaim</c> flag is
+    ///     ⚠
+    ///     <b>
+    ///         The mail volume is the strongest case in the catalogue for retention and the entry is
+    ///         deliberately unconditional.
+    ///     </b> Every other type offering a <c>deleteClaim</c> flag is
     ///     offering to discard a store the tenant can rebuild — a replica, an index, a cache of
     ///     something authoritative elsewhere. A mailbox is the only copy of correspondence the tenant
     ///     did not author and cannot ask anybody to resend. There is no property here that turns
@@ -986,8 +1031,11 @@ public static class MailDomains {
     /// <param name="rejectThreshold">The Rspamd reject score.</param>
     /// <param name="location">The billing region.</param>
     /// <remarks>
-    ///     ⚠ <b>Every property the schema declares is written, including the ones equal to their
-    ///     defaults.</b> A body that omitted them would test the accessors' fallbacks rather than the
+    ///     ⚠
+    ///     <b>
+    ///         Every property the schema declares is written, including the ones equal to their
+    ///         defaults.
+    ///     </b> A body that omitted them would test the accessors' fallbacks rather than the
     ///     rendering, and the two are different questions — <c>MailDeclarationTests</c> asks
     ///     the first one deliberately, with bodies that omit.
     /// </remarks>
@@ -1009,22 +1057,12 @@ public static class MailDomains {
                 ["clusterId"] = clusterId.ToString("D", CultureInfo.InvariantCulture),
                 ["domain"] = domain,
                 ["version"] = DefaultVersion,
-                ["sizing"] = new JsonObject {
-                    ["preset"] = preset,
-                    ["cpu"] = string.Empty,
-                    ["memory"] = string.Empty
-                },
-                ["storage"] = new JsonObject {
-                    ["size"] = storageSize,
-                    ["mailboxQuota"] = mailboxQuota
-                },
+                ["sizing"] = new JsonObject { ["preset"] = preset, ["cpu"] = string.Empty, ["memory"] = string.Empty },
+                ["storage"] = new JsonObject { ["size"] = storageSize, ["mailboxQuota"] = mailboxQuota },
                 ["catchAll"] = catchAll,
                 ["relayHosts"] = new JsonArray(),
                 ["dedicatedIp"] = false,
-                ["filtering"] = new JsonObject {
-                    ["rejectThreshold"] = rejectThreshold,
-                    ["antivirus"] = antivirus
-                },
+                ["filtering"] = new JsonObject { ["rejectThreshold"] = rejectThreshold, ["antivirus"] = antivirus },
                 ["sieve"] = sieve
             }
         }.ToJsonString();
@@ -1243,11 +1281,7 @@ public static class MailDomains {
 
         return new JsonObject {
             ["metadata"] = new JsonObject { ["name"] = ServiceName(name) },
-            ["spec"] = new JsonObject {
-                ["type"] = "ClusterIP",
-                ["selector"] = Selector(name),
-                ["ports"] = ports
-            }
+            ["spec"] = new JsonObject { ["type"] = "ClusterIP", ["selector"] = Selector(name), ["ports"] = ports }
         }.ToJsonString();
     }
 
@@ -1271,10 +1305,7 @@ public static class MailDomains {
         // meter derivation in MailProvider refuses the write before it reaches here, so this branch
         // is the unreachable half of the same guard rather than a second policy.
         if (cpu.Length > 0 && memory.Length > 0) {
-            var block = new JsonObject {
-                ["cpu"] = cpu,
-                ["memory"] = memory
-            };
+            var block = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
 
             resources["requests"] = block.DeepClone();
             resources["limits"] = block;
@@ -1298,8 +1329,7 @@ public static class MailDomains {
                         ["containers"] = containers,
                         ["volumes"] = new JsonArray {
                             new JsonObject {
-                                ["name"] = "config",
-                                ["configMap"] = new JsonObject { ["name"] = ConfigMapName(name) }
+                                ["name"] = "config", ["configMap"] = new JsonObject { ["name"] = ConfigMapName(name) }
                             },
                             new JsonObject {
                                 ["name"] = "credentials",
@@ -1320,9 +1350,7 @@ public static class MailDomains {
                         ["spec"] = new JsonObject {
                             ["accessModes"] = new JsonArray { "ReadWriteOnce" },
                             ["resources"] = new JsonObject {
-                                ["requests"] = new JsonObject {
-                                    ["storage"] = StorageSize(desired)
-                                }
+                                ["requests"] = new JsonObject { ["storage"] = StorageSize(desired) }
                             }
                         }
                     }
@@ -1340,9 +1368,8 @@ public static class MailDomains {
             ["metadata"] = new JsonObject { ["name"] = PodMonitorName(name) },
             ["spec"] = new JsonObject {
                 ["selector"] = new JsonObject { ["matchLabels"] = Selector(name) },
-                ["podMetricsEndpoints"] = new JsonArray {
-                    new JsonObject { ["port"] = "metrics", ["path"] = "/metrics" }
-                }
+                ["podMetricsEndpoints"] =
+                    new JsonArray { new JsonObject { ["port"] = "metrics", ["path"] = "/metrics" } }
             }
         }.ToJsonString();
     }
@@ -1406,8 +1433,11 @@ public static class MailDomains {
     ///     <c>PodMonitor</c> scrapes by, and <see cref="RetainedClaims" /> proves ownership with.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>ONE SOURCE, BECAUSE A <c>StatefulSet</c>'s <c>spec.selector</c> IS IMMUTABLE AFTER
-    ///     CREATE.</b> Four consumers deriving the same labels separately is four chances for one of
+    ///     ⚠
+    ///     <b>
+    ///         ONE SOURCE, BECAUSE A <c>StatefulSet</c>'s <c>spec.selector</c> IS IMMUTABLE AFTER
+    ///         CREATE.
+    ///     </b> Four consumers deriving the same labels separately is four chances for one of
     ///     them to drift, and the failure that produces is silent: a <c>Service</c> selecting zero
     ///     pods is a legal <c>Service</c> with no endpoints and no error, and a
     ///     <see cref="RetainedVolume" /> whose <c>OwnedBy</c> did not match would make every purge

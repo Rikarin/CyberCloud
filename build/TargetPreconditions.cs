@@ -14,20 +14,19 @@
 // included, and the log shows both — "syft: present" is information, not noise, when the next line
 // is "cosign: absent".
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Nuke.Common;
 using Nuke.Common.Tooling;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 ///     The inputs a target needs that a checkout does not provide, gathered so the failure names all
 ///     of them at once.
 /// </summary>
 /// <param name="target">The Nuke target these belong to, for the message.</param>
-sealed class TargetPreconditions(string target)
-{
+sealed class TargetPreconditions(string target) {
     readonly List<(string What, string Unblock)> unmet = [];
     readonly List<string> met = [];
 
@@ -45,12 +44,12 @@ sealed class TargetPreconditions(string target)
     ///     to create. ⚠ Never a restatement of <paramref name="what" />: the reader already knows what
     ///     is missing by the time they read this half.
     /// </param>
-    public void Require(bool satisfied, string what, string unblock)
-    {
-        if (satisfied)
+    public void Require(bool satisfied, string what, string unblock) {
+        if (satisfied) {
             met.Add(what);
-        else
+        } else {
             unmet.Add((what, unblock));
+        }
     }
 
     /// <summary>
@@ -61,21 +60,19 @@ sealed class TargetPreconditions(string target)
     ///     turns "is it installed" into "does it work", which is a different question and a slower
     ///     one; the targets that need the second answer ask it after this list is clean.
     /// </remarks>
-    public Tool? Tool(string executable, string unblock)
-    {
-        try
-        {
+    public Tool? Tool(string executable, string unblock) {
+        try {
             var tool = ToolResolver.GetPathTool(executable);
 
             met.Add($"`{executable}` is on PATH");
 
             return tool;
-        }
-        catch (Exception exception)
-        {
-            unmet.Add((
-                $"`{executable}` is not on PATH ({exception.Message.TrimEnd('.')})",
-                unblock));
+        } catch (Exception exception) {
+            unmet.Add(
+                (
+                    $"`{executable}` is not on PATH ({exception.Message.TrimEnd('.')})",
+                    unblock)
+            );
 
             return null;
         }
@@ -86,27 +83,31 @@ sealed class TargetPreconditions(string target)
     ///     Why the target cannot proceed without them — the sentence from docs/plan that makes these
     ///     inputs mandatory rather than convenient.
     /// </param>
-    public void AssertSatisfied(string because)
-    {
-        foreach (var satisfied in met)
+    public void AssertSatisfied(string because) {
+        foreach (var satisfied in met) {
             Log.Information("  ✔ {What}", satisfied);
+        }
 
-        foreach (var (what, _) in unmet)
+        foreach (var (what, _) in unmet) {
             Log.Warning("  ✘ {What}", what);
+        }
 
-        if (Satisfied)
+        if (Satisfied) {
             return;
+        }
 
         // No "{Target}:" prefix — Nuke already prefixes the target name in the "Errors & Warnings"
         // summary, and two copies of it on one line reads like a bug. Same reasoning as
         // Build.cs § NotImplementedYet.
-        foreach (var (what, unblock) in unmet)
+        foreach (var (what, unblock) in unmet) {
             Log.Error("{What}. To unblock: {Unblock}", what, unblock);
+        }
 
         Assert.Fail(
             $"{target} is BLOCKED on {unmet.Count} of {Checked} precondition(s), listed above. "
             + because
             + " ⚠ This target is not unimplemented — it is unrunnable here, and the difference "
-            + "matters: every line above is a thing to install or configure, not a thing to write.");
+            + "matters: every line above is a thing to install or configure, not a thing to write."
+        );
     }
 }

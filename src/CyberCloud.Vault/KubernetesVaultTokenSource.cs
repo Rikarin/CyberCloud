@@ -9,21 +9,32 @@ namespace CyberCloud.Vault;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS IS THE ANSWER TO "WHAT CREDENTIAL DOES THE PLATFORM USE", AND THE POINT IS THAT
-///         THERE ISN'T ONE.</b> A vault client needs a credential, and a credential in configuration
+///         ⚠
+///         <b>
+///             THIS IS THE ANSWER TO "WHAT CREDENTIAL DOES THE PLATFORM USE", AND THE POINT IS THAT
+///             THERE ISN'T ONE.
+///         </b> A vault client needs a credential, and a credential in configuration
 ///         is the problem the vault exists to solve. The way out is that a pod already holds one it
 ///         did not have to be given: the kubelet projects a signed service-account token into
 ///         <see cref="VaultOptions.TokenFilePath" />, rotates it, and never writes it anywhere a
 ///         backup or a manifest can reach. OpenBao verifies that token against the cluster's own
-///         <c>TokenReview</c> API and issues a lease. So the platform's identity is <i>which pod it
-///         is</i>, which is a fact about the cluster rather than a string somebody has to keep
+///         <c>TokenReview</c> API and issues a lease. So the platform's identity is
+///         <i>
+///             which pod it
+///             is
+///         </i>, which is a fact about the cluster rather than a string somebody has to keep
 ///         secret.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Kubernetes auth rather than JWT/OIDC against our own identity system, and
-///         docs/plan/18 § Shape's Auth row is about the other direction.</b> That row —
-///         <i>"JWT/OIDC against our identity system. Managed identities (11) map to OpenBao
-///         roles"</i> — describes how a <b>tenant's</b> workload reaches the tenant-facing vault
+///         ⚠
+///         <b>
+///             Kubernetes auth rather than JWT/OIDC against our own identity system, and
+///             docs/plan/18 § Shape's Auth row is about the other direction.
+///         </b> That row —
+///         <i>
+///             "JWT/OIDC against our identity system. Managed identities (11) map to OpenBao
+///             roles"
+///         </i> — describes how a <b>tenant's</b> workload reaches the tenant-facing vault
 ///         product. Using it here would be circular: <c>CyberCloud.Identity</c> keeps TOTP shared
 ///         secrets and application client secrets behind <see cref="SecretRef" /> handles
 ///         (<c>UnavailableTotpSecrets</c> says so), so an identity system that had to be reachable
@@ -33,8 +44,11 @@ namespace CyberCloud.Vault;
 ///         anyway.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Not <c>HttpClusterOidcDiscovery</c> or <c>ProjectedTokenValidator</c>, and it is
-///         worth saying why they do not fit.</b> Those verify a projected token that somebody
+///         ⚠
+///         <b>
+///             Not <c>HttpClusterOidcDiscovery</c> or <c>ProjectedTokenValidator</c>, and it is
+///             worth saying why they do not fit.
+///         </b> Those verify a projected token that somebody
 ///         <i>sent us</i> — <c>ManagedIdentityGrain</c> checking a tenant workload's token against
 ///         the tenant cluster's OIDC issuer, inside the grain, on the raw token. This is the mirror
 ///         image: the platform <i>presents</i> its own token and OpenBao does the verifying. Nothing
@@ -168,7 +182,7 @@ public sealed class KubernetesVaultTokenSource(HttpClient http, VaultOptions opt
                 // ⚠ The one place in this assembly that puts a credential into a request body. It is
                 // an assertion about this pod, it is signed, it is short-lived, and it goes over TLS
                 // to one address. It is never logged and never assigned to a field.
-                Content = JsonContent.Create(new LoginRequest(options.Role, jwt)),
+                Content = JsonContent.Create(new LoginRequest(options.Role, jwt))
             };
 
             if (options.Namespace.Length > 0) {
@@ -249,8 +263,10 @@ public sealed class KubernetesVaultTokenSource(HttpClient http, VaultOptions opt
     /// <param name="Role">The role name.</param>
     /// <param name="Jwt">The projected service-account token.</param>
     sealed record LoginRequest(
-        [property: System.Text.Json.Serialization.JsonPropertyName("role")] string Role,
-        [property: System.Text.Json.Serialization.JsonPropertyName("jwt")] string Jwt
+        [property: System.Text.Json.Serialization.JsonPropertyName("role")]
+        string Role,
+        [property: System.Text.Json.Serialization.JsonPropertyName("jwt")]
+        string Jwt
     );
 
     /// <summary>The documented login response, narrowed to the three fields this client uses.</summary>
@@ -262,15 +278,18 @@ public sealed class KubernetesVaultTokenSource(HttpClient http, VaultOptions opt
     ///     something will eventually log.
     /// </remarks>
     sealed record LoginResponse(
-        [property: System.Text.Json.Serialization.JsonPropertyName("auth")] AuthEnvelope? Auth
+        [property: System.Text.Json.Serialization.JsonPropertyName("auth")]
+        AuthEnvelope? Auth
     );
 
     /// <summary>The <c>auth</c> object of a login response.</summary>
     /// <param name="ClientToken">The token to send as <c>X-Vault-Token</c>.</param>
     /// <param name="LeaseDuration">How many seconds the token is good for.</param>
     sealed record AuthEnvelope(
-        [property: System.Text.Json.Serialization.JsonPropertyName("client_token")] string? ClientToken,
-        [property: System.Text.Json.Serialization.JsonPropertyName("lease_duration")] int LeaseDuration
+        [property: System.Text.Json.Serialization.JsonPropertyName("client_token")]
+        string? ClientToken,
+        [property: System.Text.Json.Serialization.JsonPropertyName("lease_duration")]
+        int LeaseDuration
     );
 }
 

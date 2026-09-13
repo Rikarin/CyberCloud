@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.ContainerService.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>WHAT A GREEN RUN OF THIS SUITE PROVES, AND WHAT IT DOES NOT — SAID FIRST, BECAUSE ON
-///         THIS PROVIDER THE GAP IS THE WIDEST IN THE TREE.</b> The k3s container this starts has
+///         ⚠
+///         <b>
+///             WHAT A GREEN RUN OF THIS SUITE PROVES, AND WHAT IT DOES NOT — SAID FIRST, BECAUSE ON
+///             THIS PROVIDER THE GAP IS THE WIDEST IN THE TREE.
+///         </b> The k3s container this starts has
 ///         <b>no Cluster API, no Kamaji and no KubeVirt</b>.
 ///         <c>ClusterConformanceHarness.EnsureCustomResourceDefinitionsAsync</c> derives a minimal CRD
 ///         stub per custom kind from the case's own <c>Objects</c> — six of them here, in four API
@@ -38,17 +41,26 @@ namespace CyberCloud.Providers.ContainerService.ClusterConformance;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>So the schema half is owed to a real management cluster and is written down as owed
-///         rather than implied by a green tick</b> —
+///         ⚠
+///         <b>
+///             So the schema half is owed to a real management cluster and is written down as owed
+///             rather than implied by a green tick
+///         </b> —
 ///         <c>charts/managed/kubernetes/conformance.yaml § owed</c>,
 ///         <c>a-green-cluster-suite-proves-the-apply-path-only</c>. docs/plan/09 § Testing the fabric
-///         already asks for the thing that would close it: <i>"a kind cluster with CAPI + Kamaji +
-///         KubeVirt in the nightly e2e … the single most valuable test in the suite, because it is the
-///         one that catches operator version drift."</i>
+///         already asks for the thing that would close it:
+///         <i>
+///             "a kind cluster with CAPI + Kamaji +
+///             KubeVirt in the nightly e2e … the single most valuable test in the suite, because it is the
+///             one that catches operator version drift."
+///         </i>
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two class declarations per type over the SAME
-///         <c>ProviderConformanceCase</c> the Docker-free suite uses.</b> One type, one case: a second
+///         ⚠
+///         <b>
+///             Two class declarations per type over the SAME
+///             <c>ProviderConformanceCase</c> the Docker-free suite uses.
+///         </b> One type, one case: a second
 ///         copy here would be a second description of the same type, and the two would disagree the
 ///         first time either changed.
 ///     </para>
@@ -56,7 +68,7 @@ namespace CyberCloud.Providers.ContainerService.ClusterConformance;
 /// <param name="fixture">The harness.</param>
 public sealed class ManagedClusterLifecycleConformance(ClusterConformanceFixture<ManagedClusterCase> fixture)
     : ClusterConformanceTests<ManagedClusterCase>(fixture),
-        IClassFixture<ClusterConformanceFixture<ManagedClusterCase>>;
+    IClassFixture<ClusterConformanceFixture<ManagedClusterCase>>;
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the managed-Kubernetes provider.</summary>
 public sealed class ManagedClusterSiloKillConformance : SiloKillConformanceTests<ManagedClusterCase>;

@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceManager;
 ///     <para>
 ///         ⚠ <b>This exists so that step order is a test rather than a review item.</b> The ordering
 ///         <i>is</i> the security property — <c>Check</c> before quota, quota before the index claim,
-///         all three before a provider is called — and docs/plan/08 says so in as many words: <i>"A
-///         provider that could skip step 3 is a provider that eventually will."</i> A trace makes the
+///         all three before a provider is called — and docs/plan/08 says so in as many words:
+///         <i>
+///             "A
+///             provider that could skip step 3 is a provider that eventually will."
+///         </i> A trace makes the
 ///         order an assertion that fails when somebody moves a step, including when they move it for
 ///         a good reason and mean to move it back.
 ///     </para>

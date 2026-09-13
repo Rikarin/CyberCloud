@@ -89,10 +89,10 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
 
         (await cluster.Directory.LookupAsync(Existing)).GetValueOrThrow()
             .Slug
-            .ShouldBe("blackhole-a");
+                .ShouldBe("blackhole-a");
         (await cluster.Directory.LookupAsync(AlsoExisting)).GetValueOrThrow()
             .Slug
-            .ShouldBe("blackhole-b");
+                .ShouldBe("blackhole-b");
 
         // 2. The shard map still routes every tenant it knows about.
         cluster.ShardMap.DurableShardFor(TenancyCluster.Id(Existing)).ShouldBe(shardOfExisting);
@@ -102,7 +102,7 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
         //    directory's database stopped.
         (await cluster.TenantGrain(Existing).GetAsync()).GetValueOrThrow()
             .Slug
-            .ShouldBe("blackhole-a");
+                .ShouldBe("blackhole-a");
 
         (await cluster.TenantGrain(Existing).AddSubscriptionAsync(Guid.NewGuid())).IsSuccess
             .ShouldBeTrue("a write for an existing tenant is unaffected by the global cluster.");
@@ -111,7 +111,7 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
         (await cluster.SubscriptionGrain(AlsoExisting, subscription).CreateAsync("prod")).IsSuccess
             .ShouldBeTrue();
         (await cluster.SubscriptionGrain(AlsoExisting, subscription)
-            .CreateResourceGroupAsync("prod-rg", "eu-central")).IsSuccess.ShouldBeTrue();
+                .CreateResourceGroupAsync("prod-rg", "eu-central")).IsSuccess.ShouldBeTrue();
 
         var address = new ResourceId(
             AlsoExisting,
@@ -127,7 +127,7 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
         (await cluster.ResourceIndexGrain(address).ConfirmAsync(address.Id)).IsSuccess.ShouldBeTrue();
 
         (await cluster.QuotaGrain(AlsoExisting, subscription)
-            .TryReserveAsync(QuotaMeter.Vcpu, 2m, Guid.NewGuid())).IsSuccess.ShouldBeTrue();
+                .TryReserveAsync(QuotaMeter.Vcpu, 2m, Guid.NewGuid())).IsSuccess.ShouldBeTrue();
 
         // 4. And what genuinely IS lost: no NEW tenant can be resolved, and no directory change
         //    propagates. Named, rather than glossed.
@@ -159,7 +159,7 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
         //    failures above are known not to have broken them.
         (await cluster.TenantGrain(Existing).GetAsync()).GetValueOrThrow()
             .Slug
-            .ShouldBe("blackhole-a");
+                .ShouldBe("blackhole-a");
         (await cluster.Directory.LookupAsync(AlsoExisting)).IsSuccess.ShouldBeTrue();
     }
 

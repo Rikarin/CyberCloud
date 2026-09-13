@@ -1,8 +1,8 @@
-using System.CommandLine;
 using CyberCloud.Cli.Commands;
 using CyberCloud.Cli.Configuration;
 using CyberCloud.Cli.Extensions;
 using CyberCloud.Cli.Output;
+using System.CommandLine;
 
 namespace CyberCloud.Cli;
 
@@ -20,7 +20,11 @@ static class CycApplication {
     /// <param name="host">The host.</param>
     /// <param name="arguments">The arguments, without the executable name.</param>
     /// <param name="cancellationToken">The token. Cancelling it is <see cref="ExitCode.Timeout" />.</param>
-    public static async Task<int> RunAsync(CycHost host, string[] arguments, CancellationToken cancellationToken = default) {
+    public static async Task<int> RunAsync(
+        CycHost host,
+        string[] arguments,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(arguments);
 
@@ -65,7 +69,7 @@ static class CycApplication {
                 // ⚠ Off. System.CommandLine's own handler prints a stack trace and returns 1, which
                 // would make the exit-code table a suggestion. Every failure goes through
                 // ErrorWriter instead.
-                EnableDefaultExceptionHandler = false,
+                EnableDefaultExceptionHandler = false
             };
 
             return await parse.InvokeAsync(configuration, deadline.Token).ConfigureAwait(false);
@@ -89,13 +93,16 @@ static class CycApplication {
         for (var i = 0; i < arguments.Length; i++) {
             var argument = arguments[i];
 
-            if (argument.StartsWith("--output=", StringComparison.Ordinal))
+            if (argument.StartsWith("--output=", StringComparison.Ordinal)) {
                 return Safe(argument["--output=".Length..]);
+            }
 
-            if (argument.StartsWith("-o=", StringComparison.Ordinal))
+            if (argument.StartsWith("-o=", StringComparison.Ordinal)) {
                 return Safe(argument["-o=".Length..]);
+            }
 
-            if ((string.Equals(argument, "--output", StringComparison.Ordinal) || string.Equals(argument, "-o", StringComparison.Ordinal))
+            if ((string.Equals(argument, "--output", StringComparison.Ordinal)
+                    || string.Equals(argument, "-o", StringComparison.Ordinal))
                 && i + 1 < arguments.Length) {
                 return Safe(arguments[i + 1]);
             }
@@ -127,8 +134,9 @@ static class CycApplication {
     static CancellationTokenSource Deadline(CycHost host, GlobalValues values, CancellationToken cancellationToken) {
         var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        if (values.Timeout is { } timeout)
+        if (values.Timeout is { } timeout) {
             source.CancelAfter(timeout);
+        }
 
         return source;
     }

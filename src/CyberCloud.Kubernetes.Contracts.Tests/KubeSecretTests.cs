@@ -18,8 +18,11 @@ namespace CyberCloud.Kubernetes.Contracts.Tests;
 ///         required.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The messages are asserted not to carry the value, and that is the assertion this file
-///         exists for.</b> Everything else here is behaviour; that one is containment. A failure
+///         ⚠
+///         <b>
+///             The messages are asserted not to carry the value, and that is the assertion this file
+///             exists for.
+///         </b> Everything else here is behaviour; that one is containment. A failure
 ///         message quoting what it found would put the credential into whatever logged the failure,
 ///         which is the leak the whole action path is careful about.
 ///     </para>

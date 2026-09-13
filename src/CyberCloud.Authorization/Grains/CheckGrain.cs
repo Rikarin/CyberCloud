@@ -62,7 +62,8 @@ namespace CyberCloud.Authorization.Grains;
 ///     </para>
 /// </remarks>
 public sealed class CheckGrain(
-    [PersistentState("check", StorageTiers.Hot)] IPersistentState<CheckCacheState> cache,
+    [PersistentState("check", StorageTiers.Hot)]
+    IPersistentState<CheckCacheState> cache,
     AuthorizationSchema schema,
     AuthorizationLimits limits,
     IMembershipIndex membershipIndex

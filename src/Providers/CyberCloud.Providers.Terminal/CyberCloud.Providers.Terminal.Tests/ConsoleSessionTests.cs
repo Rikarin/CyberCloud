@@ -39,11 +39,10 @@ public sealed class ConsoleSessionTests {
         (await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
         connection.Objects.TryRemove(
-            RecordingConnection.Key(
-                CloudConsoles.NetworkPolicyRef(ConsoleReconcilerTests.Namespace, "observed")
-            ),
+            RecordingConnection.Key(CloudConsoles.NetworkPolicyRef(ConsoleReconcilerTests.Namespace, "observed")),
             out _
-        ).ShouldBeTrue();
+        )
+            .ShouldBeTrue();
 
         var connected = await ConsoleReconcilerTests.Connect(connection, desired.RootElement);
 
@@ -188,7 +187,8 @@ public sealed class ConsoleSessionTests {
 
         var pod = connection.Applied.Last(x => x.Target.Kind.Kind == "Pod");
 
-        JsonNode.Parse(pod.Body)!["spec"]!["volumes"]!.AsArray()[0]!["persistentVolumeClaim"]!["claimName"]!
+        JsonNode.Parse(pod.Body)!["spec"]!["volumes"]!
+            .AsArray()[0]!["persistentVolumeClaim"]!["claimName"]!
             .GetValue<string>()
             .ShouldBe(CloudConsoles.HomeClaimName("observed"));
     }
@@ -198,9 +198,7 @@ public sealed class ConsoleSessionTests {
         // docs/plan/19 § Auditing: full-session recording is "loud in the UI when it is on". A panel
         // that had to fetch the resource to find out would render one frame of a terminal that lies.
         var connection = new RecordingConnection();
-        using var desired = JsonDocument.Parse(
-            CloudConsoles.Body(ConsoleReconcilerTests.ClusterId, recording: true)
-        );
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId, recording: true));
 
         await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
 
@@ -221,7 +219,10 @@ public sealed class ConsoleSessionTests {
 
         var connected = await ConsoleReconcilerTests.Connect(connection, desired.RootElement);
 
-        JsonNode.Parse(connected.GetValueOrThrow())!.AsObject().Select(x => x.Key).Order(StringComparer.Ordinal)
+        JsonNode.Parse(connected.GetValueOrThrow())!
+            .AsObject()
+            .Select(x => x.Key)
+            .Order(StringComparer.Ordinal)
             .ShouldBe(
                 CloudConsoles.ConnectResponse.Properties
                     .Select(x => x.JsonPointer[1..])
@@ -234,7 +235,9 @@ public sealed class ConsoleSessionTests {
             CloudConsoles.TerminateAction
         );
 
-        JsonNode.Parse(terminated.GetValueOrThrow())!.AsObject().Select(x => x.Key)
+        JsonNode.Parse(terminated.GetValueOrThrow())!
+            .AsObject()
+            .Select(x => x.Key)
             .ShouldBe(CloudConsoles.TerminateResponse.Properties.Select(x => x.JsonPointer[1..]));
     }
 

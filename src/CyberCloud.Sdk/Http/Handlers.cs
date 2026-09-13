@@ -8,8 +8,11 @@ namespace CyberCloud.Sdk;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This handler sits outside the retry handler, and the placement is the whole
-///         feature.</b> A correlation id identifies one logical operation; minted per attempt, the
+///         ⚠
+///         <b>
+///             This handler sits outside the retry handler, and the placement is the whole
+///             feature.
+///         </b> A correlation id identifies one logical operation; minted per attempt, the
 ///         three lines a 429-then-429-then-200 writes into the gateway's log would look like three
 ///         unrelated callers, which is the exact question the header exists to answer. The chain is
 ///         built once, in <see cref="CyberCloudPipeline" />, and the order there is load-bearing
@@ -31,11 +34,15 @@ namespace CyberCloud.Sdk;
 /// </remarks>
 public sealed class CorrelationRequestIdHandler : DelegatingHandler {
     /// <inheritdoc />
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (!request.Headers.Contains(CyberCloudHeaders.CorrelationRequestId))
+        if (!request.Headers.Contains(CyberCloudHeaders.CorrelationRequestId)) {
             request.Headers.TryAddWithoutValidation(CyberCloudHeaders.CorrelationRequestId, NextId());
+        }
 
         return base.SendAsync(request, cancellationToken);
     }
@@ -51,12 +58,18 @@ public sealed class CorrelationRequestIdHandler : DelegatingHandler {
 
 /// <summary>
 ///     Appends <c>?api-version=</c> to every request that does not already carry one — docs/plan/10
-///     § API versioning: <i>"required, on every request. Missing → 400 naming the current
-///     version."</i>
+///     § API versioning:
+///     <i>
+///         "required, on every request. Missing → 400 naming the current
+///         version."
+///     </i>
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A handler rather than a line in every generated method, and the reason is the poll
-///     URL.</b> A long-running operation's next request comes from the <c>Azure-AsyncOperation</c>
+///     ⚠
+///     <b>
+///         A handler rather than a line in every generated method, and the reason is the poll
+///         URL.
+///     </b> A long-running operation's next request comes from the <c>Azure-AsyncOperation</c>
 ///     header — an absolute URL the SDK did not build and no emitter wrote. Putting the rule here
 ///     means that request carries a version too. It checks before it appends because two
 ///     <c>api-version</c> parameters is a <c>400</c>, and it would be a <c>400</c> that only ever
@@ -76,14 +89,19 @@ public sealed class ApiVersionHandler : DelegatingHandler {
     }
 
     /// <inheritdoc />
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(request);
 
         var uri = request.RequestUri;
 
         if (uri is not null && !HasApiVersion(uri.Query)) {
             var separator = uri.Query.Length > 0 ? '&' : '?';
-            request.RequestUri = new Uri($"{uri.GetLeftPart(UriPartial.Path)}{uri.Query}{separator}{QueryParameter}={apiVersion}");
+            request.RequestUri = new Uri(
+                $"{uri.GetLeftPart(UriPartial.Path)}{uri.Query}{separator}{QueryParameter}={apiVersion}"
+            );
         }
 
         return base.SendAsync(request, cancellationToken);
@@ -101,8 +119,9 @@ public sealed class ApiVersionHandler : DelegatingHandler {
             var startsParameter = index == 0 || query[index - 1] is '?' or '&';
             var end = index + QueryParameter.Length;
 
-            if (startsParameter && end < query.Length && query[end] == '=')
+            if (startsParameter && end < query.Length && query[end] == '=') {
                 return true;
+            }
 
             index = query.IndexOf(QueryParameter, index + 1, StringComparison.OrdinalIgnoreCase);
         }
@@ -116,8 +135,11 @@ public sealed class ApiVersionHandler : DelegatingHandler {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This handler sits <i>inside</i> the retry handler, and that is what makes
-///         docs/plan/11 § Protocol's 10-minute tokens survive a nine-minute operation.</b> Every
+///         ⚠
+///         <b>
+///             This handler sits <i>inside</i> the retry handler, and that is what makes
+///             docs/plan/11 § Protocol's 10-minute tokens survive a nine-minute operation.
+///         </b> Every
 ///         attempt runs it again, so an attempt that begins after the cached token expired asks the
 ///         credential for a new one rather than replaying a dead <c>Authorization</c> header. A
 ///         <c>401</c> on the eleventh minute of a poll is the failure this ordering exists to
@@ -153,7 +175,10 @@ public sealed class BearerTokenHandler : DelegatingHandler {
     }
 
     /// <inheritdoc />
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(request);
 
         var token = await cache.GetTokenAsync(context, cancellationToken).ConfigureAwait(false);

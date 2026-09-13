@@ -13,17 +13,23 @@ namespace CyberCloud.Vault.Tests;
 ///         removes anything, so the message is tenant-visible by construction.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The forbidden-substring shape is
-///         <c>KubeFailureMappingTests.AnRbacRefusalNamesNothingInternalToTheTenantAndEverythingToTheOperator</c>'s,
-///         copied deliberately.</b> That test asserts an RBAC denial names nothing internal —
+///         ⚠
+///         <b>
+///             The forbidden-substring shape is
+///             <c>KubeFailureMappingTests.AnRbacRefusalNamesNothingInternalToTheTenantAndEverythingToTheOperator</c>'s,
+///             copied deliberately.
+///         </b> That test asserts an RBAC denial names nothing internal —
 ///         <c>system:serviceaccount</c>, <c>RBAC</c>, <c>clusterrole</c> — while the operator log
 ///         gets all of it. The vault's list is the same idea over a different vocabulary: an address,
 ///         a mount, a path, a field, a role, a namespace and the words that would tell a tenant which
 ///         product the platform's secret store is.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Asserted over <i>every</i> builder rather than over the ones a test happened to
-///         drive.</b> A sixth failure mode added later gets the check for free, which is the
+///         ⚠
+///         <b>
+///             Asserted over <i>every</i> builder rather than over the ones a test happened to
+///             drive.
+///         </b> A sixth failure mode added later gets the check for free, which is the
 ///         difference between a rule and five examples of one.
 ///     </para>
 /// </remarks>
@@ -32,11 +38,8 @@ public sealed class RefusalHygieneTests {
     const string Mount = "platform-kv";
     const string Role = "cc-silo-reader";
 
-    static readonly SecretRef Handle = new() {
-        Path = "tenants/9f2b/postgres/main",
-        Field = "adminPassword",
-        Version = "7",
-    };
+    static readonly SecretRef Handle =
+        new() { Path = "tenants/9f2b/postgres/main", Field = "adminPassword", Version = "7" };
 
     /// <summary>Every refusal this assembly can produce, with realistic arguments.</summary>
     /// <remarks>
@@ -55,15 +58,12 @@ public sealed class RefusalHygieneTests {
             },
             { nameof(VaultFailures.Unreachable), VaultFailures.Unreachable($"{Address} could not be reached") },
             { nameof(VaultFailures.NotFound), VaultFailures.NotFound(Handle, Address, Mount) },
-            {
-                nameof(VaultFailures.PermissionDenied),
-                VaultFailures.PermissionDenied(Handle, Address, Mount, Role)
-            },
+            { nameof(VaultFailures.PermissionDenied), VaultFailures.PermissionDenied(Handle, Address, Mount, Role) },
             {
                 nameof(VaultFailures.FieldMissing),
                 VaultFailures.FieldMissing(Handle, Address, Mount, ["password", "username"])
             },
-            { nameof(VaultFailures.Unreadable), VaultFailures.Unreadable("it is not JSON") },
+            { nameof(VaultFailures.Unreadable), VaultFailures.Unreadable("it is not JSON") }
         };
 
     [Theory]
@@ -73,12 +73,12 @@ public sealed class RefusalHygieneTests {
                      // The vault itself, and which product it is.
                      "openbao", "bao", "hashicorp", "kv-v2", "x-vault", "8200",
                      // Where it is and how the platform gets in.
-                     "openbao.cc-vault.svc", "cc-vault", "https://", "http://", Role, "kubernetes",
-                     "serviceaccount", "service-account", "token", "login", "policy", "lease",
+                     "openbao.cc-vault.svc", "cc-vault", "https://", "http://", Role, "kubernetes", "serviceaccount",
+                     "service-account", "token", "login", "policy", "lease",
                      // What was asked for.
                      Handle.Path, Handle.Field, Mount, "tenants/", "version",
                      // The status codes, which say more than a tenant needs and less than is true.
-                     "403", "404", "http ",
+                     "403", "404", "http "
                  }) {
             refusal.TenantMessage.ShouldNotContain(
                 leak,

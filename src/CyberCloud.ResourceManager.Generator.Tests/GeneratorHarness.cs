@@ -129,9 +129,12 @@ public static class Generator {
         ArgumentNullException.ThrowIfNull(providerAssemblies);
 
         var arguments = new List<string> {
-            "--output", tree.OpenApiDirectory,
-            "--derived-output", tree.DerivedDirectory,
-            "--report", tree.ReportFile
+            "--output",
+            tree.OpenApiDirectory,
+            "--derived-output",
+            tree.DerivedDirectory,
+            "--report",
+            tree.ReportFile
         };
 
         if (check) {

@@ -81,7 +81,8 @@ public sealed class MailReconcilerTests {
             TestContext.Current.CancellationToken
         );
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target)).ToHashSet(StringComparer.Ordinal);
+        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+            .ToHashSet(StringComparer.Ordinal);
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
 
         applied.ShouldBe(read, ignoreOrder: true);

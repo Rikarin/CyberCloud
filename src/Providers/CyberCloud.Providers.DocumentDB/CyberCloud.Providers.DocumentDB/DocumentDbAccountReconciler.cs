@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.DocumentDB;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>FOUR OBJECTS ACROSS FOUR API GROUPS, AND ONE OF THEM IS ANOTHER PROVIDER'S OPERATOR'S
-///         CRD.</b> A CloudNativePG <c>Cluster</c>, a FerretDB <c>Deployment</c>, a <c>Service</c> and
+///         ⚠
+///         <b>
+///             FOUR OBJECTS ACROSS FOUR API GROUPS, AND ONE OF THEM IS ANOTHER PROVIDER'S OPERATOR'S
+///             CRD.
+///         </b> A CloudNativePG <c>Cluster</c>, a FerretDB <c>Deployment</c>, a <c>Service</c> and
 ///         — when monitoring is on — a <c>PodMonitor</c>. The <c>Cluster</c> expands into instance
 ///         pods, PVCs, three Services and its own PodMonitor, none of which is applied here: writing
 ///         any of them would be this provider competing with the controller that owns them.
@@ -21,8 +24,11 @@ namespace CyberCloud.Providers.DocumentDB;
 ///     <list type="number">
 ///         <item>
 ///             <b>Idempotent.</b> Every render is a pure function of the name and the body. Nothing
-///             here counts, appends or timestamps — in particular there is <b>no configuration digest
-///             annotation</b> on the pod template, which is the usual Helm idiom and which would make
+///             here counts, appends or timestamps — in particular there is
+///             <b>
+///                 no configuration digest
+///                 annotation
+///             </b> on the pod template, which is the usual Helm idiom and which would make
 ///             every apply depend on a hash of a document this provider also writes.
 ///         </item>
 ///         <item>
@@ -66,8 +72,11 @@ namespace CyberCloud.Providers.DocumentDB;
 ///         <c>CodecNotFoundException</c>; it comes back naming the API server's own message now.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
 ///         would let the platform silently overwrite the operator, which writes <c>.status</c> on the
 ///         <c>Cluster</c> — and, the case that matters, would undo a tenant's own HorizontalPodAutoscaler
 ///         on <c>spec.replicas</c> of the gateway Deployment every pass.
@@ -173,7 +182,7 @@ public sealed class DocumentDbAccountReconciler(IClock clock) : IResourceReconci
                 // waiting for a controller it does not drive. The read-back below is what makes
                 // Background safe: this returns Converged when the objects are GONE, not when the
                 // deletes were issued.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
                 return ReconcileOutcome.FromFailure(deleteError);
@@ -218,9 +227,7 @@ public sealed class DocumentDbAccountReconciler(IClock clock) : IResourceReconci
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the PostgreSQL cluster is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the PostgreSQL cluster is absent" };
         }
 
         var found = read.GetValueOrThrow();
@@ -241,8 +248,11 @@ public sealed class DocumentDbAccountReconciler(IClock clock) : IResourceReconci
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>A method rather than a field, and that is the clause-2 rule rather than a style
-    ///     choice.</b> A reconciler is a singleton serving every tenant, so any field is shared state
+    ///     ⚠
+    ///     <b>
+    ///         A method rather than a field, and that is the clause-2 rule rather than a style
+    ///         choice.
+    ///     </b> A reconciler is a singleton serving every tenant, so any field is shared state
     ///     — and this one would be tenant-specific, which is the exact shape clause 2 forbids.
     ///     <c>DocumentDbReconcilerTests</c> asserts the declared field count is one, the clock.
     /// </remarks>
@@ -265,8 +275,11 @@ public sealed class DocumentDbAccountReconciler(IClock clock) : IResourceReconci
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>It must stay in step with <see cref="Rendered" />, and nothing enforces that but a
-    ///     test.</b> An object rendered and not read back is an object the loop reports Converged
+    ///     ⚠
+    ///     <b>
+    ///         It must stay in step with <see cref="Rendered" />, and nothing enforces that but a
+    ///         test.
+    ///     </b> An object rendered and not read back is an object the loop reports Converged
     ///     without ever having observed — clause 4's whole point — and one read back and never
     ///     rendered is a resource that never converges.
     ///     <c>DocumentDbReconcilerTests.EveryRenderedObjectIsAlsoReadBack</c> is what holds the pair
@@ -284,7 +297,7 @@ public sealed class DocumentDbAccountReconciler(IClock clock) : IResourceReconci
 
     /// <summary>Progress for the object at <paramref name="done" /> of <paramref name="total" />.</summary>
     /// <remarks>Capped below 100, which is the reading's to report — clause 4.</remarks>
-    static int Percent(int done, int total) => 10 + (done * 80 / total);
+    static int Percent(int done, int total) => 10 + done * 80 / total;
 
     /// <summary>
     ///     Applies one object and turns the two outcomes that are not failures into progress.

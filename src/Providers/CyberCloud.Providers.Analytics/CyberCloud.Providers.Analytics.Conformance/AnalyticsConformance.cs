@@ -11,15 +11,21 @@ namespace CyberCloud.Providers.Analytics.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One case object and two class declarations, which is the sixth time that number has
-///         held.</b> What this one adds is a shape neither end of the existing range covers: two
+///         ⚠
+///         <b>
+///             One case object and two class declarations, which is the sixth time that number has
+///             held.
+///         </b> What this one adds is a shape neither end of the existing range covers: two
 ///         objects in two different <b>API groups</b>, where one of them carries a string derived from
 ///         the other's name. The suite's <c>Objects</c> member takes a list, so that cost nothing; the
 ///         cluster-backed sibling installs two definition stubs instead of one, also derived.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.Objects" /> is the two custom resources and not the
-///         workload.</b> One StatefulSet per host, a Service per host, the client Service, the
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.Objects" /> is the two custom resources and not the
+///             workload.
+///         </b> One StatefulSet per host, a Service per host, the client Service, the
 ///         ConfigMaps and the Keeper's own StatefulSet are all created by the <i>operator</i>, and this
 ///         suite asserts what the <i>reconciler</i> applied. Listing them here would make the suite
 ///         fail against every cluster that has no Altinity operator installed, which is every cluster

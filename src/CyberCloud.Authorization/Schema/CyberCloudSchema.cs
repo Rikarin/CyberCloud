@@ -78,8 +78,11 @@ public static class CyberCloudSchema {
     ///     answer computed under a different rewrite is not an answer to the same question.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>2 since <see cref="Permissions.Purge" /> was defined on
-    ///     <see cref="ObjectTypes.Resource" />.</b> It was 1 while the resource manager checked a
+    ///     ⚠
+    ///     <b>
+    ///         2 since <see cref="Permissions.Purge" /> was defined on
+    ///         <see cref="ObjectTypes.Resource" />.
+    ///     </b> It was 1 while the resource manager checked a
     ///     <c>purge</c> permission this schema did not declare — see the remarks on that permission for
     ///     how a permission that always evaluated false went unnoticed.
     /// </remarks>
@@ -202,22 +205,22 @@ public static class CyberCloudSchema {
             // question the owed item is really asking is whether `delete` should be Rel(contributor),
             // which is a widening of this platform's most destructive verb and not an addition.
             // docs/plan/07 § Azure RBAC carries both.
-            .Permission(
-                Permissions.Purge,
-                Rel(Relations.Owner) & !Rel(Relations.Suspended)
-            )
-            .DefineType(ObjectTypes.Group)
-            // Direct only, and nested groups work because a tuple's SUBJECT may itself be the
-            // userset `group:platform#member` — docs/plan/07 § The model's fourth example.
-            // That nesting is walked by the evaluator, which is exactly the cost the Leopard
-            // index removes in M2.
-            .Relation(Relations.Member)
-            .Role(Relations.Owner, This)
-            .Permission(Permissions.Read, Rel(Relations.Member))
-            .Permission(Permissions.Write, Rel(Relations.Owner))
-            .DefineType(ObjectTypes.Platform)
-            .Relation(Relations.Operator)
-            .Permission(Permissions.Administer, Rel(Relations.Operator))
-            .DefineType(ObjectTypes.User)
-            .Build();
+                .Permission(
+                    Permissions.Purge,
+                    Rel(Relations.Owner) & !Rel(Relations.Suspended)
+                )
+                .DefineType(ObjectTypes.Group)
+                // Direct only, and nested groups work because a tuple's SUBJECT may itself be the
+                // userset `group:platform#member` — docs/plan/07 § The model's fourth example.
+                // That nesting is walked by the evaluator, which is exactly the cost the Leopard
+                // index removes in M2.
+                .Relation(Relations.Member)
+                .Role(Relations.Owner, This)
+                .Permission(Permissions.Read, Rel(Relations.Member))
+                .Permission(Permissions.Write, Rel(Relations.Owner))
+                .DefineType(ObjectTypes.Platform)
+                .Relation(Relations.Operator)
+                .Permission(Permissions.Administer, Rel(Relations.Operator))
+                .DefineType(ObjectTypes.User)
+                .Build();
 }

@@ -66,7 +66,8 @@ public sealed class DocumentDbDeclarationTests {
 
         CliTokens.Collisions(
             registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
-        ).ShouldBeEmpty();
+        )
+            .ShouldBeEmpty();
 
         // ⚠ LITERALS, not `ProviderNamespace.Split('.')[^1].ToLowerInvariant()`. Deriving the group
         // name the same way the emitter does would compare the emitter to itself, which is the shape
@@ -133,11 +134,12 @@ public sealed class DocumentDbDeclarationTests {
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
             foreach (var pointer in meter.Derivation.Reads) {
-                DocumentDbAccounts.Schema2026.Declares(pointer).ShouldBeTrue(
-                    $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
-                    + "api-version's schema does not declare. A read set that names a property the "
-                    + "schema dropped is what an api-version bump has to be diffed against."
-                );
+                DocumentDbAccounts.Schema2026.Declares(pointer)
+                    .ShouldBeTrue(
+                        $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
+                        + "api-version's schema does not declare. A read set that names a property the "
+                        + "schema dropped is what an api-version bump has to be diffed against."
+                    );
             }
         }
 
@@ -146,10 +148,11 @@ public sealed class DocumentDbDeclarationTests {
         // the only thing that makes the claim checkable is a reviewer — or this — noting that a
         // formula summing the FerretDB pods must say it reads their count.
         foreach (var meter in new[] { QuotaMeter.Vcpu, QuotaMeter.MemoryGb }) {
-            registration.Meters.Single(x => x.Meter == meter).Derivation!.Reads.ShouldContain(
-                "/properties/gateway/replicas",
-                meter.ToString()
-            );
+            registration.Meters.Single(x => x.Meter == meter).Derivation!
+                .Reads.ShouldContain(
+                    "/properties/gateway/replicas",
+                    meter.ToString()
+                );
         }
     }
 
@@ -163,10 +166,11 @@ public sealed class DocumentDbDeclarationTests {
                 Overridden(DocumentDbAccounts.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
 
-            DocumentDbAccounts.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
-                $"the declared default for '{property.JsonPointer}' does not validate inside an "
-                + "otherwise-valid body."
-            );
+            DocumentDbAccounts.Schema2026.Validate(body.RootElement, allowTags: true)
+                .IsSuccess.ShouldBeTrue(
+                    $"the declared default for '{property.JsonPointer}' does not validate inside an "
+                    + "otherwise-valid body."
+                );
         }
     }
 
@@ -285,7 +289,8 @@ public sealed class DocumentDbDeclarationTests {
         using var body = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId));
 
         var image = JsonNode.Parse(DocumentDbAccounts.ClusterJson("orders", body.RootElement))!["spec"]!
-            ["imageName"]!.GetValue<string>();
+            ["imageName"]!
+            .GetValue<string>();
 
         image.ShouldStartWith("ghcr.io/ferretdb/postgres-documentdb:");
         image.ShouldNotContain("cloudnative-pg/postgresql");
@@ -311,7 +316,8 @@ public sealed class DocumentDbDeclarationTests {
         using var body = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId));
 
         var postgresql = JsonNode.Parse(DocumentDbAccounts.ClusterJson("orders", body.RootElement))!
-            ["spec"]!["postgresql"]!.AsObject();
+            ["spec"]!["postgresql"]!
+            .AsObject();
 
         var libraries = postgresql["shared_preload_libraries"]!.AsArray()
             .Select(x => x!.GetValue<string>())
@@ -319,11 +325,13 @@ public sealed class DocumentDbDeclarationTests {
 
         libraries.ShouldBe(["pg_cron", "pg_documentdb_core", "pg_documentdb"]);
 
-        postgresql["parameters"]!.AsObject().ContainsKey("shared_preload_libraries").ShouldBeFalse(
-            "shared_preload_libraries was written under spec.postgresql.parameters, where "
-            + "CloudNativePG's validating webhook refuses it as a fixed configuration parameter. The "
-            + "cluster is rejected at admission and the caller has already been told 202."
-        );
+        postgresql["parameters"]!.AsObject()
+            .ContainsKey("shared_preload_libraries")
+            .ShouldBeFalse(
+                "shared_preload_libraries was written under spec.postgresql.parameters, where "
+                + "CloudNativePG's validating webhook refuses it as a fixed configuration parameter. The "
+                + "cluster is rejected at admission and the caller has already been told 202."
+            );
 
         // ⚠ The LIBRARY names carry the pg_ prefix and the EXTENSION created from them does not. Two
         // vocabularies, three lines apart in the rendered object.
@@ -349,7 +357,7 @@ public sealed class DocumentDbDeclarationTests {
         // ⚠ postInitApplicationSQL would put the extension in the application database, which is NOT
         // where FERRETDB_POSTGRESQL_URL points. See conformance.yaml § owed,
         // `superuser-is-the-connection-role`, for the shape that would move both together.
-        (spec["bootstrap"]!["initdb"]!.AsObject().ContainsKey("postInitApplicationSQL")).ShouldBeFalse();
+        spec["bootstrap"]!["initdb"]!.AsObject().ContainsKey("postInitApplicationSQL").ShouldBeFalse();
 
         spec["postgresql"]!["parameters"]!["cron.database_name"]!.GetValue<string>().ShouldBe("postgres");
     }

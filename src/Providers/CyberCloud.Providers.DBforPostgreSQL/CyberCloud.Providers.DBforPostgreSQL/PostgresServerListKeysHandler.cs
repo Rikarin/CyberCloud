@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
@@ -30,8 +31,11 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         can hold two.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>/host</c> is computed and not taken from the Secret, and the two disagree on
-///         purpose.</b> CloudNativePG writes its own <c>host</c> key naming the read-write service.
+///         ⚠
+///         <b>
+///             <c>/host</c> is computed and not taken from the Secret, and the two disagree on
+///             purpose.
+///         </b> CloudNativePG writes its own <c>host</c> key naming the read-write service.
 ///         <see cref="PostgresServers.Host" /> answers with the <i>pooler's</i> service while pooling
 ///         is on, which is what a client should actually connect to and what the response schema
 ///         says this field is. Echoing the secret's copy would hand out the address that bypasses

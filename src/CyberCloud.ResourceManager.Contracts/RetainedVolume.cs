@@ -8,11 +8,17 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This type exists because a purge is the one path on which the platform is supposed to
-///         destroy a tenant's data, and a volume named by pattern rather than by ownership is how the
-///         wrong one goes.</b> docs/plan/08 § Soft delete keeps a soft-deleted resource's claims on
-///         purpose — <i>"deleting a <c>StatefulSet</c> does not delete the
-///         <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> created"</i> — and that is
+///         ⚠
+///         <b>
+///             This type exists because a purge is the one path on which the platform is supposed to
+///             destroy a tenant's data, and a volume named by pattern rather than by ownership is how the
+///             wrong one goes.
+///         </b> docs/plan/08 § Soft delete keeps a soft-deleted resource's claims on
+///         purpose —
+///         <i>
+///             "deleting a <c>StatefulSet</c> does not delete the
+///             <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> created"
+///         </i> — and that is
 ///         exactly what makes a restore work. Ending the window has to remove precisely those and
 ///         nothing else, so a provider does not hand the manager a name: it hands over a name
 ///         <i>and</i> the labels the object must be carrying for the delete to be allowed.
@@ -22,8 +28,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         delete.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A label <i>selector</i> is the mechanism this wants and cannot have yet, which is why
-///         the shape is "name, then verify" rather than "select, then delete".</b> Two things are
+///         ⚠
+///         <b>
+///             A label <i>selector</i> is the mechanism this wants and cannot have yet, which is why
+///             the shape is "name, then verify" rather than "select, then delete".
+///         </b> Two things are
 ///         missing independently. <c>KubeCommandBuilder.Inject</c> writes ADR-013's seven labels into
 ///         the top-level <c>metadata.labels</c> and does not descend into a nested
 ///         <c>volumeClaimTemplate</c>, so a claim the <c>StatefulSet</c> controller creates carries
@@ -72,10 +81,7 @@ public readonly record struct RetainedVolume(
     ///     rather than obeyed.
     /// </remarks>
     public static GroupVersionKind ClaimKind { get; } = new() {
-        Group = "",
-        Version = "v1",
-        Kind = "PersistentVolumeClaim",
-        Plural = "persistentvolumeclaims"
+        Group = "", Version = "v1", Kind = "PersistentVolumeClaim", Plural = "persistentvolumeclaims"
     };
 
     /// <summary>
@@ -83,8 +89,11 @@ public readonly record struct RetainedVolume(
     ///     <c>{volume}-{set}-{ordinal}</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is the naming rule and not a guess, and it is the reason a provider can answer
-    ///     at all.</b> The <c>StatefulSet</c> controller composes a claim's name from the template's
+    ///     ⚠
+    ///     <b>
+    ///         This is the naming rule and not a guess, and it is the reason a provider can answer
+    ///         at all.
+    ///     </b> The <c>StatefulSet</c> controller composes a claim's name from the template's
     ///     <c>metadata.name</c>, the set's name and the pod's ordinal, which is why a claim outlives
     ///     the set that made it and why nothing else can recreate the name. It is still only a
     ///     <i>name</i> — <see cref="OwnedBy" /> is what makes acting on it safe.
@@ -105,8 +114,11 @@ public readonly record struct RetainedVolume(
     ///     pods, in ordinal order.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Ordinals <c>0 … replicas-1</c>, which is every claim of a set that was never scaled
-    ///     down.</b> A set scaled from three replicas to one leaves the claims of ordinals 1 and 2
+    ///     ⚠
+    ///     <b>
+    ///         Ordinals <c>0 … replicas-1</c>, which is every claim of a set that was never scaled
+    ///         down.
+    ///     </b> A set scaled from three replicas to one leaves the claims of ordinals 1 and 2
     ///     behind — that is the same Kubernetes behaviour this whole file is about, one level in —
     ///     and the desired body a purge reads names only the replica count the resource ended on. So
     ///     those claims are <b>not</b> reclaimed, and this is deliberate rather than overlooked:
@@ -146,9 +158,7 @@ public readonly record struct RetainedVolume(
         for (var ordinal = 0; ordinal < replicas; ordinal++) {
             volumes.Add(
                 new(
-                    new() {
-                        Kind = ClaimKind, Namespace = ns, Name = NameFor(volume, set, ordinal)
-                    },
+                    new() { Kind = ClaimKind, Namespace = ns, Name = NameFor(volume, set, ordinal) },
                     ownedBy,
                     reason
                 )

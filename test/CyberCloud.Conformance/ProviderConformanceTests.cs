@@ -23,8 +23,11 @@ namespace CyberCloud.Conformance;
 ///         </i>
 ///     </para>
 ///     <para>
-///         Four of those five run here. <b>The fifth — killing a silo mid-create — does not, and it
-///         is not absent either</b>: an in-process <c>TestCluster</c> over in-memory storage cannot
+///         Four of those five run here.
+///         <b>
+///             The fifth — killing a silo mid-create — does not, and it
+///             is not absent either
+///         </b>: an in-process <c>TestCluster</c> over in-memory storage cannot
 ///         tell "the silo died and the durable state brought it back" from "a grain deactivated and
 ///         reactivated over the same dictionary", so running it here would assert something weaker
 ///         under the right name. It runs against real PostgreSQL and a real Redis reminder table in
@@ -56,9 +59,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // A provider whose Describe returned early, or whose reconciler names a type nobody declared,
         // is a provider whose endpoints answer 404 with nothing in the log. ProviderRegistry.Build
         // throws on most of that; this asserts the parts it cannot.
-        Cluster.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue(
-            $"'{Case.Type}' is not in the registry built from {Case.DisplayName}'s own Describe."
-        );
+        Cluster.Registry.TryGetType(Case.Type, out var registration)
+            .ShouldBeTrue($"'{Case.Type}' is not in the registry built from {Case.DisplayName}'s own Describe.");
 
         registration.ReconcilerType.ShouldBe(
             Case.ReconcilerType,
@@ -267,15 +269,21 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         volumes were in it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The templates are found by SHAPE and by name, over the whole body, rather than
-    ///         from whatever the provider declared.</b> A check that read
+    ///         ⚠
+    ///         <b>
+    ///             The templates are found by SHAPE and by name, over the whole body, rather than
+    ///             from whatever the provider declared.
+    ///         </b> A check that read
     ///         <c>WithTemplateLabels</c>'s own argument would pass for a provider that declared
     ///         nothing, which is the only way this can be got wrong. Walking the body means a
     ///         provider that renders a claim template and forgets to declare it fails here.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The seventh is asserted ABSENT, and that is a decision rather than an
-    ///         oversight.</b> <c>cybercloud.io/api-version</c> is stamped from the request that
+    ///         ⚠
+    ///         <b>
+    ///             The seventh is asserted ABSENT, and that is a decision rather than an
+    ///             oversight.
+    ///         </b> <c>cybercloud.io/api-version</c> is stamped from the request that
     ///         caused the reconcile, so it differs between reconciles — and a live
     ///         <c>StatefulSet</c>'s <c>spec.volumeClaimTemplates</c> refuses every change, measured
     ///         against the cluster lane's own k3s pin. A template carrying it would make the resource
@@ -306,19 +314,21 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             );
 
             foreach (var key in KubeLabels.LifetimeStable) {
-                labels[key]?.GetValue<string>().ShouldBe(
-                    command.Labels[key],
-                    $"'{command.Target}'s claim template is missing '{key}', or disagrees with the "
-                    + "object's own label of the same name."
-                );
+                labels[key]?.GetValue<string>()
+                    .ShouldBe(
+                        command.Labels[key],
+                        $"'{command.Target}'s claim template is missing '{key}', or disagrees with the "
+                        + "object's own label of the same name."
+                    );
             }
 
-            labels.ContainsKey(KubeLabels.ApiVersion).ShouldBeFalse(
-                $"'{command.Target}'s claim template carries '{KubeLabels.ApiVersion}'. That label "
-                + "is stamped from the request, and a StatefulSet's spec.volumeClaimTemplates is "
-                + "refused every change once the set exists — so the next reconcile at a different "
-                + "api-version would be rejected, and so would every one after it."
-            );
+            labels.ContainsKey(KubeLabels.ApiVersion)
+                .ShouldBeFalse(
+                    $"'{command.Target}'s claim template carries '{KubeLabels.ApiVersion}'. That label "
+                    + "is stamped from the request, and a StatefulSet's spec.volumeClaimTemplates is "
+                    + "refused every change once the set exists — so the next reconcile at a different "
+                    + "api-version would be rejected, and so would every one after it."
+                );
         }
     }
 
@@ -454,10 +464,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         Cluster.Locks.Reset();
 
         var entry = await Cluster.Index(ProviderTestCluster<TSource>.Address("locked")).GetAsync();
-        entry.GetValueOrThrow().State.ShouldBe(
-            IndexEntryState.Confirmed,
-            "a refused delete must not have released the name — the release is irreversible"
-        );
+        entry.GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.Confirmed,
+                "a refused delete must not have released the name — the release is irreversible"
+            );
 
         foreach (var target in ObjectsOf(accepted.Resource.Id, "locked")) {
             Cluster.World.Holds(target).ShouldBeTrue("a lock that let the data plane go is not a lock");
@@ -491,8 +502,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>TWO OF THE ASSERTIONS BELOW ARE CORRECT FOR A HARD-DELETE TYPE AND WRONG FOR A
-    ///         SOFT-DELETABLE ONE</b>, and the branch is what reconciles them. The index entry going
+    ///         ⚠
+    ///         <b>
+    ///             TWO OF THE ASSERTIONS BELOW ARE CORRECT FOR A HARD-DELETE TYPE AND WRONG FOR A
+    ///             SOFT-DELETABLE ONE
+    ///         </b>, and the branch is what reconciles them. The index entry going
     ///         back to <c>Free</c> — <i>"the name comes back"</i> — and the ReBAC parent tuple being
     ///         removed are both things a <c>DELETE</c> deliberately does <b>not</b> do when the type
     ///         declares a recovery window (docs/plan/08 § Soft delete): the name is held so a restore
@@ -500,8 +514,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         the resource is never invisible.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A THIRD ASSERTION USED TO BRANCH AND NO LONGER DOES: THE OBJECTS ARE GONE EITHER
-    ///         WAY.</b> The soft arm asserted they stayed, and two providers declared a window against
+    ///         ⚠
+    ///         <b>
+    ///             A THIRD ASSERTION USED TO BRANCH AND NO LONGER DOES: THE OBJECTS ARE GONE EITHER
+    ///             WAY.
+    ///         </b> The soft arm asserted they stayed, and two providers declared a window against
     ///         that arm, measured what a tenant was left with — a workload still running behind an
     ///         address answering <c>404</c>, still billed, and unreachable to delete again — and
     ///         withdrew. A soft delete tears the data plane down like any other delete; what the
@@ -511,11 +528,16 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         never hand anything back.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE BRANCH IS TAKEN FROM THE REGISTRY AND NOT FROM
-    ///         <see cref="ProviderConformanceCase" />, and that distinction is the whole design.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THE BRANCH IS TAKEN FROM THE REGISTRY AND NOT FROM
+    ///             <see cref="ProviderConformanceCase" />, and that distinction is the whole design.
+    ///         </b>
     ///         That record's own remarks forbid a case supplying anything the suite decides with —
-    ///         <i>"a case that could supply an assertion would be a provider grading its own
-    ///         homework"</i> — and "which of these two contracts do I have to satisfy" is exactly such
+    ///         <i>
+    ///             "a case that could supply an assertion would be a provider grading its own
+    ///             homework"
+    ///         </i> — and "which of these two contracts do I have to satisfy" is exactly such
     ///         a decision. The registry is not the provider's answer to the suite; it is the platform's
     ///         own description of the type, built from <c>Describe</c> and read by the write path, the
     ///         OpenAPI emitter and the four generated surfaces alike. A provider declares
@@ -525,8 +547,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         by omission the way a nullable case member would let it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Why not a <c>static virtual</c> on <see cref="IProviderCaseSource" />, which is the
-    ///         one accepted way to add an optional member.</b> <c>Ancestors</c> earns that shape
+    ///         ⚠
+    ///         <b>
+    ///             Why not a <c>static virtual</c> on <see cref="IProviderCaseSource" />, which is the
+    ///             one accepted way to add an optional member.
+    ///         </b> <c>Ancestors</c> earns that shape
     ///         because its value is <i>not derivable</i> — a parent's api-version and a body its schema
     ///         accepts exist nowhere else — and because omitting it is refused by name rather than
     ///         silently running a smaller suite. Neither applies here: the window is already a registry
@@ -536,8 +561,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         and pass.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Which providers take the soft arm is a registry fact and therefore moves without
-    ///         this file changing.</b> <c>CyberCloud.ContainerRegistry/registries</c> and
+    ///         ⚠
+    ///         <b>
+    ///             Which providers take the soft arm is a registry fact and therefore moves without
+    ///             this file changing.
+    ///         </b> <c>CyberCloud.ContainerRegistry/registries</c> and
     ///         <c>CyberCloud.Monitor/workspaces</c> declare a window;
     ///         <c>CyberCloud.ResourceManager.Tests.SoftDeletePathTests</c> drives the same contract
     ///         against a fixture type in isolation, which is where its own sabotage results were
@@ -545,32 +573,46 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///     </para>
     /// </remarks>
     /// <summary>
-    ///     ⚠ <b>The claims a teardown deliberately leaves survive it, and the teardown that ends the
-    ///     resource for good removes them.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The claims a teardown deliberately leaves survive it, and the teardown that ends the
+    ///         resource for good removes them.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>This is the assertion docs/plan/08 § Soft delete's owed item was waiting for:</b>
-    ///         <i>"a purge still leaves the volumes, because ending a window has to remove exactly
-    ///         what a teardown keeps"</i>. Deleting a <c>StatefulSet</c> does not delete the
+    ///         <i>
+    ///             "a purge still leaves the volumes, because ending a window has to remove exactly
+    ///             what a teardown keeps"
+    ///         </i>. Deleting a <c>StatefulSet</c> does not delete the
     ///         <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> made — that is what makes
     ///         a recovery window worth having — and until <c>IResourceReconciler</c> gained
     ///         <c>RetainedVolumesAsync</c> nothing ever removed them, so a purged resource returned
     ///         its quota and left its disks.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The claims are PLANTED rather than created, because the fake cluster runs no
-    ///         controllers</b>, and how they are planted is the load-bearing part. Kubernetes composes
+    ///         ⚠
+    ///         <b>
+    ///             The claims are PLANTED rather than created, because the fake cluster runs no
+    ///             controllers
+    ///         </b>, and how they are planted is the load-bearing part. Kubernetes composes
     ///         a claim's name as <c>{volume}-{set}-{ordinal}</c> and copies the set's
-    ///         <c>spec.selector.matchLabels</c> onto it; both halves are read <i>out of the document
-    ///         the provider actually applied</i> rather than supplied by the case, so a provider
+    ///         <c>spec.selector.matchLabels</c> onto it; both halves are read
+    ///         <i>
+    ///             out of the document
+    ///             the provider actually applied
+    ///         </i> rather than supplied by the case, so a provider
     ///         cannot make this pass by describing claims it does not create. The same round trip
     ///         against a real API server, where the controller makes the claims itself, is what
     ///         proves the model — <c>CyberCloud.Cluster.Conformance</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The branch is the registry's, exactly as in
-    ///         <see cref="DeleteTearsDownTheDataPlaneAndTheResourceIsGone" />.</b> A type with a
+    ///         ⚠
+    ///         <b>
+    ///             The branch is the registry's, exactly as in
+    ///             <see cref="DeleteTearsDownTheDataPlaneAndTheResourceIsGone" />.
+    ///         </b> A type with a
     ///         window must keep its claims through the soft delete — asserting they are gone there
     ///         would be asserting a restore has nothing to restore from — and lose them at the purge.
     ///         A type with no window loses them at the delete, which is the same defect one step
@@ -620,11 +662,12 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         if (!recoverable) {
             foreach (var (target, _) in claims) {
-                Cluster.World.Holds(target).ShouldBeFalse(
-                    $"'{target}' is still in the cluster after a converged hard delete. The resource "
-                    + "is gone, its name is free and its quota is back — and its disk is still "
-                    + "allocated, unreferenced and unbilled, until an operator finds it."
-                );
+                Cluster.World.Holds(target)
+                    .ShouldBeFalse(
+                        $"'{target}' is still in the cluster after a converged hard delete. The resource "
+                        + "is gone, its name is free and its quota is back — and its disk is still "
+                        + "allocated, unreferenced and unbilled, until an operator finds it."
+                    );
             }
 
             return;
@@ -632,12 +675,13 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         // ── The window's half: the disks are what a restore restores from ───────────────────────
         foreach (var (target, _) in claims) {
-            Cluster.World.Holds(target).ShouldBeTrue(
-                $"'{target}' was removed by a SOFT delete on a type that declares a "
-                + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day window. "
-                + "The claims are the data a restore hands back; removing them makes the window an "
-                + "advertisement."
-            );
+            Cluster.World.Holds(target)
+                .ShouldBeTrue(
+                    $"'{target}' was removed by a SOFT delete on a type that declares a "
+                    + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day window. "
+                    + "The claims are the data a restore hands back; removing them makes the window an "
+                    + "advertisement."
+                );
         }
 
         // ── And the purge's half: ending the window ends the disks ──────────────────────────────
@@ -651,11 +695,12 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         );
 
         foreach (var (target, _) in claims) {
-            Cluster.World.Holds(target).ShouldBeFalse(
-                $"'{target}' survived the purge. docs/plan/08 § Soft delete: ending a window has to "
-                + "remove exactly what a teardown keeps, or a purged resource returns its quota and "
-                + "leaves its disks."
-            );
+            Cluster.World.Holds(target)
+                .ShouldBeFalse(
+                    $"'{target}' survived the purge. docs/plan/08 § Soft delete: ending a window has to "
+                    + "remove exactly what a teardown keeps, or a purged resource returns its quota and "
+                    + "leaves its disks."
+                );
         }
     }
 
@@ -695,9 +740,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                         Name = RetainedVolume.NameFor(volume, command.Target.Name, ordinal)
                     };
 
-                    var metadata = new JsonObject {
-                        ["name"] = target.Name, ["namespace"] = target.Namespace
-                    };
+                    var metadata = new JsonObject { ["name"] = target.Name, ["namespace"] = target.Namespace };
 
                     if (selector is not null) {
                         metadata["labels"] = selector.DeepClone();
@@ -706,9 +749,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     claims.Add(
                         (target,
                             new JsonObject {
-                                ["apiVersion"] = "v1",
-                                ["kind"] = "PersistentVolumeClaim",
-                                ["metadata"] = metadata
+                                ["apiVersion"] = "v1", ["kind"] = "PersistentVolumeClaim", ["metadata"] = metadata
                             }.ToJsonString())
                     );
                 }
@@ -769,20 +810,22 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // leaves the claims its volumeClaimTemplate made. Those four are asserted below and by the
         // restore round trip; the running half is asserted gone here, for every type.
         foreach (var target in objects) {
-            Cluster.World.Holds(target).ShouldBeFalse(
-                $"'{target}' is still in the cluster after a converged teardown — docs/plan/06 "
-                + "§ Two-phase create: never silently gone while its pods still run and its meter "
-                + "still ticks, and never still running while the resource says it is gone"
-            );
+            Cluster.World.Holds(target)
+                .ShouldBeFalse(
+                    $"'{target}' is still in the cluster after a converged teardown — docs/plan/06 "
+                    + "§ Two-phase create: never silently gone while its pods still run and its meter "
+                    + "still ticks, and never still running while the resource says it is gone"
+                );
         }
 
         if (recoverable) {
             // ── The recovery window's contract ──────────────────────────────────────────────────
-            entry.GetValueOrThrow().State.ShouldBe(
-                IndexEntryState.SoftDeleted,
-                "the name is held for the whole window — a name taken by somebody else leaves a "
-                + "restore with nowhere to go"
-            );
+            entry.GetValueOrThrow()
+                .State.ShouldBe(
+                    IndexEntryState.SoftDeleted,
+                    "the name is held for the whole window — a name taken by somebody else leaves a "
+                    + "restore with nowhere to go"
+                );
 
             Cluster.Relations.Edges.ShouldContainKey(
                 accepted.Resource.Id,
@@ -809,12 +852,13 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             );
 
             foreach (var target in objects) {
-                Cluster.World.Holds(target).ShouldBeTrue(
-                    $"'{target}' did not come back, and this type declares a "
-                    + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day "
-                    + "recovery window. A restore re-applies the desired state the park kept — "
-                    + "docs/plan/08 § Soft delete"
-                );
+                Cluster.World.Holds(target)
+                    .ShouldBeTrue(
+                        $"'{target}' did not come back, and this type declares a "
+                        + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day "
+                        + "recovery window. A restore re-applies the desired state the park kept — "
+                        + "docs/plan/08 § Soft delete"
+                    );
             }
 
             (await ReadAsync("goodbye")).IsSuccess.ShouldBeTrue("and the old address answers again");
@@ -856,10 +900,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         var reached = accepted.Trace.Reached;
 
-        reached.IndexOf(WriteStep.LinkParent).ShouldBeLessThan(
-            reached.IndexOf(WriteStep.SubmitDesired),
-            "the parent edge was written after the durable resource"
-        );
+        reached.IndexOf(WriteStep.LinkParent)
+            .ShouldBeLessThan(
+                reached.IndexOf(WriteStep.SubmitDesired),
+                "the parent edge was written after the durable resource"
+            );
     }
 
     // ── create with another tenant's ids → 404 ──────────────────────────────────────────────────
@@ -956,11 +1001,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var absent = ProviderTestCluster<TSource>.Address("never-created-child");
 
         var onAbsent = await Cluster.Manager.ReadAsync(
-            new() {
-                Path = absent.Path,
-                ApiVersion = Case.ApiVersion,
-                Caller = ProviderTestCluster<TSource>.Caller()
-            },
+            new() { Path = absent.Path, ApiVersion = Case.ApiVersion, Caller = ProviderTestCluster<TSource>.Caller() },
             TestContext.Current.CancellationToken
         );
 
@@ -1011,7 +1052,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var accepted = (await CreateAsync("racing-delete")).GetValueOrThrow();
 
         var status = await Cluster.Operation(ConformanceIds.Tenant, accepted.OperationId).DriveAsync();
-        status.GetValueOrThrow().IsTerminal.ShouldBeFalse("the create must still be running for this test to mean anything");
+        status.GetValueOrThrow()
+            .IsTerminal.ShouldBeFalse("the create must still be running for this test to mean anything");
 
         var refused = await DeleteAsync("racing-delete");
 
@@ -1020,11 +1062,12 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         refused.Error.Message.ShouldContain(accepted.OperationId.ToString("D"));
 
         var entry = await Cluster.Index(ProviderTestCluster<TSource>.Address("racing-delete")).GetAsync();
-        entry.GetValueOrThrow().State.ShouldBe(
-            IndexEntryState.Confirmed,
-            "the delete was refused, so the name must still be bound — releasing it first and then "
-            + "refusing would hand somebody else a name that is still in use"
-        );
+        entry.GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.Confirmed,
+                "the delete was refused, so the name must still be bound — releasing it first and then "
+                + "refusing would hand somebody else a name that is still in use"
+            );
 
         Cluster.World.Suspended = false;
     }
@@ -1189,9 +1232,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             // found rather than guessed.
             Cluster.Vault,
             log
-        ) {
-            SecretWriter = Cluster.Vault
-        };
+        ) { SecretWriter = Cluster.Vault };
 
         var world = new ConformanceWorld(
             BreakAsync: () => {
@@ -1204,7 +1245,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             MatchesDesiredAsync: () => Task.FromResult(
                 objects.Length > 0
                 && objects.All(target => Cluster.World.Read(target) is { } json
-                    && MatchesDesired(accepted.Resource.Id, "clauses", target, json, Body()))
+                    && MatchesDesired(accepted.Resource.Id, "clauses", target, json, Body())
+                )
             )
         );
 
@@ -1364,9 +1406,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // ProviderBuilder.Action refuses `longRunning` together with a handler, so the fourth cell of
         // that table is unreachable and is not tested here.
         Cluster.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
-        registration.TryGetAction(Case.ActionName, out var declared).ShouldBeTrue(
-            $"'{Case.ActionName}' is the case's action and the provider does not declare it"
-        );
+        registration.TryGetAction(Case.ActionName, out var declared)
+            .ShouldBeTrue($"'{Case.ActionName}' is the case's action and the provider does not declare it");
 
         // ⚠ LONG-RUNNING IS ASKED FIRST, AND THE ORDER IS THE ASSERTION.
         //
@@ -1421,16 +1462,14 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             return;
         }
 
-        using var body = JsonDocument.Parse(
-            accepted.ActionResponse.Length == 0 ? "{}" : accepted.ActionResponse
-        );
+        using var body = JsonDocument.Parse(accepted.ActionResponse.Length == 0 ? "{}" : accepted.ActionResponse);
 
         shape.Validate(body.RootElement)
             .IsSuccess
-            .ShouldBeTrue(
-                "the handler's body does not match the response shape its provider published — which "
-                + "is what the OpenAPI document, the generated SDK and the portal form are built from"
-            );
+                .ShouldBeTrue(
+                    "the handler's body does not match the response shape its provider published — which "
+                    + "is what the OpenAPI document, the generated SDK and the portal form are built from"
+                );
     }
 
     [Fact]
@@ -1657,9 +1696,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     // what a fresh store per call would hide.
                     Cluster.Vault,
                     new RecordingLog()
-                ) {
-                    SecretWriter = Cluster.Vault
-                },
+                ) { SecretWriter = Cluster.Vault },
                 TestContext.Current.CancellationToken
             );
     }
@@ -1679,8 +1716,11 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         ProviderTestCluster<TSource>.Address(name).WithId(resourceId);
 
     /// <summary>
-    ///     Asks the case whether one object carries what a desired body asked for, <b>at a named
-    ///     address</b>.
+    ///     Asks the case whether one object carries what a desired body asked for,
+    ///     <b>
+    ///         at a named
+    ///         address
+    ///     </b>.
     /// </summary>
     /// <param name="resourceId">The resource's GUID.</param>
     /// <param name="name">Its name.</param>

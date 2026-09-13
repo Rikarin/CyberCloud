@@ -28,8 +28,11 @@ public sealed class RateLimitingTests {
     }
 
     /// <summary>
-    ///     ⚠ THE test for this stage. docs/plan/10 § Request pipeline: <i>"a rate limiter that costs
-    ///     a grain call is a rate limiter that amplifies an attack"</i>.
+    ///     ⚠ THE test for this stage. docs/plan/10 § Request pipeline:
+    ///     <i>
+    ///         "a rate limiter that costs
+    ///         a grain call is a rate limiter that amplifies an attack"
+    ///     </i>.
     /// </summary>
     /// <remarks>
     ///     The flood runs past the limit and into the <c>429</c>s, and the assertion is on the grain
@@ -118,8 +121,11 @@ public sealed class RateLimitingTests {
     ///     limits and get a concurrency limit instead.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Counting a 30-second long-poll against a 5-minute window is how you rate-limit your
-    ///     own portal.</b> A tab holding one poll open spends budget while doing nothing, and the
+    ///     ⚠
+    ///     <b>
+    ///         Counting a 30-second long-poll against a 5-minute window is how you rate-limit your
+    ///         own portal.
+    ///     </b> A tab holding one poll open spends budget while doing nothing, and the
     ///     symptom — the portal throttling itself while idle — reads as a platform fault.
     /// </remarks>
     [Theory]
@@ -145,9 +151,9 @@ public sealed class RateLimitingTests {
 
     [Fact]
     public void TheClassifierSeesTheExemptionsWithoutTheRegistry() {
-        var query = new QueryCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues> {
-            ["wait"] = "30"
-        });
+        var query = new QueryCollection(
+            new Dictionary<string, Microsoft.Extensions.Primitives.StringValues> { ["wait"] = "30" }
+        );
 
         GatewayRouter.Classify("/hubs/resources", "POST", new QueryCollection()).ShouldBe(RequestClass.Hub);
         GatewayRouter.Classify("/operations/x", "GET", query).ShouldBe(RequestClass.LongPoll);
@@ -159,8 +165,11 @@ public sealed class RateLimitingTests {
     ///     The exempt classes get a connection cap per tenant instead of a request count.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The other half of docs/plan/10 § Rate limiting's pair — streams per connection — is no
-    ///     longer asserted here, because it is no longer enforced here.</b> It bounds an interest set,
+    ///     ⚠
+    ///     <b>
+    ///         The other half of docs/plan/10 § Rate limiting's pair — streams per connection — is no
+    ///         longer asserted here, because it is no longer enforced here.
+    ///     </b> It bounds an interest set,
     ///     which is <c>ConnectionGrain</c>'s own state, and the grain moved to
     ///     <c>CyberCloud.ResourceManager</c> along with its cap
     ///     (<c>ConnectionLimits.StreamsPerConnection</c>). A limiter on this side would have been
@@ -192,7 +201,9 @@ public sealed class RateLimitingTests {
         first.Count.ShouldBe(1);
 
         clock.Advance(TimeSpan.FromSeconds(30));
-        (await counters.CountAsync("k", TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).Count.ShouldBe(2);
+        (await counters.CountAsync("k", TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).Count.ShouldBe(
+            2
+        );
 
         // The first entry has now fallen out of the window; the second has not.
         clock.Advance(TimeSpan.FromSeconds(31));

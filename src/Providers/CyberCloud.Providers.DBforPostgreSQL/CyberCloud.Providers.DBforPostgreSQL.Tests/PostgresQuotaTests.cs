@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Until the registry grew a derived-amount seam this type declared
-///         <see cref="QuotaMeter.Resources" /> and nothing else</b> — a count of one — because
+///         ⚠
+///         <b>
+///             Until the registry grew a derived-amount seam this type declared
+///             <see cref="QuotaMeter.Resources" /> and nothing else
+///         </b> — a count of one — because
 ///         <c>Meter(meter, amountPointer, fallback)</c> reserves the <i>number</i> at a JSON pointer and
 ///         none of vcpu, memoryGb or storageGb is a number in this body. <c>storage.size</c> is
 ///         <c>20Gi</c>, <c>sizing.cpu</c> is <c>500m</c>, and the ordinary body carries neither, because

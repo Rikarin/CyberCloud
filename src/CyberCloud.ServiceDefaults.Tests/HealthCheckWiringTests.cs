@@ -42,13 +42,13 @@ public sealed class HealthCheckWiringTests {
     [Fact]
     public void ExactlyOneCheckIsReadyOnASiloAndItIsTheSiloReadinessCheck() {
         var ready = Registrations(b => {
-                    b.AddServiceDefaults();
-                    b.AddOrleansHealthChecks();
-                }
-            )
-            .Registrations
-            .Where(x => x.Tags.Contains(HealthCheckTags.Ready))
-            .ToList();
+                b.AddServiceDefaults();
+                b.AddOrleansHealthChecks();
+            }
+        )
+                .Registrations
+                .Where(x => x.Tags.Contains(HealthCheckTags.Ready))
+                .ToList();
 
         ready.Count.ShouldBe(
             1,
@@ -65,11 +65,11 @@ public sealed class HealthCheckWiringTests {
         // The cascading-eviction guard: `cluster` describes PEERS. Wiring it into readiness means
         // one silo dying makes every survivor report the same degradation and get evicted too.
         var registrations = Registrations(b => {
-                    b.AddServiceDefaults();
-                    b.AddOrleansHealthChecks();
-                }
-            )
-            .Registrations;
+                b.AddServiceDefaults();
+                b.AddOrleansHealthChecks();
+            }
+        )
+                .Registrations;
 
         var cluster = registrations.Single(x => x.Name == "cluster");
         cluster.Tags.ShouldBeEmpty();
@@ -83,13 +83,13 @@ public sealed class HealthCheckWiringTests {
         // SiloReadinessHealthCheck resolves ILocalSiloDetails, which a client does not have. If it
         // were registered here the gateway would report Unhealthy forever with a DI error.
         var names = Registrations(b => {
-                    b.AddServiceDefaults();
-                    b.AddOrleansClientHealthChecks();
-                }
-            )
-            .Registrations
-            .Select(x => x.Name)
-            .ToList();
+                b.AddServiceDefaults();
+                b.AddOrleansClientHealthChecks();
+            }
+        )
+                .Registrations
+                .Select(x => x.Name)
+                .ToList();
 
         names.ShouldNotContain("silo-ready");
         names.ShouldNotContain("silo-participants");
@@ -105,12 +105,12 @@ public sealed class HealthCheckWiringTests {
         // SiloReadinessHealthCheck's remarks refuse by name. This is the assertion that keeps the
         // refusal true through a future edit.
         var registrations = Registrations(b => {
-                    b.AddServiceDefaults();
-                    b.AddOrleansHealthChecks();
-                    b.Services.AddDurableShardHealthCheck();
-                }
-            )
-            .Registrations;
+                b.AddServiceDefaults();
+                b.AddOrleansHealthChecks();
+                b.Services.AddDurableShardHealthCheck();
+            }
+        )
+                .Registrations;
 
         registrations.Single(x => x.Name == "durable-shards").Tags.ShouldBeEmpty();
 

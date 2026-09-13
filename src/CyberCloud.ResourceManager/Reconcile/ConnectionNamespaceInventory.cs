@@ -8,8 +8,11 @@ namespace CyberCloud.ResourceManager.Reconcile;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The work is <c>IKubeClusterConnection.ListNamespaceAsync</c> and this type is the
-///         translation, which is the whole of what belongs above the fabric.</b> Discovery of every
+///         ⚠
+///         <b>
+///             The work is <c>IKubeClusterConnection.ListNamespaceAsync</c> and this type is the
+///             translation, which is the whole of what belongs above the fabric.
+///         </b> Discovery of every
 ///         served namespaced kind and a list apiece is a Kubernetes concern and lives in
 ///         <c>CyberCloud.Kubernetes</c> behind the connection grain; what happens here is
 ///         <c>KubeObjectSummary</c> → <see cref="NamespaceOccupant" />, which is the one thing that
@@ -17,16 +20,22 @@ namespace CyberCloud.ResourceManager.Reconcile;
 ///         contracts and the fabric may not see them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It refuses rather than reporting an empty namespace, in both of the two ways it can
-///         fail.</b> A cluster with no connection is a refusal and not "nothing is there"; a listing
+///         ⚠
+///         <b>
+///             It refuses rather than reporting an empty namespace, in both of the two ways it can
+///             fail.
+///         </b> A cluster with no connection is a refusal and not "nothing is there"; a listing
 ///         that stopped part way is a refusal and not a shorter list. That is the same rule
 ///         <c>UnavailableNamespaceInventory</c> ships and it does not relax because a real
 ///         implementation exists — an empty listing is the answer that authorises a recursive delete
 ///         of a tenant's live data.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Not <c>IClusterObjectInventory</c>, and reusing it would have been the obvious
-///         move.</b> That seam selects on <c>cybercloud.io/managed-by=cybercloud</c> because a drift
+///         ⚠
+///         <b>
+///             Not <c>IClusterObjectInventory</c>, and reusing it would have been the obvious
+///             move.
+///         </b> That seam selects on <c>cybercloud.io/managed-by=cybercloud</c> because a drift
 ///         scan compares what the platform wrote against what it meant to write. This one has to find
 ///         the objects that selector excludes.
 ///     </para>

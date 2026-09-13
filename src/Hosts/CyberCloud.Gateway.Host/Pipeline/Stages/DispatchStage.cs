@@ -12,9 +12,12 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The other load-bearing stage, and the reason is what is <i>not</i> here.</b>
-///         docs/plan/10 § Request pipeline: <i>"Authorization inside dispatch rather than as gateway
-///         middleware means the gateway cannot be bypassed by a future internal caller, and there is
-///         exactly one enforcement seam."</i> There is no check in this file, no
+///         docs/plan/10 § Request pipeline:
+///         <i>
+///             "Authorization inside dispatch rather than as gateway
+///             middleware means the gateway cannot be bypassed by a future internal caller, and there is
+///             exactly one enforcement seam."
+///         </i> There is no check in this file, no
 ///         <c>IResourceAuthorizer</c> in this assembly's reference set, and
 ///         <c>GatewayIsolationTests</c> asserts both. A permission check appearing here would not be
 ///         a duplicate — it would be a <i>second</i> seam, and the one that gets updated when a rule
@@ -75,8 +78,7 @@ sealed class DispatchStage(
         var value = status.GetValueOrThrow();
 
         var outcome = new GatewayOutcome {
-            StatusCode = StatusCodes.Status200OK,
-            Json = ResponseBodies.Operation(value)
+            StatusCode = StatusCodes.Status200OK, Json = ResponseBodies.Operation(value)
         };
 
         // ⚠ Retry-After only while the operation is running. Sending it on a terminal status tells a
@@ -101,7 +103,9 @@ sealed class DispatchStage(
 
             return read.TryGetError(out var readError)
                 ? ResultShaper.Shape(readError, path)
-                : new() { StatusCode = StatusCodes.Status200OK, Json = ResponseBodies.Resource(read.GetValueOrThrow()) };
+                : new() {
+                    StatusCode = StatusCodes.Status200OK, Json = ResponseBodies.Resource(read.GetValueOrThrow())
+                };
         }
 
         var accepted = HttpMethods.IsDelete(context.Http.Request.Method)
@@ -118,8 +122,11 @@ sealed class DispatchStage(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>201</c> on a create and <c>200</c> on a repeat, with no <c>202</c> and no
-    ///         <c>Azure-AsyncOperation</c> anywhere.</b> A subscription and a resource group are one
+    ///         ⚠
+    ///         <b>
+    ///             <c>201</c> on a create and <c>200</c> on a repeat, with no <c>202</c> and no
+    ///             <c>Azure-AsyncOperation</c> anywhere.
+    ///         </b> A subscription and a resource group are one
     ///         grain activation each and converge before the call returns, so there is nothing to
     ///         poll — and a <c>202</c> here would advertise an operation URL that answers <c>404</c>
     ///         to every client polite enough to follow it, which is the mistake
@@ -132,8 +139,11 @@ sealed class DispatchStage(
     ///         <c>GatewayIsolationTests</c> reads this project's source for that.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>DELETE</c> serves a resource group and refuses a subscription and a tenant,
-    ///         and it answers <c>204</c> rather than <c>202</c>.</b> It does <b>not</b> cascade: a
+    ///         ⚠
+    ///         <b>
+    ///             <c>DELETE</c> serves a resource group and refuses a subscription and a tenant,
+    ///             and it answers <c>204</c> rather than <c>202</c>.
+    ///         </b> It does <b>not</b> cascade: a
     ///         group that still holds resources is refused, naming them, because a cascade is a
     ///         per-resource delete with each resource's own lock, authorization, soft-delete window
     ///         and failable teardown, and one that skipped those would be a way to delete a locked
@@ -151,9 +161,7 @@ sealed class DispatchStage(
 
         var request = new ScopeRequest {
             // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
-            Path = context.Route.ResourcePath,
-            Body = context.Body,
-            Caller = context.Caller
+            Path = context.Route.ResourcePath, Body = context.Body, Caller = context.Caller
         };
 
         if (HttpMethods.IsGet(method)) {
@@ -220,16 +228,22 @@ sealed class DispatchStage(
     ///         <c>IResourceAuthorizer</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>$top</c> is parsed leniently and <c>$skipToken</c> is passed through
-    ///         verbatim.</b> A <c>$top</c> that is not a number is <i>ignored</i> rather than
+    ///         ⚠
+    ///         <b>
+    ///             <c>$top</c> is parsed leniently and <c>$skipToken</c> is passed through
+    ///             verbatim.
+    ///         </b> A <c>$top</c> that is not a number is <i>ignored</i> rather than
     ///         refused, because the page size is a hint the platform clamps anyway — see
     ///         <c>ListRequest.PageSize</c>. A <c>$skipToken</c> naming a path in another tenant
     ///         changes nothing: the manager resumes at "the next member of THIS group whose path
     ///         sorts after this string", and the group it walks came from the rebuilt address.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And the parsed <c>$top</c> is used twice — for this page and for the
-    ///         <c>nextLink</c> of the next one (#76).</b> A page-shaping parameter that reaches the
+    ///         ⚠
+    ///         <b>
+    ///             And the parsed <c>$top</c> is used twice — for this page and for the
+    ///             <c>nextLink</c> of the next one (#76).
+    ///         </b> A page-shaping parameter that reaches the
     ///         manager but not the link the client is told to follow applies to page one and to
     ///         nothing after it, with no error anywhere; the argument is on
     ///         <c>GatewayRouterPaths.NextLink</c>. Reading it into a local rather than parsing it
@@ -316,21 +330,20 @@ sealed class DispatchStage(
     /// </remarks>
     GatewayOutcome Accepted(GatewayRequestContext context, WriteAccepted accepted) =>
         new GatewayOutcome {
-            StatusCode = StatusCodes.Status202Accepted,
-            Json = ResponseBodies.Resource(accepted.Resource)
+            StatusCode = StatusCodes.Status202Accepted, Json = ResponseBodies.Resource(accepted.Resource)
         }
-        .WithHeader(
-            GatewayHeaders.AsyncOperation,
-            GatewayRouterPaths.AsyncOperation(
-                options.PublicBaseUri,
-                accepted.OperationId,
-                context.ApiVersion.Value
-            )
-        )
-        .WithHeader(
-            GatewayHeaders.RetryAfter,
-            accepted.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture)
-        );
+                .WithHeader(
+                    GatewayHeaders.AsyncOperation,
+                    GatewayRouterPaths.AsyncOperation(
+                        options.PublicBaseUri,
+                        accepted.OperationId,
+                        context.ApiVersion.Value
+                    )
+                )
+                .WithHeader(
+                    GatewayHeaders.RetryAfter,
+                    accepted.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture)
+                );
 
     static GatewayOutcome OpenApi(GatewayRequestContext context) =>
         new() {

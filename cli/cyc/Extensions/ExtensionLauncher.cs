@@ -1,7 +1,7 @@
-using System.ComponentModel;
-using System.Diagnostics;
 using CyberCloud.Cli.Configuration;
 using CyberCloud.Cli.Output;
+using System.ComponentModel;
+using System.Diagnostics;
 
 namespace CyberCloud.Cli.Extensions;
 
@@ -16,8 +16,11 @@ namespace CyberCloud.Cli.Extensions;
 ///         and in any CI step that prints its environment. <see cref="EnvironmentFor" /> passes
 ///         <i>context</i> — endpoint, profile, subscription, tenant, api-version, output format — and
 ///         <see cref="ExecutableVariable" />, the absolute path of the running <c>cyc</c>. The
-///         extension asks for a token by running <c>$CYC_EXECUTABLE account get-access-token --output
-///         json</c>, which is <c>gh</c>'s <c>gh auth token</c> arrangement and, better, a contract
+///         extension asks for a token by running
+///         <c>
+/// $CYC_EXECUTABLE account get-access-token --output
+///         json
+///         </c>, which is <c>gh</c>'s <c>gh auth token</c> arrangement and, better, a contract
 ///         this repository already has: <c>CyberCloudCliCredential</c> issues exactly that command, so
 ///         a .NET extension writes <c>new CyberCloudCliCredential()</c> and is done. The token stays
 ///         in the OS keychain, the SDK stays the only thing that speaks OAuth, and the credential's
@@ -74,7 +77,8 @@ static class ExtensionLauncher {
         CycSettings settings,
         string apiVersion,
         OutputFormat format,
-        string? executable) {
+        string? executable
+    ) {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -83,20 +87,22 @@ static class ExtensionLauncher {
             [CycSettings.VariableFor("profile")] = settings.Profile,
             [CycSettings.VariableFor("endpoint")] = settings.Endpoint.ToString(),
             [CycSettings.VariableFor("api-version")] = apiVersion,
-            [CycSettings.VariableFor("output")] = OutputFormats.NameOf(format),
+            [CycSettings.VariableFor("output")] = OutputFormats.NameOf(format)
         };
 
         Add("subscription", settings.Get("subscription"));
         Add("tenant", settings.Get("tenant"));
 
-        if (executable is { Length: > 0 })
+        if (executable is { Length: > 0 }) {
             variables[ExecutableVariable] = executable;
+        }
 
         return variables;
 
         void Add(string key, string? value) {
-            if (value is { Length: > 0 })
+            if (value is { Length: > 0 }) {
                 variables[CycSettings.VariableFor(key)] = value;
+            }
         }
     }
 
@@ -121,26 +127,31 @@ static class ExtensionLauncher {
             // means the arguments below are passed as an array and never go near a command
             // interpreter, so a resource name with a space or a quote in it cannot become a second
             // argument.
-            UseShellExecute = false,
+            UseShellExecute = false
         };
 
-        foreach (var argument in launch.Arguments)
+        foreach (var argument in launch.Arguments) {
             start.ArgumentList.Add(argument);
+        }
 
-        foreach (var variable in launch.Environment)
+        foreach (var variable in launch.Environment) {
             start.Environment[variable.Key] = variable.Value;
+        }
 
         Process child;
 
         try {
             child = Process.Start(start)
-                ?? throw new CycClientException($"'{launch.Executable}' did not start, and the operating system gave no reason.");
+                ?? throw new CycClientException(
+                    $"'{launch.Executable}' did not start, and the operating system gave no reason."
+                );
         } catch (Win32Exception e) {
             throw new CycClientException(
                 $"'{launch.Executable}' could not be run: {e.Message} It is installed as a cyc extension, so it has to be an "
                 + "executable this machine can run — check that it is built for this architecture and reinstall it with "
                 + "'cyc extension add'.",
-                e);
+                e
+            );
         }
 
         using (child) {
@@ -160,9 +171,13 @@ static class ExtensionLauncher {
 
     static void Kill(Process child) {
         try {
-            if (!child.HasExited)
+            if (!child.HasExited) {
                 child.Kill(entireProcessTree: true);
-        } catch (Exception e) when (e is InvalidOperationException or NotSupportedException or Win32Exception or AggregateException) {
+            }
+        } catch (Exception e) when (e is InvalidOperationException
+                                        or NotSupportedException
+                                        or Win32Exception
+                                        or AggregateException) {
             // It exited between the question and the signal, which is the outcome the signal wanted.
         }
     }

@@ -10,9 +10,12 @@ namespace CyberCloud.Sdk;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Never a plaintext file.</b> docs/plan/21 § `cyc`, on the token cache row: <i>"OS
-///         keychain (DPAPI / Keychain / libsecret). ⚠ <b>Never a plaintext file</b> — that is how CI
-///         credentials leak into container images."</i> Every implementation of this interface that
+///         ⚠ <b>Never a plaintext file.</b> docs/plan/21 § `cyc`, on the token cache row:
+///         <i>
+///             "OS
+///             keychain (DPAPI / Keychain / libsecret). ⚠ <b>Never a plaintext file</b> — that is how CI
+///             credentials leak into container images."
+///         </i> Every implementation of this interface that
 ///         ships here is a keychain or a process-lifetime dictionary; there is no file-backed one to
 ///         reach for in a hurry.
 ///     </para>
@@ -63,14 +66,17 @@ public static class TokenCache {
     ///     fallback is silent to the caller and visible through <see cref="ITokenCache.IsAvailable" />.
     /// </remarks>
     public static ITokenCache CreatePersistent() {
-        if (OperatingSystem.IsMacOS())
+        if (OperatingSystem.IsMacOS()) {
             return Fallback(new MacOsKeychainTokenCache());
+        }
 
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows()) {
             return Fallback(new WindowsCredentialManagerTokenCache());
+        }
 
-        if (OperatingSystem.IsLinux())
+        if (OperatingSystem.IsLinux()) {
             return Fallback(new LibSecretTokenCache());
+        }
 
         return None;
 
@@ -87,15 +93,16 @@ public static class TokenCache {
     /// <param name="authority">The identity host.</param>
     /// <param name="clientId">The OAuth client id.</param>
     /// <param name="tenantId">The tenant, or <see langword="null" />.</param>
-    public static string KeyFor(Uri authority, string clientId, string? tenantId)
-        => string.Create(CultureInfo.InvariantCulture, $"{authority.Host}|{clientId}|{tenantId ?? "-"}");
+    public static string KeyFor(Uri authority, string clientId, string? tenantId) =>
+        string.Create(CultureInfo.InvariantCulture, $"{authority.Host}|{clientId}|{tenantId ?? "-"}");
 
-    internal static byte[] Serialise(TokenCacheRecord record)
-        => JsonSerializer.SerializeToUtf8Bytes(record, SdkJsonContext.Default.TokenCacheRecord);
+    internal static byte[] Serialise(TokenCacheRecord record) =>
+        JsonSerializer.SerializeToUtf8Bytes(record, SdkJsonContext.Default.TokenCacheRecord);
 
     internal static TokenCacheRecord? Deserialise(ReadOnlySpan<byte> bytes) {
-        if (bytes.IsEmpty)
+        if (bytes.IsEmpty) {
             return null;
+        }
 
         try {
             return JsonSerializer.Deserialize(bytes, SdkJsonContext.Default.TokenCacheRecord);
@@ -111,11 +118,11 @@ public static class TokenCache {
 sealed class NullTokenCache : ITokenCache {
     public bool IsAvailable => false;
 
-    public ValueTask<TokenCacheRecord?> GetAsync(string key, CancellationToken cancellationToken = default)
-        => ValueTask.FromResult<TokenCacheRecord?>(null);
+    public ValueTask<TokenCacheRecord?> GetAsync(string key, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<TokenCacheRecord?>(null);
 
-    public ValueTask SetAsync(string key, TokenCacheRecord record, CancellationToken cancellationToken = default)
-        => ValueTask.CompletedTask;
+    public ValueTask SetAsync(string key, TokenCacheRecord record, CancellationToken cancellationToken = default) =>
+        ValueTask.CompletedTask;
 
     public ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 }
@@ -130,22 +137,25 @@ public sealed class InMemoryTokenCache : ITokenCache {
 
     /// <inheritdoc />
     public ValueTask<TokenCacheRecord?> GetAsync(string key, CancellationToken cancellationToken = default) {
-        lock (gate)
+        lock (gate) {
             return ValueTask.FromResult(entries.GetValueOrDefault(key));
+        }
     }
 
     /// <inheritdoc />
     public ValueTask SetAsync(string key, TokenCacheRecord record, CancellationToken cancellationToken = default) {
-        lock (gate)
+        lock (gate) {
             entries[key] = record;
+        }
 
         return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc />
     public ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default) {
-        lock (gate)
+        lock (gate) {
             entries.Remove(key);
+        }
 
         return ValueTask.CompletedTask;
     }
@@ -156,8 +166,11 @@ public sealed class InMemoryTokenCache : ITokenCache {
 ///     <c>CredWriteW</c> / <c>CredDeleteW</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>P/Invoke rather than <c>System.Security.Cryptography.ProtectedData</c>, and the reason is
-///     the dependency register.</b> DPAPI's managed wrapper is a NuGet package that docs/plan/02 does
+///     ⚠
+///     <b>
+///         P/Invoke rather than <c>System.Security.Cryptography.ProtectedData</c>, and the reason is
+///         the dependency register.
+///     </b> DPAPI's managed wrapper is a NuGet package that docs/plan/02 does
 ///     not list, and docs/plan/02's own rule is that a package not in the register needs an ADR.
 ///     Credential Manager is in the OS, reachable with <c>[LibraryImport]</c> — which the AOT analyser
 ///     is happy with — and is the store a Windows user can actually inspect and revoke, which a
@@ -171,8 +184,9 @@ sealed partial class WindowsCredentialManagerTokenCache : ITokenCache {
     public bool IsAvailable => OperatingSystem.IsWindows();
 
     public ValueTask<TokenCacheRecord?> GetAsync(string key, CancellationToken cancellationToken = default) {
-        if (!CredRead(TargetName(key), CredentialTypeGeneric, 0, out var handle))
+        if (!CredRead(TargetName(key), CredentialTypeGeneric, 0, out var handle)) {
             return ValueTask.FromResult<TokenCacheRecord?>(null);
+        }
 
         try {
             var credential = Marshal.PtrToStructure<Credential>(handle);
@@ -198,11 +212,14 @@ sealed partial class WindowsCredentialManagerTokenCache : ITokenCache {
                 TargetName = target,
                 CredentialBlobSize = bytes.Length,
                 CredentialBlob = blob,
-                Persist = CredentialPersistLocalMachine,
+                Persist = CredentialPersistLocalMachine
             };
 
-            if (!CredWrite(ref credential, 0))
-                throw new AuthenticationFailedException("The token cache entry could not be written to Credential Manager.");
+            if (!CredWrite(ref credential, 0)) {
+                throw new AuthenticationFailedException(
+                    "The token cache entry could not be written to Credential Manager."
+                );
+            }
         } finally {
             // ⚠ Zeroed before it is freed. A refresh token left in released unmanaged memory is a
             // refresh token in whatever allocates that page next, and this is the one place in the SDK
@@ -240,7 +257,12 @@ sealed partial class WindowsCredentialManagerTokenCache : ITokenCache {
         public nint UserName;
     }
 
-    [LibraryImport("advapi32.dll", EntryPoint = "CredReadW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    [LibraryImport(
+        "advapi32.dll",
+        EntryPoint = "CredReadW",
+        StringMarshalling = StringMarshalling.Utf16,
+        SetLastError = true
+    )]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool CredRead(string target, int type, int reservedFlag, out nint credential);
 
@@ -248,7 +270,12 @@ sealed partial class WindowsCredentialManagerTokenCache : ITokenCache {
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool CredWrite(ref Credential credential, int flags);
 
-    [LibraryImport("advapi32.dll", EntryPoint = "CredDeleteW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    [LibraryImport(
+        "advapi32.dll",
+        EntryPoint = "CredDeleteW",
+        StringMarshalling = StringMarshalling.Utf16,
+        SetLastError = true
+    )]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool CredDelete(string target, int type, int flags);
 

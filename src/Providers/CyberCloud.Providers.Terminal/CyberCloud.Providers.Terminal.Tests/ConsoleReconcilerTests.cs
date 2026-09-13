@@ -190,9 +190,10 @@ public sealed class ConsoleReconcilerTests {
             RecordingConnection.Key(CloudConsoles.HomeClaimRef(Namespace, "observed"))
         ];
 
-        JsonNode.Parse(claim)!.AsObject().ContainsKey("status").ShouldBeFalse(
-            "the harness supplied a status, so this test no longer proves convergence ignores one"
-        );
+        JsonNode.Parse(claim)!
+            .AsObject()
+            .ContainsKey("status")
+            .ShouldBeFalse("the harness supplied a status, so this test no longer proves convergence ignores one");
     }
 
     [Fact]
@@ -237,9 +238,8 @@ public sealed class ConsoleReconcilerTests {
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
-        connection.Applied.Select(x => x.Target.Kind.Kind).ShouldBe(
-            ["PersistentVolumeClaim", "ServiceAccount", "NetworkPolicy"]
-        );
+        connection.Applied.Select(x => x.Target.Kind.Kind)
+            .ShouldBe(["PersistentVolumeClaim", "ServiceAccount", "NetworkPolicy"]);
     }
 
     [Fact]
@@ -260,9 +260,8 @@ public sealed class ConsoleReconcilerTests {
         torn.IsConverged.ShouldBeTrue(torn.ToString());
         connection.Objects.ShouldBeEmpty();
 
-        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(
-            ["Pod", "NetworkPolicy", "ServiceAccount", "PersistentVolumeClaim"]
-        );
+        connection.Deleted.Select(x => x.Kind.Kind)
+            .ShouldBe(["Pod", "NetworkPolicy", "ServiceAccount", "PersistentVolumeClaim"]);
 
         // ⚠ FOREGROUND. A background cascade returns as soon as the object is marked, so the read-back
         // could report "not found" for a shell whose container was still running — and a console that
@@ -476,8 +475,7 @@ public sealed class ConsoleReconcilerTests {
         JsonNode.Parse(accountJson)!["metadata"]!["annotations"]![CloudConsoles.PrincipalAnnotation]!
             .GetValue<string>();
 
-    internal static JsonArray Egress(string policyJson) =>
-        JsonNode.Parse(policyJson)!["spec"]!["egress"]!.AsArray();
+    internal static JsonArray Egress(string policyJson) => JsonNode.Parse(policyJson)!["spec"]!["egress"]!.AsArray();
 
     static string TenantSelector(string policyJson) =>
         Egress(policyJson)

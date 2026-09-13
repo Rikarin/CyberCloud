@@ -56,9 +56,8 @@ public sealed class PostgresDeclarationTests {
 
         parsed.Type.Namespace.ShouldBe("CyberCloud.DBforPostgreSQL");
         parsed.Type.Type.ShouldBe("servers");
-        registry.TryGetType(parsed.Type, out _).ShouldBeTrue(
-            "a path that round-tripped through the gateway's own parser no longer finds the type"
-        );
+        registry.TryGetType(parsed.Type, out _)
+            .ShouldBeTrue("a path that round-tripped through the gateway's own parser no longer finds the type");
     }
 
     [Fact]
@@ -99,11 +98,26 @@ public sealed class PostgresDeclarationTests {
     ///     the FIRST problem found.
     /// </remarks>
     [Theory]
-    [InlineData("""{"properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"17","replicas":2,"storage":{"size":"20Gi"}}}""", "/location")]
-    [InlineData("""{"location":"eu-central","properties":{"version":"17","replicas":2,"storage":{"size":"20Gi"}}}""", "/properties/clusterId")]
-    [InlineData("""{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","replicas":2,"storage":{"size":"20Gi"}}}""", "/properties/version")]
-    [InlineData("""{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"17","storage":{"size":"20Gi"}}}""", "/properties/replicas")]
-    [InlineData("""{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"17","replicas":2}}""", "/properties/storage/size")]
+    [InlineData(
+        """{"properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"17","replicas":2,"storage":{"size":"20Gi"}}}""",
+        "/location"
+    )]
+    [InlineData(
+        """{"location":"eu-central","properties":{"version":"17","replicas":2,"storage":{"size":"20Gi"}}}""",
+        "/properties/clusterId"
+    )]
+    [InlineData(
+        """{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","replicas":2,"storage":{"size":"20Gi"}}}""",
+        "/properties/version"
+    )]
+    [InlineData(
+        """{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"17","storage":{"size":"20Gi"}}}""",
+        "/properties/replicas"
+    )]
+    [InlineData(
+        """{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","version":"17","replicas":2}}""",
+        "/properties/storage/size"
+    )]
     public void EveryRequiredPropertyIsActuallyRequired(string body, string expectedTarget) {
         using var document = JsonDocument.Parse(body);
 
@@ -118,9 +132,12 @@ public sealed class PostgresDeclarationTests {
     ///     spelled.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>These are the ones worth a test rather than a declaration, because the alternative to
-    ///     each is a body that validates and then produces a CR the API server refuses AFTER the
-    ///     caller was told 202.</b> A tenant reads that as "the platform accepted my request and lost
+    ///     ⚠
+    ///     <b>
+    ///         These are the ones worth a test rather than a declaration, because the alternative to
+    ///         each is a body that validates and then produces a CR the API server refuses AFTER the
+    ///         caller was told 202.
+    ///     </b> A tenant reads that as "the platform accepted my request and lost
     ///     it", and the reason is in an operator's event stream rather than in the operation's error.
     /// </remarks>
     [Theory]
@@ -156,9 +173,8 @@ public sealed class PostgresDeclarationTests {
         // pattern that refused one would be a pattern refusing the chart's own documented values.
         using var document = JsonDocument.Parse(BodyWith(jsonPointer, literal));
 
-        PostgresServers.Schema2026.Validate(document.RootElement).IsSuccess.ShouldBeTrue(
-            $"'{jsonPointer}' refused {literal}"
-        );
+        PostgresServers.Schema2026.Validate(document.RootElement)
+            .IsSuccess.ShouldBeTrue($"'{jsonPointer}' refused {literal}");
     }
 
     [Fact]
@@ -203,9 +219,7 @@ public sealed class PostgresDeclarationTests {
     ///     somebody else owns.
     /// </remarks>
     static string BodyWith(string pointer, string literal) {
-        var body = JsonNode.Parse(
-            PostgresServers.Body(Guid.Parse("7b6a5c4d-0000-4000-8000-000000000001"))
-        )!.AsObject();
+        var body = JsonNode.Parse(PostgresServers.Body(Guid.Parse("7b6a5c4d-0000-4000-8000-000000000001")))!.AsObject();
 
         Place(body, pointer, JsonNode.Parse(literal));
         return body.ToJsonString();

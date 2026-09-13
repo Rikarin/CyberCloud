@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Messaging.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Two class declarations, which is the whole cost of putting a THIRD type in this
-///         namespace under the cluster-backed suite.</b> The case is <see cref="RabbitmqCase" /> —
+///         ⚠
+///         <b>
+///             Two class declarations, which is the whole cost of putting a THIRD type in this
+///             namespace under the cluster-backed suite.
+///         </b> The case is <see cref="RabbitmqCase" /> —
 ///         the one <c>CyberCloud.Providers.Messaging.Conformance</c> already declares — so a provider
 ///         under both halves of the suite is described exactly once. The NATS file next to this one
 ///         made that claim for a second type; a third at the same price is what makes it a shape
@@ -27,8 +30,11 @@ namespace CyberCloud.Providers.Messaging.ClusterConformance;
 ///         <c>RabbitmqOpenApiCasingTests</c> also pins as a literal without a cluster.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The derived stub is a stub, and on this operator that gap is wider than on the other
-///         two.</b> A definition derived from group, version, kind and plural has no schema, no
+///         ⚠
+///         <b>
+///             The derived stub is a stub, and on this operator that gap is wider than on the other
+///             two.
+///         </b> A definition derived from group, version, kind and plural has no schema, no
 ///         <c>default:</c> values and no admission webhook — where the real
 ///         <c>rabbitmq.com_rabbitmqclusters.yaml</c> has all three, including a mutating webhook with
 ///         <c>failurePolicy: Fail</c> that writes <c>spec.image</c>. So this suite proves the object

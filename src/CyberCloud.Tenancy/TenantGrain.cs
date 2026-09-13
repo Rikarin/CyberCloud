@@ -10,7 +10,8 @@ namespace CyberCloud.Tenancy;
 ///     <see cref="ITenantGrain" /> — Entity, Durable, key <c>tenant/{tenantId:N}</c>.
 /// </summary>
 public sealed class TenantGrain(
-    [PersistentState("tenant", StorageTiers.Durable)] IPersistentState<TenantState> state,
+    [PersistentState("tenant", StorageTiers.Durable)]
+    IPersistentState<TenantState> state,
     IClock clock
 )
     : Grain, ITenantGrain {
@@ -25,12 +26,15 @@ public sealed class TenantGrain(
     /// </remarks>
     static readonly Dictionary<TenantStatus, TenantStatus[]> Allowed = new() {
         [TenantStatus.Provisioning] = [TenantStatus.Active, TenantStatus.Disabled, TenantStatus.PendingDeletion],
-        [TenantStatus.Active] =
-            [TenantStatus.Warned, TenantStatus.Suspended, TenantStatus.Disabled, TenantStatus.PendingDeletion],
-        [TenantStatus.Warned] =
-            [TenantStatus.Active, TenantStatus.Suspended, TenantStatus.Disabled, TenantStatus.PendingDeletion],
-        [TenantStatus.Suspended] =
-            [TenantStatus.Active, TenantStatus.Warned, TenantStatus.Disabled, TenantStatus.PendingDeletion],
+        [TenantStatus.Active] = [
+            TenantStatus.Warned, TenantStatus.Suspended, TenantStatus.Disabled, TenantStatus.PendingDeletion
+        ],
+        [TenantStatus.Warned] = [
+            TenantStatus.Active, TenantStatus.Suspended, TenantStatus.Disabled, TenantStatus.PendingDeletion
+        ],
+        [TenantStatus.Suspended] = [
+            TenantStatus.Active, TenantStatus.Warned, TenantStatus.Disabled, TenantStatus.PendingDeletion
+        ],
         [TenantStatus.Disabled] = [TenantStatus.Active, TenantStatus.PendingDeletion],
         [TenantStatus.PendingDeletion] = [TenantStatus.Active, TenantStatus.Purged],
         [TenantStatus.Purged] = []

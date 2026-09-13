@@ -11,7 +11,8 @@ namespace CyberCloud.Tenancy;
 ///     <see cref="IResourceIndexGrain" /> — Index, Durable, key <c>idx/path/{digest}</c>.
 /// </summary>
 public sealed class ResourceIndexGrain(
-    [PersistentState("index", StorageTiers.Durable)] IPersistentState<IndexState> state,
+    [PersistentState("index", StorageTiers.Durable)]
+    IPersistentState<IndexState> state,
     IClock clock
 )
     : Grain, IResourceIndexGrain {
@@ -186,12 +187,12 @@ public sealed class ResourceIndexGrain(
                         // unreachable; if it ever were reachable, a refusal naming a type nobody can
                         // act on is worse than one that undercounts, and the count would be visible in
                         // the resource-graph projection either way.
-                        .Where(x => x.Value > 0 && ResourceTypeName.TryParse(x.Key, out _))
-                        // Ordered so a refusal message is the same on every retry. An unordered
-                        // dictionary would make "2 databases and 1 firewallRule" and the reverse the
-                        // same refusal with two different texts, which reads as two different faults.
-                        .OrderBy(x => x.Key, StringComparer.Ordinal)
-                        .Select(x => new ChildTypeCount { Type = Parse(x.Key), Count = x.Value })
+                            .Where(x => x.Value > 0 && ResourceTypeName.TryParse(x.Key, out _))
+                            // Ordered so a refusal message is the same on every retry. An unordered
+                            // dictionary would make "2 databases and 1 firewallRule" and the reverse the
+                            // same refusal with two different texts, which reads as two different faults.
+                            .OrderBy(x => x.Key, StringComparer.Ordinal)
+                            .Select(x => new ChildTypeCount { Type = Parse(x.Key), Count = x.Value })
                 ]
             )
         );
@@ -307,7 +308,8 @@ public sealed class ResourceIndexGrain(
 ///     <see cref="IEmailIndexGrain" /> — Index, Durable, key <c>idx/email/{digest}</c>.
 /// </summary>
 public sealed class EmailIndexGrain(
-    [PersistentState("index", StorageTiers.Durable)] IPersistentState<IndexState> state,
+    [PersistentState("index", StorageTiers.Durable)]
+    IPersistentState<IndexState> state,
     IClock clock
 )
     : Grain, IEmailIndexGrain {

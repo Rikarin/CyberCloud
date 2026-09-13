@@ -10,14 +10,18 @@ namespace CyberCloud.ResourceManager.Grains;
 ///     <see cref="IResourceGrain" /> — Entity, Durable, key <c>res/{resourceId:N}</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This grain never provisions inline.</b> docs/plan/08 § The reconcile loop: <i>"The
-///     resource grain never provisions inline. It records intent and returns; a reminder drives
-///     convergence."</i> Nothing here calls a reconciler, reaches a cluster, or awaits anything but
+///     ⚠ <b>This grain never provisions inline.</b> docs/plan/08 § The reconcile loop:
+///     <i>
+///         "The
+///         resource grain never provisions inline. It records intent and returns; a reminder drives
+///         convergence."
+///     </i> Nothing here calls a reconciler, reaches a cluster, or awaits anything but
 ///     its own storage — which is what keeps a <c>PUT</c> a sub-millisecond write rather than a
 ///     four-minute request.
 /// </remarks>
 public sealed class ResourceGrain(
-    [PersistentState("resource", StorageTiers.Durable)] IPersistentState<ResourceState> state,
+    [PersistentState("resource", StorageTiers.Durable)]
+    IPersistentState<ResourceState> state,
     IClock clock
 )
     : Grain, IResourceGrain {
@@ -73,7 +77,7 @@ public sealed class ResourceGrain(
         if (state.State.OperationId != Guid.Empty
             && state.State.OperationId != submission.OperationId
             && state.State.ProvisioningState
-                is ProvisioningState.Creating or ProvisioningState.Updating or ProvisioningState.Deleting) {
+            is ProvisioningState.Creating or ProvisioningState.Updating or ProvisioningState.Deleting) {
             return Result<ResourceSnapshot>.Failure(
                 ErrorCode.OperationInProgress,
                 $"Operation {state.State.OperationId:D} is already driving '{submission.Path}' and it "
@@ -209,7 +213,7 @@ public sealed class ResourceGrain(
         if (state.State.OperationId != Guid.Empty
             && state.State.OperationId != operationId
             && state.State.ProvisioningState
-                is ProvisioningState.Creating or ProvisioningState.Updating or ProvisioningState.Deleting) {
+            is ProvisioningState.Creating or ProvisioningState.Updating or ProvisioningState.Deleting) {
             return Result<ResourceSnapshot>.Failure(
                 ErrorCode.OperationInProgress,
                 $"Operation {state.State.OperationId:D} is already driving '{state.State.Path}' and it "
@@ -527,8 +531,7 @@ public sealed class ResourceGrain(
                     "A resource body is a JSON object.",
                     ""
                 );
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             return Result<JsonObject>.Failure(
                 ErrorCode.InvalidRequestBody,
                 // ⚠ The parser's message names the offset and the token and nothing about our stack —
@@ -586,6 +589,5 @@ public sealed class ResourceGrain(
             $"Resource {resourceId:D} does not exist."
         );
 
-    Result NotFound() =>
-        Result.Failure(ErrorCode.ResourceNotFound, $"Resource {resourceId:D} does not exist.");
+    Result NotFound() => Result.Failure(ErrorCode.ResourceNotFound, $"Resource {resourceId:D} does not exist.");
 }

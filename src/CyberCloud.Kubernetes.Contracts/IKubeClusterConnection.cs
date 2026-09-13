@@ -51,10 +51,16 @@ public interface IKubeClusterConnection {
     ///     distinguishable — the first converges a delete, the second must not.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>This member is what makes clause 4 of the reconciler contract satisfiable, and it was
-    ///     added by the first provider that tried.</b> docs/plan/08 § The reconcile loop: <i>"Observes,
-    ///     never assumes. <c>Converged</c> means it read back the desired shape, not that the apply
-    ///     returned 200."</i> Before this, the only members here were
+    ///     ⚠
+    ///     <b>
+    ///         This member is what makes clause 4 of the reconciler contract satisfiable, and it was
+    ///         added by the first provider that tried.
+    ///     </b> docs/plan/08 § The reconcile loop:
+    ///     <i>
+    ///         "Observes,
+    ///         never assumes. <c>Converged</c> means it read back the desired shape, not that the apply
+    ///         returned 200."
+    ///     </i> Before this, the only members here were
     ///     <see cref="ApplyAsync" /> and <see cref="DeleteAsync" /> — both writes — so a reconciler
     ///     given nothing but this connection could only report <c>Converged</c> by remembering that an
     ///     apply had succeeded, which is the exact violation the clause names and which
@@ -82,15 +88,21 @@ public interface IKubeClusterConnection {
     /// <param name="ns">The namespace to enumerate.</param>
     /// <param name="cancellationToken">The caller's budget.</param>
     /// <returns>
-    ///     Every object, or the failure that stopped the enumeration. ⚠ <b>Never a partial
-    ///     listing.</b> An implementation that returned what it managed to read would report the
+    ///     Every object, or the failure that stopped the enumeration. ⚠
+    ///     <b>
+    ///         Never a partial
+    ///         listing.
+    ///     </b> An implementation that returned what it managed to read would report the
     ///     kinds it could not reach as absent, and absence here is what authorises deleting the
     ///     namespace.
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS THE FIRST READ MEMBER HERE THAT IS NOT KEYED BY AN OBJECT, AND IT WAS
-    ///         ADDED BY THE ONE CALLER THAT CANNOT BE EXPRESSED WITHOUT IT.</b> Until it existed the
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS THE FIRST READ MEMBER HERE THAT IS NOT KEYED BY AN OBJECT, AND IT WAS
+    ///             ADDED BY THE ONE CALLER THAT CANNOT BE EXPRESSED WITHOUT IT.
+    ///         </b> Until it existed the
     ///         interface had <see cref="ApplyAsync" />, <see cref="GetAsync" /> and
     ///         <see cref="DeleteAsync" /> — two writes and a read of a name you already know — so a
     ///         component asking "what is in this namespace" had nowhere to ask. That is why
@@ -98,8 +110,11 @@ public interface IKubeClusterConnection {
     ///         and why <c>INamespaceInventory</c> had no implementation.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Not <c>IClusterObjectInventory</c>, and the difference is the whole safety of a
-    ///         namespace delete.</b> That seam selects on
+    ///         ⚠
+    ///         <b>
+    ///             Not <c>IClusterObjectInventory</c>, and the difference is the whole safety of a
+    ///             namespace delete.
+    ///         </b> That seam selects on
     ///         <c>cybercloud.io/managed-by=cybercloud</c> because a drift scan compares what the
     ///         platform wrote against what it meant to write. This one must find the objects that
     ///         selector excludes — a tenant's own <c>PersistentVolumeClaim</c>, a <c>Secret</c> an
@@ -107,8 +122,11 @@ public interface IKubeClusterConnection {
     ///         selector at all.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The default implementation FAILS, and every connection that cannot really
-    ///         enumerate a namespace inherits it on purpose.</b> The alternative — an abstract member
+    ///         ⚠
+    ///         <b>
+    ///             The default implementation FAILS, and every connection that cannot really
+    ///             enumerate a namespace inherits it on purpose.
+    ///         </b> The alternative — an abstract member
     ///         — would have forced twenty reconciler test doubles to write a body, and the body
     ///         everybody writes is <c>return []</c>, which is the one answer that authorises a
     ///         recursive delete of a tenant's live data. Fail-closed by default is the only default

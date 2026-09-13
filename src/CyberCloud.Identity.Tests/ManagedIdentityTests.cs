@@ -37,10 +37,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         var id = Guid.NewGuid();
         (await cluster.ManagedIdentity(id).CreateAsync("app-prod")).IsSuccess.ShouldBeTrue();
 
-        var bound = await cluster.ManagedIdentity(id).BindAsync(
-            WorkloadBinding.Create(ClusterId, @namespace, serviceAccount).GetValueOrThrow(),
-            signer.Issuer
-        );
+        var bound = await cluster.ManagedIdentity(id)
+            .BindAsync(
+                WorkloadBinding.Create(ClusterId, @namespace, serviceAccount).GetValueOrThrow(),
+                signer.Issuer
+            );
 
         bound.IsSuccess.ShouldBeTrue(bound.Error?.Message);
 
@@ -58,10 +59,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         var id = Guid.NewGuid();
         (await cluster.ManagedIdentity(id).CreateAsync("byo-app")).IsSuccess.ShouldBeTrue();
 
-        var refused = await cluster.ManagedIdentity(id).BindAsync(
-            WorkloadBinding.Create(ClusterId, "prod", "app").GetValueOrThrow(),
-            "https://oidc.private-cluster.invalid"
-        );
+        var refused = await cluster.ManagedIdentity(id)
+            .BindAsync(
+                WorkloadBinding.Create(ClusterId, "prod", "app").GetValueOrThrow(),
+                "https://oidc.private-cluster.invalid"
+            );
 
         refused.IsFailure.ShouldBeTrue("a cluster nobody can read cannot be a trust anchor");
 
@@ -87,10 +89,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
 
         (await cluster.ManagedIdentity(id).CreateAsync("byo-app")).IsSuccess.ShouldBeTrue();
 
-        (await cluster.ManagedIdentity(id).BindAsync(
-            WorkloadBinding.Create(ClusterId, "prod", "app").GetValueOrThrow(),
-            unreachable.Issuer
-        )).IsFailure.ShouldBeTrue();
+        (await cluster.ManagedIdentity(id)
+                .BindAsync(
+                    WorkloadBinding.Create(ClusterId, "prod", "app").GetValueOrThrow(),
+                    unreachable.Issuer
+                )).IsFailure.ShouldBeTrue();
 
         var descriptor = (await cluster.ManagedIdentity(id).GetAsync()).GetValueOrThrow();
 
@@ -119,10 +122,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
     public async Task AWorkloadTokenSignedByTheBoundClusterExchangesForAManagedIdentitySubject() {
         var (id, signer) = await BoundAsync();
 
-        var exchanged = await cluster.ManagedIdentity(id).ExchangeAsync(
-            signer.ProjectedToken("prod", "app", Now.AddHours(1)),
-            TokenExchange.JwtSubjectTokenType
-        );
+        var exchanged = await cluster.ManagedIdentity(id)
+            .ExchangeAsync(
+                signer.ProjectedToken("prod", "app", Now.AddHours(1)),
+                TokenExchange.JwtSubjectTokenType
+            );
 
         exchanged.IsSuccess.ShouldBeTrue(exchanged.Error?.Message);
 
@@ -147,10 +151,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         // validator only ever recognised one thing".
         var (id, signer) = await BoundAsync();
 
-        (await cluster.ManagedIdentity(id).ExchangeAsync(
-            signer.RsaProjectedToken("prod", "app", Now.AddHours(1)),
-            TokenExchange.JwtSubjectTokenType
-        )).IsSuccess.ShouldBeTrue();
+        (await cluster.ManagedIdentity(id)
+                .ExchangeAsync(
+                    signer.RsaProjectedToken("prod", "app", Now.AddHours(1)),
+                    TokenExchange.JwtSubjectTokenType
+                )).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
@@ -175,10 +180,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
 
         using var attacker = new ClusterSigner { Issuer = "https://oidc.attacker.example" };
 
-        var refused = await cluster.ManagedIdentity(id).ExchangeAsync(
-            attacker.ProjectedToken("prod", "app", Now.AddHours(1)),
-            TokenExchange.JwtSubjectTokenType
-        );
+        var refused = await cluster.ManagedIdentity(id)
+            .ExchangeAsync(
+                attacker.ProjectedToken("prod", "app", Now.AddHours(1)),
+                TokenExchange.JwtSubjectTokenType
+            );
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Message.ShouldBe(ManagedIdentityFailures.Exchange);
@@ -186,9 +192,9 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         // ⚠ And it names nothing internal: not the trusted issuer, not the binding, not the identity,
         // not the tenant, not the reason. A distinguishable refusal here is a directory listing.
         foreach (var leak in new[] {
-                     "oidc.cluster.example", "attacker", "prod", "app", "issuer", "signature",
-                     "binding", "namespace", "serviceaccount", "jwks", "key",
-                     id.ToString("N"), id.ToString("D"), IdentityCluster.Tenant.ToString("D")
+                     "oidc.cluster.example", "attacker", "prod", "app", "issuer", "signature", "binding", "namespace",
+                     "serviceaccount", "jwks", "key", id.ToString("N"), id.ToString("D"),
+                     IdentityCluster.Tenant.ToString("D")
                  }) {
             refused.Error.Message.ShouldNotContain(leak, Case.Insensitive);
         }
@@ -202,10 +208,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
                      signer.ProjectedToken("prod", "other", Now.AddHours(1)),
                      signer.ProjectedToken("staging", "app", Now.AddHours(1))
                  }) {
-            var refused = await cluster.ManagedIdentity(id).ExchangeAsync(
-                token,
-                TokenExchange.JwtSubjectTokenType
-            );
+            var refused = await cluster.ManagedIdentity(id)
+                .ExchangeAsync(
+                    token,
+                    TokenExchange.JwtSubjectTokenType
+                );
 
             refused.IsFailure.ShouldBeTrue();
             refused.Error!.Message.ShouldBe(ManagedIdentityFailures.Exchange);
@@ -219,10 +226,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         // returns true without verifying.
         var (id, signer) = await BoundAsync();
 
-        var refused = await cluster.ManagedIdentity(id).ExchangeAsync(
-            signer.UnsignedToken("prod", "app", Now.AddHours(1)),
-            TokenExchange.JwtSubjectTokenType
-        );
+        var refused = await cluster.ManagedIdentity(id)
+            .ExchangeAsync(
+                signer.UnsignedToken("prod", "app", Now.AddHours(1)),
+                TokenExchange.JwtSubjectTokenType
+            );
 
         refused.IsFailure.ShouldBeTrue("`alg: none` must never verify");
         refused.Error!.Message.ShouldBe(ManagedIdentityFailures.Exchange);
@@ -283,10 +291,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
 
         // ⚠ Indistinguishable from "never existed" and from "wrong signature". Otherwise a caller
         // walks GUIDs against /token and learns which managed identities a tenant has.
-        var neverExisted = await cluster.ManagedIdentity(Guid.NewGuid()).ExchangeAsync(
-            token,
-            TokenExchange.JwtSubjectTokenType
-        );
+        var neverExisted = await cluster.ManagedIdentity(Guid.NewGuid())
+            .ExchangeAsync(
+                token,
+                TokenExchange.JwtSubjectTokenType
+            );
 
         deleted.Error!.Message.ShouldBe(ManagedIdentityFailures.Exchange);
         neverExisted.Error!.Message.ShouldBe(ManagedIdentityFailures.Exchange);
@@ -299,9 +308,7 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         var token = signer.ProjectedToken("prod", "app", Now.AddHours(1));
 
         foreach (var type in new[] {
-                     "urn:ietf:params:oauth:token-type:access_token",
-                     "urn:ietf:params:oauth:token-type:saml2",
-                     "jwt",
+                     "urn:ietf:params:oauth:token-type:access_token", "urn:ietf:params:oauth:token-type:saml2", "jwt",
                      ""
                  }) {
             (await cluster.ManagedIdentity(id).ExchangeAsync(token, type)).IsFailure.ShouldBeTrue();
@@ -339,11 +346,8 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         var (id, _) = await BoundAsync();
 
         var stateTypes = new[] {
-            typeof(ManagedIdentityGrainState),
-            typeof(ManagedIdentityDescriptor),
-            typeof(WorkloadBinding),
-            typeof(ClusterOidcIssuer),
-            typeof(ExchangedSubject)
+            typeof(ManagedIdentityGrainState), typeof(ManagedIdentityDescriptor), typeof(WorkloadBinding),
+            typeof(ClusterOidcIssuer), typeof(ExchangedSubject)
         };
 
         foreach (var type in stateTypes) {
@@ -356,10 +360,11 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
                 // and ServicePrincipalDescriptor, nothing here needs a [SuppressMessage] with an
                 // argument, because nothing here is a credential or a handle to one.
                 foreach (var suffix in new[] { "Password", "Secret", "Token", "Key" }) {
-                    member.Name.EndsWith(suffix, StringComparison.Ordinal).ShouldBeFalse(
-                        $"{type.Name}.{member.Name} is serialized grain state and its name says it "
-                        + "holds a secret — CC1005, docs/plan/00 § Non-negotiables."
-                    );
+                    member.Name.EndsWith(suffix, StringComparison.Ordinal)
+                        .ShouldBeFalse(
+                            $"{type.Name}.{member.Name} is serialized grain state and its name says it "
+                            + "holds a secret — CC1005, docs/plan/00 § Non-negotiables."
+                        );
                 }
             }
         }
@@ -390,25 +395,28 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         using var second = new ClusterSigner { Issuer = "https://oidc.other-cluster.example" };
         ScriptedClusterOidcDiscovery.Instance.Publish(second, Now);
 
-        var rebound = await cluster.ManagedIdentity(id).BindAsync(
-            WorkloadBinding.Create(ClusterId, "staging", "app").GetValueOrThrow(),
-            second.Issuer
-        );
+        var rebound = await cluster.ManagedIdentity(id)
+            .BindAsync(
+                WorkloadBinding.Create(ClusterId, "staging", "app").GetValueOrThrow(),
+                second.Issuer
+            );
 
         rebound.IsSuccess.ShouldBeTrue(rebound.Error?.Message);
         rebound.GetValueOrThrow().ManagedIdentityId.ShouldBe(id);
         rebound.GetValueOrThrow().Issuer.Issuer.ShouldBe(second.Issuer);
 
         // The old cluster's tokens stop working the moment the binding moves.
-        (await cluster.ManagedIdentity(id).ExchangeAsync(
-            first.ProjectedToken("prod", "app", Now.AddHours(1)),
-            TokenExchange.JwtSubjectTokenType
-        )).IsFailure.ShouldBeTrue();
+        (await cluster.ManagedIdentity(id)
+                .ExchangeAsync(
+                    first.ProjectedToken("prod", "app", Now.AddHours(1)),
+                    TokenExchange.JwtSubjectTokenType
+                )).IsFailure.ShouldBeTrue();
 
-        (await cluster.ManagedIdentity(id).ExchangeAsync(
-            second.ProjectedToken("staging", "app", Now.AddHours(1)),
-            TokenExchange.JwtSubjectTokenType
-        )).IsSuccess.ShouldBeTrue();
+        (await cluster.ManagedIdentity(id)
+                .ExchangeAsync(
+                    second.ProjectedToken("staging", "app", Now.AddHours(1)),
+                    TokenExchange.JwtSubjectTokenType
+                )).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
@@ -445,9 +453,10 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
         other.IsFailure.ShouldBeTrue();
         other.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
 
-        (await cluster.ManagedIdentity(id, IdentityCluster.OtherTenant).ExchangeAsync(
-            signer.ProjectedToken("prod", "app", Now.AddHours(1)),
-            TokenExchange.JwtSubjectTokenType
-        )).IsFailure.ShouldBeTrue();
+        (await cluster.ManagedIdentity(id, IdentityCluster.OtherTenant)
+                .ExchangeAsync(
+                    signer.ProjectedToken("prod", "app", Now.AddHours(1)),
+                    TokenExchange.JwtSubjectTokenType
+                )).IsFailure.ShouldBeTrue();
     }
 }

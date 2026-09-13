@@ -3,5 +3,4 @@
 // imported. A using-alias beats a namespace import.
 
 global using ErrorCode = CyberCloud.Core.ErrorCode;
-
 global using Shouldly;

@@ -33,20 +33,28 @@ public sealed record ChartRewrite(string Text, ImmutableArray<string> Problems, 
 /// <remarks>
 ///     <para>
 ///         docs/plan/02 § ADR-010, <i>Which end authors the schema</i> — DECIDED 2026-08-11:
-///         <i>"The C# <c>ResourceSchema</c> is authored. The chart's <c>@param</c> annotations are
-///         generated from it and diffed."</i> The block this emits is what <c>Build.Charts</c> writes
+///         <i>
+///             "The C# <c>ResourceSchema</c> is authored. The chart's <c>@param</c> annotations are
+///             generated from it and diffed."
+///         </i> The block this emits is what <c>Build.Charts</c> writes
 ///         back into <c>values.yaml</c> and then fails on, exactly as <c>Build.Generate</c> treats a
 ///         drifted OpenAPI document.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This is the one derived surface that reads the registry rather than the emitted
-///         OpenAPI document, and the reason is a fact the document does not carry.</b>
+///         ⚠
+///         <b>
+///             This is the one derived surface that reads the registry rather than the emitted
+///             OpenAPI document, and the reason is a fact the document does not carry.
+///         </b>
 ///         docs/plan/21 § Generation's one hop puts the CLI, the SDK and the forms behind
 ///         <see cref="DocumentReader" /> so the compatibility gate over the published document covers
 ///         them. It cannot cover this one: the chart a type renders is
 ///         <see cref="ResourceTypeRegistration.Chart" />, which is not in the document at all, so
-///         there is no pairing to be read back. Emitting from the registry also keeps <i>declaration
-///         order</i>, which the document deliberately destroys by sorting <c>properties</c>
+///         there is no pairing to be read back. Emitting from the registry also keeps
+///         <i>
+///             declaration
+///             order
+///         </i>, which the document deliberately destroys by sorting <c>properties</c>
 ///         ordinally — and a <c>values.yaml</c> whose fields were alphabetised is a configuration file
 ///         nobody can read. The trade is stated rather than hidden: a chart block is an in-repository
 ///         file and not a published contract, so nothing here needs the protection the one hop buys.
@@ -66,8 +74,11 @@ public sealed record ChartRewrite(string Text, ImmutableArray<string> Problems, 
 ///         CLI.
 ///     </para>
 ///     <para>
-///         ⚠ <b>So is the property <c>RequiresCluster</c> names, and that is a second exclusion
-///         rather than a special case for one provider.</b> A chart is rendered <i>into</i> a cluster
+///         ⚠
+///         <b>
+///             So is the property <c>RequiresCluster</c> names, and that is a second exclusion
+///             rather than a special case for one provider.
+///         </b> A chart is rendered <i>into</i> a cluster
 ///         and has no opinion about which one: a cluster id picks the API server the apply runs
 ///         against, which is settled before Helm is handed anything, and
 ///         <c>charts/managed/postgres/templates/</c> never reads <c>.Values.clusterId</c>. It is
@@ -77,8 +88,11 @@ public sealed record ChartRewrite(string Text, ImmutableArray<string> Problems, 
 ///         the pointer rather than guessing from a member name or a <see cref="SchemaFormat" />.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Excluding it is what keeps this emitter from having to invent a value, and that is why
-///         the repair is here rather than in <see cref="Literal" />.</b> Every values key carries a
+///         ⚠
+///         <b>
+///             Excluding it is what keeps this emitter from having to invent a value, and that is why
+///             the repair is here rather than in <see cref="Literal" />.
+///         </b> Every values key carries a
 ///         literal, and a cluster id has no <see cref="SchemaProperty.DefaultJson" /> because there is
 ///         no cluster a tenant gets without choosing one. Emitted, it became <c>clusterId: ""</c>
 ///         under <c>## @format uuid</c> — a chart whose own generated <c>values.schema.json</c>
@@ -89,16 +103,22 @@ public sealed record ChartRewrite(string Text, ImmutableArray<string> Problems, 
 ///         configuration, so neither spelling of "unset" was the answer.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two <see cref="SchemaProperty" /> members still have no annotation syntax, and this
-///         emitter REFUSES rather than dropping them.</b> <see cref="SchemaProperty.Nullable" /> and a
+///         ⚠
+///         <b>
+///             Two <see cref="SchemaProperty" /> members still have no annotation syntax, and this
+///             emitter REFUSES rather than dropping them.
+///         </b> <see cref="SchemaProperty.Nullable" /> and a
 ///         non-text <see cref="SchemaProperty.ElementKind" /> are what is left of the seven
 ///         docs/plan/02 § ADR-010 named as the gap that runs registry-to-chart. Each becomes a problem
 ///         naming the property and the fact, because a constraint that reached the API and not the
 ///         chart is a chart that renders a cluster the API would have refused.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The other five closed on 2026-08-12, and closing them cost more edits than the note
-///         that stood here predicted.</b> That note said four — the <c>Directives</c> table in
+///         ⚠
+///         <b>
+///             The other five closed on 2026-08-12, and closing them cost more edits than the note
+///             that stood here predicted.
+///         </b> That note said four — the <c>Directives</c> table in
 ///         <c>build/Build.Charts.cs</c>, its emission in <c>PropertyNode</c>, a row in
 ///         charts/README.md § The annotation format, and a case here. It was written before any
 ///         directive had been added, so it was a guess, and it missed the three that carry the risk:
@@ -113,8 +133,11 @@ public sealed record ChartRewrite(string Text, ImmutableArray<string> Problems, 
 ///         directive table. Nine sites in four files, not four.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A directive that EXISTS can still be refused on a type, and that third category is
-///         separate from both lists above.</b> <c>@secret</c>, <c>@widget</c>,
+///         ⚠
+///         <b>
+///             A directive that EXISTS can still be refused on a type, and that third category is
+///             separate from both lists above.
+///         </b> <c>@secret</c>, <c>@widget</c>,
 ///         <c>@pattern</c>, <c>@length</c> and <c>@format</c> are all written, read and cross-checked
 ///         — and <c>build/Build.Charts.cs</c> refuses each of them on the wrong <c>@param</c> type,
 ///         because a JSON Schema keyword that applies to a string is <i>silently ignored</i> on any
@@ -162,8 +185,11 @@ public static class ChartAnnotationEmitter {
     ///     <see cref="IResourceTypeBuilder.RequiresCluster" />. That property is excluded from the
     ///     chart: see this class's remarks.
     ///     <para>
-    ///         ⚠ <b>It has no default, and a caller that has no registration in hand must pass
-    ///         <c>""</c> deliberately.</b> A schema alone cannot say which of its properties is
+    ///         ⚠
+    ///         <b>
+    ///             It has no default, and a caller that has no registration in hand must pass
+    ///             <c>""</c> deliberately.
+    ///         </b> A schema alone cannot say which of its properties is
     ///         placement — nothing about a required uuid called <c>clusterId</c> distinguishes it from
     ///         a tenant-chosen one — so an optional parameter would be an emitter that quietly assumes
     ///         "no placement" for the one caller that knows better.
@@ -218,8 +244,11 @@ public static class ChartAnnotationEmitter {
     ///         bytes.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Every <c>@internal</c> key must sit after every generated one AT ITS OWN LEVEL, and
-    ///         that is enforced rather than assumed.</b> An in-place rewrite needs each level's
+    ///         ⚠
+    ///         <b>
+    ///             Every <c>@internal</c> key must sit after every generated one AT ITS OWN LEVEL, and
+    ///             that is enforced rather than assumed.
+    ///         </b> An in-place rewrite needs each level's
     ///         generated region to be one contiguous run; interleaving them would make "where does the
     ///         new key go" a question with no deterministic answer, and a generated file whose ordering
     ///         depends on the previous file's ordering cannot be regenerated from scratch. The one
@@ -366,8 +395,7 @@ public static class ChartAnnotationEmitter {
         return false;
     }
 
-    static List<string> Slice(List<string> lines, int start, int end) =>
-        lines.GetRange(start, end - start);
+    static List<string> Slice(List<string> lines, int start, int end) => lines.GetRange(start, end - start);
 
     // ── The tree ──────────────────────────────────────────────────────────────────────────────
 
@@ -509,8 +537,14 @@ public static class ChartAnnotationEmitter {
             text.Append('\n');
         }
 
-        text.Append(pad).Append("## @param ").Append(node.Name).Append(" {").Append(type).Append("} ")
-            .Append(description).Append('\n');
+        text.Append(pad)
+            .Append("## @param ")
+            .Append(node.Name)
+            .Append(" {")
+            .Append(type)
+            .Append("} ")
+            .Append(description)
+            .Append('\n');
 
         if (property.Required) {
             text.Append(pad).Append("## @required\n");
@@ -525,18 +559,28 @@ public static class ChartAnnotationEmitter {
         }
 
         if (!property.AllowedValues.IsEmpty) {
-            text.Append(pad).Append("## @enum ")
-                .Append(string.Join(" | ", property.AllowedValues)).Append('\n');
+            text.Append(pad)
+                .Append("## @enum ")
+                .Append(string.Join(" | ", property.AllowedValues))
+                .Append('\n');
         }
 
         if (property.Minimum is not null || property.Maximum is not null) {
-            text.Append(pad).Append("## @range ").Append(Bound(property.Minimum))
-                .Append("..").Append(Bound(property.Maximum)).Append('\n');
+            text.Append(pad)
+                .Append("## @range ")
+                .Append(Bound(property.Minimum))
+                .Append("..")
+                .Append(Bound(property.Maximum))
+                .Append('\n');
         }
 
         if (property.MinLength is not null || property.MaxLength is not null) {
-            text.Append(pad).Append("## @length ").Append(Length(property.MinLength))
-                .Append("..").Append(Length(property.MaxLength)).Append('\n');
+            text.Append(pad)
+                .Append("## @length ")
+                .Append(Length(property.MinLength))
+                .Append("..")
+                .Append(Length(property.MaxLength))
+                .Append('\n');
         }
 
         // ⚠ Bare, not anchored. See the remarks on this class: the annotation is the same string as
@@ -595,8 +639,11 @@ public static class ChartAnnotationEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Every one of these was found by reading <c>build/Build.Charts.cs</c>'s own regular
-    ///         expressions rather than its documentation.</b> A one-sided bound is the sharp one:
+    ///         ⚠
+    ///         <b>
+    ///             Every one of these was found by reading <c>build/Build.Charts.cs</c>'s own regular
+    ///             expressions rather than its documentation.
+    ///         </b> A one-sided bound is the sharp one:
     ///         <see cref="SchemaProperty" /> lets a property declare a
     ///         <see cref="SchemaProperty.Minimum" /> with no <see cref="SchemaProperty.Maximum" />, and
     ///         <c>@range</c>'s pattern requires both — so the obvious emission, <c>## @range 1..</c>,
@@ -605,9 +652,12 @@ public static class ChartAnnotationEmitter {
     ///         may be empty; the regex is the answer.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Several of these cases are not about an argument at all: they are a directive the
-    ///         reader refuses on a type, and that is why the summary was widened on 2026-09-06
-    ///         (#84).</b> <c>@secret</c> on a non-string, <c>@widget</c> on an object or an array,
+    ///         ⚠
+    ///         <b>
+    ///             Several of these cases are not about an argument at all: they are a directive the
+    ///             reader refuses on a type, and that is why the summary was widened on 2026-09-06
+    ///             (#84).
+    ///         </b> <c>@secret</c> on a non-string, <c>@widget</c> on an object or an array,
     ///         and — since #84 — <c>@pattern</c>, <c>@length</c> and <c>@format</c> on anything the
     ///         <c>@param</c> line will not call a <c>{string}</c>. They share one shape:
     ///         <see cref="SchemaProperty.Incoherences" /> permits the declaration,
@@ -620,7 +670,7 @@ public static class ChartAnnotationEmitter {
     static void CheckUnspellable(SchemaProperty property, List<string> problems) {
         var pointer = property.JsonPointer;
 
-        if (property.Minimum is null != (property.Maximum is null)) {
+        if (property.Minimum is null != property.Maximum is null) {
             problems.Add(
                 $"'{pointer}' declares a one-sided numeric bound, and `@range` takes both — its pattern "
                 + "is `<min>..<max>` and `1..` is a malformed directive, not an open range. Declare the "
@@ -722,9 +772,7 @@ public static class ChartAnnotationEmitter {
             }
 
             if (property.Format is not SchemaFormat.None) {
-                problems.Add(
-                    Refinement(pointer, describe, $"SchemaFormat.{property.Format}", "@format")
-                );
+                problems.Add(Refinement(pointer, describe, $"SchemaFormat.{property.Format}", "@format"));
             }
         }
 
@@ -809,12 +857,18 @@ public static class ChartAnnotationEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the check the whole <c>@pattern</c> directive stands on, and it is about the
-    ///         transport rather than the regular expression.</b> The argument reaches
+    ///         ⚠
+    ///         <b>
+    ///             This is the check the whole <c>@pattern</c> directive stands on, and it is about the
+    ///             transport rather than the regular expression.
+    ///         </b> The argument reaches
     ///         <c>build/Build.Charts.cs</c> through a hand-written reader that does <c>TrimEnd</c> on the
     ///         line, <c>Trim</c> on the directive body and <c>Trim</c> again on the argument — three
-    ///         separate trims — so <b>a pattern with leading or trailing whitespace comes back as a
-    ///         different pattern</b>, silently, and the chart would then validate a set of strings the
+    ///         separate trims — so
+    ///         <b>
+    ///             a pattern with leading or trailing whitespace comes back as a
+    ///             different pattern
+    ///         </b>, silently, and the chart would then validate a set of strings the
     ///         API does not. That is precisely the "constraint that reached the API and not the chart"
     ///         failure, wearing a disguise: the constraint reaches the chart, and means something else
     ///         when it gets there.
@@ -828,8 +882,11 @@ public static class ChartAnnotationEmitter {
     ///         Refusing them would be a vocabulary that cannot spell the first pattern anybody wrote.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Nothing here compiles anything, and that was once the whole of this emitter's
-    ///         opinion about a pattern.</b> Whether the expression can be RUN is
+    ///         ⚠
+    ///         <b>
+    ///             Nothing here compiles anything, and that was once the whole of this emitter's
+    ///             opinion about a pattern.
+    ///         </b> Whether the expression can be RUN is
     ///         <see cref="CheckPatternRuns" />, which is a separate question with a separate answer and
     ///         a return value the literal check needs (#78).
     ///     </para>
@@ -880,8 +937,11 @@ public static class ChartAnnotationEmitter {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is <see cref="CheckPatternIsSpellable" />'s other half, and it is about the
-    ///         expression rather than the transport.</b> That method asks whether the pattern survives
+    ///         ⚠
+    ///         <b>
+    ///             This is <see cref="CheckPatternIsSpellable" />'s other half, and it is about the
+    ///             expression rather than the transport.
+    ///         </b> That method asks whether the pattern survives
     ///         the trip through a <c>## @pattern</c> line; this one asks whether the pattern runs at
     ///         all. Both are refusals a chart block owes: <c>build/Build.Charts.cs</c> compiles the
     ///         argument it reads back with <c>RegexOptions.NonBacktracking</c> and the same anchoring,
@@ -891,8 +951,11 @@ public static class ChartAnnotationEmitter {
     ///         <see cref="CheckUnspellable" /> exists to prevent.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The return value is the load-bearing part, and it is why this is not simply a
-    ///         seventh case inside <see cref="CheckUnspellable" />.</b> #76 made
+    ///         ⚠
+    ///         <b>
+    ///             The return value is the load-bearing part, and it is why this is not simply a
+    ///             seventh case inside <see cref="CheckUnspellable" />.
+    ///         </b> #76 made
     ///         <see cref="SchemaProperty.Matcher" /> <c>RegexOptions.NonBacktracking</c> with no match
     ///         timeout, so a lookaround, a backreference or an atomic group is refused when the matcher
     ///         is BUILT. <see cref="CheckAgainstOwnConstraints" /> then checks a declared
@@ -917,8 +980,11 @@ public static class ChartAnnotationEmitter {
     ///         (see the note on <c>@secret</c> in <see cref="CheckUnspellable" />).
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And the doors were enumerated rather than guessed at, because a per-site fix that
-    ///         leaves the next one open is the defect class this tree keeps finding.</b> Counted
+    ///         ⚠
+    ///         <b>
+    ///             And the doors were enumerated rather than guessed at, because a per-site fix that
+    ///             leaves the next one open is the defect class this tree keeps finding.
+    ///         </b> Counted
     ///         2026-09-05 with <c>grep -rn "ValueProblems(" --include=*.cs . | grep -v "///"</c> from
     ///         the repository root — the trailing parenthesis drops the places that name the method in
     ///         prose without calling it, and the <c>grep -v "///"</c> drops THIS paragraph and its twin
@@ -934,8 +1000,11 @@ public static class ChartAnnotationEmitter {
     ///         reaches it the schema has been through <c>ResourceSchema.Of</c>, so an unrunnable
     ///         pattern there is a bug in this tree and throws rather than becoming a <c>400</c> aimed
     ///         at a caller who did nothing wrong — <c>ResourceSchema.PatternProblem</c>'s remarks are
-    ///         where that argument lives, and where the same enumeration is written down. ⚠ <b>What
-    ///         would make this stale:</b> a fourth caller. One that judges a provider-declared literal
+    ///         where that argument lives, and where the same enumeration is written down. ⚠
+    ///         <b>
+    ///             What
+    ///             would make this stale:
+    ///         </b> a fourth caller. One that judges a provider-declared literal
     ///         before <c>Of</c> has run owes this same probe-and-clear.
     ///     </para>
     /// </remarks>
@@ -979,9 +1048,12 @@ public static class ChartAnnotationEmitter {
     ///     The members the vocabulary has no word for at all.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><see cref="SchemaProperty.Nullable" /> and a non-text
-    ///     <see cref="SchemaProperty.ElementKind" /> were deliberately left open on 2026-08-12 when the
-    ///     other five closed.</b> Neither has a user: no property of any type in the tree declares
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="SchemaProperty.Nullable" /> and a non-text
+    ///         <see cref="SchemaProperty.ElementKind" /> were deliberately left open on 2026-08-12 when the
+    ///         other five closed.
+    ///     </b> Neither has a user: no property of any type in the tree declares
     ///     either, so a <c>@nullable</c> or an <c>@element</c> would be a directive written from a
     ///     guess about what it should mean, tested only against a schema invented to test it, and
     ///     wired through four files' worth of tables to serve nobody. Both are harder than the five
@@ -1005,9 +1077,7 @@ public static class ChartAnnotationEmitter {
         // other element kind would be a claim the generated values.schema.json cannot make.
         if (property.Kind is SchemaKind.Array
             && property.ElementKind is not (SchemaKind.Unknown or SchemaKind.Text)) {
-            problems.Add(
-                Missing(pointer, $"ElementKind = SchemaKind.{property.ElementKind}", "@element")
-            );
+            problems.Add(Missing(pointer, $"ElementKind = SchemaKind.{property.ElementKind}", "@element"));
         }
     }
 
@@ -1028,8 +1098,11 @@ public static class ChartAnnotationEmitter {
     ///     A JSON literal on one line, in one spelling.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Re-serialised rather than copied, and that is what makes <c>@example</c> safe where
-    ///     <c>@pattern</c> needed a check.</b> <see cref="SchemaProperty.ExampleJson" /> is a string of
+    ///     ⚠
+    ///     <b>
+    ///         Re-serialised rather than copied, and that is what makes <c>@example</c> safe where
+    ///         <c>@pattern</c> needed a check.
+    ///     </b> <see cref="SchemaProperty.ExampleJson" /> is a string of
     ///     JSON whose whitespace nobody constrains — a pretty-printed one carries newlines, which would
     ///     end the annotation block above the key it describes. Parsing and re-writing it compactly
     ///     makes the emitted form single-line by construction, and JSON escapes every control character
@@ -1056,8 +1129,7 @@ public static class ChartAnnotationEmitter {
     }
 
     static readonly JsonSerializerOptions CompactJson = new() {
-        WriteIndented = false,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
     // ── Literals ──────────────────────────────────────────────────────────────────────────────
@@ -1227,8 +1299,11 @@ public static class ChartAnnotationEmitter {
     /// <param name="problems">The collector.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>ResourceSchema.ValueProblems</c> is the request path, and it builds this
-    ///         property's matcher.</b> A pattern the linear engine refuses has already been reported by
+    ///         ⚠
+    ///         <b>
+    ///             <c>ResourceSchema.ValueProblems</c> is the request path, and it builds this
+    ///             property's matcher.
+    ///         </b> A pattern the linear engine refuses has already been reported by
     ///         <see cref="CheckPatternRuns" />, and building it again here would throw out of
     ///         <c>ResourceSchema.PatternProblem</c>, which catches nothing by design: reaching that
     ///         method with a pattern that cannot run is a bug in this tree, so it raises rather than
@@ -1239,9 +1314,12 @@ public static class ChartAnnotationEmitter {
     ///         closed inside <see cref="SchemaProperty.Incoherences" />).
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The literal is still checked on everything else — kind, bounds, length, the closed
-    ///         set — because dropping it would hide a second, independent declaration bug behind the
-    ///         first.</b> The whole point of collecting into <paramref name="problems" /> rather than
+    ///         ⚠
+    ///         <b>
+    ///             The literal is still checked on everything else — kind, bounds, length, the closed
+    ///             set — because dropping it would hide a second, independent declaration bug behind the
+    ///             first.
+    ///         </b> The whole point of collecting into <paramref name="problems" /> rather than
     ///         failing on the first entry is that an author gets the entire list from one
     ///         <c>./build.sh Charts</c>. ⚠ And the clearing reaches an array's elements for free:
     ///         <c>ValueProblems</c> recurses with <c>property with { Kind = ElementKind, … }</c>, so an
@@ -1332,12 +1410,14 @@ public static class ChartAnnotationEmitter {
                 continue;
             }
 
-            starts.Add((
-                key.Groups["key"].Value,
-                i + 1,
-                blockStart < 0 ? i : blockStart,
-                blockIsInternal
-            ));
+            starts.Add(
+                (
+                    key.Groups["key"].Value,
+                    i + 1,
+                    blockStart < 0 ? i : blockStart,
+                    blockIsInternal
+                )
+            );
 
             blockStart = -1;
             blockIsInternal = false;

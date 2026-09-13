@@ -11,8 +11,11 @@ namespace CyberCloud.Sdk;
 ///         ⚠ <b>This is the emitter's whole view of the hand-written half.</b> A generated
 ///         <c>{Type}Collection</c> or <c>{Type}Resource</c> takes exactly one of these and never
 ///         constructs a pipeline, never reads <see cref="CyberCloudClientOptions" /> and never spells
-///         the api-version — which is what makes <i>"everything else is regenerated per release and
-///         never edited"</i> (docs/plan/21 § Generation) survive a change to the retry policy or the
+///         the api-version — which is what makes
+///         <i>
+///             "everything else is regenerated per release and
+///             never edited"
+///         </i> (docs/plan/21 § Generation) survive a change to the retry policy or the
 ///         correlation header.
 ///     </para>
 ///     <para>
@@ -79,7 +82,7 @@ public sealed class CyberCloudClientContext {
         ArgumentNullException.ThrowIfNull(request);
 
         request.Content = new ByteArrayContent(body.ToArray()) {
-            Headers = { ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" } },
+            Headers = { ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" } }
         };
     }
 

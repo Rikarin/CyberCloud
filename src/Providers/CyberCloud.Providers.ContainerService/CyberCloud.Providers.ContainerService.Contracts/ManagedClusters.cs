@@ -113,9 +113,12 @@ public static class ManagedClusters {
 
     /// <summary>The chart this type is the configuration surface of.</summary>
     /// <remarks>
-    ///     ⚠ <b><c>charts/managed/</c> rather than the <c>charts/tenant-cluster/</c> that
-    ///     charts/README.md's own directory sketch names, and that sketch is corrected rather than
-    ///     honoured.</b> <c>Build.Charts</c> requires <c>SOURCE</c>, <c>conformance.yaml</c> and both
+    ///     ⚠
+    ///     <b>
+    ///         <c>charts/managed/</c> rather than the <c>charts/tenant-cluster/</c> that
+    ///         charts/README.md's own directory sketch names, and that sketch is corrected rather than
+    ///         honoured.
+    ///     </b> <c>Build.Charts</c> requires <c>SOURCE</c>, <c>conformance.yaml</c> and both
     ///     <c>cybercloud.io/*</c> annotations only for a chart under <c>charts/managed/</c>, so a chart
     ///     outside it is a managed service that quietly owes no conformance manifest — which is
     ///     docs/plan/12 § The pattern, once's eighth piece, dropped by a directory name. A managed
@@ -129,16 +132,21 @@ public static class ManagedClusters {
 
     /// <summary>The action that hands back a kubeconfig.</summary>
     /// <remarks>
-    ///     ⚠ <b>Declared with no handler, exactly as the nine <c>listKeys</c>-shaped actions before it
-    ///     are, and <see cref="IResourceTypeBuilder" /> is why.</b> <c>Action</c> takes a name, a kind,
+    ///     ⚠
+    ///     <b>
+    ///         Declared with no handler, exactly as the nine <c>listKeys</c>-shaped actions before it
+    ///         are, and <see cref="IResourceTypeBuilder" /> is why.
+    ///     </b> <c>Action</c> takes a name, a kind,
     ///     a permission, a request shape and a response shape, and <b>no handler delegate</b> — so no
     ///     action in this platform can run, on any type. Building a private mechanism for this one
     ///     would be a tenth type's worth of surface that the dispatcher, when it lands, would have to
     ///     un-build. <c>conformance.yaml § owed</c>, <c>listcredentials-has-no-handler</c>.
     ///     <para>
     ///         ⚠ <b>docs/plan/13 asks for a short-lived, scoped credential and NOT the admin one</b> —
-    ///         <i>"a <c>listCredentials</c> action returning a short-lived, scoped kubeconfig — never
-    ///         the admin one"</i>. What Cluster API writes is a <c>Secret</c> named
+    ///         <i>
+    ///             "a <c>listCredentials</c> action returning a short-lived, scoped kubeconfig — never
+    ///             the admin one"
+    ///         </i>. What Cluster API writes is a <c>Secret</c> named
     ///         <see cref="KubeconfigSecretName" /> holding exactly the admin kubeconfig, signed by the
     ///         cluster CA with no expiry a client can see. Turning that into what docs/plan/13 asks for
     ///         is a certificate request against the produced cluster, which needs a connection to it —
@@ -150,8 +158,11 @@ public static class ManagedClusters {
 
     /// <summary>The permission <see cref="ListCredentialsAction" /> checks.</summary>
     /// <remarks>
-    ///     ⚠ <b>Its own permission rather than <c>read</c>, and this is the strongest case in the
-    ///     catalogue for the distinction.</b> docs/plan/07 § Consistency puts a key export in the
+    ///     ⚠
+    ///     <b>
+    ///         Its own permission rather than <c>read</c>, and this is the strongest case in the
+    ///         catalogue for the distinction.
+    ///     </b> docs/plan/07 § Consistency puts a key export in the
     ///     fully-consistent row by name. What leaves through this action is not a password to one
     ///     database — it is <c>cluster-admin</c> on a whole Kubernetes cluster, which is every workload
     ///     in it, every Secret in it and the ability to schedule a privileged pod on any node. A caller
@@ -185,8 +196,11 @@ public static class ManagedClusters {
 
     /// <summary>The Cluster API <c>Cluster</c> — the object that stitches the other two together.</summary>
     /// <remarks>
-    ///     ⚠ <b><c>v1beta2</c>, and taking <c>v1beta1</c> instead would have been the wrong kind of
-    ///     safe.</b> Checked against the CRD rather than against a template:
+    ///     ⚠
+    ///     <b>
+    ///         <c>v1beta2</c>, and taking <c>v1beta1</c> instead would have been the wrong kind of
+    ///         safe.
+    ///     </b> Checked against the CRD rather than against a template:
     ///     <c>config/crd/bases/cluster.x-k8s.io_clusters.yaml</c> marks <c>v1beta1</c>
     ///     <c>deprecated: true</c>, <c>storage: false</c>, and Cluster API v1.14.0's release notes say
     ///     it <i>"is on track to be unserved in CAPI v1.16"</i>. ⚠ The Kamaji control-plane provider's
@@ -199,8 +213,11 @@ public static class ManagedClusters {
 
     /// <summary>The Kamaji control plane — the tenant's API server, as pods in the management cluster.</summary>
     /// <remarks>
-    ///     ⚠ <b>This is the object the tenant is buying.</b> ADR-009: <i>"control plane components as
-    ///     pods in the management cluster"</i>. It is owned by
+    ///     ⚠ <b>This is the object the tenant is buying.</b> ADR-009:
+    ///     <i>
+    ///         "control plane components as
+    ///         pods in the management cluster"
+    ///     </i>. It is owned by
     ///     <c>clastix/cluster-api-control-plane-provider-kamaji</c> rather than by <c>clastix/kamaji</c>
     ///     itself — the second project serves <c>TenantControlPlane</c>, which this provider does not
     ///     render, because the control-plane provider creates one from a <c>KamajiControlPlane</c> and
@@ -223,8 +240,11 @@ public static class ManagedClusters {
 
     /// <summary>The KubeVirt infrastructure — where the worker VMs will be created.</summary>
     /// <remarks>
-    ///     ⚠ <b>It creates no machine, and — because of
-    ///     <see cref="ExternallyManagedAnnotation" /> — it creates nothing at all.</b> A
+    ///     ⚠
+    ///     <b>
+    ///         It creates no machine, and — because of
+    ///         <see cref="ExternallyManagedAnnotation" /> — it creates nothing at all.
+    ///     </b> A
     ///     <c>KubevirtCluster</c> is the infrastructure <i>side</i> of the Cluster API contract; the
     ///     VMs are <see cref="AgentPools" />', which is the structural reason node pools are a child
     ///     resource here rather than an array property.
@@ -239,8 +259,11 @@ public static class ManagedClusters {
 
     /// <summary>The annotation that tells the KubeVirt provider to keep its hands off.</summary>
     /// <remarks>
-    ///     ⚠ <b>ONE ANNOTATION DECIDES WHICH OF TWO CONTROLLERS OWNS THE CONTROL-PLANE ENDPOINT, AND
-    ///     WITHOUT IT BOTH DO.</b> Read in the KubeVirt provider's own controller rather than in its
+    ///     ⚠
+    ///     <b>
+    ///         ONE ANNOTATION DECIDES WHICH OF TWO CONTROLLERS OWNS THE CONTROL-PLANE ENDPOINT, AND
+    ///         WITHOUT IT BOTH DO.
+    ///     </b> Read in the KubeVirt provider's own controller rather than in its
     ///     README: <c>controllers/kubevirtcluster_controller.go</c> returns immediately for an
     ///     externally-managed cluster, so it creates no load-balancer <c>Service</c>, generates no SSH
     ///     key <c>Secret</c> and never sets <c>status.ready</c>. The Kamaji control-plane provider then
@@ -256,8 +279,11 @@ public static class ManagedClusters {
 
     /// <summary>The name of the <c>KamajiControlPlane</c> a cluster renders.</summary>
     /// <remarks>
-    ///     ⚠ <b>Suffixed, which the other two are not, and it follows Cluster API's own quickstart
-    ///     rather than this platform's taste.</b> Every CAPI template in the wild names the control
+    ///     ⚠
+    ///     <b>
+    ///         Suffixed, which the other two are not, and it follows Cluster API's own quickstart
+    ///         rather than this platform's taste.
+    ///     </b> Every CAPI template in the wild names the control
     ///     plane <c>{cluster}-control-plane</c>, and an operator reading
     ///     <c>kubectl get kamajicontrolplanes</c> against a cluster full of ours should see the shape
     ///     they expect.
@@ -340,8 +366,11 @@ public static class ManagedClusters {
     ///         chose is only legible by opening it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>SCANNED FOR ONE LINE RATHER THAN PARSED AS YAML, BECAUSE THERE IS NO YAML PARSER
-    ///         IN THIS TREE.</b> Adding a package to read one field of a machine-generated document is
+    ///         ⚠
+    ///         <b>
+    ///             SCANNED FOR ONE LINE RATHER THAN PARSED AS YAML, BECAUSE THERE IS NO YAML PARSER
+    ///             IN THIS TREE.
+    ///         </b> Adding a package to read one field of a machine-generated document is
     ///         a dependency the whole platform would carry; <c>client-certificate-data</c> is emitted
     ///         by Cluster API's own writer on a single line with a base64 value, so a line scan reads
     ///         it exactly. What that costs is stated rather than hidden: a kubeconfig using a token or
@@ -398,8 +427,11 @@ public static class ManagedClusters {
     /// </summary>
     /// <param name="objectJson">The <c>Cluster</c> object's JSON, as the API server returned it.</param>
     /// <remarks>
-    ///     ⚠ <b>Read from <c>spec.controlPlaneEndpoint</c>, which the Kamaji control-plane provider
-    ///     patches onto the <c>Cluster</c> itself</b> — see
+    ///     ⚠
+    ///     <b>
+    ///         Read from <c>spec.controlPlaneEndpoint</c>, which the Kamaji control-plane provider
+    ///         patches onto the <c>Cluster</c> itself
+    ///     </b> — see
     ///     <see cref="ExternallyManagedAnnotation" /> for why exactly one controller owns that field
     ///     and what happens when two do. An empty answer means the endpoint has not been assigned, and
     ///     a connection registered against an empty endpoint would be one every later call fails on,
@@ -444,16 +476,22 @@ public static class ManagedClusters {
 
     /// <summary>The Kamaji <c>DataStore</c> every tenant control plane is backed by.</summary>
     /// <remarks>
-    ///     ⚠ <b>ONE, SHARED, PLATFORM-OWNED — AND ADR-009 SAYS "a dedicated etcd per tenant from
-    ///     etcd-operator". THIS DOES NOT DO THAT, AND THE REASON IS STRUCTURAL RATHER THAN
-    ///     ECONOMIC.</b> Checked in the CRD: <c>kamaji.clastix.io_datastores.yaml</c> is
+    ///     ⚠
+    ///     <b>
+    ///         ONE, SHARED, PLATFORM-OWNED — AND ADR-009 SAYS "a dedicated etcd per tenant from
+    ///         etcd-operator". THIS DOES NOT DO THAT, AND THE REASON IS STRUCTURAL RATHER THAN
+    ///         ECONOMIC.
+    ///     </b> Checked in the CRD: <c>kamaji.clastix.io_datastores.yaml</c> is
     ///     <c>scope: Cluster</c>. Every object this platform applies is namespaced, carries ADR-013's
     ///     seven labels and lives inside <c>{subscriptionId:N}-{resourceGroup}</c>; a cluster-scoped
     ///     object has no namespace to be isolated by, so two tenants' clusters would compete for one
     ///     name in one flat space and the platform's whole tenancy story would rest on a naming
     ///     convention. This provider therefore <b>names</b> a DataStore the platform installed and
-    ///     <b>creates none</b>. The name is Kamaji's own chart default — <c>defaultDatastoreName:
-    ///     default</c>, with a <c>kamaji-etcd</c> subchart that creates a <c>DataStore</c> called
+    ///     <b>creates none</b>. The name is Kamaji's own chart default —
+    ///     <c>
+    /// defaultDatastoreName:
+    ///     default
+    ///     </c>, with a <c>kamaji-etcd</c> subchart that creates a <c>DataStore</c> called
     ///     <c>default</c> when <c>kamaji-etcd.deploy</c> is on.
     ///     <para>
     ///         ⚠ <b>What that costs, stated rather than left to be discovered:</b> tenant control planes
@@ -498,8 +536,11 @@ public static class ManagedClusters {
 
     /// <summary>What one control-plane container of a tenant control plane costs.</summary>
     /// <remarks>
-    ///     ⚠ <b>Platform-chosen, not tenant-chosen, and that is what makes this type's quota a SUM over
-    ///     two populations the tenant sizes differently.</b> A tenant picks how many control-plane
+    ///     ⚠
+    ///     <b>
+    ///         Platform-chosen, not tenant-chosen, and that is what makes this type's quota a SUM over
+    ///         two populations the tenant sizes differently.
+    ///     </b> A tenant picks how many control-plane
     ///     replicas they want and cannot pick how big one is: a Kubernetes API server's working set is
     ///     a function of the objects in it rather than of anything on this form, and offering a
     ///     "control plane size" would be offering a number nobody can choose correctly. It has to agree
@@ -536,8 +577,11 @@ public static class ManagedClusters {
     /// <remarks>
     ///     ⚠ <b>It checks SHAPE and not RANGE, and the difference is where the real mistakes are.</b>
     ///     <c>10.244.0.0/16</c> and <c>10.244.0.0/33</c> both look like CIDRs and this pattern refuses
-    ///     the second; what it cannot refuse is a pod CIDR that <i>overlaps the management cluster's
-    ///     own</i>, which is the failure that produces a cluster whose nodes route the platform's
+    ///     the second; what it cannot refuse is a pod CIDR that
+    ///     <i>
+    ///         overlaps the management cluster's
+    ///         own
+    ///     </i>, which is the failure that produces a cluster whose nodes route the platform's
     ///     addresses to themselves. That is a fact about the cluster rather than about the body —
     ///     <c>charts/managed/seaweedfs/conformance.yaml</c>'s <c>replication-versus-topology</c> is the
     ///     same shape — and it is owed as <c>cidrs-are-not-checked-against-the-management-cluster</c>.
@@ -552,8 +596,11 @@ public static class ManagedClusters {
     ///     <c>AllowedValues</c> grew under them is a tenant whose stored body stopped being the body
     ///     they sent.
     ///     <para>
-    ///         ⚠ <b>THE API TAKES A MINOR AND THE OBJECT NEEDS A FULL SEMVER, WHICH IS WHY
-    ///         <see cref="PinnedPatch" /> EXISTS.</b> Kamaji validates a tenant control plane's version
+    ///         ⚠
+    ///         <b>
+    ///             THE API TAKES A MINOR AND THE OBJECT NEEDS A FULL SEMVER, WHICH IS WHY
+    ///             <see cref="PinnedPatch" /> EXISTS.
+    ///         </b> Kamaji validates a tenant control plane's version
     ///         with a semantic-version comparison against its own bundled kubeadm, and a
     ///         two-component <c>v1.33</c> is not a semantic version. So the platform pins the patch. A
     ///         tenant-visible patch would be worse than the pin in both directions: a tenant pinned to
@@ -569,8 +616,11 @@ public static class ManagedClusters {
     /// <summary>The full version each offered minor is rendered as.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>REVIEWED 2026-08-18, AND BOTH STRINGS WERE WRONG — NOT AS KUBERNETES VERSIONS BUT
-    ///         AS IMAGE TAGS.</b> The previous pins were <c>v1.32.9</c> and <c>v1.33.4</c>. Both are
+    ///         ⚠
+    ///         <b>
+    ///             REVIEWED 2026-08-18, AND BOTH STRINGS WERE WRONG — NOT AS KUBERNETES VERSIONS BUT
+    ///             AS IMAGE TAGS.
+    ///         </b> The previous pins were <c>v1.32.9</c> and <c>v1.33.4</c>. Both are
     ///         real Kubernetes releases: 1.32 ended at 1.32.13 and 1.33 is at 1.33.13. Neither is a tag
     ///         of <see cref="AgentPools.NodeImageRepository" />, which publishes exactly four —
     ///         <c>v1.31.5</c>, <c>v1.32.1</c>, <c>v1.33.5</c>, <c>v1.34.1</c>, read off
@@ -579,8 +629,11 @@ public static class ManagedClusters {
     ///         anything this platform reads.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE NODE-IMAGE REGISTRY IS THE BINDING CONSTRAINT, NOT THE KUBERNETES RELEASE
-    ///         PAGE, AND THAT INVERTS WHAT <see cref="AgentPools.NodeImageRepository" /> ASSUMED.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THE NODE-IMAGE REGISTRY IS THE BINDING CONSTRAINT, NOT THE KUBERNETES RELEASE
+    ///             PAGE, AND THAT INVERTS WHAT <see cref="AgentPools.NodeImageRepository" /> ASSUMED.
+    ///         </b>
     ///         That constant's remarks said the KubeVirt provider publishes an image "tagged with the
     ///         Kubernetes version they carry", so the tag was "a function of <c>PinnedPatch</c>". It
     ///         publishes one tag per MINOR, at whichever patch it happened to build. A pin is
@@ -588,8 +641,11 @@ public static class ManagedClusters {
     ///         one candidate per offered minor and these are they.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>WHAT THAT COSTS, SAID RATHER THAN HIDDEN: <c>v1.32.1</c> WAS BUILT IN JANUARY
-    ///         2025</b> and carries every fix that landed in 1.32.2 through 1.32.13. The alternative
+    ///         ⚠
+    ///         <b>
+    ///             WHAT THAT COSTS, SAID RATHER THAN HIDDEN: <c>v1.32.1</c> WAS BUILT IN JANUARY
+    ///             2025
+    ///         </b> and carries every fix that landed in 1.32.2 through 1.32.13. The alternative
     ///         is a newer control plane with no bootable node image, which is a cluster with no nodes
     ///         — a worse failure and a silent one. ⚠ And both offered minors are out of upstream
     ///         support: 1.32 since 2026-02-28, 1.33 since 2026-06-28. Fixing THAT is a new
@@ -598,14 +654,23 @@ public static class ManagedClusters {
     ///         <c>offered-minors-are-out-of-support</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>RE-VERIFIED 2026-08-19 AGAINST BOTH UPSTREAMS, AND THE PINS BELOW ARE STILL THE
-    ///         ONLY RENDERABLE ONES — BUT THE MINOR SET IS NOW A DECISION RATHER THAN A GAP.</b> Both
+    ///         ⚠
+    ///         <b>
+    ///             RE-VERIFIED 2026-08-19 AGAINST BOTH UPSTREAMS, AND THE PINS BELOW ARE STILL THE
+    ///             ONLY RENDERABLE ONES — BUT THE MINOR SET IS NOW A DECISION RATHER THAN A GAP.
+    ///         </b> Both
     ///         EOL dates are exact, and <c>quay.io</c> still publishes exactly the four tags named
     ///         above with nothing pushed since 2025-09-27. What the earlier review did not weigh is
-    ///         that <b>1.34 — the one supported minor with a bootable image — is itself EOL on
-    ///         2026-10-27</b>, and enters maintenance mode on 2026-08-27. The minors worth an
-    ///         immutable api-version are 1.35 and 1.36, and <b>neither has a container-disk image in
-    ///         any repository under the <c>capk</c> namespace</b>. So the blocker is node-image supply
+    ///         that
+    ///         <b>
+    ///             1.34 — the one supported minor with a bootable image — is itself EOL on
+    ///             2026-10-27
+    ///         </b>, and enters maintenance mode on 2026-08-27. The minors worth an
+    ///         immutable api-version are 1.35 and 1.36, and
+    ///         <b>
+    ///             neither has a container-disk image in
+    ///             any repository under the <c>capk</c> namespace
+    ///         </b>. So the blocker is node-image supply
     ///         rather than the api-version cost: upstream CAPK automates no container-disk build, and
     ///         the documented route is <c>kubernetes-sigs/image-builder</c>, whose KubeVirt targets
     ///         default to 1.36 today. <b>Recommended and deliberately not landed here:</b> host a
@@ -632,8 +697,11 @@ public static class ManagedClusters {
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>THREE, AND docs/plan/13 SAYS "at most one minor" ABOUT A DIFFERENT THING.</b> That
-    ///     document's sentence is <i>"the control plane must be upgraded first and by at most one
-    ///     minor"</i>, which is the rule for the control plane's <b>own step size</b> — and it is real:
+    ///     document's sentence is
+    ///     <i>
+    ///         "the control plane must be upgraded first and by at most one
+    ///         minor"
+    ///     </i>, which is the rule for the control plane's <b>own step size</b> — and it is real:
     ///     both Cluster API's topology webhook and Kamaji's own version webhook refuse a two-minor jump
     ///     and refuse a downgrade. The <i>kubelet</i> rule is separate and is <b>three</b> minors below
     ///     the API server, per the Kubernetes version-skew policy, which moved from two to three in
@@ -641,9 +709,15 @@ public static class ManagedClusters {
     ///     <see cref="UpgradeIsLegal" /> the step-size one, because they answer different questions and
     ///     a single function would have to be asked which.
     ///     <para>
-    ///         ⚠ <b>AND NEITHER IS ENFORCED BY THIS PLATFORM, WHICH IS A REFUTATION OF docs/plan/13
-    ///         RATHER THAN AN OMISSION.</b> That document says <i>"the API enforces it with a clear
-    ///         error, rather than letting a tenant break their cluster and open a ticket"</i>. It
+    ///         ⚠
+    ///         <b>
+    ///             AND NEITHER IS ENFORCED BY THIS PLATFORM, WHICH IS A REFUTATION OF docs/plan/13
+    ///             RATHER THAN AN OMISSION.
+    ///         </b> That document says
+    ///         <i>
+    ///             "the API enforces it with a clear
+    ///             error, rather than letting a tenant break their cluster and open a ticket"
+    ///         </i>. It
     ///         cannot: a node pool's version lives in a <b>different resource</b> from its cluster's,
     ///         and <see cref="ResourceSchema" /> validates one body against constants — it never sees
     ///         another resource. This is the seam
@@ -683,8 +757,11 @@ public static class ManagedClusters {
     /// <param name="to">The version asked for.</param>
     /// <returns><see langword="true" /> for no change or exactly one minor forward.</returns>
     /// <remarks>
-    ///     ⚠ <b>Downgrades are refused, and that is upstream's rule rather than a policy invented
-    ///     here</b> — Kamaji's version webhook rejects a lower version outright and rejects a jump of
+    ///     ⚠
+    ///     <b>
+    ///         Downgrades are refused, and that is upstream's rule rather than a policy invented
+    ///         here
+    ///     </b> — Kamaji's version webhook rejects a lower version outright and rejects a jump of
     ///     more than one minor as <i>"a minor version in a non-sequential mode"</i>. Enforcing it at
     ///     the API would turn an admission failure on an object the tenant never sees into a refusal on
     ///     the request they made.
@@ -717,8 +794,11 @@ public static class ManagedClusters {
     ///     — and because a second copy in the same assembly is the drift
     ///     <c>ClickHouseClusters.Presets</c>' remarks argue against across assemblies.
     ///     <para>
-    ///         ⚠ <b><c>s1</c>, and the values are <c>StorageAccounts.Presets</c>' rather than
-    ///         <c>PostgresServers.Presets</c>'.</b> docs/plan/12 § Sizing vocabulary calls <c>s1.*</c>
+    ///         ⚠
+    ///         <b>
+    ///             <c>s1</c>, and the values are <c>StorageAccounts.Presets</c>' rather than
+    ///             <c>PostgresServers.Presets</c>'.
+    ///         </b> docs/plan/12 § Sizing vocabulary calls <c>s1.*</c>
     ///         <i>"1:4 · General — most databases"</i>, which is also the ratio every cloud's default
     ///         Kubernetes node SKU has. The two shipped spellings of <c>s1</c> differ by one rung and
     ///         <c>PostgresServers.Presets["s1.nano"]</c> is <c>(100m, 512Mi)</c> — 5 GiB per core, on
@@ -726,8 +806,11 @@ public static class ManagedClusters {
     ///         so, and <c>ManagedClusterDeclarationTests</c> pins the ratio rather than the copy.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>AND HERE A PRESET IS A VM RATHER THAN A CONTAINER, WHICH NOTHING BEFORE THIS HAS
-    ///         BEEN.</b> Every earlier provider turns a preset into <c>resources.requests</c> on a pod.
+    ///         ⚠
+    ///         <b>
+    ///             AND HERE A PRESET IS A VM RATHER THAN A CONTAINER, WHICH NOTHING BEFORE THIS HAS
+    ///             BEEN.
+    ///         </b> Every earlier provider turns a preset into <c>resources.requests</c> on a pod.
     ///         A node pool turns it into the <b>name of a KubeVirt instancetype</b> — see
     ///         <see cref="AgentPools.InstancetypeName" /> — so the numbers below are what the platform
     ///         BELIEVES that instancetype to be, and nothing checks the belief. A
@@ -754,8 +837,11 @@ public static class ManagedClusters {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>NO EXPOSURE PROPERTY AT ALL, AND THE API SERVER IS THEREFORE REACHABLE ONLY FROM
-    ///         INSIDE THE MANAGEMENT CLUSTER. THIS IS THE LARGEST DECISION ON THE TYPE.</b>
+    ///         ⚠
+    ///         <b>
+    ///             NO EXPOSURE PROPERTY AT ALL, AND THE API SERVER IS THEREFORE REACHABLE ONLY FROM
+    ///             INSIDE THE MANAGEMENT CLUSTER. THIS IS THE LARGEST DECISION ON THE TYPE.
+    ///         </b>
     ///         docs/plan/12 § Cross-cutting decisions requires an explicit CIDR allow-list on any
     ///         exposure, and there is nowhere upstream to render one: the KubeVirt provider's
     ///         <c>ServiceSpecTemplate</c> has exactly one field, <c>type</c> — no ports, no selector and
@@ -772,17 +858,23 @@ public static class ManagedClusters {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>NO <c>addons</c>, AND docs/plan/13 ASKS FOR THEM BY NAME.</b> That document's
-    ///         sub-resources are <i>"<c>agentPools</c>, <c>credentials</c>, <c>addons</c> (ingress,
-    ///         cert-manager, monitoring agents, GPU operator — each a bundle chart the tenant opts
-    ///         into)"</i>. An addon is a chart installed <b>into the produced cluster</b>, and the
+    ///         sub-resources are
+    ///         <i>
+    ///             "<c>agentPools</c>, <c>credentials</c>, <c>addons</c> (ingress,
+    ///             cert-manager, monitoring agents, GPU operator — each a bundle chart the tenant opts
+    ///             into)"
+    ///         </i>. An addon is a chart installed <b>into the produced cluster</b>, and the
     ///         platform has no connection to the produced cluster — see this class's remarks. So
     ///         <c>addons</c> is not a property that was left out; it is a property whose mechanism does
     ///         not exist, and shipping a switch that turns nothing on would be worse than the absence.
     ///         <c>conformance.yaml § owed</c>, <c>addons-need-a-connection-to-the-new-cluster</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>NO <c>subnetId</c>, AND docs/plan/09's OWN STEP TABLE OPENS WITH "Allocate VPC,
-    ///         subnet, API VIP".</b> That is <c>CyberCloud.Network/virtualNetworks</c>, which is a
+    ///         ⚠
+    ///         <b>
+    ///             NO <c>subnetId</c>, AND docs/plan/09's OWN STEP TABLE OPENS WITH "Allocate VPC,
+    ///             subnet, API VIP".
+    ///         </b> That is <c>CyberCloud.Network/virtualNetworks</c>, which is a
     ///         different provider; a resource id in this body would be the sanctioned cross-provider
     ///         route (rule 2), and it would be a required property pointing at a type that may not be
     ///         in the registry the silo built. <c>conformance.yaml § owed</c>, <c>no-vpc-placement</c>.
@@ -822,11 +914,7 @@ public static class ManagedClusters {
                     Description: "The management cluster the control plane runs in. ⚠ This is not the "
                     + "cluster being created: it is the cluster whose API server accepts the Cluster "
                     + "API objects that create one."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -838,10 +926,7 @@ public static class ManagedClusters {
                     + "one minor at a time; a node pool may run up to three minors behind and may never "
                     + "run ahead. Neither rule is enforced by this API today — an illegal pair is "
                     + "refused by the cluster's own admission, after the create was accepted."
-                ) {
-                    AllowedValues = Versions,
-                    DefaultJson = "\"" + DefaultVersion + "\""
-                },
+                ) { AllowedValues = Versions, DefaultJson = "\"" + DefaultVersion + "\"" },
                 new(
                     "/properties/controlPlane",
                     SchemaKind.Nested,
@@ -855,11 +940,7 @@ public static class ManagedClusters {
                     + "to run. Two survives a node failure; one is offered for development. ⚠ Unlike an "
                     + "etcd quorum this is a plain replica count — the datastore is separate and is "
                     + "shared — so an even number is not the mistake it would be on a Raft member set."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "2" },
                 new(
                     "/properties/network",
                     SchemaKind.Nested,
@@ -906,9 +987,7 @@ public static class ManagedClusters {
                     + "is a black box they will not trust with production\". ⚠ It covers the control "
                     + "plane, which runs in the management cluster. Nothing scrapes inside the cluster "
                     + "being created; that needs an agent in the bundle."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -916,8 +995,11 @@ public static class ManagedClusters {
     ///     What a <c>POST …/listCredentials</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared even though no handler serves it, because an undeclared response is the one
-    ///     part of the API surface with no contract</b> — and on this type the contract is the most
+    ///     ⚠
+    ///     <b>
+    ///         Declared even though no handler serves it, because an undeclared response is the one
+    ///         part of the API surface with no contract
+    ///     </b> — and on this type the contract is the most
     ///     valuable thing in the file, because what leaves is <c>cluster-admin</c> on a whole cluster.
     /// </remarks>
     public static ResourceSchema ListCredentialsResponse { get; } =
@@ -942,9 +1024,7 @@ public static class ManagedClusters {
                     + "the control plane is deliberately not exposed, because there is no upstream "
                     + "field to attach a CIDR allow-list to. Returned separately so that a caller does "
                     + "not have to parse YAML to discover that."
-                ) {
-                    Format = SchemaFormat.Uri
-                },
+                ) { Format = SchemaFormat.Uri },
                 new(
                     "/expiresAt",
                     SchemaKind.Text,
@@ -953,15 +1033,12 @@ public static class ManagedClusters {
                     + "credential with no stated expiry is one every caller will paste into CI and "
                     + "never rotate — docs/plan/13 makes \"a kubectl credential that expires\" part of "
                     + "what a tenant is buying."
-                ) {
-                    Format = SchemaFormat.DateTime
-                }
+                ) { Format = SchemaFormat.DateTime }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -1031,12 +1108,18 @@ public static class ManagedClusters {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>dataStoreName</c> IS THE ONE FIELD WITHOUT WHICH NOTHING HAPPENS, AND IT NAMES
-    ///         AN OBJECT THIS PROVIDER DOES NOT CREATE.</b> See <see cref="DataStoreName" />.
+    ///         ⚠
+    ///         <b>
+    ///             <c>dataStoreName</c> IS THE ONE FIELD WITHOUT WHICH NOTHING HAPPENS, AND IT NAMES
+    ///             AN OBJECT THIS PROVIDER DOES NOT CREATE.
+    ///         </b> See <see cref="DataStoreName" />.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>serviceType: ClusterIP</c> OVERRIDES A CRD DEFAULT OF <c>LoadBalancer</c>, AND
-    ///         THAT IS THE MOST CONSEQUENTIAL LINE IN THIS FILE.</b> Kamaji defaults
+    ///         ⚠
+    ///         <b>
+    ///             <c>serviceType: ClusterIP</c> OVERRIDES A CRD DEFAULT OF <c>LoadBalancer</c>, AND
+    ///             THAT IS THE MOST CONSEQUENTIAL LINE IN THIS FILE.
+    ///         </b> Kamaji defaults
     ///         <c>network</c> to <c>{serviceType: LoadBalancer}</c>, so rendering nothing here would
     ///         publish every tenant's Kubernetes API server on a public address with no allow-list.
     ///         <see cref="Schema2026" />'s remarks carry the whole argument; the short form is that
@@ -1045,8 +1128,11 @@ public static class ManagedClusters {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>No <c>addons</c> block.</b> Kamaji offers CoreDNS, kube-proxy and konnectivity as
-    ///         control-plane addons, and each of them is software installed <i>inside the produced
-    ///         cluster</i>. Leaving the block out takes the provider's own defaults, which is the
+    ///         control-plane addons, and each of them is software installed
+    ///         <i>
+    ///             inside the produced
+    ///             cluster
+    ///         </i>. Leaving the block out takes the provider's own defaults, which is the
     ///         honest position for a platform that cannot see inside that cluster to check the result —
     ///         and it is the position <c>StorageBuckets.BucketJson</c> takes on <c>reclaimPolicy</c>:
     ///         render nothing and let the CRD's default stand.
@@ -1077,8 +1163,11 @@ public static class ManagedClusters {
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>THE TWO REFS ARE THE WHOLE OBJECT, THEY CARRY NO <c>apiVersion</c>, AND NEITHER IS
-    ///     CHECKED BY ANYTHING ON THE WRITE PATH.</b> Cluster API v1beta2's
+    ///     ⚠
+    ///     <b>
+    ///         THE TWO REFS ARE THE WHOLE OBJECT, THEY CARRY NO <c>apiVersion</c>, AND NEITHER IS
+    ///         CHECKED BY ANYTHING ON THE WRITE PATH.
+    ///     </b> Cluster API v1beta2's
     ///     <c>ContractVersionedObjectReference</c> is <c>{apiGroup, kind, name}</c> — the version is
     ///     resolved from a label on the provider's CRD rather than written here — so a ref naming an
     ///     object that does not exist is admitted, stored, and reported as a condition on an object
@@ -1105,9 +1194,7 @@ public static class ManagedClusters {
                     ["name"] = ControlPlaneName(name)
                 },
                 ["infrastructureRef"] = new JsonObject {
-                    ["apiGroup"] = InfrastructureKind.Group,
-                    ["kind"] = InfrastructureKind.Kind,
-                    ["name"] = name
+                    ["apiGroup"] = InfrastructureKind.Group, ["kind"] = InfrastructureKind.Kind, ["name"] = name
                 }
             }
         }.ToJsonString();
@@ -1121,17 +1208,23 @@ public static class ManagedClusters {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>CONTAINMENT, AND THE REASON IS READ IN THE CRDs RATHER THAN IN A README — because
-    ///         two agents have found a README and its own code disagreeing.</b> The
+    ///         ⚠
+    ///         <b>
+    ///             CONTAINMENT, AND THE REASON IS READ IN THE CRDs RATHER THAN IN A README — because
+    ///             two agents have found a README and its own code disagreeing.
+    ///         </b> The
     ///         <c>KamajiControlPlane</c> CRD carries five <c>+kubebuilder:default</c> markers on the
     ///         top-level spec — <c>replicas=2</c>, <c>registry="registry.k8s.io"</c>, a whole
     ///         <c>kubelet</c> object, a whole <c>network</c> object and <c>network.serviceType</c> — so
     ///         a real API server writes back four keys this provider never sent, on the first create.
     ///         Cluster API's own <c>ClusterSpec</c> has no defaults and its mutating webhook is a no-op
     ///         for a non-topology cluster, which is worth knowing rather than assuming; the KubeVirt
-    ///         provider defaults only status fields. ⚠ <b>An equality comparison would pass in the
-    ///         Docker-free suite AND in the k3s suite and fail only against a real management
-    ///         cluster</b>, because the harness derives its CRD stubs from
+    ///         provider defaults only status fields. ⚠
+    ///         <b>
+    ///             An equality comparison would pass in the
+    ///             Docker-free suite AND in the k3s suite and fail only against a real management
+    ///             cluster
+    ///         </b>, because the harness derives its CRD stubs from
     ///         <c>ProviderConformanceCase.Objects</c> and a derived stub has an <i>open</i> schema with
     ///         no defaults in it — <c>CyberCloud.Providers.Search</c> measured exactly that, 27 of 27
     ///         green over an equality bug. <c>ManagedClusterMatchesTests</c> is the hand-written test
@@ -1196,23 +1289,32 @@ public static class ManagedClusters {
     /// <param name="objectJson">The <c>Cluster</c> object's JSON, as the API server returned it.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS THE FUNCTION THAT MAKES THIS TYPE DIFFERENT FROM EVERY OTHER PROVIDER, AND
-    ///         ITS THIRD ANSWER IS THE INTERESTING ONE.</b> Nine families decide convergence from
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS THE FUNCTION THAT MAKES THIS TYPE DIFFERENT FROM EVERY OTHER PROVIDER, AND
+    ///             ITS THIRD ANSWER IS THE INTERESTING ONE.
+    ///         </b> Nine families decide convergence from
     ///         <see cref="Matches" /> alone, which is right for them: what they applied <i>is</i> the
     ///         product, modulo an operator that will get there. Here what was applied is a
     ///         <i>request</i> for a cluster, so this reads Cluster API's own conditions and the
     ///         reconciler reports them as docs/plan/09 § Kubernetes in Kubernetes' step list.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see cref="ClusterReadinessKind.NotReported" /> IS A HOLE AND IT IS NAMED RATHER
-    ///         THAN HIDDEN.</b> An object with no <c>status</c> at all has never been seen by a
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ClusterReadinessKind.NotReported" /> IS A HOLE AND IT IS NAMED RATHER
+    ///             THAN HIDDEN.
+    ///         </b> An object with no <c>status</c> at all has never been seen by a
     ///         controller. In a management cluster with Cluster API installed that lasts seconds; in a
     ///         cluster where the CRDs exist and the controller is dead it lasts forever, and this
     ///         platform cannot tell the two apart from here. <c>ManagedClusterReconciler</c> treats it
     ///         as converged, because the alternative is a type that can never converge in either
     ///         conformance suite — the Docker-free harness echoes the apply back and the k3s harness
-    ///         installs a schema-less CRD stub with no controller behind it. ⚠ <b>The case where the
-    ///         CRDs are absent entirely is caught one layer earlier</b>, by the apply, which is what
+    ///         installs a schema-less CRD stub with no controller behind it. ⚠
+    ///         <b>
+    ///             The case where the
+    ///             CRDs are absent entirely is caught one layer earlier
+    ///         </b>, by the apply, which is what
     ///         keeps the hole to "installed but not running" rather than "not installed".
     ///         <c>conformance.yaml § owed</c>, <c>converged-is-not-ready</c>.
     ///     </para>
@@ -1250,11 +1352,11 @@ public static class ManagedClusters {
         return new(
             ClusterReadinessKind.NotReady,
             (Flag(status, "infrastructureReady")
-                ? "the infrastructure is ready and "
-                : "waiting for the infrastructure, and ")
+                    ? "the infrastructure is ready and "
+                    : "waiting for the infrastructure, and ")
             + (Flag(status, "controlPlaneReady")
-                ? "the control plane is ready"
-                : "waiting for the control plane")
+                    ? "the control plane is ready"
+                    : "waiting for the control plane")
         );
     }
 
@@ -1315,9 +1417,7 @@ public static class ManagedClusters {
     static JsonObject Component() =>
         new() {
             ["resources"] = new JsonObject {
-                ["requests"] = new JsonObject {
-                    ["cpu"] = ControlPlaneCpu, ["memory"] = ControlPlaneMemory
-                }
+                ["requests"] = new JsonObject { ["cpu"] = ControlPlaneCpu, ["memory"] = ControlPlaneMemory }
             }
         };
 

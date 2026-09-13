@@ -129,8 +129,11 @@ public sealed record KubeObject {
 ///         join that is blind to the unlabelled objects the reclaim exists to see.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Labels" /> is absent-as-empty, and here that is safe in the only direction
-///         it matters.</b> An object whose <c>metadata.labels</c> is missing reads as carrying no
+///         ⚠
+///         <b>
+///             <see cref="Labels" /> is absent-as-empty, and here that is safe in the only direction
+///             it matters.
+///         </b> An object whose <c>metadata.labels</c> is missing reads as carrying no
 ///         <c>managed-by</c>, so it counts as somebody else's — the conservative answer. The
 ///         opposite mapping (absent as "no labels means ours") is the one that would authorise a
 ///         delete, and it is not expressible here.

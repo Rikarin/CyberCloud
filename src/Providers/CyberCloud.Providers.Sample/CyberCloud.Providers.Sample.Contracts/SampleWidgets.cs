@@ -11,16 +11,24 @@ namespace CyberCloud.Providers.Sample.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>A widget is a <c>ConfigMap</c> with two fields in it, and it is meant to stay that
-///         way.</b> docs/plan/24 § Phase 1's exit criterion 1 names this provider by name;
-///         docs/plan/25 § R1 explains why it is first and why it is trivial — <i>"so its friction is
-///         unmistakably the platform's"</i>. Every line of cleverness added here is a line of
+///         <b>
+///             A widget is a <c>ConfigMap</c> with two fields in it, and it is meant to stay that
+///             way.
+///         </b> docs/plan/24 § Phase 1's exit criterion 1 names this provider by name;
+///         docs/plan/25 § R1 explains why it is first and why it is trivial —
+///         <i>
+///             "so its friction is
+///             unmistakably the platform's"
+///         </i>. Every line of cleverness added here is a line of
 ///         measurement lost, because a provider that solves a problem itself stops reporting that the
 ///         platform has one.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>/properties/clusterId</c> is declared here and required, and
-///         <c>RequiresCluster()</c> now names it.</b> This provider is where that gap was found: the
+///         ⚠
+///         <b>
+///             <c>/properties/clusterId</c> is declared here and required, and
+///             <c>RequiresCluster()</c> now names it.
+///         </b> This provider is where that gap was found: the
 ///         reconcile driver refused a pass with no cluster connection, the manager resolved one by
 ///         reading a hard-coded <c>/properties/clusterId</c> out of the body, and nothing checked that
 ///         a type declaring the flag also declared the property — so forgetting it was a per-resource
@@ -107,9 +115,7 @@ public static class SampleWidgets {
                     // ⚠ This is the property RequiresCluster names. ProviderBuilder now refuses the
                     // type if this pointer is missing or is not a required string, so the flag and the
                     // shape can no longer disagree.
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
+                    Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true
                 },
                 new(
                     "/properties/message",
@@ -119,9 +125,7 @@ public static class SampleWidgets {
                 ) {
                     // A ConfigMap key's value is a string of any length; the cap is ours, so that a
                     // caller learns the limit from the document rather than from the API server.
-                    MinLength = 1,
-                    MaxLength = 1024,
-                    ExampleJson = "\"hello\""
+                    MinLength = 1, MaxLength = 1024, ExampleJson = "\"hello\""
                 },
                 new(
                     "/properties/enabled",
@@ -146,11 +150,7 @@ public static class SampleWidgets {
                     "/properties/replicas",
                     SchemaKind.WholeNumber,
                     Description: "How many copies of the ConfigMap's message the widget claims to hold."
-                ) {
-                    Minimum = 1,
-                    Maximum = 9,
-                    DefaultJson = "1"
-                },
+                ) { Minimum = 1, Maximum = 9, DefaultJson = "1" },
                 new(
                     "/properties/allowedCidrs",
                     SchemaKind.Array,
@@ -172,8 +172,7 @@ public static class SampleWidgets {
                     // visible in a published document rather than only in a doc comment. Note what it
                     // costs: on a PATCH this field's null and "remove this field" are the same bytes —
                     // see the remarks on SchemaProperty.Nullable.
-                    Nullable = true,
-                    Format = SchemaFormat.DateTime
+                    Nullable = true, Format = SchemaFormat.DateTime
                 }
             ]
         );
@@ -199,8 +198,7 @@ public static class SampleWidgets {
         ResourceSchema.Of(
             [
                 new("/echo", SchemaKind.Text, Description: "Text the response repeats back.") {
-                    MaxLength = 64,
-                    DefaultJson = "\"pong\""
+                    MaxLength = 64, DefaultJson = "\"pong\""
                 }
             ]
         );
@@ -217,8 +215,7 @@ public static class SampleWidgets {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     /// <summary>Builds a body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="clusterId">The cluster to place the ConfigMap in.</param>
@@ -252,20 +249,20 @@ public static class SampleWidgets {
     /// </returns>
     public static ImmutableDictionary<string, string> DataFor(JsonElement desired) {
         var properties = desired.ValueKind == JsonValueKind.Object
-                         && desired.TryGetProperty("properties", out var found)
-                         && found.ValueKind == JsonValueKind.Object
-            ? found
-            : default;
+            && desired.TryGetProperty("properties", out var found)
+            && found.ValueKind == JsonValueKind.Object
+                ? found
+                : default;
 
         var message = properties.ValueKind == JsonValueKind.Object
-                      && properties.TryGetProperty("message", out var text)
-                      && text.ValueKind == JsonValueKind.String
-            ? text.GetString() ?? string.Empty
-            : string.Empty;
+            && properties.TryGetProperty("message", out var text)
+            && text.ValueKind == JsonValueKind.String
+                ? text.GetString() ?? string.Empty
+                : string.Empty;
 
         var enabled = properties.ValueKind == JsonValueKind.Object
-                      && properties.TryGetProperty("enabled", out var flag)
-                      && flag.ValueKind == JsonValueKind.True;
+            && properties.TryGetProperty("enabled", out var flag)
+            && flag.ValueKind == JsonValueKind.True;
 
         return ImmutableDictionary<string, string>.Empty
             .Add("message", message)
@@ -303,8 +300,7 @@ public static class SampleWidgets {
         JsonNode? parsed;
         try {
             parsed = JsonNode.Parse(objectJson);
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             return false;
         }
 

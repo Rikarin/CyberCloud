@@ -49,8 +49,11 @@ public interface IProviderBuilder {
 ///     One resource type under construction, and the point the next type chains from.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This interface carries <see cref="IProviderBuilder.ResourceType" /> as well as the type-scoped methods,
-///     and that is what makes docs/plan/08's example compile.</b> The document's <c>Describe</c> ends
+///     ⚠
+///     <b>
+///         This interface carries <see cref="IProviderBuilder.ResourceType" /> as well as the type-scoped methods,
+///         and that is what makes docs/plan/08's example compile.
+///     </b> The document's <c>Describe</c> ends
 ///     one type's declaration by starting the next one on the same chain:
 ///     <code>
 ///     .ResourceType("servers")
@@ -92,9 +95,12 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     /// <param name="meters">The meters, from docs/plan/06 § Quota's per-family list.</param>
     /// <returns>The same builder.</returns>
     /// <remarks>
-    ///     ⚠ <b>docs/plan/08 § The provider registry writes <c>Meter.VCpuHours</c>,
-    ///     <c>Meter.StorageGbMonths</c> and <c>Meter.BackupGbMonths</c>, which are <i>billing</i>
-    ///     meters and not the quota meters step 6 reserves against.</b> docs/plan/06 § Quota's
+    ///     ⚠
+    ///     <b>
+    ///         docs/plan/08 § The provider registry writes <c>Meter.VCpuHours</c>,
+    ///         <c>Meter.StorageGbMonths</c> and <c>Meter.BackupGbMonths</c>, which are <i>billing</i>
+    ///         meters and not the quota meters step 6 reserves against.
+    ///     </b> docs/plan/06 § Quota's
     ///     families are <c>vcpu</c>, <c>memoryGb</c>, <c>storageGb</c>, <c>publicIps</c>,
     ///     <c>clusters</c> and <c>resources</c>, which is what <see cref="QuotaMeter" /> implements
     ///     and what <c>IQuotaGrain.TryReserveAsync</c> takes. The two documents disagree; this takes
@@ -122,8 +128,11 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     /// </param>
     /// <returns>The same builder.</returns>
     /// <remarks>
-    ///     ⚠ <b><paramref name="fallback" /> defaulted to <c>1</c> and now defaults to refusal, which is
-    ///     a behaviour change.</b> A pointer that stops resolving is the failure worth designing for: a
+    ///     ⚠
+    ///     <b>
+    ///         <paramref name="fallback" /> defaulted to <c>1</c> and now defaults to refusal, which is
+    ///         a behaviour change.
+    ///     </b> A pointer that stops resolving is the failure worth designing for: a
     ///     property is renamed, an api-version moves, a schema and a meter drift apart, and the meter
     ///     silently reserves one unit while the resource provisions at whatever size it likes. Zero and
     ///     one are both wrong and both pass. A provider that means "absent has a server default" now
@@ -262,8 +271,11 @@ public interface IResourceTypeBuilder : IProviderBuilder {
 
     /// <summary>Declares that a deleted resource of this type is recoverable.</summary>
     /// <param name="days">
-    ///     For how long. docs/plan/06 § Tags, locks gives 7 for types carrying data — <i>"a dropped
-    ///     production database is not a support ticket you want to have to say no to"</i>.
+    ///     For how long. docs/plan/06 § Tags, locks gives 7 for types carrying data —
+    ///     <i>
+    ///         "a dropped
+    ///         production database is not a support ticket you want to have to say no to"
+    ///     </i>.
     /// </param>
     /// <param name="purgePermission">
     ///     The ReBAC permission a <b>purge</b> needs — destroying the resource before its window is
@@ -277,35 +289,53 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     /// <returns>The same builder.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><paramref name="purgePermission" /> is a fourth permission and not
-    ///         <see cref="Permissions" />'s third under another name.</b> docs/plan/08 § Soft delete:
+    ///         ⚠
+    ///         <b>
+    ///             <paramref name="purgePermission" /> is a fourth permission and not
+    ///             <see cref="Permissions" />'s third under another name.
+    ///         </b> docs/plan/08 § Soft delete:
     ///         Azure puts <c>Microsoft.KeyVault/locations/deletedVaults/purge/action</c> in Key Vault
-    ///         Contributor's <c>notActions</c>, <i>"so 'may delete' and 'may destroy permanently' are
-    ///         genuinely separable rights and a role can hold the first without the second"</i>. A
+    ///         Contributor's <c>notActions</c>,
+    ///         <i>
+    ///             "so 'may delete' and 'may destroy permanently' are
+    ///             genuinely separable rights and a role can hold the first without the second"
+    ///         </i>. A
     ///         delete that a recovery window makes reversible and a purge that ends the recovery are
     ///         not the same authority, and a platform that checked one permission for both would make
     ///         the window worth nothing to anybody who could already delete.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It rides on this method rather than on <see cref="Permissions" />, and that is the
-    ///         shape <see cref="RequiresCluster" /> already uses.</b> A purge permission on a type with
+    ///         ⚠
+    ///         <b>
+    ///             It rides on this method rather than on <see cref="Permissions" />, and that is the
+    ///             shape <see cref="RequiresCluster" /> already uses.
+    ///         </b> A purge permission on a type with
     ///         no recovery window names a right nothing can exercise; making every provider declare one
     ///         to say "not applicable" would put the cost of the first soft-deletable type on the nine
     ///         that are not. <c>Build</c> drops it for a type that declares no window, exactly as it
     ///         drops <c>ClusterIdPointer</c> for one that needs no cluster.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><paramref name="purgeProtectionPointer" /> must be a declared boolean in every
-    ///         api-version, and the builder refuses the type otherwise</b> — the lesson
+    ///         ⚠
+    ///         <b>
+    ///             <paramref name="purgeProtectionPointer" /> must be a declared boolean in every
+    ///             api-version, and the builder refuses the type otherwise
+    ///         </b> — the lesson
     ///         <see cref="RequiresCluster" />'s own check records. A flag the platform enforces against
     ///         a property no schema declares is a flag no caller can set and the platform reads as
     ///         absent, which is a protection that silently never engages.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Retention is declared here, on the type, and is therefore immutable by
-    ///         construction.</b> docs/plan/08 § Soft delete asks that it be <i>"set at creation and
-    ///         immutable afterwards — a window a caller can shorten under their own resource is not a
-    ///         recovery window"</i>. A type-level window is the stronger form of that: there is no
+    ///         ⚠
+    ///         <b>
+    ///             Retention is declared here, on the type, and is therefore immutable by
+    ///             construction.
+    ///         </b> docs/plan/08 § Soft delete asks that it be
+    ///         <i>
+    ///             "set at creation and
+    ///             immutable afterwards — a window a caller can shorten under their own resource is not a
+    ///             recovery window"
+    ///         </i>. A type-level window is the stronger form of that: there is no
     ///         per-resource retention property, so there is nothing for a caller to set at creation or
     ///         to shorten later, and the delete path stamps
     ///         <see cref="IndexEntry.RecoverableUntil" /> from this number and never from the body.
@@ -347,8 +377,11 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///         and its <see cref="ReconcileContext.Cluster" /> is <see langword="null" />.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Every api-version's schema must declare <paramref name="clusterIdPointer" /> as a
-    ///         required string, and the builder refuses the type otherwise.</b> Without that check the
+    ///         ⚠
+    ///         <b>
+    ///             Every api-version's schema must declare <paramref name="clusterIdPointer" /> as a
+    ///             required string, and the builder refuses the type otherwise.
+    ///         </b> Without that check the
     ///         flag was a promise nothing kept: the reconcile driver demanded a connection, the
     ///         manager looked for the id at a hard-coded pointer, and a provider that had not declared
     ///         the property found out one resource at a time, after the caller had already been told

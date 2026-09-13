@@ -11,8 +11,11 @@ namespace CyberCloud.Metering.Contracts;
 /// <remarks>
 ///     ⚠ <b>The snap is what makes the idempotency key work, and it is easy to leave out.</b> The key
 ///     is <c>sha256(resourceId | meter | windowStart | windowEnd)</c>, so two samplers — or one
-///     sampler run twice — produce the same key only if they produce the same window <i>to the
-///     tick</i>. A sampler that used <c>clock.UtcNow</c> as the window start would produce a
+///     sampler run twice — produce the same key only if they produce the same window
+///     <i>
+///         to the
+///         tick
+///     </i>. A sampler that used <c>clock.UtcNow</c> as the window start would produce a
 ///     different key on every run and docs/plan/22's dedup would never fire. Snapping to a grid
 ///     anchored at the Unix epoch means every silo, in every region, at every clock offset, agrees
 ///     on which window an instant belongs to without talking to anything.
@@ -43,7 +46,7 @@ public readonly record struct UsageWindow(DateTimeOffset Start, DateTimeOffset E
 
         var utc = instant.ToUniversalTime();
         var elapsed = utc.UtcTicks;
-        var start = new DateTimeOffset(elapsed - (elapsed % period.Ticks), TimeSpan.Zero);
+        var start = new DateTimeOffset(elapsed - elapsed % period.Ticks, TimeSpan.Zero);
 
         return new(start, start + period);
     }
@@ -67,8 +70,11 @@ public readonly record struct UsageWindow(DateTimeOffset Start, DateTimeOffset E
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>The property this type exists to make true</b> (docs/plan/22, first paragraph): <i>a
-///         usage record, once emitted, is never lost and never double-counted.</i> The "never lost"
+///         <b>The property this type exists to make true</b> (docs/plan/22, first paragraph):
+///         <i>
+///             a
+///             usage record, once emitted, is never lost and never double-counted.
+///         </i> The "never lost"
 ///         half is the durable rollup and ledger grains; the "never double-counted" half is
 ///         <see cref="IdempotencyKey" />, and it is a property of this type rather than of the
 ///         pipeline, because a key computed by the consumer would collapse two genuinely different
@@ -76,8 +82,11 @@ public readonly record struct UsageWindow(DateTimeOffset Start, DateTimeOffset E
 ///         collapse nothing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Build one with <see cref="ForSample" /> or <see cref="ForEvent" />, never with an
-///         object initialiser.</b> Both compute the key. A record constructed by hand with an empty
+///         ⚠
+///         <b>
+///             Build one with <see cref="ForSample" /> or <see cref="ForEvent" />, never with an
+///             object initialiser.
+///         </b> Both compute the key. A record constructed by hand with an empty
 ///         or invented key is refused by the rollup (<see cref="IsKeyConsistent" />) rather than
 ///         accepted, because a wrong key is worse than no key: it silently either swallows real
 ///         usage or duplicates it, and both are invisible until an invoice is disputed.
@@ -113,8 +122,10 @@ public sealed record UsageEvent {
     [Id(4)]
     public BillingMeter Meter { get; init; } = BillingMeter.Unknown;
 
-    /// <summary>Whether this was sampled or emitted. Redundant with the catalogue, and carried anyway
-    /// so a record read out of the sink years later explains itself without one.</summary>
+    /// <summary>
+    ///     Whether this was sampled or emitted. Redundant with the catalogue, and carried anyway
+    ///     so a record read out of the sink years later explains itself without one.
+    /// </summary>
     [Id(5)]
     public MeterKind Kind { get; init; } = MeterKind.Unknown;
 
@@ -142,9 +153,15 @@ public sealed record UsageEvent {
     ///     state-based meter.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This component is not in docs/plan/22 § The pipeline's key formula, and its absence
-    ///     there is a defect in that document.</b> <c>sha256(resourceId | meter | windowStart |
-    ///     windowEnd)</c> is exactly right for a state-based meter, where the sampler emits one event
+    ///     ⚠
+    ///     <b>
+    ///         This component is not in docs/plan/22 § The pipeline's key formula, and its absence
+    ///         there is a defect in that document.
+    ///     </b>
+    ///     <c>
+    /// sha256(resourceId | meter | windowStart |
+    ///     windowEnd)
+    ///     </c> is exactly right for a state-based meter, where the sampler emits one event
     ///     per (resource, meter, window) <i>by construction</i> — that is what makes "a sampler that
     ///     runs twice produces one record" true. It is not a key for an event-based meter: two
     ///     requests to the same resource inside one window are two genuine records with identical
@@ -173,10 +190,10 @@ public sealed record UsageEvent {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-            "Not a secret. This is sha256 of ResourceId, Meter, WindowStart, WindowEnd and EventId — "
-            + "every input is a sibling [Id] member of this same record, so the digest reveals nothing "
-            + "the state does not already carry. It is deliberately logged, traced and compared across "
-            + "silos, which is the opposite of a credential. The name is docs/plan/22 § The pipeline's."
+        "Not a secret. This is sha256 of ResourceId, Meter, WindowStart, WindowEnd and EventId — "
+        + "every input is a sibling [Id] member of this same record, so the digest reveals nothing "
+        + "the state does not already carry. It is deliberately logged, traced and compared across "
+        + "silos, which is the opposite of a credential. The name is docs/plan/22 § The pipeline's."
     )]
     public string IdempotencyKey { get; init; } = string.Empty;
 

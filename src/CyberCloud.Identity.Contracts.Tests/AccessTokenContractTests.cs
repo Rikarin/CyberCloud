@@ -3,6 +3,7 @@
 // property of the TOKEN contract (which spellings a `sub_typ` claim may carry), and moving them to
 // the authorization suite would file them under the wrong question. The byte-for-byte pinning of the
 // whole vocabulary, including these three, is AuthorizationVocabularyTests.
+
 using CyberCloud.Authorization.Contracts;
 
 namespace CyberCloud.Identity.Contracts.Tests;
@@ -99,19 +100,20 @@ public sealed class AccessTokenContractTests {
         AccessTokenClaims.Permitted.Count.ShouldBe(14);
 
         foreach (var unanticipated in new[] {
-                     "act",                 // the nested RFC 8693 form we deliberately do not also carry
-                     "sub_type",            // a near-miss spelling of sub_typ
-                     "idtyp",               // Entra's name for the same idea
-                     "impersonated_by",     // the header's name, which is not a claim name
-                     "tenant_id",           // tid spelled out
+                     "act", // the nested RFC 8693 form we deliberately do not also carry
+                     "sub_type", // a near-miss spelling of sub_typ
+                     "idtyp", // Entra's name for the same idea
+                     "impersonated_by", // the header's name, which is not a claim name
+                     "tenant_id", // tid spelled out
                      "email", "name", "preferred_username", "upn"
                  }) {
             AccessTokenClaims.Permitted.ShouldNotContain(unanticipated);
 
-            AccessTokenClaims.EnsurePermitted([unanticipated]).IsFailure.ShouldBeTrue(
-                $"'{unanticipated}' is not in the closed set, so a token carrying it must be refused "
-                + "rather than stripped — a strip only removes the spellings somebody thought of."
-            );
+            AccessTokenClaims.EnsurePermitted([unanticipated])
+                .IsFailure.ShouldBeTrue(
+                    $"'{unanticipated}' is not in the closed set, so a token carrying it must be refused "
+                    + "rather than stripped — a strip only removes the spellings somebody thought of."
+                );
         }
 
         // And the whole permitted set passes, so the check is a closure and not a blanket refusal.
@@ -207,9 +209,7 @@ public sealed class AccessTokenContractTests {
         AccessTokenClaims.ForbiddenClaims.ShouldContain("groups");
         AccessTokenClaims.ForbiddenClaims.ShouldContain("permissions");
         AccessTokenClaims.ForbiddenClaims.ShouldContain("scope");
-        AccessTokenClaims.ForbiddenClaims.ShouldContain(
-            "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
-        );
+        AccessTokenClaims.ForbiddenClaims.ShouldContain("http://schemas.microsoft.com/ws/2008/06/identity/claims/role");
 
         // Matched case-insensitively, because a claim named `Roles` is the same disclosure.
         AccessTokenClaims.ForbiddenClaims.ShouldContain("ROLES");
@@ -267,7 +267,9 @@ public sealed class AccessTokenContractTests {
         UniformFailures.SignUp.ShouldNotBeNullOrWhiteSpace();
 
         // ⚠ And none of them may say whether the account exists.
-        foreach (var message in new[] { UniformFailures.SignIn, UniformFailures.PasswordReset, UniformFailures.SignUp }) {
+        foreach (var message in new[] {
+                     UniformFailures.SignIn, UniformFailures.PasswordReset, UniformFailures.SignUp
+                 }) {
             message.ShouldNotContain("no such", Case.Insensitive);
             message.ShouldNotContain("not found", Case.Insensitive);
             message.ShouldNotContain("does not exist", Case.Insensitive);

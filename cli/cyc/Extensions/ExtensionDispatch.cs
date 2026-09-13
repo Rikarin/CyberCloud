@@ -56,20 +56,23 @@ static class ExtensionDispatch {
         GlobalOptions globals,
         VerbTreeDocument tree,
         GlobalValues values,
-        string[] arguments) {
+        string[] arguments
+    ) {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(values);
 
-        if (FirstOperand(globals, arguments) is not { } operand)
+        if (FirstOperand(globals, arguments) is not { } operand) {
             return null;
+        }
 
         var (name, index) = operand;
 
         // The re-check. It should be unreachable — the parse would have matched — and it is here so
         // that a change which makes it reachable fails a test rather than shipping a shadowable CLI.
-        if (CommandTree.TopLevelNames(tree).Contains(name))
+        if (CommandTree.TopLevelNames(tree).Contains(name)) {
             return null;
+        }
 
         var store = ExtensionStore.Open(host);
 
@@ -87,7 +90,8 @@ static class ExtensionDispatch {
             record.Name,
             store.PathFor(record.Name),
             [.. arguments.Skip(index + 1)],
-            ExtensionLauncher.EnvironmentFor(record.Name, settings, tree.ApiVersion, values.Output, host.ExecutablePath));
+            ExtensionLauncher.EnvironmentFor(record.Name, settings, tree.ApiVersion, values.Output, host.ExecutablePath)
+        );
     }
 
     /// <summary>
@@ -103,13 +107,15 @@ static class ExtensionDispatch {
     ///     does not exist.
     /// </remarks>
     static void RefuseUnregistered(ExtensionStore store, string name) {
-        if (!store.Unregistered().Contains(name, StringComparer.OrdinalIgnoreCase))
+        if (!store.Unregistered().Contains(name, StringComparer.OrdinalIgnoreCase)) {
             return;
+        }
 
         throw new CycClientException(
             $"'{store.PathFor(name)}' exists but no extension named '{name}' is installed, so cyc will not run it. "
             + "cyc runs what its index records, never what happens to be in the directory — install it with "
-            + $"'cyc extension add --source {store.PathFor(name)}'.");
+            + $"'cyc extension add --source {store.PathFor(name)}'."
+        );
     }
 
     /// <summary>
@@ -123,25 +129,32 @@ static class ExtensionDispatch {
     ///     comparison so an obvious mismatch never reads the file at all.
     /// </remarks>
     static void Verify(CycHost host, ExtensionStore store, ExtensionRecord record) {
-        if (ExtensionStore.UnsafeDirectories(host) is { Count: > 0 } unsafeDirectories)
+        if (ExtensionStore.UnsafeDirectories(host) is { Count: > 0 } unsafeDirectories) {
             throw new CycClientException(
                 $"cyc will not run an extension out of a directory anyone but you can write to: "
                 + $"{string.Join(", ", unsafeDirectories)}. Anything writable there runs as you, with your cloud "
-                + "credentials. Run 'chmod go-w' on it, then try again.");
+                + "credentials. Run 'chmod go-w' on it, then try again."
+            );
+        }
 
         var path = store.PathFor(record.Name);
         var file = new FileInfo(path);
 
-        if (!file.Exists)
+        if (!file.Exists) {
             throw new CycClientException(
                 $"'{record.Name}' is installed but '{path}' is gone. Reinstall it with 'cyc extension add', "
-                + $"or forget it with 'cyc extension remove {record.Name}'.");
+                + $"or forget it with 'cyc extension remove {record.Name}'."
+            );
+        }
 
-        if (file.Length != record.Size || !string.Equals(ExtensionStore.HashOf(path), record.Sha256, StringComparison.Ordinal))
+        if (file.Length != record.Size
+            || !string.Equals(ExtensionStore.HashOf(path), record.Sha256, StringComparison.Ordinal)) {
             throw new CycClientException(
                 $"'{path}' is not the file that was installed as '{record.Name}' — its contents changed and the index "
                 + "was not updated. cyc will not run it. Reinstall it with 'cyc extension add --source … --force' if the "
-                + "change was yours.");
+                + "change was yours."
+            );
+        }
     }
 
     /// <summary>
@@ -151,8 +164,11 @@ static class ExtensionDispatch {
     /// <param name="arguments">The raw arguments.</param>
     /// <returns>The verb and where it sits, or <c>null</c> when the command line is all flags.</returns>
     /// <remarks>
-    ///     ⚠ <b>A hand-written walk rather than <see cref="System.CommandLine.ParseResult" />, because
-    ///     the parse this runs after is the one that failed.</b> What is needed is not just the verb
+    ///     ⚠
+    ///     <b>
+    ///         A hand-written walk rather than <see cref="System.CommandLine.ParseResult" />, because
+    ///         the parse this runs after is the one that failed.
+    ///     </b> What is needed is not just the verb
     ///     but <i>where it sits</i>, so everything after it can go to the child in the order it was
     ///     typed — and a <see cref="System.CommandLine.ParseResult" />'s unmatched tokens have already
     ///     lost that. The walk knows only what it has to: a flag written <c>--flag=value</c> carries
@@ -170,29 +186,35 @@ static class ExtensionDispatch {
             // Option<bool>, whose arity is ZeroOrOne rather than Zero — `--verbose true` parses —
             // so a check on the maximum treats it as taking a value and swallows the verb that
             // follows it. Only a flag that must be given a value consumes the next token.
-            if (option.Arity.MinimumNumberOfValues == 0)
+            if (option.Arity.MinimumNumberOfValues == 0) {
                 continue;
+            }
 
             valued.Add(option.Name);
 
-            foreach (var alias in option.Aliases)
+            foreach (var alias in option.Aliases) {
                 valued.Add(alias);
+            }
         }
 
         for (var i = 0; i < arguments.Count; i++) {
             var argument = arguments[i];
 
-            if (string.Equals(argument, "--", StringComparison.Ordinal))
+            if (string.Equals(argument, "--", StringComparison.Ordinal)) {
                 return i + 1 < arguments.Count ? (arguments[i + 1], i + 1) : null;
+            }
 
-            if (!argument.StartsWith('-'))
+            if (!argument.StartsWith('-')) {
                 return (argument, i);
+            }
 
-            if (argument.Contains('=', StringComparison.Ordinal))
+            if (argument.Contains('=', StringComparison.Ordinal)) {
                 continue;
+            }
 
-            if (valued.Contains(argument))
+            if (valued.Contains(argument)) {
                 i++;
+            }
         }
 
         return null;

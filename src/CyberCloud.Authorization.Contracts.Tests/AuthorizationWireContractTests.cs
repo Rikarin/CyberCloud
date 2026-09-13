@@ -105,10 +105,10 @@ public sealed class AuthorizationWireContractTests {
     public void TheIdManifestMatchesTheBaseline() {
         var actual = WireTypes
             .SelectMany(type => type
-                .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                .Where(x => x.id is not null)
-                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
+                    .GetMembers(BindingFlags.Public | BindingFlags.Instance)
+                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(x => x.id is not null)
+                    .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .ThenBy(x => x.Id)
@@ -173,10 +173,10 @@ public sealed class AuthorizationWireContractTests {
         // excluded by having no setter at all, which is how IsValid and IsUserset are declared.
         var unnumbered = WireTypes
             .SelectMany(type => type
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
-                .Where(p => p.CanWrite)
-                .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
+                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
+                    .Where(p => p.CanWrite)
+                    .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();

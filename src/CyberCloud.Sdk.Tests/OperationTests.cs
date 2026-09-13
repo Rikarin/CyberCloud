@@ -3,8 +3,11 @@ using System.Diagnostics;
 namespace CyberCloud.Sdk.Tests;
 
 /// <summary>
-///     <c>GetProgressAsync()</c> — docs/plan/21 § The .NET SDK: <i>"ours; Azure's SDK has no
-///     equivalent … Azure's LROs expose no progress; ours do and the SDK should not hide it."</i>
+///     <c>GetProgressAsync()</c> — docs/plan/21 § The .NET SDK:
+///     <i>
+///         "ours; Azure's SDK has no
+///         equivalent … Azure's LROs expose no progress; ours do and the SDK should not hide it."
+///     </i>
 /// </summary>
 public sealed class ProgressStreamsIncrementallyTests {
     /// <summary>
@@ -17,24 +20,35 @@ public sealed class ProgressStreamsIncrementallyTests {
     [Fact]
     public async Task Entries_surface_as_each_poll_returns_them_not_in_a_batch_at_the_end() {
         var transport = new ScriptedTransport((request, index) => index switch {
-            0 => Responses.Accepted(TestClient.OperationUri),
-            1 => Responses.Operation("Running", [("etcd", "etcd cluster ready", 20)]),
-            2 => Responses.Operation("Running", [("etcd", "etcd cluster ready", 20), ("apiserver", "apiserver ready", 60)]),
-            3 => Responses.Operation("Succeeded",
-                [("etcd", "etcd cluster ready", 20), ("apiserver", "apiserver ready", 60), ("ready", "cluster ready", 100)]),
-            _ => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody),
-        });
+                0 => Responses.Accepted(TestClient.OperationUri),
+                1 => Responses.Operation("Running", [("etcd", "etcd cluster ready", 20)]),
+                2 => Responses.Operation(
+                    "Running",
+                    [("etcd", "etcd cluster ready", 20), ("apiserver", "apiserver ready", 60)]
+                ),
+                3 => Responses.Operation(
+                    "Succeeded",
+                    [
+                        ("etcd", "etcd cluster ready", 20), ("apiserver", "apiserver ready", 60),
+                        ("ready", "cluster ready", 100)
+                    ]
+                ),
+                _ => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody),
+            }
+        );
 
         using var client = TestClient.Create(transport);
 
-        var operation = await client.Widgets().CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
+        var operation = await client.Widgets()
+            .CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
 
         // The request count observed at the moment each entry was yielded. If the entries were
         // batched, all three would be observed at the same (final) count.
         var observed = new List<(string Step, int RequestsSoFar)>();
 
-        await foreach (var progress in operation.GetProgressAsync(Cancel.Token))
+        await foreach (var progress in operation.GetProgressAsync(Cancel.Token)) {
             observed.Add((progress.Step, transport.RequestCount));
+        }
 
         observed.Select(x => x.Step).ShouldBe(["etcd", "apiserver", "ready"]);
 
@@ -54,21 +68,24 @@ public sealed class ProgressStreamsIncrementallyTests {
     [Fact]
     public async Task Enumerating_after_completion_replays_every_entry() {
         var transport = new ScriptedTransport((request, index) => index switch {
-            0 => Responses.Accepted(TestClient.OperationUri),
-            1 => Responses.Operation("Succeeded", [("etcd", "ready", 100)]),
-            _ => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody),
-        });
+                0 => Responses.Accepted(TestClient.OperationUri),
+                1 => Responses.Operation("Succeeded", [("etcd", "ready", 100)]),
+                _ => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody),
+            }
+        );
 
         using var client = TestClient.Create(transport);
 
-        var operation = await client.Widgets().CreateOrUpdateAsync(WaitUntil.Completed, "main", TestClient.SampleData(), Cancel.Token);
+        var operation = await client.Widgets()
+            .CreateOrUpdateAsync(WaitUntil.Completed, "main", TestClient.SampleData(), Cancel.Token);
 
         operation.HasCompleted.ShouldBeTrue();
 
         var replayed = new List<OperationProgress>();
 
-        await foreach (var progress in operation.GetProgressAsync(Cancel.Token))
+        await foreach (var progress in operation.GetProgressAsync(Cancel.Token)) {
             replayed.Add(progress);
+        }
 
         replayed.Count.ShouldBe(1);
         replayed[0].Step.ShouldBe("etcd");
@@ -80,13 +97,15 @@ public sealed class WaitUntilTests {
     [Fact]
     public async Task Started_returns_before_the_operation_has_completed() {
         var transport = new ScriptedTransport((request, index) => index switch {
-            0 => Responses.Accepted(TestClient.OperationUri),
-            _ => Responses.Operation("Succeeded"),
-        });
+                0 => Responses.Accepted(TestClient.OperationUri),
+                _ => Responses.Operation("Succeeded"),
+            }
+        );
 
         using var client = TestClient.Create(transport);
 
-        var operation = await client.Widgets().CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
+        var operation = await client.Widgets()
+            .CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
 
         operation.HasCompleted.ShouldBeFalse();
         operation.HasValue.ShouldBeFalse();
@@ -99,15 +118,17 @@ public sealed class WaitUntilTests {
     [Fact]
     public async Task Completed_does_not_return_until_the_operation_has_completed() {
         var transport = new ScriptedTransport((request, index) => index switch {
-            0 => Responses.Accepted(TestClient.OperationUri),
-            1 => Responses.Operation("Running", [("etcd", "starting", 10)]),
-            2 => Responses.Operation("Succeeded", [("etcd", "starting", 10), ("ready", "done", 100)]),
-            _ => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody),
-        });
+                0 => Responses.Accepted(TestClient.OperationUri),
+                1 => Responses.Operation("Running", [("etcd", "starting", 10)]),
+                2 => Responses.Operation("Succeeded", [("etcd", "starting", 10), ("ready", "done", 100)]),
+                _ => Responses.Json(HttpStatusCode.OK, TestClient.WidgetBody),
+            }
+        );
 
         using var client = TestClient.Create(transport);
 
-        var operation = await client.Widgets().CreateOrUpdateAsync(WaitUntil.Completed, "main", TestClient.SampleData(), Cancel.Token);
+        var operation = await client.Widgets()
+            .CreateOrUpdateAsync(WaitUntil.Completed, "main", TestClient.SampleData(), Cancel.Token);
 
         operation.HasCompleted.ShouldBeTrue();
         operation.HasValue.ShouldBeTrue();
@@ -122,19 +143,25 @@ public sealed class WaitUntilTests {
 
     [Fact]
     public async Task A_failed_operation_throws_from_the_wait_carrying_its_code_and_target() {
-        var error = """{"code":"QuotaExceeded","message":"Subscription quota for 'vcpu' would be exceeded.","target":"/properties/sku"}""";
+        var error =
+            """{"code":"QuotaExceeded","message":"Subscription quota for 'vcpu' would be exceeded.","target":"/properties/sku"}""";
 
         var transport = new ScriptedTransport((request, index) => index switch {
-            0 => Responses.Accepted(TestClient.OperationUri),
-            _ => Responses.Operation("Failed", [("quota", "checking", 5)], error),
-        });
+                0 => Responses.Accepted(TestClient.OperationUri),
+                _ => Responses.Operation("Failed", [("quota", "checking", 5)], error),
+            }
+        );
 
         using var client = TestClient.Create(transport);
 
-        var operation = await client.Widgets().CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
+        var operation = await client.Widgets()
+            .CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
 
-        var thrown = await Should.ThrowAsync<CyberCloudRequestFailedException>(
-            async () => await operation.WaitForCompletionAsync(Cancel.Token));
+        var thrown =
+            await Should.ThrowAsync<CyberCloudRequestFailedException>(async () => await operation.WaitForCompletionAsync(
+                    Cancel.Token
+                )
+            );
 
         thrown.ErrorCode.ShouldBe("QuotaExceeded");
         thrown.Target.ShouldBe("/properties/sku");
@@ -151,18 +178,21 @@ public sealed class WaitUntilTests {
         var error = """{"code":"ProvisioningFailed","message":"The reconciler gave up."}""";
 
         var transport = new ScriptedTransport((request, index) => index switch {
-            0 => Responses.Accepted(TestClient.OperationUri),
-            _ => Responses.Operation("Failed", [("apply", "applying", 30)], error),
-        });
+                0 => Responses.Accepted(TestClient.OperationUri),
+                _ => Responses.Operation("Failed", [("apply", "applying", 30)], error),
+            }
+        );
 
         using var client = TestClient.Create(transport);
 
-        var operation = await client.Widgets().CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
+        var operation = await client.Widgets()
+            .CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
 
         var entries = new List<OperationProgress>();
 
-        await foreach (var progress in operation.GetProgressAsync(Cancel.Token))
+        await foreach (var progress in operation.GetProgressAsync(Cancel.Token)) {
             entries.Add(progress);
+        }
 
         entries.Single().Step.ShouldBe("apply");
         operation.Status!.State.ShouldBe(OperationState.Failed);
@@ -181,14 +211,19 @@ public sealed class OperationCancellationTests {
     [Fact]
     public async Task Cancelling_a_wait_stops_the_polling_promptly_and_nothing_polls_afterwards() {
         var transport = new ScriptedTransport((request, index) => index == 0
-            ? Responses.Accepted(TestClient.OperationUri)
-            : Responses.Operation("Running", [("etcd", "still going", 10)]));
+                ? Responses.Accepted(TestClient.OperationUri)
+                : Responses.Operation("Running", [("etcd", "still going", 10)])
+        );
 
         // A long interval, so the wait is asleep in Task.Delay when the token is cancelled. If the
         // delay were not cancellable this test would take 30 seconds and then fail.
-        using var client = TestClient.Create(transport, configure: options => options.PollingInterval = TimeSpan.FromSeconds(30));
+        using var client = TestClient.Create(
+            transport,
+            configure: options => options.PollingInterval = TimeSpan.FromSeconds(30)
+        );
 
-        var operation = await client.Widgets().CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
+        var operation = await client.Widgets()
+            .CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
 
         using var cancellation = new CancellationTokenSource();
         var stopwatch = Stopwatch.StartNew();
@@ -214,13 +249,16 @@ public sealed class OperationCancellationTests {
 
         using var client = TestClient.Create(transport);
 
-        var operation = await client.Widgets().CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
+        var operation = await client.Widgets()
+            .CreateOrUpdateAsync(WaitUntil.Started, "main", TestClient.SampleData(), Cancel.Token);
 
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
 
-        await Should.ThrowAsync<OperationCanceledException>(
-            async () => await operation.WaitForCompletionAsync(cancellation.Token));
+        await Should.ThrowAsync<OperationCanceledException>(async () => await operation.WaitForCompletionAsync(
+                cancellation.Token
+            )
+        );
 
         transport.RequestCount.ShouldBe(1);
     }

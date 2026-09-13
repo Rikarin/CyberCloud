@@ -1,7 +1,4 @@
 using CyberCloud.Cluster.Conformance.Infrastructure;
-using k8s;
-using k8s.Autorest;
-using k8s.Models;
 using Shouldly;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
@@ -9,6 +6,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Testcontainers.K3s;
+using k8s;
+using k8s.Autorest;
+using k8s.Models;
 
 namespace CyberCloud.Bundle.Cluster.Conformance;
 
@@ -17,8 +17,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>It neither throws nor skips when Docker does not answer, which is the contract every
-///         cluster-backed assembly in this repository keeps.</b> <c>ClusterInfrastructure</c>'s
+///         ⚠
+///         <b>
+///             It neither throws nor skips when Docker does not answer, which is the contract every
+///             cluster-backed assembly in this repository keeps.
+///         </b> <c>ClusterInfrastructure</c>'s
 ///         remarks give the reason in full: a start that threw would fail the class, which reads as
 ///         "the bundle is broken"; a start that skipped would take the class out of the runner's
 ///         output under one message. The absence of a daemon is a reportable outcome, and the report
@@ -26,8 +29,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         image, and the sentence that was not checked.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It is an <see cref="IClassFixture{TFixture}" /> and NOT a collection fixture, so each
-///         installing class gets its own k3s and its own <c>InitializeAsync</c>.</b> That is a cost —
+///         ⚠
+///         <b>
+///             It is an <see cref="IClassFixture{TFixture}" /> and NOT a collection fixture, so each
+///             installing class gets its own k3s and its own <c>InitializeAsync</c>.
+///         </b> That is a cost —
 ///         a second container start per class, serialised by <c>ClusterSlot</c> and by this
 ///         assembly's <c>CollectionBehavior</c> — and it is paid on purpose. A shared cluster would
 ///         make every class's subject depend on which classes ran before it: the cert-manager class
@@ -38,8 +44,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         hid a real defect underneath a green full suite.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE PRICE OF THAT CHOICE, MEASURED. One full-assembly run in eight started the
-///         SECOND k3s and did not get one</b>, and the openebs class reported <c>Skipped: 1</c>
+///         ⚠
+///         <b>
+///             THE PRICE OF THAT CHOICE, MEASURED. One full-assembly run in eight started the
+///             SECOND k3s and did not get one
+///         </b>, and the openebs class reported <c>Skipped: 1</c>
 ///         where the other seven reported none; four deliberate attempts to reproduce it were all
 ///         green. The suspected cause is container-start pressure while the first cluster is still
 ///         being torn down — two k3s starts per process is new with the second installing class, and
@@ -48,8 +57,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It used to degrade to a SKIP rather than to a red, and that — not the flake — was
-///         the defect.</b> The daemonless companions keep <c>--minimum-expected-tests 1</c>
+///         ⚠
+///         <b>
+///             It used to degrade to a SKIP rather than to a red, and that — not the flake — was
+///             the defect.
+///         </b> The daemonless companions keep <c>--minimum-expected-tests 1</c>
 ///         satisfied, so the assembly printed <c>Passed!</c> and only the skip count told a run that
 ///         proved nothing from one that proved everything. Nothing in <c>build/</c> reads a skip
 ///         count, so nothing could tell them apart at all.
@@ -75,8 +87,11 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the whole answer to "a retry around the container start, or a reason",
-    ///         and it is neither of them yet — it is the thing that has to come first.</b> A retry
+    ///         ⚠
+    ///         <b>
+    ///             This is the whole answer to "a retry around the container start, or a reason",
+    ///             and it is neither of them yet — it is the thing that has to come first.
+    ///         </b> A retry
     ///         would hide a real capacity limit, and a reason cannot be found for a failure that
     ///         reports success: the 1-in-8 run left one line of skip text in several thousand lines
     ///         of suite output and a green build, which is not evidence anybody can work from. The
@@ -98,8 +113,7 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
     ///         which is a skip and should stay one.
     ///     </para>
     /// </remarks>
-    static bool ADaemonThatHasAlreadyRunOneClusterIsNotAMissingDaemon
-        => Volatile.Read(ref clustersStarted) > 0;
+    static bool ADaemonThatHasAlreadyRunOneClusterIsNotAMissingDaemon => Volatile.Read(ref clustersStarted) > 0;
 
     /// <summary>The kubeconfig file <c>install.sh</c> is pointed at, or <see langword="null" />.</summary>
     public string? KubeconfigPath { get; private set; }
@@ -112,8 +126,11 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
     /// <param name="owedRow">The <c>bundle.yaml</c> § owed id the calling test narrows.</param>
     /// <param name="wouldProve">What the calling test would have proved.</param>
     /// <remarks>
-    ///     ⚠ <b>The component and the owed row are parameters rather than the literals they used to
-    ///     be, and that is not tidying.</b> This message named cert-manager and cert-manager's owed
+    ///     ⚠
+    ///     <b>
+    ///         The component and the owed row are parameters rather than the literals they used to
+    ///         be, and that is not tidying.
+    ///     </b> This message named cert-manager and cert-manager's owed
     ///     row in its own text, while the fixture type is used by every installing class in the
     ///     assembly. The moment a second class took it, a machine with no Docker daemon would have
     ///     printed a skip about cert-manager for a run that was about the storage class — a report
@@ -160,12 +177,17 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
             // than anything this process could hand it in memory. Named with a GUID so two suites
             // running at once cannot read each other's cluster, and deleted in DisposeAsync — it
             // holds a working client certificate for the container.
-            var path = Path.Combine(Path.GetTempPath(), "cybercloud-bundle-" + Guid.NewGuid().ToString("N") + ".kubeconfig");
+            var path = Path.Combine(
+                Path.GetTempPath(),
+                "cybercloud-bundle-" + Guid.NewGuid().ToString("N") + ".kubeconfig"
+            );
             await File.WriteAllTextAsync(path, kubeconfig, TestContext.Current.CancellationToken).ConfigureAwait(false);
             KubeconfigPath = path;
 
             using var yaml = new MemoryStream(Encoding.UTF8.GetBytes(kubeconfig));
-            Client = new k8s.Kubernetes(await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(yaml).ConfigureAwait(false));
+            Client = new k8s.Kubernetes(
+                await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(yaml).ConfigureAwait(false)
+            );
 
             // ⚠ Recorded AFTER the client is built rather than after StartAsync, so what it claims
             // is "this process has had a working cluster" and not "a container object was returned".
@@ -210,8 +232,11 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
 ///     cluster.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This class exists so that a run of this assembly on a machine with no Docker daemon still
-///     runs a test.</b> Microsoft.Testing.Platform reports "Zero tests ran" — and fails under
+///     ⚠
+///     <b>
+///         This class exists so that a run of this assembly on a machine with no Docker daemon still
+///         runs a test.
+///     </b> Microsoft.Testing.Platform reports "Zero tests ran" — and fails under
 ///     <c>--minimum-expected-tests 1</c> — for a run whose every test skipped, so an assembly that
 ///     skipped wholesale would turn a missing daemon into a red build rather than into a visible
 ///     skip. <c>ClusterInfrastructure</c>'s remarks name the same trap, and
@@ -233,8 +258,10 @@ public sealed class CertManagerComponentInstaller {
     ///     from <c>charts/bundle/cert-manager/component.yaml</c> and running this assembly turns both
     ///     tests red — this one in a quarter of a second, and
     ///     <see cref="CertManagerOnAnEmptyCluster" /> six minutes later on
-    ///     <c>failed post-install: resource Job/cert-manager-system/cert-manager-startupapicheck not
-    ///     ready</c>. That flag lives in a part of the component.yaml format nothing else in the tree
+    ///     <c>
+    /// failed post-install: resource Job/cert-manager-system/cert-manager-startupapicheck not
+    ///     ready
+    ///     </c>. That flag lives in a part of the component.yaml format nothing else in the tree
     ///     reads, so this is the only place a reviewer would see it go.
     ///     ⚠ The <c>values:</c> block is one line of a component manifest and the assertion above
     ///     covers exactly it. Every OTHER component's <c>values:</c> block — clickhouse-operator's
@@ -261,7 +288,8 @@ public sealed class CertManagerComponentInstaller {
         run.ExitCode.ShouldBe(
             0,
             "charts/bundle/install.sh --dry-run --phase 15 executes nothing and must therefore "
-            + "succeed on any machine with bash. Its output was:\n" + run.Output
+            + "succeed on any machine with bash. Its output was:\n"
+            + run.Output
         );
 
         var chart = BundleInstaller.Pin(BundleInstaller.CertManagerComponent, "chart");
@@ -276,14 +304,17 @@ public sealed class CertManagerComponentInstaller {
         // arrive at the value by different routes. Asserting the literal "v1.21.1" here would make
         // this test a second place the pin is written, which is the exact thing bundle.yaml's header
         // forbids: "a version written twice is a version that disagrees with itself".
-        foreach (var expected in new[] { chart!, "--repo", repo!, "--version", version!, "--set", "crds.enabled=true", "--wait" }) {
+        foreach (var expected in new[] {
+                     chart!, "--repo", repo!, "--version", version!, "--set", "crds.enabled=true", "--wait"
+                 }) {
             run.Output.ShouldContain(
                 expected,
                 Case.Sensitive,
                 $"charts/bundle/install.sh --dry-run --phase 15 did not mention \"{expected}\". Every "
                 + "value above is read out of charts/bundle/cert-manager/component.yaml by this test "
                 + "and is supposed to be read out of the same file by the script — README.md § What a "
-                + "component owes. Its output was:\n" + run.Output
+                + "component owes. Its output was:\n"
+                + run.Output
             );
         }
     }
@@ -294,8 +325,11 @@ public sealed class CertManagerComponentInstaller {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>ONE COMPONENT OF NINETEEN. This class proves the install MECHANISM, not the
-///         roster.</b> What a green run here supports, exactly: <c>charts/bundle/install.sh</c> can
+///         ⚠
+///         <b>
+///             ONE COMPONENT OF NINETEEN. This class proves the install MECHANISM, not the
+///             roster.
+///         </b> What a green run here supports, exactly: <c>charts/bundle/install.sh</c> can
 ///         be driven unattended against a fresh API server; it reads a pin out of a
 ///         <c>component.yaml</c> and installs it; <c>--wait</c> means what
 ///         <c>cert-manager/component.yaml</c> says it means, so "installed" implies "serving"; and
@@ -327,8 +361,11 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
     ///     Certificate reaches <c>Ready</c> with a parseable certificate in the Secret it names.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The Certificate is the assertion; the served group is only the half that a CRD apply
-    ///     could have faked.</b> Installing definitions makes <c>cert-manager.io/v1</c> servable with
+    ///     ⚠
+    ///     <b>
+    ///         The Certificate is the assertion; the served group is only the half that a CRD apply
+    ///         could have faked.
+    ///     </b> Installing definitions makes <c>cert-manager.io/v1</c> servable with
     ///     no controller behind it whatever — which is precisely what phase 20 of this bundle does on
     ///     purpose for <c>monitoring.coreos.com</c>. A <c>Certificate</c> that reaches <c>Ready</c>
     ///     with a certificate in its Secret cannot be produced by definitions alone: it needs the
@@ -380,7 +417,8 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
                 $"{Group}/{Version} {plural} is not served after install.sh --phase 15 reported "
                 + "success. charts/bundle/cert-manager/component.yaml declares `serves: "
                 + $"{Group}/{Version}`, and the Bundle gate's coverage check treats that line as a "
-                + "claim about what the pin installs. Installer output:\n" + run.Output
+                + "claim about what the pin installs. Installer output:\n"
+                + run.Output
             );
         }
 
@@ -395,7 +433,8 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
             + "so that its webhook is Ready before anything creates a Certificate, and says `helm "
             + "install --wait` is \"the barrier that makes 'installed' mean 'serving'\". A Certificate "
             + "that stays un-Ready after that barrier returned is that sentence being wrong. "
-            + "Installer output:\n" + run.Output
+            + "Installer output:\n"
+            + run.Output
         );
 
         // ⚠ The Secret is opened rather than counted. A Ready condition is cert-manager's own claim
@@ -500,11 +539,13 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
         certificate.TryGetProperty("status", out var status)
         && status.TryGetProperty("conditions", out var conditions)
         && conditions.ValueKind == JsonValueKind.Array
-        && conditions.EnumerateArray().Any(condition =>
-            condition.TryGetProperty("type", out var type)
-            && type.ValueKind == JsonValueKind.String
-            && type.GetString() == "Ready"
-            && condition.TryGetProperty("status", out var value)
-            && value.ValueKind == JsonValueKind.String
-            && value.GetString() == "True");
+        && conditions.EnumerateArray()
+            .Any(condition =>
+                condition.TryGetProperty("type", out var type)
+                && type.ValueKind == JsonValueKind.String
+                && type.GetString() == "Ready"
+                && condition.TryGetProperty("status", out var value)
+                && value.ValueKind == JsonValueKind.String
+                && value.GetString() == "True"
+            );
 }

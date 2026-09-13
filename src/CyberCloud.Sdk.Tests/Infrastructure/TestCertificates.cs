@@ -8,7 +8,12 @@ public static class TestCertificates {
     public static X509Certificate2 CreateRsa() {
         using var key = RSA.Create(2048);
 
-        var request = new CertificateRequest("CN=cybercloud-sdk-tests", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var request = new CertificateRequest(
+            "CN=cybercloud-sdk-tests",
+            key,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1
+        );
 
         return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
     }

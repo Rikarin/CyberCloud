@@ -151,10 +151,13 @@ public sealed class CommandLineTests {
         derived.ShouldContain("no chart's @param block was compared");
 
         Generator.Invoke(
-                "--output", withoutDerived.OpenApiDirectory,
-                "--report", withoutDerived.ReportFile,
-                "--provider-assembly", Generator.SampleProviderAssembly
-            )
+            "--output",
+            withoutDerived.OpenApiDirectory,
+            "--report",
+            withoutDerived.ReportFile,
+            "--provider-assembly",
+            Generator.SampleProviderAssembly
+        )
             .Output.ShouldContain("OpenAPI only");
     }
 }

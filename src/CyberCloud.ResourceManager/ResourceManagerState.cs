@@ -15,8 +15,11 @@ namespace CyberCloud.ResourceManager;
 ///     </para>
 ///     <para>
 ///         <b><see cref="Superset" /> is the whole point of the api-version machinery.</b>
-///         docs/plan/08 § The provider registry: <i>"the grain's state is a <b>superset</b> and a read
-///         at an old version projects down"</i>. Every write merges its version's properties into
+///         docs/plan/08 § The provider registry:
+///         <i>
+///             "the grain's state is a <b>superset</b> and a read
+///             at an old version projects down"
+///         </i>. Every write merges its version's properties into
 ///         this one document, and every read filters it by the requested version's declared pointers.
 ///         Storing one body per version instead would make "what is the resource actually like" a
 ///         question with N answers.
@@ -175,9 +178,12 @@ public sealed class OperationGrainState {
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>This is what makes cancellation complete rather than abandon.</b>
-    ///     docs/plan/08 § Long-running operations: <i>"for anything already applied it runs the delete
-    ///     path. A 'cancelled' create that leaves resources running is a billing dispute waiting to
-    ///     happen."</i> Set the moment the first reconcile pass returns anything other than an
+    ///     docs/plan/08 § Long-running operations:
+    ///     <i>
+    ///         "for anything already applied it runs the delete
+    ///         path. A 'cancelled' create that leaves resources running is a billing dispute waiting to
+    ///         happen."
+    ///     </i> Set the moment the first reconcile pass returns anything other than an
     ///     immediate failure, because a pass that got far enough to be interrupted may have applied
     ///     something the grain cannot see.
     /// </remarks>

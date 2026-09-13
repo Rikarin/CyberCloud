@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.Mail;
@@ -16,23 +17,32 @@ namespace CyberCloud.Providers.Mail;
 ///         this row does <b>not</b> build and why each omission is a different kind.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE ONLY TYPE IN THE CATALOGUE THAT DECLARES NO ACTION, AND THE REASON IS A RULE
-///         RATHER THAN A GAP.</b> doc 17 § Resource model names three — <c>verify</c>,
+///         ⚠
+///         <b>
+///             THE ONLY TYPE IN THE CATALOGUE THAT DECLARES NO ACTION, AND THE REASON IS A RULE
+///             RATHER THAN A GAP.
+///         </b> doc 17 § Resource model names three — <c>verify</c>,
 ///         <c>sendTest</c> and <c>exportMailbox</c>. <c>actions-without-handlers.txt</c> allows a
 ///         declared action with no handler <i>only</i> when the action's api-version is already
 ///         published, because a published api-version is immutable and removing a path from one is a
 ///         breaking change; <c>2026-08-01</c> of this type is published <b>by this change</b>, so
-///         that door is shut and the file's own words apply: <i>"'No handler yet' on an unpublished
-///         action is not a reason to add a line; it is a reason to write the handler or not declare
-///         the action."</i> None of the three can be written yet — see <see cref="MailDomains" /> —
+///         that door is shut and the file's own words apply:
+///         <i>
+///             "'No handler yet' on an unpublished
+///             action is not a reason to add a line; it is a reason to write the handler or not declare
+///             the action."
+///         </i> None of the three can be written yet — see <see cref="MailDomains" /> —
 ///         so none is declared. ⚠ <b>This costs nothing that matters</b>: the half of <c>verify</c>
 ///         a tenant actually needs, <i>the exact records to publish</i>, is
 ///         <see cref="MailDomains.TryRequiredRecords" />, a pure function reachable without an action
 ///         at all.
 ///     </para>
 ///     <para>
-///         ⚠ <b>NO <c>SupportsSoftDelete</c>, AND ON THIS TYPE THAT IS AN ARGUMENT RATHER THAN A
-///         DEFERRAL.</b> docs/plan/08 § Soft delete is built and a window is now a one-line
+///         ⚠
+///         <b>
+///             NO <c>SupportsSoftDelete</c>, AND ON THIS TYPE THAT IS AN ARGUMENT RATHER THAN A
+///             DEFERRAL.
+///         </b> docs/plan/08 § Soft delete is built and a window is now a one-line
 ///         declaration, so the question is the provider's own: does the data deserve a recovery
 ///         window? For a mail domain the answer is that a <i>window is the wrong instrument</i>. A
 ///         soft-deleted resource keeps its name and its quota and answers 404 at its old address —

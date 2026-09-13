@@ -8,8 +8,11 @@ namespace CyberCloud.Cli.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The trust boundary is what most of these assert, and it is a boundary rather than a
-///         feature.</b> <c>cyc</c> runs only what <c>cyc extension add</c> installed into
+///         ⚠
+///         <b>
+///             The trust boundary is what most of these assert, and it is a boundary rather than a
+///             feature.
+///         </b> <c>cyc</c> runs only what <c>cyc extension add</c> installed into
 ///         <c>~/.cyc/extensions</c>; <c>PATH</c> is never searched, because a writable directory on
 ///         <c>PATH</c> would otherwise be arbitrary code execution under the user's cloud credentials.
 ///         <see cref="PathIsNeverSearchedForExtensions" /> is the test that says so out loud.
@@ -40,9 +43,9 @@ public sealed class ExtensionTests : IDisposable {
         // ⚠ The whole decision in one test. `git` and `kubectl` would run this file; cyc does not,
         // because `cyc` carries a cloud credential and `git` does not. A green assertion here is a
         // promise that no writable PATH directory is an execution vector.
-        using var host = TestHost.Create(environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
-            ["PATH"] = OnPath(),
-        });
+        using var host = TestHost.Create(
+            environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["PATH"] = OnPath() }
+        );
 
         var code = await host.RunAsync("onpath", "--whatever");
 
@@ -85,8 +88,11 @@ public sealed class ExtensionTests : IDisposable {
 
     [Fact]
     public async Task AnExtensionInADirectoryOthersCanWriteIsRefused() {
-        if (OperatingSystem.IsWindows())
-            Assert.Skip("Unix file modes only. ExtensionStore's remarks record that the Windows ACL case is unchecked.");
+        if (OperatingSystem.IsWindows()) {
+            Assert.Skip(
+                "Unix file modes only. ExtensionStore's remarks record that the Windows ACL case is unchecked."
+            );
+        }
 
         using var host = TestHost.Create();
 
@@ -140,14 +146,16 @@ public sealed class ExtensionTests : IDisposable {
 
     [Fact]
     public async Task TheChildInheritsTheResolvedContextAndNotJustTheCommandLine() {
-        using var host = TestHost.Create(config: """
-            default = work
+        using var host = TestHost.Create(
+            config: """
+                    default = work
 
-            [work]
-            subscription = sub-42
-            tenant       = contoso
-            endpoint     = https://api.lab.internal/
-            """);
+                    [work]
+                    subscription = sub-42
+                    tenant       = contoso
+                    endpoint     = https://api.lab.internal/
+                    """
+        );
 
         await Install(host, "probe");
         await host.RunAsync("--output", "json", "probe");
@@ -168,7 +176,7 @@ public sealed class ExtensionTests : IDisposable {
 
     /// <summary>The nine names <c>CommandTree.ReservedGroups</c> holds, plus a group the embedded tree really carries.</summary>
     public static TheoryData<string> Shadowing => [
-        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version", "sample",
+        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version", "sample"
     ];
 
     [Theory]
@@ -176,7 +184,14 @@ public sealed class ExtensionTests : IDisposable {
     public async Task InstallingUnderAHostOrGeneratedNameIsRefused(string reserved) {
         using var host = TestHost.Create();
 
-        var code = await host.RunAsync("extension", "add", "--source", Script(Path.Combine(sources, "cyc-x")), "--name", reserved);
+        var code = await host.RunAsync(
+            "extension",
+            "add",
+            "--source",
+            Script(Path.Combine(sources, "cyc-x")),
+            "--name",
+            reserved
+        );
 
         code.ShouldBe((int)ExitCode.Usage);
         host.Stderr.ShouldContain($"'{reserved}'");
@@ -257,7 +272,8 @@ public sealed class ExtensionTests : IDisposable {
         await File.WriteAllTextAsync(
             Path.Combine(host.ExtensionsDirectory, ExtensionStore.IndexFileName),
             "{ this is not json",
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken
+        );
 
         var code = await host.RunAsync("extension", "list");
 
@@ -294,7 +310,8 @@ public sealed class ExtensionTests : IDisposable {
         await File.WriteAllTextAsync(
             Path.Combine(host.ExtensionsDirectory, "cyc-probe"),
             "#!/bin/sh\nexit 1\n",
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken
+        );
 
         var code = await host.RunAsync("probe");
 
@@ -388,7 +405,14 @@ public sealed class ExtensionTests : IDisposable {
     public async Task ANameThatCouldEscapeTheDirectoryIsRefused(string name) {
         using var host = TestHost.Create();
 
-        var code = await host.RunAsync("extension", "add", "--source", Script(Path.Combine(sources, "cyc-x")), "--name", name);
+        var code = await host.RunAsync(
+            "extension",
+            "add",
+            "--source",
+            Script(Path.Combine(sources, "cyc-x")),
+            "--name",
+            name
+        );
 
         code.ShouldBe((int)ExitCode.Usage);
         host.Stderr.ShouldContain("cannot be an extension name");
@@ -399,18 +423,22 @@ public sealed class ExtensionTests : IDisposable {
         // ⚠ The one test that starts a process, so CycHost.LaunchExtension cannot drift away from
         // what a child actually receives. The script writes to a file rather than to stdout because
         // the real launcher inherits the process's streams — which is the behaviour under test.
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows()) {
             Assert.Skip("The probe is a /bin/sh script.");
+        }
 
         using var host = TestHost.Create(launchExtension: ExtensionLauncher.StartAsync);
 
         var report = Path.Combine(sources, "report.txt");
 
-        Script(Path.Combine(sources, "cyc-probe"), """
+        Script(
+            Path.Combine(sources, "cyc-probe"),
+            """
             #!/bin/sh
             { echo "argv:$*"; env; } > "$1"
             exit 7
-            """);
+            """
+        );
 
         (await Install(host, "probe")).ShouldBe((int)ExitCode.Ok);
 
@@ -463,8 +491,9 @@ public sealed class ExtensionTests : IDisposable {
     async Task<int> Install(TestHost host, string name) {
         var source = Path.Combine(sources, ExtensionStore.FilePrefix + name);
 
-        if (!File.Exists(source))
+        if (!File.Exists(source)) {
             Script(source);
+        }
 
         return await host.RunAsync("extension", "add", "--source", source);
     }
@@ -474,21 +503,27 @@ public sealed class ExtensionTests : IDisposable {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, body);
 
-        if (!OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows()) {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
 
         return path;
     }
 
     /// <summary>Makes a directory group- and world-writable — the hole the install-directory model exists to close.</summary>
     static void AllowOthersToWrite(string directory) {
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows()) {
             return;
+        }
 
         File.SetUnixFileMode(
             directory,
-            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-            | UnixFileMode.GroupWrite | UnixFileMode.OtherWrite);
+            UnixFileMode.UserRead
+            | UnixFileMode.UserWrite
+            | UnixFileMode.UserExecute
+            | UnixFileMode.GroupWrite
+            | UnixFileMode.OtherWrite
+        );
     }
 
     /// <summary>A directory holding <c>cyc-onpath</c>, as a hostile <c>PATH</c> entry would.</summary>

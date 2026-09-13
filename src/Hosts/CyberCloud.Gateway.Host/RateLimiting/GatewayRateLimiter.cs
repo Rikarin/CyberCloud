@@ -28,11 +28,17 @@ readonly record struct RateLimitDecision(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Which buckets apply depends on the request class, and the exemption is the part that
-///         is routinely got wrong.</b> docs/plan/10 § Rate limiting: <i>"Long-poll and SignalR are
-///         exempt from the request-count limits and get a concurrency limit instead (connections per
-///         tenant, streams per connection). Counting a 30-second long-poll as one request against a
-///         5-minute window is how you accidentally rate-limit your own portal."</i> A portal tab
+///         ⚠
+///         <b>
+///             Which buckets apply depends on the request class, and the exemption is the part that
+///             is routinely got wrong.
+///         </b> docs/plan/10 § Rate limiting:
+///         <i>
+///             "Long-poll and SignalR are
+///             exempt from the request-count limits and get a concurrency limit instead (connections per
+///             tenant, streams per connection). Counting a 30-second long-poll as one request against a
+///             5-minute window is how you accidentally rate-limit your own portal."
+///         </i> A portal tab
 ///         holding one long-poll open for the whole window spends its budget doing nothing, and the
 ///         symptom — the portal throttling itself while idle — reads as a platform fault.
 ///     </para>
@@ -42,8 +48,11 @@ readonly record struct RateLimitDecision(
 ///         budget, and cannot dodge their own by rewriting a segment.
 ///     </para>
 ///     <para>
-///         ⚠ <b>DEFECT IN docs/plan/10 § Rate limiting, recorded here because it changes what this
-///         bucket can do.</b> The table lists <i>per IP, unauthenticated — 60/min</i> for
+///         ⚠
+///         <b>
+///             DEFECT IN docs/plan/10 § Rate limiting, recorded here because it changes what this
+///             bucket can do.
+///         </b> The table lists <i>per IP, unauthenticated — 60/min</i> for
 ///         <i>"sign-in, token, discovery"</i>, but docs/plan/10 § Request pipeline puts
 ///         authentication at stage 2 and rate limiting at stage 5. A request with a bad token is
 ///         therefore refused before it is ever counted, so on any route that requires a token the
@@ -103,21 +112,25 @@ sealed class GatewayRateLimiter(IRateLimitCounters counters) {
                 ? RateLimitBuckets.SubscriptionWrites
                 : RateLimitBuckets.SubscriptionReads;
 
-            counted.Add(await CountAsync(
-                bucket,
-                $"rl:{tag}:sub:{subscriptionId:N}:{(requestClass == RequestClass.Write ? "w" : "r")}",
-                cancellationToken
-            ));
+            counted.Add(
+                await CountAsync(
+                    bucket,
+                    $"rl:{tag}:sub:{subscriptionId:N}:{(requestClass == RequestClass.Write ? "w" : "r")}",
+                    cancellationToken
+                )
+            );
         }
 
         counted.Add(await CountAsync(RateLimitBuckets.TenantTotal, $"rl:{tag}:total", cancellationToken));
 
         if (subjectId.Length > 0) {
-            counted.Add(await CountAsync(
-                RateLimitBuckets.UserInteractive,
-                $"rl:{tag}:user:{subjectId}",
-                cancellationToken
-            ));
+            counted.Add(
+                await CountAsync(
+                    RateLimitBuckets.UserInteractive,
+                    $"rl:{tag}:user:{subjectId}",
+                    cancellationToken
+                )
+            );
         }
 
         return Decide(counted);
@@ -138,10 +151,12 @@ sealed class GatewayRateLimiter(IRateLimitCounters counters) {
                 continue;
             }
 
-            headers.Add(new(
-                bucket.RemainingHeader,
-                Math.Max(bucket.Limit - window.Count, 0).ToString(CultureInfo.InvariantCulture)
-            ));
+            headers.Add(
+                new(
+                    bucket.RemainingHeader,
+                    Math.Max(bucket.Limit - window.Count, 0).ToString(CultureInfo.InvariantCulture)
+                )
+            );
         }
 
         foreach (var (bucket, window) in counted) {
@@ -173,10 +188,12 @@ sealed class GatewayRateLimiter(IRateLimitCounters counters) {
         );
 
         return outcome with {
-            Headers = decision.Remaining.Add(new(
-                GatewayHeaders.RetryAfter,
-                decision.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture)
-            ))
+            Headers = decision.Remaining.Add(
+                new(
+                    GatewayHeaders.RetryAfter,
+                    decision.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture)
+                )
+            )
         };
     }
 }

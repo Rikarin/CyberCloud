@@ -85,9 +85,9 @@ public sealed class MariaDbReconcilerTests {
         Spec(applied[1].Body)["storage"]!["size"]!.GetValue<string>().ShouldBe("64Gi");
 
         Spec(applied[0].Body).AsObject().ContainsKey("galera").ShouldBeTrue();
-        Spec(applied[1].Body).AsObject().ContainsKey("galera").ShouldBeFalse(
-            "tenant B asked for no high availability and got tenant A's Galera block"
-        );
+        Spec(applied[1].Body).AsObject()
+            .ContainsKey("galera")
+            .ShouldBeFalse("tenant B asked for no high availability and got tenant A's Galera block");
 
         applied[0].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantA));
         applied[1].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantB));
@@ -299,25 +299,24 @@ public sealed class MariaDbReconcilerTests {
         spec["updateStrategy"] = new JsonObject { ["type"] = "ReplicasFirstPrimaryLast" };
         spec["storage"]!.AsObject()["ephemeral"] = false;
         spec["storage"]!.AsObject()["resizeInUseVolumes"] = true;
-        spec["storage"]!.AsObject()["volumeClaimTemplate"] = new JsonObject {
-            ["accessModes"] = new JsonArray("ReadWriteOnce")
-        };
+        spec["storage"]!.AsObject()["volumeClaimTemplate"] =
+            new JsonObject { ["accessModes"] = new JsonArray("ReadWriteOnce") };
 
         MariaDbServers.Matches(rendered.ToJsonString(), desired.RootElement).ShouldBeTrue();
 
         // And the halves that make containment worth more than no test at all.
         var galeraDropped = JsonNode.Parse(rendered.ToJsonString())!.AsObject();
         galeraDropped["spec"]!.AsObject().Remove("galera");
-        MariaDbServers.Matches(galeraDropped.ToJsonString(), desired.RootElement).ShouldBeFalse(
-            "a Galera server whose block the operator dropped is a single instance with a "
-            + "three-instance quota reservation, and Matches called it converged"
-        );
+        MariaDbServers.Matches(galeraDropped.ToJsonString(), desired.RootElement)
+            .ShouldBeFalse(
+                "a Galera server whose block the operator dropped is a single instance with a "
+                + "three-instance quota reservation, and Matches called it converged"
+            );
 
         var credentialDropped = JsonNode.Parse(rendered.ToJsonString())!.AsObject();
         credentialDropped["spec"]!.AsObject().Remove("rootPasswordSecretKeyRef");
-        MariaDbServers.Matches(credentialDropped.ToJsonString(), desired.RootElement).ShouldBeFalse(
-            "a server whose root credential reference is gone has a password nothing recorded"
-        );
+        MariaDbServers.Matches(credentialDropped.ToJsonString(), desired.RootElement)
+            .ShouldBeFalse("a server whose root credential reference is gone has a password nothing recorded");
 
         var resized = JsonNode.Parse(rendered.ToJsonString())!.AsObject();
         resized["spec"]!["storage"]!.AsObject()["size"] = "1Gi";
@@ -368,14 +367,15 @@ public sealed class MariaDbReconcilerTests {
 
         var claims = MariaDbServers.RetainedClaims("ns", "observed", desired.RootElement);
 
-        claims.Select(x => x.Claim.Name).ShouldBe(
-            galera
-                ? [
-                    "storage-observed-0", "storage-observed-1", "storage-observed-2",
-                    "galera-observed-0", "galera-observed-1", "galera-observed-2"
-                ]
-                : ["storage-observed-0"]
-        );
+        claims.Select(x => x.Claim.Name)
+            .ShouldBe(
+                galera
+                    ? [
+                        "storage-observed-0", "storage-observed-1", "storage-observed-2",
+                        "galera-observed-0", "galera-observed-1", "galera-observed-2"
+                    ]
+                    : ["storage-observed-0"]
+            );
 
         // ⚠ The set name is the CR's own, unsuffixed — mariadb-operator's reconcileStatefulSet passes
         // client.ObjectKeyFromObject(mariadb) straight through, while the headless Service beside it
@@ -429,10 +429,11 @@ public sealed class MariaDbReconcilerTests {
         outcome.IsConverged.ShouldBeTrue(outcome.ToString());
 
         foreach (var claim in planted) {
-            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim)).ShouldBeFalse(
-                $"'{claim.Claim}' survived the final teardown, so a purged server returned its quota "
-                + "and left its disk allocated."
-            );
+            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim))
+                .ShouldBeFalse(
+                    $"'{claim.Claim}' survived the final teardown, so a purged server returned its quota "
+                    + "and left its disk allocated."
+                );
         }
     }
 
@@ -606,8 +607,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     test puts the same resource name in two tenants, which is the only shape in which one
     ///     singleton reconciler serving both can be caught mixing them.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

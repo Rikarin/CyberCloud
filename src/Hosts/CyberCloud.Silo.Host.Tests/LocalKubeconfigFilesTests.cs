@@ -15,20 +15,29 @@ namespace CyberCloud.Silo.Host.Tests;
 ///         type is for — <c>File.ReadAllTextAsync</c> would do that in one line. What it is for is
 ///         deciding whether a <c>CredentialRef</c> is allowed to name the file at all, and that
 ///         decision is the one place in this host where a value written by a reconciler turns into a
-///         path on the host filesystem. Its own remarks say why: <i>"a credential reference that
-///         could name any path on the host would make the blast radius of a provider bug the whole
-///         filesystem"</i>.
+///         path on the host filesystem. Its own remarks say why:
+///         <i>
+///             "a credential reference that
+///             could name any path on the host would make the blast radius of a provider bug the whole
+///             filesystem"
+///         </i>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A rooted path check that is not one is this repository's signature defect wearing a
-///         security hat</b>, and it has exactly one classic shape: comparing the prefix without the
+///         ⚠
+///         <b>
+///             A rooted path check that is not one is this repository's signature defect wearing a
+///             security hat
+///         </b>, and it has exactly one classic shape: comparing the prefix without the
 ///         separator, so a root of <c>/k3s</c> admits <c>/k3s-elsewhere</c>. The production code
 ///         carries a comment saying so; <see cref="ASiblingDirectoryWhoseNameStartsWithTheRootIsOutsideIt" />
 ///         is what makes that comment a claim the build checks rather than a claim the build repeats.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The order of the refusals is asserted, and it is a property rather than an
-///         implementation detail.</b> A reference outside the root is refused
+///         ⚠
+///         <b>
+///             The order of the refusals is asserted, and it is a property rather than an
+///             implementation detail.
+///         </b> A reference outside the root is refused
 ///         <see cref="ErrorCode.AuthorizationFailed">AuthorizationFailed</see> whether the file it
 ///         names exists or not — see
 ///         <see cref="AReferenceOutsideTheRootIsRefusedWithoutLookingAtTheFilesystem" />. If the
@@ -162,8 +171,8 @@ public sealed class LocalKubeconfigFilesTests : IDisposable {
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public void AResolverCannotBeBuiltWithoutARoot(string root)
-        => Should.Throw<ArgumentException>(() => LocalKubeconfigFiles.ResolverFor(root));
+    public void AResolverCannotBeBuiltWithoutARoot(string root) =>
+        Should.Throw<ArgumentException>(() => LocalKubeconfigFiles.ResolverFor(root));
 
     // ── Inside the root, the answers are distinguishable ──────────────────────────────────────────
 
@@ -248,8 +257,11 @@ public sealed class LocalKubeconfigFilesTests : IDisposable {
     ///     A bare filesystem path is not a <c>file:</c> reference, and is refused rather than read.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This one failed when it was written, and the way it failed is the reason it is
-    ///     here.</b> The scheme check was <c>Uri.TryCreate(…, Absolute)</c> plus
+    ///     ⚠
+    ///     <b>
+    ///         This one failed when it was written, and the way it failed is the reason it is
+    ///         here.
+    ///     </b> The scheme check was <c>Uri.TryCreate(…, Absolute)</c> plus
     ///     <c>uri.Scheme == "file"</c>, which reads as "the reference declared <c>file:</c>" and is
     ///     not: <see cref="Uri" /> parses an implicit file path, so on this platform a bare
     ///     <c>/var/…/config</c> reported scheme <c>file</c> and was read, while the identical
@@ -283,8 +295,10 @@ public sealed class LocalKubeconfigFilesTests : IDisposable {
 
         var resolve = LocalKubeconfigFiles.ResolverFor(root);
 
-        await Should.ThrowAsync<OperationCanceledException>(
-            async () => await resolve(Reference(config), cancelled.Token)
+        await Should.ThrowAsync<OperationCanceledException>(async () => await resolve(
+                Reference(config),
+                cancelled.Token
+            )
         );
     }
 
@@ -294,16 +308,14 @@ public sealed class LocalKubeconfigFilesTests : IDisposable {
     static string Reference(string path) => new Uri(Path.GetFullPath(path)).AbsoluteUri;
 
     /// <summary>Runs the resolver this test's root produces.</summary>
-    Task<Result<string>> Resolve(string credentialRef)
-        => LocalKubeconfigFiles.ResolverFor(root)(credentialRef, TestContext.Current.CancellationToken);
+    Task<Result<string>> Resolve(string credentialRef) =>
+        LocalKubeconfigFiles.ResolverFor(root)(credentialRef, TestContext.Current.CancellationToken);
 
     /// <summary>Runs the resolver and insists the answer is a refusal.</summary>
     async Task<Error> RefusalFor(string credentialRef) {
         var result = await Resolve(credentialRef);
 
-        result.TryGetError(out var error).ShouldBeTrue(
-            $"'{credentialRef}' was resolved rather than refused."
-        );
+        result.TryGetError(out var error).ShouldBeTrue($"'{credentialRef}' was resolved rather than refused.");
 
         return error!;
     }

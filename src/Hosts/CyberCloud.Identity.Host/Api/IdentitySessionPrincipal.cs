@@ -20,8 +20,11 @@ namespace CyberCloud.Identity.Host.Api;
 ///         (<see cref="SecondFactorClaim" />) that must never appear in a token.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="SecondFactorClaim" /> is the reason a partial sign-in is representable at
-///         all.</b> <c>SignInService</c> opens the session as soon as the first factor verifies, and
+///         ⚠
+///         <b>
+///             <see cref="SecondFactorClaim" /> is the reason a partial sign-in is representable at
+///             all.
+///         </b> <c>SignInService</c> opens the session as soon as the first factor verifies, and
 ///         sets <see cref="SignInOutcome.SecondFactorRequired" /> for everything but a passkey. The
 ///         cookie issued at that moment has to be usable by <c>/api/signin/totp</c> — it is how that
 ///         endpoint knows who is answering — and unusable for anything else. A second cookie would be
@@ -71,12 +74,8 @@ public static class IdentitySessionPrincipal {
         identity.AddClaim(new(AccessTokenClaims.SessionId, N(outcome.SessionId)));
         identity.AddClaim(new(AccessTokenClaims.TenantId, N(tenantId)));
         identity.AddClaim(new(AccessTokenClaims.SubjectType, SubjectTypes.User));
-        identity.AddClaim(
-            new(AccessTokenClaims.AuthenticationMethods, AuthenticationMethodNames.Of(outcome.Method))
-        );
-        identity.AddClaim(
-            new(SecondFactorClaim, outcome.SecondFactorRequired ? Pending : Satisfied)
-        );
+        identity.AddClaim(new(AccessTokenClaims.AuthenticationMethods, AuthenticationMethodNames.Of(outcome.Method)));
+        identity.AddClaim(new(SecondFactorClaim, outcome.SecondFactorRequired ? Pending : Satisfied));
 
         return new(identity);
     }
@@ -94,9 +93,8 @@ public static class IdentitySessionPrincipal {
 
         // Everything except the two claims this call is here to change.
         identity.AddClaims(
-            principal.Claims.Where(
-                x => !string.Equals(x.Type, SecondFactorClaim, StringComparison.Ordinal)
-                    && !string.Equals(x.Type, AccessTokenClaims.AuthenticationMethods, StringComparison.Ordinal)
+            principal.Claims.Where(x => !string.Equals(x.Type, SecondFactorClaim, StringComparison.Ordinal)
+                && !string.Equals(x.Type, AccessTokenClaims.AuthenticationMethods, StringComparison.Ordinal)
             )
         );
 
@@ -178,6 +176,5 @@ public static class AuthenticationMethodNames {
 
     /// <summary>The <c>amr</c> spelling of <paramref name="method" />.</summary>
     /// <param name="method">The method.</param>
-    public static string Of(AuthenticationMethod method) =>
-        Names.TryGetValue(method, out var name) ? name : "none";
+    public static string Of(AuthenticationMethod method) => Names.TryGetValue(method, out var name) ? name : "none";
 }

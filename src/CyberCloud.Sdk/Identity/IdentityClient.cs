@@ -37,9 +37,12 @@ public static class OAuthGrants {
 /// <summary>Where the identity server lives.</summary>
 /// <remarks>
 ///     ⚠ docs/plan/11 § Hosts puts <c>/authorize</c>, <c>/token</c> and <c>/.well-known/*</c> on
-///     <c>CyberCloud.Identity.Host</c>, on <b>a different origin from the gateway</b> — <i>"Separate
-///     hosts on separate origins makes that structural instead of a middleware configuration somebody
-///     will change"</i>. No document names the host, so the constant below is a placeholder and the
+///     <c>CyberCloud.Identity.Host</c>, on <b>a different origin from the gateway</b> —
+///     <i>
+///         "Separate
+///         hosts on separate origins makes that structural instead of a middleware configuration somebody
+///         will change"
+///     </i>. No document names the host, so the constant below is a placeholder and the
 ///     <c>CYC_AUTHORITY_HOST</c> environment variable overrides it. ⚠ Reported as a docs/plan/11 gap.
 /// </remarks>
 public static class CyberCloudAuthorityHosts {
@@ -103,24 +106,32 @@ public sealed class IdentityClient : IDisposable {
     ///     see <see cref="SigningKeyCache" />.
     /// </remarks>
     public async ValueTask<OpenIdConfiguration> GetConfigurationAsync(CancellationToken cancellationToken) {
-        if (configuration is { } cached)
+        if (configuration is { } cached) {
             return cached;
+        }
 
         await discoveryGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try {
-            if (configuration is { } raced)
+            if (configuration is { } raced) {
                 return raced;
+            }
 
             var uri = new Uri(AuthorityHost, ".well-known/openid-configuration");
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             var content = await SendAsync(request, "discovery document", cancellationToken).ConfigureAwait(false);
 
-            var document = SdkJsonContext.Read(content, SdkJsonContext.Default.OpenIdConfiguration, "discovery document");
+            var document = SdkJsonContext.Read(
+                content,
+                SdkJsonContext.Default.OpenIdConfiguration,
+                "discovery document"
+            );
 
-            if (string.IsNullOrEmpty(document.TokenEndpoint))
+            if (string.IsNullOrEmpty(document.TokenEndpoint)) {
                 throw new AuthenticationFailedException(
-                    $"The discovery document at {uri} names no token_endpoint, so no grant can be redeemed.");
+                    $"The discovery document at {uri} names no token_endpoint, so no grant can be redeemed."
+                );
+            }
 
             configuration = document;
 
@@ -133,9 +144,14 @@ public sealed class IdentityClient : IDisposable {
     /// <summary>Redeems a grant at the token endpoint.</summary>
     /// <param name="form">The form fields. ⚠ Never reproduced in any exception — it carries the secret.</param>
     /// <param name="cancellationToken">The token.</param>
-    public async ValueTask<TokenPayload> RequestTokenAsync(IEnumerable<KeyValuePair<string, string>> form, CancellationToken cancellationToken) {
+    public async ValueTask<TokenPayload> RequestTokenAsync(
+        IEnumerable<KeyValuePair<string, string>> form,
+        CancellationToken cancellationToken
+    ) {
         var document = await GetConfigurationAsync(cancellationToken).ConfigureAwait(false);
-        using var request = new HttpRequestMessage(HttpMethod.Post, document.TokenEndpoint) { Content = new FormUrlEncodedContent(form) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, document.TokenEndpoint) {
+            Content = new FormUrlEncodedContent(form)
+        };
         var content = await SendAsync(request, "token response", cancellationToken).ConfigureAwait(false);
 
         return SdkJsonContext.Read(content, SdkJsonContext.Default.TokenPayload, "token response");
@@ -144,20 +160,31 @@ public sealed class IdentityClient : IDisposable {
     /// <summary>Starts a device authorization — RFC 8628 § 3.1.</summary>
     /// <param name="form">The form fields.</param>
     /// <param name="cancellationToken">The token.</param>
-    public async ValueTask<DeviceAuthorizationPayload> RequestDeviceCodeAsync(IEnumerable<KeyValuePair<string, string>> form, CancellationToken cancellationToken) {
+    public async ValueTask<DeviceAuthorizationPayload> RequestDeviceCodeAsync(
+        IEnumerable<KeyValuePair<string, string>> form,
+        CancellationToken cancellationToken
+    ) {
         var document = await GetConfigurationAsync(cancellationToken).ConfigureAwait(false);
 
-        if (string.IsNullOrEmpty(document.DeviceAuthorizationEndpoint))
+        if (string.IsNullOrEmpty(document.DeviceAuthorizationEndpoint)) {
             throw new CredentialUnavailableException(
-                $"{AuthorityHost} advertises no device_authorization_endpoint, so the device code flow is not available here.");
+                $"{AuthorityHost} advertises no device_authorization_endpoint, so the device code flow is not available here."
+            );
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, document.DeviceAuthorizationEndpoint) {
-            Content = new FormUrlEncodedContent(form),
+            Content = new FormUrlEncodedContent(form)
         };
 
-        var content = await SendAsync(request, "device authorization response", cancellationToken).ConfigureAwait(false);
+        var content = await SendAsync(request, "device authorization response", cancellationToken).ConfigureAwait(
+            false
+        );
 
-        return SdkJsonContext.Read(content, SdkJsonContext.Default.DeviceAuthorizationPayload, "device authorization response");
+        return SdkJsonContext.Read(
+            content,
+            SdkJsonContext.Default.DeviceAuthorizationPayload,
+            "device authorization response"
+        );
     }
 
     /// <summary>Fetches the signing key set.</summary>
@@ -165,8 +192,9 @@ public sealed class IdentityClient : IDisposable {
     public async ValueTask<JsonWebKeySet> RequestKeysAsync(CancellationToken cancellationToken) {
         var document = await GetConfigurationAsync(cancellationToken).ConfigureAwait(false);
 
-        if (string.IsNullOrEmpty(document.JwksUri))
+        if (string.IsNullOrEmpty(document.JwksUri)) {
             throw new AuthenticationFailedException($"The discovery document at {AuthorityHost} names no jwks_uri.");
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, document.JwksUri);
         var content = await SendAsync(request, "key set", cancellationToken).ConfigureAwait(false);
@@ -185,7 +213,11 @@ public sealed class IdentityClient : IDisposable {
     ///     that revokes a user's session here, so the resilience lives at the caller —
     ///     <see cref="RefreshTokenExchange" /> — where it can be about the specific grant.
     /// </remarks>
-    async ValueTask<ReadOnlyMemory<byte>> SendAsync(HttpRequestMessage request, string what, CancellationToken cancellationToken) {
+    async ValueTask<ReadOnlyMemory<byte>> SendAsync(
+        HttpRequestMessage request,
+        string what,
+        CancellationToken cancellationToken
+    ) {
         HttpResponseMessage message;
 
         try {
@@ -196,16 +228,22 @@ public sealed class IdentityClient : IDisposable {
         }
 
         using (message) {
-            ReadOnlyMemory<byte> body = await message.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            ReadOnlyMemory<byte> body =
+                await message.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
 
-            if (message.IsSuccessStatusCode)
+            if (message.IsSuccessStatusCode) {
                 return body;
+            }
 
             throw CreateFailure(message.StatusCode, body, what);
         }
     }
 
-    internal static AuthenticationFailedException CreateFailure(HttpStatusCode status, ReadOnlyMemory<byte> body, string what) {
+    internal static AuthenticationFailedException CreateFailure(
+        HttpStatusCode status,
+        ReadOnlyMemory<byte> body,
+        string what
+    ) {
         TokenErrorPayload? error = null;
 
         try {
@@ -218,9 +256,8 @@ public sealed class IdentityClient : IDisposable {
         var description = error?.ErrorDescription is { Length: > 0 } text ? $" — {text}" : string.Empty;
 
         return new AuthenticationFailedException(
-            $"The identity server rejected the request for a {what}: {(int)status} {error?.Error ?? status.ToString()}{description}") {
-            ErrorCode = error?.Error,
-        };
+            $"The identity server rejected the request for a {what}: {(int)status} {error?.Error ?? status.ToString()}{description}"
+        ) { ErrorCode = error?.Error };
     }
 
     /// <inheritdoc />

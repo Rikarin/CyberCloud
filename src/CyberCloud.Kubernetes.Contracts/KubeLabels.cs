@@ -121,17 +121,23 @@ public static class KubeLabels {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This exists for one job: labelling a nested template that a controller copies
-    ///         once and that an API server will not let anyone change afterwards.</b> The seven are
+    ///         ⚠
+    ///         <b>
+    ///             This exists for one job: labelling a nested template that a controller copies
+    ///             once and that an API server will not let anyone change afterwards.
+    ///         </b> The seven are
     ///         written into an object's own <c>metadata.labels</c>, which is mutable on every kind, so
     ///         nothing there needs this distinction. A <c>StatefulSet</c>'s
     ///         <c>spec.volumeClaimTemplates</c> is a different field with a different rule, and
     ///         <c>IKubeCommandBuilder.WithTemplateLabels</c> is the only caller.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see cref="ApiVersion" /> is excluded because it is per-request, and that single
-    ///         fact is what makes the difference between a one-time migration and a resource that can
-    ///         never be reconciled again.</b> <c>KubeCommandBuilder</c> stamps it from the api-version
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ApiVersion" /> is excluded because it is per-request, and that single
+    ///             fact is what makes the difference between a one-time migration and a resource that can
+    ///             never be reconciled again.
+    ///         </b> <c>KubeCommandBuilder</c> stamps it from the api-version
     ///         of the request that caused the reconcile, so it changes whenever a tenant calls at a
     ///         newer version. Measured against <c>rancher/k3s:v1.35.7-k3s1</c> — the pin the
     ///         cluster-backed conformance lane uses — an apply that changes <i>anything</i> under a
@@ -174,8 +180,11 @@ public static class KubeLabels {
     ///     The provider namespace the platform keeps for itself. No provider may declare it.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Reserving it is what makes <see cref="IsGroupScoped(string)" /> un-forgeable, and
-    ///     without the reservation the predicate would be a suggestion.</b> A provider cannot set
+    ///     ⚠
+    ///     <b>
+    ///         Reserving it is what makes <see cref="IsGroupScoped(string)" /> un-forgeable, and
+    ///         without the reservation the predicate would be a suggestion.
+    ///     </b> A provider cannot set
     ///     <see cref="ResourceType" /> — it is one of the seven, injected by
     ///     <see cref="KubeCommandBuilder" /> from the resource's own type, and
     ///     <see cref="IsMandatory" /> rejects an attempt to override it. So the only way an object
@@ -192,8 +201,11 @@ public static class KubeLabels {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A resource group is not a resource, and this type exists so that saying so is a
-    ///         label rather than a convention.</b> A group has no GUID —
+    ///         ⚠
+    ///         <b>
+    ///             A resource group is not a resource, and this type exists so that saying so is a
+    ///             label rather than a convention.
+    ///         </b> A group has no GUID —
     ///         <c>ResourceGroupDescriptor</c> carries a name, a subscription and a tenant, and no id —
     ///         and it is a structural segment of a resource path rather than a registered provider
     ///         type. But its namespace is a real object in a real cluster that ADR-013 requires all
@@ -201,8 +213,11 @@ public static class KubeLabels {
     ///         the object belongs to.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Three consumers need to recognise this and none of them may depend on the
-    ///         writer.</b> <c>NamespaceEnsurer</c> stamps it; <c>DriftScanner</c> must not report the
+    ///         ⚠
+    ///         <b>
+    ///             Three consumers need to recognise this and none of them may depend on the
+    ///             writer.
+    ///         </b> <c>NamespaceEnsurer</c> stamps it; <c>DriftScanner</c> must not report the
     ///         namespace as an orphan of a resource grain that will never exist; and
     ///         <c>ProviderConformanceTests</c> must not hold a group-attributed object to the
     ///         triggering resource's id. It lives here, in the label vocabulary, because that is the

@@ -12,8 +12,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A separate type from <see cref="Cidr" /> rather than a prefix with an implied
-///         <c>/32</c>, because the two are asked different questions.</b> Everything in this family
+///         ⚠
+///         <b>
+///             A separate type from <see cref="Cidr" /> rather than a prefix with an implied
+///             <c>/32</c>, because the two are asked different questions.
+///         </b> Everything in this family
 ///         before this type describes a <i>range</i> — an address space, a subnet prefix, a security
 ///         group's remote — and every one of them ends in a slash and a length. A public address is a
 ///         single host, <c>OvnEip.spec.v4Ip</c> is a bare address with no length, and
@@ -79,8 +82,11 @@ public static class IpAddresses {
     /// <returns>Whether <paramref name="text" /> is a well-formed address of that family.</returns>
     /// <remarks>
     ///     ⚠ <b>The family is checked rather than inferred</b>, because the two properties this backs
-    ///     are separate slots and a v6 address typed into the v4 slot has to be refused <i>at that
-    ///     slot's pointer</i> — otherwise the caller is told their v6 address is fine and the fabric
+    ///     are separate slots and a v6 address typed into the v4 slot has to be refused
+    ///     <i>
+    ///         at that
+    ///         slot's pointer
+    ///     </i> — otherwise the caller is told their v6 address is fine and the fabric
     ///     later allocates from a pool that has no such range.
     /// </remarks>
     public static bool TryParse(string? text, bool v6, out IPAddress address) {
@@ -142,13 +148,18 @@ public static class IpAddresses {
 /// <remarks>
 ///     <para>
 ///         <b>The authority is docs/plan/14 § Everything else</b>, whose row reads
-///         <i>"<c>publicIpAddresses</c> · M1 · ⊂ the VPC provider; a metered, quota'd, allocatable
-///         resource in its own right — because IPv4 is scarce and must be accounted"</i>, and
+///         <i>
+///             "<c>publicIpAddresses</c> · M1 · ⊂ the VPC provider; a metered, quota'd, allocatable
+///             resource in its own right — because IPv4 is scarce and must be accounted"
+///         </i>, and
 ///         § Load balancing, which is where the allocator question is asked.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE POINT OF THIS TYPE IS THE METER, AND IT IS THE FIRST TYPE IN THE PLATFORM THAT CAN
-///         DRAW <c>QuotaMeter.PublicIps</c> AT ALL.</b> That meter has existed since
+///         ⚠
+///         <b>
+///             THE POINT OF THIS TYPE IS THE METER, AND IT IS THE FIRST TYPE IN THE PLATFORM THAT CAN
+///             DRAW <c>QuotaMeter.PublicIps</c> AT ALL.
+///         </b> That meter has existed since
 ///         <c>QuotaGrain</c>'s defaults — 20 per subscription — and no shipping type has ever drawn it,
 ///         because every provider that reached for it wanted to draw it <i>conditionally</i> (an
 ///         address only when a body asked for external exposure) and <c>QuotaGrain.TryReserveAsync</c>
@@ -160,8 +171,11 @@ public static class IpAddresses {
 ///         <b>flat</b> meter of one and needs no pointer, no fallback and no <c>MeterDerivation</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A TOP-LEVEL TYPE AND NOT A CHILD OF <c>virtualNetworks</c>, WHICH IS THE OPPOSITE OF
-///         WHERE A READER OF THIS FAMILY WOULD PUT IT.</b> Its two siblings are children because a
+///         ⚠
+///         <b>
+///             A TOP-LEVEL TYPE AND NOT A CHILD OF <c>virtualNetworks</c>, WHICH IS THE OPPOSITE OF
+///             WHERE A READER OF THIS FAMILY WOULD PUT IT.
+///         </b> Its two siblings are children because a
 ///         <c>Subnet</c> binds to a <c>Vpc</c> and a security group is scoped to one network by name.
 ///         An <c>OvnEip</c> binds to <b>neither</b>: it is allocated out of the <i>external</i> subnet
 ///         — the operator's underlay — and it is attached to a tenant's routing domain later, by a
@@ -173,35 +187,53 @@ public static class IpAddresses {
 ///         <c>an-unattached-address-carries-no-traffic</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>EVERY FIELD OF AN <c>OvnEip</c> IS IMMUTABLE ONCE IT IS READY, AND THAT IS A FACT
-///         ABOUT THE CONTROLLER RATHER THAN A CONVENTION.</b> Read firsthand in
+///         ⚠
+///         <b>
+///             EVERY FIELD OF AN <c>OvnEip</c> IS IMMUTABLE ONCE IT IS READY, AND THAT IS A FACT
+///             ABOUT THE CONTROLLER RATHER THAN A CONVENTION.
+///         </b> Read firsthand in
 ///         <c>pkg/controller/ovn_eip.go</c> at <c>v1.16.2</c>: <c>handleAddOvnEip</c> returns
 ///         immediately when <c>status.macAddress</c> is already set — <i>"already ok"</i> — and
-///         <c>handleUpdateOvnEip</c> refuses four fields <b>by name</b>, one error each: <i>"not
-///         support change v4 ip"</i>, <i>"not support change v6 ip"</i>, <i>"not support change mac
-///         address"</i>, <i>"not support change type"</i>. So this is the first type in the tree with
+///         <c>handleUpdateOvnEip</c> refuses four fields <b>by name</b>, one error each:
+///         <i>
+///             "not
+///             support change v4 ip"
+///         </i>, <i>"not support change v6 ip"</i>,
+///         <i>
+///             "not support change mac
+///             address"
+///         </i>, <i>"not support change type"</i>. So this is the first type in the tree with
 ///         <b>no mutable property at all</b>. What that costs, and why the shared conformance suite
 ///         cannot see it, is
 ///         <c>charts/managed/kube-ovn-eip/conformance.yaml § owed</c>,
 ///         <c>an-allocated-address-cannot-be-changed</c> — stated as a defect rather than dressed up.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE RENDERER OMITS A KEY IT WOULD OTHERWISE SEND EMPTY, AND SENDING IT WOULD DEADLOCK
-///         THE RECONCILE LOOP RATHER THAN MERELY BE UNTIDY.</b> <c>createOrUpdateOvnEipCR</c> writes
+///         ⚠
+///         <b>
+///             THE RENDERER OMITS A KEY IT WOULD OTHERWISE SEND EMPTY, AND SENDING IT WOULD DEADLOCK
+///             THE RECONCILE LOOP RATHER THAN MERELY BE UNTIDY.
+///         </b> <c>createOrUpdateOvnEipCR</c> writes
 ///         the address the fabric allocated back into <c>spec.v4Ip</c>, <c>spec.v6Ip</c> and
 ///         <c>spec.macAddress</c> through a full <c>OvnEips().Update(...)</c> — so those fields become
 ///         owned by the controller's field manager. A provider that applied <c>v4Ip: ""</c> would own
 ///         the same field at a <i>different</i> value, and every subsequent apply would answer
 ///         <c>ApplyResult.Conflict</c>: the resource would sit in <c>InProgress</c> forever, reporting
 ///         a field manager conflict on a resource that was allocated correctly the first time.
-///         <see cref="OvnEipJson" /> therefore emits <c>v4Ip</c> and <c>v6Ip</c> <b>only when the body
-///         asks for a specific address</b>. ⚠ It is <c>CyberCloud.Terminal/consoles</c>' finding —
+///         <see cref="OvnEipJson" /> therefore emits <c>v4Ip</c> and <c>v6Ip</c>
+///         <b>
+///             only when the body
+///             asks for a specific address
+///         </b>. ⚠ It is <c>CyberCloud.Terminal/consoles</c>' finding —
 ///         <i>an empty value is not an absent one</i> — arriving on a scalar instead of a list, and
 ///         with a worse symptom.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND <see cref="Matches" /> COMPARES AN ADDRESS ONLY WHEN THE BODY REQUESTED ONE, WHICH
-///         IS THIS FAMILY'S CANONICAL BUG IN A NEW SHAPE.</b> <c>NetworkSubnets.Matches</c> compares
+///         ⚠
+///         <b>
+///             AND <see cref="Matches" /> COMPARES AN ADDRESS ONLY WHEN THE BODY REQUESTED ONE, WHICH
+///             IS THIS FAMILY'S CANONICAL BUG IN A NEW SHAPE.
+///         </b> <c>NetworkSubnets.Matches</c> compares
 ///         parsed networks because the controller <i>canonicalizes</i> what it was sent. Here the
 ///         controller <i>fills in what was not sent</i>: an address the tenant left to the fabric
 ///         arrives in <c>spec.v4Ip</c> one pass later. A comparison against the empty string would
@@ -209,8 +241,11 @@ public static class IpAddresses {
 ///         <c>NetworkPublicIpTests</c> runs that mistake red.
 ///     </para>
 ///     <para>
-///         ⚠ <b>NO <c>ipVersion</c> PROPERTY, AND ITS ABSENCE IS LOAD-BEARING RATHER THAN AN
-///         OVERSIGHT — <c>NetworkSubnets</c>' <c>protocol</c> argument, exactly.</b> Which families an
+///         ⚠
+///         <b>
+///             NO <c>ipVersion</c> PROPERTY, AND ITS ABSENCE IS LOAD-BEARING RATHER THAN AN
+///             OVERSIGHT — <c>NetworkSubnets</c>' <c>protocol</c> argument, exactly.
+///         </b> Which families an
 ///         EIP gets is decided by the <b>external subnet</b> it is allocated from: <c>acquireIPAddress</c>
 ///         hands back whatever that subnet carries, and <c>spec.v4Ip</c>/<c>spec.v6Ip</c> are requests
 ///         for a <i>particular</i> address rather than a choice of family. A tenant-facing
@@ -230,18 +265,27 @@ public static class IpAddresses {
 ///         flag, whose default is <c>external</c> and which exists precisely so a deployment can name
 ///         its provider bridge something else. A compiled-in guess would be a pool that does not
 ///         exist in the first region whose operator renamed theirs, and the symptom would be an EIP
-///         that never becomes ready. <b>The difference from the subnet case is that there the
-///         substrate's default is the platform's own VPC and is wrong, and here it is the operator's
-///         own pool and is the only right answer available.</b>
+///         that never becomes ready.
+///         <b>
+///             The difference from the subnet case is that there the
+///             substrate's default is the platform's own VPC and is wrong, and here it is the operator's
+///             own pool and is the only right answer available.
+///         </b>
 ///         <para>
-///             ⚠ <b>THE ONE HAZARD THAT ARGUMENT HAS TO SURVIVE WAS CHECKED RATHER THAN WAVED AT, AND
-///             THE ANSWER IS THAT UPSTREAM HANDLES IT.</b> Both delete paths release the address with
+///             ⚠
+///             <b>
+///                 THE ONE HAZARD THAT ARGUMENT HAS TO SURVIVE WAS CHECKED RATHER THAN WAVED AT, AND
+///                 THE ANSWER IS THAT UPSTREAM HANDLES IT.
+///             </b> Both delete paths release the address with
 ///             <c>c.ipam.ReleaseAddressByPod(eip.Name, eip.Spec.ExternalSubnet)</c> — passing a field
 ///             this provider leaves <b>empty</b>, which reads like an address that is never returned
 ///             to the pool. <c>pkg/ipam/ipam.go</c> branches on it: a non-empty name releases from
 ///             that subnet, and an <b>empty name releases from every subnet</b>. So the empty field is
-///             a superset rather than a no-op and nothing leaks. ⚠ <b>And the pool the fabric chose
-///             is still observable</b>, on the <c>ovn.kubernetes.io/subnet</c> label
+///             a superset rather than a no-op and nothing leaks. ⚠
+///             <b>
+///                 And the pool the fabric chose
+///                 is still observable
+///             </b>, on the <c>ovn.kubernetes.io/subnet</c> label
 ///             <c>createOrUpdateOvnEipCR</c> writes — which is a different label namespace from
 ///             ADR-013's seven, so the two do not fight.
 ///         </para>
@@ -257,8 +301,11 @@ public static class IpAddresses {
 ///         <c>PurgeAsync</c> have <b>no HTTP route</b>. A window here would hold a tenant's
 ///         <c>PublicIps</c> allowance, 20 by default, against addresses they deleted, for the whole
 ///         window, with no way to recover one and no way to release one early. That is a one-way leak
-///         on the platform's scarcest meter. <b>The window becomes right the day a purge route
-///         exists</b>, and not before.
+///         on the platform's scarcest meter.
+///         <b>
+///             The window becomes right the day a purge route
+///             exists
+///         </b>, and not before.
 ///     </para>
 /// </remarks>
 public static class PublicIpAddresses {
@@ -290,8 +337,11 @@ public static class PublicIpAddresses {
     ///     The <c>spec.type</c> every address this platform allocates carries.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Sent explicitly even though the controller supplies it, on the rule
-    ///     <c>NetworkSecurityGroups</c> established</b>: <c>handleAddOvnEip</c> reads an empty
+    ///     ⚠
+    ///     <b>
+    ///         Sent explicitly even though the controller supplies it, on the rule
+    ///         <c>NetworkSecurityGroups</c> established
+    ///     </b>: <c>handleAddOvnEip</c> reads an empty
     ///     <c>spec.type</c> as <c>nat</c>, but "the substrate's zero value happens to be safe" is a
     ///     fact about a version of Go source rather than a property of this resource — and
     ///     <see cref="Matches" /> can only compare a field that was sent.
@@ -355,12 +405,18 @@ public static class PublicIpAddresses {
     /// <param name="ns">The resource's namespace, used as a name component.</param>
     /// <param name="name">The address resource's name.</param>
     /// <remarks>
-    ///     ⚠ <b>Two components rather than the three a subnet needs, because this type has no
-    ///     parent</b> — and the namespace is still mandatory for <see cref="VirtualNetworks.ObjectNameOf" />'s
+    ///     ⚠
+    ///     <b>
+    ///         Two components rather than the three a subnet needs, because this type has no
+    ///         parent
+    ///     </b> — and the namespace is still mandatory for <see cref="VirtualNetworks.ObjectNameOf" />'s
     ///     reason: an <c>OvnEip</c> is cluster-scoped, so two subscriptions each creating an address
     ///     called <c>web</c> would render one object, each converging by overwriting the other, with
-    ///     nothing reporting an error. ⚠ <b>On this type the collision costs more than on any other in
-    ///     the family</b>, because the object is an <i>allocation</i>: two tenants would be handed the
+    ///     nothing reporting an error. ⚠
+    ///     <b>
+    ///         On this type the collision costs more than on any other in
+    ///         the family
+    ///     </b>, because the object is an <i>allocation</i>: two tenants would be handed the
     ///     same address, and the second tenant's traffic would arrive at the first tenant's NAT rule.
     /// </remarks>
     public static string ObjectNameOf(string ns, string name) => ns + "-" + name;
@@ -379,8 +435,11 @@ public static class PublicIpAddresses {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>TWO ADDRESS SLOTS RATHER THAN ONE, WHICH IS <c>addressSpace</c>'S SHAPE AND IS
-    ///         CHOSEN FOR THE SAME REASON.</b> Each is individually patterned, individually reportable
+    ///         ⚠
+    ///         <b>
+    ///             TWO ADDRESS SLOTS RATHER THAN ONE, WHICH IS <c>addressSpace</c>'S SHAPE AND IS
+    ///             CHOSEN FOR THE SAME REASON.
+    ///         </b> Each is individually patterned, individually reportable
     ///         through its own JSON Pointer when it is wrong, and models docs/plan/14 § IPv6's
     ///         <i>"a v4 prefix, a v6 prefix, or both"</i> exactly. A single field would have to guess
     ///         the family from the text, and would put the ordering rule in a description where nothing
@@ -394,9 +453,12 @@ public static class PublicIpAddresses {
     ///         reach the object — see <see cref="OvnEipJson" />.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THERE IS NO REQUIRED PROPERTY IN <c>/properties</c> BEYOND THE CLUSTER, WHICH IS
-    ///         WHY <c>InvalidBody</c> FOR THIS TYPE IS A MALFORMED ADDRESS RATHER THAN A MISSING
-    ///         FIELD.</b> Its two siblings drop a required property because that is all their schemas
+    ///         ⚠
+    ///         <b>
+    ///             THERE IS NO REQUIRED PROPERTY IN <c>/properties</c> BEYOND THE CLUSTER, WHICH IS
+    ///             WHY <c>InvalidBody</c> FOR THIS TYPE IS A MALFORMED ADDRESS RATHER THAN A MISSING
+    ///             FIELD.
+    ///         </b> Its two siblings drop a required property because that is all their schemas
     ///         can refuse beyond a shape; this one refuses <c>10.0.0</c> at
     ///         <c>/properties/address/v4</c> by <see cref="IpAddresses.OptionalV4Pattern" />, with a
     ///         <c>400</c> and that pointer, before the write path answers.
@@ -426,11 +488,7 @@ public static class PublicIpAddresses {
                     Description: "The cluster whose external pool the address is allocated from. ⚠ An "
                     + "address is only reachable from the fabric that announces it, so a load balancer "
                     + "in another cluster cannot use it."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
                     "/properties/address",
                     SchemaKind.Nested,
@@ -465,8 +523,7 @@ public static class PublicIpAddresses {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showAllocation</c> returns.
@@ -479,8 +536,11 @@ public static class PublicIpAddresses {
     ///     announced.
     ///     <para>
     ///         ⚠ <c>attachedTo</c> is <c>status.nat</c>, which is the name of the NAT rule using this
-    ///         address, or empty. It is reported because <b>an address with nothing attached carries no
-    ///         traffic</b>, and "I allocated an address and nothing happens" is the question this type
+    ///         address, or empty. It is reported because
+    ///         <b>
+    ///             an address with nothing attached carries no
+    ///             traffic
+    ///         </b>, and "I allocated an address and nothing happens" is the question this type
     ///         will be asked most often in M1 — where nothing can attach one yet.
     ///     </para>
     /// </remarks>
@@ -528,9 +588,7 @@ public static class PublicIpAddresses {
                     Description: "When the platform read the object, RFC 3339. ⚠ The read time rather "
                     + "than the time the fabric wrote the figures, because the object carries no "
                     + "timestamp on them."
-                ) {
-                    Format = SchemaFormat.DateTime
-                }
+                ) { Format = SchemaFormat.DateTime }
             ]
         );
 
@@ -553,8 +611,11 @@ public static class PublicIpAddresses {
     /// </summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>Much smaller than <c>NetworkSubnets.AddressProblem</c>, and the difference is the
-    ///     point.</b> A subnet's prefix is checked against a whole reserved table after the <c>202</c>,
+    ///     ⚠
+    ///     <b>
+    ///         Much smaller than <c>NetworkSubnets.AddressProblem</c>, and the difference is the
+    ///         point.
+    ///     </b> A subnet's prefix is checked against a whole reserved table after the <c>202</c>,
     ///     because the rule compares one value against a list selected by another property and
     ///     <c>ResourceSchema</c> cannot express that. Here the pattern reaches almost everything and
     ///     what is left is two facts about one string — is it the right family, and is it lower case —
@@ -578,8 +639,11 @@ public static class PublicIpAddresses {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A REQUESTED ADDRESS IS EMITTED AND AN UNREQUESTED ONE IS ABSENT, NOT EMPTY, AND
-    ///         THE DIFFERENCE IS A DEADLOCK.</b> <c>createOrUpdateOvnEipCR</c> writes the allocated
+    ///         ⚠
+    ///         <b>
+    ///             A REQUESTED ADDRESS IS EMITTED AND AN UNREQUESTED ONE IS ABSENT, NOT EMPTY, AND
+    ///             THE DIFFERENCE IS A DEADLOCK.
+    ///         </b> <c>createOrUpdateOvnEipCR</c> writes the allocated
     ///         address into <c>spec.v4Ip</c> with a full <c>Update()</c>, taking field-manager
     ///         ownership of it. An apply that carried <c>v4Ip: ""</c> would claim the same field at a
     ///         different value and every later apply would answer <c>ApplyResult.Conflict</c> — the
@@ -624,22 +688,31 @@ public static class PublicIpAddresses {
     /// <param name="objectJson">The object's JSON, exactly as the API server returned it.</param>
     /// <param name="desired">The desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>AN ADDRESS IS COMPARED ONLY WHEN ONE WAS ASKED FOR, AND THE OTHER READING IS THE BUG
-    ///     THIS FAMILY KEEPS FINDING.</b> The controller fills <c>spec.v4Ip</c> with whatever it
+    ///     ⚠
+    ///     <b>
+    ///         AN ADDRESS IS COMPARED ONLY WHEN ONE WAS ASKED FOR, AND THE OTHER READING IS THE BUG
+    ///         THIS FAMILY KEEPS FINDING.
+    ///     </b> The controller fills <c>spec.v4Ip</c> with whatever it
     ///     allocated, so a body that asked for no particular address will always disagree with the
     ///     object on that field — and a comparison that insisted would report drift on an address that
     ///     was allocated exactly as requested, forever, with the resource never leaving
     ///     <c>InProgress</c>. It is <c>NetworkSubnets.Matches</c>' canonicalisation trap in its second
-    ///     shape: there the controller <i>rewrote</i> what it was sent, here it <i>fills in what it was
-    ///     not</i>.
+    ///     shape: there the controller <i>rewrote</i> what it was sent, here it
+    ///     <i>
+    ///         fills in what it was
+    ///         not
+    ///     </i>.
     ///     <para>
     ///         ⚠ Containment rather than equality, as everywhere in this family, and here the
     ///         controller's write-back is emphatic: <c>createOrUpdateOvnEipCR</c> issues a full
     ///         <c>OvnEips().Update(...)</c> that sets <c>spec.macAddress</c>, <c>spec.v4Ip</c>,
     ///         <c>spec.v6Ip</c> and <c>spec.type</c> — four fields, on an object this provider
     ///         applied — and adds four <c>ovn.kubernetes.io/*</c> labels beside ADR-013's seven. An
-    ///         equality comparison would never converge on any of them. ⚠ <b><c>spec.externalSubnet</c>
-    ///         is <i>not</i> among them</b>, which is easy to assume and wrong: the update branch
+    ///         equality comparison would never converge on any of them. ⚠
+    ///         <b>
+    ///             <c>spec.externalSubnet</c>
+    ///             is <i>not</i> among them
+    ///         </b>, which is easy to assume and wrong: the update branch
     ///         leaves it exactly as it was applied, so on this platform's objects it stays empty and
     ///         the pool is visible only on the <c>ovn.kubernetes.io/subnet</c> label.
     ///     </para>

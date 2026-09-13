@@ -33,7 +33,7 @@ public sealed class RegionRoutingTests {
     public void ASecondHopIsRefusedRatherThanTaken() {
         RegionRouting.Decide("us-east", "eu-central", "ap-south")
             .Action
-            .ShouldBe(RegionAction.RefuseSecondHop);
+                .ShouldBe(RegionAction.RefuseSecondHop);
     }
 
     [Fact]

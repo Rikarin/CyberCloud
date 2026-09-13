@@ -9,15 +9,20 @@ namespace CyberCloud.Gateway.Host.Routing;
 /// <remarks>
 ///     <para>
 ///         docs/plan/10 § API versioning on why a query parameter rather than a header:
-///         <i>"it survives being pasted into a browser, it appears in logs without extra
-///         configuration, and it is what every Azure tool already emits. Header versioning is cleaner
-///         and loses all three."</i>
+///         <i>
+///             "it survives being pasted into a browser, it appears in logs without extra
+///             configuration, and it is what every Azure tool already emits. Header versioning is cleaner
+///             and loses all three."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>There is no "latest", and that is the whole design.</b> A default would mean a
 ///         client written today silently starts receiving tomorrow's shape, which is precisely what
-///         immutable dated versions exist to prevent — docs/plan/10 § API versioning: <i>"an old
-///         client keeps getting the shape it was written against indefinitely."</i> A missing
+///         immutable dated versions exist to prevent — docs/plan/10 § API versioning:
+///         <i>
+///             "an old
+///             client keeps getting the shape it was written against indefinitely."
+///         </i> A missing
 ///         parameter is therefore a <c>400</c> and never a guess.
 ///     </para>
 /// </remarks>

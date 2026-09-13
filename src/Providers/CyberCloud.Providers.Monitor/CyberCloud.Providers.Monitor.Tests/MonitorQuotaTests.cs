@@ -97,8 +97,9 @@ public sealed class MonitorQuotaTests {
         // the diagnostic charts/managed/opensearch/conformance.yaml already records as owed.
         var registration = Registration();
 
-        foreach (var absent in new[] { QuotaMeter.Vcpu, QuotaMeter.MemoryGb, QuotaMeter.PublicIps,
-                     QuotaMeter.Clusters }) {
+        foreach (var absent in new[] {
+                     QuotaMeter.Vcpu, QuotaMeter.MemoryGb, QuotaMeter.PublicIps, QuotaMeter.Clusters
+                 }) {
             registration.Meters.ShouldNotContain(
                 x => x.Meter == absent,
                 $"{absent} is declared on a resource type that provisions no pods, no addresses and "
@@ -123,11 +124,8 @@ public sealed class MonitorQuotaTests {
         derivation.Expression.ShouldNotBeNullOrWhiteSpace();
 
         foreach (var pointer in new[] {
-                     "/properties/retention/metrics",
-                     "/properties/retention/logs",
-                     "/properties/retention/traces",
-                     "/properties/quota/metricsGbPerDay",
-                     "/properties/quota/logsGbPerDay",
+                     "/properties/retention/metrics", "/properties/retention/logs", "/properties/retention/traces",
+                     "/properties/quota/metricsGbPerDay", "/properties/quota/logsGbPerDay",
                      "/properties/quota/tracesGbPerDay"
                  }) {
             derivation.Reads.ShouldContain(
@@ -137,10 +135,11 @@ public sealed class MonitorQuotaTests {
                 + "audit."
             );
 
-            MonitorWorkspaces.Schema2026.Declares(pointer).ShouldBeTrue(
-                $"the storage derivation declares it reads '{pointer}', which this api-version's "
-                + "schema does not declare."
-            );
+            MonitorWorkspaces.Schema2026.Declares(pointer)
+                .ShouldBeTrue(
+                    $"the storage derivation declares it reads '{pointer}', which this api-version's "
+                    + "schema does not declare."
+                );
         }
     }
 

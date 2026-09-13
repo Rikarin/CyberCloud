@@ -4,8 +4,11 @@ namespace CyberCloud.Communication.Contracts;
 
 /// <summary>
 ///     The addresses a service may not send to — docs/plan/17 § The parts that are actually the
-///     work: <i>"Bounces, complaints, opt-outs — per tenant, honoured before dispatch. Ignoring a
-///     complaint is how a sending domain gets blocked."</i>
+///     work:
+///     <i>
+///         "Bounces, complaints, opt-outs — per tenant, honoured before dispatch. Ignoring a
+///         complaint is how a sending domain gets blocked."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -25,8 +28,11 @@ namespace CyberCloud.Communication.Contracts;
 ///         again, which is itself the thing they said not to do.
 ///     </para>
 ///     <para>
-///         ⚠ <b>One grain per service holding every channel's entries, rather than one grain per
-///         address.</b> A per-address grain (the <c>IEmailIndexGrain</c> shape) would bound the state
+///         ⚠
+///         <b>
+///             One grain per service holding every channel's entries, rather than one grain per
+///             address.
+///         </b> A per-address grain (the <c>IEmailIndexGrain</c> shape) would bound the state
 ///         and cost the same single grain call on the send path. It was not chosen because
 ///         enumeration is a first-class operation here — a tenant has to be able to see and export
 ///         their suppression list, a support case starts with "is this address on it", and a
@@ -38,8 +44,14 @@ namespace CyberCloud.Communication.Contracts;
 [Alias("CyberCloud.Communication.ISuppressionListGrain")]
 public interface ISuppressionListGrain : IGrainWithStringKey {
     /// <summary>Adds an address, or updates the reason on one already there.</summary>
-    /// <param name="channel">Which channel it applies to. Suppression is per channel — an email bounce says nothing about a phone number.</param>
-    /// <param name="destination">The address, in any spelling. Normalized by <see cref="Destinations.Normalize" /> before it is stored.</param>
+    /// <param name="channel">
+    ///     Which channel it applies to. Suppression is per channel — an email bounce says nothing about a
+    ///     phone number.
+    /// </param>
+    /// <param name="destination">
+    ///     The address, in any spelling. Normalized by <see cref="Destinations.Normalize" /> before it
+    ///     is stored.
+    /// </param>
     /// <param name="reason">Why. See <see cref="SuppressionReason" /> — it decides who may lift it.</param>
     /// <param name="note">The carrier's or the operator's words, verbatim, for the support case.</param>
     /// <returns>
@@ -73,10 +85,13 @@ public interface ISuppressionListGrain : IGrainWithStringKey {
     /// <param name="reason">Who is asking and why — recorded, and required.</param>
     /// <returns>
     ///     <para>
-    ///         ⚠ <b><see cref="ErrorCode.PolicyViolation" /> for
-    ///         <see cref="SuppressionReason.Complaint" /> and
-    ///         <see cref="SuppressionReason.OptOut" />, and that refusal is the point of the
-    ///         method.</b> Those two are statements by the recipient, not facts about an address. A
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ErrorCode.PolicyViolation" /> for
+    ///             <see cref="SuppressionReason.Complaint" /> and
+    ///             <see cref="SuppressionReason.OptOut" />, and that refusal is the point of the
+    ///             method.
+    ///         </b> Those two are statements by the recipient, not facts about an address. A
     ///         tenant who could clear them could un-unsubscribe their own recipients, which is both
     ///         the thing regulators write rules about and the thing that gets a sending domain
     ///         blocked. Re-consent arrives as a new inbound message, through
@@ -104,8 +119,11 @@ public interface ISuppressionListGrain : IGrainWithStringKey {
     ///     Where one service's list stops growing quietly.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A ceiling rather than an eviction, because evicting a suppression entry re-enables
-    ///     sending to somebody who opted out.</b> At the ceiling
+    ///     ⚠
+    ///     <b>
+    ///         A ceiling rather than an eviction, because evicting a suppression entry re-enables
+    ///         sending to somebody who opted out.
+    ///     </b> At the ceiling
     ///     <see cref="SuppressAsync" /> keeps accepting — refusing would be worse — and the grain is
     ///     over a size that a single durable read on the send path should not carry. The successor
     ///     is a per-address grain with a separate enumerable index, which is a design change and a

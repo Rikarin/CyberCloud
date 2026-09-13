@@ -18,8 +18,11 @@ namespace CyberCloud.Providers.Messaging.Tests;
 ///         from the stored body at delete time through the same function the create reserved with.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The storage arithmetic is the one a reader is most likely to get wrong on THIS row,
-///         and it is wrong in the opposite direction from the intuition.</b> A quorum queue is a Raft
+///         ⚠
+///         <b>
+///             The storage arithmetic is the one a reader is most likely to get wrong on THIS row,
+///             and it is wrong in the opposite direction from the intuition.
+///         </b> A quorum queue is a Raft
 ///         group and every member holds the whole log, so <c>storage.size</c> is what each node needs
 ///         rather than a cluster-wide figure to divide. Somebody used to a sharded store would divide
 ///         by the node count and under-reserve by exactly that factor.
@@ -90,14 +93,11 @@ public sealed class RabbitmqQuotaTests {
         var registry = ProviderRegistry.Build([new MessagingProvider()]);
         registry.TryGetType(RabbitmqClusters.Type, out var registration).ShouldBeTrue();
 
-        using var body = JsonDocument.Parse(
-            WithSizing(RabbitmqClusters.Body(ClusterId), "not-a-quantity", "1Gi")
-        );
+        using var body = JsonDocument.Parse(WithSizing(RabbitmqClusters.Body(ClusterId), "not-a-quantity", "1Gi"));
 
         registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!
-            .Amount(body.RootElement).IsFailure.ShouldBeTrue(
-                "a body whose cpu quantity does not parse reserved an amount instead of refusing."
-            );
+            .Amount(body.RootElement)
+            .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
     }
 
     [Fact]
@@ -142,9 +142,7 @@ public sealed class RabbitmqQuotaTests {
 
     static string WithSizing(string body, string cpu, string memory) {
         var node = JsonNode.Parse(body)!.AsObject();
-        node["properties"]!.AsObject()["sizing"] = new JsonObject {
-            ["cpu"] = cpu, ["memory"] = memory
-        };
+        node["properties"]!.AsObject()["sizing"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
 
         return node.ToJsonString();
     }

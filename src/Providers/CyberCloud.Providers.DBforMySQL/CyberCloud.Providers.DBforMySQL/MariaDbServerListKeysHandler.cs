@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
@@ -13,14 +14,20 @@ namespace CyberCloud.Providers.DBforMySQL;
 /// <remarks>
 ///     <para>
 ///         <b>This closes <c>conformance.yaml</c> § owed, <c>listkeys-has-no-handler</c>.</b> That row
-///         said what the gap cost: <i>a tenant with a running MariaDB has no supported way to learn
-///         its password, and the two Secrets the operator generated are readable only with cluster
-///         access the tenant does not have</i>. Both halves are answered here — the action reads the
+///         said what the gap cost:
+///         <i>
+///             a tenant with a running MariaDB has no supported way to learn
+///             its password, and the two Secrets the operator generated are readable only with cluster
+///             access the tenant does not have
+///         </i>. Both halves are answered here — the action reads the
 ///         Secret on the tenant's behalf, under a permission that is deliberately not <c>read</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE APPLICATION ACCOUNT, NOT ROOT, AND THAT IS THE POINT OF THE HANDLER RATHER THAN A
-///         DETAIL OF IT.</b> mariadb-operator generates both — <see cref="MariaDbServers.RootSecretName" />
+///         ⚠
+///         <b>
+///             THE APPLICATION ACCOUNT, NOT ROOT, AND THAT IS THE POINT OF THE HANDLER RATHER THAN A
+///             DETAIL OF IT.
+///         </b> mariadb-operator generates both — <see cref="MariaDbServers.RootSecretName" />
 ///         and <see cref="MariaDbServers.PasswordSecretName" /> — and this reads only the second. A
 ///         credential with <c>GRANT OPTION</c> over every schema is not what an application connects
 ///         with, and an API that returned it would make the safe choice the harder one.

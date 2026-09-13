@@ -75,8 +75,11 @@ public sealed record ObservedState {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The subject is a type and an id, not a <c>SubjectRef</c>, and that is an assembly-graph
-///         decision.</b> A <c>SubjectRef</c> would drag <c>CyberCloud.Authorization.Contracts</c> into
+///         ⚠
+///         <b>
+///             The subject is a type and an id, not a <c>SubjectRef</c>, and that is an assembly-graph
+///             decision.
+///         </b> A <c>SubjectRef</c> would drag <c>CyberCloud.Authorization.Contracts</c> into
 ///         every provider's reference set, and with it <c>ICheckGrain</c> — the one type
 ///         docs/plan/07 § The enforcement seam says providers must never reach. The manager builds the
 ///         <c>SubjectRef</c> at the seam, from these two strings.
@@ -194,8 +197,7 @@ public sealed record WriteTrace {
     }
 
     /// <inheritdoc />
-    public override string ToString() =>
-        Reached.IsDefaultOrEmpty ? "(no steps)" : string.Join(" → ", Reached);
+    public override string ToString() => Reached.IsDefaultOrEmpty ? "(no steps)" : string.Join(" → ", Reached);
 }
 
 /// <summary>
@@ -233,8 +235,11 @@ public sealed record WriteRequest {
     public CallerContext Caller { get; init; } = new();
 
     /// <summary>
-    ///     The <c>If-Match</c> etag, or empty. docs/plan/06 § Tags, locks: <i>"the only way to make
-    ///     concurrent portal edits safe"</i>.
+    ///     The <c>If-Match</c> etag, or empty. docs/plan/06 § Tags, locks:
+    ///     <i>
+    ///         "the only way to make
+    ///         concurrent portal edits safe"
+    ///     </i>.
     /// </summary>
     [Id(5)]
     public string IfMatch { get; init; } = string.Empty;
@@ -254,11 +259,16 @@ public sealed record WriteRequest {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The absence of a <see cref="CallerContext" /> is the type's whole content, and it is
-///         a separate record rather than a <see cref="WriteRequest" /> with an empty
-///         <see cref="WriteRequest.Caller" /> for that reason.</b> docs/plan/08 § Soft delete:
-///         <i>"an expiry is not a request, so there is nobody to authorize it, and PurgeAsync checks
-///         PurgePermission against a caller"</i>. A shape that could carry a caller would invite one
+///         ⚠
+///         <b>
+///             The absence of a <see cref="CallerContext" /> is the type's whole content, and it is
+///             a separate record rather than a <see cref="WriteRequest" /> with an empty
+///             <see cref="WriteRequest.Caller" /> for that reason.
+///         </b> docs/plan/08 § Soft delete:
+///         <i>
+///             "an expiry is not a request, so there is nobody to authorize it, and PurgeAsync checks
+///             PurgePermission against a caller"
+///         </i>. A shape that could carry a caller would invite one
 ///         — and a caller here would be a subject the platform had invented in order to pass its own
 ///         check, which is the system principal docs/plan/07 declined.
 ///     </para>
@@ -274,9 +284,12 @@ public sealed record WriteRequest {
 ///         request with no version does not resolve at all and never reaches the precondition above.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This paragraph used to end "so whatever drives this records the version the resource
-///         was stored under and hands it back", and the driver that arrived cannot do that
-///         (2026-09-05, issue #12).</b> Nothing durable records it in a form a driver can read:
+///         ⚠
+///         <b>
+///             This paragraph used to end "so whatever drives this records the version the resource
+///             was stored under and hands it back", and the driver that arrived cannot do that
+///             (2026-09-05, issue #12).
+///         </b> Nothing durable records it in a form a driver can read:
 ///         <c>ResourceState.ApiVersion</c> is the version of the last write, but
 ///         <c>IResourceGrain.GetAsync</c> must be <i>given</i> a version in order to be asked and
 ///         echoes back the one it was given, and <c>ParkedResource</c> deliberately carries only an
@@ -352,8 +365,11 @@ public sealed record WriteAccepted {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS THE ONLY PLACE A <c>secret: true</c> ACTION'S VALUE TRAVELS, AND THE
-    ///         ABSENCE OF THE ALTERNATIVE IS THE POINT.</b> The obvious home for an action's result is
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS THE ONLY PLACE A <c>secret: true</c> ACTION'S VALUE TRAVELS, AND THE
+    ///             ABSENCE OF THE ALTERNATIVE IS THE POINT.
+    ///         </b> The obvious home for an action's result is
     ///         the operation it started — an LRO already has a status every client polls. That home is
     ///         <b>durable</b> and is readable by anyone holding <c>read</c> on the resource, while
     ///         <c>listKeys</c> deliberately checks a permission that is <i>not</i> <c>read</c>. So a
@@ -389,9 +405,15 @@ public sealed record WriteAccepted {
 ///     A resource as the API renders it, at one api-version.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><see cref="Properties" /> is <i>projected</i> to <see cref="ApiVersion" /> and is not the
-///     grain's whole state.</b> docs/plan/08 § The provider registry: <i>"the grain's state is a
-///     <b>superset</b> and a read at an old version projects down"</i>. A snapshot that leaked a
+///     ⚠
+///     <b>
+///         <see cref="Properties" /> is <i>projected</i> to <see cref="ApiVersion" /> and is not the
+///         grain's whole state.
+///     </b> docs/plan/08 § The provider registry:
+///     <i>
+///         "the grain's state is a
+///         <b>superset</b> and a read at an old version projects down"
+///     </i>. A snapshot that leaked a
 ///     newer version's field would break the SDK that was generated against the older one, which is
 ///     the failure the immutable-date rule exists to prevent.
 /// </remarks>
@@ -441,8 +463,11 @@ public sealed record ResourceSnapshot {
 
     /// <summary>
     ///     Which cluster the resource is placed into, or <see cref="Guid.Empty" /> for a provider with
-    ///     no cluster. docs/plan/08 § What the resource manager deliberately does not do: <i>"the
-    ///     manager just carries the id"</i>.
+    ///     no cluster. docs/plan/08 § What the resource manager deliberately does not do:
+    ///     <i>
+    ///         "the
+    ///         manager just carries the id"
+    ///     </i>.
     /// </summary>
     [Id(10)]
     public Guid ClusterId { get; init; }
@@ -600,15 +625,21 @@ public sealed record OperationSpec {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This exists because the unlink cannot re-derive it, and a tuple you cannot rebuild
-    ///         is a tuple you cannot delete.</b> <c>OperationGrain</c> reconstructs the address with
+    ///         ⚠
+    ///         <b>
+    ///             This exists because the unlink cannot re-derive it, and a tuple you cannot rebuild
+    ///             is a tuple you cannot delete.
+    ///         </b> <c>OperationGrain</c> reconstructs the address with
     ///         <c>ResourceId.ParsePath(spec.ResourcePath).WithId(spec.ResourceId)</c>, and a parsed path
     ///         carries no GUIDs at all — docs/plan/06 § Identifiers keeps them out — so the parent's is
     ///         <see cref="Guid.Empty" /> exactly where <c>UnlinkFromParentAsync</c> needs it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And re-resolving it through <c>IResourceIndexGrain</c> at unlink time is the thing
-    ///         that must not be done.</b> The unlink runs after <c>CompleteDeleteAsync</c> — the
+    ///         ⚠
+    ///         <b>
+    ///             And re-resolving it through <c>IResourceIndexGrain</c> at unlink time is the thing
+    ///             that must not be done.
+    ///         </b> The unlink runs after <c>CompleteDeleteAsync</c> — the
     ///         resource is already gone — and is retried from a reminder to
     ///         <c>ReconcileSchedule</c>'s sixty-minute ceiling. docs/plan/08 § Deleting a parent
     ///         resource that has children records that the 409 which would stop a parent being deleted
@@ -634,10 +665,16 @@ public sealed record OperationSpec {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the flag that moves the committed-quota return from the delete to the
-    ///         purge, and moving it is docs/plan/08 § Soft delete's third decision.</b> A soft-deleted
-    ///         resource still holds everything it reserved — <i>"handing the data back is the entire
-    ///         feature: the volumes, the PVCs and the memory are all still allocated"</i> — so its quota
+    ///         ⚠
+    ///         <b>
+    ///             This is the flag that moves the committed-quota return from the delete to the
+    ///             purge, and moving it is docs/plan/08 § Soft delete's third decision.
+    ///         </b> A soft-deleted
+    ///         resource still holds everything it reserved —
+    ///         <i>
+    ///             "handing the data back is the entire
+    ///             feature: the volumes, the PVCs and the memory are all still allocated"
+    ///         </i> — so its quota
     ///         stays committed. <c>OperationGrain</c> reads this and skips
     ///         <c>ReturnCommittedQuotaAsync</c>; the <see cref="OperationKind.Purge" /> that ends the
     ///         window runs it instead, from a spec carrying the same
@@ -659,8 +696,11 @@ public sealed record OperationSpec {
     ///         convergence would turn a parked resource into one whose quota came back twice.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see langword="false" /> means "as before", which is what makes appending it
-    ///         safe</b> — docs/plan/05 § Serialization and schema evolution. Every operation started by
+    ///         ⚠
+    ///         <b>
+    ///             <see langword="false" /> means "as before", which is what makes appending it
+    ///             safe
+    ///         </b> — docs/plan/05 § Serialization and schema evolution. Every operation started by
     ///         a peer that predates this member is a hard delete, which is what every delete was.
     ///         ⚠ Numbered 15, never by renumbering, and the durable tier is JSON so the property NAME is
     ///         the persisted contract.
@@ -677,8 +717,11 @@ public sealed record OperationSpec {
 ///     <para>
 ///         ⚠ <b>Not a <c>QuotaLease</c> and not a <c>QuotaUsage</c>, because it is neither.</b> A lease
 ///         is a reservation that has not landed and is gone the moment it commits; a usage is the
-///         subscription's running totals. This is the amount <i>one operation</i> put on <i>one
-///         meter</i> — the only thing a delete needs in order to give back exactly what the create
+///         subscription's running totals. This is the amount <i>one operation</i> put on
+///         <i>
+///             one
+///             meter
+///         </i> — the only thing a delete needs in order to give back exactly what the create
 ///         took, rather than an approximation re-derived from a body that may have moved.
 ///     </para>
 ///     <para>
@@ -699,8 +742,7 @@ public sealed record QuotaCommitment {
     public decimal Amount { get; init; }
 
     /// <inheritdoc />
-    public override string ToString() =>
-        string.Create(CultureInfo.InvariantCulture, $"{Meter}={Amount}");
+    public override string ToString() => string.Create(CultureInfo.InvariantCulture, $"{Meter}={Amount}");
 }
 
 /// <summary>One entry in an operation's progress array. docs/plan/08 § Long-running operations.</summary>
@@ -724,8 +766,7 @@ public sealed record OperationProgress {
     public int PercentComplete { get; init; }
 
     /// <inheritdoc />
-    public override string ToString() =>
-        string.Create(CultureInfo.InvariantCulture, $"{Step}: {Detail}");
+    public override string ToString() => string.Create(CultureInfo.InvariantCulture, $"{Step}: {Detail}");
 }
 
 /// <summary>
@@ -807,8 +848,11 @@ public sealed record OperationStatus {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Added so that <see cref="IResourceManager.GetOperationAsync" /> can authorize a
-    ///         poll without reading the resource.</b> <see cref="ResourcePath" /> alone is an address
+    ///         ⚠
+    ///         <b>
+    ///             Added so that <see cref="IResourceManager.GetOperationAsync" /> can authorize a
+    ///             poll without reading the resource.
+    ///         </b> <see cref="ResourcePath" /> alone is an address
     ///         with <see cref="Guid.Empty" /> for its id, and the ReBAC object of a resource is its
     ///         GUID — so a check built from the path alone would fall back to the parent resource
     ///         group, which is a <i>different</i> question. Resolving the GUID from the path costs an
@@ -826,8 +870,7 @@ public sealed record OperationStatus {
     public Guid ResourceId { get; init; }
 
     /// <summary>Whether the operation has reached a terminal state.</summary>
-    public bool IsTerminal =>
-        State is OperationState.Succeeded or OperationState.Failed or OperationState.Canceled;
+    public bool IsTerminal => State is OperationState.Succeeded or OperationState.Failed or OperationState.Canceled;
 
     /// <summary>The last progress entry, or <see langword="null" /> when there is none.</summary>
     /// <remarks>
@@ -835,8 +878,7 @@ public sealed record OperationStatus {
     ///     operation that timed out without saying <i>where</i> it was stuck is a support ticket, not
     ///     a diagnosis.
     /// </remarks>
-    public OperationProgress? LastProgress =>
-        Progress.IsDefaultOrEmpty ? null : Progress[^1];
+    public OperationProgress? LastProgress => Progress.IsDefaultOrEmpty ? null : Progress[^1];
 }
 
 /// <summary>
@@ -926,8 +968,7 @@ public sealed record ResourceChangedEvent {
     public long Version { get; init; }
 
     /// <summary>The stream this event belongs on — <c>cc.{tenantId:N}.res</c>, per step 11.</summary>
-    public string StreamNamespace =>
-        string.Create(CultureInfo.InvariantCulture, $"cc.{TenantId:N}.res");
+    public string StreamNamespace => string.Create(CultureInfo.InvariantCulture, $"cc.{TenantId:N}.res");
 }
 
 /// <summary>One thing a per-cluster drift scan found. docs/plan/08 § The reconcile loop.</summary>

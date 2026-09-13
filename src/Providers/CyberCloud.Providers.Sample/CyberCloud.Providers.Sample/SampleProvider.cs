@@ -5,15 +5,24 @@ namespace CyberCloud.Providers.Sample;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/24 § Phase 1, exit criterion 1: <i>"A trivial provider
-///         (<c>CyberCloud.Sample/widgets</c>, a ConfigMap) passes the full conformance suite."</i>
+///         docs/plan/24 § Phase 1, exit criterion 1:
+///         <i>
+///             "A trivial provider
+///             (<c>CyberCloud.Sample/widgets</c>, a ConfigMap) passes the full conformance suite."
+///         </i>
 ///         docs/plan/25 § R1 is why it exists at all — it is the instrument that measures whether the
-///         resource manager is finished, and its leading indicator is <i>"the number of commits to
-///         <c>CyberCloud.ResourceManager</c> made by a provider PR"</i>.
+///         resource manager is finished, and its leading indicator is
+///         <i>
+///             "the number of commits to
+///             <c>CyberCloud.ResourceManager</c> made by a provider PR"
+///         </i>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Nothing here is clever, and that is a requirement rather than a stage of
-///         development.</b> A capability this provider grows is a capability the platform is not being
+///         ⚠
+///         <b>
+///             Nothing here is clever, and that is a requirement rather than a stage of
+///             development.
+///         </b> A capability this provider grows is a capability the platform is not being
 ///         asked for, and the measurement quietly degrades. If a widget needs something, the right
 ///         move is to change <c>CyberCloud.ResourceManager</c> and record why.
 ///     </para>
@@ -22,8 +31,10 @@ namespace CyberCloud.Providers.Sample;
 ///         not read <c>SoftDeleteDays</c>, and declaring a recovery window the platform does not honour is
 ///         worse than declaring none; no <c>Chart</c> — <c>CyberCloud.Kubernetes.Charts</c> does not exist
 ///         and a chart name that renders nothing would fail at apply time rather than at silo start. ⚠
-///         <b>THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED
-///         ONE.</b> docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks
+///         <b>
+///             THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED
+///             ONE.
+///         </b> docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks
 ///         the resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical
 ///         <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to the
 ///         subscription and drops its direct role assignments; a restore reverses it and a purge — under

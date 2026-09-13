@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         <c>module-layering.txt</c> records it under
 ///         <c>CyberCloud.Providers.ContainerService</c>: a provider may reference
 ///         <c>CyberCloud.Kubernetes.Contracts</c> only (docs/plan/03 § The .Contracts split), so a
-///         reconciler cannot reach <c>IClusterConnectionGrain.AttachAsync</c> — and <i>"attaching a
-///         connection is the resource manager's job rather than a reconciler's"</i>. The consequence
+///         reconciler cannot reach <c>IClusterConnectionGrain.AttachAsync</c> — and
+///         <i>
+///             "attaching a
+///             connection is the resource manager's job rather than a reconciler's"
+///         </i>. The consequence
 ///         was written down rather than worked around, and the consequence was that
 ///         <c>AttachAsync</c> was called by tests and by nothing else: a cluster
 ///         <c>CyberCloud.ContainerService/managedClusters</c> created converged and was then
@@ -24,9 +27,12 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         supplies the facts, which only it knows; the manager performs the write, which only it may.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The driver attaches only after a pass that returned
-///         <see cref="ReconcileOutcomeKind.Converged" />, and that ordering is the whole safety
-///         property.</b> A connection registered while a control plane is still coming up is a
+///         ⚠
+///         <b>
+///             The driver attaches only after a pass that returned
+///             <see cref="ReconcileOutcomeKind.Converged" />, and that ordering is the whole safety
+///             property.
+///         </b> A connection registered while a control plane is still coming up is a
 ///         connection every later placement fails against: the resource manager would hand a
 ///         reconciler a handle to an API server that answers nothing, the reconcile would fail, back
 ///         off, and report a cluster problem rather than a timing one. docs/plan/09 § Kubernetes in
@@ -57,8 +63,11 @@ public interface IClusterConnectionRegistrar {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Synchronous and returning nothing, for the reasons <see cref="IReconcileLog" />
-///         gives.</b> A reconciler is bounded at 30 seconds and runs inside a single-threaded grain
+///         ⚠
+///         <b>
+///             Synchronous and returning nothing, for the reasons <see cref="IReconcileLog" />
+///             gives.
+///         </b> A reconciler is bounded at 30 seconds and runs inside a single-threaded grain
 ///         turn, so a seam it can await is one more thing that can spend the budget. The driver
 ///         collects what was reported and performs the attach once, after the pass — which is also
 ///         what lets it refuse to attach a pass that did not converge.

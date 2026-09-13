@@ -47,8 +47,11 @@ public sealed class TestClock : IClock {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This stands in for the resource-graph projection of docs/plan/08 § The resource-graph
-///         projection, and it is the <i>right</i> kind of stand-in.</b> What matters about the real
+///         ⚠
+///         <b>
+///             This stands in for the resource-graph projection of docs/plan/08 § The resource-graph
+///             projection, and it is the <i>right</i> kind of stand-in.
+///         </b> What matters about the real
 ///         source is that it reports what <b>exists</b> — the quantities the write path reserved and
 ///         committed — rather than what is running. A double that returns a fixed list has exactly
 ///         that property, which is why the "stopped resource is still metered" test can be written
@@ -143,8 +146,7 @@ public sealed class MeteringCluster : IAsyncLifetime {
 
     /// <summary>A tenant-qualified grain factory.</summary>
     /// <param name="tenant">The tenant.</param>
-    public TenantGrainFactory For(Guid tenant) =>
-        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>The sampler for a subscription.</summary>
     /// <param name="tenant">The tenant.</param>

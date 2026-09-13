@@ -67,11 +67,15 @@ public sealed class HotTierAndWiringTests(StorageFixture fixture) {
         // 12 tenants × 25 grains × 2 tiers, all at once.
         await Task.WhenAll(
             tenants.SelectMany(tenant => Enumerable.Range(0, 25)
-                .SelectMany(i => new[] {
-                        fixture.Grains.ForTenant(Id(tenant)).GetGrain<IHotStateGrain>($"session/{i}").WriteAsync("x"),
-                        fixture.Grains.ForTenant(Id(tenant)).GetGrain<IDurableStateGrain>($"res/{i}").WriteAsync("x")
-                    }
-                )
+                    .SelectMany(i => new[] {
+                            fixture.Grains.ForTenant(Id(tenant))
+                                .GetGrain<IHotStateGrain>($"session/{i}")
+                                .WriteAsync("x"),
+                            fixture.Grains.ForTenant(Id(tenant))
+                                .GetGrain<IDurableStateGrain>($"res/{i}")
+                                .WriteAsync("x")
+                        }
+                    )
             )
         );
 
@@ -170,9 +174,11 @@ public sealed class HotTierAndWiringTests(StorageFixture fixture) {
         );
 
         var load = tenantsOnShardA.SelectMany(tenant => Enumerable.Range(0, 30)
-            .Select(i =>
-                fixture.Grains.ForTenant(Id(tenant)).GetGrain<IDurableStateGrain>($"res/pool/{i}").WriteAsync("load")
-            )
+                .Select(i =>
+                    fixture.Grains.ForTenant(Id(tenant))
+                        .GetGrain<IDurableStateGrain>($"res/pool/{i}")
+                        .WriteAsync("load")
+                )
         );
 
         await Task.WhenAll(load);

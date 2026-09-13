@@ -1,6 +1,7 @@
 // ⚠ For SecretRef. It lives in CyberCloud.Core.Contracts rather than in
 // CyberCloud.ResourceManager.Contracts where it started — see its own remarks on why the [Alias]
 // stayed put through the move.
+
 using CyberCloud.Core.Contracts;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
@@ -23,8 +24,11 @@ namespace CyberCloud.Providers.Cache.Contracts;
 ///         service, and ADR-011, which rejects Redis ≥ 7.4 as RSALv2/SSPL and takes Valkey instead).
 ///     </para>
 ///     <para>
-///         ⚠ <b>The type path is <c>redis</c> and the product is <b>Valkey</b>, and that is deliberate
-///         rather than a leftover.</b> docs/plan/01 § Azure parity maps this row onto
+///         ⚠
+///         <b>
+///             The type path is <c>redis</c> and the product is <b>Valkey</b>, and that is deliberate
+///             rather than a leftover.
+///         </b> docs/plan/01 § Azure parity maps this row onto
 ///         <c>Microsoft.Cache/redis</c>, and a resource path is the one part of the surface a tenant's
 ///         existing scripts and ARM-shaped tooling address by string. ADR-011's rule is about the
 ///         <i>product</i>: <i>"API-compatible; say Valkey on the product page"</i>. So every display
@@ -32,8 +36,11 @@ namespace CyberCloud.Providers.Cache.Contracts;
 ///         renaming the path would buy a truer noun at the price of the parity the row exists for.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Schema2026" /> is the authored side of the pair and
-///         <c>charts/managed/valkey/values.yaml</c> is the generated one.</b> ADR-010 § Which end
+///         ⚠
+///         <b>
+///             <see cref="Schema2026" /> is the authored side of the pair and
+///             <c>charts/managed/valkey/values.yaml</c> is the generated one.
+///         </b> ADR-010 § Which end
 ///         authors the schema, DECIDED 2026-08-11: the C# <c>ResourceSchema</c> is authored, the
 ///         chart's <c>@param</c> block is generated from it by <c>ChartAnnotationEmitter</c> and
 ///         byte-diffed by <c>./build.sh Charts</c>. Every property whose pointer begins
@@ -42,8 +49,11 @@ namespace CyberCloud.Providers.Cache.Contracts;
 ///         are excluded by the emitter rather than by anyone remembering.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Three things docs/plan/12 names for this row are NOT declared, because the operator
-///         ADR-010 clause 1 selects cannot do them.</b> Each was checked against
+///         ⚠
+///         <b>
+///             Three things docs/plan/12 names for this row are NOT declared, because the operator
+///             ADR-010 clause 1 selects cannot do them.
+///         </b> Each was checked against
 ///         <c>spotahome/redis-operator</c>'s own source rather than against its README, and each is
 ///         recorded on the property it would have been:
 ///     </para>
@@ -69,8 +79,11 @@ namespace CyberCloud.Providers.Cache.Contracts;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>No property here is <see cref="SchemaProperty.Secret" />, and the <c>requirepass</c>
-///         reaches the data plane the same way Postgres's does — as a reference by name.</b> Nothing on
+///         ⚠
+///         <b>
+///             No property here is <see cref="SchemaProperty.Secret" />, and the <c>requirepass</c>
+///             reaches the data plane the same way Postgres's does — as a reference by name.
+///         </b> Nothing on
 ///         the write path swaps a secret value for a <c>SecretRef</c> before the grain writes
 ///         desired state (<see cref="SchemaProperty" />'s own remarks say so), so a declared secret
 ///         would be a plaintext password in durable state. <c>spec.auth.secretPath</c> is the seam:
@@ -145,12 +158,7 @@ public static class ValkeyCaches {
     ///     <c>upstream-api: databases.spotahome.com/v1</c>.
     /// </remarks>
     public static GroupVersionKind FailoverKind { get; } =
-        new() {
-            Group = "databases.spotahome.com",
-            Version = "v1",
-            Kind = "RedisFailover",
-            Plural = "redisfailovers"
-        };
+        new() { Group = "databases.spotahome.com", Version = "v1", Kind = "RedisFailover", Plural = "redisfailovers" };
 
     /// <summary>
     ///     The core <c>Secret</c> the <c>requirepass</c> is carried in.
@@ -234,8 +242,11 @@ public static class ValkeyCaches {
     /// <remarks>
     ///     ⚠ <c>noeviction</c> is the default and the platform makes the same choice for its own hot
     ///     tier — <c>CyberCloud.Cluster.Conformance</c>'s Redis container sets it explicitly, with the
-    ///     reason: <i>"a default is how one environment ends up with allkeys-lru and another with
-    ///     noeviction"</i>. A cache that silently drops a key somebody was relying on is a correctness
+    ///     reason:
+    ///     <i>
+    ///         "a default is how one environment ends up with allkeys-lru and another with
+    ///         noeviction"
+    ///     </i>. A cache that silently drops a key somebody was relying on is a correctness
     ///     bug in the caller's code that nothing in either system reports.
     /// </remarks>
     public static ImmutableArray<string> EvictionPolicies { get; } = [
@@ -287,11 +298,7 @@ public static class ValkeyCaches {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the RedisFailover."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -300,32 +307,21 @@ public static class ValkeyCaches {
                     Required: true,
                     Description: "Major Valkey version. Minor upgrades are applied automatically in "
                     + "the maintenance window."
-                ) {
-                    AllowedValues = ["7", "8"],
-                    DefaultJson = "\"8\""
-                },
+                ) { AllowedValues = ["7", "8"], DefaultJson = "\"8\"" },
                 new(
                     "/properties/mode",
                     SchemaKind.Text,
                     Description: "Replication topology. Sentinel is the only one this operator "
                     + "implements, and a client written against it is not portable to a sharded "
                     + "deployment, so it may not change after create."
-                ) {
-                    AllowedValues = ModeValues,
-                    Immutable = true,
-                    DefaultJson = "\"Sentinel\""
-                },
+                ) { AllowedValues = ModeValues, Immutable = true, DefaultJson = "\"Sentinel\"" },
                 new(
                     "/properties/replicas",
                     SchemaKind.WholeNumber,
                     Required: true,
                     Description: "Number of Valkey instances, including the primary. One is a single "
                     + "point of failure and is offered for development only."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "3" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -355,20 +351,14 @@ public static class ValkeyCaches {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset. It also sets maxmemory, so a cache evicts or "
                     + "refuses before the kernel kills the pod."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/persistence",
                     SchemaKind.Nested,
@@ -380,48 +370,31 @@ public static class ValkeyCaches {
                     SchemaKind.Text,
                     Description: "None keeps nothing, RDB snapshots periodically, AOF appends every "
                     + "write."
-                ) {
-                    AllowedValues = ["None", "RDB", "AOF"],
-                    DefaultJson = "\"AOF\""
-                },
+                ) { AllowedValues = ["None", "RDB", "AOF"], DefaultJson = "\"AOF\"" },
                 new(
                     "/properties/persistence/fsync",
                     SchemaKind.Text,
                     Description: "How often the append-only file reaches the disk. Read only when the "
                     + "mode is AOF; everysec can lose the last second of writes."
-                ) {
-                    AllowedValues = ["always", "everysec", "no"],
-                    DefaultJson = "\"everysec\""
-                },
+                ) { AllowedValues = ["always", "everysec", "no"], DefaultJson = "\"everysec\"" },
                 new(
                     "/properties/persistence/size",
                     SchemaKind.Text,
                     Description: "Persistent volume size in Kubernetes quantity form. Unused when the "
                     + "mode is None, which keeps the data directory in memory."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"8Gi\"",
-                    ExampleJson = "\"8Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"8Gi\"", ExampleJson = "\"8Gi\"" },
                 new(
                     "/properties/persistence/class",
                     SchemaKind.Text,
                     Description: "StorageClass name. Empty means the cluster default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/maxmemoryPolicy",
                     SchemaKind.Text,
                     Description: "What happens when the cache reaches its memory limit. noeviction "
                     + "returns an error to the writer rather than dropping a key somebody is relying "
                     + "on."
-                ) {
-                    AllowedValues = EvictionPolicies,
-                    DefaultJson = "\"noeviction\""
-                },
+                ) { AllowedValues = EvictionPolicies, DefaultJson = "\"noeviction\"" },
                 new(
                     "/properties/monitoring",
                     SchemaKind.Nested,
@@ -432,9 +405,7 @@ public static class ValkeyCaches {
                     SchemaKind.Boolean,
                     Description: "Whether the operator runs a metrics exporter beside every Valkey and "
                     + "every Sentinel pod."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -473,10 +444,7 @@ public static class ValkeyCaches {
                     SchemaKind.WholeNumber,
                     Required: true,
                     Description: "The Sentinel TCP port."
-                ) {
-                    Minimum = 1,
-                    Maximum = 65535
-                },
+                ) { Minimum = 1, Maximum = 65535 },
                 new(
                     "/masterName",
                     SchemaKind.Text,
@@ -497,15 +465,21 @@ public static class ValkeyCaches {
 
     /// <summary>The sizing presets of docs/plan/12 § Sizing vocabulary, m1 family.</summary>
     /// <remarks>
-    ///     ⚠ <b>This table is a second copy of <c>charts/managed/valkey/templates/_helpers.tpl</c>'s
-    ///     <c>valkey.resources</c>, and the duplication is the cost of having no chart renderer.</b>
+    ///     ⚠
+    ///     <b>
+    ///         This table is a second copy of <c>charts/managed/valkey/templates/_helpers.tpl</c>'s
+    ///         <c>valkey.resources</c>, and the duplication is the cost of having no chart renderer.
+    ///     </b>
     ///     <c>CyberCloud.Kubernetes.Charts</c> does not exist (docs/plan/03 § src), so the object is
     ///     built here; the moment it does, this table and the reconciler's use of it should go and the
     ///     chart's should stay, because the chart is the file a support engineer reads. Until then both
     ///     exist and <c>ChartRegistryPairTests</c> asserts they agree value for value.
     ///     <para>
-    ///         ⚠ <c>m1</c> is 1 vCPU to 8 GiB — docs/plan/12 § Sizing vocabulary, <i>"m1.* · 1:8 ·
-    ///         Memory-bound — caches, analytics"</i> — where <c>s1</c> is 1:4. <c>m1.nano</c> is the one
+    ///         ⚠ <c>m1</c> is 1 vCPU to 8 GiB — docs/plan/12 § Sizing vocabulary,
+    ///         <i>
+    ///             "m1.* · 1:8 ·
+    ///             Memory-bound — caches, analytics"
+    ///         </i> — where <c>s1</c> is 1:4. <c>m1.nano</c> is the one
     ///         row off the ratio, at 1:10, exactly as <c>s1.nano</c> is: the smallest box needs a floor
     ///         rather than a ratio, because 800 MiB of Valkey plus an exporter does not fit in what
     ///         100m of CPU implies.
@@ -524,8 +498,7 @@ public static class ValkeyCaches {
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── Addressing ────────────────────────────────────────────────────────────────────────────
 
@@ -549,8 +522,11 @@ public static class ValkeyCaches {
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>The operator looks for it in the <c>RedisFailover</c>'s OWN namespace and nowhere
-    ///     else</b> — <c>service/k8s/util.go</c>'s <c>GetRedisPassword</c> calls
+    ///     ⚠
+    ///     <b>
+    ///         The operator looks for it in the <c>RedisFailover</c>'s OWN namespace and nowhere
+    ///         else
+    ///     </b> — <c>service/k8s/util.go</c>'s <c>GetRedisPassword</c> calls
     ///     <c>GetSecret(rf.ObjectMeta.Namespace, rf.Spec.Auth.SecretPath)</c>. <c>secretPath</c> is a
     ///     name despite what it is called; there is no path grammar and no cross-namespace form.
     /// </remarks>
@@ -569,13 +545,19 @@ public static class ValkeyCaches {
     /// </summary>
     /// <param name="name">The resource's own name, which is the <c>RedisFailover</c>'s.</param>
     /// <remarks>
-    ///     ⚠ <b>This platform does not render the set, so this is the operator's convention read out
-    ///     of the operator's source rather than a name this file chose.</b>
+    ///     ⚠
+    ///     <b>
+    ///         This platform does not render the set, so this is the operator's convention read out
+    ///         of the operator's source rather than a name this file chose.
+    ///     </b>
     ///     <c>operator/redisfailover/service/names.go</c>'s <c>GetRedisName</c> is
     ///     <c>generateName(redisName, rf.Name)</c>, and <c>generateName</c> is
     ///     <c>fmt.Sprintf("%s%s-%s", baseName, typeName, metaName)</c> over <c>baseName = "rf"</c> and
-    ///     <c>redisName = "r"</c>. ⚠ <b>Naming another project's object from its convention is
-    ///     version-coupled and would ordinarily be fragile</b> — here it is not, and for an unusual
+    ///     <c>redisName = "r"</c>. ⚠
+    ///     <b>
+    ///         Naming another project's object from its convention is
+    ///         version-coupled and would ordinarily be fragile
+    ///     </b> — here it is not, and for an unusual
     ///     reason: <c>charts/bundle/redis-operator/component.yaml</c> records that
     ///     <c>spotahome/redis-operator</c> is <b>archived</b>, last pushed 2024-07-01, and the
     ///     component pins <c>v1.3.0-rc1</c>. The convention cannot change under us because nothing
@@ -619,8 +601,11 @@ public static class ValkeyCaches {
     /// <param name="desired">The validated desired body: the replica count and the persistence mode.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This type declares NO recovery window and still kept its disks, which made the
-    ///         leak unconditional rather than a purge's problem.</b> <see cref="Storage" /> sets
+    ///         ⚠
+    ///         <b>
+    ///             This type declares NO recovery window and still kept its disks, which made the
+    ///             leak unconditional rather than a purge's problem.
+    ///         </b> <see cref="Storage" /> sets
     ///         <c>keepAfterDeletion: true</c> so a rolling restart is not a cold start; the operator
     ///         reads that flag by <i>withholding</i> the owner reference that would otherwise let the
     ///         garbage collector take the claim. So every delete of a
@@ -677,12 +662,18 @@ public static class ValkeyCaches {
     ///         <c>if password, ok := secret.Data["password"]; ok { return string(password), nil }</c>,
     ///         and the <c>else</c> branch is
     ///         <c>secret "%s" does not have a password field</c>. The generator wires the same key into
-    ///         the pods — <c>SecretKeySelector{ LocalObjectReference{ Name: rf.Spec.Auth.SecretPath },
-    ///         Key: "password" }</c> becomes <c>REDIS_PASSWORD</c>.
+    ///         the pods —
+    ///         <c>
+    /// SecretKeySelector{ LocalObjectReference{ Name: rf.Spec.Auth.SecretPath },
+    ///         Key: "password" }
+    ///         </c> becomes <c>REDIS_PASSWORD</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A <c>Secret</c> under any other key applies cleanly, reads back cleanly and
-    ///         converges</b> — the API server has no opinion about the keys in an <c>Opaque</c>
+    ///         ⚠
+    ///         <b>
+    ///             A <c>Secret</c> under any other key applies cleanly, reads back cleanly and
+    ///             converges
+    ///         </b> — the API server has no opinion about the keys in an <c>Opaque</c>
     ///         document — <b>and the cache still never comes up</b>, because the operator's read of it
     ///         fails. That is the whole reason this constant carries a citation rather than a
     ///         convention: nothing inside this repository can tell the two apart.
@@ -721,8 +712,7 @@ public static class ValkeyCaches {
     ///     one address, and the failure — the handler reading a path the reconciler never wrote — is a
     ///     <c>listKeys</c> that answers "not found" on a cache that works.
     /// </remarks>
-    public static SecretRef PasswordRef(ResourceId id) =>
-        new() { Path = SecretPath(id), Field = PasswordField };
+    public static SecretRef PasswordRef(ResourceId id) => new() { Path = SecretPath(id), Field = PasswordField };
 
     /// <summary>The symbols a generated <c>requirepass</c> is drawn from.</summary>
     /// <remarks>
@@ -754,8 +744,7 @@ public static class ValkeyCaches {
     ///         one guessable.
     ///     </para>
     /// </remarks>
-    public static string GeneratePassword() =>
-        RandomNumberGenerator.GetString(PasswordAlphabet, PasswordLength);
+    public static string GeneratePassword() => RandomNumberGenerator.GetString(PasswordAlphabet, PasswordLength);
 
     /// <summary>
     ///     The <c>Secret</c> document a cache's <c>requirepass</c> becomes, ready for server-side
@@ -766,15 +755,21 @@ public static class ValkeyCaches {
     /// <returns>The JSON <c>templates/redisfailover.yaml</c>'s second document renders.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE ONE OBJECT THIS PROVIDER RENDERS THAT CARRIES A SECRET VALUE, AND IT IS BUILT
-    ///         FROM WHAT THE VAULT RETURNED RATHER THAN FROM DESIRED STATE.</b> The cache's body has no
+    ///         ⚠
+    ///         <b>
+    ///             THE ONE OBJECT THIS PROVIDER RENDERS THAT CARRIES A SECRET VALUE, AND IT IS BUILT
+    ///             FROM WHAT THE VAULT RETURNED RATHER THAN FROM DESIRED STATE.
+    ///         </b> The cache's body has no
     ///         credential property and must not grow one: docs/plan/00 § Non-negotiables keeps secrets
     ///         out of grain state, and a body is grain state. The value exists in a local inside one
     ///         reconcile pass, goes into this document, and is gone when the pass returns.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>data</c> with the base64 written out, rather than the <c>stringData</c>
-    ///         convenience field, and the reason is the read-back.</b> <c>stringData</c> is write-only:
+    ///         ⚠
+    ///         <b>
+    ///             <c>data</c> with the base64 written out, rather than the <c>stringData</c>
+    ///             convenience field, and the reason is the read-back.
+    ///         </b> <c>stringData</c> is write-only:
     ///         the API server folds it into <c>data</c> and never returns it, so an object applied with
     ///         one field and read back with another is an object <see cref="Matches" /> would have to
     ///         accept in two shapes — one of which no real cluster ever produces. It is also the field
@@ -795,9 +790,7 @@ public static class ValkeyCaches {
             ["kind"] = SecretKind.Kind,
             ["metadata"] = new JsonObject { ["name"] = CredentialSecretName(name) },
             ["type"] = "Opaque",
-            ["data"] = new JsonObject {
-                [PasswordField] = Convert.ToBase64String(Encoding.UTF8.GetBytes(password))
-            }
+            ["data"] = new JsonObject { [PasswordField] = Convert.ToBase64String(Encoding.UTF8.GetBytes(password)) }
         }.ToJsonString();
     }
 
@@ -818,8 +811,11 @@ public static class ValkeyCaches {
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>A bare DNS name and no scheme, because a client library takes a host rather than a
-    ///     URL.</b> <c>StorageAccounts.Endpoint</c> hands out <c>http://…</c> because an S3 client
+    ///     ⚠
+    ///     <b>
+    ///         A bare DNS name and no scheme, because a client library takes a host rather than a
+    ///         URL.
+    ///     </b> <c>StorageAccounts.Endpoint</c> hands out <c>http://…</c> because an S3 client
     ///     wants one; a Sentinel-aware Valkey client is given <c>(host, port, masterName)</c> as three
     ///     arguments, and a scheme prefixed here would end up inside a resolver's hostname.
     ///     <para>
@@ -883,8 +879,7 @@ public static class ValkeyCaches {
 
     /// <summary>The persistence mode a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string PersistenceMode(JsonElement desired) =>
-        Text(desired, "persistence", "mode", "AOF");
+    public static string PersistenceMode(JsonElement desired) => Text(desired, "persistence", "mode", "AOF");
 
     /// <summary>How many Valkey instances a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -982,8 +977,11 @@ public static class ValkeyCaches {
     /// </summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>The zero test is on the ceiling, not on the byte count, and it used to be on the byte
-    ///     count.</b> <c>maxmemory 0</c> means UNLIMITED to Valkey, which is the opposite of what a
+    ///     ⚠
+    ///     <b>
+    ///         The zero test is on the ceiling, not on the byte count, and it used to be on the byte
+    ///         count.
+    ///     </b> <c>maxmemory 0</c> means UNLIMITED to Valkey, which is the opposite of what a
     ///     caller with no usable memory figure should get, so the line is omitted instead. Testing the
     ///     byte count let one window through: a limit of one byte — <c>1</c>, <c>1500m</c>, <c>1.9</c>
     ///     — passed the guard, and three quarters of it floored to 0, so the provider wrote the exact
@@ -1058,16 +1056,22 @@ public static class ValkeyCaches {
     ///         that could get them wrong.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The <c>requirepass</c> appears here as a <i>reference by name</i> and never as a
-    ///         value.</b> <c>spec.auth.secretPath</c> is the seam: the operator reads the password out
+    ///         ⚠
+    ///         <b>
+    ///             The <c>requirepass</c> appears here as a <i>reference by name</i> and never as a
+    ///             value.
+    ///         </b> <c>spec.auth.secretPath</c> is the seam: the operator reads the password out
     ///         of a <c>Secret</c> in the namespace, so the only component that ever holds the plaintext
     ///         is whatever writes that <c>Secret</c>. That is <see cref="CredentialSecretJson" />, and
     ///         <c>ValkeyCacheReconciler</c> applies it <b>before</b> this document — docs/plan/12 § The
     ///         pattern, once, piece 5.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THIS TYPE MINTS ITS OWN CREDENTIAL WHERE EVERY OTHER DATA PROVIDER READS ONE THE
-    ///         OPERATOR GENERATED, AND THE EXCEPTION IS spotahome's DOING.</b> CloudNativePG, Strimzi
+    ///         ⚠
+    ///         <b>
+    ///             THIS TYPE MINTS ITS OWN CREDENTIAL WHERE EVERY OTHER DATA PROVIDER READS ONE THE
+    ///             OPERATOR GENERATED, AND THE EXCEPTION IS spotahome's DOING.
+    ///         </b> CloudNativePG, Strimzi
     ///         and the rest bring a credential up with the engine and the handler reads it, because
     ///         anything minted afterwards is a password the server never accepted while everything
     ///         reports success. spotahome generates nothing at all: with <c>auth.secretPath</c> set and
@@ -1076,8 +1080,11 @@ public static class ValkeyCaches {
     ///         keeps a second pass from rotating the password out from under a running server.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The <c>auth</c> block is rendered unconditionally, and the obvious "fix" for a
-    ///         cache stuck <see cref="ReconcileOutcome.InProgress" /> is to delete it.</b> Omitting it
+    ///         ⚠
+    ///         <b>
+    ///             The <c>auth</c> block is rendered unconditionally, and the obvious "fix" for a
+    ///             cache stuck <see cref="ReconcileOutcome.InProgress" /> is to delete it.
+    ///         </b> Omitting it
     ///         produces a cache with no <c>requirepass</c> at all — a running, unauthenticated Valkey
     ///         reachable by anything in the tenant's namespace — which is a worse answer than a
     ///         resource that visibly has not finished. docs/plan/12 § Cross-cutting decisions makes the
@@ -1139,9 +1146,7 @@ public static class ValkeyCaches {
         var claim = new JsonObject {
             ["accessModes"] = new JsonArray("ReadWriteOnce"),
             ["resources"] = new JsonObject {
-                ["requests"] = new JsonObject {
-                    ["storage"] = Text(desired, "persistence", "size", "8Gi")
-                }
+                ["requests"] = new JsonObject { ["storage"] = Text(desired, "persistence", "size", "8Gi") }
             }
         };
 
@@ -1169,8 +1174,7 @@ public static class ValkeyCaches {
             // VolumeReclaimer, on the convergence of the hard delete.
             ["keepAfterDeletion"] = true,
             ["persistentVolumeClaim"] = new JsonObject {
-                ["metadata"] = new JsonObject { ["name"] = DataVolumeName(name) },
-                ["spec"] = claim
+                ["metadata"] = new JsonObject { ["name"] = DataVolumeName(name) }, ["spec"] = claim
             }
         };
     }

@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
@@ -12,8 +13,11 @@ namespace CyberCloud.Providers.ContainerService;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>WHAT LEAVES HERE IS <c>cluster-admin</c> ON A WHOLE CLUSTER, AND THAT IS WHAT THE
-///         DECLARATION ALREADY PROMISED RATHER THAN SOMETHING THIS HANDLER DECIDED.</b>
+///         ⚠
+///         <b>
+///             WHAT LEAVES HERE IS <c>cluster-admin</c> ON A WHOLE CLUSTER, AND THAT IS WHAT THE
+///             DECLARATION ALREADY PROMISED RATHER THAN SOMETHING THIS HANDLER DECIDED.
+///         </b>
 ///         <c>ManagedClusters.ListCredentialsResponse</c> has said so since it was written:
 ///         docs/plan/13 wants this short-lived and scoped, what Cluster API generates is the admin
 ///         credential, and narrowing it needs a certificate request against a cluster this platform
@@ -23,8 +27,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         <c>charts/managed/kubernetes/conformance.yaml § owed</c> is where it is recorded.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT READS AND DOES NOT MINT — and unlike the database providers, it could not mint
-///         even with somewhere to put the value.</b> Minting a kubeconfig means issuing a client
+///         ⚠
+///         <b>
+///             IT READS AND DOES NOT MINT — and unlike the database providers, it could not mint
+///             even with somewhere to put the value.
+///         </b> Minting a kubeconfig means issuing a client
 ///         certificate the workload cluster's own CA signs, which is a request against that cluster;
 ///         the platform has no connection to it, which is the same gap that stops the connection
 ///         descriptor from resolving.
@@ -38,8 +45,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         that a caller should not have to do one either.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An endpoint the <c>Cluster</c> does not carry yet is a refusal, not an empty
-///         string.</b> <see cref="ManagedClusters.ApiServerEndpoint" /> answers empty while no
+///         ⚠
+///         <b>
+///             An endpoint the <c>Cluster</c> does not carry yet is a refusal, not an empty
+///             string.
+///         </b> <see cref="ManagedClusters.ApiServerEndpoint" /> answers empty while no
 ///         controller has assigned one, and the response schema declares <c>/apiServerEndpoint</c>
 ///         required and a URI. A kubeconfig handed out beside an empty address is a credential for a
 ///         cluster the caller cannot find — worth a message saying the control plane is not ready.

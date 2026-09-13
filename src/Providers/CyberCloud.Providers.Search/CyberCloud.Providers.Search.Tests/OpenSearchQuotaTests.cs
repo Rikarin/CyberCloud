@@ -13,10 +13,16 @@ namespace CyberCloud.Providers.Search.Tests;
 ///     resource that reserves a third of what it costs provisions perfectly, reads back perfectly and
 ///     converges — and the subscription is billed for a third of it.
 ///     <para>
-///         ⚠ <b>This type's meters are a sum over heterogeneous components — the shape
-///         <c>CyberCloud.Storage/accounts</c> found — and a second sighting is what turns that from an
-///         anecdote into a pattern.</b> What is new here is that <b>the three meters split the
-///         populations differently from each other</b>: a coordinating node is sized like a
+///         ⚠
+///         <b>
+///             This type's meters are a sum over heterogeneous components — the shape
+///             <c>CyberCloud.Storage/accounts</c> found — and a second sighting is what turns that from an
+///             anecdote into a pattern.
+///         </b> What is new here is that
+///         <b>
+///             the three meters split the
+///             populations differently from each other
+///         </b>: a coordinating node is sized like a
 ///         <i>data</i> node for CPU and memory and like a <i>cluster-manager</i> node for disk, so a
 ///         single parameterised derivation would be wrong on one of the three however it was written.
 ///     </para>
@@ -126,15 +132,12 @@ public sealed class OpenSearchQuotaTests {
         var registry = ProviderRegistry.Build([new SearchProvider()]);
         registry.TryGetType(OpenSearchServices.Type, out var registration).ShouldBeTrue();
 
-        using var body = JsonDocument.Parse(
-            WithSizing(OpenSearchServices.Body(ClusterId), "not-a-quantity", "8Gi")
-        );
+        using var body = JsonDocument.Parse(WithSizing(OpenSearchServices.Body(ClusterId), "not-a-quantity", "8Gi"));
 
         var vcpu = registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!;
 
-        vcpu.Amount(body.RootElement).IsFailure.ShouldBeTrue(
-            "a body whose cpu quantity does not parse reserved an amount instead of refusing."
-        );
+        vcpu.Amount(body.RootElement)
+            .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
     }
 
     [Fact]
@@ -217,9 +220,7 @@ public sealed class OpenSearchQuotaTests {
 
     static string WithSizing(string body, string cpu, string memory) {
         var node = JsonNode.Parse(body)!.AsObject();
-        node["properties"]!.AsObject()["sizing"] = new JsonObject {
-            ["cpu"] = cpu, ["memory"] = memory
-        };
+        node["properties"]!.AsObject()["sizing"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
 
         return node.ToJsonString();
     }

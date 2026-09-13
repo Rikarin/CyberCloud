@@ -10,8 +10,11 @@ namespace CyberCloud.Communication.Webhooks;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The provider parses and this correlates, and the split is what makes a new carrier
-///         cheap.</b> A provider knows one carrier's payload and nothing about grains; this knows
+///         ⚠
+///         <b>
+///             The provider parses and this correlates, and the split is what makes a new carrier
+///             cheap.
+///         </b> A provider knows one carrier's payload and nothing about grains; this knows
 ///         about grains and nothing about payloads. Every carrier-specific parser then gets the
 ///         late-receipt and duplicate-receipt cases right by construction, because it never handles
 ///         them.
@@ -94,12 +97,7 @@ public sealed class WebhookRouter(
         }
 
         return Result<WebhookHandling>.Success(
-            new() {
-                ReceiptsApplied = applied,
-                ReceiptsIgnored = ignored,
-                InboundHandled = inbound,
-                OptOuts = optOuts
-            }
+            new() { ReceiptsApplied = applied, ReceiptsIgnored = ignored, InboundHandled = inbound, OptOuts = optOuts }
         );
     }
 

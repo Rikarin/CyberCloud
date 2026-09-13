@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.ContainerRegistry.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Two class declarations over the case
-///         <c>CyberCloud.Providers.ContainerRegistry.Conformance</c> already declares.</b> One
+///         ⚠
+///         <b>
+///             Two class declarations over the case
+///             <c>CyberCloud.Providers.ContainerRegistry.Conformance</c> already declares.
+///         </b> One
 ///         provider, one <c>ProviderConformanceCase</c>: a second copy here would be a second
 ///         description of the same provider, and the two would disagree the first time either changed.
 ///     </para>
@@ -48,7 +51,7 @@ public sealed class ContainerRegistryLifecycleConformance(
     ClusterConformanceFixture<ContainerRegistryCase> fixture
 )
     : ClusterConformanceTests<ContainerRegistryCase>(fixture),
-        IClassFixture<ClusterConformanceFixture<ContainerRegistryCase>>;
+    IClassFixture<ClusterConformanceFixture<ContainerRegistryCase>>;
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the managed container-registry provider.</summary>
 public sealed class ContainerRegistrySiloKillConformance : SiloKillConformanceTests<ContainerRegistryCase>;

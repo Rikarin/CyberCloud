@@ -64,9 +64,7 @@ public class ClusterConformanceFixture<TSource> : IAsyncLifetime
             return harness;
         }
 
-        Assert.Skip(
-            ClusterInfrastructure.SkipMessage(TSource.ProviderCase.DisplayName, wouldProve, failure)
-        );
+        Assert.Skip(ClusterInfrastructure.SkipMessage(TSource.ProviderCase.DisplayName, wouldProve, failure));
 
         throw new InvalidOperationException("unreachable: Assert.Skip does not return.");
     }

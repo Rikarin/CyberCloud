@@ -1,6 +1,7 @@
 // The metadata half of Build.Architecture.cs — what the gates read, separated from what they
 // decide. docs/plan/03 § Assembly graph rules and docs/plan/05 § Choosing a tier.
 
+using Nuke.Common.IO;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,7 +9,6 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
-using Nuke.Common.IO;
 
 /// <summary>
 ///     One <c>[PersistentState]</c> binding, as it survives into the compiled assembly.
@@ -32,8 +32,11 @@ sealed record PersistentStateBinding(string DeclaringType, string StateName, str
 /// <param name="ReferencedAssemblies">
 ///     The simple names in the <c>AssemblyRef</c> table.
 ///     <para>
-///         ⚠ <b>This is a list of assemblies the compiler actually bound a type from, not a list of
-///         packages the project restored</b>, and that distinction is the whole reason the gates read
+///         ⚠
+///         <b>
+///             This is a list of assemblies the compiler actually bound a type from, not a list of
+///             packages the project restored
+///         </b>, and that distinction is the whole reason the gates read
 ///         metadata instead of project files. Roslyn omits a reference from <c>AssemblyRef</c> when
 ///         no type in it was used. docs/plan/03 § Assembly graph rules, rule 3 is a rule about types
 ///         — <c>Microsoft.Orleans.Hosting.Kubernetes</c> and <c>Orleans.Clustering.Kubernetes</c>
@@ -69,8 +72,7 @@ sealed record AssemblyFacts(
     IReadOnlyList<PersistentStateBinding> PersistentStateBindings,
     IReadOnlyDictionary<string, string?> DurableStateRationales,
     IReadOnlyDictionary<string, IReadOnlyList<string>> InterfaceBases,
-    IReadOnlyList<string?> OwningHosts)
-{
+    IReadOnlyList<string?> OwningHosts) {
     /// <summary>
     ///     Reads one assembly without loading it.
     ///     <para>
@@ -82,8 +84,7 @@ sealed record AssemblyFacts(
     ///         single-TFM rule — is read exactly like every other one, with no special case.
     ///     </para>
     /// </summary>
-    public static AssemblyFacts Read(AbsolutePath dll)
-    {
+    public static AssemblyFacts Read(AbsolutePath dll) {
         using var stream = File.OpenRead(dll);
         using var pe = new PEReader(stream);
         var metadata = pe.GetMetadataReader();
@@ -103,52 +104,59 @@ sealed record AssemblyFacts(
         // walk below never sees them. A null entry is an [OwningHost] whose argument is not a string
         // constant; the gate reports it rather than dropping it, because a silently dropped one
         // would read as "declares no host" and fail somewhere else with the wrong message.
-        foreach (var handle in metadata.GetAssemblyDefinition().GetCustomAttributes())
-        {
+        foreach (var handle in metadata.GetAssemblyDefinition().GetCustomAttributes()) {
             var attribute = metadata.GetCustomAttribute(handle);
 
-            if (string.Equals(AttributeTypeName(metadata, attribute), OwningHostAttribute, StringComparison.Ordinal))
+            if (string.Equals(AttributeTypeName(metadata, attribute), OwningHostAttribute, StringComparison.Ordinal)) {
                 owningHosts.Add(FixedStringArguments(metadata, attribute).ElementAtOrDefault(0));
+            }
         }
 
-        foreach (var typeHandle in metadata.TypeDefinitions)
-        {
+        foreach (var typeHandle in metadata.TypeDefinitions) {
             var type = metadata.GetTypeDefinition(typeHandle);
             var typeName = FullName(metadata, typeHandle);
             var rationale = FindAttribute(metadata, type.GetCustomAttributes(), DurableStateRationaleAttribute);
 
-            if (rationale is not null)
+            if (rationale is not null) {
                 rationales[typeName] = FixedStringArguments(metadata, rationale.Value).ElementAtOrDefault(0);
+            }
 
-            if (type.Attributes.HasFlag(TypeAttributes.Interface))
+            if (type.Attributes.HasFlag(TypeAttributes.Interface)) {
                 interfaceBases[typeName] = BaseInterfaceNames(metadata, type);
+            }
 
-            foreach (var methodHandle in type.GetMethods())
-            {
+            foreach (var methodHandle in type.GetMethods()) {
                 var method = metadata.GetMethodDefinition(methodHandle);
 
                 // Only constructors: [PersistentState] is an Orleans DI marker on an activation
                 // constructor parameter, and a primary constructor is a constructor in metadata.
-                if (!string.Equals(metadata.GetString(method.Name), ".ctor", StringComparison.Ordinal))
+                if (!string.Equals(metadata.GetString(method.Name), ".ctor", StringComparison.Ordinal)) {
                     continue;
+                }
 
-                foreach (var parameterHandle in method.GetParameters())
-                {
+                foreach (var parameterHandle in method.GetParameters()) {
                     var parameter = metadata.GetParameter(parameterHandle);
 
-                    foreach (var attributeHandle in parameter.GetCustomAttributes())
-                    {
+                    foreach (var attributeHandle in parameter.GetCustomAttributes()) {
                         var attribute = metadata.GetCustomAttribute(attributeHandle);
 
-                        if (!string.Equals(AttributeTypeName(metadata, attribute), PersistentStateAttribute, StringComparison.Ordinal))
+                        if (!string.Equals(
+                                AttributeTypeName(metadata, attribute),
+                                PersistentStateAttribute,
+                                StringComparison.Ordinal
+                            )) {
                             continue;
+                        }
 
                         var arguments = FixedStringArguments(metadata, attribute);
 
-                        bindings.Add(new PersistentStateBinding(
-                            typeName,
-                            arguments.ElementAtOrDefault(0) ?? "(unnamed)",
-                            arguments.ElementAtOrDefault(1)));
+                        bindings.Add(
+                            new PersistentStateBinding(
+                                typeName,
+                                arguments.ElementAtOrDefault(0) ?? "(unnamed)",
+                                arguments.ElementAtOrDefault(1)
+                            )
+                        );
                     }
                 }
             }
@@ -158,10 +166,13 @@ sealed record AssemblyFacts(
             metadata.GetString(metadata.GetAssemblyDefinition().Name),
             dll,
             references,
-            bindings.OrderBy(x => x.DeclaringType, StringComparer.Ordinal).ThenBy(x => x.StateName, StringComparer.Ordinal).ToList(),
+            bindings.OrderBy(x => x.DeclaringType, StringComparer.Ordinal)
+                .ThenBy(x => x.StateName, StringComparer.Ordinal)
+                .ToList(),
             rationales,
             interfaceBases,
-            owningHosts);
+            owningHosts
+        );
     }
 
     /// <summary>
@@ -169,23 +180,25 @@ sealed record AssemblyFacts(
     ///     assembly is a <c>TypeRef</c> and a base in this one is a <c>TypeDef</c>; both spell the
     ///     name the same way, which is all any rule here needs.
     /// </summary>
-    static List<string> BaseInterfaceNames(MetadataReader metadata, TypeDefinition type)
-    {
+    static List<string> BaseInterfaceNames(MetadataReader metadata, TypeDefinition type) {
         var names = new List<string>();
 
-        foreach (var handle in type.GetInterfaceImplementations())
-        {
+        foreach (var handle in type.GetInterfaceImplementations()) {
             var @interface = metadata.GetInterfaceImplementation(handle).Interface;
 
-            var name = @interface.Kind switch
-            {
-                HandleKind.TypeReference => metadata.GetString(metadata.GetTypeReference((TypeReferenceHandle)@interface).Name),
-                HandleKind.TypeDefinition => metadata.GetString(metadata.GetTypeDefinition((TypeDefinitionHandle)@interface).Name),
+            var name = @interface.Kind switch {
+                HandleKind.TypeReference => metadata.GetString(
+                    metadata.GetTypeReference((TypeReferenceHandle)@interface).Name
+                ),
+                HandleKind.TypeDefinition => metadata.GetString(
+                    metadata.GetTypeDefinition((TypeDefinitionHandle)@interface).Name
+                ),
                 _ => null,
             };
 
-            if (name is not null)
+            if (name is not null) {
                 names.Add(name);
+            }
         }
 
         return names;
@@ -200,14 +213,17 @@ sealed record AssemblyFacts(
     const string DurableStateRationaleAttribute = "DurableStateRationaleAttribute";
     const string OwningHostAttribute = "OwningHostAttribute";
 
-    static CustomAttribute? FindAttribute(MetadataReader metadata, CustomAttributeHandleCollection attributes, string name)
-    {
-        foreach (var handle in attributes)
-        {
+    static CustomAttribute? FindAttribute(
+        MetadataReader metadata,
+        CustomAttributeHandleCollection attributes,
+        string name
+    ) {
+        foreach (var handle in attributes) {
             var attribute = metadata.GetCustomAttribute(handle);
 
-            if (string.Equals(AttributeTypeName(metadata, attribute), name, StringComparison.Ordinal))
+            if (string.Equals(AttributeTypeName(metadata, attribute), name, StringComparison.Ordinal)) {
                 return attribute;
+            }
         }
 
         return null;
@@ -218,10 +234,8 @@ sealed record AssemblyFacts(
     ///     a <c>MemberRef</c> for an attribute defined elsewhere, a <c>MethodDef</c> for one defined
     ///     in the same assembly.
     /// </summary>
-    static string? AttributeTypeName(MetadataReader metadata, CustomAttribute attribute)
-    {
-        switch (attribute.Constructor.Kind)
-        {
+    static string? AttributeTypeName(MetadataReader metadata, CustomAttribute attribute) {
+        switch (attribute.Constructor.Kind) {
             case HandleKind.MemberReference:
                 var member = metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor);
 
@@ -243,8 +257,8 @@ sealed record AssemblyFacts(
     ///     The attribute's fixed constructor arguments, as strings, with <c>null</c> for any argument
     ///     that is not one. Named arguments are ignored — no rule here reads one.
     /// </summary>
-    static List<string?> FixedStringArguments(MetadataReader metadata, CustomAttribute attribute)
-        => attribute
+    static List<string?> FixedStringArguments(MetadataReader metadata, CustomAttribute attribute) =>
+        attribute
             .DecodeValue(AttributeTypeProvider.Instance)
             .FixedArguments
             .Select(x => x.Value as string)
@@ -254,13 +268,13 @@ sealed record AssemblyFacts(
     ///     The full metadata name of a type — <c>Namespace.Type</c>, and <c>Namespace.Outer+Inner</c>
     ///     for a nested one, which is the spelling <c>durable-grains.txt</c> uses.
     /// </summary>
-    static string FullName(MetadataReader metadata, TypeDefinitionHandle handle)
-    {
+    static string FullName(MetadataReader metadata, TypeDefinitionHandle handle) {
         var type = metadata.GetTypeDefinition(handle);
         var name = metadata.GetString(type.Name);
 
-        if (type.IsNested)
+        if (type.IsNested) {
             return FullName(metadata, type.GetDeclaringType()) + "+" + name;
+        }
 
         var @namespace = metadata.GetString(type.Namespace);
 
@@ -277,8 +291,7 @@ sealed record AssemblyFacts(
     ///         has both a one- and a two-argument constructor.
     ///     </para>
     /// </summary>
-    sealed class AttributeTypeProvider : ICustomAttributeTypeProvider<string>
-    {
+    sealed class AttributeTypeProvider : ICustomAttributeTypeProvider<string> {
         public static readonly AttributeTypeProvider Instance = new();
 
         public string GetPrimitiveType(PrimitiveTypeCode typeCode) => typeCode.ToString();
@@ -287,11 +300,11 @@ sealed record AssemblyFacts(
 
         public string GetSZArrayType(string elementType) => elementType + "[]";
 
-        public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
-            => reader.GetString(reader.GetTypeDefinition(handle).Name);
+        public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) =>
+            reader.GetString(reader.GetTypeDefinition(handle).Name);
 
-        public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
-            => reader.GetString(reader.GetTypeReference(handle).Name);
+        public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) =>
+            reader.GetString(reader.GetTypeReference(handle).Name);
 
         public string GetTypeFromSerializedName(string name) => name;
 

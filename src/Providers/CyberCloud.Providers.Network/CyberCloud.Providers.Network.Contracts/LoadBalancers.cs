@@ -14,14 +14,23 @@ namespace CyberCloud.Providers.Network.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>The authority is docs/plan/14 § Load balancing, M1 · 0.8 EM</b>: <i>"L4. An address from
-///         the tenant's pool plus a <c>Service type=LoadBalancer</c> (announced per ADR-019) <b>or an
-///         HAProxy deployment for TCP with health checks and connection limits</b>."</i> This type is
+///         <b>The authority is docs/plan/14 § Load balancing, M1 · 0.8 EM</b>:
+///         <i>
+///             "L4. An address from
+///             the tenant's pool plus a <c>Service type=LoadBalancer</c> (announced per ADR-019)
+///             <b>
+///                 or an
+///                 HAProxy deployment for TCP with health checks and connection limits
+///             </b>."
+///         </i> This type is
 ///         the second of those two, and the first is not available on this substrate.
 ///     </para>
 ///     <para>
-///         ⚠ <b>KUBE-OVN'S OWN L4 LOAD BALANCING IS UNREACHABLE ON THIS PLATFORM, AND THAT IS A
-///         REFUTATION RATHER THAN A PREFERENCE.</b> The obvious object for this row is
+///         ⚠
+///         <b>
+///             KUBE-OVN'S OWN L4 LOAD BALANCING IS UNREACHABLE ON THIS PLATFORM, AND THAT IS A
+///             REFUTATION RATHER THAN A PREFERENCE.
+///         </b> The obvious object for this row is
 ///         <c>kubeovn.io/v1 SwitchLBRule</c> — a VIP on a tenant's logical switch, served by OVN's own
 ///         load balancer, with no pod anywhere. Read firsthand in <c>pkg/controller/controller.go</c> at
 ///         <c>v1.16.2</c>: the <c>SwitchLBRule</c> lister, its three work queues, its event handler and
@@ -36,15 +45,21 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///     <para>
 ///         ⚠ <b>AND THE CILIUM HALF IS NOT AVAILABLE EITHER, FOR A DIFFERENT REASON.</b>
 ///         ADR-019 gives Cilium LB-IPAM and BGP the <i>platform's</i> service VIPs and says of the
-///         tenant half that <i>"an address terminating on an OVN logical router is invisible to a
-///         host-network speaker"</i>. A <c>Service type=LoadBalancer</c> is announced from the host
+///         tenant half that
+///         <i>
+///             "an address terminating on an OVN logical router is invisible to a
+///             host-network speaker"
+///         </i>. A <c>Service type=LoadBalancer</c> is announced from the host
 ///         network namespace, and the workloads this type balances are on a tenant's own routing domain
 ///         with an address space the platform allows to overlap another tenant's. There is no
 ///         arrangement of the two in which a Kubernetes <c>Service</c> reaches a custom VPC.
 ///     </para>
 ///     <para>
-///         ⚠ <b>SO THE PROXY IS A POD ON THE TENANT'S OWN SUBNET, AND EVERY OTHER DECISION HERE FOLLOWS
-///         FROM THAT.</b> A pod joins a Kube-OVN subnet through the
+///         ⚠
+///         <b>
+///             SO THE PROXY IS A POD ON THE TENANT'S OWN SUBNET, AND EVERY OTHER DECISION HERE FOLLOWS
+///             FROM THAT.
+///         </b> A pod joins a Kube-OVN subnet through the
 ///         <c>ovn.kubernetes.io/logical_switch</c> annotation (<c>pkg/util/const.go</c>), which is the
 ///         only seam by which anything this platform runs can be <i>inside</i> a tenant's network. Once
 ///         the proxy is a pod, its address comes from that subnet's IPAM, its configuration is a file,
@@ -63,8 +78,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         validates.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE FIRST TYPE IN THIS FAMILY WHOSE OBJECTS ARE NAMESPACED, AND THE NAME ARITHMETIC
-///         INVERTS BECAUSE OF IT.</b> A <c>Vpc</c>, a <c>Subnet</c>, a <c>SecurityGroup</c> and an
+///         ⚠
+///         <b>
+///             THE FIRST TYPE IN THIS FAMILY WHOSE OBJECTS ARE NAMESPACED, AND THE NAME ARITHMETIC
+///             INVERTS BECAUSE OF IT.
+///         </b> A <c>Vpc</c>, a <c>Subnet</c>, a <c>SecurityGroup</c> and an
 ///         <c>OvnEip</c> are all <c>scope="Cluster"</c>, so every one of them folds the namespace into
 ///         its object name. A <c>Deployment</c> and a <c>ConfigMap</c> are namespaced, so
 ///         <c>ReconcileDriver.NamespaceFor</c> already separates two subscriptions and
@@ -73,12 +91,20 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         still live here.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE BACKEND POOL IS ADDRESSES AND NOT RESOURCE IDS, AND THE SUBSTRATE AGREES WITH THE
-///         LIMIT RATHER THAN MERELY IMPOSING IT.</b> docs/plan/14 wants backend pools that
-///         <i>"reference resource ids (a VM, a scale set, a cluster's node pool), resolved by the
-///         reconciler into endpoints"</i>. <c>ReconcileContext</c> carries a cluster connection, an
-///         <c>ISecretResolver</c>, an <c>ISecretWriter</c> and a log — <b>nothing that can resolve a
-///         resource id</b>, which is the blocker <c>NetworkProvider</c> recorded for this type — and a
+///         ⚠
+///         <b>
+///             THE BACKEND POOL IS ADDRESSES AND NOT RESOURCE IDS, AND THE SUBSTRATE AGREES WITH THE
+///             LIMIT RATHER THAN MERELY IMPOSING IT.
+///         </b> docs/plan/14 wants backend pools that
+///         <i>
+///             "reference resource ids (a VM, a scale set, a cluster's node pool), resolved by the
+///             reconciler into endpoints"
+///         </i>. <c>ReconcileContext</c> carries a cluster connection, an
+///         <c>ISecretResolver</c>, an <c>ISecretWriter</c> and a log —
+///         <b>
+///             nothing that can resolve a
+///             resource id
+///         </b>, which is the blocker <c>NetworkProvider</c> recorded for this type — and a
 ///         comma-separated list of objects
 ///         is what <c>SchemaProperty.ElementKind</c> refuses. What makes the address list honest rather
 ///         than a workaround is the first paragraph: with <c>ENABLE_LB=false</c> there is no service
@@ -88,8 +114,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         addresses.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE FRONTEND ADDRESS IS REQUIRED, WHICH IS THE OPPOSITE OF
-///         <see cref="PublicIpAddresses" />' DECISION, FOR THE SAME REASON.</b> There an address the
+///         ⚠
+///         <b>
+///             THE FRONTEND ADDRESS IS REQUIRED, WHICH IS THE OPPOSITE OF
+///             <see cref="PublicIpAddresses" />' DECISION, FOR THE SAME REASON.
+///         </b> There an address the
 ///         fabric picks is the ordinary request, because the tenant learns it from an action and points
 ///         DNS at it. Here there is <b>no DNS in the VPC to point</b>, so an address nobody chose is an
 ///         address nothing can be configured to reach. A required patterned property needs a
@@ -107,8 +136,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         reads.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE CONFIG CHECKSUM ON THE POD TEMPLATE IS LOAD-BEARING AND ITS ABSENCE WOULD BE
-///         INVISIBLE.</b> A <c>ConfigMap</c> that changes does <b>not</b> restart the pods that mount
+///         ⚠
+///         <b>
+///             THE CONFIG CHECKSUM ON THE POD TEMPLATE IS LOAD-BEARING AND ITS ABSENCE WOULD BE
+///             INVISIBLE.
+///         </b> A <c>ConfigMap</c> that changes does <b>not</b> restart the pods that mount
 ///         it, and HAProxy reads its file once at start. Without
 ///         <see cref="ConfigChecksumAnnotation" /> in the pod template, an edited backend list would
 ///         apply cleanly, read back exactly as desired, converge, report <c>Succeeded</c> — and traffic
@@ -116,8 +148,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         config part of the pod template, so a config change is a rollout.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>Recreate</c> RATHER THAN <c>RollingUpdate</c>, AND THAT IS THE PINNED ADDRESS'S
-///         DOING.</b> A rolling update starts the new pod before the old one goes, and the new pod
+///         ⚠
+///         <b>
+///             <c>Recreate</c> RATHER THAN <c>RollingUpdate</c>, AND THAT IS THE PINNED ADDRESS'S
+///             DOING.
+///         </b> A rolling update starts the new pod before the old one goes, and the new pod
 ///         would ask IPAM for an address the old pod still holds —
 ///         <c>acquireStaticAddress</c> refuses it, so the rollout stalls and the resource sits in
 ///         <c>InProgress</c> forever. The cost is a few seconds of downtime on every change, which is
@@ -126,8 +161,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///     <para>
 ///         ⚠ <b>LICENCE.</b> HAProxy is GPL-2.0-or-later and is run as an unmodified upstream container
 ///         image, in its own process, with nothing of this platform linked into it. ADR-011 does not
-///         list HAProxy; the row it decides this by is ClamAV's — <i>"GPL-2.0 ✓ — separate process,
-///         separate container, no linking"</i> — and the same reasoning already ships
+///         list HAProxy; the row it decides this by is ClamAV's —
+///         <i>
+///             "GPL-2.0 ✓ — separate process,
+///             separate container, no linking"
+///         </i> — and the same reasoning already ships
 ///         <c>charts/managed/mariadb</c>. No SSPL or BUSL component is involved.
 ///     </para>
 /// </remarks>
@@ -160,8 +198,11 @@ public static class LoadBalancers {
 
     /// <summary>The default HAProxy line — the current long-term-support one.</summary>
     /// <remarks>
-    ///     ⚠ <b>Both values in <see cref="Versions" /> were resolved against the registry rather than
-    ///     assumed</b>, on 2026-08-19, through
+    ///     ⚠
+    ///     <b>
+    ///         Both values in <see cref="Versions" /> were resolved against the registry rather than
+    ///         assumed
+    ///     </b>, on 2026-08-19, through
     ///     <c>hub.docker.com/v2/repositories/library/haproxy/tags</c>: <c>3.2-alpine</c> and
     ///     <c>3.4-alpine</c> both exist, alongside <c>3.2.22-alpine</c> and <c>3.4.3-alpine</c>. A pin
     ///     that names a tag nobody checked is the defect <c>CyberCloud.ContainerService</c> shipped, and
@@ -190,8 +231,7 @@ public static class LoadBalancers {
     ///     <c>NetworkLoadBalancerTests</c> compares the two, for
     ///     <c>ConsoleSizingTests.TheImageDigestsAreTheSameInCSharpAndInTheChart</c>'s reason.
     /// </remarks>
-    public static string Image(JsonElement desired) =>
-        ImageRepository + ":" + Version(desired) + "-alpine";
+    public static string Image(JsonElement desired) => ImageRepository + ":" + Version(desired) + "-alpine";
 
     // ── Sizing ────────────────────────────────────────────────────────────────────────────────
 
@@ -211,9 +251,7 @@ public static class LoadBalancers {
     /// </remarks>
     public static FrozenDictionary<string, (string Cpu, string Memory)> Presets { get; } =
         new Dictionary<string, (string, string)>(StringComparer.Ordinal) {
-            ["c1.small"] = ("250m", "256Mi"),
-            ["c1.medium"] = ("500m", "512Mi"),
-            ["c1.large"] = ("1", "1Gi")
+            ["c1.small"] = ("250m", "256Mi"), ["c1.medium"] = ("500m", "512Mi"), ["c1.large"] = ("1", "1Gi")
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>What a body's preset costs.</summary>
@@ -225,8 +263,11 @@ public static class LoadBalancers {
 
     /// <summary>The action that reports what the proxy is configured to do and whether it is up.</summary>
     /// <remarks>
-    ///     ⚠ <b>It is <see cref="NetworkSecurityGroups.EffectiveRulesAction" />'s shape plus one fact
-    ///     the body cannot carry.</b> The server list is an expansion of two scalars — the address list
+    ///     ⚠
+    ///     <b>
+    ///         It is <see cref="NetworkSecurityGroups.EffectiveRulesAction" />'s shape plus one fact
+    ///         the body cannot carry.
+    ///     </b> The server list is an expansion of two scalars — the address list
     ///     and the backend port — which is arithmetic a tenant would otherwise do in their head; the
     ///     fact that is not in the body is whether the proxy pod is actually running, which lives on
     ///     <c>Deployment.status.readyReplicas</c> and nowhere else. A load balancer whose pod is
@@ -257,8 +298,11 @@ public static class LoadBalancers {
     /// <param name="id">The load balancer's address.</param>
     /// <exception cref="ArgumentException"><paramref name="id" /> carries no parent name.</exception>
     /// <remarks>
-    ///     ⚠ <b>TWO COMPONENTS AND NOT THE THREE ITS SIBLINGS NEED, BECAUSE THESE OBJECTS ARE
-    ///     NAMESPACED.</b> <c>ReconcileDriver.NamespaceFor</c> is
+    ///     ⚠
+    ///     <b>
+    ///         TWO COMPONENTS AND NOT THE THREE ITS SIBLINGS NEED, BECAUSE THESE OBJECTS ARE
+    ///         NAMESPACED.
+    ///     </b> <c>ReconcileDriver.NamespaceFor</c> is
     ///     <c>{subscriptionId:N}-{resourceGroup}</c>, so a subscription and a resource group are already
     ///     folded into the namespace this object lands in — which is exactly the separation
     ///     <c>NetworkSubnets.ObjectNameOf</c> has to add by hand for a cluster-scoped <c>Subnet</c>. What
@@ -290,11 +334,17 @@ public static class LoadBalancers {
     /// <param name="id">The load balancer's address.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>Composed through <see cref="NetworkSubnets.ObjectNameOf(string, string, string)" />
-    ///     rather than spelled again here</b>, on the rule <c>NetworkSubnets.VpcRefOf</c> states: a
+    ///     ⚠
+    ///     <b>
+    ///         Composed through <see cref="NetworkSubnets.ObjectNameOf(string, string, string)" />
+    ///         rather than spelled again here
+    ///     </b>, on the rule <c>NetworkSubnets.VpcRefOf</c> states: a
     ///     second spelling of another type's object name is the thing that stops agreeing the day that
-    ///     type's naming changes. ⚠ <b>The network half comes from the ADDRESS and only the subnet half
-    ///     from the body</b>, so a load balancer cannot be placed on another network's subnet even if a
+    ///     type's naming changes. ⚠
+    ///     <b>
+    ///         The network half comes from the ADDRESS and only the subnet half
+    ///         from the body
+    ///     </b>, so a load balancer cannot be placed on another network's subnet even if a
     ///     body names one — the worst failure available here, because a subnet in another tenant's VPC
     ///     with a colliding name would put this tenant's proxy inside it.
     /// </remarks>
@@ -396,8 +446,11 @@ public static class LoadBalancers {
     ///     ⚠ <b>Named explicitly, and <c>runAsNonRoot: true</c> alone would BREAK THE POD.</b> The
     ///     image ends with <c>USER haproxy</c> — a name, not a number — and a kubelet asked to enforce
     ///     <c>runAsNonRoot</c> against an image whose user is non-numeric refuses to start the container
-    ///     with <i>"container has runAsNonRoot and image has non-numeric user (haproxy), cannot verify
-    ///     user is non-root"</i>. The uid is 99, read from the same Dockerfile
+    ///     with
+    ///     <i>
+    ///         "container has runAsNonRoot and image has non-numeric user (haproxy), cannot verify
+    ///         user is non-root"
+    ///     </i>. The uid is 99, read from the same Dockerfile
     ///     (<c>addgroup --gid 99</c>, <c>adduser --uid 99</c>).
     /// </remarks>
     public const int ProxyUid = 99;
@@ -436,8 +489,11 @@ public static class LoadBalancers {
 
     /// <summary>How many servers one backend may carry.</summary>
     /// <remarks>
-    ///     ⚠ <b>Checked in the reconciler rather than in the schema, because it is a count of list
-    ///     elements inside a string</b> and <c>SchemaProperty</c> can bound a length but not an arity.
+    ///     ⚠
+    ///     <b>
+    ///         Checked in the reconciler rather than in the schema, because it is a count of list
+    ///         elements inside a string
+    ///     </b> and <c>SchemaProperty</c> can bound a length but not an arity.
     ///     The number is a product decision rather than a limit of HAProxy, which handles thousands:
     ///     a backend list this long is a tenant who wants a service mesh, and the failure of allowing
     ///     it is a ConfigMap that stops fitting in etcd's 1 MiB object limit.
@@ -463,8 +519,11 @@ public static class LoadBalancers {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>NO <c>protocol</c> PROPERTY, AND THE ABSENCE IS THE SUBSTRATE'S RATHER THAN A
-    ///         SIMPLIFICATION.</b> HAProxy proxies TCP and HTTP; it does <b>not</b> proxy UDP at all, in
+    ///         ⚠
+    ///         <b>
+    ///             NO <c>protocol</c> PROPERTY, AND THE ABSENCE IS THE SUBSTRATE'S RATHER THAN A
+    ///             SIMPLIFICATION.
+    ///         </b> HAProxy proxies TCP and HTTP; it does <b>not</b> proxy UDP at all, in
     ///         any version. A <c>protocol</c> property with one legal value is a control that suggests a
     ///         choice nobody has, and one with <c>udp</c> in it is a <c>400</c> the tenant discovers
     ///         after they have designed around it. UDP load balancing on this substrate is
@@ -511,11 +570,7 @@ public static class LoadBalancers {
                     Description: "The cluster the proxy runs in. ⚠ It must be the cluster the virtual "
                     + "network was created in: a proxy in another cluster has no route into this "
                     + "network at all."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
                     "/properties/subnet",
                     SchemaKind.Text,
@@ -573,11 +628,7 @@ public static class LoadBalancers {
                     Required: true,
                     Description: "The TCP port the proxy listens on. ⚠ There is no protocol setting: "
                     + "HAProxy does not proxy UDP in any version, so every rule here is TCP."
-                ) {
-                    Minimum = 1,
-                    Maximum = 65535,
-                    DefaultJson = "80"
-                },
+                ) { Minimum = 1, Maximum = 65535, DefaultJson = "80" },
 
                 // ── The backend ────────────────────────────────────────────────────────────────
                 new(
@@ -605,11 +656,7 @@ public static class LoadBalancers {
                     Required: true,
                     Description: "The TCP port every backend address is reached on. ⚠ One port for the "
                     + "whole pool: a pool whose members listen on different ports is two pools."
-                ) {
-                    Minimum = 1,
-                    Maximum = 65535,
-                    DefaultJson = "8080"
-                },
+                ) { Minimum = 1, Maximum = 65535, DefaultJson = "8080" },
 
                 // ── Health checking ────────────────────────────────────────────────────────────
                 new(
@@ -622,29 +669,17 @@ public static class LoadBalancers {
                     "/properties/health/intervalSeconds",
                     SchemaKind.WholeNumber,
                     Description: "How often each backend is probed with a TCP connection."
-                ) {
-                    Minimum = 2,
-                    Maximum = 60,
-                    DefaultJson = "5"
-                },
+                ) { Minimum = 2, Maximum = 60, DefaultJson = "5" },
                 new(
                     "/properties/health/unhealthyAfter",
                     SchemaKind.WholeNumber,
                     Description: "How many failed probes take a backend out of the pool."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 10, DefaultJson = "3" },
                 new(
                     "/properties/health/healthyAfter",
                     SchemaKind.WholeNumber,
                     Description: "How many successful probes put a backend back into the pool."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 10, DefaultJson = "2" },
 
                 // ── Limits ─────────────────────────────────────────────────────────────────────
                 new(
@@ -659,11 +694,7 @@ public static class LoadBalancers {
                     + "connections wait in the kernel's accept queue rather than being refused, so "
                     + "this is a back-pressure setting rather than a firewall. It is also applied per "
                     + "backend server."
-                ) {
-                    Minimum = 10,
-                    Maximum = 100000,
-                    DefaultJson = "2000"
-                },
+                ) { Minimum = 10, Maximum = 100000, DefaultJson = "2000" },
 
                 // ── The proxy itself ───────────────────────────────────────────────────────────
                 new("/properties/sizing", SchemaKind.Nested, Description: "CPU and memory for the proxy."),
@@ -692,8 +723,7 @@ public static class LoadBalancers {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showBackends</c> returns.
@@ -725,9 +755,7 @@ public static class LoadBalancers {
                     SchemaKind.Array,
                     Required: true,
                     Description: "One line per backend server, in the order the proxy is given them."
-                ) {
-                    ElementKind = SchemaKind.Text
-                },
+                ) { ElementKind = SchemaKind.Text },
                 new(
                     "/serverCount",
                     SchemaKind.WholeNumber,
@@ -755,9 +783,7 @@ public static class LoadBalancers {
                     SchemaKind.Text,
                     Required: true,
                     Description: "When the platform read the Deployment, RFC 3339."
-                ) {
-                    Format = SchemaFormat.DateTime
-                }
+                ) { Format = SchemaFormat.DateTime }
             ]
         );
 
@@ -773,8 +799,7 @@ public static class LoadBalancers {
 
     /// <summary>The IPv4 address the proxy answers on.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string FrontendV4(JsonElement desired) =>
-        Nested(desired, "frontend", "v4", DefaultFrontendV4);
+    public static string FrontendV4(JsonElement desired) => Nested(desired, "frontend", "v4", DefaultFrontendV4);
 
     /// <summary>The IPv6 address the proxy also answers on, or empty.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -797,11 +822,10 @@ public static class LoadBalancers {
     ///     balancer down for a punctuation mistake. <see cref="BackendProblem" /> is what refuses the
     ///     rest.
     /// </remarks>
-    public static ImmutableArray<string> BackendAddresses(JsonElement desired) =>
-        [
-            .. BackendAddressList(desired)
-                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-        ];
+    public static ImmutableArray<string> BackendAddresses(JsonElement desired) => [
+        .. BackendAddressList(desired)
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+    ];
 
     /// <summary>The port every backend is reached on.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -809,8 +833,7 @@ public static class LoadBalancers {
 
     /// <summary>How often a backend is probed, in seconds.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int HealthIntervalSeconds(JsonElement desired) =>
-        Whole(desired, "health", "intervalSeconds", 5);
+    public static int HealthIntervalSeconds(JsonElement desired) => Whole(desired, "health", "intervalSeconds", 5);
 
     /// <summary>How many failed probes remove a backend.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -822,8 +845,7 @@ public static class LoadBalancers {
 
     /// <summary>How many connections the frontend accepts at once.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int MaxConnections(JsonElement desired) =>
-        Whole(desired, "limits", "maxConnections", 2000);
+    public static int MaxConnections(JsonElement desired) => Whole(desired, "limits", "maxConnections", 2000);
 
     /// <summary>The sizing preset.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -848,8 +870,11 @@ public static class LoadBalancers {
     ///     reconciler, which is a singleton serving every tenant in the process. Same rule, same reason,
     ///     as <c>NetworkAddressing.ProblemWith</c>.
     ///     <para>
-    ///         ⚠ <b>What is left after the pattern is the family's recurring shape and it is narrow
-    ///         here.</b> <see cref="AddressListPattern" /> refuses everything that is not a list of
+    ///         ⚠
+    ///         <b>
+    ///             What is left after the pattern is the family's recurring shape and it is narrow
+    ///             here.
+    ///         </b> <see cref="AddressListPattern" /> refuses everything that is not a list of
     ///         address-shaped tokens, at the API, with a pointer, before the <c>202</c>. What it cannot
     ///         say is that a token parses, that there are not too many of them, and — the one that
     ///         matters — that an address is not the <b>same</b> as the frontend's, which would be a
@@ -911,8 +936,11 @@ public static class LoadBalancers {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>mode tcp</c> AND NOT <c>mode http</c>, WHICH IS THE WHOLE OF WHAT THIS ROW
-    ///         CLAIMS.</b> docs/plan/14 puts L7 — host and path routing, TLS termination, header
+    ///         ⚠
+    ///         <b>
+    ///             <c>mode tcp</c> AND NOT <c>mode http</c>, WHICH IS THE WHOLE OF WHAT THIS ROW
+    ///             CLAIMS.
+    ///         </b> docs/plan/14 puts L7 — host and path routing, TLS termination, header
     ///         rewrites, a WAF — on <c>applicationGateways</c> at M2, over Envoy. An HTTP-mode HAProxy
     ///         here would be a second, quieter L7 product with none of those, and the first tenant to
     ///         ask for a path rule would be told to migrate.
@@ -943,7 +971,9 @@ public static class LoadBalancers {
         var interval = HealthIntervalSeconds(desired) * 1000;
         var builder = new StringBuilder();
 
-        builder.Append(CultureInfo.InvariantCulture, $"""
+        builder.Append(
+            CultureInfo.InvariantCulture,
+            $"""
             # Generated by CyberCloud from CyberCloud.Network/virtualNetworks/loadBalancers.
             # Edits are overwritten on the next reconcile pass.
             global
@@ -968,7 +998,8 @@ public static class LoadBalancers {
               balance roundrobin
               option tcp-check
 
-            """);
+            """
+        );
 
         var port = BackendPort(desired);
         var index = 0;
@@ -1004,8 +1035,7 @@ public static class LoadBalancers {
     ///     <c>sha256:…</c> spelling. See <see cref="ConfigChecksumAnnotation" /> for why the value has
     ///     to be on the pod template at all.
     /// </remarks>
-    public static string ConfigHash(JsonElement desired) =>
-        KubeLabels.ReconcileHash(HaproxyConfig(desired));
+    public static string ConfigHash(JsonElement desired) => KubeLabels.ReconcileHash(HaproxyConfig(desired));
 
     /// <summary>The <c>ConfigMap</c> document a desired body becomes.</summary>
     /// <param name="id">The load balancer's address.</param>
@@ -1028,11 +1058,17 @@ public static class LoadBalancers {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>ovn.kubernetes.io/ip_pool</c> AND NOT <c>ovn.kubernetes.io/ip_address</c>, AND
-    ///         THE TWO ARE READ BY THE SAME FUNCTION.</b> Read firsthand in
+    ///         ⚠
+    ///         <b>
+    ///             <c>ovn.kubernetes.io/ip_pool</c> AND NOT <c>ovn.kubernetes.io/ip_address</c>, AND
+    ///             THE TWO ARE READ BY THE SAME FUNCTION.
+    ///         </b> Read firsthand in
     ///         <c>pkg/controller/pod.go</c> at <c>v1.16.2</c>: <c>acquireStaticAddressHelper</c> takes
-    ///         either, and the pool form splits on commas — with the special case that <b>two entries of
-    ///         different families are one dual-stack address</b> rather than two servers. The pool
+    ///         either, and the pool form splits on commas — with the special case that
+    ///         <b>
+    ///             two entries of
+    ///             different families are one dual-stack address
+    ///         </b> rather than two servers. The pool
     ///         spelling is Kube-OVN's documented one for a workload rather than a bare pod, so a future
     ///         second replica is a second entry here rather than a different annotation.
     ///     </para>
@@ -1043,18 +1079,18 @@ public static class LoadBalancers {
     ///         anything in the body.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The readiness probe is a TCP connection to the frontend port and not an HTTP
-    ///         get.</b> This is an L4 proxy: there is no path to ask for, and a probe that assumed one
+    ///         ⚠
+    ///         <b>
+    ///             The readiness probe is a TCP connection to the frontend port and not an HTTP
+    ///             get.
+    ///         </b> This is an L4 proxy: there is no path to ask for, and a probe that assumed one
     ///         would report a healthy proxy as unready in front of any non-HTTP workload.
     ///     </para>
     /// </remarks>
     public static string DeploymentJson(string ns, ResourceId id, JsonElement desired) {
         var name = ObjectNameOf(id);
         var (cpu, memory) = Resources(desired);
-        var selector = new JsonObject {
-            [NameLabel] = ImageRepository,
-            [InstanceLabel] = name
-        };
+        var selector = new JsonObject { [NameLabel] = ImageRepository, [InstanceLabel] = name };
 
         return new JsonObject {
             ["kind"] = DeploymentKind.Kind,
@@ -1086,9 +1122,7 @@ public static class LoadBalancers {
                             ["runAsGroup"] = ProxyUid,
                             ["seccompProfile"] = new JsonObject { ["type"] = "RuntimeDefault" },
                             ["sysctls"] = new JsonArray {
-                                new JsonObject {
-                                    ["name"] = UnprivilegedPortSysctl, ["value"] = "0"
-                                }
+                                new JsonObject { ["name"] = UnprivilegedPortSysctl, ["value"] = "0" }
                             }
                         },
                         ["containers"] = new JsonArray {
@@ -1098,9 +1132,7 @@ public static class LoadBalancers {
                                 ["securityContext"] = new JsonObject {
                                     ["allowPrivilegeEscalation"] = false,
                                     ["readOnlyRootFilesystem"] = true,
-                                    ["capabilities"] = new JsonObject {
-                                        ["drop"] = new JsonArray { "ALL" }
-                                    }
+                                    ["capabilities"] = new JsonObject { ["drop"] = new JsonArray { "ALL" } }
                                 },
                                 ["ports"] = new JsonArray {
                                     new JsonObject {
@@ -1110,33 +1142,22 @@ public static class LoadBalancers {
                                     }
                                 },
                                 ["readinessProbe"] = new JsonObject {
-                                    ["tcpSocket"] = new JsonObject {
-                                        ["port"] = FrontendPort(desired)
-                                    },
+                                    ["tcpSocket"] = new JsonObject { ["port"] = FrontendPort(desired) },
                                     ["periodSeconds"] = 5
                                 },
                                 ["resources"] = new JsonObject {
-                                    ["requests"] = new JsonObject {
-                                        ["cpu"] = cpu, ["memory"] = memory
-                                    },
-                                    ["limits"] = new JsonObject {
-                                        ["cpu"] = cpu, ["memory"] = memory
-                                    }
+                                    ["requests"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory },
+                                    ["limits"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory }
                                 },
                                 ["volumeMounts"] = new JsonArray {
                                     new JsonObject {
-                                        ["name"] = "config",
-                                        ["mountPath"] = ConfigDirectory,
-                                        ["readOnly"] = true
+                                        ["name"] = "config", ["mountPath"] = ConfigDirectory, ["readOnly"] = true
                                     }
                                 }
                             }
                         },
                         ["volumes"] = new JsonArray {
-                            new JsonObject {
-                                ["name"] = "config",
-                                ["configMap"] = new JsonObject { ["name"] = name }
-                            }
+                            new JsonObject { ["name"] = "config", ["configMap"] = new JsonObject { ["name"] = name } }
                         }
                     }
                 }
@@ -1147,8 +1168,11 @@ public static class LoadBalancers {
     /// <summary>The value of the pod template's address-pool annotation.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>Comma-joined, which Kube-OVN reads as ONE dual-stack address rather than as two
-    ///     servers</b> — <c>acquireStaticAddressHelper</c> compares the families of a two-entry list
+    ///     ⚠
+    ///     <b>
+    ///         Comma-joined, which Kube-OVN reads as ONE dual-stack address rather than as two
+    ///         servers
+    ///     </b> — <c>acquireStaticAddressHelper</c> compares the families of a two-entry list
     ///     and folds them when they differ. A semicolon, which the same function also accepts, would
     ///     mean two single-stack addresses for two pods and would leave this proxy's v6 half
     ///     unallocated.
@@ -1167,14 +1191,19 @@ public static class LoadBalancers {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Dispatches on <c>kind</c>, and a document with no kind is <see langword="false" />
+    ///         ⚠
+    ///         <b>
+    ///             Dispatches on <c>kind</c>, and a document with no kind is <see langword="false" />
     ///         </b> — <c>CloudConsoles.Matches</c>' rule, for its reason: this resource owns two kinds,
     ///         and guessing which a kindless document was would mean judging a Deployment by a
     ///         ConfigMap's data.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE CONFIG IS COMPARED EXACTLY AND THE DEPLOYMENT BY CONTAINMENT, WHICH IS NOT AN
-    ///         INCONSISTENCY.</b> Nothing in Kubernetes rewrites a <c>ConfigMap</c>'s <c>data</c>, so an
+    ///         ⚠
+    ///         <b>
+    ///             THE CONFIG IS COMPARED EXACTLY AND THE DEPLOYMENT BY CONTAINMENT, WHICH IS NOT AN
+    ///             INCONSISTENCY.
+    ///         </b> Nothing in Kubernetes rewrites a <c>ConfigMap</c>'s <c>data</c>, so an
     ///         exact comparison there is the strongest available and catches a hand edit. A
     ///         <c>Deployment</c> is defaulted heavily by the API server — <c>revisionHistoryLimit</c>,
     ///         <c>progressDeadlineSeconds</c>, <c>dnsPolicy</c>, <c>schedulerName</c>, every container's
@@ -1182,11 +1211,17 @@ public static class LoadBalancers {
     ///         perfectly converged proxy forever. This family's recurring trap in its third shape.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE FOUR FIELDS COMPARED ON THE DEPLOYMENT ARE THE FOUR THAT DECIDE WHETHER TRAFFIC
-    ///         GOES ANYWHERE.</b> The logical switch decides which network the proxy is on; the address
+    ///         ⚠
+    ///         <b>
+    ///             THE FOUR FIELDS COMPARED ON THE DEPLOYMENT ARE THE FOUR THAT DECIDE WHETHER TRAFFIC
+    ///             GOES ANYWHERE.
+    ///         </b> The logical switch decides which network the proxy is on; the address
     ///         pool decides whether anything can reach it; the config hash decides whether the running
-    ///         proxy has the configuration this platform last wrote — <b>this is the one an obvious
-    ///         implementation leaves out</b>, and without it every backend change converges instantly
+    ///         proxy has the configuration this platform last wrote —
+    ///         <b>
+    ///             this is the one an obvious
+    ///             implementation leaves out
+    ///         </b>, and without it every backend change converges instantly
     ///         and changes nothing; the image decides what is running.
     ///     </para>
     /// </remarks>
@@ -1231,8 +1266,7 @@ public static class LoadBalancers {
     static JsonObject? Document(string objectJson) {
         try {
             return JsonNode.Parse(objectJson) as JsonObject;
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             return null;
         }
     }
@@ -1275,15 +1309,9 @@ public static class LoadBalancers {
             ["properties"] = new JsonObject {
                 ["clusterId"] = clusterId.ToString("D", CultureInfo.InvariantCulture),
                 ["subnet"] = subnet,
-                ["frontend"] = new JsonObject {
-                    ["v4"] = frontendV4, ["v6"] = frontendV6, ["port"] = frontendPort
-                },
-                ["backend"] = new JsonObject {
-                    ["addresses"] = backendAddresses, ["port"] = backendPort
-                },
-                ["health"] = new JsonObject {
-                    ["intervalSeconds"] = 5, ["unhealthyAfter"] = 3, ["healthyAfter"] = 2
-                },
+                ["frontend"] = new JsonObject { ["v4"] = frontendV4, ["v6"] = frontendV6, ["port"] = frontendPort },
+                ["backend"] = new JsonObject { ["addresses"] = backendAddresses, ["port"] = backendPort },
+                ["health"] = new JsonObject { ["intervalSeconds"] = 5, ["unhealthyAfter"] = 3, ["healthyAfter"] = 2 },
                 ["limits"] = new JsonObject { ["maxConnections"] = maxConnections },
                 ["sizing"] = new JsonObject { ["preset"] = preset },
                 ["version"] = version

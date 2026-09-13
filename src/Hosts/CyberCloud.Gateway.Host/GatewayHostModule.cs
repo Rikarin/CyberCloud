@@ -23,8 +23,11 @@ namespace CyberCloud.Gateway.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The same twelve provider modules the silo loads, and the gateway needs them for a
-///         different reason.</b> The silo loads them to run reconcilers; this host loads them to have
+///         ⚠
+///         <b>
+///             The same twelve provider modules the silo loads, and the gateway needs them for a
+///             different reason.
+///         </b> The silo loads them to run reconcilers; this host loads them to have
 ///         an <c>IProviderRegistry</c> with anything in it. Stage 6 resolves a request path against
 ///         that registry, so a gateway with no providers routes nothing — it answers the canonical
 ///         <c>404</c> to every resource and every action, which is exactly what a caller gets for a

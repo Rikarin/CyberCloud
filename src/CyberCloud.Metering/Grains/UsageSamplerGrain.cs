@@ -10,8 +10,11 @@ namespace CyberCloud.Metering.Grains;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Everything this grain meters comes from <see cref="IMeteredResourceSource" />, which
-///         is a view of what <i>exists</i>.</b> docs/plan/22 § Two kinds of meter: "A stopped VM
+///         ⚠
+///         <b>
+///             Everything this grain meters comes from <see cref="IMeteredResourceSource" />, which
+///             is a view of what <i>exists</i>.
+///         </b> docs/plan/22 § Two kinds of meter: "A stopped VM
 ///         still has a disk; a <c>Deployment</c> scaled to zero still has a
 ///         <c>PersistentVolumeClaim</c>. Metrics know about running pods; the resource graph knows
 ///         what exists." <see cref="MeteredResource.RunState" /> is never read here — deliberately,
@@ -27,7 +30,8 @@ namespace CyberCloud.Metering.Grains;
 ///     </para>
 /// </remarks>
 public sealed class UsageSamplerGrain(
-    [PersistentState("usage-sampler", StorageTiers.Hot)] IPersistentState<UsageSamplerState> state,
+    [PersistentState("usage-sampler", StorageTiers.Hot)]
+    IPersistentState<UsageSamplerState> state,
     IMeteredResourceSource resources,
     IUsageEmitter emitter,
     IClock clock

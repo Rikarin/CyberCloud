@@ -25,7 +25,8 @@ namespace CyberCloud.ResourceManager.Grains;
 ///     </para>
 /// </remarks>
 public sealed class OperationGrain(
-    [PersistentState("operation", StorageTiers.Durable)] IPersistentState<OperationGrainState> state,
+    [PersistentState("operation", StorageTiers.Durable)]
+    IPersistentState<OperationGrainState> state,
     ReconcileDriver driver,
     IResourceRelationWriter relations,
     IGrainFactory grains,
@@ -537,14 +538,20 @@ public sealed class OperationGrain(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Reached from <see cref="ConvergedAsync" /> and therefore only after the data plane
-    ///         is down, read back.</b> Parking before the teardown converged would be the defect this
+    ///         ⚠
+    ///         <b>
+    ///             Reached from <see cref="ConvergedAsync" /> and therefore only after the data plane
+    ///             is down, read back.
+    ///         </b> Parking before the teardown converged would be the defect this
     ///         path was built to close, one step later: the resource would stop being addressable while
     ///         its pods were still running, and nothing would be driving them down.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Here rather than in <c>ResourceManagerService.DeleteAsync</c>, and for the two
-    ///         reasons the unlink beside it lives here.</b> Both writes can fail, and this grain is the
+    ///         ⚠
+    ///         <b>
+    ///             Here rather than in <c>ResourceManagerService.DeleteAsync</c>, and for the two
+    ///             reasons the unlink beside it lives here.
+    ///         </b> Both writes can fail, and this grain is the
     ///         durable, reminder-driven machinery that re-drives them; and a delete is accepted long
     ///         before it settles, so the request path should not be holding a caller while two tuple
     ///         stores are written. The index park stays on the request path because THAT is what makes
@@ -561,8 +568,11 @@ public sealed class OperationGrain(
     ///         with nothing to restore <i>from</i>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The re-parent goes first and the assignment drop second, and both are retried as a
-    ///         unit.</b> The re-parent is what keeps the resource visible to somebody — a subscription
+    ///         ⚠
+    ///         <b>
+    ///             The re-parent goes first and the assignment drop second, and both are retried as a
+    ///             unit.
+    ///         </b> The re-parent is what keeps the resource visible to somebody — a subscription
     ///         role holder — so running it first means the drop can never leave the resource
     ///         unreachable even for an instant. A failure in either schedules a retry, so the pair
     ///         converges or the operation fails at <c>ReconcileSchedule</c>'s ceiling with a reason,
@@ -658,8 +668,7 @@ public sealed class OperationGrain(
         // SweepAsync, and ExpirySweeperBackfill at the next silo start.
         try {
             _ = await Sweeper(spec).ArmAsync();
-        }
-        catch (Exception error) when (error is not OperationCanceledException) {
+        } catch (Exception error) when (error is not OperationCanceledException) {
             logger.LogWarning(
                 error,
                 "'{Path}' is parked but its resource group's expiry sweeper could not be armed, so "
@@ -743,8 +752,7 @@ public sealed class OperationGrain(
         // What is lost is a stale label on one listing entry, against an operation that already failed.
         if (spec.Kind == OperationKind.Delete) {
             _ = await Group(spec).FailDeleteAsync(spec.ResourceId, error.Message);
-        }
-        else {
+        } else {
             await StampMemberAsync(spec, ProvisioningState.Failed);
         }
 
@@ -825,8 +833,11 @@ public sealed class OperationGrain(
     /// <remarks>
     ///     ⚠ <b>Uses <c>IQuotaGrain.ReleaseAsync</c> rather than reimplementing a release.</b>
     ///     docs/plan/06 § Quota already has the semantics: releasing a lease that has already gone
-    ///     succeeds rather than failing, <i>"so a failure path re-driven from a reminder is safe to
-    ///     run twice"</i>, and a lease nobody released expires on its own because expiry is evaluated
+    ///     succeeds rather than failing,
+    ///     <i>
+    ///         "so a failure path re-driven from a reminder is safe to
+    ///         run twice"
+    ///     </i>, and a lease nobody released expires on its own because expiry is evaluated
     ///     on read. Both are exactly what this path needs and neither is restated here.
     /// </remarks>
     async Task ReleaseAsync(OperationSpec spec) {
@@ -857,8 +868,11 @@ public sealed class OperationGrain(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>ReturnAsync</c>, not <c>ReleaseAsync</c>, and the difference was a real defect
-    ///         rather than a naming preference.</b> This method used to delegate to
+    ///         ⚠
+    ///         <b>
+    ///             <c>ReturnAsync</c>, not <c>ReleaseAsync</c>, and the difference was a real defect
+    ///             rather than a naming preference.
+    ///         </b> This method used to delegate to
     ///         <see cref="ReleaseAsync" />, which releases <i>leases</i> — and a delete holds none:
     ///         <see cref="OperationSpec.QuotaLeaseIds" /> is empty on every delete spec, because the
     ///         amounts were <b>committed</b> by the create that made the resource. So the call was a
@@ -884,8 +898,11 @@ public sealed class OperationGrain(
     ///         and why it is the last quota call the operation makes.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see cref="QuotaMeter.Unknown" /> and non-positive amounts are skipped rather than
-    ///         sent.</b> Both are refused by the grain, and a refusal logged per delete is noise that
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="QuotaMeter.Unknown" /> and non-positive amounts are skipped rather than
+    ///             sent.
+    ///         </b> Both are refused by the grain, and a refusal logged per delete is noise that
     ///         hides a real one. <see cref="QuotaMeter.Unknown" /> is the zero value a
     ///         default-constructed wire type carries, which is what an operation started by a peer
     ///         that predates <see cref="OperationSpec.CommittedQuota" /> would produce.
@@ -949,8 +966,11 @@ public sealed class OperationGrain(
     /// <param name="terminal">The terminal state.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A member that is not there is not an error, and this is the one place that
-    ///         tolerance lives.</b> <c>ResourceManagerService</c>'s step 7b records a member for every
+    ///         ⚠
+    ///         <b>
+    ///             A member that is not there is not an error, and this is the one place that
+    ///             tolerance lives.
+    ///         </b> <c>ResourceManagerService</c>'s step 7b records a member for every
     ///         create, so every resource created after it exists in some group's membership. A
     ///         resource created <i>before</i> it has none, and an update or a delete of one reaches
     ///         here with nothing to stamp. Refusing would fail an operation whose work landed, and
@@ -1002,8 +1022,7 @@ public sealed class OperationGrain(
     OperationProgress Progress(string step, string detail) =>
         new() { At = clock.UtcNow, Step = step, Detail = detail, PercentComplete = state.State.PercentComplete };
 
-    OperationProgress? LastProgress() =>
-        state.State.Progress.Count == 0 ? null : state.State.Progress[^1];
+    OperationProgress? LastProgress() => state.State.Progress.Count == 0 ? null : state.State.Progress[^1];
 
     OperationStatus Status() =>
         new() {
@@ -1023,7 +1042,8 @@ public sealed class OperationGrain(
             Children = [.. state.State.Children]
         };
 
-    IResourceGrain Resource(OperationSpec spec) => Tenant(spec).GetGrain<IResourceGrain>(GrainKeys.Resource(spec.ResourceId));
+    IResourceGrain Resource(OperationSpec spec) =>
+        Tenant(spec).GetGrain<IResourceGrain>(GrainKeys.Resource(spec.ResourceId));
 
     /// <summary>
     ///     The operation's resource as an address, for the ReBAC unlink.
@@ -1048,18 +1068,19 @@ public sealed class OperationGrain(
     ///     The resource group whose membership this operation's endings maintain.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The group NAME comes from <see cref="Address" />, which reparses
-    ///     <see cref="OperationSpec.ResourcePath" />, and the subscription comes from the spec's own
-    ///     field.</b> Both are what the spec durably recorded, so this converges from a reminder after
+    ///     ⚠
+    ///     <b>
+    ///         The group NAME comes from <see cref="Address" />, which reparses
+    ///         <see cref="OperationSpec.ResourcePath" />, and the subscription comes from the spec's own
+    ///         field.
+    ///     </b> Both are what the spec durably recorded, so this converges from a reminder after
     ///     the resource itself is gone — which is exactly when the delete path's last two calls run.
     ///     A second copy of the group name on the spec would be a second thing that can disagree with
     ///     the path, which is the argument <see cref="Address" /> already makes.
     /// </remarks>
     IResourceGroupGrain Group(OperationSpec spec) =>
         Tenant(spec)
-            .GetGrain<IResourceGroupGrain>(
-                GrainKeys.ResourceGroup(spec.SubscriptionId, Address(spec).ResourceGroup)
-            );
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(spec.SubscriptionId, Address(spec).ResourceGroup));
 
     /// <summary>
     ///     The same resource group's registry of parked resources — docs/plan/08 § Soft delete.
@@ -1090,9 +1111,7 @@ public sealed class OperationGrain(
     /// </remarks>
     IExpirySweeperGrain Sweeper(OperationSpec spec) =>
         Tenant(spec)
-            .GetGrain<IExpirySweeperGrain>(
-                GrainKeys.ExpirySweeper(spec.SubscriptionId, Address(spec).ResourceGroup)
-            );
+            .GetGrain<IExpirySweeperGrain>(GrainKeys.ExpirySweeper(spec.SubscriptionId, Address(spec).ResourceGroup));
 
     TenantGrainFactory Tenant(OperationSpec spec) =>
         grains.ForTenant(spec.TenantId.ToString("D", CultureInfo.InvariantCulture));

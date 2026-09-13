@@ -6,8 +6,11 @@ namespace CyberCloud.Vault;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The split is not decoration, and <c>CyberCloud.Kubernetes</c>'s <c>KubeRefusal</c>
-///         established why.</b> A failed <see cref="Result{T}" /> out of
+///         ⚠
+///         <b>
+///             The split is not decoration, and <c>CyberCloud.Kubernetes</c>'s <c>KubeRefusal</c>
+///             established why.
+///         </b> A failed <see cref="Result{T}" /> out of
 ///         <see cref="OpenBaoSecretResolver" /> travels: the reconciler turns it into
 ///         <c>ReconcileOutcome.Failed</c>, the operation grain streams it to
 ///         <c>operation-progress</c>, and it lands in <c>ResourceSnapshot.LastFailure</c> where the
@@ -17,20 +20,32 @@ namespace CyberCloud.Vault;
 ///         an <c>ILogger</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Neither string ever holds the secret value, and one of them is nowhere near the
-///         value at all.</b> A refusal is built before a value is read or after a read that produced
+///         ⚠
+///         <b>
+///             Neither string ever holds the secret value, and one of them is nowhere near the
+///             value at all.
+///         </b> A refusal is built before a value is read or after a read that produced
 ///         none, and <see cref="VaultFailures" /> has no overload taking one.
 ///         <c>SecretContainmentTests.NoRefusalCanBeHandedTheValue</c> is the assertion, by
 ///         reflection, because CC1005 is switched off in this assembly and cannot be.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Four distinguishable answers, and the whole argument for this type is that none of
-///         them is an empty string.</b> <c>UnavailableSecretResolver</c>'s remarks make the case for
-///         the unwired default — <i>"an empty password reaching a rendered manifest is a database
-///         with no password, applied to a real cluster, reported as a successful provision"</i> — and
+///         ⚠
+///         <b>
+///             Four distinguishable answers, and the whole argument for this type is that none of
+///             them is an empty string.
+///         </b> <c>UnavailableSecretResolver</c>'s remarks make the case for
+///         the unwired default —
+///         <i>
+///             "an empty password reaching a rendered manifest is a database
+///             with no password, applied to a real cluster, reported as a successful provision"
+///         </i> — and
 ///         it applies with more force to the wired one, which fails in ways an empty string would
-///         flatten into each other: a vault that is <i>unreachable</i>, a path that <i>does not
-///         exist</i>, a permission that is <i>denied</i>, and a path that exists without the field
+///         flatten into each other: a vault that is <i>unreachable</i>, a path that
+///         <i>
+///             does not
+///             exist
+///         </i>, a permission that is <i>denied</i>, and a path that exists without the field
 ///         asked for are four different incidents with four different fixes.
 ///         <c>ResolveFailureTests</c> drives all four against a real OpenBao.
 ///     </para>
@@ -89,8 +104,11 @@ public static class VaultFailures {
     /// <param name="reference">The empty handle.</param>
     /// <remarks>
     ///     ⚠ Refused without a network call. <see cref="SecretRef.IsEmpty" />'s own remarks make the
-    ///     case: <i>"a handle with no path or no field is not 'an empty secret' — it is an address
-    ///     that resolves to nothing, and a caller that passed one meant to pass a real one."</i>
+    ///     case:
+    ///     <i>
+    ///         "a handle with no path or no field is not 'an empty secret' — it is an address
+    ///         that resolves to nothing, and a caller that passed one meant to pass a real one."
+    ///     </i>
     ///     Resolving it would ask OpenBao for <c>{mount}/data/</c> and get a <c>404</c>, which would
     ///     report a missing secret rather than a broken handle.
     /// </remarks>
@@ -106,16 +124,19 @@ public static class VaultFailures {
                 $"A SecretRef with no path or no field reached the resolver: path='{reference.Path}', "
                 + $"field='{reference.Field}'. This is a provider bug rather than a vault fault — "
                 + "nothing was asked of OpenBao. The handle came from the resource's desired state, "
-                + "so the reconciler that built it is where to look.",
+                + "so the reconciler that built it is where to look."
         };
     }
 
     /// <summary>The platform could not authenticate to OpenBao at all.</summary>
     /// <param name="detail">What the login attempt actually produced. Never a token.</param>
     /// <remarks>
-    ///     ⚠ <b><see cref="ErrorCode.InternalError" /> and not
-    ///     <see cref="ErrorCode.AuthorizationFailed" />, and the difference matters to whoever reads
-    ///     the code rather than the message.</b> <c>AuthorizationFailed</c> renders as <c>403</c> and
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="ErrorCode.InternalError" /> and not
+    ///         <see cref="ErrorCode.AuthorizationFailed" />, and the difference matters to whoever reads
+    ///         the code rather than the message.
+    ///     </b> <c>AuthorizationFailed</c> renders as <c>403</c> and
     ///     says <i>the caller may not do this</i>. The caller may; the platform cannot reach its own
     ///     vault. Handing a tenant a <c>403</c> for the platform's deployment fault sends them to
     ///     check their own permissions.
@@ -125,10 +146,11 @@ public static class VaultFailures {
             Code = ErrorCode.InternalError,
             TenantMessage =
                 "The platform could not reach its own secret store to read a credential this "
-                + "resource needs. " + Escalation,
+                + "resource needs. "
+                + Escalation,
             OperatorDetail =
                 "The silo could not authenticate to OpenBao, so no secret can be resolved on this "
-                + $"silo at all until it is fixed. Specifically: {detail}",
+                + $"silo at all until it is fixed. Specifically: {detail}"
         };
 
     /// <summary>OpenBao did not answer, or did not answer in time.</summary>
@@ -138,8 +160,9 @@ public static class VaultFailures {
             Code = ErrorCode.InternalError,
             TenantMessage =
                 "The platform's secret store did not answer, so a credential this resource needs "
-                + "could not be read. " + Escalation,
-            OperatorDetail = $"OpenBao did not answer. Specifically: {detail}",
+                + "could not be read. "
+                + Escalation,
+            OperatorDetail = $"OpenBao did not answer. Specifically: {detail}"
         };
 
     /// <summary>The path, or the pinned version of it, is not there.</summary>
@@ -168,7 +191,7 @@ public static class VaultFailures {
                 + (reference.Version.Length == 0 ? string.Empty : $" at version {reference.Version}")
                 + ". Either nothing was ever written there, or the version pinned in the resource's "
                 + "desired state has been deleted or destroyed — OpenBao answers both with a bare "
-                + "404 and an empty error list, so the two cannot be told apart from here.",
+                + "404 and an empty error list, so the two cannot be told apart from here."
         };
     }
 
@@ -194,7 +217,7 @@ public static class VaultFailures {
                 $"OpenBao at {address} answered 403 for '{mount}/data/{reference.Path}'. The login "
                 + $"succeeded, so the role '{role}' is bound correctly and this is its policy: the "
                 + "token it issues does not carry read on that path. ⚠ Not the same fault as a "
-                + "refused login, which fails every path rather than one.",
+                + "refused login, which fails every path rather than one."
         };
     }
 
@@ -204,8 +227,11 @@ public static class VaultFailures {
     /// <param name="mount">The <c>kv-v2</c> mount the read went through.</param>
     /// <param name="present">The field names that <i>are</i> at that path. ⚠ Names, never values.</param>
     /// <remarks>
-    ///     ⚠ <b>This is the case an empty string would hide most quietly, which is why it has its own
-    ///     builder.</b> A <c>kv-v2</c> read of an existing path returns <c>200</c> with a
+    ///     ⚠
+    ///     <b>
+    ///         This is the case an empty string would hide most quietly, which is why it has its own
+    ///         builder.
+    ///     </b> A <c>kv-v2</c> read of an existing path returns <c>200</c> with a
     ///     <c>data.data</c> object, and a missing key in that object is a JSON absence rather than an
     ///     error — the obvious implementation reads it into a <see langword="string" /> that is
     ///     <see langword="null" />, coalesces it to <c>""</c>, and hands back a successful result
@@ -240,7 +266,7 @@ public static class VaultFailures {
                 + (names.Length == 0 ? "(none)" : names)
                 + ". ⚠ This is reported as a failure rather than as an empty value on purpose — an "
                 + "empty password rendered into a manifest is a database with no password, reported "
-                + "as a successful provision.",
+                + "as a successful provision."
         };
     }
 
@@ -263,6 +289,6 @@ public static class VaultFailures {
                 $"OpenBao's response could not be read: {detail}. ⚠ The body is deliberately not "
                 + "quoted here — a kv-v2 response body holds the secret, so echoing an unparseable "
                 + "one is the one way this assembly could write a value to a log. This is a fault in "
-                + "the platform or a version skew against OpenBao rather than a fault in the request.",
+                + "the platform or a version skew against OpenBao rather than a fault in the request."
         };
 }

@@ -8,8 +8,11 @@ namespace CyberCloud.Gateway.Host.Pipeline;
 ///     What one request has accumulated so far. Each stage reads what the ones before it wrote.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><see cref="Caller" /> is the only tenant in here, and it is written exactly once, by
-///     stage 3, from the token.</b> Nothing later re-derives it and nothing earlier can. That is the
+///     ⚠
+///     <b>
+///         <see cref="Caller" /> is the only tenant in here, and it is written exactly once, by
+///         stage 3, from the token.
+///     </b> Nothing later re-derives it and nothing earlier can. That is the
 ///     property docs/plan/00 § The tenant-separation row, corrected leaves the gateway responsible
 ///     for: an Orleans client is outside <c>Orleans.Multitenant</c>'s call filter permanently, so
 ///     the value in this field <i>is</i> the tenancy boundary for every request that arrives over

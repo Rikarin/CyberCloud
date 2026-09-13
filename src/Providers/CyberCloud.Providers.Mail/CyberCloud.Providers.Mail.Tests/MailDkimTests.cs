@@ -137,7 +137,8 @@ public sealed class MailDkimTests {
             key.ExportPkcs8PrivateKeyPem(),
             "mx.cybercloud.io",
             out var records
-        ).ShouldBeTrue();
+        )
+            .ShouldBeTrue();
 
         records.Length.ShouldBe(4);
         records.Count(x => x.Kind == "MX").ShouldBe(1);

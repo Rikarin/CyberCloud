@@ -7,8 +7,11 @@ namespace CyberCloud.Providers.Network;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>IT REFUSES A BODY THE API ALREADY ACCEPTED — AND FOR ONE RELATION ONLY, WHICH IS THE
-///         NARROWEST THIS FAMILY'S RECURRING DEFECT HAS EVER BEEN.</b> The two sibling reconcilers
+///         ⚠
+///         <b>
+///             IT REFUSES A BODY THE API ALREADY ACCEPTED — AND FOR ONE RELATION ONLY, WHICH IS THE
+///             NARROWEST THIS FAMILY'S RECURRING DEFECT HAS EVER BEEN.
+///         </b> The two sibling reconcilers
 ///         re-check a whole reserved-range table here because <c>ResourceSchema</c> compares one value
 ///         against constants. This one re-checks exactly <c>min &lt;= max</c> inside a port range:
 ///         everything else that can be wrong with a port list — a non-number, a <c>0</c>, a
@@ -24,8 +27,11 @@ namespace CyberCloud.Providers.Network;
 ///         reading as "still working on it" rather than as "your rule is backwards".
 ///     </para>
 ///     <para>
-///         ⚠ <b>NOTHING IS APPLIED BEFORE THE CHECK, AND ON THIS TYPE THAT IS A SECURITY PROPERTY
-///         RATHER THAN TIDINESS.</b> A partially-rendered security group is a perimeter with some of
+///         ⚠
+///         <b>
+///             NOTHING IS APPLIED BEFORE THE CHECK, AND ON THIS TYPE THAT IS A SECURITY PROPERTY
+///             RATHER THAN TIDINESS.
+///         </b> A partially-rendered security group is a perimeter with some of
 ///         its rules in it, and a tenant reading <c>Failed</c> would have no reason to believe
 ///         anything had been programmed at all.
 ///     </para>
@@ -103,12 +109,10 @@ public sealed class NetworkSecurityGroupReconciler(IClock clock) : IResourceReco
             .WithTenantId(context.Id.TenantId)
             .WithResourceId(context.Id)
             // ⚠ Cluster-scoped: no `InNamespace`. The namespace is inside `name`.
-            .WithKind(NetworkSecurityGroups.SecurityGroupKind)
-            .WithApiVersion(context.ApiVersion)
-            .ObjectJson(
-                NetworkSecurityGroups.SecurityGroupJson(context.Namespace, context.Id, context.Desired)
-            )
-            .ApplyAsync(cancellationToken);
+                .WithKind(NetworkSecurityGroups.SecurityGroupKind)
+                .WithApiVersion(context.ApiVersion)
+                .ObjectJson(NetworkSecurityGroups.SecurityGroupJson(context.Namespace, context.Id, context.Desired))
+                .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
             return ReconcileOutcome.FromFailure(applyError);
@@ -168,8 +172,11 @@ public sealed class NetworkSecurityGroupReconciler(IClock clock) : IResourceReco
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>DELETING A SECURITY GROUP OPENS EVERY PORT THAT CARRIED IT, AND NOTHING WARNS ABOUT
-    ///     THAT.</b> A port's security groups are named from its own annotation; removing the object
+    ///     ⚠
+    ///     <b>
+    ///         DELETING A SECURITY GROUP OPENS EVERY PORT THAT CARRIED IT, AND NOTHING WARNS ABOUT
+    ///         THAT.
+    ///     </b> A port's security groups are named from its own annotation; removing the object
     ///     removes the port group and its default-deny with it, so a workload that was behind this
     ///     perimeter is behind no perimeter rather than behind a closed one. It is the inverse of the
     ///     usual delete hazard — the danger is not an orphan, it is the absence of one.
@@ -195,9 +202,7 @@ public sealed class NetworkSecurityGroupReconciler(IClock clock) : IResourceReco
             .WithResourceId(context.Id)
             .WithKind(NetworkSecurityGroups.SecurityGroupKind)
             .WithApiVersion(context.ApiVersion)
-            .ObjectJson(
-                NetworkSecurityGroups.SecurityGroupJson(context.Namespace, context.Id, context.Desired)
-            )
+            .ObjectJson(NetworkSecurityGroups.SecurityGroupJson(context.Namespace, context.Id, context.Desired))
             .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -234,9 +239,7 @@ public sealed class NetworkSecurityGroupReconciler(IClock clock) : IResourceReco
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the security group is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the security group is absent" };
         }
 
         var found = read.GetValueOrThrow();

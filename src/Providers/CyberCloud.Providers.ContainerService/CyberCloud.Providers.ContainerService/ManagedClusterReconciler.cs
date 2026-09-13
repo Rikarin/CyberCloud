@@ -16,17 +16,26 @@ namespace CyberCloud.Providers.ContainerService;
 ///         Keeper before the installation that points at it, one level up.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS IS THE ONLY RECONCILER IN THE TREE WHOSE <c>Converged</c> READS A <c>status</c>,
-///         AND THE REASON IS THAT THE PRODUCT IS NOT THE OBJECTS.</b> Nine families decide convergence
+///         ⚠
+///         <b>
+///             THIS IS THE ONLY RECONCILER IN THE TREE WHOSE <c>Converged</c> READS A <c>status</c>,
+///             AND THE REASON IS THAT THE PRODUCT IS NOT THE OBJECTS.
+///         </b> Nine families decide convergence
 ///         from a spec read-back, which is right for them: what they applied <i>is</i> what the tenant
-///         bought, modulo an operator that will get there. What this applies is a <b>request for a
-///         cluster</b>. A <c>Cluster</c> whose spec reads back perfectly can be a tenant with no API
+///         bought, modulo an operator that will get there. What this applies is a
+///         <b>
+///             request for a
+///             cluster
+///         </b>. A <c>Cluster</c> whose spec reads back perfectly can be a tenant with no API
 ///         server, no nodes and no kubeconfig — docs/plan/09 § Kubernetes in Kubernetes budgets six to
 ///         nine minutes between those two states — so the read-back below is followed by
 ///         <see cref="ManagedClusters.Readiness" />, and the reason a control plane is not ready is
-///         reported through <see cref="IReconcileLog" /> as docs/plan/08 intends: <i>"those entries
-///         stream to operation-progress … which is what turns a four-minute cluster creation from a
-///         spinner into a story."</i>
+///         reported through <see cref="IReconcileLog" /> as docs/plan/08 intends:
+///         <i>
+///             "those entries
+///             stream to operation-progress … which is what turns a four-minute cluster creation from a
+///             spinner into a story."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>AND THE THIRD ANSWER — a status nobody has written — CONVERGES, WHICH IS A HOLE.</b>
@@ -65,8 +74,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>, and on these
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>, and on these
 ///         objects there is a second party with a legitimate claim: the Kamaji control-plane provider
 ///         <i>patches</i> <c>spec.controlPlaneEndpoint</c> onto the <c>KubevirtCluster</c> this
 ///         reconciler applies. Forcing would take that field back every pass and hand it to nobody.
@@ -292,7 +304,7 @@ public sealed class ManagedClusterReconciler(IClock clock) : IResourceReconciler
                 // out of passes waiting for a controller it does not drive. The read-back below is
                 // what makes Background safe: this returns Converged when the objects are GONE, not
                 // when the deletes were issued.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError)
                 && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -335,9 +347,7 @@ public sealed class ManagedClusterReconciler(IClock clock) : IResourceReconciler
         );
 
         if (found.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the Cluster is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the Cluster is absent" };
         }
 
         var read = found.GetValueOrThrow();

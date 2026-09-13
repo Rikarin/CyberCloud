@@ -19,8 +19,11 @@ namespace CyberCloud.Cli.VerbTree;
 ///         format it did not understand would mis-parse the flags rather than say so.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every collection and string here reads through <c>field ?? …</c>, and that is not
-///         belt-and-braces — it is required.</b> <c>CliEmitter § ToJson</c> omits every member that
+///         ⚠
+///         <b>
+///             Every collection and string here reads through <c>field ?? …</c>, and that is not
+///             belt-and-braces — it is required.
+///         </b> <c>CliEmitter § ToJson</c> omits every member that
 ///         would say <c>false</c>, <c>""</c> or <c>[]</c>, so "absent" is the common case rather than
 ///         the exception. A property initialiser does <b>not</b> survive source-generated
 ///         <c>System.Text.Json</c> deserialisation of an absent member: the first flag of the first
@@ -62,7 +65,8 @@ sealed class VerbTreeDocument {
 
     /// <summary>The top-level groups, keyed by the name a user types.</summary>
     [JsonPropertyName("groups")]
-    public IReadOnlyDictionary<string, VerbTreeGroup> Groups { get => field ?? Empty<VerbTreeGroup>.Map; init; } = Empty<VerbTreeGroup>.Map;
+    public IReadOnlyDictionary<string, VerbTreeGroup> Groups { get => field ?? Empty<VerbTreeGroup>.Map; init; } =
+        Empty<VerbTreeGroup>.Map;
 }
 
 /// <summary>The empty map a missing dictionary member reads as.</summary>
@@ -84,7 +88,8 @@ sealed class VerbTreeGroup {
 
     /// <summary>The resource types in the group, keyed by the name a user types.</summary>
     [JsonPropertyName("commands")]
-    public IReadOnlyDictionary<string, VerbTreeCommand> Commands { get => field ?? Empty<VerbTreeCommand>.Map; init; } = Empty<VerbTreeCommand>.Map;
+    public IReadOnlyDictionary<string, VerbTreeCommand> Commands { get => field ?? Empty<VerbTreeCommand>.Map; init; } =
+        Empty<VerbTreeCommand>.Map;
 }
 
 /// <summary>One resource type — <c>cyc sample widgets …</c>.</summary>
@@ -111,7 +116,8 @@ sealed class VerbTreeCommand {
 
     /// <summary>The verbs, keyed by the name a user types.</summary>
     [JsonPropertyName("verbs")]
-    public IReadOnlyDictionary<string, VerbTreeVerb> Verbs { get => field ?? Empty<VerbTreeVerb>.Map; init; } = Empty<VerbTreeVerb>.Map;
+    public IReadOnlyDictionary<string, VerbTreeVerb> Verbs { get => field ?? Empty<VerbTreeVerb>.Map; init; } =
+        Empty<VerbTreeVerb>.Map;
 
     /// <summary>
     ///     The short form, or <c>null</c>. ⚠ <b>Generated.</b> It comes from the resource type's own
@@ -148,7 +154,10 @@ sealed class VerbTreeVerb {
     [JsonPropertyName("apiVersion")]
     public string ApiVersion { get => field ?? string.Empty; init; } = string.Empty;
 
-    /// <summary>Whether the platform answers <c>202</c> and the host polls — docs/plan/10 § Long-running operations, over HTTP.</summary>
+    /// <summary>
+    ///     Whether the platform answers <c>202</c> and the host polls — docs/plan/10 § Long-running operations, over
+    ///     HTTP.
+    /// </summary>
     [JsonPropertyName("longRunning")]
     public bool LongRunning { get; init; }
 
@@ -241,11 +250,17 @@ sealed class VerbTreeFlag {
     ///     The <c>{…}</c> placeholder in the verb's own <c>path</c> this flag fills, or <c>null</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The emitter has declared this since 2026-08-12 and this reader did not have it, which
-    ///     is why five commands could not build a URL at all.</b> <c>ResourceVerb</c> filled four
+    ///     ⚠
+    ///     <b>
+    ///         The emitter has declared this since 2026-08-12 and this reader did not have it, which
+    ///         is why five commands could not build a URL at all.
+    ///     </b> <c>ResourceVerb</c> filled four
     ///     placeholders from a hard-coded table, so <c>cyc network virtual-networks-subnets show</c>
-    ///     reached <c>{virtualNetworksName}</c> and answered <i>"which this build of cyc does not know
-    ///     how to fill. Upgrade cyc."</i> — advice that could not have helped, because no newer build
+    ///     reached <c>{virtualNetworksName}</c> and answered
+    ///     <i>
+    ///         "which this build of cyc does not know
+    ///         how to fill. Upgrade cyc."
+    ///     </i> — advice that could not have helped, because no newer build
     ///     would have known either. Read it here and the table shrinks to what a <i>profile</i> can
     ///     also supply.
     /// </remarks>

@@ -11,8 +11,11 @@ namespace CyberCloud.Cli.Tests;
 ///         <c>BearerTokenHandler</c> attaches <c>Authorization</c> inside the SDK's pipeline, below
 ///         anything the CLI can see, and the SDK owns the keychain-backed cache. So the tests below
 ///         assert two things a reviewer can check: a sentinel token never appears in any stream, and
-///         the CLI writes no cache of its own — docs/plan/21 § Decisions: <i>"Never a plaintext file —
-///         that is how CI credentials leak into container images."</i>
+///         the CLI writes no cache of its own — docs/plan/21 § Decisions:
+///         <i>
+///             "Never a plaintext file —
+///             that is how CI credentials leak into container images."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ The sentinel is the token <see cref="TestHost" />'s credential hands out, so a leak is a
@@ -22,13 +25,26 @@ namespace CyberCloud.Cli.Tests;
 public sealed class NoCredentialLeakTests {
     [Fact]
     public async Task VerboseNeverPrintsTheToken() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) =>
-            Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, _) =>
+                Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")
+            )
+        );
 
         var code = await host.RunAsync(
-            "sample", "widgets", "show",
-            "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t",
-            "--verbose");
+            "sample",
+            "widgets",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--verbose"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
 
@@ -40,37 +56,68 @@ public sealed class NoCredentialLeakTests {
 
     [Fact]
     public async Task VerboseNeverPrintsTheTokenWhenTheRequestFails() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) =>
-            Responses.Error(HttpStatusCode.Unauthorized, "Unauthorized", "The token has expired.")));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, _) =>
+                Responses.Error(HttpStatusCode.Unauthorized, "Unauthorized", "The token has expired.")
+            )
+        );
 
         await host.RunAsync(
-            "sample", "widgets", "show",
-            "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t",
-            "--verbose");
+            "sample",
+            "widgets",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--verbose"
+        );
 
         host.Stderr.ShouldNotContain(TestHost.FixedToken);
     }
 
     [Fact]
     public async Task NoTokenCacheIsWrittenByTheCli() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) =>
-            Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, _) =>
+                Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")
+            )
+        );
 
         await host.RunAsync(
-            "sample", "widgets", "show",
-            "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t");
+            "sample",
+            "widgets",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t"
+        );
 
         // ⚠ The state directory is the CLI's whole footprint on disk. The only file a command may
         // leave there is `config`, which CycConfigFile refuses to put a credential in, and the
         // update-check stamp.
         var written = Directory.Exists(host.StateDirectory)
-            ? Directory.GetFiles(host.StateDirectory, "*", SearchOption.AllDirectories).Select(Path.GetFileName).ToList()
+            ? Directory.GetFiles(host.StateDirectory, "*", SearchOption.AllDirectories)
+                .Select(Path.GetFileName)
+                .ToList()
             : [];
 
         written.ShouldAllBe(name => name == "config" || name == "update-check");
 
-        foreach (var file in Directory.GetFiles(host.StateDirectory, "*", SearchOption.AllDirectories))
-            (await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken)).ShouldNotContain(TestHost.FixedToken);
+        foreach (var file in Directory.GetFiles(host.StateDirectory, "*", SearchOption.AllDirectories)) {
+            (await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken)).ShouldNotContain(
+                TestHost.FixedToken
+            );
+        }
     }
 
     [Fact]
@@ -85,7 +132,8 @@ public sealed class NoCredentialLeakTests {
 
         // The ordinary settings still work — the guard is about credential-shaped names, not about
         // making the file read-only.
-        file.Set("default", "endpoint", "https://api.lab.internal/").Value("default", "endpoint")
+        file.Set("default", "endpoint", "https://api.lab.internal/")
+            .Value("default", "endpoint")
             .ShouldBe("https://api.lab.internal/");
     }
 
@@ -121,7 +169,13 @@ public sealed class NoCredentialLeakTests {
     public async Task ARestCallCannotSetItsOwnAuthorizationHeader() {
         using var host = TestHost.Create(new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}")));
 
-        var code = await host.RunAsync("rest", "--uri", "/tenants/t/subscriptions", "--header", "Authorization=Bearer x");
+        var code = await host.RunAsync(
+            "rest",
+            "--uri",
+            "/tenants/t/subscriptions",
+            "--header",
+            "Authorization=Bearer x"
+        );
 
         code.ShouldBe((int)ExitCode.Usage);
         host.Stderr.ShouldContain("authenticated by the SDK's pipeline");

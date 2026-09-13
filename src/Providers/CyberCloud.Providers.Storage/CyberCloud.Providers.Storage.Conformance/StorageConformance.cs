@@ -14,15 +14,21 @@ namespace CyberCloud.Providers.Storage.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One case object and two class declarations, which is the fifth time that number has
-///         held.</b> What this one adds is the other end of the range: the Kafka and NATS cases proved
+///         ⚠
+///         <b>
+///             One case object and two class declarations, which is the fifth time that number has
+///             held.
+///         </b> What this one adds is the other end of the range: the Kafka and NATS cases proved
 ///         the suite could host a provider rendering five objects across three API groups; this one
 ///         renders <b>one</b>, and it needed no change either. Between them the shape is now bounded
 ///         on both sides rather than only above.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.Objects" /> is a <c>Seaweed</c> and a <c>Secret</c>,
-///         and stopping there is not an under-declaration.</b> The masters, the volume servers, the
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.Objects" /> is a <c>Seaweed</c> and a <c>Secret</c>,
+///             and stopping there is not an under-declaration.
+///         </b> The masters, the volume servers, the
 ///         filer, the S3 gateway, their Services and — when monitoring is on — four
 ///         <c>ServiceMonitor</c>s are all created by the <i>operator</i>, and this suite asserts what
 ///         the <i>reconciler</i> applied. Listing them here would make the suite fail against every
@@ -46,8 +52,11 @@ namespace CyberCloud.Providers.Storage.Conformance;
 ///         implements mint-once for real, so the idempotence assertions still measure the reconciler.
 ///     </para>
 ///     <para>
-///         ⚠ <b>CORRECTED 2026-08-12 — docs/plan/15's <c>buckets</c> child type IS declared now, and
-///         the claim this paragraph used to make was wrong within the hour.</b> It said the blocker
+///         ⚠
+///         <b>
+///             CORRECTED 2026-08-12 — docs/plan/15's <c>buckets</c> child type IS declared now, and
+///             the claim this paragraph used to make was wrong within the hour.
+///         </b> It said the blocker
 ///         was this file: that <see cref="ProviderConformanceCase" /> was single-type and that both
 ///         <c>ProviderTestCluster.Address</c> and <c>ClusterConformanceHarness.Address</c> built a
 ///         <see cref="ResourceId" /> with no <c>ParentNames</c>, so a depth-2 <c>Case.Type</c> threw
@@ -121,8 +130,11 @@ public sealed class StorageCase : IProviderCaseSource {
 ///         nothing else about it changes.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The count is the same as the parent's and the APPLICABLE count is not, which is the
-///         point of putting a child in the tree at all.</b>
+///         ⚠
+///         <b>
+///             The count is the same as the parent's and the APPLICABLE count is not, which is the
+///             point of putting a child in the tree at all.
+///         </b>
 ///         <c>CreatingUnderAParentThatDoesNotExistIsTheSame404AsAnAbsentResource</c> self-skips at
 ///         <see cref="ResourceTypeName.Depth" /> 1 — a top-level type's parent is its resource group
 ///         and there is no parent-existence check to fire — so <see cref="StorageCase" /> runs 28 and
@@ -219,7 +231,7 @@ public sealed class StorageAccountConformance(ProviderTestCluster<StorageCase> c
 /// <param name="cluster">The harness.</param>
 public sealed class StorageBucketConformance(ProviderTestCluster<StorageBucketCase> cluster)
     : ProviderConformanceTests<StorageBucketCase>(cluster),
-        IClassFixture<ProviderTestCluster<StorageBucketCase>>;
+    IClassFixture<ProviderTestCluster<StorageBucketCase>>;
 
 /// <summary>The container-backed half, skipped loudly, against the managed object-storage provider.</summary>
 public sealed class StorageClusterBackedConformance() : ClusterBackedConformanceTests(StorageCase.ProviderCase);
@@ -290,14 +302,11 @@ public sealed class StorageSuiteShapeTests {
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>
-    static ImmutableArray<string> RunnableFactsOf(Type suite) =>
-        [
-            .. suite
-                .GetMethods(
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance
-                )
-                .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-                .Select(x => x.Name)
-                .OrderBy(x => x, StringComparer.Ordinal)
-        ];
+    static ImmutableArray<string> RunnableFactsOf(Type suite) => [
+        .. suite
+            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(x => x.Name)
+            .OrderBy(x => x, StringComparer.Ordinal)
+    ];
 }

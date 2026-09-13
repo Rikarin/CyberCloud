@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.DBforMySQL.Tests;
 /// <remarks>
 ///     <para>
 ///         docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row; docs/plan/12
-///         § Cross-cutting decisions, Credentials: <i>"Generated at create, written to the tenant's
-///         Vault path, never in grain state."</i> <c>CC1005</c> is the compile-time half and polices
+///         § Cross-cutting decisions, Credentials:
+///         <i>
+///             "Generated at create, written to the tenant's
+///             Vault path, never in grain state."
+///         </i> <c>CC1005</c> is the compile-time half and polices
 ///         <c>[Id]</c>-annotated members named <c>*Password</c>/<c>*Secret</c>/<c>*Token</c>/
 ///         <c>*Key</c>; nothing in this provider declares one, and a <c>[SuppressMessage]</c> here
 ///         would be a failure rather than a fix.
@@ -24,8 +27,11 @@ namespace CyberCloud.Providers.DBforMySQL.Tests;
 ///         substitutes a <c>SecretRef</c> before the grain persists the body.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What is different from BOTH neighbours is what happens when the value is missing, and
-///         it is a difference this provider CHOSE rather than inherited.</b> CloudNativePG generates
+///         ⚠
+///         <b>
+///             What is different from BOTH neighbours is what happens when the value is missing, and
+///             it is a difference this provider CHOSE rather than inherited.
+///         </b> CloudNativePG generates
 ///         its own password when the referenced <c>Secret</c> is absent; spotahome generates nothing,
 ///         so a Valkey cache does not come up. mariadb-operator does neither by itself — it generates
 ///         only when the reference says <c>generate: true</c>, and that field's own default is
@@ -42,11 +48,12 @@ public sealed class MariaDbSecretTests {
             );
 
             foreach (var word in new[] { "password", "secret", "token", "key" }) {
-                property.Name.Contains(word, StringComparison.OrdinalIgnoreCase).ShouldBeFalse(
-                    $"'{property.JsonPointer}' is named like a credential. CC1005 bans the shape on "
-                    + "[Id]-annotated members; a JSON pointer is the same hazard with no analyzer "
-                    + "watching it."
-                );
+                property.Name.Contains(word, StringComparison.OrdinalIgnoreCase)
+                    .ShouldBeFalse(
+                        $"'{property.JsonPointer}' is named like a credential. CC1005 bans the shape on "
+                        + "[Id]-annotated members; a JSON pointer is the same hazard with no analyzer "
+                        + "watching it."
+                    );
             }
         }
     }
@@ -116,14 +123,14 @@ public sealed class MariaDbSecretTests {
         var spec = JsonNode.Parse(MariaDbServers.ServerJson("generated", desired.RootElement))!["spec"]!
             .AsObject();
 
-        spec["rootPasswordSecretKeyRef"]!["generate"]!.GetValue<bool>().ShouldBeTrue(
-            "the root credential reference does not ask the operator to generate. Its default is "
-            + "false, and nothing in this platform writes the Secret, so the server never starts."
-        );
+        spec["rootPasswordSecretKeyRef"]!["generate"]!.GetValue<bool>()
+            .ShouldBeTrue(
+                "the root credential reference does not ask the operator to generate. Its default is "
+                + "false, and nothing in this platform writes the Secret, so the server never starts."
+            );
 
-        spec["passwordSecretKeyRef"]!["generate"]!.GetValue<bool>().ShouldBeTrue(
-            "the application credential reference does not ask the operator to generate."
-        );
+        spec["passwordSecretKeyRef"]!["generate"]!.GetValue<bool>()
+            .ShouldBeTrue("the application credential reference does not ask the operator to generate.");
     }
 
     [Fact]

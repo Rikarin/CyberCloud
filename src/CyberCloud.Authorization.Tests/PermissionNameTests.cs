@@ -182,29 +182,32 @@ public sealed class PermissionNameTests {
             .SelectMany(SafeTypes)
             .Where(include)
             .SelectMany(type => type
-                .GetMembers(
-                    BindingFlags.Public
-                    | BindingFlags.NonPublic
-                    | BindingFlags.Instance
-                    | BindingFlags.Static
-                )
-                .SelectMany(member => member
-                    .GetCustomAttributes<RequiresPermissionAttribute>()
-                    .Select(attribute => (
-                        attribute.ObjectType,
-                        attribute.Permission,
-                        Where: string.Create(CultureInfo.InvariantCulture, $"{type.FullName}.{member.Name}"))
+                    .GetMembers(
+                        BindingFlags.Public
+                        | BindingFlags.NonPublic
+                        | BindingFlags.Instance
+                        | BindingFlags.Static
                     )
-                )
-                .Concat(
-                    type
-                        .GetCustomAttributes<RequiresPermissionAttribute>()
-                        .Select(attribute => (
-                            attribute.ObjectType,
-                            attribute.Permission,
-                            Where: type.FullName ?? type.Name)
-                        )
-                )
+                    .SelectMany(member => member
+                            .GetCustomAttributes<RequiresPermissionAttribute>()
+                            .Select(attribute => (
+                                    attribute.ObjectType,
+                                    attribute.Permission,
+                                    Where: string.Create(
+                                        CultureInfo.InvariantCulture,
+                                        $"{type.FullName}.{member.Name}"
+                                    ))
+                            )
+                    )
+                    .Concat(
+                        type
+                            .GetCustomAttributes<RequiresPermissionAttribute>()
+                            .Select(attribute => (
+                                    attribute.ObjectType,
+                                    attribute.Permission,
+                                    Where: type.FullName ?? type.Name)
+                            )
+                    )
             );
 
     static IEnumerable<Type> SafeTypes(Assembly assembly) {

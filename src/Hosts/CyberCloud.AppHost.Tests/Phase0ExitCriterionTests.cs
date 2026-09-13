@@ -91,7 +91,7 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology) {
 
         var rows = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
 
-        foreach (var shard in (string[]) [
+        foreach (var shard in (string[])[
                      CyberCloudResources.ShardA,
                      CyberCloudResources.ShardB,
                      CyberCloudResources.PlatformShard
@@ -253,8 +253,11 @@ static class TestPaths {
     ///     The walk for <c>CyberCloud.slnx</c>, deferred until somebody asks for its answer.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A <see cref="Lazy{T}" /> rather than <c>= RepositoryRoot()</c>, and issue #82 is why
-    ///     the difference matters to a class that is not this one.</b> A static property initialiser
+    ///     ⚠
+    ///     <b>
+    ///         A <see cref="Lazy{T}" /> rather than <c>= RepositoryRoot()</c>, and issue #82 is why
+    ///         the difference matters to a class that is not this one.
+    ///     </b> A static property initialiser
     ///     runs in the type's static constructor, so with the walk written that way, touching ANY
     ///     member of <c>TestPaths</c> — <see cref="AppHostDirectory" /> included — hit the disk. That
     ///     made "does initialising my class reach the repository?" unanswerable for
@@ -280,8 +283,11 @@ static class TestPaths {
 
     /// <summary>Whether anything in this assembly has resolved <see cref="Repository" /> yet.</summary>
     /// <remarks>
-    ///     ⚠ <b>For <c>ClusterBackedGatingTests</c>'s issue #82 guard, and it is deliberately a fact
-    ///     about the whole assembly rather than about one class</b> — a <c>Lazy</c> resolves once and
+    ///     ⚠
+    ///     <b>
+    ///         For <c>ClusterBackedGatingTests</c>'s issue #82 guard, and it is deliberately a fact
+    ///         about the whole assembly rather than about one class
+    ///     </b> — a <c>Lazy</c> resolves once and
     ///     cannot say who forced it. That is why the guard reads this twice and compares, instead of
     ///     asserting it is false: by the time a class initialises, another test class in this
     ///     assembly may already have resolved the root, and an assertion on the bare flag would pass
@@ -301,8 +307,7 @@ static class TestPaths {
     ///     <see cref="LazyRepository" />; what repeats is a <c>Path.Combine</c> of four strings, which
     ///     is not worth a second <c>Lazy</c> to avoid.
     /// </remarks>
-    public static string AppHostDirectory =>
-        Path.Combine(Repository, "src", "Hosts", "CyberCloud.AppHost");
+    public static string AppHostDirectory => Path.Combine(Repository, "src", "Hosts", "CyberCloud.AppHost");
 
     static string RepositoryRoot() {
         var directory = new DirectoryInfo(Path.GetDirectoryName(typeof(TestPaths).Assembly.Location)!);

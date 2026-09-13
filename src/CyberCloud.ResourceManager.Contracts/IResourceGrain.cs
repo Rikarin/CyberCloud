@@ -6,9 +6,12 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///     What step 8 writes: a desired body at an api-version, and who wrote it.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><see cref="Verb" /> is carried into the grain rather than resolved in the manager, and
-///     that is what makes <c>PUT</c> and <c>PATCH</c> different at the one place the difference
-///     matters.</b> A <c>PUT</c> replaces the version's slice of the superset outright; a
+///     ⚠
+///     <b>
+///         <see cref="Verb" /> is carried into the grain rather than resolved in the manager, and
+///         that is what makes <c>PUT</c> and <c>PATCH</c> different at the one place the difference
+///         matters.
+///     </b> A <c>PUT</c> replaces the version's slice of the superset outright; a
 ///     <c>PATCH</c> merges into it. Deciding that in the manager and handing the grain a finished
 ///     body would work, and would put the merge on the far side of the etag check — so two concurrent
 ///     patches could each read the same base, merge, and one would win silently. The grain is the
@@ -106,8 +109,11 @@ public sealed record DesiredSubmission {
 ///         first (docs/plan/06 § Two-phase create).
 ///     </para>
 ///     <para>
-///         ⚠ <b>This grain never provisions inline.</b> docs/plan/08 § The reconcile loop: <i>"The
-///         resource grain records intent and returns; a reminder drives convergence."</i>
+///         ⚠ <b>This grain never provisions inline.</b> docs/plan/08 § The reconcile loop:
+///         <i>
+///             "The
+///             resource grain records intent and returns; a reminder drives convergence."
+///         </i>
 ///         <see cref="SubmitDesiredAsync" /> writes and returns; the work happens in the operation
 ///         grain's <c>DriveAsync</c>.
 ///     </para>
@@ -134,9 +140,12 @@ public interface IResourceGrain : IGrainWithStringKey {
     /// </returns>
     /// <remarks>
     ///     ⚠ <b>An identical <c>PUT</c> is a no-op and reports success.</b>
-    ///     docs/plan/06 § Two-phase create: <i>"the caller retries the <c>PUT</c> — which is idempotent
-    ///     because <c>PUT</c> with the same body on an existing resource is a no-op, which is exactly
-    ///     why the API is <c>PUT</c> and not <c>POST</c>."</i> "Identical" means the projected slice
+    ///     docs/plan/06 § Two-phase create:
+    ///     <i>
+    ///         "the caller retries the <c>PUT</c> — which is idempotent
+    ///         because <c>PUT</c> with the same body on an existing resource is a no-op, which is exactly
+    ///         why the API is <c>PUT</c> and not <c>POST</c>."
+    ///     </i> "Identical" means the projected slice
     ///     for that api-version is byte-equal after canonical ordering, so a body whose properties
     ///     arrived in a different order is still a no-op. The returned snapshot's
     ///     <c>ProvisioningState</c> and <c>Etag</c> are unchanged, which is how a caller tells.
@@ -170,8 +179,11 @@ public interface IResourceGrain : IGrainWithStringKey {
     ///     driving the resource.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>The single-writer guard is the same one <see cref="SubmitDesiredAsync" /> applies, and
-    ///     it is here because docs/plan/03 § Providers requires it.</b> That section's conformance list
+    ///     ⚠
+    ///     <b>
+    ///         The single-writer guard is the same one <see cref="SubmitDesiredAsync" /> applies, and
+    ///         it is here because docs/plan/03 § Providers requires it.
+    ///     </b> That section's conformance list
     ///     includes <i>"delete while an operation is running → 409"</i>. A delete that raced a live
     ///     create would tear down objects the create is still applying, and would leave the create's
     ///     quota lease and index claim owned by an operation whose resource is on its way out. A
@@ -202,15 +214,21 @@ public interface IResourceGrain : IGrainWithStringKey {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A restore is a write, and this is the only member that can start one, because
-    ///         <see cref="SubmitDesiredAsync" /> takes a body and a restore has none.</b> The whole
+    ///         ⚠
+    ///         <b>
+    ///             A restore is a write, and this is the only member that can start one, because
+    ///             <see cref="SubmitDesiredAsync" /> takes a body and a restore has none.
+    ///         </b> The whole
     ///         point of the recovery window is that the tenant supplies nothing: the body the delete
     ///         did not throw away is the body that comes back, byte for byte, so re-submitting it
     ///         through the write path would be the platform inventing a caller.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>Updating</c> rather than <c>Creating</c>, and the resource never stops
-    ///         existing.</b> <c>Creating</c> is what a name that held nothing becomes; this name held
+    ///         ⚠
+    ///         <b>
+    ///             <c>Updating</c> rather than <c>Creating</c>, and the resource never stops
+    ///             existing.
+    ///         </b> <c>Creating</c> is what a name that held nothing becomes; this name held
     ///         a resource the whole time — that is what the window <i>is</i> — and its
     ///         <c>CreatedAt</c>, its version history and its etag lineage are all continuous through
     ///         it. A restore that reported <c>Creating</c> would tell a tenant their data had a new

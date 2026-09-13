@@ -7,9 +7,12 @@ namespace CyberCloud.Identity.SignIn;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>docs/plan/11 § Auditing: "no email, name or IP in a log <i>message</i>. They go in
-///         structured fields, which are subject to the retention and redaction policy; a message
-///         string is not."</b> That rule is easy to state and very easy to break by accident — an
+///         ⚠
+///         <b>
+///             docs/plan/11 § Auditing: "no email, name or IP in a log <i>message</i>. They go in
+///             structured fields, which are subject to the retention and redaction policy; a message
+///             string is not."
+///         </b> That rule is easy to state and very easy to break by accident — an
 ///         interpolated string in a <c>LogWarning</c> looks identical at the call site to a message
 ///         template, and the difference is whether the address ends up in a field a redaction policy
 ///         can reach or baked into a line nobody can un-bake.
@@ -99,7 +102,8 @@ public static partial class IdentityLog {
     [LoggerMessage(
         EventId = 1103,
         Level = LogLevel.Warning,
-        Message = "Refresh reuse detected on session {SessionId} for user {UserId} in tenant {TenantId}. The session and its entire chain are revoked."
+        Message =
+        "Refresh reuse detected on session {SessionId} for user {UserId} in tenant {TenantId}. The session and its entire chain are revoked."
     )]
     public static partial void RefreshReuseDetected(
         ILogger logger,
@@ -140,7 +144,8 @@ public static partial class IdentityLog {
     [LoggerMessage(
         EventId = 1105,
         Level = LogLevel.Information,
-        Message = "A request named an address with no account: identifier {IdentifierDigest} in tenant {TenantId}. The caller was told nothing."
+        Message =
+        "A request named an address with no account: identifier {IdentifierDigest} in tenant {TenantId}. The caller was told nothing."
     )]
     public static partial void UnknownAddressProbed(ILogger logger, Guid tenantId, string identifierDigest);
 
@@ -156,7 +161,8 @@ public static partial class IdentityLog {
     [LoggerMessage(
         EventId = 1106,
         Level = LogLevel.Information,
-        Message = "A self-serve sign-up was requested in tenant {TenantId}. The caller was told nothing about the address."
+        Message =
+        "A self-serve sign-up was requested in tenant {TenantId}. The caller was told nothing about the address."
     )]
     public static partial void SignUpRequested(ILogger logger, Guid tenantId);
 
@@ -228,7 +234,8 @@ public static partial class IdentityLog {
     [LoggerMessage(
         EventId = 1110,
         Level = LogLevel.Warning,
-        Message = "A recovery code was burnt for user {UserId} in tenant {TenantId}. The session is now fully authenticated."
+        Message =
+        "A recovery code was burnt for user {UserId} in tenant {TenantId}. The session is now fully authenticated."
     )]
     public static partial void RecoveryCodeBurnt(ILogger logger, Guid tenantId, Guid userId);
 
@@ -266,8 +273,11 @@ public static partial class IdentityLog {
     /// <param name="reason">
     ///     The internal reason, which never reaches the caller — the per-user issue cap, an
     ///     unenrolled channel, or <c>UnavailableOtpDelivery</c>'s sentence naming the missing
-    ///     <c>AddCommunicationOtpDelivery</c> call. ⚠ <b>This is the one line an operator whose
-    ///     silo is unwired will actually see</b>, so it carries the message verbatim.
+    ///     <c>AddCommunicationOtpDelivery</c> call. ⚠
+    ///     <b>
+    ///         This is the one line an operator whose
+    ///         silo is unwired will actually see
+    ///     </b>, so it carries the message verbatim.
     /// </param>
     [LoggerMessage(
         EventId = 1112,

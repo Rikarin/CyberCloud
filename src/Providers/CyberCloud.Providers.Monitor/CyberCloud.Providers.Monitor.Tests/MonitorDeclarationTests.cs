@@ -138,10 +138,10 @@ public sealed class MonitorDeclarationTests {
         // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
-            ProviderRegistry.Build([new MonitorProvider()]).Types.Select(
-                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
-            )
-        ).ShouldBeEmpty();
+            ProviderRegistry.Build([new MonitorProvider()])
+                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        )
+            .ShouldBeEmpty();
 
         // ⚠ THE HALF THE DERIVED CHECK CANNOT MAKE, KEPT FROM THE TEST THAT HELD THE LISTS. Uniqueness
         // says the short name reaches this type; it does not say the short name is the word a person
@@ -222,16 +222,14 @@ public sealed class MonitorDeclarationTests {
         // the resource's own id — MonitorWorkspaces.AccountId and .Database — and neither appears in
         // the schema at all, so there is nothing for the write path to have to refuse.
         foreach (var forbidden in new[] {
-                     "/properties/accountId",
-                     "/properties/database",
-                     "/properties/ingestKey",
-                     "/properties/dataSources"
+                     "/properties/accountId", "/properties/database", "/properties/ingestKey", "/properties/dataSources"
                  }) {
-            MonitorWorkspaces.Schema2026.Declares(forbidden).ShouldBeFalse(
-                $"'{forbidden}' is a body property. A tenancy coordinate a tenant can choose is "
-                + "another tenant's data; an endpoint a tenant can set is a datasource pointing "
-                + "somewhere the platform does not serve."
-            );
+            MonitorWorkspaces.Schema2026.Declares(forbidden)
+                .ShouldBeFalse(
+                    $"'{forbidden}' is a body property. A tenancy coordinate a tenant can choose is "
+                    + "another tenant's data; an endpoint a tenant can set is a datasource pointing "
+                    + "somewhere the platform does not serve."
+                );
         }
     }
 }

@@ -12,7 +12,9 @@ namespace CyberCloud.Sdk.Tests;
 public sealed class TestTimeProvider : TimeProvider {
     DateTimeOffset now;
 
-    public TestTimeProvider(DateTimeOffset start) => now = start;
+    public TestTimeProvider(DateTimeOffset start) {
+        now = start;
+    }
 
     public override DateTimeOffset GetUtcNow() => now;
 

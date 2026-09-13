@@ -17,8 +17,11 @@ namespace CyberCloud.ResourceManager.Actions;
 ///         silent no-op. Nothing new was invented for actions because nothing needed to be.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE RESPONSE IS VALIDATED HERE AND NOT TRUSTED, WHICH IS THE ONE THING THIS ADDS OVER
-///         THE RECONCILE PATH.</b> A provider declares <c>ActionRegistration.Response</c> and that
+///         ⚠
+///         <b>
+///             THE RESPONSE IS VALIDATED HERE AND NOT TRUSTED, WHICH IS THE ONE THING THIS ADDS OVER
+///             THE RECONCILE PATH.
+///         </b> A provider declares <c>ActionRegistration.Response</c> and that
 ///         schema reaches the OpenAPI document, the generated SDK, the CLI's output shape and the
 ///         portal's form. A handler returning a different shape makes all four a lie, and no compiler
 ///         catches it: the handler returns JSON text and the schema is data. So the dispatcher runs
@@ -27,8 +30,11 @@ namespace CyberCloud.ResourceManager.Actions;
 ///         carrying something the caller's generated client cannot deserialize.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An action with no declared response is not validated, and that is not the same as
-///         validating against nothing.</b> <see langword="null" /> means the provider has not said
+///         ⚠
+///         <b>
+///             An action with no declared response is not validated, and that is not the same as
+///             validating against nothing.
+///         </b> <see langword="null" /> means the provider has not said
 ///         what the action returns — see <see cref="ActionRegistration.Response" /> — and checking
 ///         against <see cref="ResourceSchema.Empty" /> would refuse every action that returns
 ///         anything at all.
@@ -144,8 +150,8 @@ public sealed class ActionDispatcher(
         Result<string> invoked;
         try {
             invoked = await handler.InvokeAsync(context, budget.Token);
-        }
-        catch (OperationCanceledException) when (budget.IsCancellationRequested && !cancellationToken.IsCancellationRequested) {
+        } catch (OperationCanceledException) when (budget.IsCancellationRequested
+                                                   && !cancellationToken.IsCancellationRequested) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
                 $"'{handler.GetType().Name}' did not return within "
@@ -185,8 +191,7 @@ public sealed class ActionDispatcher(
         JsonDocument parsed;
         try {
             parsed = JsonDocument.Parse(string.IsNullOrWhiteSpace(response) ? "{}" : response);
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
                 $"'{handler.GetType().Name}' returned something that is not JSON for "
@@ -214,8 +219,7 @@ public sealed class ActionDispatcher(
         try {
             using var document = JsonDocument.Parse(json);
             return document.RootElement.Clone();
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             using var fallback = JsonDocument.Parse("{}");
             return fallback.RootElement.Clone();
         }

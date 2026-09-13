@@ -47,8 +47,11 @@ public sealed class HostCompositionTests {
     ///     The fifteen provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
-    ///     fifteen.</b> The list is what the test reads and the list was right; the number beside it
+    ///     ⚠
+    ///     <b>
+    ///         The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
+    ///         fifteen.
+    ///     </b> The list is what the test reads and the list was right; the number beside it
     ///     was three behind, which is the ordinary fate of a count written next to the thing it
     ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
     ///     a glance whether an entry went missing, and that is the failure this file exists for.
@@ -138,9 +141,7 @@ public sealed class HostCompositionTests {
 
         using var provider = services.BuildServiceProvider();
 
-        var thrown = Should.Throw<InvalidOperationException>(
-            provider.GetRequiredService<IProviderRegistry>
-        );
+        var thrown = Should.Throw<InvalidOperationException>(provider.GetRequiredService<IProviderRegistry>);
 
         thrown.Message.ShouldContain("No IResourceProvider is registered");
     }
@@ -182,8 +183,7 @@ public sealed class HostCompositionTests {
 
         return;
 
-        static string[] Types(WebApplication host) =>
-        [
+        static string[] Types(WebApplication host) => [
             .. host.Services
                 .GetRequiredService<IProviderRegistry>()
                 .Types
@@ -199,8 +199,10 @@ public sealed class HostCompositionTests {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         <b>A <c>ProjectReference</c> that satisfies the compiler and never reaches Orleans is
-    ///         the same defect with more steps.</b> Orleans discovers grains by scanning referenced
+    ///         <b>
+    ///             A <c>ProjectReference</c> that satisfies the compiler and never reaches Orleans is
+    ///             the same defect with more steps.
+    ///         </b> Orleans discovers grains by scanning referenced
     ///         assemblies, and what it scans is decided by the SDK per reference — so "the host builds"
     ///         proves the assembly is on disk and proves nothing about whether a silo would activate
     ///         <c>ResourceGrain</c>. This reads <c>GrainTypeOptions</c>, which is what the manifest is
@@ -275,8 +277,10 @@ public sealed class HostCompositionTests {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         <b>Every other test in this file passed while <c>CyberCloud.Silo.Host</c> could not
-    ///         start at all.</b> Loading the twelve provider modules brings
+    ///         <b>
+    ///             Every other test in this file passed while <c>CyberCloud.Silo.Host</c> could not
+    ///             start at all.
+    ///         </b> Loading the twelve provider modules brings
     ///         <c>AbpDddApplicationModule</c>'s graph in, and with it enough of ASP.NET Core's
     ///         authorization surface that <c>WebApplication</c> inserts <c>UseAuthorization</c> into
     ///         the pipeline by itself. That middleware then looks for the marker only
@@ -285,14 +289,20 @@ public sealed class HostCompositionTests {
     ///         <c>Build()</c> was green against a silo that died on every launch.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>CyberCloud.AppHost.Tests</c> was the only suite in the repository that caught
-    ///         it</b>, because it was the only one that starts the real silo — and it caught it as nine
+    ///         ⚠
+    ///         <b>
+    ///             <c>CyberCloud.AppHost.Tests</c> was the only suite in the repository that caught
+    ///             it
+    ///         </b>, because it was the only one that starts the real silo — and it caught it as nine
     ///         fixtures timing out after ten minutes, which names nothing. This test is the cheap
     ///         version: no containers, no Aspire, and the failure is the exception itself.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The gateway is started against the silo, in that order, because it is an Orleans
-    ///         client.</b> Started alone it never reaches its web pipeline at all — the cluster client's
+    ///         ⚠
+    ///         <b>
+    ///             The gateway is started against the silo, in that order, because it is an Orleans
+    ///             client.
+    ///         </b> Started alone it never reaches its web pipeline at all — the cluster client's
     ///         hosted service exhausts its connection retries and the process dies with a
     ///         <c>TaskCanceledException</c> from <c>OutsideRuntimeClient</c>, which would make this test
     ///         fail for a reason that has nothing to do with what it is asserting.
@@ -391,8 +401,10 @@ public sealed class HostCompositionTests {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         <b>Reading a kubeconfig off the filesystem is a capability, and this is the assertion
-    ///         that it stays opt-in.</b> <c>SiloComposition</c> § <c>ConfigureKubeconfigResolver</c>
+    ///         <b>
+    ///             Reading a kubeconfig off the filesystem is a capability, and this is the assertion
+    ///             that it stays opt-in.
+    ///         </b> <c>SiloComposition</c> § <c>ConfigureKubeconfigResolver</c>
     ///         registers a resolver only when <c>CyberCloud:Silo:KubeconfigRoot</c> names a directory,
     ///         and <c>CyberCloud.Silo.Host</c>'s shipped <c>appsettings.json</c> sets no such key — so
     ///         a deployed silo keeps <c>KubeApiClientFactory</c>'s refusal until
@@ -426,10 +438,11 @@ public sealed class HostCompositionTests {
                 TestContext.Current.CancellationToken
             );
 
-        result.TryGetError(out var error).ShouldBeTrue(
-            "a silo with no CyberCloud:Silo:KubeconfigRoot connected to a cluster using a kubeconfig "
-            + "path it was never given a root for."
-        );
+        result.TryGetError(out var error)
+            .ShouldBeTrue(
+                "a silo with no CyberCloud:Silo:KubeconfigRoot connected to a cluster using a kubeconfig "
+                + "path it was never given a root for."
+            );
 
         error!.Code.ShouldBe(ErrorCode.InternalError);
         error.Message.ShouldContain("ResolveKubeconfig");
@@ -495,11 +508,7 @@ public sealed class HostCompositionTests {
 
     /// <summary>A kubeconfig-kind connection naming one credential reference.</summary>
     static ClusterConnectionDescriptor Descriptor(string credentialRef) =>
-        new() {
-            ClusterId = Guid.NewGuid(),
-            Kind = ClusterConnectionKind.Kubeconfig,
-            CredentialRef = credentialRef
-        };
+        new() { ClusterId = Guid.NewGuid(), Kind = ClusterConnectionKind.Kubeconfig, CredentialRef = credentialRef };
 
     // ── Failure class (d): two hosts driving the same reminder ────────────────────────────────────
 
@@ -508,8 +517,10 @@ public sealed class HostCompositionTests {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         <b>The silo owns the loop, and what stops the gateway from starting one is what the
-    ///         gateway <i>is</i>.</b> A reconcile tick is a reminder registered by <c>OperationGrain</c>
+    ///         <b>
+    ///             The silo owns the loop, and what stops the gateway from starting one is what the
+    ///             gateway <i>is</i>.
+    ///         </b> A reconcile tick is a reminder registered by <c>OperationGrain</c>
     ///         (docs/plan/04 § Reminders, item 1). Reminders are registered by grains, grains activate
     ///         on silos, and the gateway is an Orleans client — <c>CreateClient</c>, docs/plan/10
     ///         § Shape — so it activates nothing and has no reminder table to register into. Composing
@@ -527,11 +538,12 @@ public sealed class HostCompositionTests {
     public async Task TheGatewayHasNoReminderService() {
         await using var gateway = await BuildGatewayAsync();
 
-        gateway.Services.GetService<IReminderService>().ShouldBeNull(
-            "the gateway is an Orleans client. A reminder service here would mean a second process "
-            + "able to drive a resource's reconcile loop, and a resource driven twice concurrently is "
-            + "two reconcilers applying to one cluster."
-        );
+        gateway.Services.GetService<IReminderService>()
+            .ShouldBeNull(
+                "the gateway is an Orleans client. A reminder service here would mean a second process "
+                + "able to drive a resource's reconcile loop, and a resource driven twice concurrently is "
+                + "two reconcilers applying to one cluster."
+            );
     }
 
     // ── The hosts, composed the way Program.cs composes them ─────────────────────────────────────

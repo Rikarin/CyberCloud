@@ -23,11 +23,14 @@ namespace CyberCloud.ResourceManager.Registry;
 ///         constraint <c>AddCyberCloudProvider&lt;TProvider&gt;</c> already spells
 ///         <c>where TProvider : class, IResourceProvider, new()</c>. A provider that needed an
 ///         injected dependency could not be described at build time, and
-///         <see cref="IResourceProvider.Describe" />'s remarks already forbid one: <i>"A Describe that
-///         consulted configuration, a clock or a database would make the platform's API surface depend
-///         on when the silo happened to start — and the generated CLI, which runs Describe in a build
-///         step with none of those available, would describe a different platform than the one
-///         running."</i> This is that build step.
+///         <see cref="IResourceProvider.Describe" />'s remarks already forbid one:
+///         <i>
+///             "A Describe that
+///             consulted configuration, a clock or a database would make the platform's API surface depend
+///             on when the silo happened to start — and the generated CLI, which runs Describe in a build
+///             step with none of those available, would describe a different platform than the one
+///             running."
+///         </i> This is that build step.
 ///     </para>
 /// </remarks>
 public static class ProviderDiscovery {

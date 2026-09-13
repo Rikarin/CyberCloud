@@ -9,9 +9,12 @@ namespace CyberCloud.ResourceManager;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>This is what makes <c>PUT</c> idempotent, and it is not a tidiness measure.</b>
-///         docs/plan/06 § Two-phase create: <i>"the caller retries the <c>PUT</c> — which is idempotent
-///         because <c>PUT</c> with the same body on an existing resource is a no-op, which is exactly
-///         why the API is <c>PUT</c> and not <c>POST</c>."</i> The resource grain decides "no-op" by
+///         docs/plan/06 § Two-phase create:
+///         <i>
+///             "the caller retries the <c>PUT</c> — which is idempotent
+///             because <c>PUT</c> with the same body on an existing resource is a no-op, which is exactly
+///             why the API is <c>PUT</c> and not <c>POST</c>."
+///         </i> The resource grain decides "no-op" by
 ///         comparing the new superset against the stored one, and <c>JsonNode</c> serializes in
 ///         <i>insertion</i> order — so without this, whether a retry was a no-op depended on the order
 ///         the client's serializer happened to emit properties in, and on the order the write path

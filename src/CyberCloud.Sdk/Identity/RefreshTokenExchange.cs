@@ -9,8 +9,11 @@ namespace CyberCloud.Sdk;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>This is the most dangerous code in the SDK, and the danger is not obvious.</b>
-///         docs/plan/11 § Protocol: refresh tokens are <i>"Rotating, one-time-use, with reuse
-///         detection → revoke the whole chain"</i>, and § Sessions and revocation confirms it —
+///         docs/plan/11 § Protocol: refresh tokens are
+///         <i>
+///             "Rotating, one-time-use, with reuse
+///             detection → revoke the whole chain"
+///         </i>, and § Sessions and revocation confirms it —
 ///         refresh-reuse detection <i>"invalidates the refresh chain immediately"</i>. So the ordinary
 ///         reflex of a networked client, "the request failed, try it again", takes a user who suffered
 ///         one dropped packet and signs them out of every device they own.
@@ -48,29 +51,40 @@ static class RefreshTokenExchange {
         TokenCacheRecord record,
         string clientId,
         TokenRequestContext context,
-        CancellationToken cancellationToken) {
-        if (record.Poisoned || string.IsNullOrEmpty(record.RefreshToken))
+        CancellationToken cancellationToken
+    ) {
+        if (record.Poisoned || string.IsNullOrEmpty(record.RefreshToken)) {
             throw new CredentialUnavailableException(
-                "The cached sign-in cannot be refreshed and a new sign-in is required.");
+                "The cached sign-in cannot be refreshed and a new sign-in is required."
+            );
+        }
 
         var form = new List<KeyValuePair<string, string>> {
             new("grant_type", OAuthGrants.RefreshToken),
             new("refresh_token", record.RefreshToken),
-            new("client_id", clientId),
+            new("client_id", clientId)
         };
 
-        if (context.Scopes is { Length: > 0 })
+        if (context.Scopes is { Length: > 0 }) {
             form.Add(new KeyValuePair<string, string>("scope", string.Join(' ', context.Scopes)));
+        }
 
         TokenPayload payload;
 
         try {
             payload = await identity.RequestTokenAsync(form, cancellationToken).ConfigureAwait(false);
-        } catch (AuthenticationFailedException e) when (string.Equals(e.ErrorCode, "invalid_grant", StringComparison.Ordinal)) {
+        } catch (AuthenticationFailedException e) when (string.Equals(
+                                                            e.ErrorCode,
+                                                            "invalid_grant",
+                                                            StringComparison.Ordinal
+                                                        )) {
             // Rule 3. The server answered, and the answer is that this chain is finished.
             await cache.RemoveAsync(cacheKey, cancellationToken).ConfigureAwait(false);
 
-            throw new CredentialUnavailableException("The cached sign-in has expired or been revoked. Sign in again.", e);
+            throw new CredentialUnavailableException(
+                "The cached sign-in has expired or been revoked. Sign in again.",
+                e
+            );
         } catch (AuthenticationFailedException e) when (e.ErrorCode is null) {
             // Rule 2. No OAuth error code means the server never answered — a transport failure, a
             // timeout, a body we could not parse. We do not know whether the token was spent.
@@ -79,22 +93,24 @@ static class RefreshTokenExchange {
             throw new CredentialUnavailableException(
                 "A token refresh ended without an answer, so the cached sign-in can no longer be used safely. "
                 + "Sign in again — retrying it would look like refresh-token reuse and would revoke the whole session.",
-                e);
+                e
+            );
         }
 
         // Write the new refresh token before returning the access token. A caller that gets a usable
         // token and a cache that still holds the spent one is the same ambiguity as rule 2, arrived at
         // through carelessness instead of through a network.
         await cache.SetAsync(
-                cacheKey,
-                new TokenCacheRecord {
-                    RefreshToken = payload.RefreshToken ?? record.RefreshToken,
-                    AccessToken = payload.AccessToken,
-                    ExpiresOn = DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn),
-                    Authority = record.Authority,
-                    ClientId = clientId,
-                },
-                cancellationToken)
+            cacheKey,
+            new TokenCacheRecord {
+                RefreshToken = payload.RefreshToken ?? record.RefreshToken,
+                AccessToken = payload.AccessToken,
+                ExpiresOn = DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn),
+                Authority = record.Authority,
+                ClientId = clientId
+            },
+            cancellationToken
+        )
             .ConfigureAwait(false);
 
         return TokenEndpointCredential.ToAccessToken(payload);

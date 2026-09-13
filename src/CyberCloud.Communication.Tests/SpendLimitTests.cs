@@ -3,8 +3,11 @@ using System.Globalization;
 namespace CyberCloud.Communication.Tests;
 
 /// <summary>
-///     docs/plan/17 § The parts that are actually the work: <i>"An SMS loop is a five-figure incident
-///     within an hour, and the limit is the only thing between a bug and that invoice."</i>
+///     docs/plan/17 § The parts that are actually the work:
+///     <i>
+///         "An SMS loop is a five-figure incident
+///         within an hour, and the limit is the only thing between a bug and that invoice."
+///     </i>
 /// </summary>
 [Collection(CommunicationClusterFixture.Name)]
 public sealed class SpendLimitTests(CommunicationCluster cluster) {
@@ -171,10 +174,10 @@ public sealed class SpendLimitTests(CommunicationCluster cluster) {
 
         // Reserved directly, as a silo that died between reserving and dispatching would leave it.
         var held = (await limits.ReserveAsync(
-            ChannelKind.Sms,
-            new() { MaxMessagesPerWindow = 100, MaxSpendPerWindow = 100m, Currency = "EUR" },
-            1m
-        )).GetValueOrThrow();
+                ChannelKind.Sms,
+                new() { MaxMessagesPerWindow = 100, MaxSpendPerWindow = 100m, Currency = "EUR" },
+                1m
+            )).GetValueOrThrow();
 
         (await limits.ReadAsync(ChannelKind.Sms)).GetValueOrThrow().Reserved.ShouldBe(1m);
 

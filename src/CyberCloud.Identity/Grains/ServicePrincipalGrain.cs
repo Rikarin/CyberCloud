@@ -13,7 +13,8 @@ namespace CyberCloud.Identity.Grains;
 ///     so a durable-tier backup carries no credential.
 /// </remarks>
 public sealed class ServicePrincipalGrain(
-    [PersistentState("servicePrincipal", StorageTiers.Durable)] IPersistentState<ServicePrincipalGrainState> state,
+    [PersistentState("servicePrincipal", StorageTiers.Durable)]
+    IPersistentState<ServicePrincipalGrainState> state,
     IClock clock
 )
     : Grain, IServicePrincipalGrain {
@@ -39,9 +40,7 @@ public sealed class ServicePrincipalGrain(
         }
 
         state.State.Descriptor = descriptor with {
-            ServicePrincipalId = servicePrincipalId,
-            TenantId = tenantId,
-            CreatedAt = clock.UtcNow
+            ServicePrincipalId = servicePrincipalId, TenantId = tenantId, CreatedAt = clock.UtcNow
         };
 
         await state.WriteStateAsync();

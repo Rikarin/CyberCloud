@@ -73,11 +73,12 @@ public sealed partial class OpenSearchSizingTests {
         );
 
         // ⚠ And the fixed volume every non-data node gets, which the storage meter adds per node.
-        Define("opensearch.controlPlaneVolume").Trim().ShouldContain(
-            OpenSearchServices.ControlPlaneVolumeSize,
-            Case.Sensitive,
-            "the chart's control-plane volume size is not " + OpenSearchServices.ControlPlaneVolumeSize
-        );
+        Define("opensearch.controlPlaneVolume").Trim()
+            .ShouldContain(
+                OpenSearchServices.ControlPlaneVolumeSize,
+                Case.Sensitive,
+                "the chart's control-plane volume size is not " + OpenSearchServices.ControlPlaneVolumeSize
+            );
 
         // ⚠ THE NEGATIVE HALF, WHICH IS THE ONE THAT CATCHES THE COPY. A chart that had taken
         // charts/managed/seaweedfs' figures for the same job would satisfy nothing above and would

@@ -6,13 +6,19 @@ using System.Globalization;
 namespace CyberCloud.Cluster.Conformance;
 
 /// <summary>
-///     docs/plan/24 § Phase 1's exit criterion 3 — <i>kill the silo mid-create, and the resource still
-///     converges</i> — against real durable storage.
+///     docs/plan/24 § Phase 1's exit criterion 3 —
+///     <i>
+///         kill the silo mid-create, and the resource still
+///         converges
+///     </i> — against real durable storage.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Its own class because it destroys its cluster, and its own clusters because that is
-///         the assertion.</b> Every other test in this assembly shares one Orleans cluster; this one
+///         ⚠
+///         <b>
+///             Its own class because it destroys its cluster, and its own clusters because that is
+///             the assertion.
+///         </b> Every other test in this assembly shares one Orleans cluster; this one
 ///         kills silos, so sharing would take the others down with it.
 ///     </para>
 ///     <para>
@@ -81,15 +87,15 @@ public abstract class SiloKillConformanceTests<TSource>
 
         try {
             var accepted = (await doomed.Manager.WriteAsync(
-                new() {
-                    Path = ClusterConformanceHarness<TSource>.Address(name).Path,
-                    ApiVersion = Case.ApiVersion,
-                    Verb = WriteVerb.Put,
-                    Body = Case.Body(ClusterConformanceHarness<TSource>.ClusterId),
-                    Caller = ClusterConformanceHarness<TSource>.Caller()
-                },
-                token
-            )).GetValueOrThrow();
+                    new() {
+                        Path = ClusterConformanceHarness<TSource>.Address(name).Path,
+                        ApiVersion = Case.ApiVersion,
+                        Verb = WriteVerb.Put,
+                        Body = Case.Body(ClusterConformanceHarness<TSource>.ClusterId),
+                        Caller = ClusterConformanceHarness<TSource>.Caller()
+                    },
+                    token
+                )).GetValueOrThrow();
 
             operationId = accepted.OperationId;
             resourceId = accepted.Resource.Id;
@@ -157,7 +163,8 @@ public abstract class SiloKillConformanceTests<TSource>
                     0,
                     "the operation grain registered no reminder, so the safety net docs/plan/08 "
                     + "§ Long-running operations relies on to re-drive after a silo loss is not "
-                    + "there. The whole reminder table holds: " + await doomed.AllRemindersAsync()
+                    + "there. The whole reminder table holds: "
+                    + await doomed.AllRemindersAsync()
                 );
 
             await doomed.KillEverySiloAsync();
@@ -243,21 +250,19 @@ public abstract class SiloKillConformanceTests<TSource>
             foreach (var target in objects) {
                 var json = await ReadAsync(successor, target, token);
 
-                json.ShouldNotBeNull(
-                    $"the operation says Succeeded and '{target}' is not in the real cluster."
-                );
+                json.ShouldNotBeNull($"the operation says Succeeded and '{target}' is not in the real cluster.");
 
                 Case.ObjectMatchesDesired(
-                        new() {
-                            ObjectJson = json!,
-                            DesiredJson = Case.Body(ClusterConformanceHarness<TSource>.ClusterId),
-                            Id = ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId),
-                            Target = target,
-                            Namespace = ReconcileDriver.NamespaceFor(
-                                ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId)
-                            )
-                        }
-                    )
+                    new() {
+                        ObjectJson = json!,
+                        DesiredJson = Case.Body(ClusterConformanceHarness<TSource>.ClusterId),
+                        Id = ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId),
+                        Target = target,
+                        Namespace = ReconcileDriver.NamespaceFor(
+                            ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId)
+                        )
+                    }
+                )
                     .ShouldBeTrue($"'{target}' is in the cluster without the desired shape.");
             }
 
@@ -273,10 +278,11 @@ public abstract class SiloKillConformanceTests<TSource>
 
             snapshot.IsSuccess.ShouldBeTrue(snapshot.Error?.Message);
             snapshot.GetValueOrThrow().ProvisioningState.ShouldBe(ProvisioningState.Succeeded);
-            snapshot.GetValueOrThrow().Id.ShouldBe(
-                resourceId,
-                "the successor cluster created a NEW resource rather than reading the old one back."
-            );
+            snapshot.GetValueOrThrow()
+                .Id.ShouldBe(
+                    resourceId,
+                    "the successor cluster created a NEW resource rather than reading the old one back."
+                );
         } finally {
             await successor.DisposeAsync();
         }
@@ -311,7 +317,7 @@ public abstract class SiloKillConformanceTests<TSource>
             return ((System.Text.Json.JsonElement)response.Body!).GetRawText();
         } catch (k8s.Autorest.HttpOperationException ex)
             when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
-            return null;
-        }
+                return null;
+            }
     }
 }

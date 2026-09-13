@@ -135,10 +135,10 @@ public sealed class ContainerRegistryDeclarationTests {
         // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
-            ProviderRegistry.Build([new ContainerRegistryProvider()]).Types.Select(
-                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
-            )
-        ).ShouldBeEmpty();
+            ProviderRegistry.Build([new ContainerRegistryProvider()])
+                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        )
+            .ShouldBeEmpty();
     }
 
     // ── The meters ──────────────────────────────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ public sealed class ContainerRegistryDeclarationTests {
         // would reserve three times the disk on the default body.
         derived.Single(x => x.Meter == QuotaMeter.StorageGb)
             .Reads
-            .ShouldNotContain("/properties/replicas");
+                .ShouldNotContain("/properties/replicas");
     }
 
     [Fact]
@@ -316,6 +316,5 @@ public sealed class ContainerRegistryDeclarationTests {
         return registration;
     }
 
-    static List<MeterRegistration> Derived() =>
-        [.. Registration().Meters.Where(x => x.Derivation is not null)];
+    static List<MeterRegistration> Derived() => [.. Registration().Meters.Where(x => x.Derivation is not null)];
 }

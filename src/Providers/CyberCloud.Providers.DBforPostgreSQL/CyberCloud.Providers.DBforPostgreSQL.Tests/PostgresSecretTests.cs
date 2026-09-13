@@ -9,15 +9,21 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Tests;
 /// <remarks>
 ///     <para>
 ///         docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row; docs/plan/12
-///         § Cross-cutting decisions, Credentials: <i>"Generated at create, written to the tenant's
-///         Vault path, never in grain state."</i> <c>CC1005</c> is the compile-time half and polices
+///         § Cross-cutting decisions, Credentials:
+///         <i>
+///             "Generated at create, written to the tenant's
+///             Vault path, never in grain state."
+///         </i> <c>CC1005</c> is the compile-time half and polices
 ///         <c>[Id]</c>-annotated members named <c>*Password</c>/<c>*Secret</c>/<c>*Token</c>/
 ///         <c>*Key</c>; nothing in this provider declares one, and a <c>[SuppressMessage]</c> here
 ///         would be a failure rather than a fix.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The analyzer is not the interesting half on this type, because the risk here is not a
-///         field.</b> <c>charts/managed/postgres/values.yaml</c> carries a <c>bootstrap.password</c>
+///         ⚠
+///         <b>
+///             The analyzer is not the interesting half on this type, because the risk here is not a
+///             field.
+///         </b> <c>charts/managed/postgres/values.yaml</c> carries a <c>bootstrap.password</c>
 ///         row, and a provider that mirrored it as a body property would have put a plaintext
 ///         password into the resource grain's desired state through a JSON string that no analyzer
 ///         reads. <c>Secret</c> would not have saved it: nothing on the write path substitutes a
@@ -38,11 +44,12 @@ public sealed class PostgresSecretTests {
             );
 
             foreach (var word in new[] { "password", "secret", "token", "key" }) {
-                property.Name.Contains(word, StringComparison.OrdinalIgnoreCase).ShouldBeFalse(
-                    $"'{property.JsonPointer}' is named like a credential. CC1005 bans the shape on "
-                    + "[Id]-annotated members; a JSON pointer is the same hazard with no analyzer "
-                    + "watching it."
-                );
+                property.Name.Contains(word, StringComparison.OrdinalIgnoreCase)
+                    .ShouldBeFalse(
+                        $"'{property.JsonPointer}' is named like a credential. CC1005 bans the shape on "
+                        + "[Id]-annotated members; a JSON pointer is the same hazard with no analyzer "
+                        + "watching it."
+                    );
             }
         }
     }
@@ -78,10 +85,11 @@ public sealed class PostgresSecretTests {
             .ShouldBe(PostgresServers.CredentialSecretName("credentials"));
 
         initdb.ContainsKey("password").ShouldBeFalse();
-        rendered.Contains("password", StringComparison.OrdinalIgnoreCase).ShouldBeFalse(
-            "the rendered Cluster mentions a password. The only legal mention is a Secret reference "
-            + "by name, and that is spelled 'secret'."
-        );
+        rendered.Contains("password", StringComparison.OrdinalIgnoreCase)
+            .ShouldBeFalse(
+                "the rendered Cluster mentions a password. The only legal mention is a Secret reference "
+                + "by name, and that is spelled 'secret'."
+            );
     }
 
     // ⚠ A FOURTH TEST WAS HERE AND IT IS GONE ON PURPOSE. It projected a desired body through

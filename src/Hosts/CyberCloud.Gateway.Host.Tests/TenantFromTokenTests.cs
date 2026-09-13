@@ -158,8 +158,11 @@ public sealed class TenantFromTokenTests {
     ///     A physical grain key in the URL — route 7b's move, tried through the front door.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is the exact attack <c>Route7b_FromOutsideAGrainTheRawKeyIsSTILLOPEN</c>
-    ///     performs successfully from a cluster client.</b> <c>Orleans.Multitenant</c> encodes the
+    ///     ⚠
+    ///     <b>
+    ///         This is the exact attack <c>Route7b_FromOutsideAGrainTheRawKeyIsSTILLOPEN</c>
+    ///         performs successfully from a cluster client.
+    ///     </b> <c>Orleans.Multitenant</c> encodes the
     ///     tenant into a string key as <c>{tenant}|{key}</c>, so a raw key is a complete address for
     ///     another tenant's grain and nothing in the runtime refuses it. Through the gateway it never
     ///     becomes a grain key at all: it is not a resource-id path, so it does not parse, and it
@@ -174,7 +177,11 @@ public sealed class TenantFromTokenTests {
 
         var response = await gateway.SendAsync(
             "GET",
-            string.Format(System.Globalization.CultureInfo.InvariantCulture, shape, GatewayHarness.TenantB.ToString("N")),
+            string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                shape,
+                GatewayHarness.TenantB.ToString("N")
+            ),
             gateway.Token(GatewayHarness.TenantA)
         );
 

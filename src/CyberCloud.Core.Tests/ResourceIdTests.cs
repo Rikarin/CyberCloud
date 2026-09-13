@@ -84,9 +84,7 @@ public class ResourceIdTests {
         var nested = (Sample with { Name = "orders" })
             .WithType(new("CyberCloud.DBforPostgreSQL", "servers/databases"), "pg-main");
 
-        nested.Path.ShouldEndWith(
-            "/providers/CyberCloud.DBforPostgreSQL/servers/pg-main/databases/orders"
-        );
+        nested.Path.ShouldEndWith("/providers/CyberCloud.DBforPostgreSQL/servers/pg-main/databases/orders");
 
         ResourceId.TryParsePath(nested.Path, out var parsed).ShouldBeTrue();
         parsed.Type.Type.ShouldBe("servers/databases");
@@ -129,8 +127,7 @@ public class ResourceIdTests {
     }
 
     [Fact]
-    public void ATopLevelResourcesParentIsTheResourceGroupAndSoIsNull() =>
-        Sample.Parent.ShouldBeNull();
+    public void ATopLevelResourcesParentIsTheResourceGroupAndSoIsNull() => Sample.Parent.ShouldBeNull();
 
     [Fact]
     public void ADepthThreeParentWalkPeelsOneLevelAtATime() {
@@ -189,16 +186,19 @@ public class ResourceIdTests {
     [Fact]
     public void ATypeAndItsParentNamesCannotDisagree() {
         // A depth-2 type with no parent name would render a path with a segment missing.
-        Should.Throw<ArgumentException>(
-            () => Sample with { Type = new("CyberCloud.DBforPostgreSQL", "servers/databases") }
+        Should.Throw<ArgumentException>(() => Sample with {
+                Type = new("CyberCloud.DBforPostgreSQL", "servers/databases")
+            }
         );
 
         // …and a top-level type with one is the same mistake upside down.
         Should.Throw<ArgumentException>(() => Sample with { ParentNames = "pg-main" });
 
         // An ancestor's name is validated exactly as the resource's own is.
-        Should.Throw<ArgumentException>(
-            () => Sample.WithType(new("CyberCloud.DBforPostgreSQL", "servers/databases"), "PG-Main")
+        Should.Throw<ArgumentException>(() => Sample.WithType(
+                new("CyberCloud.DBforPostgreSQL", "servers/databases"),
+                "PG-Main"
+            )
         );
     }
 

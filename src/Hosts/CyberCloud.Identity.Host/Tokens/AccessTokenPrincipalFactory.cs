@@ -11,8 +11,11 @@ namespace CyberCloud.Identity.Host.Tokens;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>NO ROLE OR PERMISSION CLAIM IS ADDED HERE, AND ADDING ONE LATER IS THE MISTAKE THIS
-///         TYPE EXISTS TO MAKE HARD.</b> docs/plan/11 § Protocol: roles and permissions "are looked
+///         ⚠
+///         <b>
+///             NO ROLE OR PERMISSION CLAIM IS ADDED HERE, AND ADDING ONE LATER IS THE MISTAKE THIS
+///             TYPE EXISTS TO MAKE HARD.
+///         </b> docs/plan/11 § Protocol: roles and permissions "are looked
 ///         up per request from ReBAC. Putting role claims in a 10-minute token means a revoke takes
 ///         up to 10 minutes, and packing a large user's groups into a JWT produces the header-size
 ///         failures every large enterprise hits."
@@ -69,8 +72,11 @@ public static class AccessTokenPrincipalFactory {
     ///         the three it is.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><paramref name="impersonatedBy" /> is a parameter of this factory and is never
-    ///         read from a request.</b> docs/plan/06 § Platform administration's controls — a second
+    ///         ⚠
+    ///         <b>
+    ///             <paramref name="impersonatedBy" /> is a parameter of this factory and is never
+    ///             read from a request.
+    ///         </b> docs/plan/06 § Platform administration's controls — a second
     ///         operator's approval, a 60-minute box, the audit record, and the tenant's notification —
     ///         are all properties of the <i>grant</i>, and the only way a token can carry the grant it
     ///         was issued under is for the value to be minted here. See

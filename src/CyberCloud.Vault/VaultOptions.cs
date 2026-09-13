@@ -31,8 +31,11 @@ public sealed class VaultOptions {
     ///     The default path the kubelet projects a service-account token to.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A default rather than a required value, and this is the one place a hard-coded path
-    ///     is right.</b> It is fixed by Kubernetes, not by us — every pod with
+    ///     ⚠
+    ///     <b>
+    ///         A default rather than a required value, and this is the one place a hard-coded path
+    ///         is right.
+    ///     </b> It is fixed by Kubernetes, not by us — every pod with
     ///     <c>automountServiceAccountToken</c> gets it — so requiring a deployment to restate it
     ///     would be asking an operator to type a constant. A pod that projects an
     ///     <i>audience-bound</i> token puts it somewhere else, which is what
@@ -83,8 +86,11 @@ public sealed class VaultOptions {
 
     /// <summary>Where the <c>kv-v2</c> engine is mounted. A <see cref="SecretRef.Path" /> is relative to it.</summary>
     /// <remarks>
-    ///     ⚠ <b>The mount is configuration and the path is data, and conflating them is how a handle
-    ///     stops being portable.</b> <c>SecretRef { Path = "tenants/x/postgres/main" }</c> means the
+    ///     ⚠
+    ///     <b>
+    ///         The mount is configuration and the path is data, and conflating them is how a handle
+    ///         stops being portable.
+    ///     </b> <c>SecretRef { Path = "tenants/x/postgres/main" }</c> means the
     ///     same secret in every region; if the mount name were baked into the handle, moving the
     ///     engine would rewrite every stored handle in the durable tier.
     /// </remarks>
@@ -142,8 +148,11 @@ public sealed class VaultOptions {
     ///     nothing else.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This exists because the alternative was worse, and it is worth saying which
-    ///     alternative.</b> A vault suite needs a real OpenBao to be worth running, a container in
+    ///     ⚠
+    ///     <b>
+    ///         This exists because the alternative was worse, and it is worth saying which
+    ///         alternative.
+    ///     </b> A vault suite needs a real OpenBao to be worth running, a container in
     ///     CI has no certificate anybody trusts, and the two ways to reach one are this flag or a
     ///     custom <c>HttpMessageHandler</c> that skips certificate validation. The flag is a single
     ///     boolean a reviewer can grep for and a deployment gate can refuse; a handler that ignores

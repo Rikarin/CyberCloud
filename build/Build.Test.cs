@@ -6,6 +6,11 @@
 // only what `Test` runs. See TestSuite below. So is the run half — `E2E`, `Chaos` and `Load` drive
 // their own suites through RunSuites, so there is one answer to "how is a test host invoked".
 
+using Nuke.Common;
+using Nuke.Common.IO;
+using Nuke.Common.Tooling;
+using Nuke.Common.Tools.DotNet;
+using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -15,14 +20,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Nuke.Common;
-using Nuke.Common.IO;
-using Nuke.Common.Tooling;
-using Nuke.Common.Tools.DotNet;
-using Serilog;
 
-partial class Build
-{
+partial class Build {
     /// <summary>
     ///     The target that runs a test project.
     ///     <para>
@@ -32,8 +31,11 @@ partial class Build
     ///     </para>
     ///     <list type="bullet">
     ///         <item>
-    ///             props asks <em>does this build as an xunit.v3 / Microsoft.Testing.Platform
-    ///             host?</em> — true for all of them, the deployment-driven suites included;
+    ///             props asks
+    ///             <em>
+    ///                 does this build as an xunit.v3 / Microsoft.Testing.Platform
+    ///                 host?
+    ///             </em> — true for all of them, the deployment-driven suites included;
     ///         </item>
     ///         <item>
     ///             this asks <em>which target runs it, and how often?</em> — and docs/plan/23
@@ -49,8 +51,7 @@ partial class Build
     ///         nothing. With the split it logs "no per-PR test projects found".
     ///     </para>
     /// </summary>
-    enum TestSuite
-    {
+    enum TestSuite {
         /// <summary>
         ///     <c>Test</c>, every PR: the unit, grain, reconciler, conformance, isolation and
         ///     contract layers of docs/plan/23 § Test layers.
@@ -64,7 +65,7 @@ partial class Build
         Chaos,
 
         /// <summary><c>Load</c> — weekly and pre-release, against a real deployment.</summary>
-        Load,
+        Load
     }
 
     /// <summary>
@@ -79,9 +80,8 @@ partial class Build
     ///         project added under test/ and to neither file.
     ///     </para>
     /// </summary>
-    static TestSuite? SuiteOwning(AbsolutePath project)
-        => project.NameWithoutExtension switch
-        {
+    static TestSuite? SuiteOwning(AbsolutePath project) =>
+        project.NameWithoutExtension switch {
             var name when name.EndsWith(".Tests", StringComparison.Ordinal) => TestSuite.PerPullRequest,
             var name when name.EndsWith(".Conformance", StringComparison.Ordinal) => TestSuite.PerPullRequest,
             "CyberCloud.E2E" => TestSuite.EndToEnd,
@@ -136,12 +136,12 @@ partial class Build
     ///         mostly production projects, where "no suite claims it" is the normal answer.
     ///     </para>
     /// </summary>
-    void AssertEveryTestProjectIsOwned()
-    {
+    void AssertEveryTestProjectIsOwned() {
         var testRoot = RootDirectory / "test";
 
-        if (!testRoot.DirectoryExists())
+        if (!testRoot.DirectoryExists()) {
             return;
+        }
 
         var unowned = testRoot
             .GlobFiles("**/*.csproj")
@@ -155,7 +155,8 @@ partial class Build
             $"test/ holds {unowned.Count} project(s) that no target runs: {string.Join(", ", unowned)}. "
             + "Every project under test/ must be claimed by Test, E2E, Chaos or Load — add it to "
             + "Build.Test.cs § SuiteOwning and to Directory.Build.props § Project role detection, "
-            + "which have to agree. docs/plan/03 § test/, docs/plan/23 § Test layers.");
+            + "which have to agree. docs/plan/03 § test/, docs/plan/23 § Test layers."
+        );
     }
 
     /// <summary>
@@ -176,33 +177,33 @@ partial class Build
     ///         outside every other solution-scoped gate regardless.
     ///     </para>
     /// </summary>
-    void AssertTestProjectsAreInSolution(IReadOnlyCollection<AbsolutePath> projects)
-    {
+    void AssertTestProjectsAreInSolution(IReadOnlyCollection<AbsolutePath> projects) {
         var inSolution = Solution.AllProjects
             .Select(x => (AbsolutePath)x.Path)
             .ToHashSet();
 
         var orphans = projects.Where(x => !inSolution.Contains(x)).ToList();
-        if (orphans.Count == 0)
+        if (orphans.Count == 0) {
             return;
+        }
 
-        foreach (var orphan in orphans)
-        {
+        foreach (var orphan in orphans) {
             Log.Error(
                 "{Project} is on disk but is not a member of {Solution}, so `Compile` never built "
                 + "it and there is nothing for `Test` to run. Add it with: dotnet sln {Solution} "
                 + "add {Project}",
                 orphan,
-                SolutionFile.Name);
+                SolutionFile.Name
+            );
         }
 
         Assert.Fail(
             $"{orphans.Count} test project(s) on disk are missing from {SolutionFile.Name} — "
-            + "listed above.");
+            + "listed above."
+        );
     }
 
-    void RunTests()
-    {
+    void RunTests() {
         // ⚠ Both guards run before the empty check, and both cover EVERY test project rather than
         // the per-PR ones about to be run.
         //
@@ -217,8 +218,7 @@ partial class Build
 
         var projects = TestProjects;
 
-        if (projects.Count == 0)
-        {
+        if (projects.Count == 0) {
             // ⚠ This is a PASS, on purpose.
             //
             // docs/plan/23 § CI shape gates every PR on `Test`. A `Test` target that is red because
@@ -229,7 +229,8 @@ partial class Build
                 "Test: no per-PR test projects found under {Roots} — nothing to run. Discovery is "
                 + "*.Tests, *.Conformance and CyberCloud.Isolation; the E2E, Chaos and Load suites "
                 + "are owned by their own targets. Build.Test.cs § SuiteOwning.",
-                string.Join(", ", SourceRoots.Select(x => x.Name)));
+                string.Join(", ", SourceRoots.Select(x => x.Name))
+            );
             return;
         }
 
@@ -267,15 +268,16 @@ partial class Build
     ///     change the numbers the load run exists to measure.
     /// </param>
     /// <remarks>
-    ///     ⚠ `dotnet run`, NOT `dotnet test`. This is the design of this target, not an accident.</remarks>
+    ///     ⚠ `dotnet run`, NOT `dotnet test`. This is the design of this target, not an accident.
+    /// </remarks>
     void RunSuites(
         string target,
         IReadOnlyCollection<AbsolutePath> projects,
         // Dictionary rather than IReadOnlyDictionary: CA1859 is an error here, and this is internal
         // to the build — the same concession Build.Test.cs § ProjectsIn already makes.
         Dictionary<string, string>? environment,
-        bool collectCoverage = false)
-    {
+        bool collectCoverage = false
+    ) {
         //
         // These are Microsoft.Testing.Platform hosts: OutputType=Exe, xunit.v3, no VSTest adapter.
         // `dotnet test` inserts a runner-selection step in front of that, and when it selects VSTest
@@ -489,8 +491,7 @@ partial class Build
         Parallel.ForEach(
             Partitioner.Create(ordered, EnumerablePartitionerOptions.NoBuffering),
             new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
-            project =>
-            {
+            project => {
                 // ⚠ Two semaphores, each taken only by the suites it is about. A cheap suite waits on
                 // neither, so capping either one costs nothing on the other 52 (2026-09-05).
                 var gated = containerBacked.Contains(project);
@@ -524,75 +525,74 @@ partial class Build
                 }
 
                 try {
-                var name = project.NameWithoutExtension;
-                var exitCode = 0;
+                    var name = project.NameWithoutExtension;
+                    var exitCode = 0;
 
-                // ⚠ --minimum-expected-tests 1 guards the worst outcome this target can have: a
-                // project that discovers nothing, runs nothing and reports success. Without it,
-                // broken discovery — a bad filter, a lost runner reference, a project that stops
-                // being an MTP host — shows up as a green build.
-                //
-                // The TRX switch is xunit's `--report-xunit-trx`, not MTP's `--report-trx`: the
-                // latter lives in Microsoft.Testing.Extensions.TrxReport, which nothing here
-                // references, and using it fails with "Unknown option '--report-trx'".
-                var run =
-                    $"run --configuration {Configuration} --no-restore --no-build --no-launch-profile "
-                    + $"--project {project} -- --minimum-expected-tests 1 --report-xunit-trx "
-                    + $"--report-xunit-trx-filename {name}.trx --results-directory {TestResultsDirectory}";
+                    // ⚠ --minimum-expected-tests 1 guards the worst outcome this target can have: a
+                    // project that discovers nothing, runs nothing and reports success. Without it,
+                    // broken discovery — a bad filter, a lost runner reference, a project that stops
+                    // being an MTP host — shows up as a green build.
+                    //
+                    // The TRX switch is xunit's `--report-xunit-trx`, not MTP's `--report-trx`: the
+                    // latter lives in Microsoft.Testing.Extensions.TrxReport, which nothing here
+                    // references, and using it fails with "Unknown option '--report-trx'".
+                    var run =
+                        $"run --configuration {Configuration} --no-restore --no-build --no-launch-profile "
+                        + $"--project {project} -- --minimum-expected-tests 1 --report-xunit-trx "
+                        + $"--report-xunit-trx-filename {name}.trx --results-directory {TestResultsDirectory}";
 
-                // ⚠ coverlet instruments the suite's OWN output directory and nothing else, which is
-                // what makes running all of them at once safe: it rewrites the IL of the assemblies
-                // on disk, runs the target, then puts them back, and every suite has its own copy of
-                // every dependency under artifacts/bin/<project>/<configuration>. Point two suites at
-                // one directory and they would corrupt each other's assemblies; the artifacts layout
-                // means they never share one.
-                //
-                // ⚠ It also instruments only what has a portable PDB beside it, so the NuGet
-                // dependencies in that directory are skipped without a filter having to name them —
-                // 12 CyberCloud assemblies out of 102 DLLs, measured on CyberCloud.Identity.Tests.
-                //
-                // ⚠ THE TWO CALLS ARE NOT A TIDINESS FAILURE, THEY ARE THE ONLY SHAPE THAT WORKS, and
-                // the reason is worth writing down because the wrong shape fails in a way that reads
-                // like a missing tool. Nuke's ArgumentStringHandler is an interpolated-string handler:
-                // each HOLE is quoted if it needs quoting, and a whole string handed over as one
-                // argument goes through its implicit operator, which is `$"{value}"` — a single hole.
-                // A command line containing a `"` therefore comes back double-quoted end to end with
-                // its inner quotes escaped, so `dotnet` is asked to run one command named
-                // `coverlet /path --target dotnet …` and answers "Could not execute because the
-                // specified command or file was not found" — an error about `dotnet` that is really
-                // an error about a quote. Observed on every suite at once, all of them failing in
-                // about ten seconds, which is the shape to recognise it by: a real tooling problem
-                // does not arrive simultaneously everywhere and does not arrive that fast.
-                //
-                // So the interpolated literal has to be AT the call, `run` has to arrive as a hole,
-                // and it is pre-quoted because a hole is quoted only when the handler thinks it needs
-                // it — an already-double-quoted value is passed through untouched, which is the one
-                // way to say "this argument is one argument" and be sure of it.
-                if (withCoverage)
-                {
-                    var report = CoverageDirectory / $"{name}.cobertura.xml";
-                    var instrumented = SuiteOutputDirectory(project);
-                    var targetArguments = $"\"{run}\"";
+                    // ⚠ coverlet instruments the suite's OWN output directory and nothing else, which is
+                    // what makes running all of them at once safe: it rewrites the IL of the assemblies
+                    // on disk, runs the target, then puts them back, and every suite has its own copy of
+                    // every dependency under artifacts/bin/<project>/<configuration>. Point two suites at
+                    // one directory and they would corrupt each other's assemblies; the artifacts layout
+                    // means they never share one.
+                    //
+                    // ⚠ It also instruments only what has a portable PDB beside it, so the NuGet
+                    // dependencies in that directory are skipped without a filter having to name them —
+                    // 12 CyberCloud assemblies out of 102 DLLs, measured on CyberCloud.Identity.Tests.
+                    //
+                    // ⚠ THE TWO CALLS ARE NOT A TIDINESS FAILURE, THEY ARE THE ONLY SHAPE THAT WORKS, and
+                    // the reason is worth writing down because the wrong shape fails in a way that reads
+                    // like a missing tool. Nuke's ArgumentStringHandler is an interpolated-string handler:
+                    // each HOLE is quoted if it needs quoting, and a whole string handed over as one
+                    // argument goes through its implicit operator, which is `$"{value}"` — a single hole.
+                    // A command line containing a `"` therefore comes back double-quoted end to end with
+                    // its inner quotes escaped, so `dotnet` is asked to run one command named
+                    // `coverlet /path --target dotnet …` and answers "Could not execute because the
+                    // specified command or file was not found" — an error about `dotnet` that is really
+                    // an error about a quote. Observed on every suite at once, all of them failing in
+                    // about ten seconds, which is the shape to recognise it by: a real tooling problem
+                    // does not arrive simultaneously everywhere and does not arrive that fast.
+                    //
+                    // So the interpolated literal has to be AT the call, `run` has to arrive as a hole,
+                    // and it is pre-quoted because a hole is quoted only when the handler thinks it needs
+                    // it — an already-double-quoted value is passed through untouched, which is the one
+                    // way to say "this argument is one argument" and be sure of it.
+                    if (withCoverage) {
+                        var report = CoverageDirectory / $"{name}.cobertura.xml";
+                        var instrumented = SuiteOutputDirectory(project);
+                        var targetArguments = $"\"{run}\"";
 
-                    DotNetTasks.DotNet(
-                        $"coverlet {instrumented} --target dotnet --targetargs {targetArguments} --format cobertura --output {report}",
-                        workingDirectory: RootDirectory,
-                        environmentVariables: environmentVariables,
-                        exitHandler: process => exitCode = process.ExitCode);
-                }
-                else
-                {
-                    DotNetTasks.DotNet(
-                        run,
-                        workingDirectory: RootDirectory,
-                        environmentVariables: environmentVariables,
-                        exitHandler: process => exitCode = process.ExitCode);
-                }
+                        DotNetTasks.DotNet(
+                            $"coverlet {instrumented} --target dotnet --targetargs {targetArguments} --format cobertura --output {report}",
+                            workingDirectory: RootDirectory,
+                            environmentVariables: environmentVariables,
+                            exitHandler: process => exitCode = process.ExitCode
+                        );
+                    } else {
+                        DotNetTasks.DotNet(
+                            run,
+                            workingDirectory: RootDirectory,
+                            environmentVariables: environmentVariables,
+                            exitHandler: process => exitCode = process.ExitCode
+                        );
+                    }
 
-                if (exitCode != 0)
-                    failures.Add($"{name} exited {exitCode}");
-                }
-                finally {
+                    if (exitCode != 0) {
+                        failures.Add($"{name} exited {exitCode}");
+                    }
+                } finally {
                     // ⚠ Released in the mirror image of the order they were taken. It does not matter
                     // to correctness here — a release never blocks — but a reader checking the
                     // lock-ordering argument above should be able to check it from one place.
@@ -604,7 +604,8 @@ partial class Build
                         clusterSlots.Release();
                     }
                 }
-            });
+            }
+        );
 
         // ⚠ Every suite runs before any failure is reported — the same reasoning as
         // Build.Architecture.cs § Report, and the reason the old call passed completeOnFailure.
@@ -636,7 +637,8 @@ partial class Build
             + "is, so a cluster-backed suite starved on this host is a host that cannot hold ONE "
             + "cluster beside the container budget, not a degree that is too high. Build.Test.cs § "
             + "ClusterBackedSuiteDegree says what to do about that and why the number is not a "
-            + "parameter. #77.");
+            + "parameter. #77."
+        );
     }
 
     /// <summary>
@@ -644,8 +646,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Nothing in this build read a skip count until this method, and that is a bigger
-    ///         hole than it sounds.</b> Pass and fail come from a process exit code, and a suite
+    ///         ⚠
+    ///         <b>
+    ///             Nothing in this build read a skip count until this method, and that is a bigger
+    ///             hole than it sounds.
+    ///         </b> Pass and fail come from a process exit code, and a suite
     ///         whose cluster-backed tests all skipped exits <b>0</b>: its daemonless companions keep
     ///         <c>--minimum-expected-tests 1</c> satisfied, the assembly prints <c>Passed!</c>, and
     ///         a gate reading the exit code cannot tell a run that proved nothing from one that
@@ -654,8 +659,11 @@ partial class Build
     ///         build, and it left no other trace.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It reports and does not fail, and the reason is the mirror-image trap
-    ///         <c>Build.Architecture.cs</c> § <c>LabelsGate</c> spends a paragraph on.</b> Skipping
+    ///         ⚠
+    ///         <b>
+    ///             It reports and does not fail, and the reason is the mirror-image trap
+    ///             <c>Build.Architecture.cs</c> § <c>LabelsGate</c> spends a paragraph on.
+    ///         </b> Skipping
     ///         when no Docker daemon answers is this repository's contract, kept deliberately so a
     ///         developer without one gets a report rather than a red build. Failing on any skip
     ///         would break every such machine, and a gate people switch off is not a gate. Where a
@@ -671,8 +679,7 @@ partial class Build
     ///     </para>
     /// </remarks>
     /// <param name="target">The target whose run is being summarised, for the log line.</param>
-    void ReportSkippedTests(string target)
-    {
+    void ReportSkippedTests(string target) {
         var skipped = TestResultsDirectory
             .GlobFiles("*.trx")
             .Select(report => (Suite: report.NameWithoutExtension, Count: NotExecuted(report)))
@@ -681,8 +688,7 @@ partial class Build
             .ThenBy(x => x.Suite, StringComparer.Ordinal)
             .ToList();
 
-        if (skipped.Count == 0)
-        {
+        if (skipped.Count == 0) {
             Log.Information("{Target}: no test was skipped in this run.", target);
 
             return;
@@ -696,7 +702,8 @@ partial class Build
             target,
             skipped.Sum(x => x.Count),
             skipped.Count,
-            string.Join(", ", skipped.Select(x => $"{x.Suite} {x.Count}")));
+            string.Join(", ", skipped.Select(x => $"{x.Suite} {x.Count}"))
+        );
     }
 
     /// <summary>
@@ -709,28 +716,27 @@ partial class Build
     ///     report gains an outcome this build has not met.
     /// </remarks>
     /// <param name="report">The <c>.trx</c> a suite wrote.</param>
-    static int NotExecuted(AbsolutePath report)
-    {
-        try
-        {
+    static int NotExecuted(AbsolutePath report) {
+        try {
             return XDocument.Load(report)
                 .Descendants()
                 .Where(x => x.Name.LocalName == "Counters")
                 .Select(x => int.TryParse(
-                    x.Attribute("notExecuted")?.Value,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out var parsed)
-                    ? parsed
-                    : 0)
+                        x.Attribute("notExecuted")?.Value,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out var parsed
+                    )
+                        ? parsed
+                        : 0
+                )
                 .Sum();
-        }
-        catch (Exception unreadable) when (unreadable is IOException or System.Xml.XmlException)
-        {
+        } catch (Exception unreadable) when (unreadable is IOException or System.Xml.XmlException) {
             Log.Debug(
                 unreadable,
                 "Test: {Report} could not be read for its skip count, so this run's report omits it.",
-                report);
+                report
+            );
 
             return 0;
         }
@@ -741,8 +747,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS USED TO GREP THE <c>.csproj</c> FOR THE WORD "Testcontainers", AND THE CAP
-    ///         ABOVE WAS THEREFORE NOT CAPPING WHAT IT SAID IT WAS.</b> Measured over this tree on
+    ///         ⚠
+    ///         <b>
+    ///             THIS USED TO GREP THE <c>.csproj</c> FOR THE WORD "Testcontainers", AND THE CAP
+    ///             ABOVE WAS THEREFORE NOT CAPPING WHAT IT SAID IT WAS.
+    ///         </b> Measured over this tree on
     ///         2026-08-20, at 71 suites: 28 project files contained the word and <b>19</b> suites
     ///         actually shipped the assemblies. It was wrong in both directions and the two errors
     ///         compounded. ⚠ Those are dated counts of a tree that grows a suite most weeks, and
@@ -786,8 +795,11 @@ partial class Build
     ///         logged rather than passed over.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>"Costs a little wall clock" is what that said until the #77 review, and the
-    ///         degraded case is now three times worse than it was.</b>
+    ///         ⚠
+    ///         <b>
+    ///             "Costs a little wall clock" is what that said until the #77 review, and the
+    ///             degraded case is now three times worse than it was.
+    ///         </b>
     ///         <see cref="StartsCluster" /> answers the same missing directory the same safe way, so
     ///         a suite that lands here is gated on BOTH permits and the cluster one is
     ///         <see cref="ClusterBackedSuiteDegree" /> = 1. Before #77 a cleaned
@@ -798,9 +810,15 @@ partial class Build
     ///         gate is the thing people wait out.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>"Testcontainers" WAS STILL TOO NARROW A PIECE OF EVIDENCE, AND #77 IS WHAT THAT
-    ///         COST.</b> <c>CyberCloud.AppHost.Tests</c> starts Redis, PostgreSQL, NATS <em>and a
-    ///         k3s</em> — through Aspire, whose <c>DistributedApplicationTestingBuilder</c> runs
+    ///         ⚠
+    ///         <b>
+    ///             "Testcontainers" WAS STILL TOO NARROW A PIECE OF EVIDENCE, AND #77 IS WHAT THAT
+    ///             COST.
+    ///         </b> <c>CyberCloud.AppHost.Tests</c> starts Redis, PostgreSQL, NATS
+    ///         <em>
+    ///             and a
+    ///             k3s
+    ///         </em> — through Aspire, whose <c>DistributedApplicationTestingBuilder</c> runs
     ///         <c>CyberCloud.AppHost</c>'s own <c>Program.cs</c> — and it ships not one
     ///         <c>Testcontainers</c> assembly, so this method called it cheap and the semaphore never
     ///         saw it. Measured 2026-09-05 on this tree: it is the only suite in it that ships
@@ -830,7 +848,8 @@ partial class Build
                 + "§ StartsCluster.",
                 project.NameWithoutExtension,
                 output,
-                ClusterBackedSuiteDegree);
+                ClusterBackedSuiteDegree
+            );
 
             return true;
         }
@@ -843,8 +862,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the class the cap was always really about, and until #77 the tree had no
-    ///         name for it.</b> Measured 2026-09-05 over this tree's build output, at 73 per-PR
+    ///         ⚠
+    ///         <b>
+    ///             This is the class the cap was always really about, and until #77 the tree had no
+    ///             name for it.
+    ///         </b> Measured 2026-09-05 over this tree's build output, at 73 per-PR
     ///         suites: 21 can start a container and <b>17 of the 21 hold a k3s API server</b> — the
     ///         fifteen <c>*.Cluster.Conformance</c> assemblies, <c>CyberCloud.Kubernetes.Tests</c> and
     ///         <c>CyberCloud.AppHost.Tests</c>. The other four are
@@ -875,8 +897,11 @@ partial class Build
     ///         not the promise about it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Silent on a missing output directory, and only because
-    ///         <see cref="StartsContainers" /> has already warned about the same directory</b> — both
+    ///         ⚠
+    ///         <b>
+    ///             Silent on a missing output directory, and only because
+    ///             <see cref="StartsContainers" /> has already warned about the same directory
+    ///         </b> — both
     ///         are asked of every suite, and one fact should not produce two warnings. The answer is
     ///         the same safe direction: an unknown suite is treated as holding a cluster. ⚠ That
     ///         warning is worded to cover this verdict as well as its own, which it was not until the
@@ -900,12 +925,18 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Three, and it is measured — but read the next paragraph before quoting the
-    ///         measurement, because the obvious one does not say what it looks like it says.</b>
+    ///         ⚠
+    ///         <b>
+    ///             Three, and it is measured — but read the next paragraph before quoting the
+    ///             measurement, because the obvious one does not say what it looks like it says.
+    ///         </b>
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE "FOUR STARVES A SUITE, THREE DOES NOT" MEASUREMENT OF 2026-08-19 CANNOT BE
-    ///         USED TO CALIBRATE THIS NUMBER, AND THE REASON IS <see cref="StartsContainers" />.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THE "FOUR STARVES A SUITE, THREE DOES NOT" MEASUREMENT OF 2026-08-19 CANNOT BE
+    ///             USED TO CALIBRATE THIS NUMBER, AND THE REASON IS <see cref="StartsContainers" />.
+    ///         </b>
     ///         It was taken while the container-backed set was decided by grepping <c>.csproj</c>
     ///         files, which held slots for twelve suites that start no container and let three that
     ///         each hold a k3s cluster run free. "Degree 4" then meant "four mostly-cheap suites in
@@ -933,8 +964,11 @@ partial class Build
     ///         <c>CC_TEST_CONTAINER_PARALLELISM</c>, which is why the failure message names it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>#77 REPORTED THREE FAILING AND TWO PASSING ON THIS HOST, AND THE THREE STAYS —
-    ///         2026-09-05.</b> Read on its own that table says the divisor is one too large; read
+    ///         ⚠
+    ///         <b>
+    ///             #77 REPORTED THREE FAILING AND TWO PASSING ON THIS HOST, AND THE THREE STAYS —
+    ///             2026-09-05.
+    ///         </b> Read on its own that table says the divisor is one too large; read
     ///         with <see cref="StartsCluster" /> it says something else. At 8548ee9 a slot could be
     ///         spent on a suite holding a whole k3s, and nothing stopped a second and a third being
     ///         held beside it: <c>CyberCloud.Kubernetes.Tests</c> takes no cross-process permit and
@@ -964,8 +998,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>One, and — unlike every other number in this file — it is not measured, not
-    ///         derived, and not tunable, because it is not a property of the host.</b> It is the
+    ///         ⚠
+    ///         <b>
+    ///             One, and — unlike every other number in this file — it is not measured, not
+    ///             derived, and not tunable, because it is not a property of the host.
+    ///         </b> It is the
     ///         invariant fifteen of the seventeen cluster-backed assemblies already keep among
     ///         themselves: <c>ClusterSlot</c>, in
     ///         <c>test/CyberCloud.Cluster.Conformance/Infrastructure/ClusterInfrastructure.cs</c>, is
@@ -995,8 +1032,11 @@ partial class Build
     ///         the reason they have to move together is this paragraph.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The cost, stated in full — this paragraph read "and it is smaller than it looks"
-    ///         until the #77 review, and it was false on the machine that matters.</b> Fifteen of the
+    ///         ⚠
+    ///         <b>
+    ///             The cost, stated in full — this paragraph read "and it is smaller than it looks"
+    ///             until the #77 review, and it was false on the machine that matters.
+    ///         </b> Fifteen of the
     ///         seventeen were already serial through <c>ClusterSlot</c>, so the cap does not lengthen
     ///         <em>that</em> chain. What it does is stop the other two overlapping it, and stopping
     ///         an overlap is the same arithmetic as adding its wall clock to the chain:
@@ -1008,8 +1048,11 @@ partial class Build
     ///         this ten-CPU host with the cluster suites effectively serialised already.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>AND ON CI THE COST DOES NOT COME FROM THIS CAP AT ALL. IT COMES FROM
-    ///         <see cref="StartsCluster" />, AND IT IS THE LARGER HALF.</b> GitHub's hosted
+    ///         ⚠
+    ///         <b>
+    ///             AND ON CI THE COST DOES NOT COME FROM THIS CAP AT ALL. IT COMES FROM
+    ///             <see cref="StartsCluster" />, AND IT IS THE LARGER HALF.
+    ///         </b> GitHub's hosted
     ///         <c>ubuntu-24.04</c> runner — <c>.github/workflows/gate.yml</c> pins it — has 2 or 4
     ///         vCPUs, and <see cref="ContainerBackedSuiteDegree" /> is
     ///         <c>Math.Max(1, ProcessorCount / 3)</c>, so it is <b>1</b> on either: every
@@ -1019,17 +1062,26 @@ partial class Build
     ///         What changes on CI is the SET, not the degree: <c>CyberCloud.AppHost.Tests</c> ships
     ///         no <c>Testcontainers</c> assembly, so master's glob ran it entirely ungated, and the
     ///         <c>or</c> in <see cref="StartsContainers" /> now puts it in the chain. Up to its own
-    ///         wall clock joins the critical path — its <c>.csproj</c> says <i>"IT IS THEREFORE
-    ///         SLOW … this suite is a large fraction of"</i> the <c>Test</c> budget, and it measured
+    ///         wall clock joins the critical path — its <c>.csproj</c> says
+    ///         <i>
+    ///             "IT IS THEREFORE
+    ///             SLOW … this suite is a large fraction of"
+    ///         </i> the <c>Test</c> budget, and it measured
     ///         2 m 43 s warm on this ten-CPU host, which a cold small runner will not beat.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>That is a real charge against a real budget, and it has NOT been measured on a
-    ///         runner — nothing in this tree can measure it.</b> <c>gate.yml</c> gives the
+    ///         ⚠
+    ///         <b>
+    ///             That is a real charge against a real budget, and it has NOT been measured on a
+    ///             runner — nothing in this tree can measure it.
+    ///         </b> <c>gate.yml</c> gives the
     ///         <c>test</c> job <c>timeout-minutes: 30</c> and
     ///         <c>.github/scripts/assert-budget.sh</c> fails the pipeline past the 25 minutes
-    ///         <c>pr.yml</c> § <c>BUDGET_MINUTES</c> sets, so it can cost a PR. ⚠ <b>The lever is
-    ///         not this constant.</b> Making the cluster degree track the container degree — so the
+    ///         <c>pr.yml</c> § <c>BUDGET_MINUTES</c> sets, so it can cost a PR. ⚠
+    ///         <b>
+    ///             The lever is
+    ///             not this constant.
+    ///         </b> Making the cluster degree track the container degree — so the
     ///         cap "can never serialise more than master did" — is the repair that suggests itself
     ///         and it is worth nothing twice over: on CI it changes nothing, because the container
     ///         degree is already 1 and the added suite is added by the classifier; on this ten-CPU
@@ -1042,8 +1094,11 @@ partial class Build
     ///         <c>MaxDegreeOfParallelism</c> question the next paragraph is about.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>One consequence to know before reaching for it: a waiting suite still holds a
-    ///         <see cref="Parallel" /> worker.</b> <c>MaxDegreeOfParallelism</c> is
+    ///         ⚠
+    ///         <b>
+    ///             One consequence to know before reaching for it: a waiting suite still holds a
+    ///             <see cref="Parallel" /> worker.
+    ///         </b> <c>MaxDegreeOfParallelism</c> is
     ///         <see cref="Environment.ProcessorCount" /> and the partitioner hands out one item at a
     ///         time in order, so while the head of the queue is seventeen cluster-backed suites, the
     ///         workers are pinned to them and the cheap suites behind them do not start — the queue
@@ -1072,8 +1127,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>What this models is CPU, and it is worth being explicit about the two things it
-    ///         does not.</b> Memory is the obvious other candidate — a Docker daemon with 8 GB will
+    ///         ⚠
+    ///         <b>
+    ///             What this models is CPU, and it is worth being explicit about the two things it
+    ///             does not.
+    ///         </b> Memory is the obvious other candidate — a Docker daemon with 8 GB will
     ///         thrash long before its core count says it should — and the tree cannot observe it
     ///         honestly: on Linux the daemon shares the host's RAM and
     ///         <see cref="GC" />'s view of it is the right one, while on macOS and Windows the daemon
@@ -1103,16 +1161,18 @@ partial class Build
     ///         rather than deadlocking on a semaphore nobody can enter.
     ///     </para>
     /// </remarks>
-    static int ContainerBackedSuiteDegree =>
-        Math.Max(1, Environment.ProcessorCount / CpusPerContainerBackedSuite);
+    static int ContainerBackedSuiteDegree => Math.Max(1, Environment.ProcessorCount / CpusPerContainerBackedSuite);
 
     /// <summary>
     ///     Whether a suite <em>declares</em> a test matching a filter, without running it.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>--list-tests</c>, and the distinction from <see cref="SuiteTestPasses" /> is a
-    ///         safety one rather than a performance one.</b> The caller that needs this is
+    ///         ⚠
+    ///         <b>
+    ///             <c>--list-tests</c>, and the distinction from <see cref="SuiteTestPasses" /> is a
+    ///             safety one rather than a performance one.
+    ///         </b> The caller that needs this is
     ///         <c>Chaos</c>, checking that each of the seven invariants in docs/plan/23 § The chaos
     ///         invariants has a test. Answering that by running the test would kill a silo and
     ///         <c>FLUSHALL</c> a Redis to find out whether somebody wrote the test that kills a silo.
@@ -1124,14 +1184,14 @@ partial class Build
     ///         which a metadata reader here would see.
     ///     </para>
     /// </remarks>
-    bool SuiteListsTest(AbsolutePath project, string methodFilter)
-    {
+    bool SuiteListsTest(AbsolutePath project, string methodFilter) {
         var output = DotNetTasks.DotNet(
             $"run --configuration {Configuration} --no-restore --no-build --no-launch-profile "
             + $"--project {project} -- --list-tests --filter-method {methodFilter}",
             workingDirectory: RootDirectory,
             logOutput: false,
-            exitHandler: process => process.ExitCode);
+            exitHandler: process => process.ExitCode
+        );
 
         // xunit prints "Test discovery summary: found N test(s)". Reading the number rather than the
         // exit code because a filter matching nothing is a successful discovery of nothing.
@@ -1152,15 +1212,15 @@ partial class Build
     ///     renamed test would turn this into a check that runs nothing and approves of it — which is
     ///     the failure mode the Labels gate exists to avoid, one level down.
     /// </remarks>
-    bool SuiteTestPasses(AbsolutePath project, string methodFilter)
-    {
+    bool SuiteTestPasses(AbsolutePath project, string methodFilter) {
         var exitCode = 0;
 
         DotNetTasks.DotNet(
             $"run --configuration {Configuration} --no-restore --no-build --no-launch-profile "
             + $"--project {project} -- --minimum-expected-tests 1 --filter-method {methodFilter}",
             workingDirectory: RootDirectory,
-            exitHandler: process => exitCode = process.ExitCode);
+            exitHandler: process => exitCode = process.ExitCode
+        );
 
         return exitCode == 0;
     }
@@ -1206,14 +1266,20 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE COLLECTOR IS <c>coverlet</c>, AND THE REASON IS THAT THE FLOOR HAS TO BE
-    ///         MEASURABLE WHERE THE CODE IS WRITTEN.</b> It used to be <c>dotnet-coverage</c>, which
+    ///         ⚠
+    ///         <b>
+    ///             THE COLLECTOR IS <c>coverlet</c>, AND THE REASON IS THAT THE FLOOR HAS TO BE
+    ///             MEASURABLE WHERE THE CODE IS WRITTEN.
+    ///         </b> It used to be <c>dotnet-coverage</c>, which
     ///         ships native profilers for <c>ubuntu/x64</c>, <c>alpine/x64</c>, <c>macos/x64</c> and
     ///         Windows and for nothing else — both of its arm64 directories hold
     ///         <c>MicrosoftInstrumentationEngine_arm64.dll</c>, a <em>Windows</em> DLL. So on every
     ///         Apple Silicon and every arm64 Linux machine the probe below correctly said "no", the
-    ///         floor correctly reported ○, and the result was that <b>an x64 CI runner was the first
-    ///         and only place the floor had ever run</b>. Two projects breached it unnoticed under
+    ///         floor correctly reported ○, and the result was that
+    ///         <b>
+    ///             an x64 CI runner was the first
+    ///             and only place the floor had ever run
+    ///         </b>. Two projects breached it unnoticed under
     ///         that arrangement, which is what a gate nobody can run locally is for.
     ///     </para>
     ///     <para>
@@ -1283,8 +1349,7 @@ partial class Build
     ///         mean "the repository's analyzer settings changed", not "the profiler is missing".
     ///     </para>
     /// </remarks>
-    bool ProbeCoverageCollection()
-    {
+    bool ProbeCoverageCollection() {
         var probe = CoverageProbeDirectory;
         var assembly = probe / "bin" / "Probe.dll";
         var report = probe / "probe.cobertura.xml";
@@ -1300,15 +1365,16 @@ partial class Build
             workingDirectory: probe,
             logOutput: false,
             logInvocation: false,
-            exitHandler: process => buildExitCode = process.ExitCode);
+            exitHandler: process => buildExitCode = process.ExitCode
+        );
 
-        if (buildExitCode != 0 || !assembly.FileExists())
-        {
+        if (buildExitCode != 0 || !assembly.FileExists()) {
             // ⚠ Printed, not swallowed. "Could not build the probe" with no compiler output is a
             // dead end, and the reader has no probe project to go and build by hand — this method
             // wrote it.
-            foreach (var line in buildOutput.TakeLast(20))
+            foreach (var line in buildOutput.TakeLast(20)) {
                 Log.Warning("  {Line}", line.Text);
+            }
 
             Log.Warning(
                 "Test: could not build the coverage probe in {Probe} (exit {Exit}), so whether "
@@ -1316,7 +1382,8 @@ partial class Build
                 + "makes the floor say it was not measured rather than guess a number.",
                 probe,
                 buildExitCode,
-                CoverletVersion);
+                CoverletVersion
+            );
 
             return false;
         }
@@ -1332,24 +1399,25 @@ partial class Build
             workingDirectory: RootDirectory,
             logOutput: false,
             logInvocation: false,
-            exitHandler: process => process.ExitCode);
+            exitHandler: process => process.ExitCode
+        );
 
-        if (!report.FileExists())
-        {
+        if (!report.FileExists()) {
             Log.Warning(
                 "Test: coverlet {Version} wrote no report for the probe at all on {Platform}. "
                 + "Coverage will not be collected.",
                 CoverletVersion,
-                EnvironmentInfo.Platform);
+                EnvironmentInfo.Platform
+            );
 
             return false;
         }
 
-        var probed = CoverageReport.Read(report).Modules
-            .FirstOrDefault(x => x.Covered > 0 && x.Covered < x.Coverable);
+        var probed = CoverageReport.Read(report)
+            .Modules
+                .FirstOrDefault(x => x.Covered > 0 && x.Covered < x.Coverable);
 
-        if (probed is null)
-        {
+        if (probed is null) {
             Log.Warning(
                 "Test: coverlet {Version} cannot instrument on {Platform}/{Architecture} — it wrote a "
                 + "report with nothing usable in it. The coverage floor will report that it was not "
@@ -1360,7 +1428,8 @@ partial class Build
                 + "CoverageCollectionIsAvailable has the history.",
                 CoverletVersion,
                 EnvironmentInfo.Platform,
-                System.Runtime.InteropServices.RuntimeInformation.OSArchitecture);
+                System.Runtime.InteropServices.RuntimeInformation.OSArchitecture
+            );
 
             return false;
         }
@@ -1371,7 +1440,8 @@ partial class Build
             CoverletVersion,
             probed.Rate,
             probed.Covered,
-            probed.Coverable);
+            probed.Coverable
+        );
 
         return true;
     }
@@ -1380,8 +1450,7 @@ partial class Build
     /// <remarks>
     ///     Rewriting an identical file would re-date it and cost a rebuild on every <c>Test</c> run.
     /// </remarks>
-    void WriteProbeSources(AbsolutePath probe)
-    {
+    void WriteProbeSources(AbsolutePath probe) {
         probe.CreateDirectory();
 
         // The framework the rest of the tree targets, read rather than repeated — a probe pinned to
@@ -1393,11 +1462,14 @@ partial class Build
                 .FirstOrDefault()?.Value
             ?? throw new InvalidOperationException(
                 "Directory.Build.props declares no <TargetFramework>, so the coverage probe cannot "
-                + "be pinned to the same one as the rest of the tree.");
+                + "be pinned to the same one as the rest of the tree."
+            );
 
         // ⚠ Three lines, one of them never called, so the answer is checkable by hand: a working
         // collector has to report 2 of 3 and nothing else can.
-        Write(probe / "Program.cs", """
+        Write(
+            probe / "Program.cs",
+            """
             public static class Probe
             {
                 public static int Covered(int n) => n > 0 ? n * 2 : 0;
@@ -1405,9 +1477,12 @@ partial class Build
                 public static void Main() => System.Console.WriteLine(Covered(21));
             }
 
-            """);
+            """
+        );
 
-        Write(probe / "Probe.csproj", $"""
+        Write(
+            probe / "Probe.csproj",
+            $"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
@@ -1424,17 +1499,21 @@ partial class Build
               </PropertyGroup>
             </Project>
 
-            """);
+            """
+        );
 
         // The stoppers. MSBuild and NuGet both walk up from the project directory, and artifacts/ is
         // inside the repository.
-        foreach (var stopper in new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props" })
+        foreach (var stopper in new[] {
+                     "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props"
+                 }) {
             Write(probe / stopper, "<Project />\n");
+        }
 
-        static void Write(AbsolutePath path, string content)
-        {
-            if (!path.FileExists() || path.ReadAllText() != content)
+        static void Write(AbsolutePath path, string content) {
+            if (!path.FileExists() || path.ReadAllText() != content) {
                 path.WriteAllText(content);
+            }
         }
     }
 
@@ -1458,8 +1537,7 @@ partial class Build
     ///     rather than read here so a malformed row fails before the suites run rather than after —
     ///     see the call site.
     /// </param>
-    void EnforceCoverageFloor(Dictionary<string, CoverageReport.Pin> baseline)
-    {
+    void EnforceCoverageFloor(Dictionary<string, CoverageReport.Pin> baseline) {
         var reports = CoverageReportFile is not null
             ? [(AbsolutePath)CoverageReportFile]
             : CoverageDirectory.DirectoryExists()
@@ -1488,21 +1566,20 @@ partial class Build
         // would be a number nobody could defend.
         var measuredNothing = coverage is null || coverage.MentionedAssemblies.Count == 0;
 
-        if (measuredNothing)
-        {
+        if (measuredNothing) {
             var why = reports.Count == 0
                 ? CoverageCollectionIsAvailable
                     ? $"coverlet {CoverletVersion} produced no report, which on a machine where the "
-                      + "probe passed means the collection itself failed; its output is above"
+                    + "probe passed means the collection itself failed; its output is above"
                     : $"coverlet {CoverletVersion} cannot instrument on "
-                      + $"{EnvironmentInfo.Platform}/{System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}, "
-                      + "which the probe above established by trying it"
+                    + $"{EnvironmentInfo.Platform}/{System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}, "
+                    + "which the probe above established by trying it"
                 : $"{reports.Count} report(s) came back naming no assembly at all, so coverlet "
-                  + $"{CoverletVersion} instrumented nothing for the suites even though the probe "
-                  + "said it would. It instruments the assemblies it finds a portable PDB beside in "
-                  + "the suite's own output directory, so the usual cause is that Build.Test.cs § "
-                  + "SuiteOutputDirectory no longer names the directory the build writes to. "
-                  + "Build.Test.cs § CoverageCollectionIsAvailable";
+                + $"{CoverletVersion} instrumented nothing for the suites even though the probe "
+                + "said it would. It instruments the assemblies it finds a portable PDB beside in "
+                + "the suite's own output directory, so the usual cause is that Build.Test.cs § "
+                + "SuiteOutputDirectory no longer names the directory the build writes to. "
+                + "Build.Test.cs § CoverageCollectionIsAvailable";
 
             var message =
                 "Test: the coverage floor was NOT ENFORCED. docs/plan/23 § Test layers requires "
@@ -1514,12 +1591,12 @@ partial class Build
             // Silicon developer's `Test` for a gap in a Microsoft tool would get the floor deleted
             // within a week; passing CI over the same gap would mean the floor never runs anywhere.
             // docs/plan/23 § CI shape puts this gate on every PR, and PRs are built on Linux.
-            if (IsServerBuild)
-            {
+            if (IsServerBuild) {
                 Assert.Fail(
                     message
                     + " On CI this is a failure, not a warning — a coverage floor that CI skips is a "
-                    + "floor that does not exist.");
+                    + "floor that does not exist."
+                );
             }
 
             Log.Warning(message);
@@ -1536,10 +1613,10 @@ partial class Build
             CoverageFloor,
             reports.Count,
             baseline.Count,
-            CoverageBaselineFile.Name);
+            CoverageBaselineFile.Name
+        );
 
-        foreach (var module in coverage.Modules.Where(x => shipping.Contains(x.Assembly, StringComparer.Ordinal)))
-        {
+        foreach (var module in coverage.Modules.Where(x => shipping.Contains(x.Assembly, StringComparer.Ordinal))) {
             // ⚠ A pinned project gets its own marker rather than a ✘, and the pin is printed beside
             // the rate. ✘ has to keep meaning "this run broke something": a reader scanning 68 rows
             // for a cross must not find six that were already true this morning, or they stop
@@ -1553,16 +1630,17 @@ partial class Build
                 module.Rate,
                 module.Covered,
                 module.Coverable,
-                pinned ? $"  pinned {pin!.Rate:P1} — {CoverageBaselineFile.Name} line {pin.Line}" : string.Empty);
+                pinned ? $"  pinned {pin!.Rate:P1} — {CoverageBaselineFile.Name} line {pin.Line}" : string.Empty
+            );
         }
 
-        foreach (var project in nothingToCover.OrderBy(x => x, StringComparer.Ordinal))
-        {
+        foreach (var project in nothingToCover.OrderBy(x => x, StringComparer.Ordinal)) {
             Log.Information(
                 "  {Marker} {Assembly,-46} {Note}",
                 "○",
                 project,
-                "no coverable line to instrument — CoverageReport.cs § CoverableLines");
+                "no coverable line to instrument — CoverageReport.cs § CoverableLines"
+            );
         }
 
         var violations = coverage.Violations(
@@ -1570,10 +1648,10 @@ partial class Build
             CoverageFloor,
             nothingToCover,
             baseline,
-            CoverageBaselineFile.Name);
+            CoverageBaselineFile.Name
+        );
 
-        if (violations.Count == 0)
-        {
+        if (violations.Count == 0) {
             Log.Information(
                 "Test: {Count} shipping project(s) at or above the {Floor:P0} floor ({Empty} of them "
                 + "with no executable code at all, {Pinned} below it and pinned by {File})",
@@ -1581,13 +1659,15 @@ partial class Build
                 CoverageFloor,
                 nothingToCover.Count,
                 baseline.Count,
-                CoverageBaselineFile.Name);
+                CoverageBaselineFile.Name
+            );
 
             return;
         }
 
-        foreach (var violation in violations)
+        foreach (var violation in violations) {
             Log.Error("Test: {Violation}", violation);
+        }
 
         Assert.Fail(
             $"{violations.Count} coverage violation(s) over {shipping.Count} shipping project(s), "
@@ -1596,7 +1676,8 @@ partial class Build
             + $"shaped like whatever the tree happened to be on the day it was added. {CoverageBaselineFile.Name} "
             + "is not that list: every row in it names a measured rate the project may not fall "
             + "below, must be deleted the moment the project reaches the floor, and is a review "
-            + "request rather than a build fix.");
+            + "request rather than a build fix."
+        );
     }
 
     /// <summary>The reviewed list of projects below the floor, with the rate each is held to.</summary>
@@ -1607,8 +1688,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A row without a reason is refused, and that is the point of the file rather than
-    ///         a formatting rule.</b> The whole value of <c>actions-without-handlers.txt</c> is that
+    ///         ⚠
+    ///         <b>
+    ///             A row without a reason is refused, and that is the point of the file rather than
+    ///             a formatting rule.
+    ///         </b> The whole value of <c>actions-without-handlers.txt</c> is that
     ///         every row says what is missing and what closing it would take, so the next person's
     ///         decision is cheap. A bare list of names and numbers is a list somebody adds to at 6pm;
     ///         a list where adding a row means writing a sentence a reviewer will read is a list that
@@ -1623,32 +1707,36 @@ partial class Build
     /// </remarks>
     // Dictionary rather than IReadOnlyDictionary: CA1859 is an error here and this is internal to
     // the build — the same concession Build.Test.cs § ProjectsIn already makes.
-    Dictionary<string, CoverageReport.Pin> CoverageBaseline()
-    {
+    Dictionary<string, CoverageReport.Pin> CoverageBaseline() {
         Assert.FileExists(
             CoverageBaselineFile,
             $"{CoverageBaselineFile.Name} is missing. It is the reviewed list of projects below the "
             + $"{CoverageFloor:P0} floor and the rate each is held to; without it this gate cannot "
             + "tell debt somebody signed off from a regression this change introduced, and treating "
-            + "all of it as new would fail the build over the former.");
+            + "all of it as new would fail the build over the former."
+        );
 
         var rows = new Dictionary<string, CoverageReport.Pin>(StringComparer.Ordinal);
         var lines = CoverageBaselineFile.ReadAllLines();
 
-        for (var i = 0; i < lines.Length; i++)
-        {
+        for (var i = 0; i < lines.Length; i++) {
             var line = lines[i].Trim();
 
-            if (line.Length == 0 || line.StartsWith('#'))
+            if (line.Length == 0 || line.StartsWith('#')) {
                 continue;
+            }
 
-            var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var parts = line.Split(
+                (char[]?)null,
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            );
 
             Assert.True(
                 parts.Length == 2,
                 $"{CoverageBaselineFile.Name} line {i + 1} is '{line}'. A row is the project name, "
                 + "whitespace, and the measured rate as a percentage with one decimal — for example "
-                + "'CyberCloud.Silo.Host    32.5'.");
+                + "'CyberCloud.Silo.Host    32.5'."
+            );
 
             Assert.True(
                 double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent)
@@ -1656,22 +1744,27 @@ partial class Build
                 && percent < CoverageFloor * 100,
                 $"{CoverageBaselineFile.Name} line {i + 1} pins {parts[0]} at '{parts[1]}'. That has to "
                 + $"be a number between 0 and {CoverageFloor * 100:F0} — a pin at or above the floor "
-                + "is not debt, it is a project that belongs out of this file entirely.");
+                + "is not debt, it is a project that belongs out of this file entirely."
+            );
 
             // ⚠ The reason, and it is required. See the remarks: the line immediately above, no blank
             // line between, so it cannot drift away from the row it explains.
             Assert.True(
-                i > 0 && lines[i - 1].TrimStart().StartsWith('#') && lines[i - 1].Trim().TrimStart('#').Trim().Length > 0,
+                i > 0
+                && lines[i - 1].TrimStart().StartsWith('#')
+                && lines[i - 1].Trim().TrimStart('#').Trim().Length > 0,
                 $"{CoverageBaselineFile.Name} line {i + 1} pins {parts[0]} and the line above it is not "
                 + "a comment. Every row needs a sentence directly above it saying what is uncovered "
                 + "and what closing it would take — a row is a review request, and a reviewer cannot "
-                + "answer one that is a name and a number.");
+                + "answer one that is a name and a number."
+            );
 
             Assert.True(
                 rows.TryAdd(parts[0], new(percent / 100, i + 1)),
                 $"{CoverageBaselineFile.Name} pins '{parts[0]}' twice, on lines "
                 + $"{rows.GetValueOrDefault(parts[0])?.Line} and {i + 1}. Two rates for one project "
-                + "means one of them is not the measurement.");
+                + "means one of them is not the measurement."
+            );
         }
 
         return rows;
@@ -1683,8 +1776,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A project with no executable code and a project nothing tests look identical in a
-    ///         Cobertura report</b> — neither gets a <c>&lt;package&gt;</c> element — and one of them
+    ///         ⚠
+    ///         <b>
+    ///             A project with no executable code and a project nothing tests look identical in a
+    ///             Cobertura report
+    ///         </b> — neither gets a <c>&lt;package&gt;</c> element — and one of them
     ///         deserves a pass. Four projects in this tree are the first kind:
     ///         <c>CyberCloud.Providers.*.Application</c>, each one nothing but an ABP module
     ///         declaration with no body. <c>dotnet-coverage instrument</c> refuses all four with

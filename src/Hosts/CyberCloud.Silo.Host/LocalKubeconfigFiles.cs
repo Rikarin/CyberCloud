@@ -9,18 +9,27 @@ namespace CyberCloud.Silo.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This closes the one seam that made every production silo unable to reach any
-///         cluster.</b> <c>KubeApiClientFactory.ResolveKubeconfig</c> is a nullable delegate and its
-///         null case is a refusal — <i>"No kubeconfig resolver is registered, so cluster … cannot be
-///         reached … the resolver has to be supplied at registration time"</i> — and no host supplied
+///         ⚠
+///         <b>
+///             This closes the one seam that made every production silo unable to reach any
+///             cluster.
+///         </b> <c>KubeApiClientFactory.ResolveKubeconfig</c> is a nullable delegate and its
+///         null case is a refusal —
+///         <i>
+///             "No kubeconfig resolver is registered, so cluster … cannot be
+///             reached … the resolver has to be supplied at registration time"
+///         </i> — and no host supplied
 ///         one. So <c>AddCyberCloudKubernetes</c> put <c>ClusterConnectionGrain</c> in the silo,
 ///         <see cref="SiloComposition" /> wired <c>GrainClusterConnectionFactory</c> over it, and the
 ///         first apply of the first reconcile still failed with an <c>InternalError</c> naming a
 ///         registration nobody had made. The refusal is correct; what was missing was any caller.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It is opt-in and it is rooted, because "read a kubeconfig off the filesystem" is a
-///         capability rather than a convenience.</b> With no root configured this registers nothing
+///         ⚠
+///         <b>
+///             It is opt-in and it is rooted, because "read a kubeconfig off the filesystem" is a
+///             capability rather than a convenience.
+///         </b> With no root configured this registers nothing
 ///         and the silo keeps the refusal above, which is the right posture for a cluster whose
 ///         kubeconfig belongs in Vault (docs/plan/09 § Cluster connections, docs/plan/18). With a root
 ///         configured, a <c>CredentialRef</c> must be a <c>file:</c> URI resolving <i>inside</i> that
@@ -47,8 +56,11 @@ static class LocalKubeconfigFiles {
     ///     What a reference has to start with, checked before it is parsed.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Because comparing <c>Uri.Scheme</c> alone answers a narrower question than it looks
-    ///     like it does, and the difference is per-platform.</b> <see cref="Uri" /> treats an
+    ///     ⚠
+    ///     <b>
+    ///         Because comparing <c>Uri.Scheme</c> alone answers a narrower question than it looks
+    ///         like it does, and the difference is per-platform.
+    ///     </b> <see cref="Uri" /> treats an
     ///     <i>implicit</i> file path as a <c>file:</c> URI, so on Linux and macOS a bare
     ///     <c>/etc/kubernetes/admin.conf</c> parsed as absolute, reported scheme <c>file</c> and was
     ///     resolved — while the same reference on Windows failed to parse and was refused as "not a

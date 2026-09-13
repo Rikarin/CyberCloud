@@ -28,7 +28,8 @@ namespace CyberCloud.Tenancy;
 ///     </para>
 /// </remarks>
 public sealed class TenantDirectoryGrain(
-    [PersistentState("directory", StorageTiers.Durable)] IPersistentState<TenantDirectoryState> state
+    [PersistentState("directory", StorageTiers.Durable)]
+    IPersistentState<TenantDirectoryState> state
 )
     : Grain, ITenantDirectoryGrain {
     /// <summary>

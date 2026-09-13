@@ -13,18 +13,29 @@ namespace CyberCloud.Providers.DBforMySQL.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/12 § The catalogue, <i>"MariaDB — <c>CyberCloud.DBforMySQL/servers</c> · M3 ·
-///         0.8 EM"</i>, on <b>mariadb-operator</b> (ADR-010 clause 1, which names the operator per
+///         docs/plan/12 § The catalogue,
+///         <i>
+///             "MariaDB — <c>CyberCloud.DBforMySQL/servers</c> · M3 ·
+///             0.8 EM"
+///         </i>, on <b>mariadb-operator</b> (ADR-010 clause 1, which names the operator per
 ///         managed service).
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE COMPATIBILITY CLAIM, WHICH IS THIS ROW'S CENTRAL OBLIGATION AND NOT A
-///         GARNISH.</b> docs/plan/12 line 310: <i>"Positioned as MySQL-compatible; the same honesty
-///         rule as FerretDB applies to the compatibility claim."</i> That rule, at line 262, is:
-///         <i>"⚠ This is a compatibility layer and the product page must say so, with a
-///         supported-subset table. … Selling it as 'MongoDB' produces a churn event at the first
-///         <c>$lookup</c>. Selling it as 'MongoDB-compatible document database, here is exactly what
-///         works' produces a happy customer with a smaller use case."</i> ADR-011 makes the same
+///         ⚠
+///         <b>
+///             THE COMPATIBILITY CLAIM, WHICH IS THIS ROW'S CENTRAL OBLIGATION AND NOT A
+///             GARNISH.
+///         </b> docs/plan/12 line 310:
+///         <i>
+///             "Positioned as MySQL-compatible; the same honesty
+///             rule as FerretDB applies to the compatibility claim."
+///         </i> That rule, at line 262, is:
+///         <i>
+///             "⚠ This is a compatibility layer and the product page must say so, with a
+///             supported-subset table. … Selling it as 'MongoDB' produces a churn event at the first
+///             <c>$lookup</c>. Selling it as 'MongoDB-compatible document database, here is exactly what
+///             works' produces a happy customer with a smaller use case."
+///         </i> ADR-011 makes the same
 ///         demand of the cache row in one line — <i>"say Valkey on the product page"</i>.
 ///     </para>
 ///     <para>
@@ -46,8 +57,11 @@ namespace CyberCloud.Providers.DBforMySQL.Contracts;
 ///         that the claim reaches the API surface.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Schema2026" /> is the authored side of the pair and
-///         <c>charts/managed/mariadb/values.yaml</c> is the generated one.</b> ADR-010 § Which end
+///         ⚠
+///         <b>
+///             <see cref="Schema2026" /> is the authored side of the pair and
+///             <c>charts/managed/mariadb/values.yaml</c> is the generated one.
+///         </b> ADR-010 § Which end
 ///         authors the schema, DECIDED 2026-08-11: the C# <c>ResourceSchema</c> is authored, the
 ///         chart's <c>@param</c> block is generated from it by <c>ChartAnnotationEmitter</c> and
 ///         byte-diffed by <c>./build.sh Charts</c>. <c>/location</c> is root-level and
@@ -55,8 +69,11 @@ namespace CyberCloud.Providers.DBforMySQL.Contracts;
 ///         by anyone remembering.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No property here is <see cref="SchemaProperty.Secret" />, and both passwords reach
-///         the data plane as references by name.</b> Nothing on the write path swaps a secret value
+///         ⚠
+///         <b>
+///             No property here is <see cref="SchemaProperty.Secret" />, and both passwords reach
+///             the data plane as references by name.
+///         </b> Nothing on the write path swaps a secret value
 ///         for a <c>SecretRef</c> before the grain writes desired state
 ///         (<see cref="SchemaProperty" />'s own remarks say so), so a declared secret would be a
 ///         plaintext password in durable state. <c>spec.rootPasswordSecretKeyRef</c> and
@@ -170,8 +187,11 @@ public static class MariaDbServers {
     ///         works.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>This table describes the two ENGINES and not this platform's implementation of
-    ///         them</b>, which is why nothing here is worded as a roadmap item. The rows marked
+    ///         ⚠
+    ///         <b>
+    ///             This table describes the two ENGINES and not this platform's implementation of
+    ///             them
+    ///         </b>, which is why nothing here is worded as a roadmap item. The rows marked
     ///         <c>false</c> do not close when the provider grows a property; they close if MariaDB
     ///         implements them, which is not a thing this row waits for.
     ///         <c>charts/managed/mariadb/conformance.yaml</c> § owed is where <i>this platform's</i>
@@ -251,8 +271,11 @@ public static class MariaDbServers {
     ///     type's own remarks give. It must match <c>charts/managed/mariadb/SOURCE</c>'s
     ///     <c>upstream-api: k8s.mariadb.com/v1alpha1</c>.
     ///     <para>
-    ///         ⚠ <b><c>v1alpha1</c> is the only served version, and this is the first type in the tree
-    ///         whose CRD is not at a stable one.</b> It is not a reason to refuse the row — the
+    ///         ⚠
+    ///         <b>
+    ///             <c>v1alpha1</c> is the only served version, and this is the first type in the tree
+    ///             whose CRD is not at a stable one.
+    ///         </b> It is not a reason to refuse the row — the
     ///         api-version this provider publishes is a promise about <i>our</i> body shape, which the
     ///         platform controls — but a conversion upstream is a reconciler change, and
     ///         <c>conformance.yaml</c> § owed, <c>crd-is-v1alpha1</c>, records that it was expected
@@ -294,8 +317,11 @@ public static class MariaDbServers {
 
     /// <summary>The longest account name this API accepts.</summary>
     /// <remarks>
-    ///     ⚠ <b>MySQL's limit, not MariaDB's, and that is <see cref="SupportedSubset" /> applied to a
-    ///     number.</b> MariaDB accepts a longer account name than MySQL does. Taking the larger of the
+    ///     ⚠
+    ///     <b>
+    ///         MySQL's limit, not MariaDB's, and that is <see cref="SupportedSubset" /> applied to a
+    ///         number.
+    ///     </b> MariaDB accepts a longer account name than MySQL does. Taking the larger of the
     ///     two would let a tenant create an account whose name their own MySQL tooling cannot
     ///     reproduce — a compatibility break introduced by this platform rather than inherited from
     ///     the engine, which is the one kind this row has no excuse for. The smaller limit is a subset
@@ -317,8 +343,11 @@ public static class MariaDbServers {
     ///         <c>async-replication-topology</c>, carries it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The property is <see cref="SchemaProperty.Immutable" />, and adding the third
-    ///         member later is a new api-version either way.</b> <c>OpenApiCompatibility</c> refuses a
+    ///         ⚠
+    ///         <b>
+    ///             The property is <see cref="SchemaProperty.Immutable" />, and adding the third
+    ///             member later is a new api-version either way.
+    ///         </b> <c>OpenApiCompatibility</c> refuses a
     ///         widened <see cref="SchemaProperty.AllowedValues" />, so a third topology is a new date;
     ///         what declaring the axis now buys is that it is a new date for <i>one enum member</i>
     ///         rather than for a property that did not exist, which leaves the meaning, the
@@ -330,8 +359,11 @@ public static class MariaDbServers {
     /// <summary>The instance count a Galera server runs.</summary>
     /// <remarks>
     ///     ⚠ <b>A constant rather than a tenant setting, and the CRD is why rather than taste.</b> The
-    ///     <c>MariaDB</c> CRD carries the rule <i>"An odd number of MariaDB instances
-    ///     (mariadb.spec.replicas) is required to avoid split brain situations for Galera"</i>, with an
+    ///     <c>MariaDB</c> CRD carries the rule
+    ///     <i>
+    ///         "An odd number of MariaDB instances
+    ///         (mariadb.spec.replicas) is required to avoid split brain situations for Galera"
+    ///     </i>, with an
     ///     opt-out at <c>galera.replicasAllowEvenNumber</c> that this provider does not render.
     ///     <see cref="SchemaProperty" /> can express <see cref="SchemaProperty.Minimum" /> and
     ///     <see cref="SchemaProperty.Maximum" /> and has no way to say "odd" — so a <c>replicas</c>
@@ -386,11 +418,7 @@ public static class MariaDbServers {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the MariaDB objects."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -399,20 +427,13 @@ public static class MariaDbServers {
                     Required: true,
                     Description: "Major MariaDB version, by LTS series. Minor upgrades are applied "
                     + "automatically in the maintenance window."
-                ) {
-                    AllowedValues = ["10.11", "11.4", "11.8"],
-                    DefaultJson = "\"11.4\""
-                },
+                ) { AllowedValues = ["10.11", "11.4", "11.8"], DefaultJson = "\"11.4\"" },
                 new(
                     "/properties/highAvailability",
                     SchemaKind.Text,
                     Description: "Replication topology. Galera is three synchronous instances; None is "
                     + "a single instance and a single point of failure, offered for development only."
-                ) {
-                    AllowedValues = Topologies,
-                    Immutable = true,
-                    DefaultJson = "\"Galera\""
-                },
+                ) { AllowedValues = Topologies, Immutable = true, DefaultJson = "\"Galera\"" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -442,19 +463,13 @@ public static class MariaDbServers {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -466,20 +481,12 @@ public static class MariaDbServers {
                     Required: true,
                     Description: "Data volume size in Kubernetes quantity form. Grows online; never "
                     + "shrinks."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"20Gi\"",
-                    ExampleJson = "\"20Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"20Gi\"", ExampleJson = "\"20Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name. Empty means the cluster default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/bootstrap",
                     SchemaKind.Nested,
@@ -504,10 +511,7 @@ public static class MariaDbServers {
                     + "at MySQL's 32 characters rather than MariaDB's longer limit, because this row "
                     + "is sold as MySQL-compatible."
                 ) {
-                    Pattern = IdentifierPattern,
-                    MinLength = 1,
-                    MaxLength = MaxUserNameLength,
-                    DefaultJson = "\"app\""
+                    Pattern = IdentifierPattern, MinLength = 1, MaxLength = MaxUserNameLength, DefaultJson = "\"app\""
                 },
                 new(
                     "/properties/monitoring",
@@ -518,9 +522,7 @@ public static class MariaDbServers {
                     "/properties/monitoring/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether the operator runs a mysqld-exporter beside the server."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -565,8 +567,7 @@ public static class MariaDbServers {
                     + "rather than hidden behind it."
                 ),
                 new("/port", SchemaKind.WholeNumber, Required: true, Description: "The TCP port.") {
-                    Minimum = 1,
-                    Maximum = 65535
+                    Minimum = 1, Maximum = 65535
                 },
                 new("/database", SchemaKind.Text, Required: true, Description: "The application database."),
                 new("/username", SchemaKind.Text, Required: true, Description: "The application account."),
@@ -592,24 +593,33 @@ public static class MariaDbServers {
 
     /// <summary>The sizing presets of docs/plan/12 § Sizing vocabulary, s1 family.</summary>
     /// <remarks>
-    ///     ⚠ <b>This table is a second copy of
-    ///     <c>charts/managed/mariadb/templates/_helpers.tpl</c>'s <c>mariadb.presets</c>, and the
-    ///     duplication is the cost of having no chart renderer.</b>
+    ///     ⚠
+    ///     <b>
+    ///         This table is a second copy of
+    ///         <c>charts/managed/mariadb/templates/_helpers.tpl</c>'s <c>mariadb.presets</c>, and the
+    ///         duplication is the cost of having no chart renderer.
+    ///     </b>
     ///     <c>CyberCloud.Kubernetes.Charts</c> does not exist (docs/plan/03 § src), so the object is
     ///     built here; the moment it does, this table and the reconciler's use of it should go and the
     ///     chart's should stay, because the chart is the file a support engineer reads. Until then both
     ///     exist and <c>ChartRegistryPairTests</c> asserts they agree value for value.
     ///     <para>
-    ///         ⚠ <b>AND IT IS ALSO A SECOND COPY OF <c>PostgresServers.Presets</c>, WHICH NOTHING
-    ///         COMPARES.</b> The s1 family is docs/plan/12 § Sizing vocabulary's, not this provider's,
+    ///         ⚠
+    ///         <b>
+    ///             AND IT IS ALSO A SECOND COPY OF <c>PostgresServers.Presets</c>, WHICH NOTHING
+    ///             COMPARES.
+    ///         </b> The s1 family is docs/plan/12 § Sizing vocabulary's, not this provider's,
     ///         and two managed relational databases now spell the same eight rows independently. Rule 2
     ///         of docs/plan/03 § Assembly graph rules forbids reaching the other provider's copy — even
     ///         for a <c>const</c>, and especially for one, since the compiler inlines it and the gate
     ///         reads binding references. The quantity grammar had the same problem and was lifted into
     ///         <c>KubeQuantity</c>, beside the parser that gave it a reason to live there; a preset
     ///         table is a docs/plan/12 fact with no such neighbour in
-    ///         <c>CyberCloud.ResourceManager.Contracts</c>, so it is <b>recorded here rather than
-    ///         fixed</b> — and the shape of the fix, when a third s1 consumer arrives, is a sizing
+    ///         <c>CyberCloud.ResourceManager.Contracts</c>, so it is
+    ///         <b>
+    ///             recorded here rather than
+    ///             fixed
+    ///         </b> — and the shape of the fix, when a third s1 consumer arrives, is a sizing
     ///         vocabulary in the resource manager rather than a fourth copy.
     ///     </para>
     /// </remarks>
@@ -626,8 +636,7 @@ public static class MariaDbServers {
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── Addressing ────────────────────────────────────────────────────────────────────────────
 
@@ -652,8 +661,11 @@ public static class MariaDbServers {
     /// <summary>The Galera configuration <c>volumeClaimTemplate</c>'s <c>metadata.name</c>.</summary>
     /// <remarks>
     ///     ⚠ <c>pkg/controller/galera/resources/resources.go</c>'s
-    ///     <c>GaleraConfigVolume = "galera"</c>. ⚠ <b>It exists because of a default rather than
-    ///     because this platform asked for it.</b> <see cref="ServerJson" /> renders
+    ///     <c>GaleraConfigVolume = "galera"</c>. ⚠
+    ///     <b>
+    ///         It exists because of a default rather than
+    ///         because this platform asked for it.
+    ///     </b> <see cref="ServerJson" /> renders
     ///     <c>spec.galera = { enabled: true }</c> and nothing else; the operator's
     ///     <c>Galera.SetDefaults</c> then fills in a 100 MiB <c>config.volumeClaimTemplate</c>,
     ///     because <c>config.reuseStorageVolume</c> defaults to <c>false</c>. So an HA server has a
@@ -676,12 +688,18 @@ public static class MariaDbServers {
     ///     <c>BuildMariadbStatefulSet</c>. The operator's own <c>MariaDB.PVCKey</c> composes the same
     ///     claim name this file predicts: <c>fmt.Sprintf("%s-%s-%d", name, m.Name, index)</c>.
     ///     <para>
-    ///         ⚠ <b>THIS IS VERSION-COUPLED TO A MAINTAINED PROJECT, WHICH IS THE UNCOMFORTABLE PART
-    ///         AND IS SAID RATHER THAN HIDDEN.</b> This platform does not render the
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS VERSION-COUPLED TO A MAINTAINED PROJECT, WHICH IS THE UNCOMFORTABLE PART
+    ///             AND IS SAID RATHER THAN HIDDEN.
+    ///         </b> This platform does not render the
     ///         <c>StatefulSet</c>, so the claims are named by mariadb-operator; the reading above is
     ///         of the version <c>charts/bundle/mariadb-operator/component.yaml</c> pins, and that pin
-    ///         moves. ⚠ <b>The failure direction on a WRONG name is the quiet one and it is worth
-    ///         being precise about:</b> <c>VolumeReclaimer</c>'s ownership guard protects against
+    ///         moves. ⚠
+    ///         <b>
+    ///             The failure direction on a WRONG name is the quiet one and it is worth
+    ///             being precise about:
+    ///         </b> <c>VolumeReclaimer</c>'s ownership guard protects against
     ///         destroying somebody else's disk, not against missing our own — a claim named wrongly
     ///         simply is not found, the reclaim converges, and the volume is left exactly as it is
     ///         left today. So a bump that renames a claim is a leak that comes back, never a delete
@@ -723,8 +741,11 @@ public static class MariaDbServers {
     /// <param name="desired">The validated desired body: the topology, which is what fixes the count.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Nothing in mariadb-operator removes these, and that was read rather than
-    ///         assumed.</b> <c>mariadbVolumeClaimTemplates</c> gives the templates a
+    ///         ⚠
+    ///         <b>
+    ///             Nothing in mariadb-operator removes these, and that was read rather than
+    ///             assumed.
+    ///         </b> <c>mariadbVolumeClaimTemplates</c> gives the templates a
     ///         <c>Name</c>, <c>Labels</c> and <c>Annotations</c> and no <c>OwnerReferences</c>; the
     ///         one <c>SetControllerReference</c> in <c>BuildMariadbStatefulSet</c> targets the
     ///         <c>StatefulSet</c>. There is no <c>MariaDB</c> finalizer.
@@ -793,8 +814,11 @@ public static class MariaDbServers {
 
     /// <summary>The key inside <see cref="PasswordSecretName" /> and <see cref="RootSecretName" />.</summary>
     /// <remarks>
-    ///     ⚠ <b>This platform's choice rather than the operator's, which is why it is one constant and
-    ///     not two.</b> mariadb-operator takes the key name from the CR's <c>…SecretKeyRef</c> and
+    ///     ⚠
+    ///     <b>
+    ///         This platform's choice rather than the operator's, which is why it is one constant and
+    ///         not two.
+    ///     </b> mariadb-operator takes the key name from the CR's <c>…SecretKeyRef</c> and
     ///     generates the Secret to match when <c>generate</c> is set — so the name in
     ///     <see cref="ServerJson" /> and the name <c>listKeys</c> reads by have to be the same string,
     ///     and a literal in both files is a mismatch waiting for the first edit that touches one.
@@ -813,15 +837,17 @@ public static class MariaDbServers {
     ///     applies and not ones it may rename; they are here because <see cref="ListKeysResponse" />
     ///     advertises one, and a connection string built from a guess resolves to nothing.
     /// </remarks>
-    public static string EndpointName(string name, bool highlyAvailable) =>
-        highlyAvailable ? name + "-primary" : name;
+    public static string EndpointName(string name, bool highlyAvailable) => highlyAvailable ? name + "-primary" : name;
 
     /// <summary>
     ///     The authentication plugin <see cref="ListKeysResponse" /> reports.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The <c>auth-plugin</c> row of <see cref="SupportedSubset" />, as a value rather than as
-    ///     a sentence.</b> MySQL 8 defaults its clients to <c>caching_sha2_password</c>, which MariaDB
+    ///     ⚠
+    ///     <b>
+    ///         The <c>auth-plugin</c> row of <see cref="SupportedSubset" />, as a value rather than as
+    ///         a sentence.
+    ///     </b> MySQL 8 defaults its clients to <c>caching_sha2_password</c>, which MariaDB
     ///     does not implement, so the compatibility claim's first real consequence is a handshake
     ///     failure. A connection string that carries the plugin turns that into a setting the caller
     ///     already has rather than an error they have to go and read about.
@@ -863,8 +889,11 @@ public static class MariaDbServers {
     /// <summary>How many instances a body implies, including the primary.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>Public because quota multiplies by it, and derived because the CRD would not let it be
-    ///     a number in the body.</b> Every instance carries the whole <c>spec.resources</c> block and
+    ///     ⚠
+    ///     <b>
+    ///         Public because quota multiplies by it, and derived because the CRD would not let it be
+    ///         a number in the body.
+    ///     </b> Every instance carries the whole <c>spec.resources</c> block and
     ///     its own data PVC — <see cref="ServerJson" /> writes both once because the CR is per-server,
     ///     not because the cost is. A meter that reserved the per-instance figure would under-reserve
     ///     the default shape by two thirds. See <see cref="GaleraReplicas" /> for why the multiplier is
@@ -934,8 +963,11 @@ public static class MariaDbServers {
     ///         that could get them wrong.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Both passwords appear as <i>references by name</i> and never as values, and neither
-    ///         <c>Secret</c> is written by this reconciler.</b> ⚠ The reason is <b>not</b> that
+    ///         ⚠
+    ///         <b>
+    ///             Both passwords appear as <i>references by name</i> and never as values, and neither
+    ///             <c>Secret</c> is written by this reconciler.
+    ///         </b> ⚠ The reason is <b>not</b> that
     ///         docs/plan/12 § The pattern, once, piece 5 is unbuilt — it is built and named
     ///         <c>ISecretWriter</c>, <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>, and four
     ///         reconcilers mint through it. This row declines to, and <c>generate: true</c> below is
@@ -946,8 +978,11 @@ public static class MariaDbServers {
     ///         database has.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>generate: true</c> is load-bearing rather than polite, and this operator is a
-    ///         THIRD answer to the question the two neighbouring rows already asked.</b> CloudNativePG
+    ///         ⚠
+    ///         <b>
+    ///             <c>generate: true</c> is load-bearing rather than polite, and this operator is a
+    ///             THIRD answer to the question the two neighbouring rows already asked.
+    ///         </b> CloudNativePG
     ///         generates its own password when the referenced <c>Secret</c> is absent, so
     ///         <c>CyberCloud.DBforPostgreSQL/servers</c> gets a working database whose credentials
     ///         <c>listKeys</c> cannot hand out. spotahome generates nothing, so
@@ -964,8 +999,11 @@ public static class MariaDbServers {
     ///     <para>
     ///         ⚠ <b><c>rootEmptyPassword</c> is written as <c>false</c> though its default already is.</b>
     ///         It is the one field on this CRD that turns a managed database into an open one, and
-    ///         docs/plan/12's own <i>"a managed database on a public IP with a weak password is the
-    ///         single most common cloud breach"</i> applies inside a namespace too. Stating it puts the
+    ///         docs/plan/12's own
+    ///         <i>
+    ///             "a managed database on a public IP with a weak password is the
+    ///             single most common cloud breach"
+    ///         </i> applies inside a namespace too. Stating it puts the
     ///         answer where a reader asking "is this thing password-protected" will look.
     ///     </para>
     /// </remarks>
@@ -997,9 +1035,7 @@ public static class MariaDbServers {
 
         if (cpu.Length > 0 && memory.Length > 0) {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
-            spec["resources"] = new JsonObject {
-                ["requests"] = quantities.DeepClone(), ["limits"] = quantities
-            };
+            spec["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
         }
 
         // ⚠ Absent rather than an `enabled: false` block when HA is off. `IsGaleraEnabled()` reads

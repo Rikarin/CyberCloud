@@ -10,14 +10,23 @@ namespace CyberCloud.Communication.Providers;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>They refuse rather than logging and returning success, and for this module the
-///         difference is the product.</b> The whole reason docs/plan/17 § The parts that are actually
-///         the work insists on delivery receipts is that <i>"without them 'did it arrive' is
-///         unanswerable"</i>. A seam that reported a dispatch and sent nothing makes that question
+///         ⚠
+///         <b>
+///             They refuse rather than logging and returning success, and for this module the
+///             difference is the product.
+///         </b> The whole reason docs/plan/17 § The parts that are actually
+///         the work insists on delivery receipts is that
+///         <i>
+///             "without them 'did it arrive' is
+///             unanswerable"
+///         </i>. A seam that reported a dispatch and sent nothing makes that question
 ///         unanswerable in the worst way: the platform says yes. <c>IOtpDeliverySeam</c> in
-///         <c>CyberCloud.Identity.Contracts</c> already states the consequence — <i>"an OTP factor
-///         that reports delivery and sends nothing locks every user who enrols in it out of their
-///         account"</i> — and this is the other end of that same seam.
+///         <c>CyberCloud.Identity.Contracts</c> already states the consequence —
+///         <i>
+///             "an OTP factor
+///             that reports delivery and sends nothing locks every user who enrols in it out of their
+///             account"
+///         </i> — and this is the other end of that same seam.
 ///     </para>
 ///     <para>
 ///         Refusing is also <i>safe</i> here, which is what makes it the right default rather than
@@ -175,8 +184,11 @@ public sealed class UnavailableWhatsAppProvider(ILogger<UnavailableWhatsAppProvi
 /// <remarks>
 ///     ⚠ <b>A real implementation's hard part is deliberately somebody else's.</b> docs/plan/17
 ///     § Deliverability puts SPF, DKIM, DMARC, PTR records, feedback loops and IP warm-up on
-///     <c>CyberCloud.Mail</c>, and says <i>"the platform will not enable sending until the DNS
-///     records verify"</i>. A provider here talks to whatever does that — SES, or our own Postfix —
+///     <c>CyberCloud.Mail</c>, and says
+///     <i>
+///         "the platform will not enable sending until the DNS
+///         records verify"
+///     </i>. A provider here talks to whatever does that — SES, or our own Postfix —
 ///     and owes bounce and complaint classification into
 ///     <see cref="DeliveryReceipt.Suppresses" />, because that is what keeps the sending domain
 ///     alive.
@@ -227,8 +239,11 @@ public sealed class UnavailableEmailProvider(ILogger<UnavailableEmailProvider> l
 
 /// <summary>The <see cref="IChannelProvider" /> a silo with no push service registers: it refuses.</summary>
 /// <remarks>
-///     ⚠ <b>A real implementation's trap is that a push token expires and the failure is
-///     asynchronous.</b> APNs and FCM both report an unregistered device on a later feedback channel
+///     ⚠
+///     <b>
+///         A real implementation's trap is that a push token expires and the failure is
+///         asynchronous.
+///     </b> APNs and FCM both report an unregistered device on a later feedback channel
 ///     rather than at send time, so a provider owes that path a
 ///     <see cref="SuppressionReason.HardBounce" /> — a device that has uninstalled the app is exactly
 ///     an address that no longer exists, and continuing to push at it is what gets a sender
@@ -275,8 +290,11 @@ public sealed class UnavailablePushProvider(ILogger<UnavailablePushProvider> log
 
 /// <summary>The <see cref="IChannelProvider" /> a silo with no voice carrier registers: it refuses.</summary>
 /// <remarks>
-///     ⚠ <b>Voice carries the strictest per-country rules of the five and the platform enforces
-///     none of them.</b> Calling hours, recorded-call consent, and prerecorded-message restrictions
+///     ⚠
+///     <b>
+///         Voice carries the strictest per-country rules of the five and the platform enforces
+///         none of them.
+///     </b> Calling hours, recorded-call consent, and prerecorded-message restrictions
 ///     vary by jurisdiction and in several are criminal rather than civil matters. We are a broker,
 ///     not a carrier (docs/plan/17 § The channel abstraction): a real provider owes the tenant the
 ///     carrier's own answer about what a sender is cleared for, and owes it accurately, because it
@@ -383,9 +401,7 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
         Interlocked.Increment(ref calls);
 
         if (Fail) {
-            return Task.FromResult(
-                Result<DispatchReceipt>.Failure(ErrorCode.InternalError, "the carrier is down")
-            );
+            return Task.FromResult(Result<DispatchReceipt>.Failure(ErrorCode.InternalError, "the carrier is down"));
         }
 
         sent.Enqueue(message);
@@ -440,8 +456,11 @@ public sealed class InMemoryChannelProvider(ChannelKind kind) : IChannelProvider
 ///     Resolves a channel and a provider name to the registered <see cref="IChannelProvider" />.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>An unnamed provider resolves to the channel's <i>only</i> registration, and to nothing
-///     when there are several.</b> Picking the first of several would make which carrier a tenant
+///     ⚠
+///     <b>
+///         An unnamed provider resolves to the channel's <i>only</i> registration, and to nothing
+///         when there are several.
+///     </b> Picking the first of several would make which carrier a tenant
 ///     sends through depend on service-registration order — a thing that changes when somebody
 ///     reorders a wiring method, and that nobody would look at when a tenant's messages started
 ///     arriving from a different sender id.

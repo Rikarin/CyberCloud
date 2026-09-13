@@ -70,15 +70,19 @@ static class Fixtures {
                         // shape. The response schema is what makes "which values leave the platform"
                         // a reviewable fact rather than a read of the handler.
                         new("listKeys", ActionKind.Post, "listKeys", Secret: true) {
-                            Request = ResourceSchema.Of([
-                                new("/keyName", SchemaKind.Text, Description: "Which key to read.") {
-                                    AllowedValues = ["primary", "secondary"]
-                                }
-                            ]),
-                            Response = ResourceSchema.Of([
-                                new("/primary", SchemaKind.Text, Required: true, Secret: true),
-                                new("/secondary", SchemaKind.Text, Required: true, Secret: true)
-                            ])
+                            Request = ResourceSchema.Of(
+                                [
+                                    new("/keyName", SchemaKind.Text, Description: "Which key to read.") {
+                                        AllowedValues = ["primary", "secondary"]
+                                    }
+                                ]
+                            ),
+                            Response = ResourceSchema.Of(
+                                [
+                                    new("/primary", SchemaKind.Text, Required: true, Secret: true),
+                                    new("/secondary", SchemaKind.Text, Required: true, Secret: true)
+                                ]
+                            )
                         }
                     ],
                     Display = new("PostgreSQL server", "PostgreSQL servers", "postgres", "A managed Postgres."),
@@ -115,63 +119,56 @@ static class Fixtures {
     ///     pattern, where <c>items: {}</c> used to be.
     /// </remarks>
     public static ResourceSchema ServerSchema() =>
-        ResourceSchema.Of([
-            new("/location", SchemaKind.Text, Required: true, Description: "Where the server runs.") {
-                Format = SchemaFormat.Region,
-                Widget = WidgetHint.Region,
-                Immutable = true
-            },
-            new("/properties", SchemaKind.Nested, Required: true),
-            // ⚠ The property RequiresCluster names. ProviderBuilder refuses a type that declares the
-            // flag without it, so a fixture that claims RequiresCluster must carry it too.
-            new("/properties/clusterId", SchemaKind.Text, Required: true, Description: "The cluster.") {
-                Format = SchemaFormat.Uuid,
-                Widget = WidgetHint.Cluster,
-                Immutable = true
-            },
-            new("/properties/sku", SchemaKind.Nested, Required: true),
-            new("/properties/sku/name", SchemaKind.Text, Required: true, Description: "The sku.") {
-                AllowedValues = ["s1.small", "s1.large", "c1.large", "m1.large"],
-                Widget = WidgetHint.Sku,
-                ExampleJson = "\"s1.large\""
-            },
-            new("/properties/sku/vcpu", SchemaKind.WholeNumber, Required: true, Description: "vCPUs.") {
-                Minimum = 1,
-                Maximum = 64
-            },
-            new("/properties/storageGb", SchemaKind.WholeNumber, Description: "Storage, in GB.") {
-                Minimum = 32,
-                Maximum = 16384,
-                DefaultJson = "32"
-            },
-            new("/properties/highAvailability", SchemaKind.Boolean) { DefaultJson = "false" },
-            // ⚠ A closed set with NO widget hint, so the portal emitter's shape-based fallback is
-            // exercised as well as the declared-hint path. `sku/name` declares WidgetHint.Sku and
-            // takes the picker; this one has to fall through to docs/plan/20's "≤ 8 is a select".
-            new("/properties/tier", SchemaKind.Text, Description: "Support tier.") {
-                AllowedValues = ["free", "standard", "premium"]
-            },
-            new("/properties/adminPassword", SchemaKind.Text, Secret: true, Description: "The password.") {
-                MinLength = 12,
-                Widget = WidgetHint.SecretRef
-            },
-            new("/properties/provisioningState", SchemaKind.Text, ReadOnly: true, Description: "State."),
-            new("/properties/retiredOn", SchemaKind.Text, Description: "When it was retired, or null.") {
-                Nullable = true,
-                Format = SchemaFormat.DateTime
-            },
-            new("/properties/allowedRanges", SchemaKind.Array, Description: "CIDR ranges.") {
-                ElementKind = SchemaKind.Text,
-                Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}",
-                Widget = WidgetHint.Cidr
-            }
-        ]);
+        ResourceSchema.Of(
+            [
+                new("/location", SchemaKind.Text, Required: true, Description: "Where the server runs.") {
+                    Format = SchemaFormat.Region, Widget = WidgetHint.Region, Immutable = true
+                },
+                new("/properties", SchemaKind.Nested, Required: true),
+                // ⚠ The property RequiresCluster names. ProviderBuilder refuses a type that declares the
+                // flag without it, so a fixture that claims RequiresCluster must carry it too.
+                new("/properties/clusterId", SchemaKind.Text, Required: true, Description: "The cluster.") {
+                    Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true
+                },
+                new("/properties/sku", SchemaKind.Nested, Required: true),
+                new("/properties/sku/name", SchemaKind.Text, Required: true, Description: "The sku.") {
+                    AllowedValues = ["s1.small", "s1.large", "c1.large", "m1.large"],
+                    Widget = WidgetHint.Sku,
+                    ExampleJson = "\"s1.large\""
+                },
+                new("/properties/sku/vcpu", SchemaKind.WholeNumber, Required: true, Description: "vCPUs.") {
+                    Minimum = 1, Maximum = 64
+                },
+                new("/properties/storageGb", SchemaKind.WholeNumber, Description: "Storage, in GB.") {
+                    Minimum = 32, Maximum = 16384, DefaultJson = "32"
+                },
+                new("/properties/highAvailability", SchemaKind.Boolean) { DefaultJson = "false" },
+                // ⚠ A closed set with NO widget hint, so the portal emitter's shape-based fallback is
+                // exercised as well as the declared-hint path. `sku/name` declares WidgetHint.Sku and
+                // takes the picker; this one has to fall through to docs/plan/20's "≤ 8 is a select".
+                new("/properties/tier", SchemaKind.Text, Description: "Support tier.") {
+                    AllowedValues = ["free", "standard", "premium"]
+                },
+                new("/properties/adminPassword", SchemaKind.Text, Secret: true, Description: "The password.") {
+                    MinLength = 12, Widget = WidgetHint.SecretRef
+                },
+                new("/properties/provisioningState", SchemaKind.Text, ReadOnly: true, Description: "State."),
+                new("/properties/retiredOn", SchemaKind.Text, Description: "When it was retired, or null.") {
+                    Nullable = true, Format = SchemaFormat.DateTime
+                },
+                new("/properties/allowedRanges", SchemaKind.Array, Description: "CIDR ranges.") {
+                    ElementKind = SchemaKind.Text, Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}", Widget = WidgetHint.Cidr
+                }
+            ]
+        );
 
     public static ResourceSchema DatabaseSchema() =>
-        ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Required: true),
-            new("/properties/charset", SchemaKind.Text, Description: "The character set.")
-        ]);
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties/charset", SchemaKind.Text, Description: "The character set.")
+            ]
+        );
 
     /// <summary>The Postgres registry with its first api-version under a retirement notice.</summary>
     public static IProviderRegistry RetiringPostgres(DateOnly retiresOn) =>
@@ -208,8 +205,7 @@ static class Fixtures {
             Namespaces = [Namespace],
             Types = [
                 new ResourceTypeRegistration {
-                    Type = new(Namespace, "servers"),
-                    ApiVersions = [new(ApiVersion.Parse(FirstVersion), schema)]
+                    Type = new(Namespace, "servers"), ApiVersions = [new(ApiVersion.Parse(FirstVersion), schema)]
                 }
             ]
         };

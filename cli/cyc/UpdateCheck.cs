@@ -47,14 +47,20 @@ static class UpdateCheck {
     /// <param name="currentVersion">This build's version.</param>
     /// <param name="probe">Asks the feed for the newest version, or <c>null</c> to use the environment's.</param>
     /// <returns>The task, which the caller does not await.</returns>
-    public static Task Start(CycHost host, string currentVersion, Func<CancellationToken, Task<string?>>? probe = null) {
+    public static Task Start(
+        CycHost host,
+        string currentVersion,
+        Func<CancellationToken, Task<string?>>? probe = null
+    ) {
         ArgumentNullException.ThrowIfNull(host);
 
-        if (host.Environment.ContainsKey("CYC_NO_UPDATE_CHECK"))
+        if (host.Environment.ContainsKey("CYC_NO_UPDATE_CHECK")) {
             return Task.CompletedTask;
+        }
 
-        if (!IsDue(host))
+        if (!IsDue(host)) {
             return Task.CompletedTask;
+        }
 
         Stamp(host);
 
@@ -67,16 +73,23 @@ static class UpdateCheck {
         try {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(2), host.Time);
 
-            if (await probe(deadline.Token).ConfigureAwait(false) is not { Length: > 0 } newest)
+            if (await probe(deadline.Token).ConfigureAwait(false) is not { Length: > 0 } newest) {
                 return;
+            }
 
-            if (string.Equals(newest, currentVersion, StringComparison.Ordinal))
+            if (string.Equals(newest, currentVersion, StringComparison.Ordinal)) {
                 return;
+            }
 
             // ⚠ One line, on stderr, naming the command to run. Not a download, not a prompt, not a
             // banner around the answer the user asked for.
-            host.Console.Note($"cyc {newest} is available; you have {currentVersion}. See the release notes to upgrade.");
-        } catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException or JsonException) {
+            host.Console.Note(
+                $"cyc {newest} is available; you have {currentVersion}. See the release notes to upgrade."
+            );
+        } catch (Exception e) when (e is HttpRequestException
+                                        or OperationCanceledException
+                                        or IOException
+                                        or JsonException) {
             // An update check that fails is not news. Nothing about the command the user ran depends
             // on it, so it dies quietly by design.
         }
@@ -90,12 +103,18 @@ static class UpdateCheck {
         var path = StampPath(host);
 
         try {
-            if (!File.Exists(path))
+            if (!File.Exists(path)) {
                 return true;
+            }
 
             var text = File.ReadAllText(path).Trim();
 
-            return !DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var last)
+            return !DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal,
+                out var last
+            )
                 || host.Time.GetUtcNow() - last >= Interval;
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
             return false;

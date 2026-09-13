@@ -10,8 +10,11 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 /// <param name="Secret">Whether the response carries secret material. Always audited.</param>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><see cref="Request" /> and <see cref="Response" /> are the reason
-///         <c>listKeys</c> stopped returning "secrets of unknown shape".</b> Before them an action
+///         ⚠
+///         <b>
+///             <see cref="Request" /> and <see cref="Response" /> are the reason
+///             <c>listKeys</c> stopped returning "secrets of unknown shape".
+///         </b> Before them an action
 ///         carried a name, a kind, a permission and a flag, so every generated surface had to describe
 ///         its result as an unconstrained object: the OpenAPI emitter wrote <c>schema: {}</c> and said
 ///         so out loud, an SDK could only hand back a <c>JsonElement</c>, and a portal had nothing to
@@ -19,8 +22,11 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///         the registry can now say what they are.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Both are <see langword="null" /> when undeclared, and that is not the same as
-///         <see cref="ResourceSchema.Empty" />.</b> Empty means "an object with no members, and an
+///         ⚠
+///         <b>
+///             Both are <see langword="null" /> when undeclared, and that is not the same as
+///             <see cref="ResourceSchema.Empty" />.
+///         </b> Empty means "an object with no members, and an
 ///         unknown member is refused" — a real, checkable shape. Null means the provider has not said,
 ///         and the emitters render that as the unconstrained schema it is rather than pretending the
 ///         action takes nothing.
@@ -57,8 +63,11 @@ public readonly record struct ActionRegistration(
     ///     Whether the action returns <c>202</c> and an operation to poll rather than <c>200</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Not derivable, and guessing it wrong is a generated client that hangs or one that
-    ///     returns too early.</b> <c>restart</c> takes a minute and is long-running; <c>listKeys</c>
+    ///     ⚠
+    ///     <b>
+    ///         Not derivable, and guessing it wrong is a generated client that hangs or one that
+    ///         returns too early.
+    ///     </b> <c>restart</c> takes a minute and is long-running; <c>listKeys</c>
     ///     reads two strings and is not. Both are <see cref="ActionKind.Post" /> and nothing else in
     ///     the registration distinguishes them, so before this the emitter had to declare one shape
     ///     for both — and it chose <c>200</c>, which is wrong for every action that does work.
@@ -71,16 +80,22 @@ public readonly record struct ActionRegistration(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A <see cref="Type" /> resolved from the container, which is the precedent
-    ///         <see cref="ResourceTypeRegistration.ReconcilerType" /> already set</b> rather than a
+    ///         ⚠
+    ///         <b>
+    ///             A <see cref="Type" /> resolved from the container, which is the precedent
+    ///             <see cref="ResourceTypeRegistration.ReconcilerType" /> already set
+    ///         </b> rather than a
     ///         second mechanism invented beside it. <c>ActionDispatcher</c> resolves it the way
     ///         <c>ReconcileDriver</c> resolves a reconciler, and <c>AddCyberCloudProvider</c> registers
     ///         it as a singleton by concrete type from the same <c>Describe</c> pass that finds the
     ///         reconcilers.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see langword="null" /> is a declared action that cannot run, and it answers a
-    ///         refusal naming itself.</b> That is every action in the catalogue as it stood: declared,
+    ///         ⚠
+    ///         <b>
+    ///             <see langword="null" /> is a declared action that cannot run, and it answers a
+    ///             refusal naming itself.
+    ///         </b> That is every action in the catalogue as it stood: declared,
     ///         published to the SDK, the CLI and the portal, and unable to execute. A refusal that says
     ///         which action has no handler is worth more than a <c>202</c> that quietly re-runs the
     ///         type's reconciler, which is what happened before.
@@ -153,8 +168,7 @@ public readonly record struct DisplayMetadata(
     } = Summary;
 
     /// <summary>Whether the provider declared anything at all.</summary>
-    public bool IsEmpty =>
-        Name.Length == 0 && Plural.Length == 0 && Alias.Length == 0 && Summary.Length == 0;
+    public bool IsEmpty => Name.Length == 0 && Plural.Length == 0 && Alias.Length == 0 && Summary.Length == 0;
 }
 
 /// <summary>
@@ -170,8 +184,11 @@ public readonly record struct DisplayMetadata(
 ///     <see langword="null" /> to refuse the write.
 /// </param>
 /// <remarks>
-///     ⚠ <b><paramref name="Fallback" /> is nullable, and <see langword="null" /> is the default a
-///     provider gets.</b> It used to be <c>decimal</c> defaulting to <c>1</c>, so a pointer that
+///     ⚠
+///     <b>
+///         <paramref name="Fallback" /> is nullable, and <see langword="null" /> is the default a
+///         provider gets.
+///     </b> It used to be <c>decimal</c> defaulting to <c>1</c>, so a pointer that
 ///     stopped resolving — a property renamed, an api-version bumped, a schema and a meter that drifted
 ///     apart — quietly reserved one unit. Quota passed, the resource provisioned, and the meter that
 ///     was supposed to bound it recorded a number nobody chose. A meter that cannot determine its
@@ -202,21 +219,23 @@ public readonly record struct MeterRegistration(
     public string Expression =>
         Derivation?.Expression
         ?? (AmountPointer.Length > 0
-            ? AmountPointer
-            : (Fallback ?? 1m).ToString(CultureInfo.InvariantCulture));
+                ? AmountPointer
+                : (Fallback ?? 1m).ToString(CultureInfo.InvariantCulture));
 
     /// <summary>Every pointer the amount reads. Empty for a flat amount.</summary>
-    public ImmutableArray<string> Reads =>
-        Derivation?.Reads ?? (AmountPointer.Length > 0 ? [AmountPointer] : []);
+    public ImmutableArray<string> Reads => Derivation?.Reads ?? (AmountPointer.Length > 0 ? [AmountPointer] : []);
 }
 
 /// <summary>
 ///     One api-version of one resource type: the date, the schema, and nothing else.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Kept forever.</b> docs/plan/08 § The provider registry: <i>"The registry keeps every
-///     version … Removing a version needs a 12-month notice window and a build gate that fails on a
-///     version removed without one."</i> That gate is not written — see
+///     ⚠ <b>Kept forever.</b> docs/plan/08 § The provider registry:
+///     <i>
+///         "The registry keeps every
+///         version … Removing a version needs a 12-month notice window and a build gate that fails on a
+///         version removed without one."
+///     </i> That gate is not written — see
 ///     <see cref="ResourceTypeRegistration.RetiredOn" /> for the half that is.
 /// </remarks>
 /// <param name="Version">The immutable date.</param>
@@ -267,8 +286,11 @@ public sealed record ResourceTypeRegistration {
     /// <summary>How many days a deleted resource is recoverable, or 0 for no soft delete.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The manager reads this, and the branch it drives is the whole of docs/plan/08
-    ///         § Soft delete.</b> A positive window makes <c>DELETE</c> park the resource instead of
+    ///         ⚠
+    ///         <b>
+    ///             The manager reads this, and the branch it drives is the whole of docs/plan/08
+    ///             § Soft delete.
+    ///         </b> A positive window makes <c>DELETE</c> park the resource instead of
     ///         tearing it down: the index entry becomes
     ///         <see cref="IndexEntryState.SoftDeleted" /> so the old address answers the canonical
     ///         <c>404</c>, the ReBAC parent edge moves to the subscription, and the committed quota
@@ -277,8 +299,11 @@ public sealed record ResourceTypeRegistration {
     ///     <para>
     ///         ⚠ <b>It is the resource's retention and there is no other source of one.</b> The delete
     ///         path stamps <see cref="IndexEntry.RecoverableUntil" /> from this number and the clock,
-    ///         never from the body — which is how docs/plan/08's <i>"retention is set at creation and
-    ///         immutable afterwards"</i> is satisfied without a property a caller could shorten.
+    ///         never from the body — which is how docs/plan/08's
+    ///         <i>
+    ///             "retention is set at creation and
+    ///             immutable afterwards"
+    ///         </i> is satisfied without a property a caller could shorten.
     ///     </para>
     /// </remarks>
     public int SoftDeleteDays { get; init; }
@@ -287,8 +312,11 @@ public sealed record ResourceTypeRegistration {
     ///     The permission a <b>purge</b> needs. Empty for a type with no recovery window.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A fourth permission, because "may delete" and "may destroy permanently" are separable
-    ///     rights.</b> docs/plan/08 § Soft delete takes that from Azure, which puts
+    ///     ⚠
+    ///     <b>
+    ///         A fourth permission, because "may delete" and "may destroy permanently" are separable
+    ///         rights.
+    ///     </b> docs/plan/08 § Soft delete takes that from Azure, which puts
     ///     <c>deletedVaults/purge/action</c> in Key Vault Contributor's <c>notActions</c>. Checking
     ///     <see cref="DeletePermission" /> for a purge would mean anybody who could delete could also
     ///     destroy, and the window would protect against nothing.
@@ -300,10 +328,16 @@ public sealed record ResourceTypeRegistration {
     ///     otherwise.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Once <see langword="true" /> it may not be set back to <see langword="false" />, and
-    ///     the write path enforces that.</b> docs/plan/08 § Soft delete: <i>"Purge protection is a
-    ///     further opt-in flag that cannot be turned off once on, which is the only version of it that
-    ///     is worth anything."</i> A flag an attacker can clear and then purge is one round-trip of
+    ///     ⚠
+    ///     <b>
+    ///         Once <see langword="true" /> it may not be set back to <see langword="false" />, and
+    ///         the write path enforces that.
+    ///     </b> docs/plan/08 § Soft delete:
+    ///     <i>
+    ///         "Purge protection is a
+    ///         further opt-in flag that cannot be turned off once on, which is the only version of it that
+    ///         is worth anything."
+    ///     </i> A flag an attacker can clear and then purge is one round-trip of
     ///     protection.
     /// </remarks>
     public string PurgeProtectionPointer { get; init; } = string.Empty;
@@ -332,8 +366,11 @@ public sealed record ResourceTypeRegistration {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The second flag with no schema consequence, and its failure mode was worse than
-    ///         the tag one.</b> <c>RequiresCluster()</c> made the reconcile driver refuse a pass with
+    ///         ⚠
+    ///         <b>
+    ///             The second flag with no schema consequence, and its failure mode was worse than
+    ///             the tag one.
+    ///         </b> <c>RequiresCluster()</c> made the reconcile driver refuse a pass with
     ///         no connection, and the connection was resolved by reading <c>/properties/clusterId</c>
     ///         out of the body — a pointer hard-coded in <c>ResourceManagerService</c> and declared, if
     ///         at all, by each provider's schema. Nothing connected the two. A provider that declared
@@ -360,16 +397,18 @@ public sealed record ResourceTypeRegistration {
     /// <remarks>
     ///     ⚠ <b>Half of docs/plan/08 § The provider registry's rule, and the half that belongs here.</b>
     ///     The document requires "a 12-month notice window and a build gate that fails on a version
-    ///     removed without one". This map is where the notice is recorded; <b>the build gate is not
-    ///     written</b> — it belongs in <c>build/Build.Architecture.cs</c> with the other architecture
+    ///     removed without one". This map is where the notice is recorded;
+    ///     <b>
+    ///         the build gate is not
+    ///         written
+    ///     </b> — it belongs in <c>build/Build.Architecture.cs</c> with the other architecture
     ///     assertions, the same split <see cref="ErrorCode" /> records for the error-code registry.
     /// </remarks>
     public ImmutableDictionary<ApiVersion, DateOnly> RetiredOn { get; init; } =
         ImmutableDictionary<ApiVersion, DateOnly>.Empty;
 
     /// <summary>The newest api-version. ⚠ Not what a request gets unless it asked for it by date.</summary>
-    public ApiVersion Newest =>
-        ApiVersions.IsDefaultOrEmpty ? default : ApiVersions[^1].Version;
+    public ApiVersion Newest => ApiVersions.IsDefaultOrEmpty ? default : ApiVersions[^1].Version;
 
     /// <summary>Finds an api-version's schema.</summary>
     /// <param name="version">The version asked for.</param>
@@ -421,9 +460,12 @@ public sealed record ResourceTypeRegistration {
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>This is the same object ADR-012's emitters walk.</b>
-///         docs/plan/08 § The provider registry: <i>"the same registry that generates the CLI is the
-///         one that validates the request body. That identity is what makes drift impossible rather
-///         than merely detectable."</i> Anything that reads a resource type's shape reads it from
+///         docs/plan/08 § The provider registry:
+///         <i>
+///             "the same registry that generates the CLI is the
+///             one that validates the request body. That identity is what makes drift impossible rather
+///             than merely detectable."
+///         </i> Anything that reads a resource type's shape reads it from
 ///         here — there is no second description of the API anywhere in the platform, and a second
 ///         one would be the drift.
 ///     </para>

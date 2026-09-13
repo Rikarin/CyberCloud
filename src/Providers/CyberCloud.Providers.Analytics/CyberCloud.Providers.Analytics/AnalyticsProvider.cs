@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.Analytics;
@@ -10,8 +11,11 @@ namespace CyberCloud.Providers.Analytics;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/12 § The catalogue: <i>"ClickHouse — <c>CyberCloud.Analytics/clickhouseClusters</c>
-///         · M2 · 1.2 EM. <b>Altinity operator.</b>"</i> — ADR-010 clause 1's survey names the same
+///         docs/plan/12 § The catalogue:
+///         <i>
+///             "ClickHouse — <c>CyberCloud.Analytics/clickhouseClusters</c>
+///             · M2 · 1.2 EM. <b>Altinity operator.</b>"
+///         </i> — ADR-010 clause 1's survey names the same
 ///         operator, and ADR-011 clears ClickHouse itself (Apache-2.0; it is not one of the four rows
 ///         that document refuses).
 ///     </para>
@@ -23,8 +27,11 @@ namespace CyberCloud.Providers.Analytics;
 ///         single-tenant cluster in a tenant namespace whose schema docs/plan/12 says the tenant owns.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The sixth provider family, and the first whose namespace comes from the parity
-///         catalogue rather than from a service name.</b> docs/plan/03 § Providers plans a
+///         ⚠
+///         <b>
+///             The sixth provider family, and the first whose namespace comes from the parity
+///             catalogue rather than from a service name.
+///         </b> docs/plan/03 § Providers plans a
 ///         <c>Data</c> namespace holding six engines including this one; docs/plan/12 and docs/plan/01
 ///         both spell the row <c>CyberCloud.Analytics/clickhouseClusters</c>. The catalogue wins for
 ///         the reason <c>CyberCloud.DBforPostgreSQL</c> already established — the resource path is the
@@ -32,15 +39,21 @@ namespace CyberCloud.Providers.Analytics;
 ///         the same four module edges, which is now the fifth data point for docs/plan/25 § R1.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What this row owes against docs/plan/12 § The pattern, once's eight pieces is named
-///         rather than implied.</b> ⚠ Piece 5 — credential provisioning into the
+///         ⚠
+///         <b>
+///             What this row owes against docs/plan/12 § The pattern, once's eight pieces is named
+///             rather than implied.
+///         </b> ⚠ Piece 5 — credential provisioning into the
 ///         tenant's Vault — <b>is</b> built: <c>ISecretWriter</c> is the interface and
 ///         <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>. <c>listKeys</c> still has a
 ///         declared response shape and no handler, and the real reason is upstream of the vault: no
 ///         <c>spec.configuration.users</c> is rendered, so no credential exists to read or to
-///         correspond to a mint — <c>actions-without-handlers.txt</c> carries the line. ⚠ <b>On this
-///         service the consequence is a cluster that is secure and unreachable rather than one that is
-///         open</b>, which is the opposite of what <c>CyberCloud.Storage/accounts</c> found. Piece
+///         correspond to a mint — <c>actions-without-handlers.txt</c> carries the line. ⚠
+///         <b>
+///             On this
+///             service the consequence is a cluster that is secure and unreachable rather than one that is
+///             open
+///         </b>, which is the opposite of what <c>CyberCloud.Storage/accounts</c> found. Piece
 ///         6 reaches an answer neither of its branches describes — the operator scrapes every
 ///         installation itself through one cluster-wide exporter and offers no per-installation scrape
 ///         switch — so the metrics are turned on here and the object that scrapes them is owed. Piece
@@ -50,8 +63,11 @@ namespace CyberCloud.Providers.Analytics;
 ///     <para>
 ///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the five providers before this one give</b>:
 ///         the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the platform
-///         does not honour would be a promise made to the users most likely to test it. ⚠ <b>THAT REASON
-///         HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED ONE.</b>
+///         does not honour would be a promise made to the users most likely to test it. ⚠
+///         <b>
+///             THAT REASON
+///             HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED ONE.
+///         </b>
 ///         docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks the
 ///         resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical
 ///         <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to the
@@ -166,12 +182,12 @@ public sealed class AnalyticsProvider : IResourceProvider {
                 "/properties/keeperNodes"
             ],
             body => KubeQuantity.TryParse(ClickHouseClusters.Resources(body).Cpu, out var cores)
-            && KubeQuantity.TryParse(ClickHouseClusters.KeeperCpu, out var keeper)
-                ? Result<decimal>.Success(
-                    (ClickHouseClusters.Servers(body) * cores)
-                    + (ClickHouseClusters.KeeperNodes(body) * keeper)
-                )
-                : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
+                && KubeQuantity.TryParse(ClickHouseClusters.KeeperCpu, out var keeper)
+                    ? Result<decimal>.Success(
+                        ClickHouseClusters.Servers(body) * cores
+                        + ClickHouseClusters.KeeperNodes(body) * keeper
+                    )
+                    : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
 
     /// <summary>Memory: the same two populations, in gibibytes.</summary>
@@ -187,12 +203,12 @@ public sealed class AnalyticsProvider : IResourceProvider {
                 "/properties/keeperNodes"
             ],
             body => KubeQuantity.TryGibibytes(ClickHouseClusters.Resources(body).Memory, out var gibibytes)
-            && KubeQuantity.TryGibibytes(ClickHouseClusters.KeeperMemory, out var keeper)
-                ? Result<decimal>.Success(
-                    (ClickHouseClusters.Servers(body) * gibibytes)
-                    + (ClickHouseClusters.KeeperNodes(body) * keeper)
-                )
-                : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
+                && KubeQuantity.TryGibibytes(ClickHouseClusters.KeeperMemory, out var keeper)
+                    ? Result<decimal>.Success(
+                        ClickHouseClusters.Servers(body) * gibibytes
+                        + ClickHouseClusters.KeeperNodes(body) * keeper
+                    )
+                    : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
 
     /// <summary>Storage: every server's data volume, plus every Keeper node's own volume.</summary>
@@ -212,12 +228,12 @@ public sealed class AnalyticsProvider : IResourceProvider {
             "shards × replicas × storage.size + keeperNodes × 10Gi, in GiB",
             ["/properties/shards", "/properties/replicas", "/properties/storage/size", "/properties/keeperNodes"],
             body => KubeQuantity.TryGibibytes(ClickHouseClusters.StorageSize(body), out var gibibytes)
-            && KubeQuantity.TryGibibytes(ClickHouseClusters.KeeperVolumeSize, out var keeper)
-                ? Result<decimal>.Success(
-                    (ClickHouseClusters.Servers(body) * gibibytes)
-                    + (ClickHouseClusters.KeeperNodes(body) * keeper)
-                )
-                : Unresolvable("storage", "storage.size")
+                && KubeQuantity.TryGibibytes(ClickHouseClusters.KeeperVolumeSize, out var keeper)
+                    ? Result<decimal>.Success(
+                        ClickHouseClusters.Servers(body) * gibibytes
+                        + ClickHouseClusters.KeeperNodes(body) * keeper
+                    )
+                    : Unresolvable("storage", "storage.size")
         );
 
     static Result<decimal> Unresolvable(string what, string where) =>

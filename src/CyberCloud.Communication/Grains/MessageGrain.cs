@@ -11,8 +11,11 @@ namespace CyberCloud.Communication.Grains;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Read <see cref="IMessageGrain" /> first: the grain key <i>is</i> the idempotency
-///         check.</b> There is no "have I seen this key" lookup in this class because there does not
+///         ⚠
+///         <b>
+///             Read <see cref="IMessageGrain" /> first: the grain key <i>is</i> the idempotency
+///             check.
+///         </b> There is no "have I seen this key" lookup in this class because there does not
 ///         need to be — a retry carrying the same key arrives at this activation, and Orleans
 ///         serializes calls to it, so two concurrent retries cannot both find the state empty.
 ///     </para>
@@ -25,7 +28,8 @@ namespace CyberCloud.Communication.Grains;
 ///     </para>
 /// </remarks>
 public sealed class MessageGrain(
-    [PersistentState("message", StorageTiers.Hot)] IPersistentState<MessageState> state,
+    [PersistentState("message", StorageTiers.Hot)]
+    IPersistentState<MessageState> state,
     IChannelProviderRegistry providers,
     IGrainFactory grains,
     IClock clock
@@ -251,9 +255,7 @@ public sealed class MessageGrain(
     ) {
         var messageId = state.State.Snapshot?.MessageId ?? Guid.NewGuid();
 
-        var service = Tenant().GetGrain<ICommunicationServiceGrain>(
-            CommunicationGrainKeys.Service(request.ServiceId)
-        );
+        var service = Tenant().GetGrain<ICommunicationServiceGrain>(CommunicationGrainKeys.Service(request.ServiceId));
 
         var configured = await service.GetChannelAsync(request.Channel);
         if (configured.TryGetError(out var noChannel)) {
@@ -330,7 +332,11 @@ public sealed class MessageGrain(
 
         // ── The spend limit, before dispatch. The only thing between a bug and a five-figure
         //    invoice — docs/plan/17 § The parts that are actually the work. ──────────────────────
-        var reserved = await Limits(request.ServiceId).ReserveAsync(request.Channel, channel.Limits, channel.EstimatedUnitCost);
+        var reserved = await Limits(request.ServiceId).ReserveAsync(
+            request.Channel,
+            channel.Limits,
+            channel.EstimatedUnitCost
+        );
         if (reserved.TryGetError(out var overLimit)) {
             return await RefuseAsync(messageId, request, destination, digest, now, overLimit);
         }
@@ -381,9 +387,7 @@ public sealed class MessageGrain(
             state.State.ReservationId = Guid.Empty;
 
             state.State.Snapshot = state.State.Snapshot with {
-                Status = MessageStatus.Failed,
-                SettledAt = now,
-                Detail = carrierRefused.Message
+                Status = MessageStatus.Failed, SettledAt = now, Detail = carrierRefused.Message
             };
 
             await state.WriteStateAsync();
@@ -445,9 +449,7 @@ public sealed class MessageGrain(
                 );
             }
 
-            return Result<RenderedMessage>.Success(
-                new() { Body = request.Body, Locale = request.Locale, Version = 0 }
-            );
+            return Result<RenderedMessage>.Success(new() { Body = request.Body, Locale = request.Locale, Version = 0 });
         }
 
         var resolved = await service.ResolveTemplateAsync(request.TemplateName);
@@ -512,10 +514,10 @@ public sealed class MessageGrain(
     /// </remarks>
     static MessageStatus Advance(MessageStatus current, MessageStatus reported) =>
         current is MessageStatus.Delivered or MessageStatus.Failed
-            ? current
-            : reported is MessageStatus.Delivered or MessageStatus.Failed
-                ? reported
-                : current;
+        ? current
+        : reported is MessageStatus.Delivered or MessageStatus.Failed
+            ? reported
+            : current;
 
     ISuppressionListGrain Suppression(Guid serviceId) =>
         Tenant().GetGrain<ISuppressionListGrain>(CommunicationGrainKeys.Service(serviceId));
@@ -527,8 +529,11 @@ public sealed class MessageGrain(
     ///     This grain's own tenant, as a qualified factory.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A grain-to-grain call is NOT automatically tenant-qualified, and assuming it was cost
-    ///     an afternoon.</b> <c>Orleans.Multitenant</c> carries the tenant in the string key and
+    ///     ⚠
+    ///     <b>
+    ///         A grain-to-grain call is NOT automatically tenant-qualified, and assuming it was cost
+    ///         an afternoon.
+    ///     </b> <c>Orleans.Multitenant</c> carries the tenant in the string key and
     ///     nowhere else (ADR-002, docs/plan/02 § ADR-002), so an unqualified
     ///     <c>GrainFactory.GetGrain</c> from inside a grain addresses the <i>null-tenant</i>
     ///     activation of the target — which then fails its own <c>TenantOf</c> check on activation.

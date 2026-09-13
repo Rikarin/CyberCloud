@@ -31,8 +31,11 @@ public enum ScopeKind {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A scope is not a resource, and this type exists because <see cref="ResourceId" />
-///         cannot say so.</b> docs/plan/06 § Identifiers gives a resource id path a fixed eight-segment
+///         ⚠
+///         <b>
+///             A scope is not a resource, and this type exists because <see cref="ResourceId" />
+///             cannot say so.
+///         </b> docs/plan/06 § Identifiers gives a resource id path a fixed eight-segment
 ///         prefix ending in <c>/providers/{namespace}</c> followed by an even number of
 ///         <c>{type}/{name}</c> pairs. A scope has no provider, no type and no name pair, so every
 ///         scope address fails <see cref="ResourceId.ParsePath" /> — which is exactly what it did:
@@ -50,9 +53,12 @@ public enum ScopeKind {
 ///         unreachable.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="SubscriptionId" /> being <see cref="Guid.Empty" /> does <i>not</i> mean
-///         "no subscription", and <see cref="TenantId" /> being <see cref="Guid.Empty" /> does not
-///         mean "no tenant".</b> docs/plan/06 § Platform administration makes <c>Guid.Empty</c> the
+///         ⚠
+///         <b>
+///             <see cref="SubscriptionId" /> being <see cref="Guid.Empty" /> does <i>not</i> mean
+///             "no subscription", and <see cref="TenantId" /> being <see cref="Guid.Empty" /> does not
+///             mean "no tenant".
+///         </b> docs/plan/06 § Platform administration makes <c>Guid.Empty</c> the
 ///         <i>platform tenant</i> — an ordinary id that happens to be all zeroes. <see cref="Kind" />
 ///         is the only discriminator, and reading a GUID for one would make the platform tenant
 ///         unaddressable.
@@ -96,22 +102,28 @@ public readonly record struct ScopeId(
             }
 
             var built = new StringBuilder(96)
-                .Append('/').Append(ResourceId.TenantsSegment)
-                .Append('/').Append(TenantId.ToString("D", CultureInfo.InvariantCulture));
+                .Append('/')
+                .Append(ResourceId.TenantsSegment)
+                .Append('/')
+                .Append(TenantId.ToString("D", CultureInfo.InvariantCulture));
 
             if (Kind == ScopeKind.Tenant) {
                 return built.ToString();
             }
 
-            built.Append('/').Append(ResourceId.SubscriptionsSegment)
-                .Append('/').Append(SubscriptionId.ToString("D", CultureInfo.InvariantCulture));
+            built.Append('/')
+                .Append(ResourceId.SubscriptionsSegment)
+                .Append('/')
+                .Append(SubscriptionId.ToString("D", CultureInfo.InvariantCulture));
 
             if (Kind == ScopeKind.Subscription) {
                 return built.ToString();
             }
 
-            return built.Append('/').Append(ResourceId.ResourceGroupsSegment)
-                .Append('/').Append(ResourceGroup)
+            return built.Append('/')
+                .Append(ResourceId.ResourceGroupsSegment)
+                .Append('/')
+                .Append(ResourceGroup)
                 .ToString();
         }
     }
@@ -120,8 +132,11 @@ public readonly record struct ScopeId(
     ///     The scope one level up, or <see langword="null" /> for a tenant.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is the address the ReBAC <c>parent</c> edge points at, and a tenant having none
-    ///     is the whole of the authorization problem this type surfaces.</b> <c>CyberCloudSchema</c>
+    ///     ⚠
+    ///     <b>
+    ///         This is the address the ReBAC <c>parent</c> edge points at, and a tenant having none
+    ///         is the whole of the authorization problem this type surfaces.
+    ///     </b> <c>CyberCloudSchema</c>
     ///     gives <c>subscription</c> and <c>resourceGroup</c> a <c>parent</c> relation and every role
     ///     a <c>From("parent", …)</c> rewrite, so a subscription's permissions resolve through its
     ///     tenant and a group's through its subscription. <c>tenant</c> has no <c>parent</c> relation
@@ -255,6 +270,5 @@ public readonly record struct ScopeId(
     static bool IsLiteral(string segment, string literal) =>
         string.Equals(segment, literal, StringComparison.OrdinalIgnoreCase);
 
-    static Result<ScopeId> Invalid(string message) =>
-        Result<ScopeId>.Failure(ErrorCode.InvalidResourceId, message);
+    static Result<ScopeId> Invalid(string message) => Result<ScopeId>.Failure(ErrorCode.InvalidResourceId, message);
 }

@@ -9,8 +9,11 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 ///     docs/plan/10 § Request pipeline.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The <c>api-version</c> check runs before the registry lookup, and the order is
-///     visible to callers.</b> A request with no <c>api-version</c> gets a <c>400</c> naming the
+///     ⚠
+///     <b>
+///         The <c>api-version</c> check runs before the registry lookup, and the order is
+///         visible to callers.
+///     </b> A request with no <c>api-version</c> gets a <c>400</c> naming the
 ///     current version whether or not the path names anything real — docs/plan/10 § API versioning
 ///     makes the parameter required <i>"on every request"</i>. Doing the registry lookup first would
 ///     answer <c>404</c> to a caller who simply forgot the parameter, which sends them looking for a

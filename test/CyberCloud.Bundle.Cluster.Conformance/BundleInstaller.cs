@@ -11,8 +11,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         ⚠ <b>The script is the subject, so the test may not do the script's job.</b>
 ///         <c>charts/bundle/bundle.yaml</c> § owed,
 ///         <c>most-of-the-roster-has-never-been-installed</c>, is about <c>install.sh</c>
-///         specifically: <i>"a procedure that has been reasoned about and not
-///         exercised"</i>. A test that ran <c>helm upgrade --install</c> itself with the same
+///         specifically:
+///         <i>
+///             "a procedure that has been reasoned about and not
+///             exercised"
+///         </i>. A test that ran <c>helm upgrade --install</c> itself with the same
 ///         arguments would prove that helm installs cert-manager, which nobody doubted, and would
 ///         leave the ordering, the flag handling, the bash 3.2 array expansions and the
 ///         <c>component.yaml</c> reader exactly as unexercised as they were.
@@ -28,9 +31,15 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         suite exactly, and a lane narrower than that would run nothing at all.
 ///     </para>
 ///     <para>
-///         ⚠ <b>That paragraph used to quote the script's usage text — <i>"skips that guarantee and
-///         is for repairing one row, not for installing"</i> — and the quotation had been stale since
-///         2026-09-03</b>, when <c>--component</c> landed and that sentence was rewritten around it.
+///         ⚠
+///         <b>
+///             That paragraph used to quote the script's usage text —
+///             <i>
+///                 "skips that guarantee and
+///                 is for repairing one row, not for installing"
+///             </i> — and the quotation had been stale since
+///             2026-09-03
+///         </b>, when <c>--component</c> landed and that sentence was rewritten around it.
 ///         #74 rewrote the same text again on 2026-09-05, so the quotation is not re-quoted: it is
 ///         removed. What this paragraph needs is a property of the script's BEHAVIOUR — a selector
 ///         narrows a run — and quoting prose to establish behaviour is how a citation goes stale
@@ -38,16 +47,22 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         <c>a-selector-that-matched-nothing-reported-success</c>, keeps the usage text's history.
 ///     </para>
 ///     <para>
-///         ⚠ <b>That sentence read "in a Testcontainers lane Task #95 capped at four concurrent
-///         suites" until the #77 review, and both halves of it had moved</b> — the same stale
+///         ⚠
+///         <b>
+///             That sentence read "in a Testcontainers lane Task #95 capped at four concurrent
+///             suites" until the #77 review, and both halves of it had moved
+///         </b> — the same stale
 ///         citation the sibling <c>.csproj</c> and <c>charts/bundle/README.md</c> were corrected for
 ///         on 2026-09-05, in a third copy nobody looked for. The container cap is derived from the
 ///         host rather than the literal four, and since #77 a suite that holds a <em>cluster</em> —
 ///         this one does — waits on a second cap of its own: <c>build/Build.Test.cs</c>
 ///         § <c>ClusterBackedSuiteDegree</c>, which is <b>1</b>.
-///         ⚠ <b>That last clause read "The number is deliberately not repeated here;
-///         build/README.md § 'The cluster degree is 1' is where it lives" until issue #81, and the
-///         same sentence had already said "at one" three words earlier.</b> It cannot not be
+///         ⚠
+///         <b>
+///             That last clause read "The number is deliberately not repeated here;
+///             build/README.md § 'The cluster degree is 1' is where it lives" until issue #81, and the
+///             same sentence had already said "at one" three words earlier.
+///         </b> It cannot not be
 ///         repeated: the section it points at carries the number in its own heading. So the number is
 ///         stated once, plainly, and build/README.md § "The cluster degree is 1" is where it is
 ///         ARGUED rather than merely written down — that it is the invariant fifteen of the seventeen
@@ -77,15 +92,21 @@ public static class BundleInstaller {
     ///     ⚠ Longer than <c>install.sh</c>'s own <c>--timeout 10m</c> on the helm call, so a helm
     ///     timeout surfaces as helm's message rather than as this harness killing the process. A
     ///     harness that times out first turns every slow install into the same uninformative failure.
-    ///     ⚠ <b>#74 added a SECOND timeout inside the script and this number was left to be
-    ///     reconsidered on 2026-09-05, which is recorded here rather than acted on.</b> The
+    ///     ⚠
+    ///     <b>
+    ///         #74 added a SECOND timeout inside the script and this number was left to be
+    ///         reconsidered on 2026-09-05, which is recorded here rather than acted on.
+    ///     </b> The
     ///     <c>manifest:</c> branch now runs
     ///     <c>kubectl wait --for=condition=Established --timeout=5m crd --all</c> after EVERY
     ///     manifest apply — six of the nineteen rows, up from the two that declare a
     ///     <c>manifestExtra</c> — so the worst case of a run is no longer bounded by helm's 10 m
     ///     alone but by <c>10 m × (helm rows selected) + 5 m × (manifest rows selected)</c>.
-    ///     ⚠ <b>Twelve minutes still bounds every run this assembly makes, and that is COUNTED
-    ///     rather than assumed.</b> Three call sites run the installer for real rather than
+    ///     ⚠
+    ///     <b>
+    ///         Twelve minutes still bounds every run this assembly makes, and that is COUNTED
+    ///         rather than assumed.
+    ///     </b> Three call sites run the installer for real rather than
     ///     <c>--dry-run</c>: <c>--phase 15</c> (cert-manager), <c>--phase 25</c> (openebs-localpv)
     ///     and one <c>--component</c> pair (openebs-localpv, cloudnative-pg). The THREE distinct
     ///     components between them — cert-manager, openebs-localpv, cloudnative-pg — all declare
@@ -143,8 +164,11 @@ public static class BundleInstaller {
     ///     Every component the roster lists, paired with its phase, in the roster's own order.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The same narrow reader <c>install.sh</c>'s <c>roster()</c> awk is, mirrored rather
-    ///     than shared, for the reason <see cref="Pin" /> gives.</b> Its two rules are easy to get
+    ///     ⚠
+    ///     <b>
+    ///         The same narrow reader <c>install.sh</c>'s <c>roster()</c> awk is, mirrored rather
+    ///         than shared, for the reason <see cref="Pin" /> gives.
+    ///     </b> Its two rules are easy to get
     ///     subtly wrong and both matter: <c>components:</c> opens the block, and <b>any</b> other
     ///     line beginning with a lower-case letter closes it — which is what stops the reader
     ///     walking on into <c>ordering:</c> and <c>owed:</c>, where the word <c>name</c> appears in
@@ -191,8 +215,11 @@ public static class BundleInstaller {
     /// <param name="component">The component's directory name.</param>
     /// <param name="key">The key.</param>
     /// <remarks>
-    ///     ⚠ <b>The same deliberately narrow reader <c>install.sh</c>'s <c>key()</c> is, and for the
-    ///     same reason rather than by copying.</b> The point of reading the pin here is that the
+    ///     ⚠
+    ///     <b>
+    ///         The same deliberately narrow reader <c>install.sh</c>'s <c>key()</c> is, and for the
+    ///         same reason rather than by copying.
+    ///     </b> The point of reading the pin here is that the
     ///     assertion and the script arrive at the value independently; a YAML library would still be
     ///     an independent path, but it would also accept documents the script's awk cannot, and then
     ///     a component.yaml that this suite reads and the installer silently does not would look
@@ -223,8 +250,11 @@ public static class BundleInstaller {
     /// <param name="component">The component's directory name.</param>
     /// <param name="name">The helm value's dotted name, exactly as the block spells it.</param>
     /// <remarks>
-    ///     ⚠ <b><see cref="Pin" /> cannot read these and would silently return <see langword="null" />
-    ///     for every one of them.</b> Its loop skips any line that does not begin with a letter, and
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="Pin" /> cannot read these and would silently return <see langword="null" />
+    ///         for every one of them.
+    ///     </b> Its loop skips any line that does not begin with a letter, and
     ///     every <c>values:</c> entry is indented — so a test that asked <c>Pin</c> for
     ///     <c>hostpathClass.isDefaultClass</c> would get nothing back and, unless it asserted
     ///     non-null, would pass over a component.yaml with the flag deleted. That is the failure this
@@ -281,8 +311,11 @@ public static class BundleInstaller {
     /// </param>
     /// <param name="cancellationToken">The test's token.</param>
     /// <remarks>
-    ///     ⚠ <b><c>KUBECONFIG</c> is set to the container's file for every run that has one, and it is
-    ///     never left unset for a run that applies.</b> <c>install.sh</c> falls back to the ambient
+    ///     ⚠
+    ///     <b>
+    ///         <c>KUBECONFIG</c> is set to the container's file for every run that has one, and it is
+    ///         never left unset for a run that applies.
+    ///     </b> <c>install.sh</c> falls back to the ambient
     ///     kubeconfig, so a bug that dropped the environment here would install cert-manager into
     ///     whatever cluster the developer running the suite was last pointed at. This is the same
     ///     hazard <c>Build.E2E.cs</c> § <c>ExerciseBootstrap</c> guards with an unresolvable context,
@@ -365,6 +398,6 @@ public static class BundleInstaller {
     /// </remarks>
     public static bool OnPath(string command) =>
         (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-        .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-        .Any(directory => File.Exists(Path.Combine(directory, command)));
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Any(directory => File.Exists(Path.Combine(directory, command)));
 }

@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.Storage.Tests;
 ///         only in a log line.
 ///     </para>
 ///     <para>
-///         ⚠ <b>EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
-///         STAYED GREEN BECAUSE IT WAS NOT.</b> That version built the expected path from the same
+///         ⚠
+///         <b>
+///             EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
+///             STAYED GREEN BECAUSE IT WAS NOT.
+///         </b> That version built the expected path from the same
 ///         constants the emitter reads, so re-casing a constant left the whole suite green — two
 ///         things derived from one constant agree however that constant is spelled.
 ///     </para>
@@ -99,11 +102,12 @@ public sealed class StorageBucketOpenApiCasingTests {
     public void TheInterleavedPathSurvivesIntoThePathsExactly() {
         // ⚠ THE SPELLING A CHILD TYPE ADDS, AND THE ONE A FLATTENED ADDRESS WOULD SILENTLY CHANGE.
         // docs/plan/12 § Child resources: `…/{parentType}/{parentName}/{childType}/{childName}`.
-        StorageBuckets.Type.ToString().ShouldBe(
-            QualifiedType,
-            "the declared type is spelled differently from docs/plan/15 § The three kinds and from "
-            + "charts/managed/seaweedfs-bucket/Chart.yaml's cybercloud.io/resource-type annotation."
-        );
+        StorageBuckets.Type.ToString()
+            .ShouldBe(
+                QualifiedType,
+                "the declared type is spelled differently from docs/plan/15 § The three kinds and from "
+                + "charts/managed/seaweedfs-bucket/Chart.yaml's cybercloud.io/resource-type annotation."
+            );
 
         var paths = Paths();
 
@@ -116,7 +120,8 @@ public sealed class StorageBucketOpenApiCasingTests {
                 StringComparison.Ordinal
             ),
             "no path interleaves the account's name between the two type segments. Every path in the "
-            + "document: " + string.Join(", ", paths)
+            + "document: "
+            + string.Join(", ", paths)
         );
 
         paths.ShouldNotContain(
@@ -163,9 +168,8 @@ public sealed class StorageBucketOpenApiCasingTests {
             + "admission."
         );
 
-        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType).IsSuccess.ShouldBeTrue(
-            "the resource-type label value is not legal Kubernetes label syntax."
-        );
+        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType)
+            .IsSuccess.ShouldBeTrue("the resource-type label value is not legal Kubernetes label syntax.");
     }
 
     /// <summary>The document the generator would write for this provider alone.</summary>

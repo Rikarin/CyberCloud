@@ -33,8 +33,7 @@ public sealed class ReferenceCase : IProviderCaseSource {
             InvalidBody = Probes.BodyWithoutNote,
             InvalidBodyTarget = "/properties/note",
             ActionName = "ping",
-            Objects = (id, ns) =>
-                [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
+            Objects = (id, ns) => [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
@@ -48,8 +47,11 @@ public sealed class ReferenceCase : IProviderCaseSource {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is the whole cost of putting a child type under the shared suite, and it is one
-///         member longer than a top-level one.</b> Everything else is the same object shape:
+///         ⚠
+///         <b>
+///             This is the whole cost of putting a child type under the shared suite, and it is one
+///             member longer than a top-level one.
+///         </b> Everything else is the same object shape:
 ///         <see cref="ProviderConformanceCase" /> gained nothing, the four shipping providers'
 ///         case files were not touched, and the child inherits all <b>28</b> assertions rather than a
 ///         subset — <c>ProviderTestCluster.Address</c> interleaves the ancestors the harness created,
@@ -79,8 +81,7 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
             InvalidBody = Probes.ChildBodyWithoutNote,
             InvalidBodyTarget = "/properties/note",
             ActionName = "ping",
-            Objects = (id, ns) =>
-                [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
+            Objects = (id, ns) => [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
@@ -89,8 +90,7 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
         };
 
     /// <inheritdoc />
-    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
-        [ReferenceCase.ProviderCase];
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [ReferenceCase.ProviderCase];
 }
 
 /// <summary>
@@ -108,15 +108,16 @@ public sealed class AncestorlessChildCase : IProviderCaseSource {
     public static ProviderConformanceCase ProviderCase => ReferenceChildCase.ProviderCase;
 }
 
-/// <summary>A depth-2 source whose one ancestor is not its own — the copy-paste, so the guard can be
-///     shown to catch it.</summary>
+/// <summary>
+///     A depth-2 source whose one ancestor is not its own — the copy-paste, so the guard can be
+///     shown to catch it.
+/// </summary>
 public sealed class WrongAncestorChildCase : IProviderCaseSource {
     /// <inheritdoc />
     public static ProviderConformanceCase ProviderCase => ReferenceChildCase.ProviderCase;
 
     /// <inheritdoc />
-    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
-        [ReferenceChildCase.ProviderCase];
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [ReferenceChildCase.ProviderCase];
 }
 
 /// <summary>The shared suite, run against the reference provider.</summary>
@@ -139,7 +140,7 @@ public sealed class ReferenceProviderConformance(ProviderTestCluster<ReferenceCa
 /// <param name="cluster">The harness.</param>
 public sealed class ReferenceChildProviderConformance(ProviderTestCluster<ReferenceChildCase> cluster)
     : ProviderConformanceTests<ReferenceChildCase>(cluster),
-        IClassFixture<ProviderTestCluster<ReferenceChildCase>>;
+    IClassFixture<ProviderTestCluster<ReferenceChildCase>>;
 
 /// <summary>
 ///     The signpost to the container-backed half, which runs in <c>CyberCloud.Cluster.Conformance</c>.
@@ -267,10 +268,7 @@ public sealed class SuiteRejectionTests {
         var ns = ReconcileDriver.NamespaceFor(address);
 
         var custom = new GroupVersionKind {
-            Group = "kafka.strimzi.io",
-            Version = "v1beta2",
-            Kind = "Kafka",
-            Plural = "kafkas"
+            Group = "kafka.strimzi.io", Version = "v1beta2", Kind = "Kafka", Plural = "kafkas"
         };
 
         var applied = await KubeCommand.For(world)
@@ -336,9 +334,7 @@ public sealed class SuiteRejectionTests {
                 world.RemoveBehindTheirBack(target);
                 return Task.CompletedTask;
             },
-            MatchesDesiredAsync: () => Task.FromResult(
-                world.Read(target) is { } json && Probes.Matches(json, desired)
-            )
+            MatchesDesiredAsync: () => Task.FromResult(world.Read(target) is { } json && Probes.Matches(json, desired))
         );
 
         var report = await ReconcilerConformance.RunAsync(
@@ -409,8 +405,9 @@ public sealed class SuiteRejectionTests {
         // member. Without this guard it is ResourceId's constructor throwing ArgumentException about
         // parent-name counts, from a static helper every test calls, so xUnit reports all 27 as
         // failed and none of them says which member is missing.
-        var thrown = Should.Throw<InvalidOperationException>(
-            () => ProviderTestCluster<AncestorlessChildCase>.Address("anything")
+        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<AncestorlessChildCase>.Address(
+                "anything"
+            )
         );
 
         thrown.Message.ShouldContain("Ancestors");
@@ -424,8 +421,9 @@ public sealed class SuiteRejectionTests {
         // naming the wrong type. The harness registers ONE provider, so a case pointing at somebody
         // else's parent would have the harness creating a resource this run's registry cannot
         // address — and the create would fail with the registry's message rather than the case's.
-        var thrown = Should.Throw<InvalidOperationException>(
-            () => ProviderTestCluster<WrongAncestorChildCase>.Address("anything")
+        var thrown = Should.Throw<InvalidOperationException>(() => ProviderTestCluster<WrongAncestorChildCase>.Address(
+                "anything"
+            )
         );
 
         thrown.Message.ShouldContain(Probes.ChildTypePath);
@@ -459,14 +457,13 @@ public sealed class SuiteRejectionTests {
 
     /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
     /// <param name="suite">The closed test class.</param>
-    static ImmutableArray<string> RunnableFactsOf(Type suite) =>
-        [
-            .. suite
-                .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
-                .Select(x => x.Name)
-                .OrderBy(x => x, StringComparer.Ordinal)
-        ];
+    static ImmutableArray<string> RunnableFactsOf(Type suite) => [
+        .. suite
+            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+            .Select(x => x.Name)
+            .OrderBy(x => x, StringComparer.Ordinal)
+    ];
 
     [Fact]
     public void EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile() {
@@ -483,7 +480,12 @@ public sealed class SuiteRejectionTests {
         var optional = new[] { typeof(ProviderConformanceCase), typeof(MatchContext) }
             .SelectMany(type => type.GetProperties().Select(x => (Type: type, Property: x)))
             .Where(x => x.Property.SetMethod is not null || x.Property.GetMethod is not null)
-            .Where(x => x.Property.GetCustomAttributes(typeof(System.Runtime.CompilerServices.RequiredMemberAttribute), false).Length == 0)
+            .Where(x => x.Property.GetCustomAttributes(
+                    typeof(System.Runtime.CompilerServices.RequiredMemberAttribute),
+                    false
+                ).Length
+                == 0
+            )
             .Select(x => $"{x.Type.Name}.{x.Property.Name}")
             .ToImmutableArray();
 

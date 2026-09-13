@@ -1,6 +1,7 @@
 // ⚠ For SecretRef. CyberCloud.Storage/accounts is the first provider that named the type and this is
 // the second; it lives in CyberCloud.Core.Contracts rather than in CyberCloud.ResourceManager.Contracts
 // where it started — see its own remarks on why the [Alias] stayed put through the move.
+
 using CyberCloud.Core.Contracts;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
@@ -18,8 +19,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A WORKSPACE IS A TENANCY IN A STORE THE PLATFORM ALREADY RUNS. IT IS NOT A
-///         DEPLOYMENT, AND GETTING THAT BACKWARDS IS THE EXPENSIVE MISTAKE ON THIS ROW.</b>
+///         ⚠
+///         <b>
+///             A WORKSPACE IS A TENANCY IN A STORE THE PLATFORM ALREADY RUNS. IT IS NOT A
+///             DEPLOYMENT, AND GETTING THAT BACKWARDS IS THE EXPENSIVE MISTAKE ON THIS ROW.
+///         </b>
 ///         <c>CyberCloud.Analytics/clickhouseClusters</c> had to settle the mirror image of this
 ///         question and its answer is the precedent: the platform's own ClickHouse is not that
 ///         type. This row is the other half of the same sentence — the platform's own ClickHouse,
@@ -36,36 +40,52 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///             <c>accountID</c> is a tenancy coordinate inside one VictoriaMetrics cluster and a
 ///             database is one inside one ClickHouse. Neither is a deployment. If a workspace were a
 ///             deployment, the ingest router would have to discover and hold a connection per
-///             workspace, and that document's opening claim — <i>"it is only safe because tenancy is
-///             enforced at ingest, not at query"</i> — would have nothing left to enforce.
+///             workspace, and that document's opening claim —
+///             <i>
+///                 "it is only safe because tenancy is
+///                 enforced at ingest, not at query"
+///             </i> — would have nothing left to enforce.
 ///         </item>
 ///         <item>
 ///             <b>docs/plan/05 § Every store gives the telemetry stores ONE ROW EACH.</b>
-///             <i>"ClickHouse · Logs, traces, metering rollups, resource graph · Per region;
-///             database-per-tenant; shard+replica"</i>, and <i>"VictoriaMetrics · Metrics · Per
-///             region; native multi-tenant accountID"</i>. One row per region is one deployment per
+///             <i>
+///                 "ClickHouse · Logs, traces, metering rollups, resource graph · Per region;
+///                 database-per-tenant; shard+replica"
+///             </i>, and
+///             <i>
+///                 "VictoriaMetrics · Metrics · Per
+///                 region; native multi-tenant accountID"
+///             </i>. One row per region is one deployment per
 ///             region; database-per-tenant is what this type allocates.
 ///         </item>
 ///         <item>
-///             <b>The deployment-shaped reading is a product this catalogue already sells under
-///             another name.</b> <c>CyberCloud.Analytics/clickhouseClusters</c> is a single-tenant
+///             <b>
+///                 The deployment-shaped reading is a product this catalogue already sells under
+///                 another name.
+///             </b> <c>CyberCloud.Analytics/clickhouseClusters</c> is a single-tenant
 ///             cluster in a tenant namespace whose schema the tenant owns. A workspace that was also
 ///             a deployment would be that type with a worse name, and docs/plan/16's economic claim —
 ///             <i>"Building one pipeline for both is the decision that makes this affordable"</i> —
 ///             is a shared-engine argument that a per-workspace deployment refutes.
 ///         </item>
 ///         <item>
-///             ⚠ <b>THE DEPENDENCY CYCLE, WHICH IS THE ONE THAT MAKES IT A CORRECTNESS QUESTION
-///             RATHER THAN A MODELLING PREFERENCE.</b> docs/plan/16 says platform telemetry runs
+///             ⚠
+///             <b>
+///                 THE DEPENDENCY CYCLE, WHICH IS THE ONE THAT MAKES IT A CORRECTNESS QUESTION
+///                 RATHER THAN A MODELLING PREFERENCE.
+///             </b> docs/plan/16 says platform telemetry runs
 ///             <i>"under a platform workspace. No separate stack."</i> — so the platform workspace
 ///             <b>is</b> a resource of this type. If a resource of this type provisioned the store,
 ///             then reconciling the platform's own workspace would provision the store that every
 ///             reconcile — including that one — emits its telemetry into.
 ///             <c>CyberCloud.Ingest.Host</c> is deliberately not an Orleans client
 ///             (docs/plan/03 § Hosts) precisely so telemetry never runs through the control plane,
-///             and a store the control plane creates puts it back. <b>Both halves have to be true at
-///             once — the platform workspace is one of these, and the platform's stores are not —
-///             and only the shared-store reading makes them compatible.</b>
+///             and a store the control plane creates puts it back.
+///             <b>
+///                 Both halves have to be true at
+///                 once — the platform workspace is one of these, and the platform's stores are not —
+///                 and only the shared-store reading makes them compatible.
+///             </b>
 ///         </item>
 ///         <item>
 ///             <b>Soft delete decides the same way.</b> On the shared reading a soft-deleted
@@ -83,8 +103,10 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///         which <c>accountID</c> its metrics carry, which database its logs land in, what its
 ///         retention and quota are. docs/plan/16 calls that <i>"a cached map"</i> and says nothing
 ///         about how it is filled — and the one constraint on filling it is decisive:
-///         <b><c>CyberCloud.Ingest.Host</c> is not an Orleans client, so the control plane cannot
-///         tell it anything by grain call.</b> The publication has to be through a store the ingest
+///         <b>
+///             <c>CyberCloud.Ingest.Host</c> is not an Orleans client, so the control plane cannot
+///             tell it anything by grain call.
+///         </b> The publication has to be through a store the ingest
 ///         host can read without the control plane, and the only such store the platform already
 ///         operates is Kubernetes. So the objects below are the workspace's <b>ingest map row</b>,
 ///         and the resource converges when that row is readable. That is a forced design rather
@@ -120,10 +142,16 @@ public static class MonitorWorkspaces {
 
     /// <summary>Where the cluster id lives in the body.</summary>
     /// <remarks>
-    ///     ⚠ <b>It names the regional cluster whose telemetry data plane serves this workspace, and
-    ///     NOT a cluster the workspace deploys anything into.</b> Every other type in the catalogue
-    ///     reads this pointer as <i>"put my workload here"</i>; this one reads it as <i>"publish my
-    ///     tenancy where this region's ingest host is watching"</i>. The mechanism is identical and
+    ///     ⚠
+    ///     <b>
+    ///         It names the regional cluster whose telemetry data plane serves this workspace, and
+    ///         NOT a cluster the workspace deploys anything into.
+    ///     </b> Every other type in the catalogue
+    ///     reads this pointer as <i>"put my workload here"</i>; this one reads it as
+    ///     <i>
+    ///         "publish my
+    ///         tenancy where this region's ingest host is watching"
+    ///     </i>. The mechanism is identical and
     ///     the meaning is not, which is why the property's description says so in the tenant's own
     ///     words rather than leaving it to be inferred from the type.
     /// </remarks>
@@ -156,8 +184,11 @@ public static class MonitorWorkspaces {
 
     /// <summary>The core group, which two of this type's three objects are in.</summary>
     /// <remarks>
-    ///     ⚠ <b>Two core kinds and one custom kind, which is a mix no earlier family has in this
-    ///     proportion, and it is the architecture read off the object list.</b> A type that
+    ///     ⚠
+    ///     <b>
+    ///         Two core kinds and one custom kind, which is a mix no earlier family has in this
+    ///         proportion, and it is the architecture read off the object list.
+    ///     </b> A type that
     ///     provisions an engine writes its operator's CRD and nothing else;
     ///     <c>CyberCloud.Storage/accounts</c> writes one <c>Secret</c> beside its custom resource
     ///     because the engine needs a credential file. This type provisions no engine at all, so
@@ -176,8 +207,11 @@ public static class MonitorWorkspaces {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE ONLY OBJECT HERE THAT BELONGS TO AN OPERATOR, AND THE ONLY ONE THAT
-    ///         ENFORCES ANYTHING TODAY.</b> Checked against
+    ///         ⚠
+    ///         <b>
+    ///             THE ONLY OBJECT HERE THAT BELONGS TO AN OPERATOR, AND THE ONLY ONE THAT
+    ///             ENFORCES ANYTHING TODAY.
+    ///         </b> Checked against
     ///         <c>api/operator/v1beta1/vmuser_types.go</c> rather than a README:
     ///         <c>VMUserSpec</c> carries <c>username</c>, <c>password</c>, <c>passwordRef</c>,
     ///         <c>bearerToken</c> and a required <c>targetRefs</c>, and each <c>TargetRef</c> carries
@@ -196,9 +230,7 @@ public static class MonitorWorkspaces {
     ///     </para>
     /// </remarks>
     public static GroupVersionKind VmUserKind { get; } =
-        new() {
-            Group = "operator.victoriametrics.com", Version = "v1beta1", Kind = "VMUser", Plural = "vmusers"
-        };
+        new() { Group = "operator.victoriametrics.com", Version = "v1beta1", Kind = "VMUser", Plural = "vmusers" };
 
     /// <summary>The name of the <c>ConfigMap</c> carrying the ingest map row.</summary>
     /// <param name="name">The resource's own name.</param>
@@ -237,8 +269,11 @@ public static class MonitorWorkspaces {
     ///     The label the ingest host would select the rows of every workspace in a region by.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Not one of ADR-013's seven, and it is here because the seven cannot answer this
-    ///     question.</b> <c>cybercloud.io/resource-type</c> is on every object this provider applies,
+    ///     ⚠
+    ///     <b>
+    ///         Not one of ADR-013's seven, and it is here because the seven cannot answer this
+    ///         question.
+    ///     </b> <c>cybercloud.io/resource-type</c> is on every object this provider applies,
     ///     including the <c>Secret</c>; a watcher wants the <c>ConfigMap</c>s and only the
     ///     <c>ConfigMap</c>s, across every namespace in the region, and it must not have to encode
     ///     "the one whose kind is ConfigMap" as a rule about our label scheme. So the row carries a
@@ -294,30 +329,41 @@ public static class MonitorWorkspaces {
     /// <summary>The ClickHouse database this workspace's logs, traces and events land in.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
     /// <remarks>
-    ///     ⚠ <b>Keyed on the resource's GUID rather than on its name, and unlike
-    ///     <see cref="AccountId" /> this one is injective.</b> A database name may be long, so the
+    ///     ⚠
+    ///     <b>
+    ///         Keyed on the resource's GUID rather than on its name, and unlike
+    ///         <see cref="AccountId" /> this one is injective.
+    ///     </b> A database name may be long, so the
     ///     whole GUID fits; a workspace renamed — which this platform does not offer — or two
     ///     workspaces called <c>prod</c> in two tenants cannot collide. The <c>ws_</c> prefix is
     ///     there because a ClickHouse identifier may not start with a digit.
     /// </remarks>
-    public static string Database(ResourceId id) =>
-        string.Create(CultureInfo.InvariantCulture, $"ws_{id.Id:N}");
+    public static string Database(ResourceId id) => string.Create(CultureInfo.InvariantCulture, $"ws_{id.Id:N}");
 
     // ── The retention tiers ───────────────────────────────────────────────────────────────────
 
     /// <summary>The three retention tiers, in ascending order of what they cost.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>TIER NAMES RATHER THAN DAY COUNTS, AND THE REASON IS A LIMIT OF
-    ///         <c>ResourceSchema</c> RATHER THAN A PREFERENCE.</b> docs/plan/16 spells retention as
+    ///         ⚠
+    ///         <b>
+    ///             TIER NAMES RATHER THAN DAY COUNTS, AND THE REASON IS A LIMIT OF
+    ///             <c>ResourceSchema</c> RATHER THAN A PREFERENCE.
+    ///         </b> docs/plan/16 spells retention as
     ///         nine numbers — <i>"metrics 15/90/400 days, logs 7/30/90, traces 3/14/30. Priced"</i> —
     ///         and each triple is a <b>discrete priced set</b>, not a range.
     ///         <c>SchemaProperty.AllowedValues</c> is legal on <c>SchemaKind.Text</c> and nowhere
-    ///         else, and its own remarks say a numeric enumeration <i>"is expressible as
-    ///         Minimum/Maximum or is a modelling mistake"</i> — but <c>Minimum</c>/<c>Maximum</c>
+    ///         else, and its own remarks say a numeric enumeration
+    ///         <i>
+    ///             "is expressible as
+    ///             Minimum/Maximum or is a modelling mistake"
+    ///         </i> — but <c>Minimum</c>/<c>Maximum</c>
     ///         admits 399, which no price list has a row for and which this type's storage meter
-    ///         would then reserve against. <b>So a discrete numeric tier set is inexpressible, and
-    ///         this is the sixth family to record a rule <c>ResourceSchema</c> cannot state.</b>
+    ///         would then reserve against.
+    ///         <b>
+    ///             So a discrete numeric tier set is inexpressible, and
+    ///             this is the sixth family to record a rule <c>ResourceSchema</c> cannot state.
+    ///         </b>
     ///     </para>
     ///     <para>
     ///         ⚠ <b>What that forces turns out to be better than what it forbids.</b> A tier NAME is
@@ -328,27 +374,47 @@ public static class MonitorWorkspaces {
     ///         <c>MonitorRetentionTests</c> pins all nine against docs/plan/16 as literals.
     ///     </para>
     ///     <para>
-    ///         ⚠⚠ <b>AND THE SECOND REASON IS THE ONE THAT REFUTES docs/plan/16: ON THE METRICS HALF
-    ///         A PER-WORKSPACE RETENTION PERIOD IS NOT A SETTING VICTORIAMETRICS HAS.</b> Checked in
+    ///         ⚠⚠
+    ///         <b>
+    ///             AND THE SECOND REASON IS THE ONE THAT REFUTES docs/plan/16: ON THE METRICS HALF
+    ///             A PER-WORKSPACE RETENTION PERIOD IS NOT A SETTING VICTORIAMETRICS HAS.
+    ///         </b> Checked in
     ///         upstream's source and its own enterprise page on 2026-08-18, not in a blog post:
     ///         <c>app/vmstorage/main.go</c> declares <c>-retentionPeriod</c> once, per vmstorage
-    ///         <i>node</i> — <i>"Data with timestamps outside the retentionPeriod is automatically
-    ///         deleted"</i> — and the per-tenant form, <c>-retentionFilter</c> with its
+    ///         <i>node</i> —
+    ///         <i>
+    ///             "Data with timestamps outside the retentionPeriod is automatically
+    ///             deleted"
+    ///         </i> — and the per-tenant form, <c>-retentionFilter</c> with its
     ///         <c>vm_account_id</c> pseudo-label selectors, is on
     ///         <c>docs.victoriametrics.com/enterprise/</c>'s feature list. So is
-    ///         <c>-downsampling.period</c>. <b>An open-source VictoriaMetrics cluster cannot give two
-    ///         accountIDs two retention periods.</b> docs/plan/16 § <c>workspaces</c> prices exactly
+    ///         <c>-downsampling.period</c>.
+    ///         <b>
+    ///             An open-source VictoriaMetrics cluster cannot give two
+    ///             accountIDs two retention periods.
+    ///         </b> docs/plan/16 § <c>workspaces</c> prices exactly
     ///         that, and ADR-016 chose the engine for <i>"native multi-tenancy"</i> — which is real
     ///         and is about isolation, not about retention.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The closure is upstream's own, and it is what makes a tier NAME the load-bearing
-    ///         model rather than a workaround.</b> <c>docs.victoriametrics.com/guides/
-    ///         guide-vmcluster-multiple-retention-setup/</c> answers the open-source case by running
-    ///         <i>"separate logic groups of storages … with individual <c>-retentionPeriod</c>
-    ///         settings, while still providing a single unified write and read path"</i>. That is
-    ///         one vmstorage group per tier, and a workspace's tier therefore decides <b>which group
-    ///         it is routed to</b> rather than a number written into a shared one — which is exactly
+    ///         ⚠
+    ///         <b>
+    ///             The closure is upstream's own, and it is what makes a tier NAME the load-bearing
+    ///             model rather than a workaround.
+    ///         </b>
+    ///         <c>
+    /// docs.victoriametrics.com/guides/
+    ///         guide-vmcluster-multiple-retention-setup/
+    ///         </c> answers the open-source case by running
+    ///         <i>
+    ///             "separate logic groups of storages … with individual <c>-retentionPeriod</c>
+    ///             settings, while still providing a single unified write and read path"
+    ///         </i>. That is
+    ///         one vmstorage group per tier, and a workspace's tier therefore decides
+    ///         <b>
+    ///             which group
+    ///             it is routed to
+    ///         </b> rather than a number written into a shared one — which is exactly
     ///         what <see cref="MetricsClusterName" /> spells and what the <c>VMUser</c> renders. A
     ///         retention expressed as a day count would have had nowhere to go; expressed as one of
     ///         three names it is a target.
@@ -401,8 +467,11 @@ public static class MonitorWorkspaces {
 
     /// <summary>The default tier, for every signal.</summary>
     /// <remarks>
-    ///     docs/plan/16 § Cost and retention honesty: <i>"per-signal retention that is a paid
-    ///     property with a cheap default"</i>. The cheap one is the short one.
+    ///     docs/plan/16 § Cost and retention honesty:
+    ///     <i>
+    ///         "per-signal retention that is a paid
+    ///         property with a cheap default"
+    ///     </i>. The cheap one is the short one.
     /// </remarks>
     public const string DefaultTier = "short";
 
@@ -438,8 +507,11 @@ public static class MonitorWorkspaces {
     /// <summary>The lowest legal retained fraction, in percent.</summary>
     /// <remarks>
     ///     ⚠ <b>ONE, AND THE REASON IS THE PRODUCT CLAIM RATHER THAN A ROUND NUMBER.</b> docs/plan/16
-    ///     § Cost and retention honesty forbids the silent drop — <i>"over-quota behaviour is
-    ///     sampling with a visible rate rather than a drop"</i> — and zero is a drop spelled as a
+    ///     § Cost and retention honesty forbids the silent drop —
+    ///     <i>
+    ///         "over-quota behaviour is
+    ///         sampling with a visible rate rather than a drop"
+    ///     </i> — and zero is a drop spelled as a
     ///     rate. A <c>Minimum</c> of 1 is the one part of that promise the API can enforce on its
     ///     own, without anything downstream having to be built, so it is enforced there.
     /// </remarks>
@@ -477,11 +549,7 @@ public static class MonitorWorkspaces {
                     Description: "The regional cluster whose telemetry data plane serves this "
                     + "workspace. ⚠ Nothing is deployed into it: a workspace is a tenancy in stores "
                     + "the platform already runs, and this is where its ingest routing is published."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── Retention ────────────────────────────────────────────────────────────────
                 new(
@@ -498,11 +566,7 @@ public static class MonitorWorkspaces {
                     + "400. ⚠ Shortening this under an existing workspace destroys the samples "
                     + "already outside the new window, and the reconciler refuses the change rather "
                     + "than applying it."
-                ) {
-                    AllowedValues = Tiers,
-                    Widget = WidgetHint.Sku,
-                    DefaultJson = "\"short\""
-                },
+                ) { AllowedValues = Tiers, Widget = WidgetHint.Sku, DefaultJson = "\"short\"" },
                 new(
                     "/properties/retention/logs",
                     SchemaKind.Text,
@@ -511,11 +575,7 @@ public static class MonitorWorkspaces {
                     + "⚠ Shortening this under an existing workspace destroys the lines already "
                     + "outside the new window, and the reconciler refuses the change rather than "
                     + "applying it."
-                ) {
-                    AllowedValues = Tiers,
-                    Widget = WidgetHint.Sku,
-                    DefaultJson = "\"short\""
-                },
+                ) { AllowedValues = Tiers, Widget = WidgetHint.Sku, DefaultJson = "\"short\"" },
                 new(
                     "/properties/retention/traces",
                     SchemaKind.Text,
@@ -524,11 +584,7 @@ public static class MonitorWorkspaces {
                     + "⚠ Shortening this under an existing workspace destroys the spans already "
                     + "outside the new window, and the reconciler refuses the change rather than "
                     + "applying it."
-                ) {
-                    AllowedValues = Tiers,
-                    Widget = WidgetHint.Sku,
-                    DefaultJson = "\"short\""
-                },
+                ) { AllowedValues = Tiers, Widget = WidgetHint.Sku, DefaultJson = "\"short\"" },
 
                 // ── Quota ────────────────────────────────────────────────────────────────────
                 new(
@@ -544,31 +600,19 @@ public static class MonitorWorkspaces {
                     Description: "Metric samples accepted per day, in gibibytes. This is the first "
                     + "factor of what the workspace draws against the subscription's storage quota; "
                     + "the second is the retention tier."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10_000,
-                    DefaultJson = "5"
-                },
+                ) { Minimum = 1, Maximum = 10_000, DefaultJson = "5" },
                 new(
                     "/properties/quota/logsGbPerDay",
                     SchemaKind.WholeNumber,
                     Required: true,
                     Description: "Log lines accepted per day, in gibibytes."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10_000,
-                    DefaultJson = "10"
-                },
+                ) { Minimum = 1, Maximum = 10_000, DefaultJson = "10" },
                 new(
                     "/properties/quota/tracesGbPerDay",
                     SchemaKind.WholeNumber,
                     Required: true,
                     Description: "Spans accepted per day, in gibibytes."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10_000,
-                    DefaultJson = "5"
-                },
+                ) { Minimum = 1, Maximum = 10_000, DefaultJson = "5" },
                 new(
                     "/properties/quota/seriesCap",
                     SchemaKind.WholeNumber,
@@ -576,11 +620,7 @@ public static class MonitorWorkspaces {
                     Description: "Active metric series the workspace may hold at once. One tenant "
                     + "putting a request id in a metric label is how a shared time-series database "
                     + "dies, so this is a ceiling rather than a guideline."
-                ) {
-                    Minimum = 1_000,
-                    Maximum = 50_000_000,
-                    DefaultJson = "1000000"
-                },
+                ) { Minimum = 1_000, Maximum = 50_000_000, DefaultJson = "1000000" },
                 new(
                     "/properties/quota/cardinalityCap",
                     SchemaKind.WholeNumber,
@@ -589,11 +629,7 @@ public static class MonitorWorkspaces {
                     + "carrying it are rejected. The rejection names the offending label — "
                     + "docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the "
                     + "client just retries."
-                ) {
-                    Minimum = 100,
-                    Maximum = 1_000_000,
-                    DefaultJson = "20000"
-                },
+                ) { Minimum = 100, Maximum = 1_000_000, DefaultJson = "20000" },
                 new(
                     "/properties/quota/overQuotaSampleRate",
                     SchemaKind.WholeNumber,
@@ -602,11 +638,7 @@ public static class MonitorWorkspaces {
                     + "daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over "
                     + "quota samples at a visible rate rather than dropping silently, and zero is a "
                     + "silent drop spelled as a rate."
-                ) {
-                    Minimum = MinimumOverQuotaSampleRate,
-                    Maximum = 100,
-                    DefaultJson = "10"
-                },
+                ) { Minimum = MinimumOverQuotaSampleRate, Maximum = 100, DefaultJson = "10" },
 
                 // ── Soft delete ──────────────────────────────────────────────────────────────
                 new(
@@ -616,18 +648,22 @@ public static class MonitorWorkspaces {
                     Description: "Whether this workspace may be destroyed before its seven-day "
                     + "recovery window is out. Once true it stays true for the rest of the "
                     + "workspace's life, and a purge is refused while it is set."
-                ) {
-                    DefaultJson = "false"
-                }
+                ) { DefaultJson = "false" }
             ]
         );
 
     /// <summary>What a <c>POST …/listKeys</c> returns.</summary>
     /// <remarks>
-    ///     ⚠ <b>It carries the datasource endpoints as well as the credential, and that is
-    ///     docs/plan/16's <c>dataSources</c> row rather than an extra.</b> That document lists
-    ///     <c>dataSources</c> as a property of the workspace — <i>"Read-only endpoints for the
-    ///     tenant's own Grafana or an external one"</i> — and an endpoint the platform computes is
+    ///     ⚠
+    ///     <b>
+    ///         It carries the datasource endpoints as well as the credential, and that is
+    ///         docs/plan/16's <c>dataSources</c> row rather than an extra.
+    ///     </b> That document lists
+    ///     <c>dataSources</c> as a property of the workspace —
+    ///     <i>
+    ///         "Read-only endpoints for the
+    ///         tenant's own Grafana or an external one"
+    ///     </i> — and an endpoint the platform computes is
     ///     an output rather than a setting. A body property nobody may write is one the write path
     ///     has to refuse and the portal has to grey out; the action already exists, is already
     ///     audited, and is already the one place a tenant is told how to reach their data.
@@ -687,16 +723,14 @@ public static class MonitorWorkspaces {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ───────────────────────────────────────────────────────────────
 
     /// <summary>The retention tier a body asks for, for one signal.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <param name="signal">One of <see cref="Signals" />.</param>
-    public static string Tier(JsonElement desired, string signal) =>
-        Text(desired, "retention", signal, DefaultTier);
+    public static string Tier(JsonElement desired, string signal) => Text(desired, "retention", signal, DefaultTier);
 
     /// <summary>How many days one signal is kept, for the tier a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -720,8 +754,7 @@ public static class MonitorWorkspaces {
 
     /// <summary>The active-series ceiling a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int SeriesCap(JsonElement desired) =>
-        Number(desired, "quota", "seriesCap", DefaultSeriesCap);
+    public static int SeriesCap(JsonElement desired) => Number(desired, "quota", "seriesCap", DefaultSeriesCap);
 
     /// <summary>The label-cardinality ceiling a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -743,10 +776,16 @@ public static class MonitorWorkspaces {
     /// </summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>THIS IS WHERE THE RETENTION SETTING REACHES THE METER, AND IT IS THE WHOLE ANSWER TO
-    ///     docs/plan/16 § Cost and retention honesty.</b> That section's first failure mode is
-    ///     <i>"storing everything forever"</i>, prevented by making retention <i>"a paid
-    ///     property"</i> — which is only true if the number a tenant sets moves the number the
+    ///     ⚠
+    ///     <b>
+    ///         THIS IS WHERE THE RETENTION SETTING REACHES THE METER, AND IT IS THE WHOLE ANSWER TO
+    ///         docs/plan/16 § Cost and retention honesty.
+    ///     </b> That section's first failure mode is
+    ///     <i>"storing everything forever"</i>, prevented by making retention
+    ///     <i>
+    ///         "a paid
+    ///         property"
+    ///     </i> — which is only true if the number a tenant sets moves the number the
     ///     platform reserves. It is a sum over three signals of a product of two things the tenant
     ///     sets separately, and both factors are in every derivation's declared read set.
     /// </remarks>
@@ -780,8 +819,7 @@ public static class MonitorWorkspaces {
     ///     never this value — it is whatever <c>ISecretResolver</c> returns after the mint, which is
     ///     the value the <i>first</i> pass wrote. See <c>MonitorWorkspaceReconciler</c>.
     /// </remarks>
-    public static string GenerateIngestKey() =>
-        RandomNumberGenerator.GetString(KeyAlphabet, KeyLength);
+    public static string GenerateIngestKey() => RandomNumberGenerator.GetString(KeyAlphabet, KeyLength);
 
     /// <summary>Where a workspace's secrets live in the tenant's vault.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
@@ -796,8 +834,7 @@ public static class MonitorWorkspaces {
 
     /// <summary>The handle that reads a workspace's ingest key back.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
-    public static SecretRef IngestKeyRef(ResourceId id) =>
-        new() { Path = SecretPath(id), Field = IngestKeyField };
+    public static SecretRef IngestKeyRef(ResourceId id) => new() { Path = SecretPath(id), Field = IngestKeyField };
 
     /// <summary>The <c>Secret</c> document a workspace's ingest key becomes.</summary>
     /// <param name="name">The resource's own name.</param>
@@ -815,16 +852,17 @@ public static class MonitorWorkspaces {
             ["kind"] = SecretKind.Kind,
             ["metadata"] = new JsonObject { ["name"] = KeySecretName(name) },
             ["type"] = "Opaque",
-            ["data"] = new JsonObject {
-                [IngestKeyField] = Convert.ToBase64String(Encoding.UTF8.GetBytes(ingestKey))
-            }
+            ["data"] = new JsonObject { [IngestKeyField] = Convert.ToBase64String(Encoding.UTF8.GetBytes(ingestKey)) }
         }.ToJsonString();
     }
 
     /// <summary>The namespace the region's telemetry stack runs in.</summary>
     /// <remarks>
-    ///     ⚠ <b>A platform namespace, and it is the one string in this file that is an assumption
-    ///     about a deployment nothing in this repository performs.</b> The stores are installed by
+    ///     ⚠
+    ///     <b>
+    ///         A platform namespace, and it is the one string in this file that is an assumption
+    ///         about a deployment nothing in this repository performs.
+    ///     </b> The stores are installed by
     ///     the platform bundle (docs/plan/09) rather than by any resource, so this names where they
     ///     are and cannot verify it. A wrong value here produces a <c>VMUser</c> that applies
     ///     cleanly, reads back cleanly, converges, and routes to a <c>VMCluster</c> that is not
@@ -838,8 +876,11 @@ public static class MonitorWorkspaces {
     /// </summary>
     /// <param name="tier">One of <see cref="Tiers" />.</param>
     /// <remarks>
-    ///     ⚠ <b>ONE CLUSTER PER TIER, WHICH IS THE ONLY OPEN-SOURCE ANSWER TO A PRICED RETENTION —
-    ///     see <see cref="Tiers" /> for the source.</b> A workspace's metrics retention is therefore
+    ///     ⚠
+    ///     <b>
+    ///         ONE CLUSTER PER TIER, WHICH IS THE ONLY OPEN-SOURCE ANSWER TO A PRICED RETENTION —
+    ///         see <see cref="Tiers" /> for the source.
+    ///     </b> A workspace's metrics retention is therefore
     ///     a <i>routing</i> decision taken at reconcile time and not a number sent to a store, and
     ///     that is why moving a workspace between tiers is not a field edit: it is a different
     ///     target, and the samples already written stay in the group that holds them.
@@ -861,9 +902,15 @@ public static class MonitorWorkspaces {
     ///         <c>/select/&lt;accountID&gt;/prometheus/api/v1/query</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THIS OBJECT IS docs/plan/16's <i>"the tenant label is injected by us and
-    ///         overwrites anything the client sent"</i> FOR THE METRICS HALF, AND IT IS THE ONE
-    ///         PLACE THAT RULE IS ACTUALLY ENFORCED TODAY.</b> A client cannot reach another
+    ///         ⚠
+    ///         <b>
+    ///             THIS OBJECT IS docs/plan/16's
+    ///             <i>
+    ///                 "the tenant label is injected by us and
+    ///                 overwrites anything the client sent"
+    ///             </i> FOR THE METRICS HALF, AND IT IS THE ONE
+    ///             PLACE THAT RULE IS ACTUALLY ENFORCED TODAY.
+    ///         </b> A client cannot reach another
     ///         workspace's accountID by sending one, because it never sends one: it writes to
     ///         <c>/api/v1/write</c> and vmauth prefixes the tenant from the credential it
     ///         authenticated. ⚠ That is a property of the <b>suffix</b> and not of the credential,
@@ -888,10 +935,7 @@ public static class MonitorWorkspaces {
             ["spec"] = new JsonObject {
                 ["name"] = id.Name,
                 ["username"] = VmUserName(id.Name),
-                ["passwordRef"] = new JsonObject {
-                    ["name"] = KeySecretName(id.Name),
-                    ["key"] = IngestKeyField
-                },
+                ["passwordRef"] = new JsonObject { ["name"] = KeySecretName(id.Name), ["key"] = IngestKeyField },
                 ["targetRefs"] = new JsonArray {
                     TargetRef(cluster, "vminsert", $"/insert/{account}/prometheus"),
                     TargetRef(cluster, "vmselect", $"/select/{account}/prometheus")
@@ -903,9 +947,7 @@ public static class MonitorWorkspaces {
     static JsonObject TargetRef(string cluster, string component, string suffix) =>
         new() {
             ["crd"] = new JsonObject {
-                ["kind"] = "VMCluster/" + component,
-                ["name"] = cluster,
-                ["namespace"] = TelemetryNamespace
+                ["kind"] = "VMCluster/" + component, ["name"] = cluster, ["namespace"] = TelemetryNamespace
             },
             ["paths"] = new JsonArray { "/" },
             // ⚠ SNAKE_CASE, AND IT IS THE GO TAG RATHER THAN THE PROSE. See VmUserKind's remarks.
@@ -942,8 +984,7 @@ public static class MonitorWorkspaces {
         return new JsonObject {
             ["kind"] = ConfigMapKind.Kind,
             ["metadata"] = new JsonObject {
-                ["name"] = RowName(id.Name),
-                ["labels"] = new JsonObject { [RowLabel] = RowLabelValue }
+                ["name"] = RowName(id.Name), ["labels"] = new JsonObject { [RowLabel] = RowLabelValue }
             },
             ["data"] = new JsonObject {
                 ["tenantId"] = id.TenantId.ToString("D", CultureInfo.InvariantCulture),
@@ -974,16 +1015,25 @@ public static class MonitorWorkspaces {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>CONTAINMENT, NOT EQUALITY — and for a reason none of the eleven families before
-    ///         this one gives.</b> Theirs are structural defaulting by a CRD, rewriting by a mutating
+    ///         ⚠
+    ///         <b>
+    ///             CONTAINMENT, NOT EQUALITY — and for a reason none of the eleven families before
+    ///             this one gives.
+    ///         </b> Theirs are structural defaulting by a CRD, rewriting by a mutating
     ///         webhook, and a controller writing back into <c>.spec</c>. There is no CRD here and no
-    ///         operator at all: both kinds are core. What forces containment is the <b>API server
-    ///         itself</b>. A <c>ConfigMap</c> and a <c>Secret</c> read back carry
+    ///         operator at all: both kinds are core. What forces containment is the
+    ///         <b>
+    ///             API server
+    ///             itself
+    ///         </b>. A <c>ConfigMap</c> and a <c>Secret</c> read back carry
     ///         <c>metadata.creationTimestamp</c>, <c>metadata.uid</c>, <c>metadata.resourceVersion</c>,
     ///         <c>metadata.managedFields</c> and the seven labels <c>KubeCommandBuilder</c> injects,
     ///         none of which the render writes — so an equality comparison never matches on the
-    ///         first read-back and the resource never converges. ⚠ <b>And unlike the CRD-defaulting
-    ///         sightings, the conformance harness is NOT blind to this one</b>: <c>FakeKubeCluster</c>
+    ///         first read-back and the resource never converges. ⚠
+    ///         <b>
+    ///             And unlike the CRD-defaulting
+    ///             sightings, the conformance harness is NOT blind to this one
+    ///         </b>: <c>FakeKubeCluster</c>
     ///         echoes an apply back, but <c>KubeCommandBuilder</c> has already added the labels by
     ///         then, so the mistake goes red in both halves of the suite.
     ///         <c>MonitorMatchesTests.AnObjectCarryingWhatAnApiServerAddsStillMatches</c> runs it.
@@ -1027,8 +1077,11 @@ public static class MonitorWorkspaces {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A DELIBERATELY WEAKER COMPARISON, AND IT EXISTS BECAUSE
-    ///         <c>ProviderConformanceCase.ObjectMatchesDesired</c> IS HANDED NO ADDRESS.</b> That
+    ///         ⚠
+    ///         <b>
+    ///             A DELIBERATELY WEAKER COMPARISON, AND IT EXISTS BECAUSE
+    ///             <c>ProviderConformanceCase.ObjectMatchesDesired</c> IS HANDED NO ADDRESS.
+    ///         </b> That
     ///         member's signature is <c>(objectJson, desiredJson)</c> — the limit
     ///         <c>StorageBuckets</c> records and <c>AgentPools</c> demonstrated — and every identity
     ///         this type renders is keyed on the resource's own GUID: the <c>accountID</c> in the
@@ -1039,8 +1092,11 @@ public static class MonitorWorkspaces {
     ///     <para>
     ///         ⚠ <b>What this does NOT catch, therefore, is the worst bug this type can have:</b> a
     ///         render that put every workspace on one <c>accountID</c>, which is every tenant reading
-    ///         every other tenant's metrics. <c>MonitorReconcilerTests
-    ///         .TwoWorkspacesInTwoTenantsGetTwoAccountIdsAndTwoDatabases</c> is what catches that, and
+    ///         every other tenant's metrics.
+    ///         <c>
+    /// MonitorReconcilerTests
+    ///         .TwoWorkspacesInTwoTenantsGetTwoAccountIdsAndTwoDatabases
+    ///         </c> is what catches that, and
     ///         it is a hand-written test for exactly this reason.
     ///     </para>
     ///     <para>
@@ -1201,8 +1257,11 @@ public static class MonitorWorkspaces {
 
     /// <summary>The in-cluster host the region's ingest gateway answers on.</summary>
     /// <remarks>
-    ///     ⚠ <b>A platform address rather than a per-workspace one, which is the architecture read
-    ///     off the endpoint.</b> Every workspace in a region shares this host and is separated by its
+    ///     ⚠
+    ///     <b>
+    ///         A platform address rather than a per-workspace one, which is the architecture read
+    ///         off the endpoint.
+    ///     </b> Every workspace in a region shares this host and is separated by its
     ///     key and its <c>accountID</c>. A per-workspace hostname would mean a per-workspace
     ///     listener, which is the deployment-shaped reading this type refuses.
     /// </remarks>
@@ -1261,9 +1320,7 @@ public static class MonitorWorkspaces {
             ["properties"] = new JsonObject {
                 ["clusterId"] = clusterId.ToString("D", CultureInfo.InvariantCulture),
                 ["retention"] = new JsonObject {
-                    ["metrics"] = metricsTier,
-                    ["logs"] = logsTier,
-                    ["traces"] = tracesTier
+                    ["metrics"] = metricsTier, ["logs"] = logsTier, ["traces"] = tracesTier
                 },
                 ["quota"] = new JsonObject {
                     ["metricsGbPerDay"] = DefaultMetricsGbPerDay,

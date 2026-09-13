@@ -40,8 +40,11 @@ namespace CyberCloud.Providers.Messaging;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The <c>Kafka</c> is applied before the <c>KafkaNodePool</c>, and the order is
-///         load-bearing in a way the PostgreSQL provider's is not.</b> A pool whose
+///         ⚠
+///         <b>
+///             The <c>Kafka</c> is applied before the <c>KafkaNodePool</c>, and the order is
+///             load-bearing in a way the PostgreSQL provider's is not.
+///         </b> A pool whose
 ///         <c>strimzi.io/cluster</c> label names a <c>Kafka</c> that does not exist yet is not an
 ///         error the operator reports — it is a pool the operator ignores, with no event and no
 ///         status. The teardown reverses it for the same reason the PostgreSQL provider deletes its
@@ -49,8 +52,11 @@ namespace CyberCloud.Providers.Messaging;
 ///         reconciling something whose target is gone.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Converged here means "the CRs are applied and read back", not "the brokers are
-///         serving".</b> The honest stronger check is <c>status.conditions[type=Ready]</c> on the
+///         ⚠
+///         <b>
+///             Converged here means "the CRs are applied and read back", not "the brokers are
+///             serving".
+///         </b> The honest stronger check is <c>status.conditions[type=Ready]</c> on the
 ///         <c>Kafka</c>, and it is not made because nothing in this repository can produce that
 ///         status: the Docker-free harness is a dictionary, and the cluster-backed harness runs a
 ///         bare k3s with the CRDs installed and <b>no Strimzi cluster operator</b> — see
@@ -60,8 +66,11 @@ namespace CyberCloud.Providers.Messaging;
 ///         <c>charts/managed/kafka/conformance.yaml</c>'s <c>produce-and-consume</c> assertion.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
 ///         would let the platform silently overwrite a tenant's own controller, and on this type that
 ///         controller is plausibly an autoscaler writing <c>spec.replicas</c> through the node pool's
 ///         own <c>scale</c> subresource.
@@ -189,7 +198,7 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
                 // and a converge loop with a bounded pass budget would run out of passes waiting for
                 // a controller it does not drive. The read-back below is what makes Background safe:
                 // this returns Converged when the objects are GONE, not when the deletes were issued.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
                 return ReconcileOutcome.FromFailure(deleteError);
@@ -230,9 +239,7 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the Strimzi Kafka is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the Strimzi Kafka is absent" };
         }
 
         var found = read.GetValueOrThrow();
@@ -253,8 +260,11 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
     ///     The two annotations that put a <c>Kafka</c> into KRaft mode with node-pool topology.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A property rather than a static field, and that is the clause-2 rule rather than a
-    ///     style choice.</b> A reconciler is a singleton serving every tenant, so any field is shared
+    ///     ⚠
+    ///     <b>
+    ///         A property rather than a static field, and that is the clause-2 rule rather than a
+    ///         style choice.
+    ///     </b> A reconciler is a singleton serving every tenant, so any field is shared
     ///     state; this one would be immutable and harmless, and the check that would allow it is a
     ///     check that has to reason about mutability.
     ///     <c>KafkaReconcilerTests.TheReconcilerHoldsNoMutableState</c> asserts — through
@@ -292,10 +302,10 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
             // operator-facing keys go through the same syntax check ADR-013's seven do — and so that
             // an attempt to spell one of the seven this way is a loud ArgumentException rather than a
             // silent merge.
-            .WithAnnotations(annotations)
-            .WithLabels(labels)
-            .ObjectJson(json)
-            .ApplyAsync(cancellationToken);
+                .WithAnnotations(annotations)
+                .WithLabels(labels)
+                .ObjectJson(json)
+                .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
             // ⚠ The code decides, not this call site. An apply that could not reach the cluster is a

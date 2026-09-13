@@ -12,23 +12,32 @@ namespace CyberCloud.Providers.Messaging.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One case object and two class declarations, in a project that already holds two other
-///         types' — which turns the NATS case's claim into a measurement.</b> That file said adding a
+///         ⚠
+///         <b>
+///             One case object and two class declarations, in a project that already holds two other
+///             types' — which turns the NATS case's claim into a measurement.
+///         </b> That file said adding a
 ///         second type to a namespace cost no new project and read it as the first evidence that
 ///         docs/plan/03's five-project shape is per <i>namespace</i>. A third type costing exactly
 ///         the same again is what makes the cost flat rather than merely small once.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This is the SIMPLEST case in the tree by object count, and that is the counter-reading
-///         to <see cref="NatsCase" />'s.</b> That one renders five objects across three API groups,
+///         ⚠
+///         <b>
+///             This is the SIMPLEST case in the tree by object count, and that is the counter-reading
+///             to <see cref="NatsCase" />'s.
+///         </b> That one renders five objects across three API groups,
 ///         two of which share a kind, because <c>nats-operator</c> was archived. This one renders
 ///         <b>one</b>, because the RabbitMQ Cluster Operator is alive and official — so
 ///         <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> needs no <c>kind</c> dispatch
 ///         at all, and the cluster-backed half needs exactly one definition stub.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.ChangedBody" /> moves <c>nodes</c> rather than the
-///         default queue type, and the choice is deliberate.</b> The update test asserts that a
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.ChangedBody" /> moves <c>nodes</c> rather than the
+///             default queue type, and the choice is deliberate.
+///         </b> The update test asserts that a
 ///         changed body reaches the cluster; <c>queues.defaultType</c> reaches
 ///         <c>spec.rabbitmq.additionalConfig</c>, which <see cref="RabbitmqClusters.Matches" />
 ///         compares with <c>Contains</c> — so a body that changed only it would be a weaker probe than

@@ -1,9 +1,12 @@
 namespace CyberCloud.Metering.Tests;
 
 /// <summary>
-///     The append-only usage ledger — docs/plan/22 § The pipeline: <i>"Corrections are new entries
-///     with a reason and a link to the original, never edits. An adjustable ledger cannot be audited
-///     and cannot be defended in a dispute."</i>
+///     The append-only usage ledger — docs/plan/22 § The pipeline:
+///     <i>
+///         "Corrections are new entries
+///         with a reason and a link to the original, never edits. An adjustable ledger cannot be audited
+///         and cannot be defended in a dispute."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     The <i>structural</i> half — that no mutator exists to call — is

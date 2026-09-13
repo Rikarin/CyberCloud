@@ -14,8 +14,11 @@ namespace CyberCloud.Sdk;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The refresh is single-flight, and that is not just an efficiency.</b> docs/plan/11
-///         § Sessions and revocation rotates refresh tokens one-time-use <i>with reuse detection →
-///         revoke the whole chain</i>. Two concurrent refreshes would spend the same refresh token
+///         § Sessions and revocation rotates refresh tokens one-time-use
+///         <i>
+///             with reuse detection →
+///             revoke the whole chain
+///         </i>. Two concurrent refreshes would spend the same refresh token
 ///         twice, the identity server would see a reuse, and the user would be signed out everywhere —
 ///         from nothing worse than two parallel API calls. So the gate is correctness, not a
 ///         micro-optimisation, and it is why the cache holds a <see cref="SemaphoreSlim" /> rather
@@ -50,17 +53,22 @@ sealed class AccessTokenCache {
     /// <summary>How many times the credential was actually asked. Read by the tests that prove a refresh happened.</summary>
     public int FetchCount { get; private set; }
 
-    public async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken) {
-        if (TryReadFresh(out var cached))
+    public async ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken
+    ) {
+        if (TryReadFresh(out var cached)) {
             return cached;
+        }
 
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try {
             // Re-check inside the gate: the caller we queued behind has probably just fetched the very
             // token we were about to ask for, and asking again would spend a one-time refresh token.
-            if (TryReadFresh(out cached))
+            if (TryReadFresh(out cached)) {
                 return cached;
+            }
 
             var token = await credential.GetTokenAsync(context, cancellationToken).ConfigureAwait(false);
 
@@ -77,8 +85,9 @@ sealed class AccessTokenCache {
     bool TryReadFresh(out AccessToken token) {
         token = current;
 
-        if (!hasToken)
+        if (!hasToken) {
             return false;
+        }
 
         var now = time.GetUtcNow();
         var replaceAt = token.RefreshAfter ?? token.ExpiresOn - RefreshWindow;

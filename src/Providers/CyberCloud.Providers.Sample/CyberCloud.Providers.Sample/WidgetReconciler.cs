@@ -38,8 +38,11 @@ namespace CyberCloud.Providers.Sample;
 ///     </list>
 ///     <para>
 ///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed.</b>
-///         ADR-013 (docs/plan/09 § The command builder) makes a conflict <i>"a drift event with a
-///         name"</i> rather than an error, and the outcome carries the field and the manager that took
+///         ADR-013 (docs/plan/09 § The command builder) makes a conflict
+///         <i>
+///             "a drift event with a
+///             name"
+///         </i> rather than an error, and the outcome carries the field and the manager that took
 ///         it into <c>operation-progress</c>. Retrying without <c>force</c> will not win the field
 ///         back, so the operation eventually times out at sixty minutes with the conflict as its last
 ///         progress entry — which is the actionable ending. Forcing would let the platform silently

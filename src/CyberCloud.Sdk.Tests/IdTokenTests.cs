@@ -22,11 +22,16 @@ public sealed class IdTokenTests {
             """;
     }
 
-    static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     static string Sign(string header, string payload) {
         var signingInput = $"{Base64Url(Encoding.UTF8.GetBytes(header))}.{Base64Url(Encoding.UTF8.GetBytes(payload))}";
-        var signature = Key.SignData(Encoding.ASCII.GetBytes(signingInput), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var signature = Key.SignData(
+            Encoding.ASCII.GetBytes(signingInput),
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1
+        );
 
         return $"{signingInput}.{Base64Url(signature)}";
     }
@@ -55,7 +60,14 @@ public sealed class IdTokenTests {
 
         var token = Sign($$"""{"alg":"RS256","typ":"JWT","kid":"{{KeyId}}"}""", Payload());
 
-        using var claims = await IdTokenValidator.ValidateAsync(token, keys, Issuer, Audience, DateTimeOffset.UtcNow, Cancel.Token);
+        using var claims = await IdTokenValidator.ValidateAsync(
+            token,
+            keys,
+            Issuer,
+            Audience,
+            DateTimeOffset.UtcNow,
+            Cancel.Token
+        );
 
         claims.RootElement.GetProperty("sub").GetString().ShouldBe("user-1");
     }
@@ -74,8 +86,16 @@ public sealed class IdTokenTests {
         var header = Base64Url(Encoding.UTF8.GetBytes($$"""{"alg":"none","typ":"JWT","kid":"{{KeyId}}"}"""));
         var payload = Base64Url(Encoding.UTF8.GetBytes(Payload()));
 
-        var thrown = await Should.ThrowAsync<AuthenticationFailedException>(
-            async () => await IdTokenValidator.ValidateAsync($"{header}.{payload}.", keys, Issuer, Audience, DateTimeOffset.UtcNow, Cancel.Token));
+        var thrown =
+            await Should.ThrowAsync<AuthenticationFailedException>(async () => await IdTokenValidator.ValidateAsync(
+                    $"{header}.{payload}.",
+                    keys,
+                    Issuer,
+                    Audience,
+                    DateTimeOffset.UtcNow,
+                    Cancel.Token
+                )
+            );
 
         thrown.Message.ShouldContain("unsupported algorithm");
     }
@@ -90,8 +110,16 @@ public sealed class IdTokenTests {
         var parts = token.Split('.');
         var tampered = $"{parts[0]}.{Base64Url(Encoding.UTF8.GetBytes(Payload(audience: "someone-else")))}.{parts[2]}";
 
-        var thrown = await Should.ThrowAsync<AuthenticationFailedException>(
-            async () => await IdTokenValidator.ValidateAsync(tampered, keys, Issuer, Audience, DateTimeOffset.UtcNow, Cancel.Token));
+        var thrown =
+            await Should.ThrowAsync<AuthenticationFailedException>(async () => await IdTokenValidator.ValidateAsync(
+                    tampered,
+                    keys,
+                    Issuer,
+                    Audience,
+                    DateTimeOffset.UtcNow,
+                    Cancel.Token
+                )
+            );
 
         thrown.Message.ShouldContain("signature");
     }
@@ -99,15 +127,27 @@ public sealed class IdTokenTests {
     [Theory]
     [InlineData("https://evil.example/", Audience, "issuer")]
     [InlineData(Issuer, "another-client", "issued to this client")]
-    public async Task A_token_for_a_different_issuer_or_audience_is_refused(string issuer, string audience, string expected) {
+    public async Task A_token_for_a_different_issuer_or_audience_is_refused(
+        string issuer,
+        string audience,
+        string expected
+    ) {
         var (server, identity, keys) = Fixture();
         using var _ = server;
         using var __ = identity;
 
         var token = Sign($$"""{"alg":"RS256","typ":"JWT","kid":"{{KeyId}}"}""", Payload(issuer, audience));
 
-        var thrown = await Should.ThrowAsync<AuthenticationFailedException>(
-            async () => await IdTokenValidator.ValidateAsync(token, keys, Issuer, Audience, DateTimeOffset.UtcNow, Cancel.Token));
+        var thrown =
+            await Should.ThrowAsync<AuthenticationFailedException>(async () => await IdTokenValidator.ValidateAsync(
+                    token,
+                    keys,
+                    Issuer,
+                    Audience,
+                    DateTimeOffset.UtcNow,
+                    Cancel.Token
+                )
+            );
 
         thrown.Message.ShouldContain(expected);
     }
@@ -123,13 +163,26 @@ public sealed class IdTokenTests {
 
         // Inside the allowance: still accepted.
         using var claims = await IdTokenValidator.ValidateAsync(
-            token, keys, Issuer, Audience, DateTimeOffset.UtcNow.AddSeconds(30), Cancel.Token);
+            token,
+            keys,
+            Issuer,
+            Audience,
+            DateTimeOffset.UtcNow.AddSeconds(30),
+            Cancel.Token
+        );
 
         claims.RootElement.GetProperty("sub").GetString().ShouldBe("user-1");
 
-        var thrown = await Should.ThrowAsync<AuthenticationFailedException>(
-            async () => await IdTokenValidator.ValidateAsync(
-                token, keys, Issuer, Audience, DateTimeOffset.UtcNow.AddMinutes(5), Cancel.Token));
+        var thrown =
+            await Should.ThrowAsync<AuthenticationFailedException>(async () => await IdTokenValidator.ValidateAsync(
+                    token,
+                    keys,
+                    Issuer,
+                    Audience,
+                    DateTimeOffset.UtcNow.AddMinutes(5),
+                    Cancel.Token
+                )
+            );
 
         thrown.Message.ShouldContain("expired");
     }
@@ -143,8 +196,16 @@ public sealed class IdTokenTests {
 
         var token = Sign("""{"alg":"RS256","typ":"JWT","kid":"key-that-does-not-exist"}""", Payload());
 
-        var thrown = await Should.ThrowAsync<AuthenticationFailedException>(
-            async () => await IdTokenValidator.ValidateAsync(token, keys, Issuer, Audience, DateTimeOffset.UtcNow, Cancel.Token));
+        var thrown =
+            await Should.ThrowAsync<AuthenticationFailedException>(async () => await IdTokenValidator.ValidateAsync(
+                    token,
+                    keys,
+                    Issuer,
+                    Audience,
+                    DateTimeOffset.UtcNow,
+                    Cancel.Token
+                )
+            );
 
         thrown.Message.ShouldContain("does not publish");
     }

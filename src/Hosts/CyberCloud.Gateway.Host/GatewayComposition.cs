@@ -15,8 +15,11 @@ namespace CyberCloud.Gateway.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This exists so a test can compose the real host, for the same reason
-///         <c>SiloComposition</c> does.</b> Top-level statements cannot be called, so composition that
+///         ⚠
+///         <b>
+///             This exists so a test can compose the real host, for the same reason
+///             <c>SiloComposition</c> does.
+///         </b> Top-level statements cannot be called, so composition that
 ///         lives in <c>Program.cs</c> is composition nothing can assert against — and this host spent
 ///         its whole life so far composing the resource manager and registering no provider, which made
 ///         every resource and action path a <c>404</c> and left no trace anywhere.
@@ -37,8 +40,11 @@ public static class GatewayComposition {
     /// <returns>The built host. Nothing has started.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><paramref name="configure" /> exists because the identity seam is the one part of
-    ///         this host that no deployment shares.</b> Stage 2 resolves
+    ///         ⚠
+    ///         <b>
+    ///             <paramref name="configure" /> exists because the identity seam is the one part of
+    ///             this host that no deployment shares.
+    ///         </b> Stage 2 resolves
     ///         <c>ICallerContextResolver</c>, and there is deliberately no default: a gateway that
     ///         authenticated nobody and served anyway is the failure
     ///         <see cref="GatewayServiceCollectionExtensions.AddIssuedTokenAuthentication" />'s
@@ -141,8 +147,11 @@ public static class GatewayComposition {
     /// <returns>The same host, so a caller can chain.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the second half of the argument the top of this file makes, applied to
-    ///         the half that was left behind.</b> <c>Program.cs</c> holds no composition because top
+    ///         ⚠
+    ///         <b>
+    ///             This is the second half of the argument the top of this file makes, applied to
+    ///             the half that was left behind.
+    ///         </b> <c>Program.cs</c> holds no composition because top
     ///         -level statements cannot be called from a test — and it went on holding the one
     ///         <c>app.Use</c> that runs the nine stages, which is exactly as untestable and rather
     ///         more load-bearing. The consequence was structural: <c>CyberCloud.Gateway.Host.Tests</c>
@@ -164,21 +173,22 @@ public static class GatewayComposition {
         ArgumentNullException.ThrowIfNull(app);
 
         app.Use(async (context, next) => {
-            if (context.Request.Path.StartsWithSegments("/health")
-                || context.Request.Path.StartsWithSegments("/alive")) {
-                await next(context);
+                if (context.Request.Path.StartsWithSegments("/health")
+                    || context.Request.Path.StartsWithSegments("/alive")) {
+                    await next(context);
 
-                return;
+                    return;
+                }
+
+                var pipeline = context.RequestServices.GetRequiredService<GatewayPipeline>();
+                var result = await pipeline.RunAsync(context);
+
+                if (result.Route.Kind == RouteKind.Hub) {
+                    context.Items[GatewayCallerFeature.ItemKey] = result.Caller;
+                    await next(context);
+                }
             }
-
-            var pipeline = context.RequestServices.GetRequiredService<GatewayPipeline>();
-            var result = await pipeline.RunAsync(context);
-
-            if (result.Route.Kind == RouteKind.Hub) {
-                context.Items[GatewayCallerFeature.ItemKey] = result.Caller;
-                await next(context);
-            }
-        });
+        );
 
         app.MapHub<ResourcesHub>(GatewayRouter.HubPrefix + HubNames.Resources);
         app.MapHub<OperationsHub>(GatewayRouter.HubPrefix + HubNames.Operations);

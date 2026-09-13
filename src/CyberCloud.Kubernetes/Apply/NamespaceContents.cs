@@ -9,15 +9,21 @@ namespace CyberCloud.Kubernetes.Apply;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE ANSWER THIS PRODUCES AUTHORISES A RECURSIVE DELETE OF A TENANT'S LIVE DATA, SO
-///         THE ONLY ACCEPTABLE FAILURE MODE IS A REFUSAL.</b> Every path that cannot finish returns a
+///         ⚠
+///         <b>
+///             THE ANSWER THIS PRODUCES AUTHORISES A RECURSIVE DELETE OF A TENANT'S LIVE DATA, SO
+///             THE ONLY ACCEPTABLE FAILURE MODE IS A REFUSAL.
+///         </b> Every path that cannot finish returns a
 ///         failure rather than what it managed to collect. A partial listing is not a smaller true
 ///         answer — it is a wrong one, because the caller reads a kind's absence as "the namespace
 ///         holds none of those" and an empty result as "delete it".
 ///     </para>
 ///     <para>
-///         ⚠ <b>It is a discovery plus one list per served kind, which on a busy cluster is a hundred
-///         round trips.</b> That cost is why it is not on the reconcile path: the reconcile driver
+///         ⚠
+///         <b>
+///             It is a discovery plus one list per served kind, which on a busy cluster is a hundred
+///             round trips.
+///         </b> That cost is why it is not on the reconcile path: the reconcile driver
 ///         asks <c>NamespaceEnsurer</c> whether the namespace exists, which is one apply an hour.
 ///         This runs once, when a resource group is deleted.
 ///     </para>
@@ -34,8 +40,11 @@ public static class NamespaceContents {
     ///     How many objects a namespace may hold before the enumeration refuses to finish.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A ceiling and not a page size, and exceeding it is a failure rather than a
-    ///     truncation.</b> The caller decides whether a namespace is empty; a truncated listing is
+    ///     ⚠
+    ///     <b>
+    ///         A ceiling and not a page size, and exceeding it is a failure rather than a
+    ///         truncation.
+    ///     </b> The caller decides whether a namespace is empty; a truncated listing is
     ///     still evidence of "not empty", but returning one would put a value in circulation whose
     ///     count is wrong, and the count is quoted to an operator. A namespace with more than this
     ///     many objects in it is not one anything here should be reasoning about deleting.
@@ -79,15 +88,15 @@ public static class NamespaceContents {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var page = await api.ListAsync(
-                        kind,
-                        ns,
-                        // ⚠ NO SELECTOR. The drift scan's inventory filters on
-                        // `managed-by=cybercloud`; this one must find the objects that filter hides,
-                        // because those are the ones a namespace delete would destroy.
-                        string.Empty,
-                        continueToken: string.IsNullOrEmpty(continueToken) ? null : continueToken,
-                        cancellationToken: cancellationToken
-                    )
+                    kind,
+                    ns,
+                    // ⚠ NO SELECTOR. The drift scan's inventory filters on
+                    // `managed-by=cybercloud`; this one must find the objects that filter hides,
+                    // because those are the ones a namespace delete would destroy.
+                    string.Empty,
+                    continueToken: string.IsNullOrEmpty(continueToken) ? null : continueToken,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false);
 
                 if (page.TryGetError(out var listError)) {
@@ -133,8 +142,11 @@ public static class NamespaceContents {
     ///     no name.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>An item with no <c>metadata.name</c> is skipped and that is the one safe direction to
-    ///     be wrong in here — it removes an occupant from the listing.</b> It is also not reachable
+    ///     ⚠
+    ///     <b>
+    ///         An item with no <c>metadata.name</c> is skipped and that is the one safe direction to
+    ///         be wrong in here — it removes an occupant from the listing.
+    ///     </b> It is also not reachable
     ///     from a real API server: every object in etcd has a name. The alternative, synthesising a
     ///     placeholder name, would put a refusal message in front of an operator naming an object
     ///     that does not exist.

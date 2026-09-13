@@ -94,9 +94,7 @@ public sealed class IdempotencyKeyTests {
     /// </summary>
     [Fact]
     public void AnEventIdCarryingTheSeparatorIsRefused() =>
-        Should.Throw<ArgumentException>(
-            () => UsageEvent.KeyFor(Resource, BillingMeter.Requests, Start, End, "a|b")
-        );
+        Should.Throw<ArgumentException>(() => UsageEvent.KeyFor(Resource, BillingMeter.Requests, Start, End, "a|b"));
 
     /// <summary>
     ///     ⚠ Emission time is deliberately not a key component. A redelivery after a silo restart
@@ -240,15 +238,15 @@ public sealed class IdempotencyKeyTests {
 
     static UsageEvent Build(decimal quantity = 1m, DateTimeOffset? emittedAt = null) =>
         UsageEvent.ForSample(
-                Guid.Parse("11111111-1111-4111-8111-111111111111"),
-                Guid.Parse("33333333-3333-4333-8333-333333333333"),
-                Resource,
-                "/tenants/x/subscriptions/y/resourceGroups/prod/providers/CyberCloud.Sample/widgets/w",
-                BillingMeter.VCpuHours,
-                quantity,
-                new(Start, End),
-                "eu-central",
-                emittedAt ?? Start
-            )
+            Guid.Parse("11111111-1111-4111-8111-111111111111"),
+            Guid.Parse("33333333-3333-4333-8333-333333333333"),
+            Resource,
+            "/tenants/x/subscriptions/y/resourceGroups/prod/providers/CyberCloud.Sample/widgets/w",
+            BillingMeter.VCpuHours,
+            quantity,
+            new(Start, End),
+            "eu-central",
+            emittedAt ?? Start
+        )
             .GetValueOrThrow();
 }

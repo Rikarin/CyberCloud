@@ -10,10 +10,16 @@ namespace CyberCloud.Providers.Sample.Conformance;
 ///     <c>CyberCloud.Sample/widgets</c>, registered into the shared provider suite.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This file is the entire cost of putting a provider under conformance, and that is the
-///     point being demonstrated.</b> docs/plan/03 § Providers: <i>"The conformance suite is what makes
-///     the catalogue safe to grow. It is one xUnit theory that every provider must pass … A provider
-///     is not registered in the platform bundle until it passes."</i> A suite that a provider had to
+///     ⚠
+///     <b>
+///         This file is the entire cost of putting a provider under conformance, and that is the
+///         point being demonstrated.
+///     </b> docs/plan/03 § Providers:
+///     <i>
+///         "The conformance suite is what makes
+///         the catalogue safe to grow. It is one xUnit theory that every provider must pass … A provider
+///         is not registered in the platform bundle until it passes."
+///     </i> A suite that a provider had to
 ///     copy would drift a clause at a time across twenty copies, which is the same argument
 ///     docs/plan/08 makes for the write path being one component.
 /// </remarks>
@@ -41,8 +47,7 @@ public sealed class SampleCase : IProviderCaseSource {
             ActionName = "ping",
             // One widget owns exactly one ConfigMap, named after the resource, in the resource
             // group's namespace.
-            Objects = (id, ns) =>
-                [new() { Kind = SampleWidgets.ConfigMapKind, Namespace = ns, Name = id.Name }],
+            Objects = (id, ns) => [new() { Kind = SampleWidgets.ConfigMapKind, Namespace = ns, Name = id.Name }],
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.

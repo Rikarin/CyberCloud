@@ -665,10 +665,10 @@ public class GrainKeysTests {
         // The shape ADR-002 used to specify, and the reason this type replaced ResourceKey. If it
         // ever parses again, two designs are live at once.
         GrainKeys.TryParse(
-                "7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/prod/CyberCloud.DBforPostgreSQL/servers"
-                + "/0a1b2c3d4e5f40718293a4b5c6d7e8f9",
-                out _
-            )
+            "7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f/prod/CyberCloud.DBforPostgreSQL/servers"
+            + "/0a1b2c3d4e5f40718293a4b5c6d7e8f9",
+            out _
+        )
             .ShouldBeFalse();
 
     [Fact]
@@ -887,7 +887,7 @@ public class GrainKeysTests {
         GrainKeys.Parse(key)
             .GetValueOrThrow()
             .ObjectId
-            .ShouldBe(Tenant.ToString("N", CultureInfo.InvariantCulture));
+                .ShouldBe(Tenant.ToString("N", CultureInfo.InvariantCulture));
     }
 
     [Theory]

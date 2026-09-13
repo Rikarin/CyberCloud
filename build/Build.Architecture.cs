@@ -3,6 +3,12 @@
 //
 // What this target reads is in ArchitectureFacts.cs; what it decides is here.
 
+using Nuke.Common;
+using Nuke.Common.IO;
+using Nuke.Common.Tooling;
+using Nuke.Common.Tools.DotNet;
+using Nuke.Common.Tools.Git;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Formats.Tar;
@@ -10,15 +16,8 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using Nuke.Common;
-using Nuke.Common.IO;
-using Nuke.Common.Tooling;
-using Nuke.Common.Tools.DotNet;
-using Nuke.Common.Tools.Git;
-using Serilog;
 
-partial class Build
-{
+partial class Build {
     /// <summary>
     ///     What a gate did, which is not the same question as whether it passed.
     ///     <para>
@@ -29,16 +28,18 @@ partial class Build
     ///         and misleading.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Every assembly-graph rule has candidates now, and that is not the reassurance it
-    ///         reads as.</b> Rule 2 spent its whole life green over three candidates in one provider
+    ///         ⚠
+    ///         <b>
+    ///             Every assembly-graph rule has candidates now, and that is not the reassurance it
+    ///             reads as.
+    ///         </b> Rule 2 spent its whole life green over three candidates in one provider
     ///         family — a set in which no violation was constructible — and the <c>const</c> hole
     ///         underneath it was found only once a second family existed. A candidate count answers
     ///         "did this rule look at anything", not "could this rule have failed"; the second
     ///         question is answered by constructing a violation, and only by that.
     ///     </para>
     /// </summary>
-    enum GateStatus
-    {
+    enum GateStatus {
         /// <summary>Ran, inspected at least one candidate, found nothing.</summary>
         Enforced,
 
@@ -62,7 +63,7 @@ partial class Build
         Blocked,
 
         /// <summary>Ran and found violations. They are in <see cref="GateOutcome.Violations" />.</summary>
-        Failed,
+        Failed
     }
 
     /// <summary>One row of the target's report.</summary>
@@ -76,22 +77,21 @@ partial class Build
     ///     One line per violation, each naming the offending type or file <i>and</i> the rule. The
     ///     failure is read at 2 a.m. by somebody who did not write the rule.
     /// </param>
-    sealed record GateOutcome(string Gate, GateStatus Status, string Detail, IReadOnlyList<string> Violations)
-    {
-        public static GateOutcome From(string gate, int inspected, string what, List<string> violations)
-            => new(
+    sealed record GateOutcome(string Gate, GateStatus Status, string Detail, IReadOnlyList<string> Violations) {
+        public static GateOutcome From(string gate, int inspected, string what, List<string> violations) =>
+            new(
                 gate,
                 violations.Count > 0 ? GateStatus.Failed
                 : inspected == 0 ? GateStatus.Vacuous
                 : GateStatus.Enforced,
                 $"{inspected} {what}",
-                violations);
+                violations
+            );
 
-        public static GateOutcome Analyzer(string gate, string detail)
-            => new(gate, GateStatus.CompilerEnforced, detail, []);
+        public static GateOutcome Analyzer(string gate, string detail) =>
+            new(gate, GateStatus.CompilerEnforced, detail, []);
 
-        public static GateOutcome Blocked(string gate, string why)
-            => new(gate, GateStatus.Blocked, why, []);
+        public static GateOutcome Blocked(string gate, string why) => new(gate, GateStatus.Blocked, why, []);
     }
 
     /// <summary>
@@ -99,22 +99,45 @@ partial class Build
     ///     plus the seven this build adds. Named here so the target's log output is the checklist, and so
     ///     adding a gate is a visible diff against the doc rather than a silent omission.
     ///     <para>
-    ///         ⚠ <b><c>Generated SDK compiles</c> is placed immediately after <c>Generated
-    ///         surfaces</c> rather than with the other additions at the end, and the position is the
-    ///         argument.</b> It is the row that says what the row above it does not: byte-identical
+    ///         ⚠
+    ///         <b>
+    ///             <c>Generated SDK compiles</c> is placed immediately after
+    ///             <c>
+    /// Generated
+    ///         surfaces
+    ///             </c> rather than with the other additions at the end, and the position is the
+    ///             argument.
+    ///         </b> It is the row that says what the row above it does not: byte-identical
     ///         is not valid, and the .NET SDK is the one of the five surfaces with nothing downstream
     ///         to notice. Issue #73.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Three of the ten are enforced by the compiler instead, and this target must not
-    ///         re-implement them.</b> <c>src/CyberCloud.Analyzers</c> ships CC1001–CC1007. It was four
+    ///         ⚠
+    ///         <b>
+    ///             Three of the ten are enforced by the compiler instead, and this target must not
+    ///             re-implement them.
+    ///         </b> <c>src/CyberCloud.Analyzers</c> ships CC1001–CC1007. It was four
     ///         until <b>Serializer discipline</b> stopped being a sentence and became a gate:
     ///     </para>
     ///     <list type="bullet">
-    ///         <item><b>Tenant keys</b> — the "no string literal containing '|' in a GetGrain argument" half is CC1004. The "every tenant-scoped grain interface is IGrainWithStringKey" half is cross-assembly and is enforced here.</item>
-    ///         <item><b>Serializer discipline</b> — ⚠ <b>this row is no longer one of the four, and the sentence that used to sit here is why.</b> It read "the [Alias] on every [GenerateSerializer] half is CC1003; the [Id(n)] half is a reflection test, <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c>" — a string constant that named a test covering <b>6 of the tree's 212</b> aliased wire types and checked neither that the test existed nor that it passed. <see cref="SerializerDisciplineGate" /> evaluates the row instead.</item>
+    ///         <item>
+    ///             <b>Tenant keys</b> — the "no string literal containing '|' in a GetGrain argument" half is CC1004. The
+    ///             "every tenant-scoped grain interface is IGrainWithStringKey" half is cross-assembly and is enforced here.
+    ///         </item>
+    ///         <item>
+    ///             <b>Serializer discipline</b> — ⚠
+    ///             <b>this row is no longer one of the four, and the sentence that used to sit here is why.</b> It read "the
+    ///             [Alias] on every [GenerateSerializer] half is CC1003; the [Id(n)] half is a reflection test,
+    ///             <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c>" — a string constant that named a test covering
+    ///             <b>6 of the tree's 212</b> aliased wire types and checked neither that the test existed nor that it passed.
+    ///             <see cref="SerializerDisciplineGate" /> evaluates the row instead.
+    ///         </item>
     ///         <item><b>Secrets</b> — CC1005, in full.</item>
-    ///         <item><b>No blocking</b> — CC1001 and CC1002. ⚠ Wider than the doc's wording: the doc says "in grain assemblies", the analyzers apply everywhere they are referenced, because a gateway that blocks is a stalled request even though it is not a stalled activation.</item>
+    ///         <item>
+    ///             <b>No blocking</b> — CC1001 and CC1002. ⚠ Wider than the doc's wording: the doc says "in grain
+    ///             assemblies", the analyzers apply everywhere they are referenced, because a gateway that blocks is a stalled
+    ///             request even though it is not a stalled activation.
+    ///         </item>
     ///     </list>
     ///     <para>
     ///         A compile-time rule beats a build-target sweep for all three: it names the line, it runs
@@ -130,25 +153,35 @@ partial class Build
     ///         a claim about six projects wearing the clothes of a claim about the tree.
     ///     </para>
     /// </summary>
-    static readonly (string Gate, string Checks)[] ArchitectureGates =
-    [
+    static readonly (string Gate, string Checks)[] ArchitectureGates = [
         ("Assembly graph", "the seven rules in docs/plan/03"),
-        ("Storage tier", "every [PersistentState] against durable-grains.txt; a Durable binding outside the list needs [DurableStateRationale]"),
-        ("Tenant keys", "no string literal containing '|' in a GetGrain argument; every tenant-scoped grain interface is IGrainWithStringKey"),
-        ("Serializer discipline", "every [GenerateSerializer] type has a stable [Alias]; [Id(n)] numbers never reused, checked against a committed manifest"),
+        ("Storage tier",
+            "every [PersistentState] against durable-grains.txt; a Durable binding outside the list needs [DurableStateRationale]"),
+        ("Tenant keys",
+            "no string literal containing '|' in a GetGrain argument; every tenant-scoped grain interface is IGrainWithStringKey"),
+        ("Serializer discipline",
+            "every [GenerateSerializer] type has a stable [Alias]; [Id(n)] numbers never reused, checked against a committed manifest"),
         ("Wire compatibility", "round-trip every wire type through the last three released contract assemblies"),
         ("Secrets", "no [Id] member named *Password/*Secret/*Token/*Key outside CyberCloud.Vault"),
         ("No blocking", ".Result, .Wait(), async void banned in grain assemblies"),
-        ("Generated surfaces", "OpenAPI/CLI/SDK/forms and the portal's TypeScript client regenerate byte-identically from the registry"),
-        ("Generated SDK compiles", "every generated/sdk/{api-version}.cs is handed to Roslyn against the real CyberCloud.Sdk — the row above compares bytes, and byte-identical is not valid. Issue #73; not in docs/plan/23"),
-        ("Action handlers", "every synchronous declared action names an IResourceActionHandler; a long-running one must not — not in docs/plan/23"),
+        ("Generated surfaces",
+            "OpenAPI/CLI/SDK/forms and the portal's TypeScript client regenerate byte-identically from the registry"),
+        ("Generated SDK compiles",
+            "every generated/sdk/{api-version}.cs is handed to Roslyn against the real CyberCloud.Sdk — the row above compares bytes, and byte-identical is not valid. Issue #73; not in docs/plan/23"),
+        ("Action handlers",
+            "every synchronous declared action names an IResourceActionHandler; a long-running one must not — not in docs/plan/23"),
         ("OpenAPI compatibility", "published api-versions diffed; a breaking change fails"),
-        ("Labels", "every reconciler's rendered output carries the seven cybercloud.io/* labels, asserted against real output"),
+        ("Labels",
+            "every reconciler's rendered output carries the seven cybercloud.io/* labels, asserted against real output"),
         ("Analyzer coverage", "every project under src/ references CyberCloud.Analyzers — not in docs/plan/23"),
-        ("Plan citations", "no docs/plan/NN:LINE citation in a tracked file — docs/code-documentation-style.md § Citing the plan"),
-        ("Code citations", "every <c>…Tests</c> and <c>…Tests.Method</c> in a tracked file names something this repository compiles — not in docs/plan/23"),
-        ("Bundle", "every charts/bundle/ component declares a complete pin on ADR-011's allow-list, and every group/version charts/managed/ renders is served by exactly one of them — not in docs/plan/23"),
-        ("Log egress", "only CyberCloud.ServiceDefaults binds a Serilog type, and no appsettings file declares a sink, so SecretScrubbingSink wraps every one — not in docs/plan/23"),
+        ("Plan citations",
+            "no docs/plan/NN:LINE citation in a tracked file — docs/code-documentation-style.md § Citing the plan"),
+        ("Code citations",
+            "every <c>…Tests</c> and <c>…Tests.Method</c> in a tracked file names something this repository compiles — not in docs/plan/23"),
+        ("Bundle",
+            "every charts/bundle/ component declares a complete pin on ADR-011's allow-list, and every group/version charts/managed/ renders is served by exactly one of them — not in docs/plan/23"),
+        ("Log egress",
+            "only CyberCloud.ServiceDefaults binds a Serilog type, and no appsettings file declares a sink, so SecretScrubbingSink wraps every one — not in docs/plan/23")
     ];
 
     // ── The assemblies the gates read ─────────────────────────────────────────────────────────
@@ -178,12 +211,13 @@ partial class Build
             .Where(project => SuiteOwning(project) is null)
             .OrderBy(project => project.NameWithoutExtension, StringComparer.Ordinal)
             .Select(project => (
-                Project: project,
-                Assembly: ArtifactsDirectory
+                    Project: project,
+                    Assembly: ArtifactsDirectory
                     / "bin"
                     / project.NameWithoutExtension
                     / Configuration.ToLowerInvariant()
-                    / (project.NameWithoutExtension + ".dll")))
+                    / (project.NameWithoutExtension + ".dll"))
+            )
             .ToList();
 
     /// <summary>
@@ -203,12 +237,11 @@ partial class Build
     ///     directory was cleaned between the two, and quietly inspecting the remainder is how a gate
     ///     reports a green tick over half a tree.
     /// </summary>
-    IReadOnlyList<AssemblyFacts> ShippingAssemblies
-    {
-        get
-        {
-            if (shippingAssemblies is not null)
+    IReadOnlyList<AssemblyFacts> ShippingAssemblies {
+        get {
+            if (shippingAssemblies is not null) {
                 return shippingAssemblies;
+            }
 
             var missing = ShippingAssemblyPaths.Where(x => !x.Assembly.FileExists()).ToList();
 
@@ -216,7 +249,8 @@ partial class Build
                 missing.Select(x => x.Project.NameWithoutExtension).ToList(),
                 $"{missing.Count} shipping project(s) have no built assembly under {ArtifactsDirectory.Name}/bin — "
                 + $"{string.Join(", ", missing.Select(x => x.Project.NameWithoutExtension))}. Run ./build.sh Compile "
-                + $"first, in the same configuration ({Configuration}).");
+                + $"first, in the same configuration ({Configuration})."
+            );
 
             shippingAssemblies = ShippingAssemblyPaths.Select(x => AssemblyFacts.Read(x.Assembly)).ToList();
 
@@ -226,18 +260,17 @@ partial class Build
 
     // ── The target ────────────────────────────────────────────────────────────────────────────
 
-    void CheckArchitecture()
-    {
+    void CheckArchitecture() {
         // Logged before the gates run, not after: the assembly-graph gate narrates its seven rules
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
             + "Generated SDK compiles, Action handlers, Analyzer coverage, Plan citations, Code "
             + "citations, Bundle and Log egress, which that table does not list",
-            ArchitectureGates.Length);
+            ArchitectureGates.Length
+        );
 
-        var outcomes = new List<GateOutcome>
-        {
+        var outcomes = new List<GateOutcome> {
             AssemblyGraphGate(),
             StorageTierGate(),
             TenantKeyGate(),
@@ -254,7 +287,7 @@ partial class Build
             PlanCitationGate(),
             CodeCitationGate(),
             BundleGate(),
-            LogEgressGate(),
+            LogEgressGate()
         };
 
         Report(outcomes);
@@ -268,11 +301,11 @@ partial class Build
     ///         than the seconds saved.
     ///     </para>
     /// </summary>
-    static void Report(List<GateOutcome> outcomes)
-    {
+    static void Report(List<GateOutcome> outcomes) {
         Assert.True(
             outcomes.Select(x => x.Gate).Distinct(StringComparer.Ordinal).Count() == outcomes.Count,
-            "Two gates share a name — the report would be ambiguous.");
+            "Two gates share a name — the report would be ambiguous."
+        );
 
         var unreported = ArchitectureGates
             .Select(x => x.Gate)
@@ -283,12 +316,11 @@ partial class Build
             unreported,
             $"{unreported.Count} gate(s) named in Build.Architecture.cs § ArchitectureGates produced no "
             + $"outcome: {string.Join(", ", unreported)}. The roster and the run must agree — "
-            + "docs/plan/23 § The architecture gates.");
+            + "docs/plan/23 § The architecture gates."
+        );
 
-        foreach (var outcome in outcomes)
-        {
-            var marker = outcome.Status switch
-            {
+        foreach (var outcome in outcomes) {
+            var marker = outcome.Status switch {
                 GateStatus.Enforced => "✔",
                 GateStatus.Vacuous => "○",
                 GateStatus.CompilerEnforced => "⌨",
@@ -301,13 +333,13 @@ partial class Build
                 marker,
                 outcome.Gate,
                 outcome.Status,
-                outcome.Detail);
+                outcome.Detail
+            );
         }
 
         var vacuous = outcomes.Where(x => x.Status == GateStatus.Vacuous).Select(x => x.Gate).ToList();
 
-        if (vacuous.Count > 0)
-        {
+        if (vacuous.Count > 0) {
             // ⚠ Not "inspected zero candidates", which is what this said until Wire compatibility
             // became the first row to report ○ over a set it had partly inspected. That row reads
             // 212 wire types against 1 of the 3 released baselines its own rule names, so the old
@@ -319,23 +351,26 @@ partial class Build
                 + "because of what they did not find, not because the tree is clean: {Gates}. "
                 + "○, not ✔ — each row's detail says how much it saw.",
                 vacuous.Count,
-                string.Join(", ", vacuous));
+                string.Join(", ", vacuous)
+            );
         }
 
         var failures = outcomes.Where(x => x.Status == GateStatus.Failed).ToList();
 
-        if (failures.Count == 0)
+        if (failures.Count == 0) {
             return;
+        }
 
-        foreach (var failure in failures)
-        {
-            foreach (var violation in failure.Violations)
+        foreach (var failure in failures) {
+            foreach (var violation in failure.Violations) {
                 Log.Error("{Gate}: {Violation}", failure.Gate, violation);
+            }
         }
 
         Assert.Fail(
             $"{failures.Sum(x => x.Violations.Count)} architecture violation(s) across "
-            + $"{failures.Count} gate(s): {string.Join(", ", failures.Select(x => x.Gate))}. Listed above.");
+            + $"{failures.Count} gate(s): {string.Join(", ", failures.Select(x => x.Gate))}. Listed above."
+        );
     }
 
     // ── Gate: assembly graph — docs/plan/03 § Assembly graph rules ────────────────────────────
@@ -344,12 +379,18 @@ partial class Build
     ///     The seven rules, read off the compiled assemblies and — where metadata cannot see — off
     ///     the project files.
     ///     <para>
-    ///         ⚠ <b>Rule 3 is the reason metadata is the primary instrument, and it is worth
-    ///         understanding before changing it.</b> "No assembly above <c>CyberCloud.Kubernetes</c>
+    ///         ⚠
+    ///         <b>
+    ///             Rule 3 is the reason metadata is the primary instrument, and it is worth
+    ///             understanding before changing it.
+    ///         </b> "No assembly above <c>CyberCloud.Kubernetes</c>
     ///         references <c>k8s.Models</c>" is a rule about <i>types</i>. docs/plan/02 § ADR-004
     ///         requires <c>UseKubeMembership()</c> and <c>UseKubernetesHosting()</c>, whose packages
-    ///         both depend on <c>KubernetesClient</c>, so <c>dotnet list package
-    ///         --include-transitive</c> on <c>CyberCloud.ServiceDefaults</c> reports
+    ///         both depend on <c>KubernetesClient</c>, so
+    ///         <c>
+    /// dotnet list package
+    ///         --include-transitive
+    ///         </c> on <c>CyberCloud.ServiceDefaults</c> reports
     ///         <c>KubernetesClient</c> and always will. A gate phrased over packages is therefore
     ///         <b>unsatisfiable</b>. The <c>AssemblyRef</c> table is the right instrument: Roslyn
     ///         writes a row only for an assembly a type was actually bound from, so it says "no code
@@ -375,24 +416,25 @@ partial class Build
     ///         than leaving it to be inferred from a tick.
     ///     </para>
     /// </summary>
-    GateOutcome AssemblyGraphGate()
-    {
+    GateOutcome AssemblyGraphGate() {
         var violations = new List<string>();
         var inspected = 0;
 
-        void Rule(int number, string statement, int candidates, IEnumerable<string> found)
-        {
+        void Rule(int number, string statement, int candidates, IEnumerable<string> found) {
             var list = found.ToList();
 
             inspected += candidates;
-            violations.AddRange(list.Select(x => $"rule {number} — {x}. docs/plan/03 § Assembly graph rules: \"{statement}\""));
+            violations.AddRange(
+                list.Select(x => $"rule {number} — {x}. docs/plan/03 § Assembly graph rules: \"{statement}\"")
+            );
 
             Log.Information(
                 "    rule {Number}: {Candidates} candidate(s){Note} — {Statement}",
                 number,
                 candidates,
                 candidates == 0 ? ", VACUOUS" : list.Count > 0 ? $", {list.Count} violation(s)" : string.Empty,
-                statement);
+                statement
+            );
         }
 
         // Rule 1. Asserted in its strongest available form — not "no Orleans hosting, no
@@ -400,13 +442,19 @@ partial class Build
         // references today (its .csproj says so in a comment); pinning that exactly means the gate
         // fires on the first dependency of any kind, before anyone has to argue about which ones the
         // doc's three examples were meant to stand for.
-        var core = ShippingAssemblies.SingleOrDefault(x => string.Equals(x.Name, "CyberCloud.Core", StringComparison.Ordinal));
+        var core = ShippingAssemblies.SingleOrDefault(x => string.Equals(
+                x.Name,
+                "CyberCloud.Core",
+                StringComparison.Ordinal
+            )
+        );
 
         Rule(
             1,
             "CyberCloud.Core references no Orleans hosting, no KubernetesClient, no ABP application layer.",
             core is null ? 0 : 1,
-            core is null ? [] : CoreDependencyViolations(core));
+            core is null ? [] : CoreDependencyViolations(core)
+        );
 
         // Rule 2. Read as cross-provider: CyberCloud.Providers.Compute referencing its own
         // .Contracts is a provider's internal seam, and the doc's own next sentence — "Cross-provider
@@ -425,10 +473,14 @@ partial class Build
             "No Providers.* assembly references another Providers.* assembly — not even .Contracts.",
             providers.Count,
             providers.SelectMany(provider => InTreeEdges(provider)
-                .Where(edge => ProviderFamily(edge.To) is { } family
-                    && !string.Equals(family, ProviderFamily(provider.Name), StringComparison.Ordinal))
-                .Select(edge =>
-                    $"{provider.Name} {edge.How} {edge.To}; go through CyberCloud.ResourceManager by resource id")));
+                    .Where(edge => ProviderFamily(edge.To) is { } family
+                        && !string.Equals(family, ProviderFamily(provider.Name), StringComparison.Ordinal)
+                    )
+                    .Select(edge =>
+                        $"{provider.Name} {edge.How} {edge.To}; go through CyberCloud.ResourceManager by resource id"
+                    )
+            )
+        );
 
         // Rule 3. "Above CyberCloud.Kubernetes" is everything outside its own family.
         var aboveKubernetes = ShippingAssemblies
@@ -440,10 +492,13 @@ partial class Build
             "No assembly above CyberCloud.Kubernetes references k8s.Models.",
             aboveKubernetes.Count,
             aboveKubernetes.SelectMany(assembly => assembly.ReferencedAssemblies
-                .Where(IsKubernetesClient)
-                .Select(reference =>
-                    $"{assembly.Name} binds types from {reference}. This is about types, not packages — "
-                    + "docs/plan/02 § ADR-004 legitimately puts KubernetesClient in the restore closure")));
+                    .Where(IsKubernetesClient)
+                    .Select(reference =>
+                        $"{assembly.Name} binds types from {reference}. This is about types, not packages — "
+                        + "docs/plan/02 § ADR-004 legitimately puts KubernetesClient in the restore closure"
+                    )
+            )
+        );
 
         // ── Rule 4 ────────────────────────────────────────────────────────────────────────────
         //
@@ -475,7 +530,8 @@ partial class Build
         var owningHosts = applications.ToDictionary(
             x => x.Name,
             x => x.OwningHosts.Where(host => !string.IsNullOrWhiteSpace(host)).Select(host => host!).ToList(),
-            StringComparer.Ordinal);
+            StringComparer.Ordinal
+        );
 
         Rule(
             4,
@@ -484,14 +540,19 @@ partial class Build
             applications.Count,
             OwningHostDeclarationViolations(applications).Concat(
                 ShippingAssemblies.SelectMany(assembly => InTreeEdges(assembly)
-                    .Where(edge => owningHosts.TryGetValue(edge.To, out var owners)
-                        && !owners.Contains(assembly.Name, StringComparer.Ordinal))
-                    .Select(edge => owningHosts[edge.To].Count == 0
-                        ? $"{assembly.Name} {edge.How} {edge.To}, which declares no [OwningHost] and so "
-                        + "has no own host for anything to be. docs/plan/03 § Assembly graph rules, "
-                        + "rule 4 permits nothing to reference it until it names one"
-                        : $"{assembly.Name} {edge.How} {edge.To}, whose own host is "
-                        + $"{string.Join(" or ", owningHosts[edge.To])}"))));
+                        .Where(edge => owningHosts.TryGetValue(edge.To, out var owners)
+                            && !owners.Contains(assembly.Name, StringComparer.Ordinal)
+                        )
+                        .Select(edge => owningHosts[edge.To].Count == 0
+                                ? $"{assembly.Name} {edge.How} {edge.To}, which declares no [OwningHost] and so "
+                                + "has no own host for anything to be. docs/plan/03 § Assembly graph rules, "
+                                + "rule 4 permits nothing to reference it until it names one"
+                                : $"{assembly.Name} {edge.How} {edge.To}, whose own host is "
+                                + $"{string.Join(" or ", owningHosts[edge.To])}"
+                        )
+                )
+            )
+        );
 
         // Rule 5. Over InTreeEdges for the same reason as rule 2: a gateway that took a
         // ProjectReference on a provider implementation and used only its consts would leave no
@@ -505,8 +566,10 @@ partial class Build
             "The gateway references no provider implementation assembly, only .Contracts and .Application.",
             gateways.Count,
             gateways.SelectMany(gateway => InTreeEdges(gateway)
-                .Where(edge => IsProviderImplementation(edge.To))
-                .Select(edge => $"{gateway.Name} {edge.How} the implementation assembly {edge.To}")));
+                    .Where(edge => IsProviderImplementation(edge.To))
+                    .Select(edge => $"{gateway.Name} {edge.How} the implementation assembly {edge.To}")
+            )
+        );
 
         // Rule 6. Not an assembly rule — portal/libs/api is TypeScript.
         var portalApi = RootDirectory / "portal" / "libs" / "api";
@@ -523,7 +586,9 @@ partial class Build
                 .Where(file => !LooksGenerated(file))
                 .Select(file =>
                     $"{RootDirectory.GetRelativePathTo(file)} carries no generator banner "
-                    + "(\"DO NOT EDIT\", \"@generated\" or \"auto-generated\" in its first 2 KB)"));
+                    + "(\"DO NOT EDIT\", \"@generated\" or \"auto-generated\" in its first 2 KB)"
+                )
+        );
 
         // Rule 7 — see ModuleLayeringViolations.
         var moduleEdges = ModuleEdges();
@@ -533,7 +598,8 @@ partial class Build
             $"Every edge between two modules is declared in {ModuleLayeringFile.Name}, and the "
             + "declaration is acyclic.",
             moduleEdges.Count,
-            ModuleLayeringViolations(moduleEdges));
+            ModuleLayeringViolations(moduleEdges)
+        );
 
         return GateOutcome.From("Assembly graph", inspected, "rule candidate(s) across 7 rules", violations);
     }
@@ -572,8 +638,7 @@ partial class Build
     ///         — deliberately does not come through here.
     ///     </para>
     /// </summary>
-    IEnumerable<AssemblyEdge> InTreeEdges(AssemblyFacts assembly)
-    {
+    IEnumerable<AssemblyEdge> InTreeEdges(AssemblyFacts assembly) {
         var bound = assembly.ReferencedAssemblies
             .Where(ShippingProjectFiles.ContainsKey)
             .ToHashSet(StringComparer.Ordinal);
@@ -585,11 +650,13 @@ partial class Build
         return bound.Union(declared, StringComparer.Ordinal)
             .OrderBy(x => x, StringComparer.Ordinal)
             .Select(to => new AssemblyEdge(
-                to,
-                bound.Contains(to)
-                    ? "binds types from"
-                    : "declares a <ProjectReference> on, and binds nothing from,",
-                bound.Contains(to)));
+                    to,
+                    bound.Contains(to)
+                        ? "binds types from"
+                        : "declares a <ProjectReference> on, and binds nothing from,",
+                    bound.Contains(to)
+                )
+            );
     }
 
     /// <summary>
@@ -597,13 +664,16 @@ partial class Build
     ///     "folder name == assembly name" rule of docs/plan/03 § src.
     ///     <para>
     ///         ⚠ Analyzer references are excluded. <c>CyberCloud.Analyzers</c> is referenced by every
-    ///         project in the tree with <c>OutputItemType="Analyzer"
-    ///         ReferenceOutputAssembly="false"</c> — it contributes no assembly to the graph, and
+    ///         project in the tree with
+    ///         <c>
+    /// OutputItemType="Analyzer"
+    ///         ReferenceOutputAssembly="false"
+    ///         </c> — it contributes no assembly to the graph, and
     ///         counting it would put an edge from everything to it in every rule below.
     ///     </para>
     /// </summary>
-    static IEnumerable<string> DeclaredProjectReferences(AbsolutePath project)
-        => XDocument.Load(project)
+    static IEnumerable<string> DeclaredProjectReferences(AbsolutePath project) =>
+        XDocument.Load(project)
             .Descendants()
             .Where(x => string.Equals(x.Name.LocalName, "ProjectReference", StringComparison.Ordinal))
             .Where(x => !string.Equals(x.Attribute("OutputItemType")?.Value, "Analyzer", StringComparison.Ordinal))
@@ -621,13 +691,14 @@ partial class Build
     ///     <c>CyberCloud.Core</c> unnoticed until the first line of code used it — at which point the
     ///     gate fires on a commit that only added a call.
     /// </remarks>
-    IEnumerable<string> CoreDependencyViolations(AssemblyFacts core)
-    {
-        foreach (var reference in core.ReferencedAssemblies.Where(x => !IsSharedFramework(x)))
+    IEnumerable<string> CoreDependencyViolations(AssemblyFacts core) {
+        foreach (var reference in core.ReferencedAssemblies.Where(x => !IsSharedFramework(x))) {
             yield return $"{core.Name} binds types from {reference}";
+        }
 
-        foreach (var package in DeclaredPackageReferences(ShippingProjectFiles[core.Name]))
+        foreach (var package in DeclaredPackageReferences(ShippingProjectFiles[core.Name])) {
             yield return $"{core.Name}.csproj declares <PackageReference Include=\"{package}\" />";
+        }
     }
 
     /// <summary>
@@ -639,34 +710,34 @@ partial class Build
     ///         not show up here.
     ///     </para>
     /// </summary>
-    static IEnumerable<string> DeclaredPackageReferences(AbsolutePath project)
-        => XDocument.Load(project)
+    static IEnumerable<string> DeclaredPackageReferences(AbsolutePath project) =>
+        XDocument.Load(project)
             .Descendants()
             .Where(x => string.Equals(x.Name.LocalName, "PackageReference", StringComparison.Ordinal))
             .Select(x => x.Attribute("Include")?.Value)
             .Where(x => !string.IsNullOrEmpty(x))
             .Select(x => x!);
 
-    static bool IsSharedFramework(string assembly)
-        => assembly.StartsWith("System.", StringComparison.Ordinal)
-            || string.Equals(assembly, "System", StringComparison.Ordinal)
-            || string.Equals(assembly, "netstandard", StringComparison.Ordinal)
-            || string.Equals(assembly, "mscorlib", StringComparison.Ordinal);
+    static bool IsSharedFramework(string assembly) =>
+        assembly.StartsWith("System.", StringComparison.Ordinal)
+        || string.Equals(assembly, "System", StringComparison.Ordinal)
+        || string.Equals(assembly, "netstandard", StringComparison.Ordinal)
+        || string.Equals(assembly, "mscorlib", StringComparison.Ordinal);
 
-    static bool IsKubernetesClient(string assembly)
-        => assembly.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)
-            || assembly.Contains("KubernetesClient", StringComparison.OrdinalIgnoreCase);
+    static bool IsKubernetesClient(string assembly) =>
+        assembly.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)
+        || assembly.Contains("KubernetesClient", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     ///     The provider a <c>CyberCloud.Providers.X[.Contracts|.Application]</c> assembly belongs to,
     ///     or <see langword="null" /> if it is not a provider assembly at all.
     /// </summary>
-    static string? ProviderFamily(string assembly)
-    {
+    static string? ProviderFamily(string assembly) {
         const string prefix = "CyberCloud.Providers.";
 
-        if (!assembly.StartsWith(prefix, StringComparison.Ordinal))
+        if (!assembly.StartsWith(prefix, StringComparison.Ordinal)) {
             return null;
+        }
 
         var rest = assembly[prefix.Length..];
         var dot = rest.IndexOf('.', StringComparison.Ordinal);
@@ -674,19 +745,19 @@ partial class Build
         return dot < 0 ? rest : rest[..dot];
     }
 
-    static bool IsProviderImplementation(string assembly)
-        => ProviderFamily(assembly) is not null
-            && !assembly.EndsWith(".Contracts", StringComparison.Ordinal)
-            && !assembly.EndsWith(".Application", StringComparison.Ordinal);
+    static bool IsProviderImplementation(string assembly) =>
+        ProviderFamily(assembly) is not null
+        && !assembly.EndsWith(".Contracts", StringComparison.Ordinal)
+        && !assembly.EndsWith(".Application", StringComparison.Ordinal);
 
     /// <summary>
     ///     Whether an assembly is a host, by where its project lives. docs/plan/03 § src/Hosts is the
     ///     definition; a name test would miss <c>CyberCloud.AppHost</c>, which does not end in
     ///     <c>.Host</c>.
     /// </summary>
-    bool IsHost(string assembly)
-        => ShippingProjectFiles.TryGetValue(assembly, out var project)
-            && string.Equals(project.Parent.Parent.Name, "Hosts", StringComparison.Ordinal);
+    bool IsHost(string assembly) =>
+        ShippingProjectFiles.TryGetValue(assembly, out var project)
+        && string.Equals(project.Parent.Parent.Name, "Hosts", StringComparison.Ordinal);
 
     /// <summary>
     ///     Rule 4's other half: whether the declarations themselves are usable. An
@@ -695,22 +766,17 @@ partial class Build
     ///     option in this rule's history — inferring ownership from the host's own references —
     ///     the wrong one.
     /// </summary>
-    IEnumerable<string> OwningHostDeclarationViolations(IEnumerable<AssemblyFacts> applications)
-    {
-        foreach (var application in applications)
-        {
-            foreach (var host in application.OwningHosts)
-            {
-                if (string.IsNullOrWhiteSpace(host))
-                {
+    IEnumerable<string> OwningHostDeclarationViolations(IEnumerable<AssemblyFacts> applications) {
+        foreach (var application in applications) {
+            foreach (var host in application.OwningHosts) {
+                if (string.IsNullOrWhiteSpace(host)) {
                     yield return $"{application.Name} carries an [OwningHost] with no host name. The "
                         + "attribute names one host under src/Hosts — docs/plan/03 § Assembly graph rules, rule 4";
 
                     continue;
                 }
 
-                if (!IsHost(host))
-                {
+                if (!IsHost(host)) {
                     yield return $"{application.Name} declares [OwningHost(\"{host}\")] and {host} is not "
                         + "a project under src/Hosts. An application layer's own host is a host; naming "
                         + "anything else would make the attribute an exemption from rule 4 rather than an "
@@ -720,8 +786,7 @@ partial class Build
         }
     }
 
-    static bool LooksGenerated(AbsolutePath file)
-    {
+    static bool LooksGenerated(AbsolutePath file) {
         using var reader = new StreamReader(file);
 
         var head = new char[2048];
@@ -770,21 +835,24 @@ partial class Build
     ///         are the identity module's.)
     ///     </para>
     /// </summary>
-    string? ModuleOf(string assembly)
-    {
-        if (!ShippingProjectFiles.TryGetValue(assembly, out var project))
+    string? ModuleOf(string assembly) {
+        if (!ShippingProjectFiles.TryGetValue(assembly, out var project)) {
             return null;
+        }
 
-        if (ProviderFamily(assembly) is { } family)
+        if (ProviderFamily(assembly) is { } family) {
             return "CyberCloud.Providers." + family;
+        }
 
-        if (!string.Equals(project.Parent.Parent.Name, "src", StringComparison.Ordinal))
+        if (!string.Equals(project.Parent.Parent.Name, "src", StringComparison.Ordinal)) {
             return null;
+        }
 
         var first = assembly.IndexOf('.', StringComparison.Ordinal);
 
-        if (first < 0)
+        if (first < 0) {
             return assembly;
+        }
 
         var second = assembly.IndexOf('.', first + 1);
 
@@ -803,24 +871,24 @@ partial class Build
     ///     would be reported as binding nothing, which is true of that one reference and false of
     ///     the edge.
     /// </summary>
-    List<ModuleEdge> ModuleEdges()
-    {
+    List<ModuleEdge> ModuleEdges() {
         var edges = new Dictionary<(string From, string To), (string Because, bool Bound)>();
 
-        foreach (var assembly in ShippingAssemblies)
-        {
-            if (ModuleOf(assembly.Name) is not { } from)
+        foreach (var assembly in ShippingAssemblies) {
+            if (ModuleOf(assembly.Name) is not { } from) {
                 continue;
+            }
 
-            foreach (var edge in InTreeEdges(assembly))
-            {
-                if (ModuleOf(edge.To) is not { } to || string.Equals(from, to, StringComparison.Ordinal))
+            foreach (var edge in InTreeEdges(assembly)) {
+                if (ModuleOf(edge.To) is not { } to || string.Equals(from, to, StringComparison.Ordinal)) {
                     continue;
+                }
 
                 var because = ($"{assembly.Name} {edge.How} {edge.To}", edge.Bound);
 
-                if (!edges.TryGetValue((from, to), out var existing) || (edge.Bound && !existing.Bound))
+                if (!edges.TryGetValue((from, to), out var existing) || (edge.Bound && !existing.Bound)) {
                     edges[(from, to)] = because;
+                }
             }
         }
 
@@ -855,13 +923,13 @@ partial class Build
     ///         the coupling that assembly's own author wrote down twice is the wrong rule.
     ///     </para>
     /// </summary>
-    List<string> ModuleLayeringViolations(List<ModuleEdge> actual)
-    {
+    List<string> ModuleLayeringViolations(List<ModuleEdge> actual) {
         Assert.True(
             ModuleLayeringFile.FileExists(),
             $"{ModuleLayeringFile.Name} is missing. It is the reviewed list of edges between modules "
             + "— docs/plan/03 § Assembly graph rules, rule 7. Create it at the repository root, one "
-            + "\"Module -> Module\" per line.");
+            + "\"Module -> Module\" per line."
+        );
 
         var modules = ShippingAssemblies
             .Select(x => ModuleOf(x.Name))
@@ -872,61 +940,60 @@ partial class Build
         var violations = new List<string>();
         var lines = ModuleLayeringFile.ReadAllLines();
 
-        for (var i = 0; i < lines.Length; i++)
-        {
+        for (var i = 0; i < lines.Length; i++) {
             var line = lines[i].Trim();
 
-            if (line.Length == 0 || line.StartsWith('#'))
+            if (line.Length == 0 || line.StartsWith('#')) {
                 continue;
+            }
 
             var parts = line.Split("->", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
-            if (parts.Length != 2)
-            {
-                violations.Add(
-                    $"{ModuleLayeringFile.Name}:{i + 1} is not \"Module -> Module\" — \"{line}\"");
+            if (parts.Length != 2) {
+                violations.Add($"{ModuleLayeringFile.Name}:{i + 1} is not \"Module -> Module\" — \"{line}\"");
 
                 continue;
             }
 
             var unknown = parts.Where(x => !modules.Contains(x)).ToList();
 
-            foreach (var module in unknown)
-            {
+            foreach (var module in unknown) {
                 violations.Add(
                     $"{ModuleLayeringFile.Name}:{i + 1} names {module}, which is not a module in this "
                     + "tree. A module is a shipping project directly under src/, or a provider family "
-                    + "under src/Providers, named by its first two dotted segments");
+                    + "under src/Providers, named by its first two dotted segments"
+                );
             }
 
             // Not added to `declared`: an unknown name is already reported, and letting it through
             // would report the same line a second time as a stale edge.
-            if (unknown.Count == 0)
+            if (unknown.Count == 0) {
                 declared.Add((parts[0], parts[1]));
+            }
         }
 
         var declaredSet = declared.ToHashSet();
 
         // Direction 1: every edge in the graph is declared. This is the direction that would have
         // caught the sibling reference the gate used to let through.
-        foreach (var edge in actual.Where(x => !declaredSet.Contains((x.From, x.To))))
-        {
+        foreach (var edge in actual.Where(x => !declaredSet.Contains((x.From, x.To)))) {
             violations.Add(
                 $"{edge.From} references {edge.To} and {ModuleLayeringFile.Name} does not say it may "
                 + $"({edge.Because}). Adding the line is a review request, not a build fix — "
-                + "docs/plan/03 § Assembly graph rules, rule 7");
+                + "docs/plan/03 § Assembly graph rules, rule 7"
+            );
         }
 
         // Direction 2: every declared edge is real. A line for a coupling that no longer exists is
         // a permission nobody granted twice, sitting there for the next person to use.
         var actualSet = actual.Select(x => (x.From, x.To)).ToHashSet();
 
-        foreach (var (from, to) in declared.Where(x => !actualSet.Contains(x)))
-        {
+        foreach (var (from, to) in declared.Where(x => !actualSet.Contains(x))) {
             violations.Add(
                 $"{ModuleLayeringFile.Name} declares {from} -> {to} and no assembly in {from} "
                 + $"references one in {to}. Delete the line: a stale entry is standing permission for "
-                + "a coupling nobody reviewed");
+                + "a coupling nobody reviewed"
+            );
         }
 
         // Direction 3: the declaration is acyclic. Nothing may be written here that makes a cycle
@@ -940,8 +1007,7 @@ partial class Build
     ///     Every cycle in the declared graph, as a path. Reported as a path rather than as "there is
     ///     a cycle" because a two-module cycle is obvious and a four-module one is not.
     /// </summary>
-    static List<string> DeclarationCycles(List<(string From, string To)> declared)
-    {
+    static List<string> DeclarationCycles(List<(string From, string To)> declared) {
         var outgoing = declared
             .GroupBy(x => x.From, StringComparer.Ordinal)
             .ToDictionary(x => x.Key, x => x.Select(y => y.To).ToList(), StringComparer.Ordinal);
@@ -952,34 +1018,35 @@ partial class Build
         var reported = new HashSet<string>(StringComparer.Ordinal);
         var cycles = new List<string>();
 
-        foreach (var start in outgoing.Keys.OrderBy(x => x, StringComparer.Ordinal))
+        foreach (var start in outgoing.Keys.OrderBy(x => x, StringComparer.Ordinal)) {
             Walk(start, []);
+        }
 
         return cycles;
 
-        void Walk(string module, List<string> path)
-        {
-            if (path.Contains(module, StringComparer.Ordinal))
-            {
+        void Walk(string module, List<string> path) {
+            if (path.Contains(module, StringComparer.Ordinal)) {
                 var loop = path[path.IndexOf(module)..];
                 var key = string.Join(" -> ", loop.OrderBy(x => x, StringComparer.Ordinal));
 
-                if (reported.Add(key))
-                {
+                if (reported.Add(key)) {
                     cycles.Add(
                         $"the declaration is cyclic: {string.Join(" -> ", loop)} -> {module}. Modules "
                         + "form a layering, not a mesh — an edge that closes a loop cannot be declared "
-                        + "away, because a cycle is what makes two modules one");
+                        + "away, because a cycle is what makes two modules one"
+                    );
                 }
 
                 return;
             }
 
-            if (!visited.Add(module) || !outgoing.TryGetValue(module, out var next))
+            if (!visited.Add(module) || !outgoing.TryGetValue(module, out var next)) {
                 return;
+            }
 
-            foreach (var to in next.OrderBy(x => x, StringComparer.Ordinal))
+            foreach (var to in next.OrderBy(x => x, StringComparer.Ordinal)) {
                 Walk(to, [.. path, module]);
+            }
         }
     }
 
@@ -1014,13 +1081,13 @@ partial class Build
     ///         would teach reviewers to skim it.
     ///     </para>
     /// </summary>
-    GateOutcome StorageTierGate()
-    {
+    GateOutcome StorageTierGate() {
         Assert.True(
             DurableGrainsFile.FileExists(),
             $"{DurableGrainsFile.Name} is missing. It is the reviewed list of grain types whose state "
             + "is durable — docs/plan/05 § Choosing a tier. Create it at the repository root, one "
-            + "fully-qualified grain type per line.");
+            + "fully-qualified grain type per line."
+        );
 
         var listed = DurableGrainsFile.ReadAllLines()
             .Select(line => line.Trim())
@@ -1028,7 +1095,10 @@ partial class Build
             .ToHashSet(StringComparer.Ordinal);
 
         var bindings = ShippingAssemblies
-            .SelectMany(assembly => assembly.PersistentStateBindings.Select(binding => (Assembly: assembly.Name, Binding: binding)))
+            .SelectMany(assembly => assembly.PersistentStateBindings.Select(binding => (Assembly: assembly.Name,
+                        Binding: binding)
+                )
+            )
             .ToList();
 
         var rationales = ShippingAssemblies
@@ -1038,46 +1108,49 @@ partial class Build
         var violations = new List<string>();
 
         // Direction 1: everything on the list still binds Durable.
-        foreach (var type in listed.OrderBy(x => x, StringComparer.Ordinal))
-        {
-            var forType = bindings.Where(x => string.Equals(x.Binding.DeclaringType, type, StringComparison.Ordinal)).ToList();
+        foreach (var type in listed.OrderBy(x => x, StringComparer.Ordinal)) {
+            var forType = bindings.Where(x => string.Equals(x.Binding.DeclaringType, type, StringComparison.Ordinal))
+                .ToList();
 
-            if (forType.Any(x => string.Equals(x.Binding.Tier, DurableTier, StringComparison.Ordinal)))
+            if (forType.Any(x => string.Equals(x.Binding.Tier, DurableTier, StringComparison.Ordinal))) {
                 continue;
+            }
 
-            violations.Add(forType.Count == 0
-                ? $"{type} is listed in {DurableGrainsFile.Name} but no shipping assembly declares a grain "
-                + "type of that name with any [PersistentState] — the list has gone stale, or the type was "
-                + "renamed without renaming the entry"
-                : $"{type} is listed in {DurableGrainsFile.Name} but binds no state to the Durable tier "
-                + $"(it binds {string.Join(", ", forType.Select(x => $"\"{x.Binding.StateName}\" → {x.Binding.Tier ?? "the default provider"}"))}). "
-                + "State on the list is state whose loss tolerance is zero — docs/plan/02 § ADR-003");
+            violations.Add(
+                forType.Count == 0
+                    ? $"{type} is listed in {DurableGrainsFile.Name} but no shipping assembly declares a grain "
+                    + "type of that name with any [PersistentState] — the list has gone stale, or the type was "
+                    + "renamed without renaming the entry"
+                    : $"{type} is listed in {DurableGrainsFile.Name} but binds no state to the Durable tier "
+                    + $"(it binds {string.Join(", ", forType.Select(x => $"\"{x.Binding.StateName}\" → {x.Binding.Tier ?? "the default provider"}"))}). "
+                    + "State on the list is state whose loss tolerance is zero — docs/plan/02 § ADR-003"
+            );
         }
 
         // Direction 2: everything binding Durable is either on the list or carries a rationale.
         foreach (var (assembly, binding) in bindings
-            .Where(x => string.Equals(x.Binding.Tier, DurableTier, StringComparison.Ordinal))
-            .OrderBy(x => x.Binding.DeclaringType, StringComparer.Ordinal))
-        {
-            if (listed.Contains(binding.DeclaringType))
+                     .Where(x => string.Equals(x.Binding.Tier, DurableTier, StringComparison.Ordinal))
+                     .OrderBy(x => x.Binding.DeclaringType, StringComparer.Ordinal)) {
+            if (listed.Contains(binding.DeclaringType)) {
                 continue;
+            }
 
-            if (!rationales.TryGetValue(binding.DeclaringType, out var reason))
-            {
+            if (!rationales.TryGetValue(binding.DeclaringType, out var reason)) {
                 violations.Add(
                     $"{binding.DeclaringType} ({assembly}) binds [PersistentState(\"{binding.StateName}\", "
                     + $"StorageTiers.Durable)] but is not in {DurableGrainsFile.Name} and carries no "
                     + "[DurableStateRationale]. Add it to the list — reviewed like a schema migration — or "
-                    + "say in the attribute why it does not belong there. docs/plan/05 § Choosing a tier");
+                    + "say in the attribute why it does not belong there. docs/plan/05 § Choosing a tier"
+                );
 
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(reason))
-            {
+            if (string.IsNullOrWhiteSpace(reason)) {
                 violations.Add(
                     $"{binding.DeclaringType} ({assembly}) carries [DurableStateRationale] with an empty "
-                    + "reason. The attribute is an argument, not a checkbox — docs/plan/05 § Choosing a tier");
+                    + "reason. The attribute is an argument, not a checkbox — docs/plan/05 § Choosing a tier"
+                );
             }
         }
 
@@ -1086,7 +1159,8 @@ partial class Build
             bindings.Count,
             $"[PersistentState] binding(s), {listed.Count} listed in {DurableGrainsFile.Name}, "
             + $"{rationales.Count} with [DurableStateRationale]",
-            violations);
+            violations
+        );
     }
 
     /// <summary>
@@ -1116,10 +1190,12 @@ partial class Build
     ///         <c>IShardMapGrain</c> and <c>ITenantDirectoryGrain</c> both are.
     ///     </para>
     /// </summary>
-    GateOutcome TenantKeyGate()
-    {
+    GateOutcome TenantKeyGate() {
         var grainInterfaces = ShippingAssemblies
-            .SelectMany(assembly => assembly.InterfaceBases.Select(x => (Assembly: assembly.Name, Interface: x.Key, Bases: x.Value)))
+            .SelectMany(assembly => assembly.InterfaceBases.Select(x => (Assembly: assembly.Name, Interface: x.Key,
+                        Bases: x.Value)
+                )
+            )
             .Where(x => x.Bases.Any(IsGrainKeyInterface))
             .OrderBy(x => x.Interface, StringComparer.Ordinal)
             .ToList();
@@ -1129,19 +1205,21 @@ partial class Build
             .Select(x =>
                 $"{x.Interface} ({x.Assembly}) extends {string.Join(", ", x.Bases.Where(IsGrainKeyInterface))}. "
                 + "Orleans.Multitenant carries the tenant in the string key and nowhere else, so any other key "
-                + "kind puts the grain permanently outside tenant separation — docs/plan/02 § ADR-002")
+                + "kind puts the grain permanently outside tenant separation — docs/plan/02 § ADR-002"
+            )
             .ToList();
 
         return GateOutcome.From(
             "Tenant keys",
             grainInterfaces.Count,
             "grain interface(s); the '|'-literal half of this row is CC1004, at compile time",
-            violations);
+            violations
+        );
     }
 
-    static bool IsGrainKeyInterface(string name)
-        => name.StartsWith("IGrainWith", StringComparison.Ordinal)
-            && name.EndsWith("Key", StringComparison.Ordinal);
+    static bool IsGrainKeyInterface(string name) =>
+        name.StartsWith("IGrainWith", StringComparison.Ordinal)
+        && name.EndsWith("Key", StringComparison.Ordinal);
 
     // ── Gate: log egress — docs/plan/18 § Platform security, row Secrets ───────────────────────
 
@@ -1152,8 +1230,11 @@ partial class Build
     /// <remarks>
     ///     <para>
     ///         The Secrets row names three controls. <b>Secrets</b> above reports the first
-    ///         (CC1005, over <c>[Id]</c> members in grain state). The third — <i>"a log-scanning
-    ///         canary that alerts on a key-shaped string in the log pipeline"</i> — is
+    ///         (CC1005, over <c>[Id]</c> members in grain state). The third —
+    ///         <i>
+    ///             "a log-scanning
+    ///             canary that alerts on a key-shaped string in the log pipeline"
+    ///         </i> — is
     ///         <c>CyberCloud.ServiceDefaults.Logging.SecretScrubbingSink</c>, and it is a control
     ///         over the sinks it wraps and no others. This row is the two ways it could stop being
     ///         a control over all of them without a test going red.
@@ -1175,8 +1256,11 @@ partial class Build
     ///         </item>
     ///     </list>
     ///     <para>
-    ///         ⚠ <b>What this row does NOT check, stated because the tick would otherwise be read as
-    ///         covering it.</b> It says nothing about whether the wrapper is still attached to the
+    ///         ⚠
+    ///         <b>
+    ///             What this row does NOT check, stated because the tick would otherwise be read as
+    ///             covering it.
+    ///         </b> It says nothing about whether the wrapper is still attached to the
     ///         pipeline inside <c>CyberCloud.ServiceDefaults</c> — that is
     ///         <c>CyberCloud.ServiceDefaults.Tests.Logging.LogEgressTests</c>, whose
     ///         <c>ASecretLoggedThroughAHostsOwnLoggerDoesNotReachStandardOutput</c> drives a real
@@ -1186,8 +1270,7 @@ partial class Build
     ///         by omission.
     ///     </para>
     /// </remarks>
-    GateOutcome LogEgressGate()
-    {
+    GateOutcome LogEgressGate() {
         const string owner = "CyberCloud.ServiceDefaults";
 
         var assemblies = ShippingAssemblies.ToList();
@@ -1195,12 +1278,14 @@ partial class Build
         var violations = assemblies
             .Where(assembly => !string.Equals(assembly.Name, owner, StringComparison.Ordinal))
             .SelectMany(assembly => assembly.ReferencedAssemblies
-                .Where(IsSerilog)
-                .Select(reference =>
-                    $"{assembly.Name} binds a type from {reference}. Only {owner} may construct a Serilog "
-                    + "pipeline: it is the one that wraps every sink in SecretScrubbingSink, and a logger built "
-                    + "anywhere else writes to sinks nothing scans — docs/plan/18 § Platform security, row "
-                    + "Secrets. Log through Microsoft.Extensions.Logging instead."))
+                    .Where(IsSerilog)
+                    .Select(reference =>
+                        $"{assembly.Name} binds a type from {reference}. Only {owner} may construct a Serilog "
+                        + "pipeline: it is the one that wraps every sink in SecretScrubbingSink, and a logger built "
+                        + "anywhere else writes to sinks nothing scans — docs/plan/18 § Platform security, row "
+                        + "Secrets. Log through Microsoft.Extensions.Logging instead."
+                    )
+            )
             .ToList();
 
         var settings = SourceRoots
@@ -1208,20 +1293,22 @@ partial class Build
             .OrderBy(x => x.ToString(), StringComparer.Ordinal)
             .ToList();
 
-        foreach (var file in settings)
-        {
+        foreach (var file in settings) {
             // A string search rather than a JSON parse, and the difference matters here: the
             // sections are found wherever they sit, including under an environment override, and a
             // file this gate cannot parse is not a file this gate skips.
             var text = File.ReadAllText(file);
 
-            violations.AddRange(SerilogSinkKeys
-                .Where(key => text.Contains(key, StringComparison.Ordinal))
-                .Select(key =>
-                    $"{RootDirectory.GetRelativePathTo(file)} declares {key.Trim('"')}. A sink in configuration is "
-                    + "added beside SecretScrubbingSink rather than behind it and would export log events with "
-                    + "credentials still in them; the host refuses to start with one. Declare the sink in "
-                    + "OrleansApplication.ConfigureHost — docs/plan/18 § Platform security, row Secrets."));
+            violations.AddRange(
+                SerilogSinkKeys
+                    .Where(key => text.Contains(key, StringComparison.Ordinal))
+                    .Select(key =>
+                        $"{RootDirectory.GetRelativePathTo(file)} declares {key.Trim('"')}. A sink in configuration is "
+                        + "added beside SecretScrubbingSink rather than behind it and would export log events with "
+                        + "credentials still in them; the host refuses to start with one. Declare the sink in "
+                        + "OrleansApplication.ConfigureHost — docs/plan/18 § Platform security, row Secrets."
+                    )
+            );
         }
 
         return GateOutcome.From(
@@ -1229,13 +1316,14 @@ partial class Build
             assemblies.Count + settings.Count,
             $"shipping assembly and appsettings file(s); the scanner itself is {owner}, and that it is still "
             + "attached is LogEgressTests rather than this row",
-            violations);
+            violations
+        );
     }
 
     /// <summary>Serilog's own assemblies, by the shape of the simple name in an <c>AssemblyRef</c>.</summary>
-    static bool IsSerilog(string assembly)
-        => string.Equals(assembly, "Serilog", StringComparison.Ordinal)
-            || assembly.StartsWith("Serilog.", StringComparison.Ordinal);
+    static bool IsSerilog(string assembly) =>
+        string.Equals(assembly, "Serilog", StringComparison.Ordinal)
+        || assembly.StartsWith("Serilog.", StringComparison.Ordinal);
 
     /// <summary>The two configuration keys that create a sink.</summary>
     static readonly string[] SerilogSinkKeys = ["\"WriteTo\"", "\"AuditTo\""];
@@ -1269,81 +1357,79 @@ partial class Build
     ///         and a confident tick over a platform with no API at all.
     ///     </para>
     /// </summary>
-    GateOutcome GeneratedSurfacesGate()
-    {
+    GateOutcome GeneratedSurfacesGate() {
         var violations = new List<string>();
 
-        foreach (var document in Generation.Documents)
-        {
-            foreach (var problem in document.StructuralProblems)
-            {
+        foreach (var document in Generation.Documents) {
+            foreach (var problem in document.StructuralProblems) {
                 violations.Add(
                     $"openapi/{document.File} is not a valid OpenAPI 3.1 document — {problem}. "
-                    + "docs/plan/02 § ADR-012 specifies 3.1");
+                    + "docs/plan/02 § ADR-012 specifies 3.1"
+                );
             }
 
-            if (document.Drifted)
-            {
+            if (document.Drifted) {
                 violations.Add(
                     $"openapi/{document.File} is not what the provider registry generates. Run "
                     + "./build.sh Generate and commit the result — docs/plan/23 § The architecture "
-                    + "gates, row Generated surfaces");
+                    + "gates, row Generated surfaces"
+                );
             }
         }
 
-        foreach (var stale in Generation.Stale)
-        {
+        foreach (var stale in Generation.Stale) {
             violations.Add(
                 $"openapi/{stale} is checked in and the registry no longer produces it. An api-version "
                 + "is kept forever and removing one needs a 12-month notice window — "
-                + "docs/plan/08 § The provider registry");
+                + "docs/plan/08 § The provider registry"
+            );
         }
 
-        foreach (var surface in Generation.Derived)
-        {
-            foreach (var problem in surface.Problems)
+        foreach (var surface in Generation.Derived) {
+            foreach (var problem in surface.Problems) {
                 violations.Add($"generated/{surface.File} is not usable — {problem}");
+            }
 
-            if (surface.Drifted)
-            {
+            if (surface.Drifted) {
                 violations.Add(
                     $"generated/{surface.File} is not what the OpenAPI document generates. Run "
                     + "./build.sh Generate and commit the result — docs/plan/23 § The architecture "
-                    + "gates, row Generated surfaces");
+                    + "gates, row Generated surfaces"
+                );
             }
         }
 
-        foreach (var stale in Generation.DerivedStale)
-        {
+        foreach (var stale in Generation.DerivedStale) {
             violations.Add(
                 $"generated/{stale} is checked in and nothing produces it. A generated surface nobody "
-                + "generates is one nobody can reproduce");
+                + "generates is one nobody can reproduce"
+            );
         }
 
         // ⚠ THE PORTAL'S CLIENT IS PART OF THIS ROW — issue #21. It is written to portal/libs/api
         // rather than to generated/, and a row that counted "3 derived file(s)" while a fourth
         // surface regenerated unchecked would be this repository's standing failure: a check that
         // answers a narrower question than its name.
-        foreach (var problem in Generation.TypeScriptProblems)
+        foreach (var problem in Generation.TypeScriptProblems) {
             violations.Add($"{PortalApiRelative} is not usable — {problem}");
+        }
 
-        foreach (var file in Generation.TypeScript)
-        {
-            if (file.Drifted)
-            {
+        foreach (var file in Generation.TypeScript) {
+            if (file.Drifted) {
                 violations.Add(
                     $"{PortalApiRelative}/{file.File} is not what the OpenAPI document generates. Run "
                     + "./build.sh Generate and commit the result — docs/plan/23 § The architecture "
-                    + "gates, row Generated surfaces");
+                    + "gates, row Generated surfaces"
+                );
             }
         }
 
-        foreach (var stale in Generation.TypeScriptStale)
-        {
+        foreach (var stale in Generation.TypeScriptStale) {
             violations.Add(
                 $"{PortalApiRelative}/{stale} is checked in and nothing produces it. docs/plan/03 "
                 + "§ Assembly graph rules, rule 6 gives that directory to the generator, so a file it "
-                + "does not produce is a hand-written one");
+                + "does not produce is a hand-written one"
+            );
         }
 
         return GateOutcome.From(
@@ -1353,7 +1439,8 @@ partial class Build
             + $"{Generation.Derived.Count} derived file(s) — the cyc verb tree, the .NET SDK and the "
             + $"portal forms — and {Generation.TypeScript.Count} file(s) of the portal's TypeScript "
             + "client, all regenerated and compared byte-for-byte",
-            violations);
+            violations
+        );
     }
 
     // ── Gate: the generated SDK compiles — issue #73, not in docs/plan/23 ─────────────────────
@@ -1364,8 +1451,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This row exists because the one above it answers a narrower question than its
-    ///         name suggests.</b> "The surfaces regenerate byte-identically" reads as "the surfaces
+    ///         ⚠
+    ///         <b>
+    ///             This row exists because the one above it answers a narrower question than its
+    ///             name suggests.
+    ///         </b> "The surfaces regenerate byte-identically" reads as "the surfaces
     ///         are good", and for four of the five it is nearly true because something downstream
     ///         consumes them — the <c>cyc</c> host parses the verb tree, the portal renders the form
     ///         schemas, <c>pnpm typecheck:api</c> runs <c>tsc</c> over the TypeScript client, and
@@ -1390,39 +1480,41 @@ partial class Build
     ///         "the file in git is not valid C#" is the sentence issue #73 is about.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Counted in FILES and in the types they declare, and the second number is the
-    ///         vacuity guard.</b> A file that parsed to nothing produces no errors, and a gate that
+    ///         ⚠
+    ///         <b>
+    ///             Counted in FILES and in the types they declare, and the second number is the
+    ///             vacuity guard.
+    ///         </b> A file that parsed to nothing produces no errors, and a gate that
     ///         reported ✔ over an empty compilation would be the same defect this row was added to
     ///         fix. <see cref="GeneratedSdkSurface" /> carries the rest of the reasoning — why
     ///         <c>CS8795</c> is accepted, why this is not a throwaway <c>.csproj</c>, and what would
     ///         make the exemption stale.
     ///     </para>
     /// </remarks>
-    GateOutcome GeneratedSdkCompilesGate()
-    {
-        if (GeneratedSdkBlocker() is { } blocker)
+    GateOutcome GeneratedSdkCompilesGate() {
+        if (GeneratedSdkBlocker() is { } blocker) {
             return GateOutcome.Blocked("Generated SDK compiles", blocker);
+        }
 
         var compiled = CompiledGeneratedSdk();
         var violations = new List<string>();
 
-        foreach (var file in compiled)
-        {
-            foreach (var error in file.Errors)
-            {
+        foreach (var file in compiled) {
+            foreach (var error in file.Errors) {
                 violations.Add(
                     $"generated/{SdkSurfaceDirectory}/{file.File} does not compile — {error}. "
                     + "generated/README.md makes that directory read-only, so the fix is in "
                     + "src/CyberCloud.ResourceManager.Contracts/Generation/SdkEmitter.cs and then "
-                    + "./build.sh Generate");
+                    + "./build.sh Generate"
+                );
             }
 
-            if (file.Types == 0)
-            {
+            if (file.Types == 0) {
                 violations.Add(
                     $"generated/{SdkSurfaceDirectory}/{file.File} declares no type at all, so it "
                     + "compiled clean by having nothing in it. A surface with no types is a "
-                    + "generator that produced nothing, not an SDK that is correct");
+                    + "generator that produced nothing, not an SDK that is correct"
+                );
             }
         }
 
@@ -1433,7 +1525,8 @@ partial class Build
             + $"its own against {SdkAssemblyName} — {compiled.Sum(x => x.Declared)} partial member(s) "
             + "accepted as declared-but-not-implemented, which is the hand-written half that does "
             + "not exist yet (docs/plan/21 § Generation)",
-            violations);
+            violations
+        );
     }
 
     /// <summary>
@@ -1450,8 +1543,11 @@ partial class Build
     ///         thirteenth from reaching four generated surfaces is this.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Here rather than in <c>ProviderBuilder.Action</c>, and the reason is what a
-    ///         refusal at registration would cost.</b> The builder is earlier, but it sees one
+    ///         ⚠
+    ///         <b>
+    ///             Here rather than in <c>ProviderBuilder.Action</c>, and the reason is what a
+    ///             refusal at registration would cost.
+    ///         </b> The builder is earlier, but it sees one
     ///         declaration at a time and it cannot tell a provider's declaration from a registration
     ///         assembled any other way — and <c>ActionRegistration.HandlerType</c> is public and
     ///         nullable, so the dispatcher's refusal stays reachable however the builder behaves.
@@ -1463,8 +1559,11 @@ partial class Build
     ///         covers every provider at once.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The long-running cell is asserted in the other direction, and the order matters
-    ///         for the same reason it does in the conformance suite.</b> A long-running action starts
+    ///         ⚠
+    ///         <b>
+    ///             The long-running cell is asserted in the other direction, and the order matters
+    ///             for the same reason it does in the conformance suite.
+    ///         </b> A long-running action starts
     ///         an operation and the operation grain drives the type's <i>reconciler</i>; it needs no
     ///         handler and cannot use one, which is why <c>ProviderBuilder.Action</c> refuses the two
     ///         together. So this gate asks <c>LongRunning</c> first: demanding a handler of
@@ -1476,58 +1575,55 @@ partial class Build
     ///         <see cref="GateStatus.Vacuous" /> rather than a confident tick.
     ///     </para>
     /// </summary>
-    GateOutcome ActionHandlerGate()
-    {
+    GateOutcome ActionHandlerGate() {
         var violations = new List<string>();
         var excused = ActionsWithoutHandlers();
         var claimed = new HashSet<string>(excused.Keys, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var action in Generation.Actions)
-        {
+        foreach (var action in Generation.Actions) {
             var row = action.Type + " " + action.Name;
 
             // ⚠ Asked first. See the remarks: the long-running cell is the one that is CORRECT
             // without a handler, and testing `Handler is null` first folds it into the failure.
-            if (action.LongRunning)
-            {
-                if (action.Handler is not null)
-                {
+            if (action.LongRunning) {
+                if (action.Handler is not null) {
                     violations.Add(
                         $"{action.Type}/{action.Name} is declared long-running and names the handler "
                         + $"{action.Handler}. A handler runs on the synchronous action path only; a "
                         + "long-running action starts an operation and the operation grain drives the "
                         + "type's reconciler, so the handler would never run. ProviderBuilder.Action "
                         + "refuses this pair at registration, so a declaration reaching here means it "
-                        + "was assembled some other way");
+                        + "was assembled some other way"
+                    );
                 }
 
-                if (claimed.Remove(row))
-                {
+                if (claimed.Remove(row)) {
                     violations.Add(
                         $"{ActionExemptionsFile.Name} lists {action.Type}/{action.Name} and that action "
                         + "is long-running, which needs no handler and cannot use one. Delete the line: "
                         + "an exemption for something that was never a gap reads as though the gap is "
-                        + "still there");
+                        + "still there"
+                    );
                 }
 
                 continue;
             }
 
-            if (action.Handler is not null)
-            {
-                if (claimed.Remove(row))
-                {
+            if (action.Handler is not null) {
+                if (claimed.Remove(row)) {
                     violations.Add(
                         $"{ActionExemptionsFile.Name} lists {action.Type}/{action.Name} and that action "
                         + $"now names the handler {action.Handler}. Delete the line — a debt list that "
-                        + "outlives the debt is one nobody can tell the live rows in");
+                        + "outlives the debt is one nobody can tell the live rows in"
+                    );
                 }
 
                 continue;
             }
 
-            if (claimed.Remove(row))
+            if (claimed.Remove(row)) {
                 continue;
+            }
 
             violations.Add(
                 $"{action.Type}/{action.Name} is a synchronous action with no handler, so every call "
@@ -1537,18 +1633,19 @@ partial class Build
                 + "declare the action longRunning: true if the work genuinely takes time and the "
                 + $"type's reconciler is what should do it. Adding a line to {ActionExemptionsFile.Name} "
                 + "is the third answer and it is a review request rather than a build fix — read the "
-                + "header there for what it is asking");
+                + "header there for what it is asking"
+            );
         }
 
         // ⚠ The other direction, and it is the half that keeps the file honest. Every row left is a
         // line naming an action no provider declares — a rename, a withdrawal, or a typo — and a row
         // nothing matches is standing permission for a gap that may not exist.
-        foreach (var stale in claimed.OrderBy(x => x, StringComparer.Ordinal))
-        {
+        foreach (var stale in claimed.OrderBy(x => x, StringComparer.Ordinal)) {
             violations.Add(
                 $"{ActionExemptionsFile.Name} line {excused[stale]} names '{stale}' and no provider "
                 + "declares that action. Either the type or the action was renamed and the line did "
-                + "not follow, or the declaration is gone and so is the reason for the line");
+                + "not follow, or the declaration is gone and so is the reason for the line"
+            );
         }
 
         var secrets = Generation.Actions.Count(x => x.Secret);
@@ -1559,7 +1656,8 @@ partial class Build
             $"declared action(s) across {Generation.Actions.Select(x => x.Type).Distinct(StringComparer.Ordinal).Count()} "
             + $"resource type(s), {secrets} of them returning secret material, "
             + $"{excused.Count} excused by {ActionExemptionsFile.Name}",
-            violations);
+            violations
+        );
     }
 
     /// <summary>The reviewed list of declared actions that cannot run. Its own header says why.</summary>
@@ -1569,38 +1667,43 @@ partial class Build
     ///     Each excused action — <c>"{type} {action}"</c> — against the 1-based line it is declared on,
     ///     so a stale row can be reported by number rather than left for the reader to find.
     /// </summary>
-    Dictionary<string, int> ActionsWithoutHandlers()
-    {
+    Dictionary<string, int> ActionsWithoutHandlers() {
         Assert.FileExists(
             ActionExemptionsFile,
             $"{ActionExemptionsFile.Name} is missing. It is the reviewed list of declared actions that "
             + "cannot run; without it this gate cannot tell a known gap from a new one, and treating "
-            + "every gap as new would fail the build over debt somebody already signed off.");
+            + "every gap as new would fail the build over debt somebody already signed off."
+        );
 
         var rows = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var lines = ActionExemptionsFile.ReadAllLines();
 
-        for (var i = 0; i < lines.Length; i++)
-        {
+        for (var i = 0; i < lines.Length; i++) {
             var line = lines[i].Trim();
 
-            if (line.Length == 0 || line.StartsWith('#'))
+            if (line.Length == 0 || line.StartsWith('#')) {
                 continue;
+            }
 
-            var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var parts = line.Split(
+                (char[]?)null,
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            );
 
             Assert.True(
                 parts.Length == 2,
                 $"{ActionExemptionsFile.Name} line {i + 1} is '{line}'. A row is the resource type, "
                 + "whitespace, and the action name — for example "
-                + "'CyberCloud.Storage/buckets stats'.");
+                + "'CyberCloud.Storage/buckets stats'."
+            );
 
             var row = parts[0] + " " + parts[1];
 
             Assert.True(
                 rows.TryAdd(row, i + 1),
                 $"{ActionExemptionsFile.Name} lists '{row}' twice, on lines {rows.GetValueOrDefault(row)} "
-                + $"and {i + 1}. Two reasons for one exemption means one of them is not the reason.");
+                + $"and {i + 1}. Two reasons for one exemption means one of them is not the reason."
+            );
         }
 
         return rows;
@@ -1616,24 +1719,26 @@ partial class Build
     ///         is the honest answer to "did the compatibility rule hold".
     ///     </para>
     /// </summary>
-    GateOutcome OpenApiCompatibilityGate()
-    {
+    GateOutcome OpenApiCompatibilityGate() {
         var diffable = Generation.Documents
             .Where(x => x.Published && x.ApiVersion.Length > 0)
             .ToList();
 
         var violations = Generation.Documents
             .SelectMany(document => document.BreakingChanges.Select(breaking =>
-                $"openapi/{document.File} breaks api-version {document.ApiVersion} — {breaking}. "
-                + "docs/plan/21 § OpenAPI: adding an optional field is fine, removing anything or "
-                + "narrowing a type is not"))
+                    $"openapi/{document.File} breaks api-version {document.ApiVersion} — {breaking}. "
+                    + "docs/plan/21 § OpenAPI: adding an optional field is fine, removing anything or "
+                    + "narrowing a type is not"
+                )
+            )
             .ToList();
 
         return GateOutcome.From(
             "OpenAPI compatibility",
             diffable.Count,
             "published api-version document(s) diffed against their checked-in predecessor",
-            violations);
+            violations
+        );
     }
 
     // ── Gate: wire compatibility — docs/plan/23 § The architecture gates, row Wire compatibility ─
@@ -1642,9 +1747,15 @@ partial class Build
     ///     How many released contract assemblies docs/plan/23 § The architecture gates wants the tree
     ///     round-tripped through.
     ///     <para>
-    ///         ⚠ <b>Three rather than one, and the doc says why in a sentence worth not paraphrasing
-    ///         away:</b> <i>"a hotfix branch will eventually be older than the previous tag, and
-    ///         discovering that during an incident is the worst time."</i> That is the whole design.
+    ///         ⚠
+    ///         <b>
+    ///             Three rather than one, and the doc says why in a sentence worth not paraphrasing
+    ///             away:
+    ///         </b>
+    ///         <i>
+    ///             "a hotfix branch will eventually be older than the previous tag, and
+    ///             discovering that during an incident is the worst time."
+    ///         </i> That is the whole design.
     ///         Comparing against the newest release only would pass a tree that is compatible with
     ///         <c>v1.2.0</c> and unreadable by the <c>v1.0.x</c> silo the hotfix is being cut for.
     ///     </para>
@@ -1661,7 +1772,8 @@ partial class Build
     [Parameter(
         "Record the wire baseline for any release tag that has no manifest under build/wire/. Builds "
         + "each such tagged commit from `git archive`, which is the one expensive thing in this "
-        + "target and is why it is opt-in.")]
+        + "target and is why it is opt-in."
+    )]
     readonly bool WireRecord;
 
     AbsolutePath WireDirectory => RootDirectory / "build" / WireContract.ManifestDirectoryName;
@@ -1693,10 +1805,16 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This row was a string constant, and it is the third instance of the defect this
-    ///         file has now removed twice before.</b> It read <c>GateOutcome.Analyzer("Serializer
+    ///         ⚠
+    ///         <b>
+    ///             This row was a string constant, and it is the third instance of the defect this
+    ///             file has now removed twice before.
+    ///         </b> It read
+    ///         <c>
+    /// GateOutcome.Analyzer("Serializer
     ///         discipline", "CC1003 for [Alias]; the [Id(n)] manifest is
-    ///         CyberCloud.Core.Contracts.Tests.WireContractTests")</c>. Nothing checked that the named
+    ///         CyberCloud.Core.Contracts.Tests.WireContractTests")
+    ///         </c>. Nothing checked that the named
     ///         test existed, that it passed, or that CC1003 was still switched on — and the named test
     ///         reflects over <c>typeof(ResultSurrogate).Assembly</c>, which is
     ///         <c>CyberCloud.Core.Contracts</c> and <b>6 of the tree's 212 aliased wire types</b>. A
@@ -1705,8 +1823,11 @@ partial class Build
     ///         asserts a condition it does not evaluate is worse than no status line.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What this closes that <see cref="WireCompatibilityGate" /> does not, stated
-    ///         narrowly, because the overlap is larger than it looks.</b> That gate compares the tree
+    ///         ⚠
+    ///         <b>
+    ///             What this closes that <see cref="WireCompatibilityGate" /> does not, stated
+    ///             narrowly, because the overlap is larger than it looks.
+    ///         </b> That gate compares the tree
     ///         against <i>released</i> manifests, and <c>build/wire/v0.1.0.txt</c> happens to contain
     ///         every wire type in the tree today — so "numbers never reused, never reordered" is in
     ///         fact enforced for all 212 right now, by a committed manifest, exactly as the doc's row
@@ -1730,8 +1851,11 @@ partial class Build
     ///         three from the artefact rather than from the configuration that produced it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The cost is deliberately near zero, and that is a design constraint rather than a
-    ///         happy result.</b> <c>Architecture</c> is about thirteen seconds and people run it
+    ///         ⚠
+    ///         <b>
+    ///             The cost is deliberately near zero, and that is a design constraint rather than a
+    ///             happy result.
+    ///         </b> <c>Architecture</c> is about thirteen seconds and people run it
     ///         constantly. <see cref="LabelsGate" /> is the shape this row would otherwise copy — run
     ///         the suite, believe only the result — but there are five per-assembly baseline suites
     ///         and each <c>dotnet run</c> costs about 1.2s, which would be roughly a 50% increase for
@@ -1741,8 +1865,7 @@ partial class Build
     ///         <c>Test</c> runs those suites; this row does not pretend to.
     ///     </para>
     /// </remarks>
-    GateOutcome SerializerDisciplineGate()
-    {
+    GateOutcome SerializerDisciplineGate() {
         var current = CurrentWireTypes;
         var serializable = WireContract.Serializable(ShippingAssemblyPaths.Select(x => x.Assembly));
         var violations = new List<string>();
@@ -1752,24 +1875,24 @@ partial class Build
         // violations and the row would print a confident count of zero. This tree cannot have zero
         // wire types — CyberCloud.Core.Contracts alone publishes six — so an empty read means the
         // assemblies were not the ones this gate thinks it opened.
-        if (current.Count == 0 || serializable.Count == 0)
-        {
+        if (current.Count == 0 || serializable.Count == 0) {
             violations.Add(
                 $"reading {ShippingAssemblyPaths.Count} shipping assembl(y/ies) found {current.Count} "
                 + $"aliased type(s) and {serializable.Count} [GenerateSerializer] type(s). Neither can be "
                 + "zero in this tree, so the metadata this row inspected is not the wire surface it "
                 + "believes it read — every check in this gate loops over that set and would otherwise "
-                + "report a clean sweep of nothing");
+                + "report a clean sweep of nothing"
+            );
         }
 
         // The CC1003 property, evaluated against what shipped rather than asserted about the compiler.
-        foreach (var (assembly, clrName, _) in serializable.Where(x => !x.Aliased))
-        {
+        foreach (var (assembly, clrName, _) in serializable.Where(x => !x.Aliased)) {
             violations.Add(
                 $"{clrName} ({assembly}) carries [GenerateSerializer] and no [Alias]. CC1003 is supposed "
                 + "to make this uncompilable, so if it is in the tree the analyzer did not run here — "
                 + "check the project's OutputItemType=\"Analyzer\" reference and CC1003's severity. "
-                + "docs/plan/04 § Failure and upgrade: the alias is what a peer looks the type up by");
+                + "docs/plan/04 § Failure and upgrade: the alias is what a peer looks the type up by"
+            );
         }
 
         // ⚠ Cross-assembly, which is the one thing no analyzer in this tree can be. CC1003 sees a
@@ -1777,15 +1900,15 @@ partial class Build
         // cleanly and separately, and Orleans then hands a peer's payload to whichever won the
         // registration race.
         foreach (var clash in current
-            .GroupBy(x => x.Alias, StringComparer.Ordinal)
-            .Where(x => x.Count() > 1)
-            .OrderBy(x => x.Key, StringComparer.Ordinal))
-        {
+                     .GroupBy(x => x.Alias, StringComparer.Ordinal)
+                     .Where(x => x.Count() > 1)
+                     .OrderBy(x => x.Key, StringComparer.Ordinal)) {
             violations.Add(
                 $"the alias \"{clash.Key}\" is declared by {clash.Count()} types — "
                 + $"{string.Join(", ", clash.Select(x => $"{x.ClrName} ({x.Assembly})"))}. An alias is the "
                 + "primary key of the wire, so two claimants is a coin flip at deserialization rather "
-                + "than an error anything reports");
+                + "than an error anything reports"
+            );
         }
 
         // "Never reused", in the one form that needs no baseline at all: within a single type.
@@ -1798,18 +1921,17 @@ partial class Build
         // It is kept because it costs a loop over data already in memory and because it reads the
         // artefact rather than trusting the toolchain that produced it, which is this gate's whole
         // posture. It is NOT one of the reasons this row is green.
-        foreach (var type in current)
-        {
+        foreach (var type in current) {
             foreach (var duplicate in type.Members
-                .GroupBy(x => x.Id)
-                .Where(x => x.Count() > 1)
-                .OrderBy(x => x.Key))
-            {
+                         .GroupBy(x => x.Id)
+                         .Where(x => x.Count() > 1)
+                         .OrderBy(x => x.Key)) {
                 violations.Add(
                     $"\"{type.Alias}\" ({type.ClrName}) declares [Id({duplicate.Key})] on "
                     + $"{string.Join(" and ", duplicate.Select(x => x.Name))}. docs/plan/05 § Serialization "
                     + "and schema evolution: numbers are never reused, and two members in one slot is the "
-                    + "shortest way to break that");
+                    + "shortest way to break that"
+                );
             }
         }
 
@@ -1829,8 +1951,7 @@ partial class Build
             + $"declared twice; {current.Count - unpinned.Count} of {current.Count} have their numbers "
             + $"pinned by a committed manifest under build/{WireContract.ManifestDirectoryName}";
 
-        if (unpinned.Count > 0)
-        {
+        if (unpinned.Count > 0) {
             detail += $". {unpinned.Count} do not and can be renumbered until the next release tag "
                 + $"records them — {string.Join(", ", unpinned.Take(5))}"
                 + (unpinned.Count > 5 ? $" and {unpinned.Count - 5} more" : string.Empty);
@@ -1842,7 +1963,8 @@ partial class Build
             : unpinned.Count > 0 ? GateStatus.Vacuous
             : GateStatus.Enforced,
             detail,
-            violations);
+            violations
+        );
     }
 
     /// <summary>
@@ -1854,15 +1976,14 @@ partial class Build
     ///     wrote down and reviewed, and this row is counting what is <i>pinned</i> rather than what is
     ///     <i>compared</i>. <see cref="WireCompatibilityGate" /> is the row about the window.
     /// </remarks>
-    HashSet<string> PinnedAliases()
-    {
+    HashSet<string> PinnedAliases() {
         var pinned = new HashSet<string>(StringComparer.Ordinal);
 
-        if (!WireDirectory.DirectoryExists())
+        if (!WireDirectory.DirectoryExists()) {
             return pinned;
+        }
 
-        foreach (var manifest in WireDirectory.GlobFiles("*.txt").Where(x => x != BurnedAliasesFile))
-        {
+        foreach (var manifest in WireDirectory.GlobFiles("*.txt").Where(x => x != BurnedAliasesFile)) {
             var (_, _, released) = WireContract.Parse(manifest.Name, manifest.ReadAllLines());
 
             pinned.UnionWith(released.Select(x => x.Alias));
@@ -1877,9 +1998,12 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This row reported <see cref="GateStatus.Blocked" /> with the reason "the
-    ///         repository has no release tags … <c>git tag</c> is empty" — and it never ran
-    ///         <c>git tag</c>.</b> The sentence was a string constant. When <c>v0.1.0</c> was created
+    ///         ⚠
+    ///         <b>
+    ///             This row reported <see cref="GateStatus.Blocked" /> with the reason "the
+    ///             repository has no release tags … <c>git tag</c> is empty" — and it never ran
+    ///             <c>git tag</c>.
+    ///         </b> The sentence was a string constant. When <c>v0.1.0</c> was created
     ///         precisely to unblock this row, the row went on printing that the repository had no
     ///         tags, because the only thing that could have noticed was a human reading the sentence.
     ///         A status line asserting a condition it does not evaluate is worse than no status line:
@@ -1897,8 +2021,11 @@ partial class Build
     ///         trust <c>openapi/2026-08-01.json</c> already carries.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The cost, measured, because a target people run constantly is a target people
-    ///         stop running.</b> <c>Architecture</c> was about twelve seconds before this row existed.
+    ///         ⚠
+    ///         <b>
+    ///             The cost, measured, because a target people run constantly is a target people
+    ///             stop running.
+    ///         </b> <c>Architecture</c> was about twelve seconds before this row existed.
     ///         Building three tagged commits on every invocation would have added about thirty. What
     ///         this does on every invocation is read the assemblies <see cref="ShippingAssemblies" />
     ///         has already opened and three text files, and the whole row costs under a second. The
@@ -1906,8 +2033,7 @@ partial class Build
     ///         reviewable diff.
     ///     </para>
     /// </remarks>
-    GateOutcome WireCompatibilityGate()
-    {
+    GateOutcome WireCompatibilityGate() {
         var current = CurrentWireTypes;
         var burned = BurnedAliases();
         var tags = ReleaseTags();
@@ -1916,33 +2042,33 @@ partial class Build
         // ⚠ The vacuity this row is most likely to be caught by. Not "the gate found nothing wrong"
         // but "there is nothing yet that this tree could be incompatible with" — the state the old
         // Blocked row was describing, said by code that actually looked.
-        if (tags.Count == 0)
-        {
+        if (tags.Count == 0) {
             return new GateOutcome(
                 "Wire compatibility",
                 violations.Count > 0 ? GateStatus.Failed : GateStatus.Vacuous,
                 $"{current.Count} aliased wire type(s) in the tree and 0 release tag(s) — `git tag` "
                 + $"matched no {ReleaseTagPattern}, so nothing has been published for the tree to be "
                 + "incompatible with",
-                violations);
+                violations
+            );
         }
 
         var compared = new List<string>();
 
-        foreach (var tag in tags)
-        {
+        foreach (var tag in tags) {
             var manifest = WireManifest(tag);
 
-            if (!manifest.FileExists() && WireRecord)
+            if (!manifest.FileExists() && WireRecord) {
                 RecordWireBaseline(tag, manifest);
+            }
 
-            if (!manifest.FileExists())
-            {
+            if (!manifest.FileExists()) {
                 violations.Add(
                     $"{tag} is a release tag and {RootDirectory.GetRelativePathTo(manifest)} does not "
                     + $"exist, so nothing in this repository knows what {tag} published on the wire. Run "
                     + "./build.sh Architecture --wire-record and commit the result — docs/plan/23 § The "
-                    + "architecture gates, row Wire compatibility");
+                    + "architecture gates, row Wire compatibility"
+                );
 
                 continue;
             }
@@ -1952,12 +2078,12 @@ partial class Build
 
             // A manifest is only worth what its provenance is worth. This is what stops one being
             // regenerated from a moved tag, or copied from another tag's file and renamed.
-            if (!string.Equals(recorded, actual, StringComparison.Ordinal))
-            {
+            if (!string.Equals(recorded, actual, StringComparison.Ordinal)) {
                 violations.Add(
                     $"{RootDirectory.GetRelativePathTo(manifest)} records commit {recorded} and {tag} "
                     + $"points at {actual}. The manifest was not generated from the tag it claims — "
-                    + "regenerate it with ./build.sh Architecture --wire-record");
+                    + "regenerate it with ./build.sh Architecture --wire-record"
+                );
 
                 continue;
             }
@@ -1968,12 +2094,12 @@ partial class Build
             // report "1 of 3 released baseline(s) (v0.1.0)" — a comparison it did not make, named
             // after a release it did not read. Found by emptying the file and watching the row stay
             // green. No release this repository will ever cut publishes zero wire types.
-            if (released.Count == 0)
-            {
+            if (released.Count == 0) {
                 violations.Add(
                     $"{RootDirectory.GetRelativePathTo(manifest)} parses to 0 wire types, so comparing "
                     + $"against it proves nothing about {tag}. Regenerate it with ./build.sh Architecture "
-                    + "--wire-record");
+                    + "--wire-record"
+                );
 
                 continue;
             }
@@ -1999,8 +2125,7 @@ partial class Build
             : compared.Count >= ReleasesCompared ? GateStatus.Enforced
             : GateStatus.Vacuous;
 
-        if (status == GateStatus.Vacuous)
-        {
+        if (status == GateStatus.Vacuous) {
             detail += $". {ReleasesCompared - compared.Count} more release(s) needed before this row is "
                 + "the guarantee docs/plan/23 words it as — a hotfix branch older than the previous tag "
                 + "is what the other two baselines are for";
@@ -2023,7 +2148,12 @@ partial class Build
     // List and HashSet rather than the interfaces: CA1859 is an error here and both are private
     // helpers — the same reason ShippingProjectFiles above returns a Dictionary.
     List<string> ReleaseTags() =>
-        GitTasks.Git($"tag --list \"{ReleaseTagPattern}\" --sort=-v:refname", RootDirectory, logOutput: false, logInvocation: false)
+        GitTasks.Git(
+            $"tag --list \"{ReleaseTagPattern}\" --sort=-v:refname",
+            RootDirectory,
+            logOutput: false,
+            logInvocation: false
+        )
             .Where(x => x.Type == OutputType.Std && !string.IsNullOrWhiteSpace(x.Text))
             .Select(x => x.Text.Trim())
             .Take(ReleasesCompared)
@@ -2034,14 +2164,15 @@ partial class Build
         GitTasks.Git($"rev-list -n 1 {tag}", RootDirectory, logOutput: false, logInvocation: false)
             .Where(x => x.Type == OutputType.Std && !string.IsNullOrWhiteSpace(x.Text))
             .Select(x => x.Text.Trim())
-            .FirstOrDefault() ?? string.Empty;
+            .FirstOrDefault()
+        ?? string.Empty;
 
     /// <summary>
     ///     The declared burned aliases. Missing file means none, which is the honest reading — the
     ///     tree has never retired an alias after a release.
     /// </summary>
-    HashSet<string> BurnedAliases()
-        => !BurnedAliasesFile.FileExists()
+    HashSet<string> BurnedAliases() =>
+        !BurnedAliasesFile.FileExists()
             ? new HashSet<string>(StringComparer.Ordinal)
             : BurnedAliasesFile.ReadAllLines()
                 .Select(line => line.Split('#')[0].Trim())
@@ -2064,24 +2195,23 @@ partial class Build
     ///         as retired the moment the fixture was renamed.
     ///     </para>
     /// </summary>
-    void RecordWireBaseline(string tag, AbsolutePath manifest)
-    {
+    void RecordWireBaseline(string tag, AbsolutePath manifest) {
         var scratch = ArtifactsDirectory / "wire-record";
         var tree = scratch / tag;
         var tar = scratch / (tag + ".tar");
 
         Log.Information("Wire compatibility: recording {Tag} — building the tagged commit", tag);
 
-        try
-        {
+        try {
             tree.CreateOrCleanDirectory();
             GitTasks.Git($"archive --format=tar --output \"{tar}\" {tag}", RootDirectory, logOutput: false);
             TarFile.ExtractToDirectory(tar, tree, overwriteFiles: true);
 
             DotNetTasks.DotNetBuild(s => s
-                .SetProjectFile(tree / SolutionFile.Name)
-                .SetConfiguration(Configuration)
-                .SetProcessWorkingDirectory(tree));
+                    .SetProjectFile(tree / SolutionFile.Name)
+                    .SetConfiguration(Configuration)
+                    .SetProcessWorkingDirectory(tree)
+            );
 
             var released = (tree / "artifacts" / "bin")
                 .GlobDirectories("*")
@@ -2094,7 +2224,8 @@ partial class Build
                 released,
                 $"building {tag} produced no shipping assembly under artifacts/bin. A manifest written "
                 + "from an empty set would record that the release published nothing, and every alias "
-                + "in the tree would then look new rather than compatible.");
+                + "in the tree would then look new rather than compatible."
+            );
 
             manifest.Parent.CreateDirectory();
             manifest.WriteAllText(WireContract.Write(tag, TagCommit(tag), WireContract.Read(released)));
@@ -2104,10 +2235,9 @@ partial class Build
                 tag,
                 RootDirectory.GetRelativePathTo(manifest),
                 released.Count,
-                released.Count == 1 ? "y" : "ies");
-        }
-        finally
-        {
+                released.Count == 1 ? "y" : "ies"
+            );
+        } finally {
             tar.DeleteFile();
             tree.DeleteDirectory();
         }
@@ -2127,9 +2257,12 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This gate was <see cref="GateStatus.Blocked" /> with the reason "no provider
-    ///         exists to render any", and that reason expired the day
-    ///         <c>src/Providers/CyberCloud.Providers.Sample</c> landed.</b> A blocked row whose stated
+    ///         ⚠
+    ///         <b>
+    ///             This gate was <see cref="GateStatus.Blocked" /> with the reason "no provider
+    ///             exists to render any", and that reason expired the day
+    ///             <c>src/Providers/CyberCloud.Providers.Sample</c> landed.
+    ///         </b> A blocked row whose stated
     ///         blocker is gone is worse than a failing one: the report keeps printing a sentence that
     ///         is no longer true, and nothing in the build can notice, because nothing in the build
     ///         reads a blocked row's prose.
@@ -2155,8 +2288,7 @@ partial class Build
     ///         one, which is what the old Blocked row was reaching for and could not express.
     ///     </para>
     /// </remarks>
-    GateOutcome LabelsGate()
-    {
+    GateOutcome LabelsGate() {
         // ⚠ Provider suites only — under src/Providers, not test/. test/CyberCloud.Conformance holds
         // the shared base class and a reference provider that exists to test the harness; counting it
         // would let the gate stay green on a tree whose real providers all stopped rendering labels.
@@ -2173,7 +2305,12 @@ partial class Build
             // fail on whether a daemon happened to be running. The stronger assertion is still made;
             // it is just not what this row reports on.
             .Where(x => !x.NameWithoutExtension.EndsWith(".Cluster.Conformance", StringComparison.Ordinal))
-            .Where(x => x.ToString().Contains($"{Path.DirectorySeparatorChar}Providers{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(x => x.ToString()
+                    .Contains(
+                        $"{Path.DirectorySeparatorChar}Providers{Path.DirectorySeparatorChar}",
+                        StringComparison.Ordinal
+                    )
+            )
             .OrderBy(x => x.NameWithoutExtension, StringComparer.Ordinal)
             .ToList();
 
@@ -2183,7 +2320,8 @@ partial class Build
                 $"{suite.NameWithoutExtension} does not pass {LabelsAssertion} — either the assertion "
                 + "failed (its output is above) or the suite has no test by that name, which "
                 + "--minimum-expected-tests 1 reports the same way. docs/plan/23 § The architecture "
-                + "gates, row Labels; the seven labels are CyberCloud.Kubernetes' KubeLabels.Mandatory")
+                + "gates, row Labels; the seven labels are CyberCloud.Kubernetes' KubeLabels.Mandatory"
+            )
             .ToList();
 
         return GateOutcome.From(
@@ -2191,7 +2329,8 @@ partial class Build
             suites.Count,
             $"provider conformance suite(s), each running {LabelsAssertion} against objects a real "
             + "reconciler applied",
-            violations);
+            violations
+        );
     }
 
     // ── Gate: analyzer coverage — not in docs/plan/23, and that is the point ──────────────────
@@ -2199,8 +2338,11 @@ partial class Build
     /// <summary>
     ///     Every shipping project references <c>CyberCloud.Analyzers</c> as an analyzer asset.
     ///     <para>
-    ///         ⚠ <b>This gate is what makes four rows of docs/plan/23 § The architecture gates
-    ///         true.</b> Tenant keys, serializer discipline, secrets and no-blocking are all
+    ///         ⚠
+    ///         <b>
+    ///             This gate is what makes four rows of docs/plan/23 § The architecture gates
+    ///             true.
+    ///         </b> Tenant keys, serializer discipline, secrets and no-blocking are all
     ///         "analyzer-enforced" — and an analyzer polices exactly the projects whose <c>.csproj</c>
     ///         opted in with <c>OutputItemType="Analyzer"</c>. A new assembly is not covered by
     ///         default, it is covered by somebody remembering, and "somebody remembered" is the
@@ -2211,8 +2353,11 @@ partial class Build
     ///         analyzer itself and its own test project are out of scope for the obvious reason.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A reference is half the property, and the half that was missing was the one that
-    ///         can be turned off without touching a project file.</b> This gate proved every project
+    ///         ⚠
+    ///         <b>
+    ///             A reference is half the property, and the half that was missing was the one that
+    ///             can be turned off without touching a project file.
+    ///         </b> This gate proved every project
     ///         carried the <c>OutputItemType="Analyzer"</c> reference and proved nothing about whether
     ///         <c>CC1001</c>–<c>CC1007</c> were still error-severity. None is suppressed today, so the
     ///         rows that lean on them were true — but nothing in the build would have noticed the line
@@ -2221,8 +2366,7 @@ partial class Build
     ///         half.
     ///     </para>
     /// </summary>
-    GateOutcome AnalyzerCoverageGate()
-    {
+    GateOutcome AnalyzerCoverageGate() {
         var candidates = ShippingProjectFiles
             .Where(x => !string.Equals(x.Key, "CyberCloud.Analyzers", StringComparison.Ordinal))
             .OrderBy(x => x.Key, StringComparer.Ordinal)
@@ -2235,7 +2379,8 @@ partial class Build
                 + "<ProjectReference Include=\"…/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj\" "
                 + "OutputItemType=\"Analyzer\" ReferenceOutputAssembly=\"false\" /> — without it CC1001–CC1007 "
                 + "do not run on this project, and docs/plan/23 § The architecture gates' "
-                + "\"analyzer-enforced\" rows are not true of it")
+                + "\"analyzer-enforced\" rows are not true of it"
+            )
             .ToList();
 
         var rules = AnalyzerRuleIds();
@@ -2247,7 +2392,8 @@ partial class Build
             candidates.Count,
             $"shipping project(s) referencing CyberCloud.Analyzers, and {rules.Count} rule(s) "
             + "checked for error severity and for suppression",
-            violations);
+            violations
+        );
     }
 
     /// <summary>
@@ -2255,8 +2401,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Those files rather than a list here, and rather than the <c>const</c>s in
-    ///         <c>Rules.cs</c>.</b> Roslyn's own <c>RS2000</c> — "Rule 'CC1005' is not part of any
+    ///         ⚠
+    ///         <b>
+    ///             Those files rather than a list here, and rather than the <c>const</c>s in
+    ///             <c>Rules.cs</c>.
+    ///         </b> Roslyn's own <c>RS2000</c> — "Rule 'CC1005' is not part of any
     ///         analyzer release" — fails the analyzer's own compilation if a diagnostic it reports is
     ///         missing from them, so they are the one place in this tree that cannot silently fall
     ///         behind the analyzers. Verified by emptying both tables and watching <c>Compile</c> fail
@@ -2270,8 +2419,7 @@ partial class Build
     ///         tick.
     ///     </para>
     /// </remarks>
-    List<string> AnalyzerRuleIds()
-    {
+    List<string> AnalyzerRuleIds() {
         var directory = RootDirectory / "src" / "CyberCloud.Analyzers";
 
         var ids = directory
@@ -2291,14 +2439,15 @@ partial class Build
             ids,
             $"no CC rule id was found in {RootDirectory.GetRelativePathTo(directory)}/AnalyzerReleases.*.md. "
             + "Those tables are what this gate reads to know which rules to check, so an empty read "
-            + "would silently reduce this row to the project-reference half it used to be.");
+            + "would silently reduce this row to the project-reference half it used to be."
+        );
 
         return ids;
     }
 
     /// <summary>Whether a file is one MSBuild evaluates, and so one whose XML means something.</summary>
-    static bool IsMsBuildFile(AbsolutePath file)
-        => file.Extension is ".csproj" or ".props" or ".targets" or ".slnx" or ".slnf" or ".proj";
+    static bool IsMsBuildFile(AbsolutePath file) =>
+        file.Extension is ".csproj" or ".props" or ".targets" or ".slnx" or ".slnf" or ".proj";
 
     /// <summary>A rule row in a release-tracking table: the id in the first column.</summary>
     static readonly Regex AnalyzerRuleRow = new(@"^(CC\d{4})\s*\|", RegexOptions.Compiled);
@@ -2306,7 +2455,8 @@ partial class Build
     /// <summary>Anything that turns a CC rule down, anywhere in the tree.</summary>
     static readonly Regex AnalyzerSeverity = new(
         @"dotnet_diagnostic\.(CC\d{4})\.severity\s*=\s*([A-Za-z]+)",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled
+    );
 
     /// <summary>
     ///     Every CC rule is declared <c>error</c> at the root, and nothing anywhere turns one down.
@@ -2320,8 +2470,11 @@ partial class Build
     ///         now. So this checks every tracked file, not the root one.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>[SuppressMessage]</c> is deliberately not checked, and the omission is a
-    ///         boundary rather than a gap.</b> <c>SecretInGrainStateAnalyzer</c>'s remarks document a
+    ///         ⚠
+    ///         <b>
+    ///             <c>[SuppressMessage]</c> is deliberately not checked, and the omission is a
+    ///             boundary rather than a gap.
+    ///         </b> <c>SecretInGrainStateAnalyzer</c>'s remarks document a
     ///         per-site suppression with a <c>Justification</c> as the designed answer to a false
     ///         positive on <c>CC1005</c>. A gate that refused it would be overruling the analyzer's
     ///         own documented escape hatch. What this refuses is the two mechanisms that are not
@@ -2329,23 +2482,18 @@ partial class Build
     ///         <c>&lt;NoWarn&gt;</c>. A bare <c>#pragma warning disable</c> is already CC1007's job.
     ///     </para>
     /// </remarks>
-    IEnumerable<string> AnalyzerSeverityViolations(List<string> rules)
-    {
+    IEnumerable<string> AnalyzerSeverityViolations(List<string> rules) {
         var declared = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var (file, lines) in TrackedText)
-        {
-            for (var i = 0; i < lines.Length; i++)
-            {
+        foreach (var (file, lines) in TrackedText) {
+            for (var i = 0; i < lines.Length; i++) {
                 var line = lines[i];
 
-                foreach (var match in AnalyzerSeverity.Matches(line).Cast<Match>())
-                {
+                foreach (var match in AnalyzerSeverity.Matches(line).Cast<Match>()) {
                     var id = match.Groups[1].Value;
                     var severity = match.Groups[2].Value;
 
-                    if (!string.Equals(severity, "error", StringComparison.Ordinal))
-                    {
+                    if (!string.Equals(severity, "error", StringComparison.Ordinal)) {
                         yield return
                             $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} sets {id} to \"{severity}\". "
                             + "The rows docs/plan/23 § The architecture gates calls analyzer-enforced are "
@@ -2355,8 +2503,9 @@ partial class Build
                         continue;
                     }
 
-                    if (file == RootDirectory / ".editorconfig")
+                    if (file == RootDirectory / ".editorconfig") {
                         declared[id] = severity;
+                    }
                 }
 
                 // ⚠ MSBuild files only. docs/plan/00 § Non-negotiables' own row for CC1007 ends
@@ -2364,11 +2513,11 @@ partial class Build
                 // sentence, in a Markdown table, is what this check flagged the first time it ran
                 // over every tracked file. A gate that fires on the documentation of the rule it
                 // enforces is the false-positive class that gets gates switched off.
-                if (!IsMsBuildFile(file) || !line.Contains("<NoWarn", StringComparison.Ordinal))
+                if (!IsMsBuildFile(file) || !line.Contains("<NoWarn", StringComparison.Ordinal)) {
                     continue;
+                }
 
-                foreach (var rule in rules.Where(rule => line.Contains(rule, StringComparison.Ordinal)))
-                {
+                foreach (var rule in rules.Where(rule => line.Contains(rule, StringComparison.Ordinal))) {
                     yield return
                         $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} puts {rule} in <NoWarn>, which "
                         + "switches it off for the whole project. A false positive is answered with a "
@@ -2378,24 +2527,26 @@ partial class Build
             }
         }
 
-        foreach (var rule in rules.Where(rule => !declared.ContainsKey(rule)))
-        {
+        foreach (var rule in rules.Where(rule => !declared.ContainsKey(rule))) {
             yield return
                 $"{rule} is a rule CyberCloud.Analyzers ships (its AnalyzerReleases table says so) and "
-                + ".editorconfig does not declare dotnet_diagnostic." + rule + ".severity = error. Its "
+                + ".editorconfig does not declare dotnet_diagnostic."
+                + rule
+                + ".severity = error. Its "
                 + "declared default is Warning, so it is currently an error only because "
                 + "Directory.Build.props sets TreatWarningsAsErrors — which is a property of the build, "
                 + "not of the rule, and is the wrong thing for a non-negotiable to depend on";
         }
     }
 
-    static bool ReferencesAnalyzer(AbsolutePath project)
-        => XDocument.Load(project)
+    static bool ReferencesAnalyzer(AbsolutePath project) =>
+        XDocument.Load(project)
             .Descendants()
             .Where(x => string.Equals(x.Name.LocalName, "ProjectReference", StringComparison.Ordinal))
             .Any(x => (x.Attribute("Include")?.Value ?? string.Empty)
                     .EndsWith("CyberCloud.Analyzers.csproj", StringComparison.Ordinal)
-                && string.Equals(x.Attribute("OutputItemType")?.Value, "Analyzer", StringComparison.Ordinal));
+                && string.Equals(x.Attribute("OutputItemType")?.Value, "Analyzer", StringComparison.Ordinal)
+            );
 
     // ── Gates: citations — docs/code-documentation-style.md § Citing the plan, § Citing a test ─
 
@@ -2431,24 +2582,23 @@ partial class Build
     ///         is to cite the section, never to widen the exemption.
     ///     </para>
     /// </summary>
-    GateOutcome PlanCitationGate()
-    {
+    GateOutcome PlanCitationGate() {
         var files = TrackedText.Where(x => x.File != CitationRuleFile).ToList();
         var violations = new List<string>();
 
-        foreach (var (file, lines) in files)
-        {
-            for (var i = 0; i < lines.Length; i++)
-            {
+        foreach (var (file, lines) in files) {
+            for (var i = 0; i < lines.Length; i++) {
                 var match = LineNumberCitation.Match(lines[i]);
 
-                if (!match.Success)
+                if (!match.Success) {
                     continue;
+                }
 
                 violations.Add(
                     $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} cites the plan by line number "
                     + $"(\"{match.Value}\"). Cite it by section — \"docs/plan/05 § The two tiers\" — "
-                    + "docs/code-documentation-style.md § Citing the plan");
+                    + "docs/code-documentation-style.md § Citing the plan"
+                );
             }
         }
 
@@ -2470,7 +2620,8 @@ partial class Build
     /// </summary>
     static readonly Regex TestCitation = new(
         @"<c>([A-Z][A-Za-z0-9_]*Tests)(?:\.([A-Za-z0-9_]+))?</c>",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled
+    );
 
     /// <summary>
     ///     Every <c>&lt;c&gt;SomethingTests&lt;/c&gt;</c> and
@@ -2479,8 +2630,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><see cref="PlanCitationGate" /> walks 1070 files to keep plan citations honest,
-    ///         and a citation of a type or a test had no gate at all.</b> The decay is the same and it
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="PlanCitationGate" /> walks 1070 files to keep plan citations honest,
+    ///             and a citation of a type or a test had no gate at all.
+    ///         </b> The decay is the same and it
     ///         is worse: a plan citation at least points at a file that exists, whereas a test
     ///         citation naming a class that never existed sends a reader looking for the assertion
     ///         that is supposed to be paying for the paragraph above it. Sixteen were found in this
@@ -2488,8 +2642,11 @@ partial class Build
     ///         sibling provider's naming pattern rather than read off the tree.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Why the subject is tests and not every code citation, which is the whole design
-    ///         and was decided by measurement rather than by taste.</b> The obvious rule — every
+    ///         ⚠
+    ///         <b>
+    ///             Why the subject is tests and not every code citation, which is the whole design
+    ///             and was decided by measurement rather than by taste.
+    ///         </b> The obvious rule — every
     ///         <c>&lt;c&gt;Identifier&lt;/c&gt;</c> must resolve — is unusable here: 8805
     ///         <c>&lt;c&gt;</c> spans in this tree, 3707 of them shaped like a dotted identifier, and
     ///         <b>1522</b> naming something this repository does not declare and never will —
@@ -2522,8 +2679,7 @@ partial class Build
     ///         ⚠ Every tracked text file, not only <c>.cs</c>. Two of the sixteen were in YAML.
     ///     </para>
     /// </remarks>
-    GateOutcome CodeCitationGate()
-    {
+    GateOutcome CodeCitationGate() {
         var assemblies = AllAssemblyPaths;
         var surface = CodeSurface.Read(assemblies);
         var violations = new List<string>();
@@ -2540,29 +2696,27 @@ partial class Build
             $"reading {assemblies.Count} assembl(y/ies) found no type at all. Architecture depends on "
             + "Compile, so this means the artifacts directory was cleaned between the two — every "
             + "citation below would be reported as unresolvable and every one of those reports would "
-            + $"be wrong. Run ./build.sh Compile first, in the same configuration ({Configuration}).");
+            + $"be wrong. Run ./build.sh Compile first, in the same configuration ({Configuration})."
+        );
 
         var files = TrackedText.Where(x => x.File != CitationRuleFile).ToList();
         var citations = 0;
 
-        foreach (var (file, lines) in files)
-        {
-            for (var i = 0; i < lines.Length; i++)
-            {
-                foreach (var match in TestCitation.Matches(lines[i]).Cast<Match>())
-                {
+        foreach (var (file, lines) in files) {
+            for (var i = 0; i < lines.Length; i++) {
+                foreach (var match in TestCitation.Matches(lines[i]).Cast<Match>()) {
                     var type = match.Groups[1].Value;
                     var member = match.Groups[2].Success ? match.Groups[2].Value : null;
 
                     citations++;
 
-                    if (!surface.TryGetValue(type, out var members))
-                    {
+                    if (!surface.TryGetValue(type, out var members)) {
                         violations.Add(
                             $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} cites {type} and no "
                             + "assembly this repository compiles declares a type of that name. The "
                             + "paragraph above it is claiming a test pays for it — "
-                            + "docs/code-documentation-style.md § Citing a test");
+                            + "docs/code-documentation-style.md § Citing a test"
+                        );
 
                         continue;
                     }
@@ -2572,14 +2726,16 @@ partial class Build
                     // this tree writes about `Directory.Build.props` and `Program.cs` too. The carve-
                     // out is narrow on purpose: an extension is lowercase and known, so nothing is
                     // hidden behind it that a member citation could be mistaken for.
-                    if (member is null || IsFileExtension(member) || members.Contains(member))
+                    if (member is null || IsFileExtension(member) || members.Contains(member)) {
                         continue;
+                    }
 
                     violations.Add(
                         $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} cites {type}.{member} and "
                         + $"{type} declares no member of that name. A truncated method name is the "
                         + "usual cause — the numbers are the contract, and so are these — "
-                        + "docs/code-documentation-style.md § Citing a test");
+                        + "docs/code-documentation-style.md § Citing a test"
+                    );
                 }
             }
         }
@@ -2589,13 +2745,29 @@ partial class Build
             citations,
             $"<c>…Tests</c> citation(s) across {files.Count} tracked text file(s), resolved against "
             + $"{surface.Count} type(s) in {assemblies.Count} compiled assembl(y/ies)",
-            violations);
+            violations
+        );
     }
 
     /// <summary>The tails that make a citation a file reference rather than a member reference.</summary>
-    static bool IsFileExtension(string segment)
-        => segment is "cs" or "csproj" or "slnx" or "props" or "targets" or "json" or "yaml" or "yml"
-            or "md" or "txt" or "tpl" or "sh" or "ps1" or "tsx" or "ts" or "razor" or "http";
+    static bool IsFileExtension(string segment) =>
+        segment is "cs"
+            or "csproj"
+            or "slnx"
+            or "props"
+            or "targets"
+            or "json"
+            or "yaml"
+            or "yml"
+            or "md"
+            or "txt"
+            or "tpl"
+            or "sh"
+            or "ps1"
+            or "tsx"
+            or "ts"
+            or "razor"
+            or "http";
 
     /// <summary>
     ///     Every project's built assembly, test projects included.
@@ -2612,7 +2784,8 @@ partial class Build
                 / "bin"
                 / project.NameWithoutExtension
                 / Configuration.ToLowerInvariant()
-                / (project.NameWithoutExtension + ".dll"))
+                / (project.NameWithoutExtension + ".dll")
+            )
             .Where(x => x.FileExists())
             .OrderBy(x => x.NameWithoutExtension, StringComparer.Ordinal)
             .ToList();
@@ -2634,8 +2807,11 @@ partial class Build
     ///     Every tracked text file with its lines, read once.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Shared because two gates walk the same 1070 files, and a target people run constantly
-    ///     cannot pay for that twice.</b> <see cref="PlanCitationGate" /> and
+    ///     ⚠
+    ///     <b>
+    ///         Shared because two gates walk the same 1070 files, and a target people run constantly
+    ///         cannot pay for that twice.
+    ///     </b> <see cref="PlanCitationGate" /> and
     ///     <see cref="CodeCitationGate" /> ask different questions of identical input — and reading it
     ///     twice would also let them disagree about the file set, which is a worse failure than the
     ///     seconds: two rows reporting different counts of "tracked text file(s)" is a report nobody
@@ -2649,8 +2825,7 @@ partial class Build
             .ToList();
 
     /// <summary>A NUL byte in the first 8 KB — the same heuristic git itself uses.</summary>
-    static bool LooksBinary(AbsolutePath file)
-    {
+    static bool LooksBinary(AbsolutePath file) {
         using var stream = File.OpenRead(file);
 
         var head = new byte[8192];

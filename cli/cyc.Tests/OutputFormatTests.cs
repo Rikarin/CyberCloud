@@ -7,16 +7,16 @@ namespace CyberCloud.Cli.Tests;
 /// </summary>
 public sealed class OutputFormatTests {
     const string Page = """
-        [
-          {"name":"w1","location":"eu-central","properties":{"tier":"free","replicas":1}},
-          {"name":"w2","location":"us-east","properties":{"tier":"premium","replicas":3}}
-        ]
-        """;
+                        [
+                          {"name":"w1","location":"eu-central","properties":{"tier":"free","replicas":1}},
+                          {"name":"w2","location":"us-east","properties":{"tier":"premium","replicas":3}}
+                        ]
+                        """;
 
     static string[] Show(params string[] extra) => [
         "sample", "widgets", "show",
         "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t",
-        .. extra,
+        .. extra
     ];
 
     [Fact]
@@ -57,8 +57,11 @@ public sealed class OutputFormatTests {
 
     [Fact]
     public async Task YamlRendersTheNestingATableCannot() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) =>
-            Responses.Json(HttpStatusCode.OK, """{"name":"w1","properties":{"tier":"free","enabled":true}}""")));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, _) =>
+                Responses.Json(HttpStatusCode.OK, """{"name":"w1","properties":{"tier":"free","enabled":true}}""")
+            )
+        );
 
         await host.RunAsync(Show("--output", "yaml"));
 
@@ -70,9 +73,13 @@ public sealed class OutputFormatTests {
 
     [Fact]
     public void YamlQuotesWhatWouldChangeMeaning() {
-        var value = Payload.Of(JsonDocument.Parse("""
-            {"a":"no","b":"1.20","c":"","d":"has: colon","e":"plain"}
-            """).RootElement);
+        var value = Payload.Of(
+            JsonDocument.Parse(
+                """
+                {"a":"no","b":"1.20","c":"","d":"has: colon","e":"plain"}
+                """
+            ).RootElement
+        );
 
         using var writer = new StringWriter();
         YamlWriter.Write(writer, value);
@@ -119,8 +126,9 @@ public sealed class OutputFormatTests {
     /// </summary>
     [Fact]
     public void EveryFormatsNameParsesBackToIt() {
-        foreach (var format in Enum.GetValues<OutputFormat>())
+        foreach (var format in Enum.GetValues<OutputFormat>()) {
             OutputFormats.Parse(OutputFormats.NameOf(format)).ShouldBe(format);
+        }
 
         // And the names are exactly the ones --output advertises, so help text and the value an
         // extension receives cannot drift apart.

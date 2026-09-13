@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The rows below are the measured behaviour of <c>System.CommandLine</c> 2.0.10, not a
-///         reading of its documentation.</b> A throwaway program built the four shapes against the
+///         ⚠
+///         <b>
+///             The rows below are the measured behaviour of <c>System.CommandLine</c> 2.0.10, not a
+///             reading of its documentation.
+///         </b> A throwaway program built the four shapes against the
 ///         pinned package: two siblings sharing a token throw
 ///         <c>ArgumentException: An item with the same key has already been added</c>; a child whose
 ///         alias equals its parent's name throws; a child whose alias equals a <i>different</i>
@@ -100,7 +103,8 @@ public sealed class CliTokenTests {
                 new(Network, "virtualNetworks", "vnet"),
                 new("CyberCloud.Monitor", "workspaces", "network")
             ]
-        ).ShouldBeEmpty();
+        )
+            .ShouldBeEmpty();
     }
 
     [Fact]
@@ -110,7 +114,8 @@ public sealed class CliTokenTests {
                 new(Network, "virtualNetworks", ""),
                 new(Network, "publicIpAddresses", "")
             ]
-        ).ShouldBeEmpty();
+        )
+            .ShouldBeEmpty();
     }
 
     [Fact]
@@ -122,7 +127,9 @@ public sealed class CliTokenTests {
                 new(Network, "virtualNetworks", "vnet"),
                 new("Contoso.Network", "gateways", "vnet")
             ]
-        ).ShouldHaveSingleItem().ShouldContain("Contoso.Network/gateways");
+        )
+            .ShouldHaveSingleItem()
+            .ShouldContain("Contoso.Network/gateways");
     }
 
     [Fact]

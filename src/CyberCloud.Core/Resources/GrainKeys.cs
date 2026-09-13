@@ -292,8 +292,11 @@ public readonly record struct GrainKey {
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
 ///         the rows that same table is missing for the grains docs/plan/11 § The object model names;
 ///         the twentieth is <see cref="ParkedResourceRegistry" />, which docs/plan/08 § Soft
-///         delete names as <i>"a per-resource-group registry of parked resources … in one grain that
-///         does not"</i> exist — it does now, so the row is here; and the twenty-first is
+///         delete names as
+///         <i>
+///             "a per-resource-group registry of parked resources … in one grain that
+///             does not"
+///         </i> exist — it does now, so the row is here; and the twenty-first is
 ///         <see cref="ExpirySweeper" />, the thing that reads that registry on a clock, which
 ///         docs/plan/07 § Azure RBAC left owed as <i>"the caller of the mechanism"</i>.
 ///         See the remarks on each. Every one of them is formatted <i>and</i> parsed —
@@ -302,8 +305,11 @@ public readonly record struct GrainKey {
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Twenty-one was twenty, was nineteen, and was eight before that, and the count is
-///         re-derived rather than incremented.</b> Counted on 2026-09-05 off
+///         ⚠
+///         <b>
+///             Twenty-one was twenty, was nineteen, and was eight before that, and the count is
+///             re-derived rather than incremented.
+///         </b> Counted on 2026-09-05 off
 ///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
 ///         is not a key — twenty-one members, of which <see cref="ExpirySweeper" /> is the one added
 ///         that day. It goes stale the moment a
@@ -631,8 +637,7 @@ public static class GrainKeys {
     const int DigestBytes = DigestLength / 2;
 
     /// <summary>The closed set of platform-singleton names.</summary>
-    public static IReadOnlyList<string> PlatformSingletons { get; } =
-        [ShardMapSingleton, TenantDirectorySingleton];
+    public static IReadOnlyList<string> PlatformSingletons { get; } = [ShardMapSingleton, TenantDirectorySingleton];
 
     // ── Formatting ─────────────────────────────────────────────────────────────────────────────
 
@@ -662,8 +667,11 @@ public static class GrainKeys {
     /// <param name="name">The resource group's name, validated as <see cref="ResourceGroup" /> validates it.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A SECOND SHAPE ADDRESSING THE SAME RESOURCE GROUP, AND THAT IS THE DECISION
-    ///         RATHER THAN AN OVERSIGHT.</b> Orleans addresses an activation by (grain type, key), so
+    ///         ⚠
+    ///         <b>
+    ///             A SECOND SHAPE ADDRESSING THE SAME RESOURCE GROUP, AND THAT IS THE DECISION
+    ///             RATHER THAN AN OVERSIGHT.
+    ///         </b> Orleans addresses an activation by (grain type, key), so
     ///         <c>IParkedResourceRegistryGrain</c> could have been reached with
     ///         <see cref="ResourceGroup" />'s key and no row would have been added to
     ///         <see cref="GrainKeyKind" /> at all. It must not be: this type documents every kind as
@@ -675,19 +683,28 @@ public static class GrainKeys {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Resource-group-scoped, and deliberately not subscription-scoped.</b> docs/plan/08
-    ///         § Soft delete: <i>"its address … is no longer blocked — <c>ResourceCollectionId</c>
-    ///         exists and is resource-group-scoped, so 'what is recoverable in this group of this
-    ///         type' is expressible today; anything wider is still the addressing question, because
-    ///         <c>ResourceId.ParsePath</c> has <c>const int fixedPrefix = 8</c> and no
-    ///         subscription-scoped shape."</i> A <c>parked/{subscriptionId:N}</c> key covering a whole
+    ///         § Soft delete:
+    ///         <i>
+    ///             "its address … is no longer blocked — <c>ResourceCollectionId</c>
+    ///             exists and is resource-group-scoped, so 'what is recoverable in this group of this
+    ///             type' is expressible today; anything wider is still the addressing question, because
+    ///             <c>ResourceId.ParsePath</c> has <c>const int fixedPrefix = 8</c> and no
+    ///             subscription-scoped shape."
+    ///         </i> A <c>parked/{subscriptionId:N}</c> key covering a whole
     ///         subscription would be a listing with no address a caller could ask for, and it would
     ///         take the addressing decision by implication rather than on purpose.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>NOT a member of the group's own membership, which is the same refusal one level
-    ///         down.</b> docs/plan/08 § Soft delete: the two collections <i>"answer different
-    ///         questions to different callers, and merging them is exactly the <c>410 Gone</c> the
-    ///         decision above refuses"</i> — a parked resource left in the group's listing hands a
+    ///         ⚠
+    ///         <b>
+    ///             NOT a member of the group's own membership, which is the same refusal one level
+    ///             down.
+    ///         </b> docs/plan/08 § Soft delete: the two collections
+    ///         <i>
+    ///             "answer different
+    ///             questions to different callers, and merging them is exactly the <c>410 Gone</c> the
+    ///             decision above refuses"
+    ///         </i> — a parked resource left in the group's listing hands a
     ///         caller who may list the group but may not read the resource the "something is held
     ///         here" signal. So it is a separate grain with a separate key, and
     ///         <c>OperationGrain.ParkAsync</c> writes this one at the same moment it clears the other.
@@ -720,8 +737,11 @@ public static class GrainKeys {
     /// <param name="name">The resource group's name, validated as <see cref="ResourceGroup" /> validates it.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A THIRD SHAPE FOR ONE RESOURCE GROUP, AND THE REASON IT IS NOT A REMINDER ON
-    ///         <see cref="ParkedResourceRegistry" />'S GRAIN IS A CYCLE RATHER THAN A PREFERENCE.</b>
+    ///         ⚠
+    ///         <b>
+    ///             A THIRD SHAPE FOR ONE RESOURCE GROUP, AND THE REASON IT IS NOT A REMINDER ON
+    ///             <see cref="ParkedResourceRegistry" />'S GRAIN IS A CYCLE RATHER THAN A PREFERENCE.
+    ///         </b>
     ///         The sweep's whole job is to call <c>PurgeExpiredAsync</c>, and
     ///         <c>ResourceManagerService.PurgeCoreAsync</c> calls
     ///         <c>IParkedResourceRegistryGrain.UnparkAsync</c> — so a reminder that fired on the
@@ -746,9 +766,12 @@ public static class GrainKeys {
     ///         sweep for the same resource.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A separate <see cref="GrainKeyKind" /> and not the registry's key, which
-    ///         <see cref="ParkedResourceRegistry" />'s own remarks already settled for the general
-    ///         case:</b> two grain types behind one kind makes <see cref="Parse" />'s answer
+    ///         ⚠
+    ///         <b>
+    ///             A separate <see cref="GrainKeyKind" /> and not the registry's key, which
+    ///             <see cref="ParkedResourceRegistry" />'s own remarks already settled for the general
+    ///             case:
+    ///         </b> two grain types behind one kind makes <see cref="Parse" />'s answer
     ///         ambiguous in exactly the situation the parser exists for — a physical key found in
     ///         Redis, in a log line or in a dead-letter handler, being routed back to the grain that
     ///         wrote it.
@@ -1017,8 +1040,11 @@ public static class GrainKeys {
     /// <param name="managedIdentityId">The managed identity.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Not keyed by <c>(cluster, namespace, serviceAccount)</c>, and that is the trap
-    ///         worth naming.</b> The binding is what a token exchange arrives holding, so keying by it
+    ///         ⚠
+    ///         <b>
+    ///             Not keyed by <c>(cluster, namespace, serviceAccount)</c>, and that is the trap
+    ///             worth naming.
+    ///         </b> The binding is what a token exchange arrives holding, so keying by it
     ///         looks like the shape that saves a lookup. It is wrong three ways: the triple is
     ///         caller-influenced text on an unauthenticated endpoint, so an attacker would choose
     ///         which activation a request creates; a rebind — pointing the same identity at a new

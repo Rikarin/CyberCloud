@@ -131,8 +131,13 @@ public sealed class ReconcilerConformanceTests {
         // The outer cancellation propagates, which is the correct behaviour: an externally cancelled
         // run is not a conformance verdict. What matters is that a reconciler which never returns
         // cannot produce a passing report.
-        await Should.ThrowAsync<OperationCanceledException>(
-            () => ReconcilerConformance.RunAsync(reconciler, Context(id), null, TestClock.Instance, source.Token)
+        await Should.ThrowAsync<OperationCanceledException>(() => ReconcilerConformance.RunAsync(
+                reconciler,
+                Context(id),
+                null,
+                TestClock.Instance,
+                source.Token
+            )
         );
     }
 
@@ -174,8 +179,8 @@ public sealed class ReconcilerConformanceTests {
         );
 
         report.Conforms.ShouldBeFalse();
-        report.Findings.ShouldContain(
-            x => x.Clause == ReconcilerClause.ObservesNeverAssumes && x.Detail.StartsWith("SKIPPED", StringComparison.Ordinal)
+        report.Findings.ShouldContain(x => x.Clause == ReconcilerClause.ObservesNeverAssumes
+            && x.Detail.StartsWith("SKIPPED", StringComparison.Ordinal)
         );
     }
 

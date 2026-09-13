@@ -20,8 +20,11 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         <item>
 ///             <b>No hidden state.</b> The only field is the primary constructor's
 ///             <see cref="IClock" />, which is a dependency rather than a memory. ⚠ This matters more
-///             here than it did for the sample: a reconciler is registered <b>as a singleton, by
-///             concrete type</b> (<c>AddCyberCloudProvider</c>'s remarks), so one instance serves
+///             here than it did for the sample: a reconciler is registered
+///             <b>
+///                 as a singleton, by
+///                 concrete type
+///             </b> (<c>AddCyberCloudProvider</c>'s remarks), so one instance serves
 ///             every tenant in the process — a field caching, say, the last rendered
 ///             <c>Cluster</c> would hand tenant B tenant A's spec, and a single-tenant test could not
 ///             see it.
@@ -39,8 +42,11 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>Converged here means "the CRs are applied and read back", not "PostgreSQL is
-///         accepting connections".</b> The honest stronger check is
+///         ⚠
+///         <b>
+///             Converged here means "the CRs are applied and read back", not "PostgreSQL is
+///             accepting connections".
+///         </b> The honest stronger check is
 ///         <c>status.conditions[type=Ready]</c> on the <c>Cluster</c>, and it is not made because
 ///         nothing in this repository can produce that status: the conformance harness is a
 ///         dictionary (<c>FakeKubeCluster</c>'s own remarks say so) and no operator runs anywhere the
@@ -51,8 +57,11 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         where it is written down as owed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
 ///         would let the platform silently overwrite a tenant's own controller, and on this type that
 ///         controller is plausibly CloudNativePG itself editing a field it owns.
 ///     </para>
@@ -247,9 +256,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the CloudNativePG Cluster is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the CloudNativePG Cluster is absent" };
         }
 
         var found = read.GetValueOrThrow();
@@ -332,8 +339,11 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
     ///     <see langword="null" /> when there is nothing left to remove, or the outcome to return.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>Reads before it deletes, so the steady state of a server with no pooler is zero
-    ///     writes.</b> An unconditional delete would be correct and would issue one request per
+    ///     ⚠
+    ///     <b>
+    ///         Reads before it deletes, so the steady state of a server with no pooler is zero
+    ///         writes.
+    ///     </b> An unconditional delete would be correct and would issue one request per
     ///     reminder for the life of the resource, which is clause 1's "changes nothing" read as "does
     ///     nothing observable" rather than as "does nothing".
     ///     <para>

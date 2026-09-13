@@ -12,8 +12,11 @@ namespace CyberCloud.Metering.Contracts;
 ///         same subscription; a second key shape would be a spelling without an identity.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Hot, and it is genuinely rebuildable — which is not obvious and is worth the
-///         paragraph.</b> This grain's state is a cursor: which window it last sampled. Losing it
+///         ⚠
+///         <b>
+///             Hot, and it is genuinely rebuildable — which is not obvious and is worth the
+///             paragraph.
+///         </b> This grain's state is a cursor: which window it last sampled. Losing it
 ///         makes the sampler re-sample the current window, which produces records with the <i>same</i>
 ///         idempotency keys, which the rollup collapses. So the loss costs one redundant pass and
 ///         nothing else, and docs/plan/05 § Choosing a tier's test — "if the honest answer is 'this

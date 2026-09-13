@@ -110,7 +110,8 @@ public sealed class EmittedExpressivenessTests {
     static JsonNode Action(string name) =>
         Document["paths"]![
             "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"
-            + "/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}/" + name
+            + "/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}/"
+            + name
         ]!;
 
     [Fact]
@@ -152,10 +153,10 @@ public sealed class EmittedExpressivenessTests {
         var document = OpenApiEmitter.Emit(registry, ApiVersion.Parse(Fixtures.FirstVersion));
 
         var description = document["paths"]![
-                "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"
-                + "/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}/noop"
-            ]!["post"]!["responses"]!["200"]!["description"]!
-            .GetValue<string>();
+            "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"
+            + "/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}/noop"
+        ]!["post"]!["responses"]!["200"]!["description"]!
+                .GetValue<string>();
 
         // Reported rather than invented: the registry can now say, and this action has not.
         description.ShouldContain("Unconstrained");
@@ -220,9 +221,8 @@ public sealed class EmittedExpressivenessTests {
         var responses = Document["components"]!["responses"]!.AsObject();
 
         foreach (var status in ErrorCode.HttpStatuses) {
-            responses.ContainsKey(OpenApiEmitter.ResponseNameOfPublic(status)).ShouldBeTrue(
-                $"HTTP {status} is an ErrorCode's status and has no response component."
-            );
+            responses.ContainsKey(OpenApiEmitter.ResponseNameOfPublic(status))
+                .ShouldBeTrue($"HTTP {status} is an ErrorCode's status and has no response component.");
         }
     }
 
@@ -279,7 +279,7 @@ public sealed class EmittedExpressivenessTests {
         // The other branch is real: IResourceTypeBuilder.SupportsTags' remarks require that a type
         // which does not declare it refuses a body with tags.
         Document["components"]!["schemas"]!["CyberCloud.DBforPostgreSQL.servers.databases"]!
-            ["properties"]!["tags"]
+        ["properties"]!["tags"]
             .ShouldBeNull();
 
     [Fact]
@@ -298,8 +298,11 @@ public sealed class EmittedExpressivenessTests {
     // ── Soft delete ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>The published window is one the platform delivers, and the disclaimer that said
-    ///     otherwise is gone with the defect it described.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The published window is one the platform delivers, and the disclaimer that said
+    ///         otherwise is gone with the defect it described.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     This test used to be called

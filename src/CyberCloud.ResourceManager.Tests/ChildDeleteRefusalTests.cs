@@ -8,8 +8,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>docs/plan/08 § Deleting a parent resource that has children decided this and it went
-///         unbuilt because the platform could not enumerate children.</b>
+///         ⚠
+///         <b>
+///             docs/plan/08 § Deleting a parent resource that has children decided this and it went
+///             unbuilt because the platform could not enumerate children.
+///         </b>
 ///         <i>
 ///             "a delete is refused while the resource still has children — 409, not a cascade, and
 ///             not a silent orphan"
@@ -62,11 +65,7 @@ public sealed class ChildDeleteRefusalTests(ResourceManagerCluster cluster) {
         );
 
     static WriteRequest Request(ResourceId address) =>
-        new() {
-            Path = address.Path,
-            ApiVersion = TestingProvider.V2026,
-            Caller = ResourceManagerCluster.Caller()
-        };
+        new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() };
 
     async Task ConvergeAsync(WriteAccepted accepted) {
         var operation = cluster.Operation(ResourceManagerCluster.Tenant, accepted.OperationId);
@@ -160,10 +159,11 @@ public sealed class ChildDeleteRefusalTests(ResourceManagerCluster cluster) {
         var readBack = await cluster.Manager.ReadAsync(Request(parent), TestContext.Current.CancellationToken);
 
         readBack.IsSuccess.ShouldBeTrue("a refused delete left the parent unreadable");
-        readBack.GetValueOrThrow().ProvisioningState.ShouldBe(
-            ProvisioningState.Succeeded,
-            "a refused delete moved the parent towards Deleting anyway"
-        );
+        readBack.GetValueOrThrow()
+            .ProvisioningState.ShouldBe(
+                ProvisioningState.Succeeded,
+                "a refused delete moved the parent towards Deleting anyway"
+            );
     }
 
     [Fact]

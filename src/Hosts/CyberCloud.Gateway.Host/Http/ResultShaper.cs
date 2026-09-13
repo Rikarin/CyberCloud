@@ -9,9 +9,12 @@ namespace CyberCloud.Gateway.Host.Http;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The status code is authorization output, so this table is a security artefact.</b>
-///         docs/plan/07 § The enforcement seam: <i>"403 is returned only when the caller can read the
-///         object but not perform the action — which is a real and useful distinction, and it means
-///         the response code itself is authorization output."</i>
+///         docs/plan/07 § The enforcement seam:
+///         <i>
+///             "403 is returned only when the caller can read the
+///             object but not perform the action — which is a real and useful distinction, and it means
+///             the response code itself is authorization output."
+///         </i>
 ///         <see cref="ErrorCode.ResourceNotFound" /> is <c>404</c> and
 ///         <see cref="ErrorCode.AuthorizationFailed" /> is <c>403</c>, and the component that decides
 ///         which of the two to return is the resource manager, not this file.
@@ -19,8 +22,11 @@ namespace CyberCloud.Gateway.Host.Http;
 ///     <para>
 ///         ⚠ <b><see cref="ErrorCode.SchemaInvalid" /> maps to <c>404</c>, not <c>500</c>.</b>
 ///         docs/plan/07 § The enforcement seam says so in as many words: a check against an
-///         undefined relation <i>"still renders it to the caller as 404; the difference is that it
-///         also appears on a dashboard"</i>. Rendering it as a <c>500</c> would tell a prober that
+///         undefined relation
+///         <i>
+///             "still renders it to the caller as 404; the difference is that it
+///             also appears on a dashboard"
+///         </i>. Rendering it as a <c>500</c> would tell a prober that
 ///         their probe hit something real.
 ///     </para>
 /// </remarks>
@@ -70,11 +76,8 @@ static class ResultShaper {
     ///     status code was chosen to erase.
     /// </remarks>
     static readonly FrozenSet<string> RewrittenToNotFound = new[] {
-        ErrorCode.ResourceNotFound.Value,
-        ErrorCode.ResourceGroupNotFound.Value,
-        ErrorCode.SubscriptionNotFound.Value,
-        ErrorCode.TenantNotFound.Value,
-        ErrorCode.SchemaInvalid.Value
+        ErrorCode.ResourceNotFound.Value, ErrorCode.ResourceGroupNotFound.Value, ErrorCode.SubscriptionNotFound.Value,
+        ErrorCode.TenantNotFound.Value, ErrorCode.SchemaInvalid.Value
     }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>Turns a failure into the outcome stage 9 writes.</summary>

@@ -18,7 +18,7 @@ public sealed class ManagedClusterQuotaTests {
         //
         // ⚠ THE NUMBERS ARE TYPED OUT rather than computed from the constants, because a computation
         // from the same constants would agree with itself however they were spelled.
-        Vcpu(ManagedClusters.Body(ClusterId, controlPlaneReplicas: 2)).ShouldBe(3m);   // 2 × 3 × 500m
+        Vcpu(ManagedClusters.Body(ClusterId, controlPlaneReplicas: 2)).ShouldBe(3m); // 2 × 3 × 500m
         Memory(ManagedClusters.Body(ClusterId, controlPlaneReplicas: 2)).ShouldBe(6m); // 2 × 3 × 1Gi
 
         Vcpu(ManagedClusters.Body(ClusterId, controlPlaneReplicas: 1)).ShouldBe(1.5m);
@@ -157,7 +157,8 @@ public sealed class ManagedClusterQuotaTests {
         Registration(type).Meters.Single(x => x.Meter == meter).Derivation!;
 
     static ResourceTypeRegistration Registration(ResourceTypeName type) {
-        ProviderRegistry.Build([new ContainerServiceProvider()]).TryGetType(type, out var registration)
+        ProviderRegistry.Build([new ContainerServiceProvider()])
+            .TryGetType(type, out var registration)
             .ShouldBeTrue();
 
         return registration;

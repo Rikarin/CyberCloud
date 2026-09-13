@@ -19,17 +19,29 @@ namespace CyberCloud.Providers.Monitor.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One case object and two class declarations, which is the twelfth time that number has
-///         held.</b> What this one adds is a resource whose objects are <i>configuration for a data
-///         plane the platform runs</i> rather than a description of a workload — three objects, two
+///         ⚠
+///         <b>
+///             One case object and two class declarations, which is the twelfth time that number has
+///             held.
+///         </b> What this one adds is a resource whose objects are
+///         <i>
+///             configuration for a data
+///             plane the platform runs
+///         </i> rather than a description of a workload — three objects, two
 ///         core kinds and one custom, none of which becomes a pod.
 ///     </para>
 ///     <para>
-///         ⚠⚠ <b><see cref="ProviderConformanceCase.ObjectMatchesDesired" /> IS THE ONLY MEMBER
-///         THAT COST ANYTHING, AND IT COST A SECOND <c>Matches</c>.</b> The member's signature is
+///         ⚠⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> IS THE ONLY MEMBER
+///             THAT COST ANYTHING, AND IT COST A SECOND <c>Matches</c>.
+///         </b> The member's signature is
 ///         <c>(objectJson, desiredJson)</c> — the limit <c>StorageBuckets</c> records and
-///         <c>AgentPools</c> demonstrated — and <b>everything this type renders is keyed on the
-///         resource's own GUID</b>: the accountID in the <c>VMUser</c>'s path suffix, the database
+///         <c>AgentPools</c> demonstrated — and
+///         <b>
+///             everything this type renders is keyed on the
+///             resource's own GUID
+///         </b>: the accountID in the <c>VMUser</c>'s path suffix, the database
 ///         name in the row, all three object names. This is the first family where that limit is not
 ///         an inconvenience but a structural gap, because identity is not one field of this type's
 ///         output, it <i>is</i> its output.
@@ -134,10 +146,16 @@ public sealed class MonitorWorkspaceConformance(ProviderTestCluster<MonitorCase>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE QUESTION <c>CyberCloud.ContainerRegistry/registries</c> RAISED, ASKED OF THIS
-    ///         TYPE RATHER THAN INHERITED FROM ITS ANSWER — AND THE ANSWER SETTLED A DISAGREEMENT.</b>
-    ///         That row declared a window, reported a soft-deleted resource <i>reconciling its whole
-    ///         data plane back</i>, and withdrew. This type could not reproduce the re-apply, and the
+    ///         ⚠
+    ///         <b>
+    ///             THE QUESTION <c>CyberCloud.ContainerRegistry/registries</c> RAISED, ASKED OF THIS
+    ///             TYPE RATHER THAN INHERITED FROM ITS ANSWER — AND THE ANSWER SETTLED A DISAGREEMENT.
+    ///         </b>
+    ///         That row declared a window, reported a soft-deleted resource
+    ///         <i>
+    ///             reconciling its whole
+    ///             data plane back
+    ///         </i>, and withdrew. This type could not reproduce the re-apply, and the
     ///         reason is that there never was one: a soft delete ran no reconcile pass at all, so the
     ///         objects were never torn down. The other row's evidence was a conformance assertion that
     ///         reports an end state, and an end state cannot tell "never removed" from "removed and
@@ -197,13 +215,14 @@ public sealed class MonitorWorkspaceConformance(ProviderTestCluster<MonitorCase>
 
         // ── The write path is closed, which is the withdrawal's own condition for coming back ────
         foreach (var target in objects) {
-            Cluster.World.Holds(target).ShouldBeFalse(
-                $"'{target}' survived a converged soft delete. On this type that is not an idle "
-                + "resource being kept warm: the VMUser is what vmauth authorises writes against, so "
-                + "the tenant's ingest key still works, telemetry keeps landing in a tenancy whose "
-                + "address answers 404, and the retention it accrues is still billed. That is the "
-                + "measurement this row withdrew its recovery window over."
-            );
+            Cluster.World.Holds(target)
+                .ShouldBeFalse(
+                    $"'{target}' survived a converged soft delete. On this type that is not an idle "
+                    + "resource being kept warm: the VMUser is what vmauth authorises writes against, so "
+                    + "the tenant's ingest key still works, telemetry keeps landing in a tenancy whose "
+                    + "address answers 404, and the retention it accrues is still billed. That is the "
+                    + "measurement this row withdrew its recovery window over."
+                );
         }
 
         // ⚠ THE POKE. A completed delete operation, driven again — a stray reminder, or a re-drive
@@ -211,12 +230,13 @@ public sealed class MonitorWorkspaceConformance(ProviderTestCluster<MonitorCase>
         await Cluster.Operation(ConformanceIds.Tenant, deleted.OperationId).DriveAsync();
 
         foreach (var target in objects) {
-            Cluster.World.Holds(target).ShouldBeFalse(
-                $"'{target}' came back after the workspace was soft-deleted, from a stray drive of its "
-                + "own delete operation. A parked resource must not re-apply itself: nobody can see it "
-                + "in order to stop it, and on this row what comes back is an open, authenticated, "
-                + "billed write path."
-            );
+            Cluster.World.Holds(target)
+                .ShouldBeFalse(
+                    $"'{target}' came back after the workspace was soft-deleted, from a stray drive of its "
+                    + "own delete operation. A parked resource must not re-apply itself: nobody can see it "
+                    + "in order to stop it, and on this row what comes back is an open, authenticated, "
+                    + "billed write path."
+                );
         }
 
         // ── And a restore puts it back, which is the half that makes it a window ─────────────────
@@ -225,11 +245,12 @@ public sealed class MonitorWorkspaceConformance(ProviderTestCluster<MonitorCase>
         (await ConvergeAsync(restored.GetValueOrThrow())).State.ShouldBe(OperationState.Succeeded);
 
         foreach (var target in objects) {
-            Cluster.World.Holds(target).ShouldBeTrue(
-                $"'{target}' did not come back from the restore. A teardown with no way back is not a "
-                + "recovery window, it is a slower delete — and on this row it would be a tenancy the "
-                + "tenant can no longer write to and no longer read from."
-            );
+            Cluster.World.Holds(target)
+                .ShouldBeTrue(
+                    $"'{target}' did not come back from the restore. A teardown with no way back is not a "
+                    + "recovery window, it is a slower delete — and on this row it would be a tenancy the "
+                    + "tenant can no longer write to and no longer read from."
+                );
         }
     }
 }

@@ -35,19 +35,28 @@ static class ResponseBodies {
     /// <param name="nextLink">The absolute next-page URL, or empty when there is no next page.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Each element is the same object <see cref="Resource" /> writes, member for
-    ///         member.</b> A list that rendered a thinner resource than a <c>GET</c> does would make
+    ///         ⚠
+    ///         <b>
+    ///             Each element is the same object <see cref="Resource" /> writes, member for
+    ///             member.
+    ///         </b> A list that rendered a thinner resource than a <c>GET</c> does would make
     ///         a generated SDK's collection type and its resource type two different shapes with one
     ///         name, and the first place anybody would notice is a deserializer dropping a field.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>nextLink</c> is omitted rather than written as <c>null</c> or <c>""</c> when
-    ///         there is no next page.</b> That is the Azure shape an <c>AsyncPageable&lt;T&gt;</c>
+    ///         ⚠
+    ///         <b>
+    ///             <c>nextLink</c> is omitted rather than written as <c>null</c> or <c>""</c> when
+    ///             there is no next page.
+    ///         </b> That is the Azure shape an <c>AsyncPageable&lt;T&gt;</c>
     ///         stops on; an empty string is a URL a polite client will happily request.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>There is no <c>count</c>, and the omission is the security property rather than
-    ///         an unfinished feature.</b> The page holds what the caller may read — see
+    ///         ⚠
+    ///         <b>
+    ///             There is no <c>count</c>, and the omission is the security property rather than
+    ///             an unfinished feature.
+    ///         </b> The page holds what the caller may read — see
     ///         <c>ResourceListPage</c> — so a total would say how many resources exist that they may
     ///         not, which is the enumeration oracle docs/plan/07 § The enforcement seam closes one
     ///         resource at a time.
@@ -113,9 +122,12 @@ static class ResponseBodies {
     /// <summary>Renders a scope — docs/plan/06 § The hierarchy's subscription or resource group.</summary>
     /// <param name="scope">The scope as the manager reports it.</param>
     /// <remarks>
-    ///     ⚠ <b>The same four top-level names a resource carries — <c>id</c>, <c>name</c>,
-    ///     <c>type</c>, <c>location</c> — and deliberately no <c>provisioningState</c> and no
-    ///     <c>etag</c>.</b> Azure's own resource group renders exactly that shape, and a client that
+    ///     ⚠
+    ///     <b>
+    ///         The same four top-level names a resource carries — <c>id</c>, <c>name</c>,
+    ///         <c>type</c>, <c>location</c> — and deliberately no <c>provisioningState</c> and no
+    ///         <c>etag</c>.
+    ///     </b> Azure's own resource group renders exactly that shape, and a client that
     ///     already reads a resource reads a scope with no branch. The two absences are real rather
     ///     than unfinished: a scope has no two-phase create, so it is never in a transient state worth
     ///     naming, and no <c>If-Match</c> concurrency, so an <c>etag</c> would be a value nothing on
@@ -148,8 +160,11 @@ static class ResponseBodies {
     /// <param name="status">The operation.</param>
     /// <remarks>
     ///     ⚠ <b>The <c>progress</c> array is ours and is the reason the endpoint is tolerable.</b>
-    ///     docs/plan/10 § Long-running operations: <i>"The <c>progress</c> array is our addition and
-    ///     it is what makes a nine-minute cluster creation tolerable."</i> A caller staring at
+    ///     docs/plan/10 § Long-running operations:
+    ///     <i>
+    ///         "The <c>progress</c> array is our addition and
+    ///         it is what makes a nine-minute cluster creation tolerable."
+    ///     </i> A caller staring at
     ///     <c>Running</c> for nine minutes has no way to tell a slow success from a stuck failure.
     ///     Everything else in this body is Azure's shape exactly, so <c>Operation&lt;T&gt;</c> in the
     ///     SDK and <c>--wait</c> in the CLI are the standard implementations.
@@ -210,8 +225,7 @@ static class ResponseBodies {
         try {
             using var document = JsonDocument.Parse(json);
             document.RootElement.WriteTo(writer);
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             // Grain state that is not JSON is a platform fault, not a caller's. An empty object
             // keeps the response parseable; the fault goes to the trace, never to the body.
             writer.WriteStartObject();

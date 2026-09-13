@@ -183,7 +183,7 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster) {
         var subscription = address.SubscriptionId;
 
         (await cluster.SubscriptionGrain(address.TenantId, subscription)
-            .RemoveResourceGroupAsync(address.ResourceGroup)).IsSuccess.ShouldBeTrue();
+                .RemoveResourceGroupAsync(address.ResourceGroup)).IsSuccess.ShouldBeTrue();
 
         (await cluster.SubscriptionGrain(address.TenantId, subscription).ListResourceGroupsAsync())
             .GetValueOrThrow()
@@ -210,7 +210,7 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster) {
         (await cluster.SubscriptionGrain(tenant, subscription).CreateAsync("prod")).IsSuccess
             .ShouldBeTrue();
         (await cluster.SubscriptionGrain(tenant, subscription)
-            .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
+                .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
 
         var address = new ResourceId(
             tenant,

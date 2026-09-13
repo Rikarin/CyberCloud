@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json;
 
@@ -11,10 +12,13 @@ namespace CyberCloud.Providers.Search;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md): <i>"OpenSearch —
-///         <c>CyberCloud.Search/services</c> · M3 · 1.0 EM. <b>OpenSearch operator</b> (Apache-2.0,
-///         ADR-011 — Elasticsearch is not available to us). Data/master/coordinating node roles, ISM
-///         policies, snapshot repository into the tenant's bucket."</i>
+///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md):
+///         <i>
+///             "OpenSearch —
+///             <c>CyberCloud.Search/services</c> · M3 · 1.0 EM. <b>OpenSearch operator</b> (Apache-2.0,
+///             ADR-011 — Elasticsearch is not available to us). Data/master/coordinating node roles, ISM
+///             policies, snapshot repository into the tenant's bucket."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE SIXTH PROVIDER NAMESPACE AND THE FIRST <c>M3</c> ROW.</b> The five before it are
@@ -24,9 +28,12 @@ namespace CyberCloud.Providers.Search;
 ///         than a shape.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE QUOTA METERS ARE A SUM OVER HETEROGENEOUS COMPONENTS — THE SHAPE
-///         <c>CyberCloud.Storage/accounts</c> FOUND — AND THIS IS THE SECOND SIGHTING, WHICH IS WHAT
-///         MAKES IT A PATTERN.</b> The three shapes <c>MeterDerivation</c> has now been asked for, in
+///         ⚠
+///         <b>
+///             THE QUOTA METERS ARE A SUM OVER HETEROGENEOUS COMPONENTS — THE SHAPE
+///             <c>CyberCloud.Storage/accounts</c> FOUND — AND THIS IS THE SECOND SIGHTING, WHICH IS WHAT
+///             MAKES IT A PATTERN.
+///         </b> The three shapes <c>MeterDerivation</c> has now been asked for, in
 ///         the order they arrived:
 ///     </para>
 ///     <list type="number">
@@ -39,21 +46,30 @@ namespace CyberCloud.Providers.Search;
 ///             count and one per-replica figure, and <c>Meter</c> multiplies by nothing.
 ///         </item>
 ///         <item>
-///             <c>CyberCloud.Storage/accounts</c> — an amount is a <i>sum over populations that are
-///             not the same size as each other</i>. Here it is
+///             <c>CyberCloud.Storage/accounts</c> — an amount is a
+///             <i>
+///                 sum over populations that are
+///                 not the same size as each other
+///             </i>. Here it is
 ///             <c>(dataNodes + coordinatingNodes) × preset + masterNodes × 500m</c>: two populations,
 ///             only one of which the tenant sizes.
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>And this type adds a fourth fact to that list, which is the one worth having: a term
-///         of the sum is ZERO on the default body and the sum is not.</b>
+///         ⚠
+///         <b>
+///             And this type adds a fourth fact to that list, which is the one worth having: a term
+///             of the sum is ZERO on the default body and the sum is not.
+///         </b>
 ///         <c>/properties/coordinatingNodes</c> defaults to <c>0</c>, so the coordinating term derives
 ///         nothing on an ordinary create.
 ///         <c>CyberCloud.Messaging/natsClusters</c> records that <c>QuotaGrain.TryReserveAsync</c>
 ///         refuses a non-positive amount — <i>"A reservation must be positive; 0 is not"</i> — and
-///         concludes that a conditional meter is undeclarable. That conclusion is <b>about a whole
-///         meter and not about a term</b>, and the distinction had never been tested because no
+///         concludes that a conditional meter is undeclarable. That conclusion is
+///         <b>
+///             about a whole
+///             meter and not about a term
+///         </b>, and the distinction had never been tested because no
 ///         earlier type had an optional population. A meter whose <i>total</i> has a floor may contain
 ///         a term that is zero; what it may not do is <i>be</i> zero.
 ///         <c>OpenSearchQuotaTests.NoMeterEverDerivesZeroEvenWithNoCoordinatingNodes</c> is the pin.
@@ -66,8 +82,11 @@ namespace CyberCloud.Providers.Search;
 ///         committed, and quota would drift upward on every create/delete cycle.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>publicIps</c> is not declared, and the reason is the FIRST of the two this tree now
-///         records rather than the second.</b> <c>CyberCloud.Storage/accounts</c> found that the two
+///         ⚠
+///         <b>
+///             <c>publicIps</c> is not declared, and the reason is the FIRST of the two this tree now
+///             records rather than the second.
+///         </b> <c>CyberCloud.Storage/accounts</c> found that the two
 ///         reasons look identical from the meter: either the operator has no exposure field to
 ///         condition on (its blocker, an upstream change), or there is one and a conditional meter
 ///         derives zero on the default path (<c>natsClusters</c>' blocker, a
@@ -77,8 +96,11 @@ namespace CyberCloud.Providers.Search;
 ///         not offered, and it is the firewall list rather than the meter that blocks it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The short name is <c>opensearch</c> and the obvious <c>search</c> is a hard
-///         collision.</b> <c>CliEmitter.GroupOf</c> is the provider namespace's last segment
+///         ⚠
+///         <b>
+///             The short name is <c>opensearch</c> and the obvious <c>search</c> is a hard
+///             collision.
+///         </b> <c>CliEmitter.GroupOf</c> is the provider namespace's last segment
 ///         lower-cased, so <c>CyberCloud.Search</c> is already the group <c>search</c> — and a short
 ///         name equal to its <i>own</i> group's key gives <c>cyc search search</c> two meanings, which
 ///         <c>System.CommandLine</c> throws on for every parse that reaches the group.
@@ -91,26 +113,41 @@ namespace CyberCloud.Providers.Search;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THIS NAMESPACE IS DESIGNED FOR TWO TYPES AND SHIPS ONE.</b> docs/plan/12 § The
-///         catalogue's other row here is <i>"Qdrant — <c>CyberCloud.Search/vectorStores</c> · M3 ·
-///         0.6 EM. Not an Azure row. A 2026 catalogue without a vector store is dated on arrival, and
-///         Qdrant's operator model is simple enough that this is the cheapest M3 item."</i> It is not
+///         catalogue's other row here is
+///         <i>
+///             "Qdrant — <c>CyberCloud.Search/vectorStores</c> · M3 ·
+///             0.6 EM. Not an Azure row. A 2026 catalogue without a vector store is dated on arrival, and
+///             Qdrant's operator model is simple enough that this is the cheapest M3 item."
+///         </i> It is not
 ///         declared, and what a second type in an existing namespace costs is already measured —
-///         <c>CyberCloud.Messaging/natsClusters</c> put it at <i>"two case objects and four class
-///         declarations, and no new project"</i>. So the reason is scope and not structure, and the
+///         <c>CyberCloud.Messaging/natsClusters</c> put it at
+///         <i>
+///             "two case objects and four class
+///             declarations, and no new project"
+///         </i>. So the reason is scope and not structure, and the
 ///         one thing a future author should not have to rediscover is this:
 ///     </para>
 ///     <list type="bullet">
 ///         <item>
-///             ⚠ <b>THERE IS NO PUBLIC QDRANT OPERATOR, AND THAT SENTENCE IN docs/plan/12 IS THE ONE
-///             CLAIM IN THAT ROW THAT DOES NOT HOLD.</b> <c>github.com/qdrant/qdrant-operator</c>
+///             ⚠
+///             <b>
+///                 THERE IS NO PUBLIC QDRANT OPERATOR, AND THAT SENTENCE IN docs/plan/12 IS THE ONE
+///                 CLAIM IN THAT ROW THAT DOES NOT HOLD.
+///             </b> <c>github.com/qdrant/qdrant-operator</c>
 ///             answers <c>404</c>. The operator that exists is the one Qdrant Managed Cloud, Hybrid
 ///             Cloud and Private Cloud run, and Qdrant's own Private Cloud documentation describes it
 ///             as sitting <i>"on top of the open source Qdrant database"</i> — the database is
-///             Apache-2.0, the operator is not distributed. ⚠ <b>ADR-010 clause 1's survey is
-///             consistent with this and reads differently once it is known:</b> that list names an
-///             <i>operator</i> for most rows — <i>"CloudNativePG", "Altinity", "Strimzi",
-///             "spotahome", "mariadb-operator", "RabbitMQ Cluster Operator", "OpenSearch
-///             operator"</i> — and for this one it names only <i>"Qdrant"</i>.
+///             Apache-2.0, the operator is not distributed. ⚠
+///             <b>
+///                 ADR-010 clause 1's survey is
+///                 consistent with this and reads differently once it is known:
+///             </b> that list names an
+///             <i>operator</i> for most rows —
+///             <i>
+///                 "CloudNativePG", "Altinity", "Strimzi",
+///                 "spotahome", "mariadb-operator", "RabbitMQ Cluster Operator", "OpenSearch
+///                 operator"
+///             </i> — and for this one it names only <i>"Qdrant"</i>.
 ///         </item>
 ///         <item>
 ///             So <c>vectorStores</c> is the <b>operator-less</b> shape, which is
@@ -121,8 +158,11 @@ namespace CyberCloud.Providers.Search;
 ///             the cluster-backed suite needs <b>no</b> CRD stub at all, where this type needs one.
 ///         </item>
 ///         <item>
-///             ⚠ <b>Its credential story is the third of the three this catalogue now has, and it is
-///             the dangerous one.</b> This type's operator <i>generates</i> a password;
+///             ⚠
+///             <b>
+///                 Its credential story is the third of the three this catalogue now has, and it is
+///                 the dangerous one.
+///             </b> This type's operator <i>generates</i> a password;
 ///             <c>CyberCloud.Storage/accounts</c> has no credential at all and visibly does not
 ///             converge. Qdrant's chart leaves <c>service.api_key</c> <b>unset by default</b>, and a
 ///             Qdrant with no API key serves every request on port 6333 unauthenticated. That is the
@@ -212,11 +252,9 @@ public sealed class SearchProvider : IResourceProvider {
                 "/properties/sizing/cpu"
             ],
             body => KubeQuantity.TryParse(OpenSearchServices.Resources(body).Cpu, out var cores)
-            && KubeQuantity.TryParse(OpenSearchServices.ControlPlaneCpu, out var share)
-                ? Result<decimal>.Success(
-                    (SizedNodes(body) * cores) + (OpenSearchServices.MasterNodes(body) * share)
-                )
-                : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
+                && KubeQuantity.TryParse(OpenSearchServices.ControlPlaneCpu, out var share)
+                    ? Result<decimal>.Success(SizedNodes(body) * cores + OpenSearchServices.MasterNodes(body) * share)
+                    : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
 
     /// <summary>Memory: the same two populations, in gibibytes.</summary>
@@ -238,17 +276,20 @@ public sealed class SearchProvider : IResourceProvider {
                 "/properties/sizing/memory"
             ],
             body => KubeQuantity.TryGibibytes(OpenSearchServices.Resources(body).Memory, out var gibibytes)
-            && KubeQuantity.TryGibibytes(OpenSearchServices.ControlPlaneMemory, out var share)
-                ? Result<decimal>.Success(
-                    (SizedNodes(body) * gibibytes) + (OpenSearchServices.MasterNodes(body) * share)
-                )
-                : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
+                && KubeQuantity.TryGibibytes(OpenSearchServices.ControlPlaneMemory, out var share)
+                    ? Result<decimal>.Success(
+                        SizedNodes(body) * gibibytes + OpenSearchServices.MasterNodes(body) * share
+                    )
+                    : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
 
     /// <summary>Storage: each data node's disk, plus the fixed volume every other node gets.</summary>
     /// <remarks>
-    ///     ⚠ <b>The populations split differently here than they do for CPU and memory, and that is
-    ///     the point of writing three derivations rather than one parameterised one.</b> A
+    ///     ⚠
+    ///     <b>
+    ///         The populations split differently here than they do for CPU and memory, and that is
+    ///         the point of writing three derivations rather than one parameterised one.
+    ///     </b> A
     ///     coordinating node is sized like a <i>data</i> node for CPU and memory — it merges result
     ///     sets and that costs both — and like a <i>cluster-manager</i> node for disk, because it
     ///     holds no shards. A derivation that reused one split for all three would over-reserve every
@@ -271,12 +312,12 @@ public sealed class SearchProvider : IResourceProvider {
                 "/properties/storage/size"
             ],
             body => KubeQuantity.TryGibibytes(OpenSearchServices.StorageSize(body), out var gibibytes)
-            && KubeQuantity.TryGibibytes(OpenSearchServices.ControlPlaneVolumeSize, out var fixedVolume)
-                ? Result<decimal>.Success(
-                    (OpenSearchServices.DataNodes(body) * gibibytes)
-                    + (UnsizedVolumes(body) * fixedVolume)
-                )
-                : Unresolvable("storage", "storage.size")
+                && KubeQuantity.TryGibibytes(OpenSearchServices.ControlPlaneVolumeSize, out var fixedVolume)
+                    ? Result<decimal>.Success(
+                        OpenSearchServices.DataNodes(body) * gibibytes
+                        + UnsizedVolumes(body) * fixedVolume
+                    )
+                    : Unresolvable("storage", "storage.size")
         );
 
     /// <summary>How many nodes are sized by the tenant's preset.</summary>

@@ -1,19 +1,25 @@
-using System.CommandLine;
 using CyberCloud.Cli.Execution;
 using CyberCloud.Cli.VerbTree;
+using System.CommandLine;
 
 namespace CyberCloud.Cli.Commands;
 
 /// <summary>
-///     <c>cyc rest</c> — docs/plan/21 § Grammar's <i>"the escape hatch for anything not yet a
-///     verb"</i>.
+///     <c>cyc rest</c> — docs/plan/21 § Grammar's
+///     <i>
+///         "the escape hatch for anything not yet a
+///         verb"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/21 is emphatic about why it exists: <i>"⚠ <c>cyc rest</c> matters more than it
-///         looks. A generated CLI always lags the API by a release; without a raw escape hatch the
-///         answer to 'how do I call the new endpoint' is 'wait'. With it, the CLI is never a
-///         blocker."</i>
+///         docs/plan/21 is emphatic about why it exists:
+///         <i>
+///             "⚠ <c>cyc rest</c> matters more than it
+///             looks. A generated CLI always lags the API by a release; without a raw escape hatch the
+///             answer to 'how do I call the new endpoint' is 'wait'. With it, the CLI is never a
+///             blocker."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Raw means untyped, not unauthenticated.</b> This command builds an
@@ -34,62 +40,68 @@ static class RestCommand {
         ArgumentNullException.ThrowIfNull(host);
 
         var method = new Option<string>("--method", "-m") {
-            Description = "The HTTP method. Defaults to GET.",
-            DefaultValueFactory = _ => "GET",
+            Description = "The HTTP method. Defaults to GET.", DefaultValueFactory = _ => "GET"
         };
 
         method.AcceptOnlyFromAmong("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
 
         var uri = new Option<string>("--uri", "-u") {
             Description = "The path, relative to the endpoint — /tenants/…/providers/… — or an absolute URL.",
-            Required = true,
+            Required = true
         };
 
         var body = new Option<string>("--body", "-b") {
-            Description = "The request body as JSON, @file to read a file, or - to read stdin.",
+            Description = "The request body as JSON, @file to read a file, or - to read stdin."
         };
 
         var headers = new Option<string[]>("--header") {
-            Description = "An extra request header, as name=value. Repeatable.",
-            AllowMultipleArgumentsPerToken = true,
+            Description = "An extra request header, as name=value. Repeatable.", AllowMultipleArgumentsPerToken = true
         };
 
-        var command = new Command("rest", "Call the API directly. Authenticated, retried and correlated — just untyped.") {
-            method, uri, body, headers,
-        };
+        var command = new Command(
+            "rest",
+            "Call the API directly. Authenticated, retried and correlated — just untyped."
+        ) { method, uri, body, headers };
 
         command.SetAction(async (parse, cancellationToken) => {
-            var invocation = CycRunner.Bind(host, globals, tree, parse);
+                var invocation = CycRunner.Bind(host, globals, tree, parse);
 
-            using var client = invocation.CreateClient(invocation.Settings.Get("tenant"));
-            var context = client.Context;
+                using var client = invocation.CreateClient(invocation.Settings.Get("tenant"));
+                var context = client.Context;
 
-            var target = Resolve(context.Endpoint, parse.GetRequiredValue(uri));
-            using var request = context.CreateRequest(new HttpMethod(parse.GetValue(method) ?? "GET"), target);
+                var target = Resolve(context.Endpoint, parse.GetRequiredValue(uri));
+                using var request = context.CreateRequest(new HttpMethod(parse.GetValue(method) ?? "GET"), target);
 
-            foreach (var header in parse.GetValue(headers) ?? [])
-                AddHeader(request, header);
+                foreach (var header in parse.GetValue(headers) ?? []) {
+                    AddHeader(request, header);
+                }
 
-            if (ReadBody(invocation, parse.GetValue(body)) is { } content)
-                CyberCloudClientContext.SetJsonBody(request, content);
+                if (ReadBody(invocation, parse.GetValue(body)) is { } content) {
+                    CyberCloudClientContext.SetJsonBody(request, content);
+                }
 
-            invocation.Trace($"{request.Method} {Redaction.Url(target)}");
+                invocation.Trace($"{request.Method} {Redaction.Url(target)}");
 
-            var response = await context.Pipeline.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                var response = await context.Pipeline.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-            invocation.Trace($"{response.Status} {response.ReasonPhrase} (request id {response.ServiceRequestId ?? "none"})");
+                invocation.Trace(
+                    $"{response.Status} {response.ReasonPhrase} (request id {response.ServiceRequestId ?? "none"})"
+                );
 
-            foreach (var header in response.Headers)
-                invocation.Trace("< " + Redaction.Header(header.Key, header.Value));
+                foreach (var header in response.Headers) {
+                    invocation.Trace("< " + Redaction.Header(header.Key, header.Value));
+                }
 
-            if (response.IsError)
-                throw CycRequestException.From(response, flag: null);
+                if (response.IsError) {
+                    throw CycRequestException.From(response, flag: null);
+                }
 
-            using var parsed = ResponseBody.Parse(response);
-            invocation.Render(parsed.Value);
+                using var parsed = ResponseBody.Parse(response);
+                invocation.Render(parsed.Value);
 
-            return (int)ExitCode.Ok;
-        });
+                return (int)ExitCode.Ok;
+            }
+        );
 
         return command;
     }
@@ -113,11 +125,13 @@ static class RestCommand {
             return new Uri(endpoint, value);
         }
 
-        if (!string.Equals(absolute.Host, endpoint.Host, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(absolute.Host, endpoint.Host, StringComparison.OrdinalIgnoreCase)) {
             throw new CycUsageException(
                 $"--uri names {absolute.Host} and this profile's endpoint is {endpoint.Host}. cyc will not "
                 + "send your access token to another host. Change the endpoint with 'cyc config set "
-                + "endpoint …' if that is really where the API is.");
+                + "endpoint …' if that is really where the API is."
+            );
+        }
 
         return absolute;
     }
@@ -125,8 +139,9 @@ static class RestCommand {
     static void AddHeader(HttpRequestMessage request, string header) {
         var separator = header.IndexOf('=', StringComparison.Ordinal);
 
-        if (separator <= 0)
+        if (separator <= 0) {
             throw new CycUsageException($"--header takes name=value pairs; '{header}' has no '='.");
+        }
 
         var name = header[..separator];
 
@@ -134,10 +149,12 @@ static class RestCommand {
         // arbitrary token through a command that advertises itself as authenticated, and the header
         // would be overwritten by BearerTokenHandler anyway — so it would fail confusingly rather
         // than dangerously, which is still not a good answer.
-        if (string.Equals(name, "Authorization", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(name, "Authorization", StringComparison.OrdinalIgnoreCase)) {
             throw new CycUsageException(
                 "--header cannot set Authorization. cyc rest is authenticated by the SDK's pipeline with "
-                + "the signed-in credential — that is the difference between it and curl.");
+                + "the signed-in credential — that is the difference between it and curl."
+            );
+        }
 
         request.Headers.TryAddWithoutValidation(name, header[(separator + 1)..]);
     }
@@ -151,8 +168,9 @@ static class RestCommand {
     ///     same instinct one level down.
     /// </remarks>
     static byte[]? ReadBody(CycInvocation invocation, string? value) {
-        if (string.IsNullOrEmpty(value))
+        if (string.IsNullOrEmpty(value)) {
             return null;
+        }
 
         var text = value switch {
             "-" => Console.In.ReadToEnd(),

@@ -15,17 +15,23 @@ namespace CyberCloud.Providers.Messaging.Tests;
 ///         only in a log line.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every expectation below is a LITERAL, and the sibling Kafka file records why in the
-///         strongest possible terms: an earlier version of it built the expected path from the same
-///         two constants the emitter reads, and re-casing the constant left the whole suite
-///         green.</b> Two things derived from one constant agree however that constant is spelled.
+///         ⚠
+///         <b>
+///             Every expectation below is a LITERAL, and the sibling Kafka file records why in the
+///             strongest possible terms: an earlier version of it built the expected path from the same
+///             two constants the emitter reads, and re-casing the constant left the whole suite
+///             green.
+///         </b> Two things derived from one constant agree however that constant is spelled.
 ///         So the strings here are typed out by hand, and they are the fourth independent copy after
 ///         docs/plan/12 § The catalogue, <c>charts/managed/nats/Chart.yaml</c>'s
 ///         <c>cybercloud.io/resource-type</c> and <c>charts/managed/nats/conformance.yaml</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This type carries a risk the Kafka one does not: a property name with an INTERNAL
-///         capital in the middle of a nested path.</b> <c>maxMemoryStore</c>, <c>maxPayload</c>,
+///         ⚠
+///         <b>
+///             This type carries a risk the Kafka one does not: a property name with an INTERNAL
+///             capital in the middle of a nested path.
+///         </b> <c>maxMemoryStore</c>, <c>maxPayload</c>,
 ///         <c>maxConnections</c>, <c>leafNodes</c> and <c>allowedCidrs</c> are five chances to write
 ///         <c>maxmemorystore</c> or <c>leafnodes</c> — and <c>leafNodes</c> is the dangerous one,
 ///         because <c>leafnodes</c> is the correct spelling of the NATS <i>configuration block</i>
@@ -89,11 +95,12 @@ public sealed class NatsOpenApiCasingTests {
         // path through ResourceTypeName — which is case-INSENSITIVE. So a mis-cased document would
         // still route, and this test is not about routing: it is about what a generated client, a
         // portal breadcrumb and docs/plan/12's prose all copy.
-        NatsClusters.Type.ToString().ShouldBe(
-            QualifiedType,
-            "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
-            + "charts/managed/nats/Chart.yaml's cybercloud.io/resource-type annotation."
-        );
+        NatsClusters.Type.ToString()
+            .ShouldBe(
+                QualifiedType,
+                "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
+                + "charts/managed/nats/Chart.yaml's cybercloud.io/resource-type annotation."
+            );
 
         var paths = Paths();
 
@@ -102,12 +109,9 @@ public sealed class NatsOpenApiCasingTests {
             "no path carries the provider namespace and type as the catalogue spells them"
         );
 
-        foreach (var path in paths.Where(
-                     x => x.Contains("natsclusters", StringComparison.OrdinalIgnoreCase)
-                 )) {
-            path.Contains(QualifiedType, StringComparison.Ordinal).ShouldBeTrue(
-                $"'{path}' spells the type in a casing other than '{QualifiedType}'."
-            );
+        foreach (var path in paths.Where(x => x.Contains("natsclusters", StringComparison.OrdinalIgnoreCase))) {
+            path.Contains(QualifiedType, StringComparison.Ordinal)
+                .ShouldBeTrue($"'{path}' spells the type in a casing other than '{QualifiedType}'.");
         }
     }
 
@@ -120,8 +124,7 @@ public sealed class NatsOpenApiCasingTests {
         var paths = Paths();
 
         paths.ShouldContain(x => x.Contains("/providers/" + QualifiedType + "/", StringComparison.Ordinal));
-        paths.ShouldContain(
-            x => x.Contains("/providers/CyberCloud.Messaging/kafkaClusters/", StringComparison.Ordinal)
+        paths.ShouldContain(x => x.Contains("/providers/CyberCloud.Messaging/kafkaClusters/", StringComparison.Ordinal)
         );
     }
 
@@ -141,10 +144,11 @@ public sealed class NatsOpenApiCasingTests {
         var value = KubeLabels.ResourceTypeValue(NatsClusters.Type);
 
         value.ShouldBe("cybercloud.messaging_natsclusters");
-        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType).IsSuccess.ShouldBeTrue(
-            "the resource-type label value is not legal Kubernetes label syntax, so every object this "
-            + "provider applies would be refused at admission rather than at build time."
-        );
+        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType)
+            .IsSuccess.ShouldBeTrue(
+                "the resource-type label value is not legal Kubernetes label syntax, so every object this "
+                + "provider applies would be refused at admission rather than at build time."
+            );
     }
 
     /// <summary>The document the generator would write for this provider alone.</summary>

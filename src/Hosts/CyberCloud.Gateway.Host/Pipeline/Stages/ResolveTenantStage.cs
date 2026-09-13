@@ -13,11 +13,14 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>THIS IS THE SECURITY BOUNDARY, AND IT IS THE ONLY ONE FOR AN HTTP REQUEST.</b>
-///         docs/plan/10 § Request pipeline: <i>"Step 3 is a security boundary, not a routing
-///         convenience, and this was not obvious. The gateway is an Orleans client, and
-///         <c>Orleans.Multitenant</c>'s call filter skips clients entirely … So the runtime will not
-///         stop a gateway code path from reaching another tenant's grain by naming its key — the
-///         tenant resolved at step 3 is the only thing that does."</i>
+///         docs/plan/10 § Request pipeline:
+///         <i>
+///             "Step 3 is a security boundary, not a routing
+///             convenience, and this was not obvious. The gateway is an Orleans client, and
+///             <c>Orleans.Multitenant</c>'s call filter skips clients entirely … So the runtime will not
+///             stop a gateway code path from reaching another tenant's grain by naming its key — the
+///             tenant resolved at step 3 is the only thing that does."
+///         </i>
 ///     </para>
 ///     <para>
 ///         What that means concretely for anybody editing this file: there is no second check below.

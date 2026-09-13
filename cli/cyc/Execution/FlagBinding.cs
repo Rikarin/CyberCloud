@@ -1,5 +1,5 @@
-using System.CommandLine;
 using CyberCloud.Cli.VerbTree;
+using System.CommandLine;
 
 namespace CyberCloud.Cli.Execution;
 
@@ -22,7 +22,13 @@ namespace CyberCloud.Cli.Execution;
 ///     </para>
 /// </remarks>
 sealed class FlagBinding {
-    FlagBinding(VerbTreeFlag flag, Option option, Func<ParseResult, bool> provided, Func<ParseResult, string?> text, Action<ParseResult, Utf8JsonWriter> writeJson) {
+    FlagBinding(
+        VerbTreeFlag flag,
+        Option option,
+        Func<ParseResult, bool> provided,
+        Func<ParseResult, string?> text,
+        Action<ParseResult, Utf8JsonWriter> writeJson
+    ) {
         Flag = flag;
         Option = option;
         Provided = provided;
@@ -62,7 +68,8 @@ sealed class FlagBinding {
             "string" => TextFlag(flag),
             _ => throw new CycUsageException(
                 $"The verb tree describes {flag.Name} with type '{flag.Type}', which this build of cyc "
-                + "does not know how to accept. Upgrade cyc."),
+                + "does not know how to accept. Upgrade cyc."
+            ),
         };
     }
 
@@ -74,8 +81,9 @@ sealed class FlagBinding {
         option.Description = Describe(flag);
         option.Required = flag.Required;
 
-        if (flag.Choices.Count > 0 && option is Option<string> closed)
+        if (flag.Choices.Count > 0 && option is Option<string> closed) {
             closed.AcceptOnlyFromAmong([.. flag.Choices]);
+        }
 
         return option;
     }
@@ -87,20 +95,27 @@ sealed class FlagBinding {
     static string Describe(VerbTreeFlag flag) {
         var text = new StringBuilder(flag.Summary);
 
-        if (flag.Immutable)
+        if (flag.Immutable) {
             text.Append(text.Length > 0 ? " " : string.Empty).Append("⚠ Cannot be changed after create.");
+        }
 
-        if (flag.Repeated)
+        if (flag.Repeated) {
             text.Append(text.Length > 0 ? " " : string.Empty).Append("Repeatable.");
+        }
 
-        if (flag.Env is { Length: > 0 } variable)
+        if (flag.Env is { Length: > 0 } variable) {
             text.Append(text.Length > 0 ? " " : string.Empty).Append(CultureInfo.InvariantCulture, $"Also {variable}.");
+        }
 
-        if (flag.Default.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.Null))
-            text.Append(text.Length > 0 ? " " : string.Empty).Append(CultureInfo.InvariantCulture, $"Default: {Compact(flag.Default)}.");
+        if (flag.Default.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.Null)) {
+            text.Append(text.Length > 0 ? " " : string.Empty)
+                .Append(CultureInfo.InvariantCulture, $"Default: {Compact(flag.Default)}.");
+        }
 
-        if (flag.Example.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.Null))
-            text.Append(text.Length > 0 ? " " : string.Empty).Append(CultureInfo.InvariantCulture, $"For example: {Compact(flag.Example)}.");
+        if (flag.Example.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.Null)) {
+            text.Append(text.Length > 0 ? " " : string.Empty)
+                .Append(CultureInfo.InvariantCulture, $"For example: {Compact(flag.Example)}.");
+        }
 
         return text.ToString();
     }
@@ -135,7 +150,8 @@ sealed class FlagBinding {
             option,
             parse => Given(parse, option),
             parse => parse.GetValue(option),
-            (parse, writer) => WriteNullable(writer, flag, parse.GetValue(option), (w, v) => w.WriteStringValue(v)));
+            (parse, writer) => WriteNullable(writer, flag, parse.GetValue(option), (w, v) => w.WriteStringValue(v))
+        );
     }
 
     static FlagBinding Switch(VerbTreeFlag flag) {
@@ -146,7 +162,8 @@ sealed class FlagBinding {
             option,
             parse => Given(parse, option),
             parse => parse.GetValue(option) ? "true" : "false",
-            (parse, writer) => writer.WriteBooleanValue(parse.GetValue(option)));
+            (parse, writer) => writer.WriteBooleanValue(parse.GetValue(option))
+        );
     }
 
     static FlagBinding Scalar<T>(VerbTreeFlag flag, Action<Utf8JsonWriter, T> write) where T : struct {
@@ -157,7 +174,8 @@ sealed class FlagBinding {
             option,
             parse => Given(parse, option),
             parse => Convert.ToString(parse.GetValue(option), CultureInfo.InvariantCulture),
-            (parse, writer) => write(writer, parse.GetValue(option)));
+            (parse, writer) => write(writer, parse.GetValue(option))
+        );
     }
 
     static FlagBinding Repeated(VerbTreeFlag flag, JsonValueKind element) {
@@ -173,14 +191,17 @@ sealed class FlagBinding {
                 writer.WriteStartArray();
 
                 foreach (var value in parse.GetValue(option) ?? []) {
-                    if (element == JsonValueKind.Number && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+                    if (element == JsonValueKind.Number
+                        && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)) {
                         writer.WriteNumberValue(number);
-                    else
+                    } else {
                         writer.WriteStringValue(value);
+                    }
                 }
 
                 writer.WriteEndArray();
-            });
+            }
+        );
     }
 
     /// <summary>
@@ -205,21 +226,24 @@ sealed class FlagBinding {
                 foreach (var pair in parse.GetValue(option) ?? []) {
                     var separator = pair.IndexOf('=', StringComparison.Ordinal);
 
-                    if (separator <= 0)
+                    if (separator <= 0) {
                         throw new CycUsageException($"{flag.Name} takes key=value pairs; '{pair}' has no '='.");
+                    }
 
                     writer.WriteString(pair[..separator], pair[(separator + 1)..]);
                 }
 
                 writer.WriteEndObject();
-            });
+            }
+        );
     }
 
     static void WriteNullable<T>(Utf8JsonWriter writer, VerbTreeFlag flag, T? value, Action<Utf8JsonWriter, T> write) {
         // ⚠ The literal `null` is how a nullable field is cleared, and it is only accepted where the
         // schema says the field is nullable — otherwise a resource legitimately named "null" could
         // never be referred to.
-        if (value is null || (flag.Nullable && value is string text && string.Equals(text, "null", StringComparison.Ordinal))) {
+        if (value is null
+            || (flag.Nullable && value is string text && string.Equals(text, "null", StringComparison.Ordinal))) {
             writer.WriteNullValue();
 
             return;

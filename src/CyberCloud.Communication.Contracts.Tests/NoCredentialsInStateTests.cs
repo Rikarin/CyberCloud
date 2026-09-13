@@ -4,13 +4,19 @@ using System.Reflection;
 namespace CyberCloud.Communication.Contracts.Tests;
 
 /// <summary>
-///     docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row: <i>"secrets are
-///     <c>SecretRef</c> handles resolved at the data plane"</i>.
+///     docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row:
+///     <i>
+///         "secrets are
+///         <c>SecretRef</c> handles resolved at the data plane"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>CC1005 already fails the build for a member <i>named</i> like a secret, and these
-///         assert the two things a name rule cannot.</b> The first is that a suppression, when one is
+///         ⚠
+///         <b>
+///             CC1005 already fails the build for a member <i>named</i> like a secret, and these
+///             assert the two things a name rule cannot.
+///         </b> The first is that a suppression, when one is
 ///         used, carries a real argument rather than a shrug. The second is that no wire type in this
 ///         module has a member whose <i>type</i> could hold a credential value — which is the shape
 ///         that gets past a name rule, because <c>public string Twilio { get; init; }</c> is not
@@ -45,7 +51,8 @@ public sealed class NoCredentialsInStateTests {
     public void NoWireTypeCarriesAMemberNamedLikeASecretExceptTheSanctionedOnes() {
         var offending = new List<string>();
 
-        foreach (var type in Contracts.GetTypes().Where(x => x.GetCustomAttribute<GenerateSerializerAttribute>() is not null)) {
+        foreach (var type in Contracts.GetTypes()
+                     .Where(x => x.GetCustomAttribute<GenerateSerializerAttribute>() is not null)) {
             foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)) {
                 if (property.GetCustomAttribute<IdAttribute>() is null) {
                     continue;
@@ -88,7 +95,9 @@ public sealed class NoCredentialsInStateTests {
 
     [Fact]
     public void CarrierCredentialsReachTheCarrierOnlyAsHandles() {
-        foreach (var property in typeof(CarrierCredentials).GetProperties(BindingFlags.Public | BindingFlags.Instance)) {
+        foreach (var property in typeof(CarrierCredentials).GetProperties(
+                     BindingFlags.Public | BindingFlags.Instance
+                 )) {
             if (property.Name == nameof(CarrierCredentials.Mode)) {
                 continue;
             }
@@ -203,10 +212,9 @@ public sealed class GrainKeyDerivationTests {
     [Fact]
     public void EveryDerivedKeyIsAParseableGrainKey() {
         foreach (var key in new[] {
-            CommunicationGrainKeys.Message(Service, "otp-42"),
-            CommunicationGrainKeys.ProviderMessage(Service, "SM123"),
-            CommunicationGrainKeys.Service(Service)
-        }) {
+                     CommunicationGrainKeys.Message(Service, "otp-42"),
+                     CommunicationGrainKeys.ProviderMessage(Service, "SM123"), CommunicationGrainKeys.Service(Service)
+                 }) {
             // ADR-002: GrainKeys is the only type allowed to build the within-tenant part, and the
             // parser's canonicity guard is what makes a key that round-trips to a different string
             // impossible. A derived guid that failed this would be a second activation of one entity.

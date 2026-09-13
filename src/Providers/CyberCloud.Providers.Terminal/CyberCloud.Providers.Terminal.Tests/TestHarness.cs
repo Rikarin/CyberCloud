@@ -52,8 +52,11 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
     /// <summary>The <c>status.phase</c> stamped onto an accepted <c>Pod</c>, or empty for none.</summary>
     /// <remarks>
-    ///     ⚠ Empty by default, because a real API server accepts a pod and answers with <b>no phase at
-    ///     all</b> until the kubelet reports one. A fake that defaulted to <c>Running</c> would make
+    ///     ⚠ Empty by default, because a real API server accepts a pod and answers with
+    ///     <b>
+    ///         no phase at
+    ///         all
+    ///     </b> until the kubelet reports one. A fake that defaulted to <c>Running</c> would make
     ///     every connect look ready and would hide the one branch a person actually sees first.
     /// </remarks>
     public string PodPhase { get; init; } = string.Empty;
@@ -165,8 +168,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     puts the same resource name in two tenants, which is the only shape in which one singleton
     ///     reconciler serving both can be caught mixing them.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>
@@ -207,10 +209,12 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }

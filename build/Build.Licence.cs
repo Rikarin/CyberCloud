@@ -53,10 +53,9 @@
 // (Syft is already a Build.Images dependency) pointed at the images charts/bundle/ now names. The
 // first half of that is a decision and the second is an afternoon.
 
-partial class Build
-{
-    void ScanLicences()
-        => NotImplementedYet(
+partial class Build {
+    void ScanLicences() =>
+        NotImplementedYet(
             nameof(Licence),
             "scan the declared licence of every packaged chart and every image charts/bundle/ "
             + "records, against a list that answers 'what may be linked into an artefact we ship' — "
@@ -66,5 +65,6 @@ partial class Build
             + "components in mcr.microsoft.com/dotnet/aspnet:10.0 declare GPL or LGPL, so a scan "
             + "over image contents against the offering allow-list fails on our own base image "
             + "before it reaches any bundle component. See this file's header, ADR-011 § Enforcement "
-            + "and charts/bundle/bundle.yaml § owed, `licence-scan-is-a-declaration-not-a-scan`");
+            + "and charts/bundle/bundle.yaml § owed, `licence-scan-is-a-declaration-not-a-scan`"
+        );
 }

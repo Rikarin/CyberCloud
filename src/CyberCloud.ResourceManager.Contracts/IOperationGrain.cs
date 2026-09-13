@@ -23,10 +23,13 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Cancellation completes rather than abandoning, and that is a billing property.</b>
-///         docs/plan/08 § Long-running operations: <i>"Cancellation is cooperative: it sets a flag the
-///         reconciler observes, and for anything already applied it runs the delete path. A
-///         'cancelled' create that leaves resources running is a billing dispute waiting to happen, so
-///         cancellation <b>completes</b> rather than abandoning."</i> So
+///         docs/plan/08 § Long-running operations:
+///         <i>
+///             "Cancellation is cooperative: it sets a flag the
+///             reconciler observes, and for anything already applied it runs the delete path. A
+///             'cancelled' create that leaves resources running is a billing dispute waiting to happen, so
+///             cancellation <b>completes</b> rather than abandoning."
+///         </i> So
 ///         <see cref="CancelAsync" /> returns as soon as the flag is set, and the operation reaches
 ///         <see cref="OperationState.Canceled" /> only after the delete path has run. A caller that
 ///         treats the return of <see cref="CancelAsync" /> as "it stopped" is reading the wrong

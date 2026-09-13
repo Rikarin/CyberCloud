@@ -35,8 +35,11 @@ public sealed record TypeScriptReport(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A separate output root from <c>generated/</c>, and the reason is rule 6 rather than
-///         taste.</b> docs/plan/03 § Assembly graph rules says <c>portal/libs/api</c> has no
+///         ⚠
+///         <b>
+///             A separate output root from <c>generated/</c>, and the reason is rule 6 rather than
+///             taste.
+///         </b> docs/plan/03 § Assembly graph rules says <c>portal/libs/api</c> has no
 ///         hand-written files and the generator owns the directory, and
 ///         <c>build/Build.Architecture.cs</c> enforces it by reading the head of every file there. A
 ///         client written under <c>generated/</c> and copied across would make that gate inspect a
@@ -66,8 +69,11 @@ public static class TypeScriptSurfaces {
     ///     stale.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The README is the one hand-written file in a directory whose rule is that it has
-    ///     none, and it survives because it is what tells a reader that.</b> It carries the same
+    ///     ⚠
+    ///     <b>
+    ///         The README is the one hand-written file in a directory whose rule is that it has
+    ///         none, and it survives because it is what tells a reader that.
+    ///     </b> It carries the same
     ///     generator banner every emitted file does — which is what
     ///     <c>build/Build.Architecture.cs</c>'s rule 6 actually checks — and
     ///     <see cref="DerivedSurfaces" /> exempts <c>.md</c> from its own stale check for the same

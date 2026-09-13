@@ -16,7 +16,8 @@ namespace CyberCloud.Authorization.Grains;
 ///     one.
 /// </remarks>
 public sealed class SubjectRelationsGrain(
-    [PersistentState("subjects", StorageTiers.Durable)] IPersistentState<SubjectRelationsState> state
+    [PersistentState("subjects", StorageTiers.Durable)]
+    IPersistentState<SubjectRelationsState> state
 )
     : Grain, ISubjectRelationsGrain {
     /// <inheritdoc />

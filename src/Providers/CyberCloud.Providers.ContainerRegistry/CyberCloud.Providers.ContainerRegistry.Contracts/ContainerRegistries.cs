@@ -1,4 +1,5 @@
 // ⚠ For SecretRef, which the credential block below hands to ISecretWriter and ISecretResolver.
+
 using CyberCloud.Core.Contracts;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
@@ -169,8 +170,11 @@ public static class ContainerRegistries {
 
     /// <summary>The body flag that refuses every purge of a resource for the rest of its window.</summary>
     /// <remarks>
-    ///     ⚠ <b>It was not declared as a property while the window was withdrawn, because
-    ///     <c>ProviderBuilder</c> refuses a purge-protection pointer on a type with no window</b> —
+    ///     ⚠
+    ///     <b>
+    ///         It was not declared as a property while the window was withdrawn, because
+    ///         <c>ProviderBuilder</c> refuses a purge-protection pointer on a type with no window
+    ///     </b> —
     ///     <i>"the flag would be a property callers can set and nothing reads"</i>. Both halves move
     ///     together, in one direction and the other: the constant lived here through the withdrawal so
     ///     the argument would not have to be rebuilt, and the schema property came back with the
@@ -208,8 +212,11 @@ public static class ContainerRegistries {
 
     /// <summary>A <c>StatefulSet</c> — the three components that own a volume.</summary>
     /// <remarks>
-    ///     ⚠ <b>A <c>StatefulSet</c> for the registry rather than a <c>Deployment</c> with a
-    ///     <c>PersistentVolumeClaim</c> beside it, and the reason is the delete path.</b> A claim
+    ///     ⚠
+    ///     <b>
+    ///         A <c>StatefulSet</c> for the registry rather than a <c>Deployment</c> with a
+    ///         <c>PersistentVolumeClaim</c> beside it, and the reason is the delete path.
+    ///     </b> A claim
     ///     created by a <c>volumeClaimTemplate</c> is named after the set and is <i>not</i> removed by
     ///     deleting it, which is precisely what makes this type's recovery window honourable — see
     ///     <see cref="SoftDeleteDays" />. A separately-applied claim would be a fifteenth object this
@@ -224,8 +231,11 @@ public static class ContainerRegistries {
     ///     <c>IKubeCommandBuilder.WithTemplateLabels</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The claims a <c>volumeClaimTemplate</c> makes are the whole content of this type's
-    ///     recovery window, so they are the objects it can least afford to be unable to find.</b> The
+    ///     ⚠
+    ///     <b>
+    ///         The claims a <c>volumeClaimTemplate</c> makes are the whole content of this type's
+    ///         recovery window, so they are the objects it can least afford to be unable to find.
+    ///     </b> The
     ///     seven labels go into an object's own <c>metadata.labels</c>; a claim the StatefulSet
     ///     controller creates is a different object, and until this path was declared it carried
     ///     nothing but the selector's <c>matchLabels</c> — so a managed-only listing saw an empty
@@ -242,25 +252,31 @@ public static class ContainerRegistries {
 
     /// <summary>Prometheus Operator's <c>PodMonitor</c> — docs/plan/12 § The pattern, once, piece 6.</summary>
     /// <remarks>
-    ///     ⚠ <b>Piece 6's SECOND branch, discharged for the reason <c>charts/managed/nats</c>
-    ///     established and this is the third sighting of.</b> The corrected piece 6 reads
-    ///     <i>"ask the operator … and hand-write one into the chart only when there is no operator to
-    ///     ask"</i>, and warns that a hand-written scrape hard-codes somebody else's pod labels. The
+    ///     ⚠
+    ///     <b>
+    ///         Piece 6's SECOND branch, discharged for the reason <c>charts/managed/nats</c>
+    ///         established and this is the third sighting of.
+    ///     </b> The corrected piece 6 reads
+    ///     <i>
+    ///         "ask the operator … and hand-write one into the chart only when there is no operator to
+    ///         ask"
+    ///     </i>, and warns that a hand-written scrape hard-codes somebody else's pod labels. The
     ///     labels this selector matches are <see cref="PodLabels" /> — written by this file onto pods
     ///     created by this file — so there is no upstream release that can move them. Hand-writing is
     ///     safe exactly when there is no operator, which is the same condition that forces the branch.
     /// </remarks>
     public static GroupVersionKind PodMonitorKind { get; } =
-        new() {
-            Group = "monitoring.coreos.com", Version = "v1", Kind = "PodMonitor", Plural = "podmonitors"
-        };
+        new() { Group = "monitoring.coreos.com", Version = "v1", Kind = "PodMonitor", Plural = "podmonitors" };
 
     // ── Ports ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>The port Harbor's core serves on — the API, the portal proxy and <c>/v2/</c>.</summary>
     /// <remarks>
-    ///     ⚠ <b>Core is the front door and there is no nginx, which is a scope decision with a
-    ///     consequence.</b> <c>goharbor/harbor-helm</c> puts an nginx in front that routes <c>/</c> to
+    ///     ⚠
+    ///     <b>
+    ///         Core is the front door and there is no nginx, which is a scope decision with a
+    ///         consequence.
+    ///     </b> <c>goharbor/harbor-helm</c> puts an nginx in front that routes <c>/</c> to
     ///     the portal and <c>/api/</c>, <c>/v2/</c>, <c>/service/</c> to core. Core serves the second
     ///     set itself, so <c>docker login</c> and <c>docker push</c> work against it directly; what is
     ///     lost is one address that serves both the UI and the API. The portal has its own
@@ -280,8 +296,11 @@ public static class ContainerRegistries {
 
     /// <summary>The port <c>distribution</c> serves the OCI API on.</summary>
     /// <remarks>
-    ///     ⚠ <b>Reachable only from inside the namespace, and that is load-bearing rather than
-    ///     incidental — see <see cref="RegistryConfigYaml" />.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Reachable only from inside the namespace, and that is load-bearing rather than
+    ///         incidental — see <see cref="RegistryConfigYaml" />.
+    ///     </b>
     /// </remarks>
     public const int RegistryPort = 5000;
 
@@ -317,16 +336,18 @@ public static class ContainerRegistries {
 
     /// <summary>The patch each offered minor is pinned to, as an image tag.</summary>
     /// <remarks>
-    ///     ⚠ <b>The API takes a MINOR and a container image takes a full tag, so the platform pins the
-    ///     patch.</b> Offering a bare minor as a tag would resolve to nothing — Harbor publishes
+    ///     ⚠
+    ///     <b>
+    ///         The API takes a MINOR and a container image takes a full tag, so the platform pins the
+    ///         patch.
+    ///     </b> Offering a bare minor as a tag would resolve to nothing — Harbor publishes
     ///     <c>v2.15.2</c> and not <c>v2.15</c> — and the failure is one image pull back-off per pod,
     ///     after the caller was told <c>202</c>. The same shape <c>ManagedClusters.PinnedPatch</c>
     ///     records for Kubernetes minors, reached from a registry rather than from a webhook.
     /// </remarks>
     public static FrozenDictionary<string, string> PinnedPatch { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal) {
-            ["2.14"] = "v2.14.4",
-            ["2.15"] = "v2.15.2"
+            ["2.14"] = "v2.14.4", ["2.15"] = "v2.15.2"
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The registry Harbor's own images are pulled from.</summary>
@@ -334,8 +355,11 @@ public static class ContainerRegistries {
 
     /// <summary>The PostgreSQL image Harbor ships. ⚠ Harbor's build, not upstream Postgres.</summary>
     /// <remarks>
-    ///     ⚠ <b><c>goharbor/harbor-db</c> and not <c>postgres</c>, and substituting the upstream image
-    ///     does not work.</b> Harbor's build carries the migration entrypoint and the
+    ///     ⚠
+    ///     <b>
+    ///         <c>goharbor/harbor-db</c> and not <c>postgres</c>, and substituting the upstream image
+    ///         does not work.
+    ///     </b> Harbor's build carries the migration entrypoint and the
     ///     <c>registry</c>/<c>notaryserver</c>/<c>notarysigner</c> database bootstrap that core's
     ///     schema migration expects to already exist. That is also why this type does <b>not</b> reach
     ///     for <c>CyberCloud.DBforPostgreSQL/servers</c> even setting rule 2 aside: the platform's
@@ -464,16 +488,22 @@ public static class ContainerRegistries {
     ///         must remove, and one list saying both is what keeps them from drifting apart.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Ordinal <c>0</c> only, and that is a fact about this type rather than a
-    ///         simplification.</b> All three sets are rendered with <c>replicas: 1</c> as a literal —
+    ///         ⚠
+    ///         <b>
+    ///             Ordinal <c>0</c> only, and that is a fact about this type rather than a
+    ///             simplification.
+    ///         </b> All three sets are rendered with <c>replicas: 1</c> as a literal —
     ///         see <c>DatabaseSetJson</c>, <c>RedisSetJson</c> and <c>RegistrySetJson</c> — and the
     ///         registry's volume is <c>ReadWriteOnce</c>, which a second replica could not mount. A
     ///         type whose replica count came from the desired body would read it here;
     ///         <c>RetainedVolume.OfSet</c> takes the count for that reason.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The ownership labels are <see cref="PodLabels" /> and NOT ADR-013's seven, and
-    ///         the reason is that the seven are not on these objects.</b>
+    ///         ⚠
+    ///         <b>
+    ///             The ownership labels are <see cref="PodLabels" /> and NOT ADR-013's seven, and
+    ///             the reason is that the seven are not on these objects.
+    ///         </b>
     ///         <c>KubeCommandBuilder.Inject</c> writes them into the top-level
     ///         <c>metadata.labels</c> of the document it sends and does not descend into a nested
     ///         <c>volumeClaimTemplate</c>, so a claim created by the <c>StatefulSet</c> controller
@@ -490,8 +520,7 @@ public static class ContainerRegistries {
         ArgumentException.ThrowIfNullOrEmpty(ns);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return
-        [
+        return [
             .. RetainedVolume.OfSet(
                 ns,
                 DataVolume,
@@ -559,8 +588,11 @@ public static class ContainerRegistries {
     ///     selector.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>These are NOT ADR-013's seven, and the distinction is the one
-    ///     <c>DocumentDbAccounts</c> measured.</b> The seven are injected by <c>KubeCommand</c> onto
+    ///     ⚠
+    ///     <b>
+    ///         These are NOT ADR-013's seven, and the distinction is the one
+    ///         <c>DocumentDbAccounts</c> measured.
+    ///     </b> The seven are injected by <c>KubeCommand</c> onto
     ///     each object's own <c>metadata.labels</c>, non-overridably, so the Labels architecture gate
     ///     cannot be failed by a provider. These four sit inside <c>spec.template.metadata.labels</c>
     ///     and <c>spec.selector</c>, which no builder reaches — so what a provider <i>can</i> get wrong
@@ -629,9 +661,15 @@ public static class ContainerRegistries {
     ///     brand-new registry the credentials of one somebody deleted, and mint-once would make that
     ///     permanent.
     ///     <para>
-    ///         ⚠ <b>On THIS type the name is held for the whole recovery window rather than released
-    ///         immediately</b> — docs/plan/08 § Soft delete, <i>"the name is held for the whole
-    ///         window"</i> — so the collision the GUID prevents is a week away rather than an hour
+    ///         ⚠
+    ///         <b>
+    ///             On THIS type the name is held for the whole recovery window rather than released
+    ///             immediately
+    ///         </b> — docs/plan/08 § Soft delete,
+    ///         <i>
+    ///             "the name is held for the whole
+    ///             window"
+    ///         </i> — so the collision the GUID prevents is a week away rather than an hour
     ///         away. That makes the GUID <i>more</i> necessary and not less: a restore has to find the
     ///         same credential the tenant was using, and only an address that survived the delete can.
     ///     </para>
@@ -671,8 +709,11 @@ public static class ContainerRegistries {
 
     /// <summary>Every field one mint writes, in the order they are generated.</summary>
     /// <remarks>
-    ///     ⚠ <b>Listed once so that the mint, the rendered <c>Secret</c> and the tests cannot disagree
-    ///     about the set.</b> <c>ContainerRegistryCredentialTests</c> walks this array against what
+    ///     ⚠
+    ///     <b>
+    ///         Listed once so that the mint, the rendered <c>Secret</c> and the tests cannot disagree
+    ///         about the set.
+    ///     </b> <c>ContainerRegistryCredentialTests</c> walks this array against what
     ///     <see cref="GenerateCredentials" /> returns and against what
     ///     <see cref="CredentialsSecretJson" /> renders, which is what catches a seventh field added to
     ///     one of the three.
@@ -733,8 +774,11 @@ public static class ContainerRegistries {
     public const int PasswordLength = 32;
 
     /// <summary>
-    ///     How many characters core's CSRF key has. ⚠ <b>Exactly 32, and Harbor refuses to start
-    ///     otherwise.</b>
+    ///     How many characters core's CSRF key has. ⚠
+    ///     <b>
+    ///         Exactly 32, and Harbor refuses to start
+    ///         otherwise.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     ⚠ It is an AES-256 key, hex-decoded from the environment; a value of any other length is a
@@ -746,8 +790,11 @@ public static class ContainerRegistries {
 
     /// <summary>The symbols a generated credential is drawn from.</summary>
     /// <remarks>
-    ///     ⚠ <b>Alphanumeric and nothing else, which is narrower than a password generator would
-    ///     ordinarily pick and is forced.</b> These values travel through a <c>ConfigMap</c>'s YAML, a
+    ///     ⚠
+    ///     <b>
+    ///         Alphanumeric and nothing else, which is narrower than a password generator would
+    ///         ordinarily pick and is forced.
+    ///     </b> These values travel through a <c>ConfigMap</c>'s YAML, a
     ///     PostgreSQL connection string and a <c>docker login</c> argument; a shell metacharacter or a
     ///     YAML special is a quoting bug in whichever of the three the author did not think about. The
     ///     entropy lost is bought back by <see cref="PasswordLength" />.
@@ -799,8 +846,11 @@ public static class ContainerRegistries {
     ///     the third type in the catalogue whose quota meters are a sum over <i>heterogeneous</i>
     ///     components — after <c>CyberCloud.Storage/accounts</c> and <c>CyberCloud.Search/services</c>.
     ///     <para>
-    ///         ⚠ <b><c>s1</c> rather than <c>c1</c>, and the choice is about the workload rather than
-    ///         about the table.</b> A registry is bound by disk and by network; docs/plan/12's five
+    ///         ⚠
+    ///         <b>
+    ///             <c>s1</c> rather than <c>c1</c>, and the choice is about the workload rather than
+    ///             about the table.
+    ///         </b> A registry is bound by disk and by network; docs/plan/12's five
     ///         families are burstable, CPU-bound, general, memory-bound and latency-sensitive, and none
     ///         of them is that. <c>s1</c> — <i>"1:4 · General"</i> — is the closest, and taking it
     ///         rather than inventing a sixth family is the point of having a vocabulary.
@@ -856,8 +906,11 @@ public static class ContainerRegistries {
     ///     The <c>volumeClaimTemplate</c> name the database and Redis sets both use.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A constant because a purge reads it, and until then it was a string literal written
-    ///     twice.</b> The claim a <c>volumeClaimTemplate</c> creates is named
+    ///     ⚠
+    ///     <b>
+    ///         A constant because a purge reads it, and until then it was a string literal written
+    ///         twice.
+    ///     </b> The claim a <c>volumeClaimTemplate</c> creates is named
     ///     <c>{volume}-{set}-{ordinal}</c>, so this word is half of the name
     ///     <see cref="RetainedClaims" /> hands the purge — and a rename here that did not reach there
     ///     would be a purge that predicts a name nothing holds, converges on the absence, and leaves
@@ -905,11 +958,7 @@ public static class ContainerRegistries {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the registry."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -920,10 +969,7 @@ public static class ContainerRegistries {
                     + "publishes image tags per patch and a bare minor resolves to nothing. A minor "
                     + "leaving support is a portal notice and a 120-day window — docs/plan/12 "
                     + "§ Cross-cutting decisions."
-                ) {
-                    AllowedValues = ["2.14", "2.15"],
-                    DefaultJson = "\"2.15\""
-                },
+                ) { AllowedValues = ["2.14", "2.15"], DefaultJson = "\"2.15\"" },
                 new(
                     "/properties/replicas",
                     SchemaKind.WholeNumber,
@@ -932,11 +978,7 @@ public static class ContainerRegistries {
                     + "web portal and the job service — run. Two is the smallest count that survives a "
                     + "node drain. The registry itself, the database and Redis each own a volume and "
                     + "run one replica whatever this says."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 10, DefaultJson = "2" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -958,19 +1000,13 @@ public static class ContainerRegistries {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -984,21 +1020,13 @@ public static class ContainerRegistries {
                     + "shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage "
                     + "bucket, which is what docs/plan/13 asks for and what the platform cannot yet "
                     + "give it — see the registry's own documentation."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"100Gi\"",
-                    ExampleJson = "\"100Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"100Gi\"", ExampleJson = "\"100Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name for the image volume. Empty means the cluster "
                     + "default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/monitoring",
                     SchemaKind.Nested,
@@ -1012,9 +1040,7 @@ public static class ContainerRegistries {
                     + "cannot see the health of is a black box they will not trust with production\". "
                     + "Turning it off removes the metrics port as well as the scrape, so nothing is "
                     + "left listening on an unscraped address."
-                ) {
-                    DefaultJson = "true"
-                },
+                ) { DefaultJson = "true" },
 
                 // ── Soft delete ──────────────────────────────────────────────────────────────
                 //
@@ -1041,9 +1067,7 @@ public static class ContainerRegistries {
                     + "window is out. Once true it stays true for the rest of the registry's life, and "
                     + "a purge is refused while it is set — a flag whose holder can clear it and then "
                     + "purge is one round-trip of protection."
-                ) {
-                    DefaultJson = "false"
-                }
+                ) { DefaultJson = "false" }
             ]
         );
 
@@ -1086,8 +1110,7 @@ public static class ContainerRegistries {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -1116,12 +1139,10 @@ public static class ContainerRegistries {
     public static int Replicas(JsonElement desired) => Number(desired, "replicas", DefaultReplicas);
 
     /// <summary>The image-storage size a body asks for.</summary>
-    public static string StorageSize(JsonElement desired) =>
-        Text(desired, "storage", "size", DefaultStorageSize);
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", DefaultStorageSize);
 
     /// <summary>Whether the desired body asks for metrics and a scrape.</summary>
-    public static bool MonitoringEnabled(JsonElement desired) =>
-        Flag(desired, "monitoring", "enabled", true);
+    public static bool MonitoringEnabled(JsonElement desired) => Flag(desired, "monitoring", "enabled", true);
 
     /// <summary>
     ///     The CPU and memory the registry pod asks for: the explicit quantities when both are given,
@@ -1148,14 +1169,20 @@ public static class ContainerRegistries {
     /// <param name="credentials">The credentials, as the vault holds them.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE ONE OBJECT THIS PROVIDER RENDERS THAT CARRIES SECRET VALUES, AND IT IS BUILT
-    ///         FROM WHAT THE VAULT RETURNED RATHER THAN FROM DESIRED STATE.</b> The registry's body has
+    ///         ⚠
+    ///         <b>
+    ///             THE ONE OBJECT THIS PROVIDER RENDERS THAT CARRIES SECRET VALUES, AND IT IS BUILT
+    ///             FROM WHAT THE VAULT RETURNED RATHER THAN FROM DESIRED STATE.
+    ///         </b> The registry's body has
     ///         no credential property and must not grow one: docs/plan/00 § Non-negotiables keeps
     ///         secrets out of grain state, and a body is grain state.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>data</c> with the base64 written out rather than <c>stringData</c>, and the
-    ///         reason is the read-back.</b> <c>stringData</c> is write-only: the API server folds it
+    ///         ⚠
+    ///         <b>
+    ///             <c>data</c> with the base64 written out rather than <c>stringData</c>, and the
+    ///             reason is the read-back.
+    ///         </b> <c>stringData</c> is write-only: the API server folds it
     ///         into <c>data</c> and never returns it, so an object applied with one field and read back
     ///         with another is an object <see cref="Matches" /> would have to accept in two shapes, one
     ///         of which no real cluster ever produces.
@@ -1184,8 +1211,11 @@ public static class ContainerRegistries {
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>NEITHER DOCUMENT CARRIES A CREDENTIAL, which is why they can live in a
-    ///     <c>ConfigMap</c>.</b> <c>distribution</c> reads its HTTP secret from
+    ///     ⚠
+    ///     <b>
+    ///         NEITHER DOCUMENT CARRIES A CREDENTIAL, which is why they can live in a
+    ///         <c>ConfigMap</c>.
+    ///     </b> <c>distribution</c> reads its HTTP secret from
     ///     <c>REGISTRY_HTTP_SECRET</c> and the job service reads its from <c>CORE_SECRET</c>, both
     ///     environment variables sourced from <see cref="CredentialsSecretName" /> — so the two files
     ///     here are configuration and the <c>Secret</c> is the only object with a value in it. A
@@ -1198,8 +1228,7 @@ public static class ContainerRegistries {
         return new JsonObject {
             ["metadata"] = new JsonObject { ["name"] = ConfigMapName(name) },
             ["data"] = new JsonObject {
-                [RegistryConfigKey] = RegistryConfigYaml(),
-                [JobServiceConfigKey] = JobServiceConfigYaml(name, desired)
+                [RegistryConfigKey] = RegistryConfigYaml(), [JobServiceConfigKey] = JobServiceConfigYaml(name, desired)
             }
         }.ToJsonString();
     }
@@ -1255,7 +1284,9 @@ public static class ContainerRegistries {
         + "    service: registry\n"
         + "storage:\n"
         + "  filesystem:\n"
-        + "    rootdirectory: " + RegistryMountPath + "\n"
+        + "    rootdirectory: "
+        + RegistryMountPath
+        + "\n"
         + "  cache:\n"
         + "    layerinfo: redis\n"
         + "  maintenance:\n"
@@ -1266,7 +1297,9 @@ public static class ContainerRegistries {
         + "  redirect:\n"
         + "    disable: true\n"
         + "http:\n"
-        + "  addr: :" + Text(RegistryPort) + "\n"
+        + "  addr: :"
+        + Text(RegistryPort)
+        + "\n"
         + "  relativeurls: false\n"
         + "  debug:\n"
         + "    addr: localhost:5001\n"
@@ -1288,21 +1321,31 @@ public static class ContainerRegistries {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         return "protocol: \"http\"\n"
-            + "port: " + Text(JobServicePort) + "\n"
+            + "port: "
+            + Text(JobServicePort)
+            + "\n"
             + "worker_pool:\n"
             + "  workers: 10\n"
             + "  backend: \"redis\"\n"
             + "  redis_pool:\n"
-            + "    redis_url: \"redis://" + RedisName(name) + ":" + Text(RedisPort) + "/1\"\n"
+            + "    redis_url: \"redis://"
+            + RedisName(name)
+            + ":"
+            + Text(RedisPort)
+            + "/1\"\n"
             + "    namespace: \"harbor_job_service_namespace\"\n"
             + "    idle_timeout_second: 3600\n"
             + "job_loggers:\n"
             + "  - name: \"STD_OUTPUT\"\n"
             + "    level: \"INFO\"\n"
             + "metric:\n"
-            + "  enabled: " + (MonitoringEnabled(desired) ? "true" : "false") + "\n"
+            + "  enabled: "
+            + (MonitoringEnabled(desired) ? "true" : "false")
+            + "\n"
             + "  path: /metrics\n"
-            + "  port: " + Text(MetricsPort) + "\n";
+            + "  port: "
+            + Text(MetricsPort)
+            + "\n";
     }
 
     // ── The workloads ─────────────────────────────────────────────────────────────────────────
@@ -1311,8 +1354,11 @@ public static class ContainerRegistries {
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>One replica, and it is a single point of failure that is written down rather than
-    ///     hidden.</b> Harbor's <c>harbor-db</c> image is a plain PostgreSQL with Harbor's bootstrap in
+    ///     ⚠
+    ///     <b>
+    ///         One replica, and it is a single point of failure that is written down rather than
+    ///         hidden.
+    ///     </b> Harbor's <c>harbor-db</c> image is a plain PostgreSQL with Harbor's bootstrap in
     ///     it and has no replication of its own; making it highly available means CloudNativePG, which
     ///     is <c>CyberCloud.DBforPostgreSQL/servers</c> and therefore another provider's resource.
     ///     Third entry in the same list — <c>conformance.yaml § owed</c>,
@@ -1408,16 +1454,11 @@ public static class ContainerRegistries {
             ["ports"] = new JsonArray { ContainerPort("registry", RegistryPort) },
             ["env"] = new JsonArray {
                 SecretEnv("REGISTRY_HTTP_SECRET", name, RegistryHttpSecretField),
-                new JsonObject {
-                    ["name"] = "REGISTRY_REDIS_ADDR",
-                    ["value"] = RedisName(name) + ":" + Text(RedisPort)
-                }
+                new JsonObject { ["name"] = "REGISTRY_REDIS_ADDR", ["value"] = RedisName(name) + ":" + Text(RedisPort) }
             },
             ["volumeMounts"] = new JsonArray {
                 new JsonObject {
-                    ["name"] = "config",
-                    ["mountPath"] = "/etc/registry/config.yml",
-                    ["subPath"] = RegistryConfigKey
+                    ["name"] = "config", ["mountPath"] = "/etc/registry/config.yml", ["subPath"] = RegistryConfigKey
                 },
                 new JsonObject { ["name"] = RegistryVolume, ["mountPath"] = RegistryMountPath }
             },
@@ -1426,9 +1467,7 @@ public static class ContainerRegistries {
 
         if (cpu.Length > 0 && memory.Length > 0) {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
-            registry["resources"] = new JsonObject {
-                ["requests"] = quantities.DeepClone(), ["limits"] = quantities
-            };
+            registry["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
         }
 
         var controller = new JsonObject {
@@ -1441,9 +1480,7 @@ public static class ContainerRegistries {
             },
             ["volumeMounts"] = new JsonArray {
                 new JsonObject {
-                    ["name"] = "config",
-                    ["mountPath"] = "/etc/registry/config.yml",
-                    ["subPath"] = RegistryConfigKey
+                    ["name"] = "config", ["mountPath"] = "/etc/registry/config.yml", ["subPath"] = RegistryConfigKey
                 },
                 new JsonObject { ["name"] = RegistryVolume, ["mountPath"] = RegistryMountPath }
             },
@@ -1584,9 +1621,7 @@ public static class ContainerRegistries {
             },
             ["volumeMounts"] = new JsonArray {
                 new JsonObject {
-                    ["name"] = "config",
-                    ["mountPath"] = "/etc/jobservice/config.yml",
-                    ["subPath"] = JobServiceConfigKey
+                    ["name"] = "config", ["mountPath"] = "/etc/jobservice/config.yml", ["subPath"] = JobServiceConfigKey
                 }
             },
             ["resources"] = ControlPlaneResources(),
@@ -1679,9 +1714,8 @@ public static class ContainerRegistries {
             ["metadata"] = new JsonObject { ["name"] = name },
             ["spec"] = new JsonObject {
                 ["selector"] = new JsonObject { ["matchLabels"] = selector },
-                ["podMetricsEndpoints"] = new JsonArray {
-                    new JsonObject { ["port"] = "metrics", ["path"] = "/metrics" }
-                }
+                ["podMetricsEndpoints"] =
+                    new JsonArray { new JsonObject { ["port"] = "metrics", ["path"] = "/metrics" } }
             }
         }.ToJsonString();
     }
@@ -1693,8 +1727,11 @@ public static class ContainerRegistries {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>CONTAINMENT, AND FOR THE REASON <c>NatsClusters</c> FOUND RATHER THAN THE ONE FIVE
-    ///         OTHER PROVIDERS GIVE.</b> The usual argument is a CRD's <c>+kubebuilder:default</c>
+    ///         ⚠
+    ///         <b>
+    ///             CONTAINMENT, AND FOR THE REASON <c>NatsClusters</c> FOUND RATHER THAN THE ONE FIVE
+    ///             OTHER PROVIDERS GIVE.
+    ///         </b> The usual argument is a CRD's <c>+kubebuilder:default</c>
     ///         markers or an operator's mutating webhook. Neither applies: the archived operator's CRDs
     ///         are not installed and are not what this row renders. What forces containment is that
     ///         <b>five of the six kinds here are built-in</b>, and a built-in kind is the most heavily
@@ -1705,14 +1742,20 @@ public static class ContainerRegistries {
     ///         and an <c>ipFamilyPolicy</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The archived operator makes this the FIRST family where the usual argument is not
-    ///         merely false but unavailable</b>, which is a distinction worth keeping:
+    ///         ⚠
+    ///         <b>
+    ///             The archived operator makes this the FIRST family where the usual argument is not
+    ///             merely false but unavailable
+    ///         </b>, which is a distinction worth keeping:
     ///         <c>KafkaClusters</c> and <c>ClickHouseClusters</c> found CRDs that declared no defaults,
     ///         and could at least look. Here there is no CRD to look at.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It dispatches on kind AND on the component label, and the component label is why
-    ///         this works at all.</b> Six <c>Service</c>s and three <c>Deployment</c>s reach this
+    ///         ⚠
+    ///         <b>
+    ///             It dispatches on kind AND on the component label, and the component label is why
+    ///             this works at all.
+    ///         </b> Six <c>Service</c>s and three <c>Deployment</c>s reach this
     ///         function as nine documents with no address attached — see § The component vocabulary.
     ///         An unrecognised document is <see langword="false" /> rather than assumed.
     ///     </para>
@@ -1744,16 +1787,22 @@ public static class ContainerRegistries {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A RENDERED BODY CARRIES NO <c>kind</c> AND SIX DIFFERENT KINDS ARRIVE HERE, WHICH IS
-    ///         A SHAPE NO EARLIER FAMILY HAD.</b> <c>KubeCommandBuilder</c> injects <c>kind</c> from the
+    ///         ⚠
+    ///         <b>
+    ///             A RENDERED BODY CARRIES NO <c>kind</c> AND SIX DIFFERENT KINDS ARRIVE HERE, WHICH IS
+    ///             A SHAPE NO EARLIER FAMILY HAD.
+    ///         </b> <c>KubeCommandBuilder</c> injects <c>kind</c> from the
     ///         <see cref="GroupVersionKind" /> on the apply path, so a document only carries one after
     ///         it has been applied and read back. Every provider before this one owned at most two
     ///         kinds, so <c>null or "TheirKind"</c> was an honest single case; here it would have to
     ///         mean six things at once.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>So the fallback reads the document's own SHAPE, and each test is a field only that
-    ///         kind has.</b> It is deliberately not a guess: a document matching none of them returns
+    ///         ⚠
+    ///         <b>
+    ///             So the fallback reads the document's own SHAPE, and each test is a field only that
+    ///             kind has.
+    ///         </b> It is deliberately not a guess: a document matching none of them returns
     ///         the empty string and <see cref="Matches" /> answers <see langword="false" />, which is
     ///         the same answer an unrecognised <c>kind</c> gets.
     ///     </para>
@@ -1845,8 +1894,11 @@ public static class ContainerRegistries {
 
     /// <summary>Whether a <c>Deployment</c> or a <c>StatefulSet</c> carries the desired spec.</summary>
     /// <remarks>
-    ///     ⚠ <b>The three stateless components are compared on their replica count and the three
-    ///     volume-owning ones are not</b>, because <c>/properties/replicas</c> genuinely does not
+    ///     ⚠
+    ///     <b>
+    ///         The three stateless components are compared on their replica count and the three
+    ///         volume-owning ones are not
+    ///     </b>, because <c>/properties/replicas</c> genuinely does not
     ///     reach them — see <see cref="RegistrySetJson" />. Comparing all six against
     ///     <see cref="Replicas" /> would report permanent drift on the database the moment a tenant
     ///     asked for two replicas of anything.
@@ -1993,9 +2045,7 @@ public static class ContainerRegistries {
         var spec = new JsonObject {
             ["replicas"] = replicas,
             ["selector"] = new JsonObject { ["matchLabels"] = labels.DeepClone() },
-            ["template"] = new JsonObject {
-                ["metadata"] = new JsonObject { ["labels"] = labels }, ["spec"] = pod
-            }
+            ["template"] = new JsonObject { ["metadata"] = new JsonObject { ["labels"] = labels }, ["spec"] = pod }
         };
 
         if (serviceName is not null) {
@@ -2022,34 +2072,25 @@ public static class ContainerRegistries {
 
         return new JsonObject {
             ["metadata"] = new JsonObject { ["name"] = objectName },
-            ["spec"] = new JsonObject {
-                ["type"] = "ClusterIP", ["selector"] = selector, ["ports"] = ports
-            }
+            ["spec"] = new JsonObject { ["type"] = "ClusterIP", ["selector"] = selector, ["ports"] = ports }
         }.ToJsonString();
     }
 
     static JsonObject ClaimTemplate(string volumeName, string size, string storageClass) {
         var spec = new JsonObject {
             ["accessModes"] = new JsonArray { "ReadWriteOnce" },
-            ["resources"] = new JsonObject {
-                ["requests"] = new JsonObject { ["storage"] = size }
-            }
+            ["resources"] = new JsonObject { ["requests"] = new JsonObject { ["storage"] = size } }
         };
 
         if (storageClass.Length > 0) {
             spec["storageClassName"] = storageClass;
         }
 
-        return new JsonObject {
-            ["metadata"] = new JsonObject { ["name"] = volumeName }, ["spec"] = spec
-        };
+        return new JsonObject { ["metadata"] = new JsonObject { ["name"] = volumeName }, ["spec"] = spec };
     }
 
     static JsonArray ConfigVolume(string name) => [
-        new JsonObject {
-            ["name"] = "config",
-            ["configMap"] = new JsonObject { ["name"] = ConfigMapName(name) }
-        }
+        new JsonObject { ["name"] = "config", ["configMap"] = new JsonObject { ["name"] = ConfigMapName(name) } }
     ];
 
     static JsonObject ControlPlaneResources() {
@@ -2058,17 +2099,14 @@ public static class ContainerRegistries {
         return new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
     }
 
-    static JsonObject Env(string variable, string value) =>
-        new() { ["name"] = variable, ["value"] = value };
+    static JsonObject Env(string variable, string value) => new() { ["name"] = variable, ["value"] = value };
 
     /// <summary>An environment variable sourced from the credentials <c>Secret</c>.</summary>
     static JsonObject SecretEnv(string variable, string name, string field) =>
         new() {
             ["name"] = variable,
             ["valueFrom"] = new JsonObject {
-                ["secretKeyRef"] = new JsonObject {
-                    ["name"] = CredentialsSecretName(name), ["key"] = field
-                }
+                ["secretKeyRef"] = new JsonObject { ["name"] = CredentialsSecretName(name), ["key"] = field }
             }
         };
 

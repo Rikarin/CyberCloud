@@ -10,14 +10,20 @@ namespace CyberCloud.Identity.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/11 § Protocol, verbatim: <i>"<c>aud</c> names the API, <c>tid</c> the tenant,
-///         <c>sub</c> the GUID, plus <c>scp</c>, <c>azp</c>, and an <c>auth_time</c>/<c>amr</c> pair
-///         so step-up authentication can be required for sensitive actions."</i> That sentence is
+///         docs/plan/11 § Protocol, verbatim:
+///         <i>
+///             "<c>aud</c> names the API, <c>tid</c> the tenant,
+///             <c>sub</c> the GUID, plus <c>scp</c>, <c>azp</c>, and an <c>auth_time</c>/<c>amr</c> pair
+///             so step-up authentication can be required for sensitive actions."
+///         </i> That sentence is
 ///         this class.
 ///     </para>
 ///     <para>
-///         ⚠ <b>NO ROLE OR PERMISSION CLAIM APPEARS HERE, AND ADDING ONE IS A DESIGN CHANGE RATHER
-///         THAN A FEATURE.</b> docs/plan/11 § Protocol: they "are looked up per request from ReBAC.
+///         ⚠
+///         <b>
+///             NO ROLE OR PERMISSION CLAIM APPEARS HERE, AND ADDING ONE IS A DESIGN CHANGE RATHER
+///             THAN A FEATURE.
+///         </b> docs/plan/11 § Protocol: they "are looked up per request from ReBAC.
 ///         Putting role claims in a 10-minute token means a revoke takes up to 10 minutes, and
 ///         packing a large user's groups into a JWT produces the header-size failures every large
 ///         enterprise hits." Both halves are real and they fail differently — the first is a security
@@ -108,8 +114,11 @@ public static class AccessTokenClaims {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>MINTED HERE AND NEVER ACCEPTED FROM A HEADER. THIS IS THE WHOLE SECURITY
-    ///         PROPERTY.</b> docs/plan/06 § Platform administration builds impersonation out of four
+    ///         ⚠
+    ///         <b>
+    ///             MINTED HERE AND NEVER ACCEPTED FROM A HEADER. THIS IS THE WHOLE SECURITY
+    ///             PROPERTY.
+    ///         </b> docs/plan/06 § Platform administration builds impersonation out of four
     ///         controls — a second operator's approval for a production tenant, a 60-minute box, an
     ///         audit record, and <i>"the tenant sees a notification"</i>. Every one of those is
     ///         defeated by a caller who can set the value themselves: the approval is skipped, the box
@@ -118,8 +127,11 @@ public static class AccessTokenClaims {
     ///         form of this value that carries the approval it was granted under.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>docs/plan/06 § Platform administration says "header", and that sentence is a doc
-    ///         defect.</b> It reads: "every request made under it carries an
+    ///         ⚠
+    ///         <b>
+    ///             docs/plan/06 § Platform administration says "header", and that sentence is a doc
+    ///             defect.
+    ///         </b> It reads: "every request made under it carries an
     ///         <c>X-CyberCloud-Impersonated-By</c> header into the audit log". A header is
     ///         caller-controlled on every request the gateway serves, so implementing that sentence
     ///         literally would let any caller impersonate any operator in the audit trail. The header
@@ -152,9 +164,8 @@ public static class AccessTokenClaims {
     ///     exact membership, so a fifteenth claim is a test failure rather than a diff nobody read.
     /// </remarks>
     public static FrozenSet<string> Permitted { get; } = new[] {
-        Subject, TenantId, Audience, Issuer, Scope, AuthorizedParty,
-        AuthenticationTime, AuthenticationMethods, SessionId, IssuedAt, ExpiresAt, TokenId,
-        SubjectType, ImpersonatedBy
+        Subject, TenantId, Audience, Issuer, Scope, AuthorizedParty, AuthenticationTime, AuthenticationMethods,
+        SessionId, IssuedAt, ExpiresAt, TokenId, SubjectType, ImpersonatedBy
     }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
@@ -180,11 +191,7 @@ public static class AccessTokenClaims {
     ///     </para>
     /// </remarks>
     public static FrozenSet<string> ForbiddenClaims { get; } = new[] {
-        "role",
-        "roles",
-        "groups",
-        "permissions",
-        "scope",
+        "role", "roles", "groups", "permissions", "scope",
         "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
@@ -257,8 +264,11 @@ public static class AccessTokenClaims {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This type exists because the gateway is built against it by a different person on a
-///         different branch.</b> Everything the gateway needs to validate a Cyber Cloud token — the
+///         ⚠
+///         <b>
+///             This type exists because the gateway is built against it by a different person on a
+///             different branch.
+///         </b> Everything the gateway needs to validate a Cyber Cloud token — the
 ///         algorithm, the discovery path, the lifetime it may assume, and the fact that it must
 ///         <i>not</i> introspect — is here rather than in prose, so a change to any of it is a
 ///         compile-time event on both sides rather than a message somebody missed.

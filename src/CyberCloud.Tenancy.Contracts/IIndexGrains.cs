@@ -140,8 +140,11 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     /// <returns>The count for that type after the increment.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is why the counter lives on the index grain rather than in a grain of its
-    ///         own.</b> docs/plan/08 asks for a counter "maintained transactionally where the index
+    ///         ⚠
+    ///         <b>
+    ///             This is why the counter lives on the index grain rather than in a grain of its
+    ///             own.
+    ///         </b> docs/plan/08 asks for a counter "maintained transactionally where the index
     ///         claim and release already happen", and this <i>is</i> that place: one activation per
     ///         parent address, single-threaded, durable, and the same activation the parent's own
     ///         delete calls <see cref="ReleaseAsync" /> on. "Is the name free" and "does it still have
@@ -176,8 +179,11 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>The gate one step before the lock check on the delete path reads this</b> —
-    ///     docs/plan/08 § Deleting a parent resource that has children, <i>"a delete is refused while
-    ///     the resource still has children — 409, not a cascade, and not a silent orphan"</i>. It is a
+    ///     docs/plan/08 § Deleting a parent resource that has children,
+    ///     <i>
+    ///         "a delete is refused while
+    ///         the resource still has children — 409, not a cascade, and not a silent orphan"
+    ///     </i>. It is a
     ///     read of the same activation the release below would mutate, so there is no window between
     ///     "it had no children" and "its name was freed".
     /// </remarks>
@@ -194,8 +200,11 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     ///         may never exist.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A <see cref="IndexEntryState.SoftDeleted" /> binding does not resolve either, and
-    ///         that single fact is what makes soft delete's <c>404</c> free.</b> docs/plan/08 § Soft
+    ///         ⚠
+    ///         <b>
+    ///             A <see cref="IndexEntryState.SoftDeleted" /> binding does not resolve either, and
+    ///             that single fact is what makes soft delete's <c>404</c> free.
+    ///         </b> docs/plan/08 § Soft
     ///         delete: the resource stops resolving at its address — it does not move to another one,
     ///         because <c>ResourceId.ParsePath</c> has no subscription-scoped path shape — so its old
     ///         address answers the <i>canonical</i> absence, and a <c>410 Gone</c> is forbidden
@@ -213,8 +222,11 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A separate method rather than a flag on <see cref="ResolveAsync" />, because the
-    ///         two questions have different answers on purpose.</b> "What resource is at this address"
+    ///         ⚠
+    ///         <b>
+    ///             A separate method rather than a flag on <see cref="ResolveAsync" />, because the
+    ///             two questions have different answers on purpose.
+    ///         </b> "What resource is at this address"
     ///         must stay <see cref="IndexEntryState.Confirmed" />-only for every ordinary caller — the
     ///         paragraph above is the whole reason — and a boolean parameter would put the decision at
     ///         each of that method's many call sites. Restore and purge are the only callers who are
@@ -230,17 +242,26 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     Task<Result<Guid>> ResolveSoftDeletedAsync();
 
     /// <summary>
-    ///     Resolves the address to the GUID of the soft-deleted resource holding it <b>whose recovery
-    ///     window has already ended</b>, or <c>ResourceNotFound</c>.
+    ///     Resolves the address to the GUID of the soft-deleted resource holding it
+    ///     <b>
+    ///         whose recovery
+    ///         window has already ended
+    ///     </b>, or <c>ResourceNotFound</c>.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the complement of <see cref="RestoreAsync" />'s refusal, computed by the
-    ///         same clock, and that is the whole reason it is a member here rather than a comparison
-    ///         at the caller.</b> <see cref="SoftDeleteAsync" /> takes a duration and not a deadline
-    ///         precisely so that one activation stamps and reads the window — <i>"a caller-computed
-    ///         deadline would be stamped from the gateway's clock and read back against the
-    ///         silo's"</i>. A caller that read <see cref="IndexEntry.RecoverableUntil" /> out of
+    ///         ⚠
+    ///         <b>
+    ///             This is the complement of <see cref="RestoreAsync" />'s refusal, computed by the
+    ///             same clock, and that is the whole reason it is a member here rather than a comparison
+    ///             at the caller.
+    ///         </b> <see cref="SoftDeleteAsync" /> takes a duration and not a deadline
+    ///         precisely so that one activation stamps and reads the window —
+    ///         <i>
+    ///             "a caller-computed
+    ///             deadline would be stamped from the gateway's clock and read back against the
+    ///             silo's"
+    ///         </i>. A caller that read <see cref="IndexEntry.RecoverableUntil" /> out of
     ///         <see cref="GetAsync" /> and compared it against its own clock would reintroduce
     ///         exactly that skew, on the one path where being early destroys a resource that was
     ///         still restorable. So "may this still be restored" and "is this window over" are two
@@ -254,9 +275,12 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     ///         every tick of whatever drives it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The refusal is the canonical absence for both reasons — a name holding no parked
-    ///         resource, and one whose window has not ended yet — for the reason every refusal on
-    ///         this grain shares.</b> The caller here is a mechanism rather than a subject, so the
+    ///         ⚠
+    ///         <b>
+    ///             The refusal is the canonical absence for both reasons — a name holding no parked
+    ///             resource, and one whose window has not ended yet — for the reason every refusal on
+    ///             this grain shares.
+    ///         </b> The caller here is a mechanism rather than a subject, so the
     ///         oracle argument does not bite; keeping the two answers identical does, because a
     ///         mechanism that could tell them apart would be a mechanism whose retries encode how
     ///         much window is left.

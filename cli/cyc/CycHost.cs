@@ -9,8 +9,11 @@ namespace CyberCloud.Cli;
 ///     client and the browser.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This is the seam the test suite drives, and it is the same seam a private deployment
-///     uses.</b> <see cref="CreateClient" /> hands back a <see cref="CyberCloudClient" />; the tests
+///     ⚠
+///     <b>
+///         This is the seam the test suite drives, and it is the same seam a private deployment
+///         uses.
+///     </b> <see cref="CreateClient" /> hands back a <see cref="CyberCloudClient" />; the tests
 ///     hand back one whose <c>CyberCloudClientOptions.Transport</c> is a scripted
 ///     <see cref="HttpMessageHandler" />, which is exactly how <c>CyberCloud.Sdk.Tests</c> works.
 ///     Nothing in <c>cyc</c>'s own test suite opens a socket, reads a keychain or launches a browser.
@@ -29,7 +32,8 @@ sealed class CycHost {
         CycConfigFile config,
         VerbTreeCatalog catalog,
         Func<CycClientRequest, CyberCloudClient> createClient,
-        Func<Uri, CancellationToken, Task> openBrowser) {
+        Func<Uri, CancellationToken, Task> openBrowser
+    ) {
         Console = console;
         Environment = environment;
         Config = config;
@@ -67,8 +71,11 @@ sealed class CycHost {
     ///         comes back, and that is the whole of its involvement.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see cref="CyberCloudCliCredential" /> is deliberately not in the chain, and the
-    ///         reason is that <c>cyc</c> is what it shells out to.</b> That credential exists for the
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="CyberCloudCliCredential" /> is deliberately not in the chain, and the
+    ///             reason is that <c>cyc</c> is what it shells out to.
+    ///         </b> That credential exists for the
     ///         SDK's <i>callers</i> — it runs <c>cyc account get-access-token</c> — so a <c>cyc</c>
     ///         that used it on itself would fork itself once per expired token.
     ///     </para>
@@ -84,7 +91,8 @@ sealed class CycHost {
     ///     without that seam a test run would sign a developer's real keychain in and out, and
     ///     <c>cyc login</c> would be the one command with no test at all.
     /// </remarks>
-    public Func<CyberCloudCredentialOptions> CreateCredentialOptions { get; init; } = () => new CyberCloudCredentialOptions();
+    public Func<CyberCloudCredentialOptions> CreateCredentialOptions { get; init; } =
+        () => new CyberCloudCredentialOptions();
 
     /// <summary>The clock, so a test can decide that a day has passed without waiting one.</summary>
     public TimeProvider Time { get; init; } = TimeProvider.System;

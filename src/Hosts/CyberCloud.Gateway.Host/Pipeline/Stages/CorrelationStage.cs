@@ -16,8 +16,11 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 ///         id" cannot tell whether they are looking at one request or six.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A caller-supplied correlation id is length-capped and stripped of control
-///         characters.</b> It is echoed into log lines and spans, and an unbounded caller-controlled
+///         ⚠
+///         <b>
+///             A caller-supplied correlation id is length-capped and stripped of control
+///             characters.
+///         </b> It is echoed into log lines and spans, and an unbounded caller-controlled
 ///         string that lands in a log is a log-injection primitive — a newline in it forges a log
 ///         entry.
 ///     </para>
@@ -43,8 +46,8 @@ sealed class CorrelationStage : IGatewayStage {
             GatewayHeaders.CorrelationRequestId,
             out var header
         )
-            ? header.ToString()
-            : "";
+                ? header.ToString()
+                : "";
 
         context.CorrelationId = Sanitize(supplied) is { Length: > 0 } clean ? clean : context.RequestId;
 

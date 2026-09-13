@@ -1,9 +1,9 @@
 using CyberCloud.Cluster.Conformance.Infrastructure;
+using Shouldly;
+using System.Net;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
-using Shouldly;
-using System.Net;
 
 namespace CyberCloud.Bundle.Cluster.Conformance;
 
@@ -12,14 +12,20 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///     a cluster.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This class exists so that a run of this assembly on a machine with no Docker daemon still
-///     runs a test</b>, for the reason <see cref="CertManagerComponentInstaller" /> states at length:
+///     ⚠
+///     <b>
+///         This class exists so that a run of this assembly on a machine with no Docker daemon still
+///         runs a test
+///     </b>, for the reason <see cref="CertManagerComponentInstaller" /> states at length:
 ///     Microsoft.Testing.Platform reports "Zero tests ran" for a run whose every test skipped, and
 ///     <c>--minimum-expected-tests 1</c> turns that into a red build. <c>Build.Architecture.cs</c>
 ///     § <c>LabelsGate</c> has the long version, and nothing here is wired to a gate.
 ///     ⚠ It is <b>not</b> a weaker restatement of <see cref="OpenEbsLocalPvOnAnEmptyCluster" />. It
-///     asserts what the cluster test cannot see: that the <c>--set</c> was <i>derived from the
-///     component.yaml</i>. An installer that hard-coded the flag would pass every assertion over
+///     asserts what the cluster test cannot see: that the <c>--set</c> was
+///     <i>
+///         derived from the
+///         component.yaml
+///     </i>. An installer that hard-coded the flag would pass every assertion over
 ///     there and fail here the moment somebody edited the manifest and expected the installer to
 ///     follow.
 /// </remarks>
@@ -44,8 +50,11 @@ public sealed class OpenEbsLocalPvComponentInstaller {
     ///     this component installs is not the cluster's default.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is the same shape as cert-manager's <c>crds.enabled</c> and it is the more
-    ///     dangerous of the two, because the failure it prevents is silent.</b> Deleting
+    ///     ⚠
+    ///     <b>
+    ///         This is the same shape as cert-manager's <c>crds.enabled</c> and it is the more
+    ///         dangerous of the two, because the failure it prevents is silent.
+    ///     </b> Deleting
     ///     <c>crds.enabled</c> makes cert-manager's install fail loudly on a not-ready Job. Deleting
     ///     this one makes <c>helm upgrade --install --wait</c> succeed, the Deployment go Ready, the
     ///     <c>openebs-hostpath</c> class exist — and every managed chart that leaves
@@ -79,7 +88,8 @@ public sealed class OpenEbsLocalPvComponentInstaller {
         run.ExitCode.ShouldBe(
             0,
             "charts/bundle/install.sh --dry-run --phase 25 executes nothing and must therefore "
-            + "succeed on any machine with bash. Its output was:\n" + run.Output
+            + "succeed on any machine with bash. Its output was:\n"
+            + run.Output
         );
 
         var component = BundleInstaller.OpenEbsLocalPvComponent;
@@ -118,8 +128,7 @@ public sealed class OpenEbsLocalPvComponentInstaller {
         // arrive at each value by different routes — bundle.yaml's header forbids a version written
         // twice, and a test is a second place to write one.
         var expected = new[] {
-            chart!, "--repo", repo!, "--version", version!,
-            "--set", DefaultClassFlag + "=" + isDefault, "--wait"
+            chart!, "--repo", repo!, "--version", version!, "--set", DefaultClassFlag + "=" + isDefault, "--wait"
         };
 
         foreach (var argument in expected) {
@@ -129,7 +138,8 @@ public sealed class OpenEbsLocalPvComponentInstaller {
                 $"charts/bundle/install.sh --dry-run --phase 25 did not mention \"{argument}\". Every "
                 + $"value above is read out of charts/bundle/{component}/component.yaml by this test "
                 + "and is supposed to be read out of the same file by the script — README.md § What a "
-                + "component owes. Its output was:\n" + run.Output
+                + "component owes. Its output was:\n"
+                + run.Output
             );
         }
     }
@@ -141,8 +151,11 @@ public sealed class OpenEbsLocalPvComponentInstaller {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE OBVIOUS VERSION OF THIS TEST WOULD PASS WITH THE COMPONENT UNINSTALLED, AND
-///         AVOIDING THAT IS THE WHOLE OF THIS CLASS.</b> The k3s this fixture starts already ships
+///         ⚠
+///         <b>
+///             THE OBVIOUS VERSION OF THIS TEST WOULD PASS WITH THE COMPONENT UNINSTALLED, AND
+///             AVOIDING THAT IS THE WHOLE OF THIS CLASS.
+///         </b> The k3s this fixture starts already ships
 ///         Rancher's <c>local-path</c> provisioner and marks its class default —
 ///         <c>charts/managed/cloud-shell/SOURCE</c> already reasons about it. So a test that
 ///         installed this component, created a bare <c>PersistentVolumeClaim</c> and waited for
@@ -155,8 +168,11 @@ public sealed class OpenEbsLocalPvComponentInstaller {
 ///         annotation is asserted to be on OUR class, on a cluster that has two.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The empty-cluster half is an assertion, and here it has a second clause the
-///         cert-manager class does not need.</b> Before anything installs, this requires both that
+///         ⚠
+///         <b>
+///             The empty-cluster half is an assertion, and here it has a second clause the
+///             cert-manager class does not need.
+///         </b> Before anything installs, this requires both that
 ///         <c>openebs-hostpath</c> is absent — so every claim below is about a class this test's own
 ///         run created — and that <c>local-path</c> is present AND annotated default. The second is
 ///         not scene-setting either: it is the premise that gives the explicit
@@ -176,9 +192,15 @@ public sealed class OpenEbsLocalPvComponentInstaller {
 ///         and a run that crosses no boundary exercises none.
 ///     </para>
 ///     <para>
-///         ⚠ <b>That last clause quoted <c>install.sh</c>'s usage text — <i>"skips that
-///         guarantee"</i> — until the #74 review, and the quotation had been stale since
-///         2026-09-03.</b> The sibling quotation in <see cref="BundleInstaller" /> was removed for
+///         ⚠
+///         <b>
+///             That last clause quoted <c>install.sh</c>'s usage text —
+///             <i>
+///                 "skips that
+///                 guarantee"
+///             </i> — until the #74 review, and the quotation had been stale since
+///             2026-09-03.
+///         </b> The sibling quotation in <see cref="BundleInstaller" /> was removed for
 ///         exactly this on 2026-09-05, in the commit that rewrote the usage text a second time; this
 ///         was the third copy, in the same assembly, and it survived that commit because nobody
 ///         grepped for the phrase. What this paragraph needs is a property of the script's
@@ -355,7 +377,8 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
             + "helm. It is the one defect here that reports nothing at install time: eleven charts "
             + "under charts/managed/ default `storageClassName` to \"\", which means the cluster's "
             + "default, so they would silently keep using k3s's provisioner — or stay Pending forever "
-            + "on a cluster that has none. Installer output:\n" + run.Output
+            + "on a cluster that has none. Installer output:\n"
+            + run.Output
         );
 
         // ⚠ TWO defaults, asserted rather than assumed. component.yaml § which stage is on lists a
@@ -446,7 +469,10 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
                             // it and reads the bytes back proves the directory is usable, which is
                             // the thing a stateful managed service actually needs. `set -e` so a
                             // failed write is a failed pod rather than an exit code nobody reads.
-                            Command = ["/bin/sh", "-c", "set -e; printf bound > /data/probe; test \"$(cat /data/probe)\" = bound"],
+                            Command = [
+                                "/bin/sh", "-c",
+                                "set -e; printf bound > /data/probe; test \"$(cat /data/probe)\" = bound"
+                            ],
                             VolumeMounts = [new V1VolumeMount { Name = "data", MountPath = "/data" }]
                         }
                     ],
@@ -472,11 +498,16 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
             + "being provisioned, not being mounted, or not being writable. The provisioner runs a "
             + "helper pod on the target node to create the directory — `kubectl -n "
             + $"{Probe} describe pod {Probe}` and the openebs-localpv-system Deployment's log are "
-            + "where the reason is. Installer output:\n" + run.Output
+            + "where the reason is. Installer output:\n"
+            + run.Output
         );
 
         // ── The bound volume, read back off the API server ─────────────────────────────────────
-        var claim = await client.CoreV1.ReadNamespacedPersistentVolumeClaimAsync(Probe, Probe, cancellationToken: token);
+        var claim = await client.CoreV1.ReadNamespacedPersistentVolumeClaimAsync(
+            Probe,
+            Probe,
+            cancellationToken: token
+        );
 
         // ⚠ Parenthesised for the reason the Pending loop above states.
         (claim.Status?.Phase).ShouldBe("Bound", "the pod succeeded and the claim it mounted is not Bound.");

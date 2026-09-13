@@ -15,8 +15,11 @@ namespace CyberCloud.Providers.ContainerService.Tests;
 ///         in a log line.
 ///     </para>
 ///     <para>
-///         ⚠ <b>EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE STAYED
-///         GREEN BECAUSE IT WAS NOT.</b> That version built the expected path from the same constants
+///         ⚠
+///         <b>
+///             EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE STAYED
+///             GREEN BECAUSE IT WAS NOT.
+///         </b> That version built the expected path from the same constants
 ///         the emitter reads, so re-casing a constant left the whole suite green — two things derived
 ///         from one constant agree however that constant is spelled.
 ///     </para>
@@ -50,17 +53,8 @@ public sealed class ManagedClusterOpenApiCasingTests {
         Collect(Document(), names);
 
         foreach (var expected in new[] {
-                     "clusterId",
-                     "controlPlane",
-                     "podCidr",
-                     "serviceCidr",
-                     "osDiskSize",
-                     "minCount",
-                     "maxCount",
-                     "maxSurge",
-                     "maxUnavailable",
-                     "apiServerEndpoint",
-                     "expiresAt"
+                     "clusterId", "controlPlane", "podCidr", "serviceCidr", "osDiskSize", "minCount", "maxCount",
+                     "maxSurge", "maxUnavailable", "apiServerEndpoint", "expiresAt"
                  }) {
             expected.ShouldNotBe(expected.ToLowerInvariant(), "this list is for camelCased names only");
 
@@ -120,7 +114,8 @@ public sealed class ManagedClusterOpenApiCasingTests {
                 StringComparison.Ordinal
             ),
             "no path interleaves the cluster's name between the two type segments. Every path in the "
-            + "document: " + string.Join(", ", paths)
+            + "document: "
+            + string.Join(", ", paths)
         );
 
         paths.ShouldNotContain(

@@ -12,8 +12,11 @@ namespace CyberCloud.Vault;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>OPTING IN IS THE ONLY WAY TO GET THIS, AND THE REFUSING DEFAULT STAYS THE DEFAULT FOR
-///         EVERYBODY ELSE.</b> <c>AddCyberCloudResourceManager</c> registers
+///         ⚠
+///         <b>
+///             OPTING IN IS THE ONLY WAY TO GET THIS, AND THE REFUSING DEFAULT STAYS THE DEFAULT FOR
+///             EVERYBODY ELSE.
+///         </b> <c>AddCyberCloudResourceManager</c> registers
 ///         <c>UnavailableSecretResolver</c> with <c>TryAdd</c>, and a silo that never calls the
 ///         method below keeps it — no configuration key flips this on, and nothing here changes what
 ///         another silo resolves. <c>VaultSeamWiringTests</c> asserts both halves against the real
@@ -32,8 +35,11 @@ namespace CyberCloud.Vault;
 ///         paragraph is here so the next reader does not have to establish it by grepping.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>Replace</c> rather than <c>Add</c>, and the reason is the count and not the
-///         resolution.</b> Both orders resolve the real thing under a plain <c>Add</c> —
+///         ⚠
+///         <b>
+///             <c>Replace</c> rather than <c>Add</c>, and the reason is the count and not the
+///             resolution.
+///         </b> Both orders resolve the real thing under a plain <c>Add</c> —
 ///         <c>TryAdd</c> is a no-op once any descriptor exists, and the last descriptor wins a single
 ///         resolve — so a resolution assertion cannot tell them apart. What <c>Replace</c> buys is
 ///         exactly one descriptor, which matters to anything taking
@@ -93,8 +99,11 @@ public static class VaultSiloBuilderExtensions {
     /// <returns>The same collection, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS EXISTS BECAUSE THE GATEWAY IS WHERE A SYNCHRONOUS ACTION ACTUALLY RUNS, WHICH
-    ///         IS NOT WHERE ANYBODY WOULD LOOK FIRST.</b> docs/plan/08 § The write path, end to end
+    ///         ⚠
+    ///         <b>
+    ///             THIS EXISTS BECAUSE THE GATEWAY IS WHERE A SYNCHRONOUS ACTION ACTUALLY RUNS, WHICH
+    ///             IS NOT WHERE ANYBODY WOULD LOOK FIRST.
+    ///         </b> docs/plan/08 § The write path, end to end
     ///         makes <c>IResourceManager</c> "a service held by the gateway", and a
     ///         non-<c>LongRunning</c> action is served inside <c>ResourceManagerService.ActionAsync</c>
     ///         rather than by an operation on a silo. So a <c>listKeys</c> reads the <i>gateway's</i>
@@ -122,8 +131,7 @@ public static class VaultSiloBuilderExtensions {
         services.TryAddSingleton<IClock, SystemClock>();
         services.AddSingleton(options);
 
-        services.TryAddSingleton<IVaultTokenSource>(
-            provider => new KubernetesVaultTokenSource(
+        services.TryAddSingleton<IVaultTokenSource>(provider => new KubernetesVaultTokenSource(
                 CreateClient(options),
                 options,
                 provider.GetRequiredService<IClock>()
@@ -132,8 +140,7 @@ public static class VaultSiloBuilderExtensions {
 
         // ⚠ Replace, not TryAdd — see the remarks for what the count buys that resolution does not.
         services.Replace(
-            ServiceDescriptor.Singleton<ISecretResolver>(
-                provider => {
+            ServiceDescriptor.Singleton<ISecretResolver>(provider => {
                     if (options.AllowInsecureTransport) {
                         // ⚠ Every start-up, naming the address. A flag that only appears in a values
                         // file is a flag nobody reads; one that appears in the first hundred log
@@ -169,8 +176,7 @@ public static class VaultSiloBuilderExtensions {
         // and a data plane with no credential — see UnavailableSecretWriter for what that costs on
         // CyberCloud.Storage/accounts.
         services.Replace(
-            ServiceDescriptor.Singleton<ISecretWriter>(
-                provider => new OpenBaoSecretWriter(
+            ServiceDescriptor.Singleton<ISecretWriter>(provider => new OpenBaoSecretWriter(
                     CreateClient(options),
                     provider.GetRequiredService<IVaultTokenSource>(),
                     options,

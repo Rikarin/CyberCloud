@@ -6,8 +6,11 @@ namespace CyberCloud.Core.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/03 § Assembly graph rules, rule 4: <i>"Nothing references a
-///         <c>*.Application</c> assembly except its own host."</i> Nothing else in the tree says
+///         docs/plan/03 § Assembly graph rules, rule 4:
+///         <i>
+///             "Nothing references a
+///             <c>*.Application</c> assembly except its own host."
+///         </i> Nothing else in the tree says
 ///         which host that is — an application assembly's name
 ///         (<c>CyberCloud.Providers.Sample.Application</c>) names its provider, not its host, and a
 ///         host's <c>ProjectReference</c> closure cannot supply the answer because it is the very
@@ -15,8 +18,11 @@ namespace CyberCloud.Core.Contracts;
 ///         it has no own host and rule 4 permits nothing to reference it.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="AttributeUsageAttribute.AllowMultiple" /> is <c>true</c>, and that is not
-///         a weakening.</b> docs/plan/03 § Assembly graph rules, rule 5 lets the gateway reference a
+///         ⚠
+///         <b>
+///             <see cref="AttributeUsageAttribute.AllowMultiple" /> is <c>true</c>, and that is not
+///             a weakening.
+///         </b> docs/plan/03 § Assembly graph rules, rule 5 lets the gateway reference a
 ///         provider's <c>.Application</c> assembly, and the gateway is not the silo host — so the
 ///         doc's own two rules disagree about how many hosts an application layer may have. Each
 ///         entry here is one line in one diff naming one host, which is the reviewable form of that

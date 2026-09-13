@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.DBforMySQL.Tests;
 ///         written in a different file.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>CyberCloud.DBforMySQL</c> is the most dangerous namespace in the tree, and the
-///         reason is arithmetic rather than opinion.</b> It carries four internal case transitions in
+///         ⚠
+///         <b>
+///             <c>CyberCloud.DBforMySQL</c> is the most dangerous namespace in the tree, and the
+///             reason is arithmetic rather than opinion.
+///         </b> It carries four internal case transitions in
 ///         ten characters, where its nearest sibling <c>CyberCloud.DBforPostgreSQL</c> carries three
 ///         and <c>CyberCloud.Cache</c> carries none. <c>DbForMySql</c> is what an IDE's normalise
 ///         refactor produces; <c>DBForMySQL</c> is what somebody who capitalises acronyms consistently
@@ -65,7 +68,8 @@ public sealed class MariaDbOpenApiCasingTests {
             "no path carries the provider namespace and type as declared"
         );
 
-        foreach (var path in paths.Where(x => x.Contains("cybercloud.dbformysql", StringComparison.OrdinalIgnoreCase))) {
+        foreach (var path in paths.Where(x => x.Contains("cybercloud.dbformysql", StringComparison.OrdinalIgnoreCase)
+                 )) {
             path.Contains("CyberCloud.DBforMySQL", StringComparison.Ordinal).ShouldBeTrue(path);
         }
     }

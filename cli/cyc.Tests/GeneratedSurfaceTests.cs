@@ -1,5 +1,5 @@
-using System.CommandLine;
 using CyberCloud.Cli.VerbTree;
+using System.CommandLine;
 
 namespace CyberCloud.Cli.Tests;
 
@@ -7,8 +7,14 @@ namespace CyberCloud.Cli.Tests;
 ///     The command surface comes from the generated tree and from nowhere else.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>docs/plan/21 § Grammar says the alias table is <i>"the only hand-maintained part of the
-///     CLI's surface"</i>, and that is now false.</b> The registry carries <c>shortName</c>,
+///     ⚠
+///     <b>
+///         docs/plan/21 § Grammar says the alias table is
+///         <i>
+///             "the only hand-maintained part of the
+///             CLI's surface"
+///         </i>, and that is now false.
+///     </b> The registry carries <c>shortName</c>,
 ///     <c>CliEmitter</c> puts it in the tree's <c>alias</c> member, and
 ///     <see cref="AliasesComeFromTheTree" /> proves it by feeding the host a tree whose alias is a word
 ///     no source file in this repository contains. A hand-maintained copy would be a second source
@@ -17,13 +23,26 @@ namespace CyberCloud.Cli.Tests;
 public sealed class GeneratedSurfaceTests {
     [Fact]
     public async Task TheGeneratedAliasWorksAsACommandName() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) =>
-            Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, _) =>
+                Responses.Json(HttpStatusCode.OK, """{"name":"w1"}""")
+            )
+        );
 
         // `widget`, the singular, is the tree's alias for `widgets`.
         var code = await host.RunAsync(
-            "sample", "widget", "show",
-            "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t");
+            "sample",
+            "widget",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
     }
@@ -32,7 +51,8 @@ public sealed class GeneratedSurfaceTests {
     public void AliasesComeFromTheTree() {
         // ⚠ A word that appears in no source file here. If the alias table were hand-maintained this
         // could not resolve.
-        var tree = VerbTreeCatalog.Parse("""
+        var tree = VerbTreeCatalog.Parse(
+            """
             {
               "format": "1",
               "apiVersion": "2026-08-01",
@@ -51,7 +71,8 @@ public sealed class GeneratedSurfaceTests {
                 }
               }
             }
-            """);
+            """
+        );
 
         using var host = TestHost.Create();
         var root = CommandTree.Build(host.Host, GlobalOptions.For(VerbTreeCatalog.Of(tree)), tree);
@@ -88,15 +109,18 @@ public sealed class GeneratedSurfaceTests {
         var root = CommandTree.Build(host.Host, GlobalOptions.For(TestHost.Catalog()), tree);
 
         var create = root.Subcommands
-            .Single(x => x.Name == "sample").Subcommands
-            .Single(x => x.Name == "widgets").Subcommands
+            .Single(x => x.Name == "sample")
+            .Subcommands
+            .Single(x => x.Name == "widgets")
+            .Subcommands
             .Single(x => x.Name == "create");
 
         var declared = create.Options.Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
         var expected = tree.Groups["sample"].Commands["widgets"].Verbs["create"].Flags.Select(x => x.Name);
 
-        foreach (var flag in expected)
+        foreach (var flag in expected) {
             declared.ShouldContain(flag);
+        }
 
         // The generated flag's alias is declared too — `--cluster` for `--cluster-id`.
         create.Options.Single(x => x.Name == "--cluster-id").Aliases.ShouldContain("--cluster");
@@ -119,8 +143,8 @@ public sealed class GeneratedSurfaceTests {
         Names(widgets, "show").ShouldNotContain("--wait");
         Names(widgets, "ping").ShouldNotContain("--wait");
 
-        static IReadOnlyList<string> Names(Command command, string verb)
-            => [.. command.Subcommands.Single(x => x.Name == verb).Options.Select(x => x.Name)];
+        static IReadOnlyList<string> Names(Command command, string verb) =>
+            [.. command.Subcommands.Single(x => x.Name == verb).Options.Select(x => x.Name)];
     }
 
     [Fact]
@@ -156,17 +180,20 @@ public sealed class GeneratedSurfaceTests {
                 foreach (var command in group.Value.Commands) {
                     Take(command.Key, $"the command '{command.Key}'");
 
-                    if (command.Value.Alias is { Length: > 0 } alias && alias != command.Key)
+                    if (command.Value.Alias is { Length: > 0 } alias && alias != command.Key) {
                         Take(alias, $"the alias of '{command.Key}'");
+                    }
 
                     continue;
 
                     void Take(string token, string owner) {
-                        owners.TryGetValue(token, out var existing).ShouldBeFalse(
-                            $"'cyc {group.Key} {token}' at api-version {version} is both {existing} "
-                            + $"and {owner}. System.CommandLine throws 'An item with the same key has "
-                            + $"already been added. Key: {token}' on every cyc invocation reaching "
-                            + $"'{group.Key}'");
+                        owners.TryGetValue(token, out var existing)
+                            .ShouldBeFalse(
+                                $"'cyc {group.Key} {token}' at api-version {version} is both {existing} "
+                                + $"and {owner}. System.CommandLine throws 'An item with the same key has "
+                                + $"already been added. Key: {token}' on every cyc invocation reaching "
+                                + $"'{group.Key}'"
+                            );
 
                         owners[token] = owner;
                     }
@@ -192,16 +219,19 @@ public sealed class GeneratedSurfaceTests {
 
             foreach (var group in tree.Groups) {
                 foreach (var command in group.Value.Commands) {
-                    if (command.Value.Alias is not { Length: > 0 } alias || alias == command.Key)
+                    if (command.Value.Alias is not { Length: > 0 } alias || alias == command.Key) {
                         continue;
+                    }
 
                     var verb = command.Value.Verbs.Keys.First();
                     var parse = root.Parse([group.Key, alias, verb, "--help"]);
 
                     parse.Errors.ShouldBeEmpty($"cyc {group.Key} {alias} {verb} did not parse");
 
-                    parse.CommandResult.Command.Parents.OfType<Command>().First().Name
-                        .ShouldBe(command.Key, $"'{alias}' resolved to the wrong command");
+                    parse.CommandResult.Command.Parents.OfType<Command>()
+                        .First()
+                        .Name
+                            .ShouldBe(command.Key, $"'{alias}' resolved to the wrong command");
 
                     resolved++;
                 }
@@ -222,8 +252,9 @@ public sealed class GeneratedSurfaceTests {
         // nowhere in cli/cyc/.
         var source = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "cli", "cyc");
 
-        if (!Directory.Exists(source))
+        if (!Directory.Exists(source)) {
             return;
+        }
 
         foreach (var file in Directory.GetFiles(source, "*.cs", SearchOption.AllDirectories)) {
             var text = File.ReadAllText(file);

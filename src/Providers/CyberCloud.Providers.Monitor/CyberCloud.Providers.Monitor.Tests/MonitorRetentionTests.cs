@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.Monitor.Tests;
 ///     The nine retention numbers, in every place they are written.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Retention is the only property on this type whose value is BOTH a bill and a data-loss
-///     boundary</b>, which is why it gets a file of its own rather than a section of the declaration
+///     ⚠
+///     <b>
+///         Retention is the only property on this type whose value is BOTH a bill and a data-loss
+///         boundary
+///     </b>, which is why it gets a file of its own rather than a section of the declaration
 ///     tests. A wrong number here overcharges a tenant and deletes their logs, and neither symptom
 ///     points at a table.
 /// </remarks>
@@ -20,8 +23,11 @@ public sealed class MonitorRetentionTests {
     /// <remarks>
     ///     ⚠ <b>LITERALS, AND THEY HAVE TO BE.</b> Reading these off
     ///     <see cref="MonitorWorkspaces.RetentionDays" /> would compare the table to itself. The
-    ///     source sentence is <i>"Per signal: metrics 15/90/400 days, logs 7/30/90, traces
-    ///     3/14/30"</i>, and the three tiers are in ascending order in that sentence, which is the
+    ///     source sentence is
+    ///     <i>
+    ///         "Per signal: metrics 15/90/400 days, logs 7/30/90, traces
+    ///         3/14/30"
+    ///     </i>, and the three tiers are in ascending order in that sentence, which is the
     ///     order <see cref="MonitorWorkspaces.Tiers" /> declares.
     /// </remarks>
     static readonly (string Signal, string Tier, int Days)[] DocumentedRetention = [
@@ -39,12 +45,13 @@ public sealed class MonitorRetentionTests {
     [Fact]
     public void TheTableIsTheOneDocPlan16Prices() {
         foreach (var (signal, tier, days) in DocumentedRetention) {
-            MonitorWorkspaces.DaysOf(signal, tier).ShouldBe(
-                days,
-                $"docs/plan/16 prices {signal} at the {tier} tier as {days} days. This number is the "
-                + "second factor of the storage meter and the boundary at which a tenant's data is "
-                + "deleted, so it is wrong in both directions at once."
-            );
+            MonitorWorkspaces.DaysOf(signal, tier)
+                .ShouldBe(
+                    days,
+                    $"docs/plan/16 prices {signal} at the {tier} tier as {days} days. This number is the "
+                    + "second factor of the storage meter and the boundary at which a tenant's data is "
+                    + "deleted, so it is wrong in both directions at once."
+                );
         }
     }
 
@@ -58,12 +65,13 @@ public sealed class MonitorRetentionTests {
         // is what stops it ever having to.
         foreach (var signal in MonitorWorkspaces.Signals) {
             foreach (var tier in MonitorWorkspaces.Tiers) {
-                MonitorWorkspaces.DaysOf(signal, tier).ShouldBeGreaterThan(
-                    0,
-                    $"'{signal}' has no day count at the '{tier}' tier. Add the row to "
-                    + "MonitorWorkspaces.RetentionDays — a tier the schema accepts and the table does "
-                    + "not carry is a create that fails inside the quota grain."
-                );
+                MonitorWorkspaces.DaysOf(signal, tier)
+                    .ShouldBeGreaterThan(
+                        0,
+                        $"'{signal}' has no day count at the '{tier}' tier. Add the row to "
+                        + "MonitorWorkspaces.RetentionDays — a tier the schema accepts and the table does "
+                        + "not carry is a create that fails inside the quota grain."
+                    );
             }
         }
     }
@@ -73,9 +81,7 @@ public sealed class MonitorRetentionTests {
         // Three places have to agree on the three names: the table's keys, the enum the API enforces,
         // and the chart's own copy. This is the first two.
         foreach (var pointer in new[] {
-                     "/properties/retention/metrics",
-                     "/properties/retention/logs",
-                     "/properties/retention/traces"
+                     "/properties/retention/metrics", "/properties/retention/logs", "/properties/retention/traces"
                  }) {
             var property = MonitorWorkspaces.Schema2026.Properties.Single(x => x.JsonPointer == pointer);
 
@@ -158,17 +164,16 @@ public sealed class MonitorRetentionTests {
         // takes ONE body and compares it against constants, so a body naming a shorter tier is
         // perfectly valid in isolation. This test asserts that, so that whoever closes the
         // provider-predicate seam finds it and can delete the reconciler's check.
-        using var shorter = JsonDocument.Parse(
-            MonitorWorkspaces.Body(Guid.NewGuid(), logsTier: "short")
-        );
+        using var shorter = JsonDocument.Parse(MonitorWorkspaces.Body(Guid.NewGuid(), logsTier: "short"));
 
-        MonitorWorkspaces.Schema2026.Validate(shorter.RootElement, allowTags: true).IsSuccess
-            .ShouldBeTrue(
-                "a body naming the shortest retention tier is refused by the schema, which would mean "
-                + "the shrink check could move to the API. Delete MonitorWorkspaceReconciler's "
-                + "ShrinkAsync and say so at conformance.yaml § owed, "
-                + "`retention-shrink-is-refused-after-202`."
-            );
+        MonitorWorkspaces.Schema2026.Validate(shorter.RootElement, allowTags: true)
+            .IsSuccess
+                .ShouldBeTrue(
+                    "a body naming the shortest retention tier is refused by the schema, which would mean "
+                    + "the shrink check could move to the API. Delete MonitorWorkspaceReconciler's "
+                    + "ShrinkAsync and say so at conformance.yaml § owed, "
+                    + "`retention-shrink-is-refused-after-202`."
+                );
     }
 
     /// <summary>The chart's helpers, read as text.</summary>

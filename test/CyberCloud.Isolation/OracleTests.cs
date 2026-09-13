@@ -85,9 +85,8 @@ public sealed class OracleTests(IsolationCluster cluster) {
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
-        refused.Error.Message.Contains(target.Action, StringComparison.OrdinalIgnoreCase).ShouldBeFalse(
-            "the declared action list was disclosed through a cross-tenant path"
-        );
+        refused.Error.Message.Contains(target.Action, StringComparison.OrdinalIgnoreCase)
+            .ShouldBeFalse("the declared action list was disclosed through a cross-tenant path");
     }
 
     [Theory]
@@ -219,7 +218,8 @@ public sealed class OracleTests(IsolationCluster cluster) {
 
         read.IsSuccess.ShouldBeTrue(
             "a reader on the resource group cannot read a resource in it, so the ReBAC inheritance "
-            + "this suite depends on is not working: " + read.Error?.Message
+            + "this suite depends on is not working: "
+            + read.Error?.Message
         );
 
         var deleted = await cluster.Manager.DeleteAsync(

@@ -170,8 +170,8 @@ public sealed class GrainBackedShardMapCache : IShardMapCache {
 
         return StaticShardMapCache.HotTagPrefix
             + (Guid.TryParse(tenantId, out var id)
-                ? id.ToString("N", CultureInfo.InvariantCulture)
-                : tenantId);
+                    ? id.ToString("N", CultureInfo.InvariantCulture)
+                    : tenantId);
     }
 
     /// <summary>

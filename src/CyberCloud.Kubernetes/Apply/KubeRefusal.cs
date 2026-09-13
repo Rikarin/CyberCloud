@@ -1,7 +1,7 @@
-using k8s.Autorest;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using k8s.Autorest;
 
 namespace CyberCloud.Kubernetes.Apply;
 
@@ -22,9 +22,12 @@ namespace CyberCloud.Kubernetes.Apply;
 ///         where.
 ///     </para>
 ///     <para>
-///         docs/plan/08 § Errors is the licence for the asymmetry: <i>"No exception details, ever. A
-///         stack trace in an error body is an information leak and a support-cost multiplier … the
-///         details go to the trace."</i>
+///         docs/plan/08 § Errors is the licence for the asymmetry:
+///         <i>
+///             "No exception details, ever. A
+///             stack trace in an error body is an information leak and a support-cost multiplier … the
+///             details go to the trace."
+///         </i>
 ///         <see cref="OperatorDetail" /> is the trace's copy.
 ///     </para>
 ///     <para>
@@ -83,7 +86,9 @@ public sealed record KubeRefusal {
 ///             <term>The object is absent, and the kind is served</term>
 ///             <description>
 ///                 A <c>v1.Status</c> with <c>details.name</c> set —
-///                 <c>{"message":"deployments.apps \"x\" not found","details":{"name":"x","group":"apps","kind":"deployments"}}</c>.
+///                 <c>
+/// {"message":"deployments.apps \"x\" not found","details":{"name":"x","group":"apps","kind":"deployments"}}
+///                 </c>.
 ///                 Normal, and expected on every create.
 ///             </description>
 ///         </item>
@@ -114,8 +119,10 @@ public sealed record KubeRefusal {
 ///     <para>
 ///         ⚠ <b>A malformed apply body answers <c>500</c>, not <c>400</c>.</b> Sending
 ///         <c>.spec.replicas: "lots"</c> to a real API server returns
-///         <c>500 failed to create typed patch object (…): .spec.replicas: expected numeric (int or
-///         float), got string</c>. Every blanket "5xx is transport" rule therefore reports our own
+///         <c>
+/// 500 failed to create typed patch object (…): .spec.replicas: expected numeric (int or
+///         float), got string
+///         </c>. Every blanket "5xx is transport" rule therefore reports our own
 ///         malformed object as "cannot reach your cluster", which is precisely what
 ///         <c>KubeApiClient.IsTransport</c>'s remarks promise it does not do. That one prefix is
 ///         carved out, narrowly, and nothing else about 5xx changes.
@@ -137,9 +144,12 @@ public static class KubeFailures {
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>THIS EXISTS BECAUSE THE REFUSAL DOES NOT NAME THE FIELD THAT CHANGED.</b> The
-    ///         message is <c>"spec: Forbidden: updates to statefulset spec for fields other than
+    ///         message is
+    ///         <c>
+    /// "spec: Forbidden: updates to statefulset spec for fields other than
     ///         'replicas', 'ordinals', 'template', 'updateStrategy', 'revisionHistoryLimit',
-    ///         'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden"</c> —
+    ///         'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden"
+    ///         </c> —
     ///         a list of what <i>may</i> change and nothing about what did. On an upgraded cluster
     ///         that reads as an unattributable reconcile failure on every stateful resource at once,
     ///         which is a support call rather than a diagnosis.
@@ -186,8 +196,11 @@ public static class KubeFailures {
     /// <param name="clusterId">The cluster, for the message.</param>
     /// <param name="verb">What was attempted — <c>apply</c>, <c>read</c>, <c>delete</c>, <c>list</c>.</param>
     /// <remarks>
-    ///     ⚠ <b>Which half of the API server's text reaches the tenant is decided per class, by who
-    ///     owns the refusal.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Which half of the API server's text reaches the tenant is decided per class, by who
+    ///         owns the refusal.
+    ///     </b>
     ///     <list type="bullet">
     ///         <item>
     ///             An <b>admission</b> decision (<c>403</c> from Pod Security or a webhook, <c>422</c>
@@ -325,7 +338,8 @@ public static class KubeFailures {
             // and both are things KubeApiClient.IsTransport already calls transport, which is what
             // makes them retryable. Classifying them here would turn a rate limit into a terminal
             // failure — the mirror image of the bug this type exists to fix.
-            >= 400 and < 500
+            >= 400
+                and < 500
                 and not (int)HttpStatusCode.RequestTimeout
                 and not (int)HttpStatusCode.TooManyRequests => Ours(
                 ErrorCode.InvalidRequestBody,
@@ -352,8 +366,8 @@ public static class KubeFailures {
                 TenantMessage =
                     $"Cluster {cluster} refused to {verb} {target}: "
                     + (body.Message.Length > 0
-                        ? body.Message
-                        : "the cluster's admission control gave no reason")
+                            ? body.Message
+                            : "the cluster's admission control gave no reason")
                     + ". The object was not written. This is a decision made by the cluster's own "
                     + "admission control, not a fault in the platform — the message above comes "
                     + "from the cluster.",
@@ -425,8 +439,10 @@ public static class KubeFailures {
         ///     ⚠ Prose matching, and there is no alternative: an RBAC denial and a Pod Security
         ///     denial are both <c>403</c> with <c>reason: Forbidden</c> and identically shaped
         ///     <c>details</c>. The measured strings are
-        ///     <c>… is forbidden: User "system:serviceaccount:default:probe-nobody" cannot get
-        ///     resource "deployments" …</c> against
+        ///     <c>
+        /// … is forbidden: User "system:serviceaccount:default:probe-nobody" cannot get
+        ///     resource "deployments" …
+        ///     </c> against
         ///     <c>… is forbidden: violates PodSecurity "restricted:latest": …</c>, so the
         ///     authorizer's fingerprint is the <c>User "…" cannot</c> pair that
         ///     <c>apierrors.NewForbidden</c> composes. Both arms are asserted against a real k3s.

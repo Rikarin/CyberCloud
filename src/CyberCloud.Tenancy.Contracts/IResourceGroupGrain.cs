@@ -37,8 +37,11 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     ///     reaper of docs/plan/06 § Two-phase create will consider it an orphan.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Three times the index lease, and the margin is what stops the reaper's evidence being
-    ///     circular.</b> Step 1's claim carries a five-minute lease, so a create that is merely slow
+    ///     ⚠
+    ///     <b>
+    ///         Three times the index lease, and the margin is what stops the reaper's evidence being
+    ///         circular.
+    ///     </b> Step 1's claim carries a five-minute lease, so a create that is merely slow
     ///     has lost its name well before this — which is what makes "old, and the index is free" mean
     ///     the same thing as "died between steps 1 and 3". A tighter figure would have the reaper
     ///     reading an index whose lease might still be alive and calling that "no confirmed index".
@@ -145,8 +148,11 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     /// <returns>The members that were removed. Empty is the ordinary answer.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>AGE IS NOT EVIDENCE, AND THIS IS THE WHOLE DIFFERENCE BETWEEN THIS AND
-    ///         <see cref="ListOrphansAsync" />.</b> That one answers "which members have been
+    ///         ⚠
+    ///         <b>
+    ///             AGE IS NOT EVIDENCE, AND THIS IS THE WHOLE DIFFERENCE BETWEEN THIS AND
+    ///             <see cref="ListOrphansAsync" />.
+    ///         </b> That one answers "which members have been
     ///         <see cref="ProvisioningState.Creating" /> for a while", which is a question about a
     ///         clock. Removing a member is a claim that the resource does not exist, and the only
     ///         thing that can support it is the index: docs/plan/06 § Two-phase create defines the
@@ -164,8 +170,11 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     ///         a resource that is silently gone from listings while its pods still run.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What it does NOT do, recorded rather than assumed: it does not clear the resource
-    ///         grain's durable state.</b> This grain cannot see <c>IResourceGrain</c> —
+    ///         ⚠
+    ///         <b>
+    ///             What it does NOT do, recorded rather than assumed: it does not clear the resource
+    ///             grain's durable state.
+    ///         </b> This grain cannot see <c>IResourceGrain</c> —
     ///         <c>CyberCloud.Tenancy</c> holds no reference to the resource manager's contracts, and
     ///         reversing that edge is a module cycle. In practice the commonest orphan has no
     ///         resource-grain state at all, because step 7b of docs/plan/08 § The write path records
@@ -183,8 +192,11 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     /// <param name="clusterId">The cluster a namespace was just written to.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>WITHOUT THIS THE GROUP DELETE HAS NOTHING TO ENUMERATE, AND THAT IS NOT OBVIOUS
-    ///         UNTIL THE DELETE IS WRITTEN.</b> A namespace is keyed by (group, cluster) and a group
+    ///         ⚠
+    ///         <b>
+    ///             WITHOUT THIS THE GROUP DELETE HAS NOTHING TO ENUMERATE, AND THAT IS NOT OBVIOUS
+    ///             UNTIL THE DELETE IS WRITTEN.
+    ///         </b> A namespace is keyed by (group, cluster) and a group
     ///         may hold resources on several clusters, so a group delete has to reclaim one namespace
     ///         per cluster the group ever touched. By the time the delete runs, every member is gone
     ///         — that is the precondition — so the members cannot say which clusters those were, and
@@ -193,8 +205,11 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     ///         pairs "is not knowable from the control plane's own state".
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Written from the reconcile driver, and only when the namespace apply really
-    ///         happened.</b> The driver is the one place that holds the group and a live connection
+    ///         ⚠
+    ///         <b>
+    ///             Written from the reconcile driver, and only when the namespace apply really
+    ///             happened.
+    ///         </b> The driver is the one place that holds the group and a live connection
     ///         at once, and <c>NamespaceEnsurer</c>'s memo already bounds that to once per (cluster,
     ///         namespace) per hour per silo — so this costs one grain call an hour rather than one
     ///         per pass. A failure to record is <b>not</b> a failed pass: the consequence is a
@@ -226,16 +241,22 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>SEALING IS THE ONLY THING THAT CLOSES THE CREATE-DURING-DELETE RACE, AND NOTHING
-    ///         BELOW THE GROUP CAN DO IT.</b> <c>NamespaceReclaim</c> weighs evidence and then a
+    ///         ⚠
+    ///         <b>
+    ///             SEALING IS THE ONLY THING THAT CLOSES THE CREATE-DURING-DELETE RACE, AND NOTHING
+    ///             BELOW THE GROUP CAN DO IT.
+    ///         </b> <c>NamespaceReclaim</c> weighs evidence and then a
     ///         namespace is deleted; a resource created in between has its objects destroyed by a
     ///         verdict that was true when it was reached. The window cannot be closed by looking
     ///         harder — only by the group refusing to accept a member first. That is why this is a
     ///         method on this grain and not a flag the caller keeps.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The check and the seal are one grain turn, which is what makes the race actually
-    ///         closed rather than narrowed.</b> An Orleans grain is single-threaded, so "no members,
+    ///         ⚠
+    ///         <b>
+    ///             The check and the seal are one grain turn, which is what makes the race actually
+    ///             closed rather than narrowed.
+    ///         </b> An Orleans grain is single-threaded, so "no members,
     ///         therefore sealed" cannot be interleaved with a <see cref="BeginCreateAsync" />. A
     ///         caller that listed first and sealed second would have reopened exactly the window this
     ///         exists to shut.

@@ -23,8 +23,11 @@ namespace CyberCloud.Silo.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The twelve lines below are the platform's API surface, and until they existed this
-///         module depended on Autofac's and nothing else.</b> Each provider module's
+///         ⚠
+///         <b>
+///             The twelve lines below are the platform's API surface, and until they existed this
+///             module depended on Autofac's and nothing else.
+///         </b> Each provider module's
 ///         <c>ConfigureServices</c> registers its <c>IResourceProvider</c>, its reconcilers and its
 ///         action handlers; <c>ProviderRegistry</c> is then built from the union at first resolve. A
 ///         provider missing from this list is a provider that reconciles nothing, and its endpoints

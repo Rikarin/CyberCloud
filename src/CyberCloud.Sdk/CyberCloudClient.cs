@@ -73,7 +73,8 @@ public partial class CyberCloudClient : IDisposable {
     /// <summary>Releases the pipeline.</summary>
     /// <param name="disposing">Whether managed state should be released.</param>
     protected virtual void Dispose(bool disposing) {
-        if (disposing)
+        if (disposing) {
             pipeline?.Dispose();
+        }
     }
 }

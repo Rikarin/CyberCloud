@@ -57,8 +57,11 @@ namespace CyberCloud.Communication.Contracts;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The signature deviates from docs/plan/17 § The channel abstraction in two places, and
-///         both are deliberate.</b> The sketch there has
+///         ⚠
+///         <b>
+///             The signature deviates from docs/plan/17 § The channel abstraction in two places, and
+///             both are deliberate.
+///         </b> The sketch there has
 ///         <c>ValueTask&lt;Result&gt; HandleWebhookAsync(HttpRequest request)</c> and
 ///         <c>GetStatusAsync</c> with no cancellation. <see cref="WebhookEnvelope" />'s own remarks
 ///         say why <c>HttpRequest</c> cannot appear in a contracts assembly; and returning
@@ -100,7 +103,10 @@ public interface IChannelProvider {
     ///     this exists for the message whose receipt never arrived, which is the case an operator
     ///     asks about.
     /// </remarks>
-    Task<Result<DeliveryStatus>> GetStatusAsync(string providerMessageId, CancellationToken cancellationToken = default);
+    Task<Result<DeliveryStatus>> GetStatusAsync(
+        string providerMessageId,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Parses a carrier callback into receipts and inbound messages.</summary>
     /// <param name="request">The callback, verbatim. Verify its signature here.</param>

@@ -19,8 +19,11 @@ namespace CyberCloud.AppHost.Tests;
 ///         for <c>Aspire.Hosting.Testing*.dll</c> as well.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Which leaves a literal assembly name in a build file as the only thing holding the
-///         gate on.</b> Neither compiler checks it. If this suite's bring-up moves to another
+///         ⚠
+///         <b>
+///             Which leaves a literal assembly name in a build file as the only thing holding the
+///             gate on.
+///         </b> Neither compiler checks it. If this suite's bring-up moves to another
 ///         library, or that library is renamed, or the reference stops being copied next to the test
 ///         host, the glob matches nothing, the build silently calls this suite cheap again, and the
 ///         symptom is a <em>different</em> suite failing somewhere else in the run — which is exactly
@@ -40,8 +43,11 @@ namespace CyberCloud.AppHost.Tests;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>And that sentence was false for one day, which is issue #82.</b> The two tests that
-///         read <c>build/Build.Test.cs</c> arrived with a <c>static string BuildTestSource { get; } =
-///         File.ReadAllText(…)</c>, and a static property initialiser runs in the type's static
+///         read <c>build/Build.Test.cs</c> arrived with a
+///         <c>
+/// static string BuildTestSource { get; } =
+///         File.ReadAllText(…)
+///         </c>, and a static property initialiser runs in the type's static
 ///         constructor — triggered by first access to <em>any</em> static member of the type. So the
 ///         claim above quietly became "answer on a machine with no Docker daemon <em>and</em> with the
 ///         repository source tree beside the artifacts directory": a run from published or copied
@@ -54,8 +60,11 @@ namespace CyberCloud.AppHost.Tests;
 ///         keeps it that way.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT THIS CLASS COVERS, STATED EXACTLY, BECAUSE #77'S COMMIT MESSAGE CALLED IT "THE
-///         REGRESSION TEST" AND THAT OVERSTATED IT.</b> The first three tests below assert facts
+///         ⚠
+///         <b>
+///             WHAT THIS CLASS COVERS, STATED EXACTLY, BECAUSE #77'S COMMIT MESSAGE CALLED IT "THE
+///             REGRESSION TEST" AND THAT OVERSTATED IT.
+///         </b> The first three tests below assert facts
 ///         about <em>this</em> assembly against a copy of the build's globs, so on their own they
 ///         would all stay green if <c>StartsCluster</c> were deleted outright and
 ///         <c>StartsContainers</c> reverted to its bare <c>Testcontainers*.dll</c> glob — the exact
@@ -200,8 +209,11 @@ public sealed partial class ClusterBackedGatingTests {
     ///     The build file both globs are actually spelled in, read on first use and never before.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A <see cref="Lazy{T}" /> and not a property initialiser, and issue #82 is the whole of
-    ///     the reason.</b> This read
+    ///     ⚠
+    ///     <b>
+    ///         A <see cref="Lazy{T}" /> and not a property initialiser, and issue #82 is the whole of
+    ///         the reason.
+    ///     </b> This read
     ///     <c>static string BuildTestSource { get; } = File.ReadAllText(…)</c>, which runs in the
     ///     static constructor along with <see cref="ClusterEvidence" /> and
     ///     <see cref="OutputDirectory" />, so <see cref="TestPaths" />'s walk for
@@ -225,8 +237,11 @@ public sealed partial class ClusterBackedGatingTests {
     ///     other way.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Frozen in the static constructor rather than asked at test time, and that is the only
-    ///     way the question has a stable answer.</b> By the time any test in this class runs the type
+    ///     ⚠
+    ///     <b>
+    ///         Frozen in the static constructor rather than asked at test time, and that is the only
+    ///         way the question has a stable answer.
+    ///     </b> By the time any test in this class runs the type
     ///     is initialised and one of the source-reading tests may already have forced the
     ///     <c>Lazy</c>, so <c>IsValueCreated</c> read from a test body would answer "true" or "false"
     ///     depending on execution order. The static constructor body runs after every static field
@@ -251,12 +266,18 @@ public sealed partial class ClusterBackedGatingTests {
     ///         So the two terms cover different halves of one property and the guard is their OR.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>WHAT IS STILL NOT OBSERVED, stated rather than implied — and it is two things,
-    ///         not one.</b> First: a static initialiser added here that reaches the disk WITHOUT going
+    ///         ⚠
+    ///         <b>
+    ///             WHAT IS STILL NOT OBSERVED, stated rather than implied — and it is two things,
+    ///             not one.
+    ///         </b> First: a static initialiser added here that reaches the disk WITHOUT going
     ///         through either — its own <c>File.ReadAllText</c> on a path it computes for itself —
     ///         re-creates issue #82 and leaves this green. No in-process flag can see that; only a
-    ///         reviewer can. Second, and less obvious: <b>the second term is a LOWER BOUND, not a
-    ///         measurement.</b> <c>RepositoryWasResolvedBeforeThisClass</c> is a snapshot, so if any
+    ///         reviewer can. Second, and less obvious:
+    ///         <b>
+    ///             the second term is a LOWER BOUND, not a
+    ///             measurement.
+    ///         </b> <c>RepositoryWasResolvedBeforeThisClass</c> is a snapshot, so if any
     ///         other class in this assembly resolved the root first the snapshot is already
     ///         <c>true</c> and the term is structurally incapable of moving — a future initialiser
     ///         here that reaches the repository through <c>TestPaths</c> rather than through
@@ -277,10 +298,11 @@ public sealed partial class ClusterBackedGatingTests {
     /// </remarks>
     static readonly bool ReachedTheRepositoryDuringTypeInitialisation;
 
-    static ClusterBackedGatingTests() =>
+    static ClusterBackedGatingTests() {
         ReachedTheRepositoryDuringTypeInitialisation =
             LazyBuildTestSource.IsValueCreated
             || (TestPaths.RepositoryHasBeenResolved && !RepositoryWasResolvedBeforeThisClass);
+    }
 
     /// <summary>The source of one method of <see cref="BuildTestSource" />, by its signature.</summary>
     /// <remarks>
@@ -352,12 +374,18 @@ public sealed partial class ClusterBackedGatingTests {
     ///     That the three tests above which need only this assembly still need only this assembly.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>It asserts a fact about the STATIC CONSTRUCTOR, because that is where issue #82
-    ///     lived and nothing else in this class can see it.</b> Adding
+    ///     ⚠
+    ///     <b>
+    ///         It asserts a fact about the STATIC CONSTRUCTOR, because that is where issue #82
+    ///         lived and nothing else in this class can see it.
+    ///     </b> Adding
     ///     <c>_ = LazyBuildTestSource.Value;</c> to the static constructor turns this red and
     ///     leaves the other five green. A static initialiser that resolves
-    ///     <see cref="TestPaths.Repository" /> for some other reason turns it red <i>only when this
-    ///     class is the first in the assembly to resolve the root</i> — see the second half of
+    ///     <see cref="TestPaths.Repository" /> for some other reason turns it red
+    ///     <i>
+    ///         only when this
+    ///         class is the first in the assembly to resolve the root
+    ///     </i> — see the second half of
     ///     <see cref="ReachedTheRepositoryDuringTypeInitialisation" />'s remarks, which says why that
     ///     term is a lower bound rather than a measurement. Red here is the shape the defect had: every test passing on a
     ///     machine that has the source tree, and every test failing at once on a machine that does
@@ -368,8 +396,11 @@ public sealed partial class ClusterBackedGatingTests {
     ///     moving the assembly. This is the observable half of the same property, in-process and with
     ///     no fixture.
     ///     <para>
-    ///         ⚠ <b>WHAT A LITERAL REVERT DOES, BECAUSE THIS REMARK CLAIMED THE WRONG THING AND THE
-    ///         DISTINCTION IS THE POINT OF THE TEST.</b> It said that "putting
+    ///         ⚠
+    ///         <b>
+    ///             WHAT A LITERAL REVERT DOES, BECAUSE THIS REMARK CLAIMED THE WRONG THING AND THE
+    ///             DISTINCTION IS THE POINT OF THE TEST.
+    ///         </b> It said that "putting
     ///         <c>File.ReadAllText</c> back in a static initialiser" turns this red. It did not.
     ///         Someone restoring the pre-#82 shape literally writes
     ///         <c>static string BuildTestSource { get; } = File.ReadAllText(…)</c> and DELETES
@@ -391,14 +422,20 @@ public sealed partial class ClusterBackedGatingTests {
     ///         as committed, <b>6 passed</b>; with <c>_ = LazyBuildTestSource.Value;</c> added to the
     ///         static constructor — the fix reverted in the smallest way that still compiles —
     ///         <b>1 failed, 5 passed</b>, and the one was this test; with the <c>Lazy</c> pointed at a
-    ///         file that does not exist, standing in for the absent source tree, <b>2 failed,
-    ///         4 passed</b> — the two that read the source, which is the outcome issue #82 asked for;
+    ///         file that does not exist, standing in for the absent source tree,
+    ///         <b>
+    ///             2 failed,
+    ///             4 passed
+    ///         </b> — the two that read the source, which is the outcome issue #82 asked for;
     ///         with both sabotages at once, the pre-#82 shape exactly, <b>6 failed, 0 passed</b> on one
     ///         <c>TypeInitializationException</c>.
     ///     </para>
     ///     <para>
-    ///         ✔ <b>And the term this branch's review added was measured against the guard it
-    ///         replaces, which is the only way to show a widening is not decoration.</b> A third
+    ///         ✔
+    ///         <b>
+    ///             And the term this branch's review added was measured against the guard it
+    ///             replaces, which is the only way to show a widening is not decoration.
+    ///         </b> A third
     ///         sabotage, <c>_ = TestPaths.Repository;</c> as the first statement of the static
     ///         constructor — initialisation reaching the repository while touching no <c>Lazy</c> of
     ///         this class's, which is the defect shape the review named — run twice on 2026-09-05:

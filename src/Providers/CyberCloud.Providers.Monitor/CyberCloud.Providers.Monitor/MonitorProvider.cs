@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.Monitor;
@@ -11,8 +12,10 @@ namespace CyberCloud.Providers.Monitor;
 /// <remarks>
 ///     <para>
 ///         docs/plan/16 § <c>CyberCloud.Monitor/workspaces</c> · <b>M1 · 2.5 EM</b>:
-///         <i>"The tenant-facing resource. Owns retention, quota, ingest keys, and the datasource
-///         wiring."</i> ADR-016 chose the two engines; docs/plan/01 § The catalogue spells the row
+///         <i>
+///             "The tenant-facing resource. Owns retention, quota, ingest keys, and the datasource
+///             wiring."
+///         </i> ADR-016 chose the two engines; docs/plan/01 § The catalogue spells the row
 ///         <c>CyberCloud.Monitor/workspaces</c> and this is the path.
 ///     </para>
 ///     <para>
@@ -36,45 +39,72 @@ namespace CyberCloud.Providers.Monitor;
 ///         it needed no fifth module edge and no seventh project.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT WAS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, IT WITHDREW
-///         THE DECLARATION, AND IT DECLARES IT AGAIN — ALL ON 2026-08-18.</b> The case for the window
+///         ⚠
+///         <b>
+///             IT WAS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, IT WITHDREW
+///             THE DECLARATION, AND IT DECLARES IT AGAIN — ALL ON 2026-08-18.
+///         </b> The case for the window
 ///         is recorded here because it survived the withdrawal unchanged, and the withdrawal is
 ///         recorded here because it is what closed the defect. Eleven families declined, each with
 ///         the same stated reason — the manager did not honour a window — and docs/plan/08 § Soft
-///         delete endorsed the instinct and ended <i>"the declaration is the last step, not the
-///         first"</i>. What is left is the provider's own question: <i>does the data this type
-///         carries deserve a recovery window, and how long</i>. On this type the answer is the least
+///         delete endorsed the instinct and ended
+///         <i>
+///             "the declaration is the last step, not the
+///             first"
+///         </i>. What is left is the provider's own question:
+///         <i>
+///             does the data this type
+///             carries deserve a recovery window, and how long
+///         </i>. On this type the answer is the least
 ///         ambiguous in the catalogue. A workspace is the tenant's <b>only</b> copy of their logs — a
 ///         database has a backup, an object store has versioning, and telemetry has neither, because
 ///         the source of truth was a process that has since exited. docs/plan/16's closing sentence
-///         is <i>"a monitoring product that quietly loses data is worse than no monitoring product,
-///         because it is trusted"</i>, and a delete with no window is the loudest possible version of
+///         is
+///         <i>
+///             "a monitoring product that quietly loses data is worse than no monitoring product,
+///             because it is trusted"
+///         </i>, and a delete with no window is the loudest possible version of
 ///         that. Seven days, which is docs/plan/06 § Tags, locks' number for a type carrying data,
 ///         with purge behind its own permission and a purge-protection flag on the body.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND THE RECOVERY WINDOW IS CHEAP HERE FOR THE SAME REASON THE TYPE IS NOT A
-///         DEPLOYMENT.</b> A soft-deleted workspace keeps its partitions and costs disk that was
+///         ⚠
+///         <b>
+///             AND THE RECOVERY WINDOW IS CHEAP HERE FOR THE SAME REASON THE TYPE IS NOT A
+///             DEPLOYMENT.
+///         </b> A soft-deleted workspace keeps its partitions and costs disk that was
 ///         already reserved and no compute at all. On the deployment-shaped reading, the same window
 ///         would mean keeping a cluster running for a week per deleted workspace, and somebody would
 ///         have quietly made it a soft delete that deletes.
 ///     </para>
 ///     <para>
-///         ⚠⚠ <b>THE WITHDRAWAL, KEPT IN FULL, BECAUSE IT IS THE MEASUREMENT THAT FIXED THE
-///         PLATFORM.</b> Two drafts of this paragraph were wrong before the third was checked. The
-///         first said a soft-deleted workspace is one whose <c>VMUser</c> is gone, <i>"so nothing can
-///         write to it"</i>; the second kept the declaration and filed the gap as owed. Both
+///         ⚠⚠
+///         <b>
+///             THE WITHDRAWAL, KEPT IN FULL, BECAUSE IT IS THE MEASUREMENT THAT FIXED THE
+///             PLATFORM.
+///         </b> Two drafts of this paragraph were wrong before the third was checked. The
+///         first said a soft-deleted workspace is one whose <c>VMUser</c> is gone,
+///         <i>
+///             "so nothing can
+///             write to it"
+///         </i>; the second kept the declaration and filed the gap as owed. Both
 ///         understated it. The facts, each read in the shipping source rather than inferred:
 ///     </para>
 ///     <list type="bullet">
 ///         <item>
-///             <c>OperationGrain.DriveAsync</c> returned early for a soft delete and ran <b>no pass
-///             at all</b> — so <c>IResourceReconciler.DeleteAsync</c> was never called and every
+///             <c>OperationGrain.DriveAsync</c> returned early for a soft delete and ran
+///             <b>
+///                 no pass
+///                 at all
+///             </b> — so <c>IResourceReconciler.DeleteAsync</c> was never called and every
 ///             object this provider applied was left exactly as it was.
 ///         </item>
 ///         <item>
-///             <c>ParkAsync</c> said the rest in as many words: <i>"Its quota stays committed until
-///             it is purged."</i> The storage this workspace's retention and allowances draw was
+///             <c>ParkAsync</c> said the rest in as many words:
+///             <i>
+///                 "Its quota stays committed until
+///                 it is purged."
+///             </i> The storage this workspace's retention and allowances draw was
 ///             still reserved against the subscription.
 ///         </item>
 ///         <item>
@@ -86,21 +116,30 @@ namespace CyberCloud.Providers.Monitor;
 ///         </item>
 ///     </list>
 ///     <para>
-///         Together those made a soft-deleted workspace an <b>authenticated, billed, open write path
-///         into a store the tenant believed was gone</b>: a collector nobody reconfigured kept
+///         Together those made a soft-deleted workspace an
+///         <b>
+///             authenticated, billed, open write path
+///             into a store the tenant believed was gone
+///         </b>: a collector nobody reconfigured kept
 ///         writing, the data kept landing in a tenancy whose address answered <c>404</c>, the
 ///         retention kept accruing against quota, and the tenant could see none of it — the only way
 ///         to stop it was a purge, which sits behind a permission they may not hold. ⚠ On a database
 ///         or an object store a recovery window merely holds disk; here it held an open ingest
 ///         endpoint, which is a difference docs/plan/08 did not anticipate because nothing before
-///         this had declared a window. <b>A delete that does not delete is worse than no recovery
-///         window</b>, so the declaration was withdrawn until the platform could withdraw the write
+///         this had declared a window.
+///         <b>
+///             A delete that does not delete is worse than no recovery
+///             window
+///         </b>, so the declaration was withdrawn until the platform could withdraw the write
 ///         path on park — the same conclusion <c>CyberCloud.ContainerRegistry/registries</c> reached
 ///         from its own measurement, for a reason that is worse here rather than merely similar.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What did NOT reproduce, recorded because a finding that fails to replicate is worth
-///         as much as one that does — and this one decided where the fix belonged.</b> That row
+///         ⚠
+///         <b>
+///             What did NOT reproduce, recorded because a finding that fails to replicate is worth
+///             as much as one that does — and this one decided where the fix belonged.
+///         </b> That row
 ///         measured a soft-deleted resource <i>reconciling its whole data plane back</i>. On this type
 ///         that path was not reachable, and it was checked rather than assumed: driving the completed
 ///         delete operation again returned nothing, and disabling <c>OperationGrain.DriveAsync</c>'s
@@ -235,11 +274,17 @@ public sealed class MonitorProvider : IResourceProvider {
 
     /// <summary>How long a deleted workspace stays recoverable.</summary>
     /// <remarks>
-    ///     docs/plan/06 § Tags, locks gives 7 for a type carrying data — <i>"a dropped production
-    ///     database is not a support ticket you want to have to say no to"</i>. ⚠ It is a
+    ///     docs/plan/06 § Tags, locks gives 7 for a type carrying data —
+    ///     <i>
+    ///         "a dropped production
+    ///         database is not a support ticket you want to have to say no to"
+    ///     </i>. ⚠ It is a
     ///     <b>type-level</b> number and therefore immutable by construction, which is what
-    ///     docs/plan/08 § Soft delete asks for: <i>"a window a caller can shorten under their own
-    ///     resource is not a recovery window"</i>. There is no per-resource retention property for a
+    ///     docs/plan/08 § Soft delete asks for:
+    ///     <i>
+    ///         "a window a caller can shorten under their own
+    ///         resource is not a recovery window"
+    ///     </i>. There is no per-resource retention property for a
     ///     caller to shorten, and the delete path stamps the window from this constant.
     /// </remarks>
     public const int SoftDeleteDays = 7;
@@ -275,8 +320,11 @@ public sealed class MonitorProvider : IResourceProvider {
     ///         two disagreeing is not a defect in either.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It cannot be zero, and the schema is what guarantees that rather than this
-    ///         method.</b> Every <c>*GbPerDay</c> has <c>Minimum = 1</c> and every retention tier
+    ///         ⚠
+    ///         <b>
+    ///             It cannot be zero, and the schema is what guarantees that rather than this
+    ///             method.
+    ///         </b> Every <c>*GbPerDay</c> has <c>Minimum = 1</c> and every retention tier
     ///         maps to a positive day count, so the sum is at least three — which keeps this meter
     ///         clear of <c>QuotaGrain.TryReserveAsync</c>'s non-positive refusal on every legal
     ///         body. A tier added to <see cref="MonitorWorkspaces.Tiers" /> without a row in

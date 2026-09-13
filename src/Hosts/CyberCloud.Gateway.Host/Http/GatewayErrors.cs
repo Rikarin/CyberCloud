@@ -4,9 +4,15 @@ namespace CyberCloud.Gateway.Host.Http;
 ///     The errors the gateway itself produces, and the one canonical <c>404</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><see cref="NotFound" /> is the enumeration-oracle defence and it is a single string on
-///     purpose.</b> docs/plan/07 § The enforcement seam gets the status code right — <i>"404, never
-///     403"</i> — and stops there. A status code that matches while the two bodies differ is the same
+///     ⚠
+///     <b>
+///         <see cref="NotFound" /> is the enumeration-oracle defence and it is a single string on
+///         purpose.
+///     </b> docs/plan/07 § The enforcement seam gets the status code right —
+///     <i>
+///         "404, never
+///         403"
+///     </i> — and stops there. A status code that matches while the two bodies differ is the same
 ///     oracle wearing a different hat: <c>'…' does not exist</c> against <c>you may not read '…'</c>
 ///     tells a prober exactly what the 404 was meant to hide. Every <c>ResourceNotFound</c> leaving
 ///     this process is re-rendered through this method, whatever message the component below wrote —
@@ -22,8 +28,7 @@ static class GatewayErrors {
     ///     caller's own input and nothing else — anything derived from what the gateway <i>found</i>
     ///     would leak the thing the status code hides.
     /// </param>
-    public static Error NotFound(string path) =>
-        new(ErrorCode.ResourceNotFound, $"'{path}' does not exist.");
+    public static Error NotFound(string path) => new(ErrorCode.ResourceNotFound, $"'{path}' does not exist.");
 
     /// <summary>The <c>401</c>. No token, an expired one, or one this platform did not issue.</summary>
     /// <param name="reason">
@@ -40,8 +45,11 @@ static class GatewayErrors {
     /// <summary>The <c>400</c> for a missing or unknown <c>api-version</c>.</summary>
     /// <param name="supplied">What the caller sent, or empty when the parameter was absent.</param>
     /// <param name="current">
-    ///     The current version, named in the message. docs/plan/10 § API versioning: <i>"Missing →
-    ///     400 naming the current version."</i> Naming it is what turns a 400 into a one-line fix.
+    ///     The current version, named in the message. docs/plan/10 § API versioning:
+    ///     <i>
+    ///         "Missing →
+    ///         400 naming the current version."
+    ///     </i> Naming it is what turns a 400 into a one-line fix.
     /// </param>
     public static Error ApiVersionRequired(string supplied, string current) =>
         new(

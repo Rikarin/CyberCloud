@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Messaging.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The usual argument for containment does not apply to this operator, and the tests
-///         below are the ones that survive checking.</b> The received wisdom is "the operator edits
+///         ⚠
+///         <b>
+///             The usual argument for containment does not apply to this operator, and the tests
+///             below are the ones that survive checking.
+///         </b> The received wisdom is "the operator edits
 ///         the spec it is given, so equality reports drift forever" — true of some operators.
 ///         Strimzi's <c>Kafka</c> CRD at v1beta2 declares <b>no <c>default:</c> anywhere</b>, so the
 ///         API server's structural defaulting adds nothing on write, and the cluster operator writes
@@ -48,14 +51,9 @@ public sealed class KafkaMatchesTests {
         readBack["status"] = new JsonObject {
             ["clusterId"] = "Yjg0OTQ0",
             ["kafkaMetadataState"] = "KRaft",
-            ["conditions"] = new JsonArray {
-                new JsonObject { ["type"] = "Ready", ["status"] = "True" }
-            },
+            ["conditions"] = new JsonArray { new JsonObject { ["type"] = "Ready", ["status"] = "True" } },
             ["listeners"] = new JsonArray {
-                new JsonObject {
-                    ["name"] = "internal",
-                    ["bootstrapServers"] = "events-kafka-bootstrap.ns.svc:9092"
-                }
+                new JsonObject { ["name"] = "internal", ["bootstrapServers"] = "events-kafka-bootstrap.ns.svc:9092" }
             }
         };
         readBack["metadata"]!.AsObject()["uid"] = "0c1a4a2e-0000-4000-8000-00000000000f";
@@ -63,10 +61,11 @@ public sealed class KafkaMatchesTests {
             new JsonObject { ["manager"] = KafkaClusters.FieldManager, ["operation"] = "Apply" }
         };
 
-        KafkaClusters.Matches(readBack.ToJsonString(), desired.RootElement).ShouldBeTrue(
-            "an operator-written status made the resource look drifted. Matches must read the fields "
-            + "this provider owns and ignore everything else."
-        );
+        KafkaClusters.Matches(readBack.ToJsonString(), desired.RootElement)
+            .ShouldBeTrue(
+                "an operator-written status made the resource look drifted. Matches must read the fields "
+                + "this provider owns and ignore everything else."
+            );
 
         // And the sabotage's own control: equality against the submitted document is false here, so
         // the test above is not passing by accident.
@@ -84,9 +83,8 @@ public sealed class KafkaMatchesTests {
         using var desired = JsonDocument.Parse(KafkaClusters.Body(ClusterId));
 
         var readBack = JsonNode.Parse(Kafka(desired.RootElement))!.AsObject();
-        readBack["spec"]!["kafka"]!.AsObject()["template"] = new JsonObject {
-            ["pod"] = new JsonObject { ["priorityClassName"] = "tenant-critical" }
-        };
+        readBack["spec"]!["kafka"]!.AsObject()["template"] =
+            new JsonObject { ["pod"] = new JsonObject { ["priorityClassName"] = "tenant-critical" } };
 
         KafkaClusters.Matches(readBack.ToJsonString(), desired.RootElement).ShouldBeTrue();
     }
@@ -103,9 +101,8 @@ public sealed class KafkaMatchesTests {
         var scaled = JsonNode.Parse(NodePool(desired.RootElement))!.AsObject();
         scaled["spec"]!.AsObject()["replicas"] = 7;
 
-        KafkaClusters.Matches(scaled.ToJsonString(), desired.RootElement).ShouldBeFalse(
-            "a node pool scaled behind the platform's back reads as converged."
-        );
+        KafkaClusters.Matches(scaled.ToJsonString(), desired.RootElement)
+            .ShouldBeFalse("a node pool scaled behind the platform's back reads as converged.");
     }
 
     [Fact]
@@ -116,9 +113,8 @@ public sealed class KafkaMatchesTests {
         using var plain = JsonDocument.Parse(KafkaClusters.Body(ClusterId));
         using var exposed = JsonDocument.Parse(WithExternalEnabled(KafkaClusters.Body(ClusterId)));
 
-        KafkaClusters.Matches(Kafka(plain.RootElement), exposed.RootElement).ShouldBeFalse(
-            "a cluster with one listener satisfies a body asking for external exposure."
-        );
+        KafkaClusters.Matches(Kafka(plain.RootElement), exposed.RootElement)
+            .ShouldBeFalse("a cluster with one listener satisfies a body asking for external exposure.");
 
         KafkaClusters.Matches(Kafka(exposed.RootElement), exposed.RootElement).ShouldBeTrue();
     }

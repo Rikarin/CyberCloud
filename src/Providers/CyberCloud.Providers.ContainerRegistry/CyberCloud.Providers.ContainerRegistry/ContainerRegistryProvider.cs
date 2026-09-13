@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json;
 
@@ -12,12 +13,18 @@ namespace CyberCloud.Providers.ContainerRegistry;
 /// <remarks>
 ///     <para>
 ///         [13 § Container Registry](../../../../docs/plan/13-compute-vm-containers.md) —
-///         <i>"<c>CyberCloud.ContainerRegistry/registries</c> · M1 · 1.5 EM"</i>, <i>"Harbor, one
-///         instance per tenant"</i>. The twelfth provider family.
+///         <i>"<c>CyberCloud.ContainerRegistry/registries</c> · M1 · 1.5 EM"</i>,
+///         <i>
+///             "Harbor, one
+///             instance per tenant"
+///         </i>. The twelfth provider family.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE OPERATOR IS ARCHIVED AND THE ROW IS BUILT ANYWAY, WHICH IS THE THIRD TIME THAT
-///         SENTENCE HAS BEEN WRITTEN IN THIS TREE.</b> The full account is on
+///         ⚠
+///         <b>
+///             THE OPERATOR IS ARCHIVED AND THE ROW IS BUILT ANYWAY, WHICH IS THE THIRD TIME THAT
+///             SENTENCE HAS BEEN WRITTEN IN THIS TREE.
+///         </b> The full account is on
 ///         <c>ContainerRegistries</c>. What it costs here is the shape:
 ///         <c>CyberCloud.Messaging/natsClusters</c> established the operator-less shape at five
 ///         objects, <c>CyberCloud.Search/vectorStores</c> was refused partly over it, and this row
@@ -25,8 +32,11 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         in this family, and each one is written where it is taken.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS ROW WAS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, AND
-///         DECLARING IT IS WHAT FOUND THAT A SOFT DELETE TORE NOTHING DOWN.</b> Eleven families
+///         ⚠
+///         <b>
+///             THIS ROW WAS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, AND
+///             DECLARING IT IS WHAT FOUND THAT A SOFT DELETE TORE NOTHING DOWN.
+///         </b> Eleven families
 ///         declined the declaration for one shared reason — the manager did not read
 ///         <c>SoftDeleteDays</c> — and docs/plan/08 § Soft delete is built, so the question each type
 ///         owes is its own: <i>can the deleted thing genuinely be handed back?</i> On this row the
@@ -40,20 +50,32 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         declaration went in.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND THE CLUSTER-BACKED SUITE FAILED: EVERY OBJECT WAS STILL IN THE CLUSTER AFTER A
-///         CONVERGED TEARDOWN.</b>
-///         <c>ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer</c> failed with <i>"is
-///         still in the real cluster after a converged teardown"</i>, and reordering the case's object
+///         ⚠
+///         <b>
+///             AND THE CLUSTER-BACKED SUITE FAILED: EVERY OBJECT WAS STILL IN THE CLUSTER AFTER A
+///             CONVERGED TEARDOWN.
+///         </b>
+///         <c>ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer</c> failed with
+///         <i>
+///             "is
+///             still in the real cluster after a converged teardown"
+///         </i>, and reordering the case's object
 ///         list showed it was not one object but <b>every</b> object, the core <c>Deployment</c>
 ///         included. ⚠ <b>Measured rather than argued</b>: removing this one call and changing nothing
 ///         else made the same test pass, and putting it back made it fail again.
 ///     </para>
 ///     <para>
-///         ⚠⚠ <b>AND THIS ROW WROTE THAT UP AS AN ACTIVE RE-APPLY, WHICH IT WAS NOT, AND THE
-///         MISREADING IS KEPT HERE BECAUSE IT IS THE MORE USEFUL HALF.</b> The conclusion recorded was
+///         ⚠⚠
+///         <b>
+///             AND THIS ROW WROTE THAT UP AS AN ACTIVE RE-APPLY, WHICH IT WAS NOT, AND THE
+///             MISREADING IS KEPT HERE BECAUSE IT IS THE MORE USEFUL HALF.
+///         </b> The conclusion recorded was
 ///         that a soft-deleted resource <i>rebuilds its entire data plane</i>. That assertion reports
-///         an END STATE — an object is present — and an end state cannot distinguish <i>never torn
-///         down</i> from <i>torn down and re-applied</i>. The two are different bugs in different code:
+///         an END STATE — an object is present — and an end state cannot distinguish
+///         <i>
+///             never torn
+///             down
+///         </i> from <i>torn down and re-applied</i>. The two are different bugs in different code:
 ///         one is a missing teardown, the other a stray reconcile. It was the first.
 ///         <c>OperationGrain.DriveAsync</c> returned before running any pass for a soft delete, so
 ///         nothing was ever asked to come down. <c>CyberCloud.Monitor/workspaces</c> declared a window
@@ -62,8 +84,11 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         disagreement findable at all.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What the defect meant, stated plainly, because it was worse than it sounds and it was
-///         real either way.</b> A tenant deletes a registry; the API answers, the operation converges,
+///         ⚠
+///         <b>
+///             What the defect meant, stated plainly, because it was worse than it sounds and it was
+///             real either way.
+///         </b> A tenant deletes a registry; the API answers, the operation converges,
 ///         the resource stops being addressable — and the workload keeps running. It is sampled by the
 ///         usage pipeline, it holds its quota, and the tenant cannot see it in order to delete it
 ///         again. A delete that does not delete is worse than no recovery window, so the declaration
@@ -79,8 +104,11 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         a restore re-attaches when it applies the stored body again.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two smaller things were found on the way and stand whatever happened to that
-///         defect.</b> Nothing removes a <c>PersistentVolumeClaim</c> on a purge — a purged registry
+///         ⚠
+///         <b>
+///             Two smaller things were found on the way and stand whatever happened to that
+///             defect.
+///         </b> Nothing removes a <c>PersistentVolumeClaim</c> on a purge — a purged registry
 ///         returns its committed quota and leaves its disks allocated — and
 ///         <c>ResourceManagerService.RestoreAsync</c> and <c>PurgeAsync</c> are reachable from no
 ///         gateway stage at all, grepped rather than assumed. Both are at
@@ -102,8 +130,11 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         and this is the third.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Piece 7 is declined for a stated reason, which docs/plan/12 § The pattern, once says
-///         is worth more than another implementation of it.</b> A registry's images are content
+///         ⚠
+///         <b>
+///             Piece 7 is declined for a stated reason, which docs/plan/12 § The pattern, once says
+///             is worth more than another implementation of it.
+///         </b> A registry's images are content
 ///         addressed and immutable, and Harbor's own answer to losing them is
 ///         <i>replication to another registry</i> rather than a snapshot. The right backup for this row
 ///         is therefore the replication sub-resource docs/plan/13 names — which needs a second registry
@@ -114,8 +145,11 @@ namespace CyberCloud.Providers.ContainerRegistry;
 public sealed class ContainerRegistryProvider : IResourceProvider {
     /// <summary>The CLI short form this type takes.</summary>
     /// <remarks>
-    ///     ⚠ <b>Derived rather than checked by hand, and the three dictionaries this used to be
-    ///     compared against were the wrong question.</b> <c>CliEmitter</c> derives the CLI group key
+    ///     ⚠
+    ///     <b>
+    ///         Derived rather than checked by hand, and the three dictionaries this used to be
+    ///         compared against were the wrong question.
+    ///     </b> <c>CliEmitter</c> derives the CLI group key
     ///     from the provider namespace's last segment, lower-cased, so this namespace is already the
     ///     group <c>containerregistry</c>, and <c>registry</c> has to stay clear of that key and of
     ///     any sibling's command or short name. It does not have to stay clear of the other eleven
@@ -251,9 +285,9 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
                 "/properties/sizing/cpu"
             ],
             body => KubeQuantity.TryParse(ContainerRegistries.Resources(body).Cpu, out var cores)
-            && KubeQuantity.TryParse(ContainerRegistries.ControlPlaneCpu, out var share)
-                ? Result<decimal>.Success(cores + (ControlPlanePods(body) * share))
-                : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
+                && KubeQuantity.TryParse(ContainerRegistries.ControlPlaneCpu, out var share)
+                    ? Result<decimal>.Success(cores + ControlPlanePods(body) * share)
+                    : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
 
     /// <summary>Memory: the same two populations, in gibibytes.</summary>
@@ -268,7 +302,7 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
             body =>
                 KubeQuantity.TryGibibytes(ContainerRegistries.Resources(body).Memory, out var gibibytes)
                 && KubeQuantity.TryGibibytes(ContainerRegistries.ControlPlaneMemory, out var share)
-                    ? Result<decimal>.Success(gibibytes + (ControlPlanePods(body) * share))
+                    ? Result<decimal>.Success(gibibytes + ControlPlanePods(body) * share)
                     : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
 
@@ -302,7 +336,7 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
     ///     ⚠ The registry is <i>not</i> in this count — it is the population the preset sizes — and a
     ///     reader adding it here would double-charge the one component the tenant pays for by name.
     /// </remarks>
-    static int ControlPlanePods(JsonElement body) => (3 * ContainerRegistries.Replicas(body)) + 2;
+    static int ControlPlanePods(JsonElement body) => 3 * ContainerRegistries.Replicas(body) + 2;
 
     static Result<decimal> Unresolvable(string what, string where) =>
         Result<decimal>.Failure(

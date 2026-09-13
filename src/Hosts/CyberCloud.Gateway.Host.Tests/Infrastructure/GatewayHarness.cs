@@ -33,8 +33,11 @@ sealed record GatewayResponse(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This composes the same eight stages <c>GatewayServiceCollectionExtensions</c>
-///         registers, through the same <see cref="GatewayPipeline" />, in the same order.</b> The
+///         ⚠
+///         <b>
+///             This composes the same eight stages <c>GatewayServiceCollectionExtensions</c>
+///             registers, through the same <see cref="GatewayPipeline" />, in the same order.
+///         </b> The
 ///         pipeline validates the set at construction, so a test that composed a different pipeline
 ///         would fail here rather than quietly assert something about a shape production does not
 ///         have.
@@ -106,14 +109,18 @@ sealed class GatewayHarness {
 
         // Seeded, not fetched. A resident tenant is a dictionary read that cannot do I/O —
         // docs/plan/05 § The tenant directory — which is why Grains stays untouched.
-        directory.Apply(new() {
-            Version = 1,
-            IsFullSnapshot = true,
-            Entries = [
-                new() { TenantId = TenantA, Slug = "tenant-a", HomeRegion = tenantARegion, Status = status },
-                new() { TenantId = TenantB, Slug = "tenant-b", HomeRegion = tenantARegion, Status = TenantStatus.Active }
-            ]
-        });
+        directory.Apply(
+            new() {
+                Version = 1,
+                IsFullSnapshot = true,
+                Entries = [
+                    new() { TenantId = TenantA, Slug = "tenant-a", HomeRegion = tenantARegion, Status = status },
+                    new() {
+                        TenantId = TenantB, Slug = "tenant-b", HomeRegion = tenantARegion, Status = TenantStatus.Active
+                    }
+                ]
+            }
+        );
 
         pipeline = new(
             [
@@ -161,8 +168,7 @@ sealed class GatewayHarness {
 
     /// <summary>The scope path of a tenant's subscription.</summary>
     /// <param name="tenantId">Which tenant's path to spell.</param>
-    public static string SubscriptionPath(Guid tenantId) =>
-        $"/tenants/{tenantId:D}/subscriptions/{Subscription:D}";
+    public static string SubscriptionPath(Guid tenantId) => $"/tenants/{tenantId:D}/subscriptions/{Subscription:D}";
 
     /// <summary>The happy-path resource path for a tenant.</summary>
     /// <param name="tenantId">Which tenant's path to spell.</param>

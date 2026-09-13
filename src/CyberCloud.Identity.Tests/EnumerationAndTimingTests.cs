@@ -70,13 +70,17 @@ public sealed class EnumerationAndTimingTests(IdentityCluster cluster) {
             IdentityCluster.Tenant,
             "present@example.com",
             "not-the-password",
-            new(), Ct);
+            new(),
+            Ct
+        );
 
         var noSuchUser = await service.SignInWithPasswordAsync(
             IdentityCluster.Tenant,
             "absent@example.com",
             Password,
-            new(), Ct);
+            new(),
+            Ct
+        );
 
         wrongPassword.IsFailure.ShouldBeTrue();
         noSuchUser.IsFailure.ShouldBeTrue();
@@ -100,13 +104,17 @@ public sealed class EnumerationAndTimingTests(IdentityCluster cluster) {
             IdentityCluster.Tenant,
             "suspended@example.com",
             Password,
-            new(), Ct);
+            new(),
+            Ct
+        );
 
         var unknown = await service.SignInWithPasswordAsync(
             IdentityCluster.Tenant,
             "never-existed@example.com",
             Password,
-            new(), Ct);
+            new(),
+            Ct
+        );
 
         // ⚠ A correct password on a suspended account must not be distinguishable from a wrong
         // password on a missing one. "Your account is suspended" is a helpful message that tells an
@@ -128,7 +136,9 @@ public sealed class EnumerationAndTimingTests(IdentityCluster cluster) {
             IdentityCluster.Tenant,
             "passkey-only@example.com",
             Password,
-            new(), Ct);
+            new(),
+            Ct
+        );
 
         noPassword.IsFailure.ShouldBeTrue();
         noPassword.Error!.Message.ShouldBe(UniformFailures.SignIn);
@@ -216,11 +226,12 @@ public sealed class EnumerationAndTimingTests(IdentityCluster cluster) {
         // short-circuited on BOTH branches — a locked identifier, a hasher that was replaced with a
         // no-op — and two equal near-zero medians would satisfy the ratio bound below while proving
         // nothing. This is the guard against the test passing for the wrong reason.
-        Math.Min(presentMedian, absentMedian).ShouldBeGreaterThan(
-            1.0,
-            $"Both branches must actually run an Argon2id verification — {report}. A sub-millisecond "
-            + "median means neither did, and the ratio assertion below would then pass vacuously."
-        );
+        Math.Min(presentMedian, absentMedian)
+            .ShouldBeGreaterThan(
+                1.0,
+                $"Both branches must actually run an Argon2id verification — {report}. A sub-millisecond "
+                + "median means neither did, and the ratio assertion below would then pass vacuously."
+            );
 
         ratio.ShouldBeLessThan(
             2.0,
@@ -257,7 +268,9 @@ public sealed class EnumerationAndTimingTests(IdentityCluster cluster) {
             IdentityCluster.Tenant,
             email,
             "a-wrong-password",
-            new(), Ct);
+            new(),
+            Ct
+        );
 
         return Stopwatch.GetElapsedTime(started).TotalMilliseconds;
     }
@@ -266,6 +279,6 @@ public sealed class EnumerationAndTimingTests(IdentityCluster cluster) {
         var sorted = values.Order().ToArray();
         return sorted.Length % 2 == 1
             ? sorted[sorted.Length / 2]
-            : (sorted[(sorted.Length / 2) - 1] + sorted[sorted.Length / 2]) / 2;
+            : (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]) / 2;
     }
 }

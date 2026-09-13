@@ -14,8 +14,11 @@ namespace CyberCloud.Isolation;
 ///         without a per-member filter removes the probing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It runs against <c>ReBacResourceAuthorizer</c> over <c>CyberCloudSchema</c> and not
-///         against a double.</b> <c>CyberCloud.ResourceManager.Tests.CollectionListingTests</c> pins
+///         ⚠
+///         <b>
+///             It runs against <c>ReBacResourceAuthorizer</c> over <c>CyberCloudSchema</c> and not
+///             against a double.
+///         </b> <c>CyberCloud.ResourceManager.Tests.CollectionListingTests</c> pins
 ///         the filter's <i>shape</i> — one check per member, no trace of a dropped one, paging that
 ///         advances past it — against <c>SwitchableAuthorizer</c>. What it cannot pin is the
 ///         <i>verdict</i>, because the double answers whatever its author believed. That gap is how
@@ -24,16 +27,22 @@ namespace CyberCloud.Isolation;
 ///         engine.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every attack runs against resources that genuinely exist and are genuinely
-///         readable by their owner.</b> A listing over an empty group answers empty by accident, and
+///         ⚠
+///         <b>
+///             Every attack runs against resources that genuinely exist and are genuinely
+///             readable by their owner.
+///         </b> A listing over an empty group answers empty by accident, and
 ///         a filter that returned nothing at all would pass such a test.
 ///     </para>
 /// </remarks>
 [Collection(IsolationSuite.Name)]
 public sealed class CollectionListingTests(IsolationCluster cluster) {
     /// <summary>
-    ///     ⚠ <b>A collection path in another tenant returns nothing and says nothing — the same
-    ///     absence a resource in another tenant gets.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A collection path in another tenant returns nothing and says nothing — the same
+    ///         absence a resource in another tenant gets.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The refusal comes from the tenant comparison in <c>ListAsync</c>'s step 1, which runs
@@ -66,15 +75,21 @@ public sealed class CollectionListingTests(IsolationCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>The name of a resource the caller cannot read is not in the page, and the whole page
-    ///     is empty rather than partly full.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The name of a resource the caller cannot read is not in the page, and the whole page
+    ///         is empty rather than partly full.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
     ///         This is the assertion the endpoint exists to satisfy and the one a doubled authorizer
     ///         cannot make. The attacker is a real subject in their own tenant with real rights in
-    ///         their own group; the victim's group is listed <i>through the attacker's own tenant's
-    ///         address</i> in the sibling case below, and here through the victim's, so that both the
+    ///         their own group; the victim's group is listed
+    ///         <i>
+    ///             through the attacker's own tenant's
+    ///             address
+    ///         </i> in the sibling case below, and here through the victim's, so that both the
     ///         tenant check and the per-member check are exercised rather than only whichever runs
     ///         first.
     ///     </para>
@@ -102,10 +117,11 @@ public sealed class CollectionListingTests(IsolationCluster cluster) {
         );
 
         owners.IsSuccess.ShouldBeTrue(owners.Error?.Message);
-        owners.GetValueOrThrow().Resources.ShouldNotBeEmpty(
-            "the control failed: the victim cannot list their own resources, so the case below "
-            + "would pass for the wrong reason"
-        );
+        owners.GetValueOrThrow()
+            .Resources.ShouldNotBeEmpty(
+                "the control failed: the victim cannot list their own resources, so the case below "
+                + "would pass for the wrong reason"
+            );
 
         // ⚠ THE ATTACK ITSELF, run from inside the victim's tenant so that the tenant comparison is
         // not what refuses it. A caller in the right tenant with no role on the group is exactly the
@@ -127,10 +143,11 @@ public sealed class CollectionListingTests(IsolationCluster cluster) {
             + "distinguish a group they may not read from one that does not exist"
         );
 
-        listed.GetValueOrThrow().Resources.ShouldBeEmpty(
-            "a listing returned resources to a caller who holds no relation on any of them, which "
-            + "is the whole group's namespace in one request"
-        );
+        listed.GetValueOrThrow()
+            .Resources.ShouldBeEmpty(
+                "a listing returned resources to a caller who holds no relation on any of them, which "
+                + "is the whole group's namespace in one request"
+            );
     }
 
     /// <summary>
@@ -182,25 +199,28 @@ public sealed class CollectionListingTests(IsolationCluster cluster) {
 
         mine.GetValueOrThrow()
             .Resources
-            .Select(x => x.Name)
-            .ShouldContain(
-                "list-scoped-mine",
-                "the control failed: an owner of a group cannot list the resources in it"
-            );
+                .Select(x => x.Name)
+                .ShouldContain(
+                    "list-scoped-mine",
+                    "the control failed: an owner of a group cannot list the resources in it"
+                );
 
         mine.GetValueOrThrow()
             .Resources
-            .Select(x => x.Name)
-            .ShouldNotContain(
-                "list-scoped-victim",
-                "a listing crossed a subscription boundary — the two groups share a name and "
-                + "GroupObjectId is what keeps them different authorization objects"
-            );
+                .Select(x => x.Name)
+                .ShouldNotContain(
+                    "list-scoped-victim",
+                    "a listing crossed a subscription boundary — the two groups share a name and "
+                    + "GroupObjectId is what keeps them different authorization objects"
+                );
     }
 
     /// <summary>
-    ///     ⚠ <b>A listing that finds nothing and a listing whose every member is invisible are the
-    ///     same answer, byte for byte.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A listing that finds nothing and a listing whose every member is invisible are the
+    ///         same answer, byte for byte.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The status code alone does not close this oracle: two empty pages that differed in any
@@ -252,8 +272,7 @@ public sealed class CollectionListingTests(IsolationCluster cluster) {
     static CallerContext Attacker() =>
         IsolationCluster.Caller(IsolationCluster.Attacker, IsolationCluster.AttackerUser);
 
-    static CallerContext Victim() =>
-        IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser);
+    static CallerContext Victim() => IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser);
 
     /// <summary>The collection a target's resources live in, in one tenant's subscription.</summary>
     static ResourceCollectionId CollectionOf(IsolationTarget target, Guid tenant, Guid subscription) =>

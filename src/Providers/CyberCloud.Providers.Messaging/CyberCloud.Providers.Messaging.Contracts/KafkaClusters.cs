@@ -18,8 +18,10 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The catalogue rows this type does <i>not</i> declare, and why.</b> That document says
-///         <i>"Topics and users as sub-resources — Strimzi's <c>KafkaTopic</c> and <c>KafkaUser</c>
-///         CRDs map to resource types almost one to one"</i>. They are not declared here, and the
+///         <i>
+///             "Topics and users as sub-resources — Strimzi's <c>KafkaTopic</c> and <c>KafkaUser</c>
+///             CRDs map to resource types almost one to one"
+///         </i>. They are not declared here, and the
 ///         reason is not effort: this platform's resource-id grammar does not carry a parent
 ///         <i>instance</i>. <c>ResourceId</c> spells a nested type
 ///         <c>…/kafkaClusters/topics/{name}</c> — one name, at the end, with the type path whole in
@@ -41,8 +43,11 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 ///         <c>ChartAnnotationEmitter</c> skips both.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two facts this type needs and the registry cannot express, recorded here rather than
-///         worked around.</b> First, <see cref="NodesPointer" /> wants an <i>odd</i> count — a KRaft
+///         ⚠
+///         <b>
+///             Two facts this type needs and the registry cannot express, recorded here rather than
+///             worked around.
+///         </b> First, <see cref="NodesPointer" /> wants an <i>odd</i> count — a KRaft
 ///         quorum of two controllers tolerates no failures at all, so an even value is a cluster that
 ///         looks highly available and is not. <c>SchemaProperty.AllowedValues</c> is
 ///         <see cref="SchemaKind.Text" />-only by construction ("comparing 1.0 and 1 for membership
@@ -118,9 +123,7 @@ public static class KafkaClusters {
     ///     conformance case lists both unconditionally.
     /// </remarks>
     public static GroupVersionKind NodePoolKind { get; } =
-        new() {
-            Group = "kafka.strimzi.io", Version = "v1beta2", Kind = "KafkaNodePool", Plural = "kafkanodepools"
-        };
+        new() { Group = "kafka.strimzi.io", Version = "v1beta2", Kind = "KafkaNodePool", Plural = "kafkanodepools" };
 
     /// <summary>The annotation that puts a <c>Kafka</c> into KRaft mode — no ZooKeeper.</summary>
     /// <remarks>
@@ -170,8 +173,11 @@ public static class KafkaClusters {
     /// <summary>An IPv4 CIDR block. ⚠ Written down, tested, and enforced by nothing — see below.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This should be <c>Pattern</c> on <see cref="Schema2026" />'s <c>allowedCidrs</c>
-    ///         and is not.</b> The registry would take it and enforce it per element;
+    ///         ⚠
+    ///         <b>
+    ///             This should be <c>Pattern</c> on <see cref="Schema2026" />'s <c>allowedCidrs</c>
+    ///             and is not.
+    ///         </b> The registry would take it and enforce it per element;
     ///         <c>./build.sh Charts</c> refuses <c>@pattern</c> on a <c>{array}</c>, and that gate may
     ///         not be edited from a provider change. The full argument, and what the omission costs a
     ///         caller, is at the property itself. <c>KafkaDeclarationTests</c> asserts this string is
@@ -233,11 +239,7 @@ public static class KafkaClusters {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the Strimzi objects."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -246,10 +248,7 @@ public static class KafkaClusters {
                     Required: true,
                     Description: "Apache Kafka version. Minor upgrades are applied automatically in "
                     + "the maintenance window; a major upgrade is an explicit update to this field."
-                ) {
-                    AllowedValues = ["3.8", "3.9"],
-                    DefaultJson = "\"3.9\""
-                },
+                ) { AllowedValues = ["3.8", "3.9"], DefaultJson = "\"3.9\"" },
                 new(
                     "/properties/nodes",
                     SchemaKind.WholeNumber,
@@ -257,11 +256,7 @@ public static class KafkaClusters {
                     Description: "Number of Kafka nodes, each acting as both a KRaft controller and a "
                     + "broker. Use an odd number: a quorum of two tolerates no failures, and one is a "
                     + "single point of failure offered for development only."
-                ) {
-                    Minimum = 1,
-                    Maximum = 9,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 9, DefaultJson = "3" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -291,19 +286,13 @@ public static class KafkaClusters {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new("/properties/storage", SchemaKind.Nested, Description: "The log volume, per node."),
                 new(
                     "/properties/storage/size",
@@ -311,28 +300,18 @@ public static class KafkaClusters {
                     Required: true,
                     Description: "Log volume size per node, in Kubernetes quantity form. Grows online; "
                     + "never shrinks."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"100Gi\"",
-                    ExampleJson = "\"100Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"100Gi\"", ExampleJson = "\"100Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name. Empty means the cluster default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage/deleteClaim",
                     SchemaKind.Boolean,
                     Description: "Whether deleting the resource also deletes the log volumes. Off by "
                     + "default, so a mistaken delete leaves the data recoverable by hand."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/topics",
                     SchemaKind.Nested,
@@ -343,32 +322,20 @@ public static class KafkaClusters {
                     "/properties/topics/partitions",
                     SchemaKind.WholeNumber,
                     Description: "Default partition count for a new topic."
-                ) {
-                    Minimum = 1,
-                    Maximum = 200,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 200, DefaultJson = "3" },
                 new(
                     "/properties/topics/replicationFactor",
                     SchemaKind.WholeNumber,
                     Description: "Default replication factor for a new topic. Must not exceed the node "
                     + "count, or every produce to a new topic fails."
-                ) {
-                    Minimum = 1,
-                    Maximum = 9,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 9, DefaultJson = "3" },
                 new(
                     "/properties/topics/minInSyncReplicas",
                     SchemaKind.WholeNumber,
                     Description: "How many replicas must acknowledge a write before it is committed. "
                     + "Must be below the replication factor, or the cluster cannot tolerate one "
                     + "broker restart."
-                ) {
-                    Minimum = 1,
-                    Maximum = 9,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 9, DefaultJson = "2" },
                 new(
                     "/properties/retention",
                     SchemaKind.Nested,
@@ -379,21 +346,13 @@ public static class KafkaClusters {
                     "/properties/retention/hours",
                     SchemaKind.WholeNumber,
                     Description: "Default retention in hours. A week by default."
-                ) {
-                    Minimum = 1,
-                    Maximum = 8760,
-                    DefaultJson = "168"
-                },
+                ) { Minimum = 1, Maximum = 8760, DefaultJson = "168" },
                 new(
                     "/properties/retention/size",
                     SchemaKind.Text,
                     Description: "Default retention by partition size, in Kubernetes quantity form. "
                     + "Empty means retention is by time alone."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\"",
-                    ExampleJson = "\"50Gi\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"", ExampleJson = "\"50Gi\"" },
                 new(
                     "/properties/listener",
                     SchemaKind.Nested,
@@ -404,9 +363,7 @@ public static class KafkaClusters {
                     SchemaKind.Boolean,
                     Description: "Whether the in-cluster listener requires TLS. On by default; turning "
                     + "it off is a plaintext broker on the pod network."
-                ) {
-                    DefaultJson = "true"
-                },
+                ) { DefaultJson = "true" },
                 new(
                     "/properties/external",
                     SchemaKind.Nested,
@@ -420,9 +377,7 @@ public static class KafkaClusters {
                     + "cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external "
                     + "exposure never the default, because a managed broker on a public IP with a weak "
                     + "password is the most common cloud breach there is."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/external/allowedCidrs",
                     SchemaKind.Array,
@@ -486,9 +441,7 @@ public static class KafkaClusters {
                     // `loadBalancerSourceRanges`, where the API server refuses the Service, and the
                     // resource fails to converge AFTER the caller was told 202 — the exact failure
                     // class every other pattern on this type exists to prevent.
-                    ElementKind = SchemaKind.Text,
-                    DefaultJson = "[]",
-                    ExampleJson = "[\"203.0.113.0/24\"]"
+                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = "[\"203.0.113.0/24\"]"
                 },
                 new(
                     "/properties/cruiseControl",
@@ -502,9 +455,7 @@ public static class KafkaClusters {
                     + "the chart rather than in a follow-up, because rebalancing a Kafka cluster by "
                     + "hand is the operational cost that makes this the most demanding service in the "
                     + "catalogue."
-                ) {
-                    DefaultJson = "true"
-                },
+                ) { DefaultJson = "true" },
                 new(
                     "/properties/monitoring",
                     SchemaKind.Nested,
@@ -515,9 +466,7 @@ public static class KafkaClusters {
                     SchemaKind.Boolean,
                     Description: "Whether the operator runs a Kafka Exporter alongside the cluster, "
                     + "exposing consumer-lag and topic metrics to the platform's metrics stack."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -525,8 +474,11 @@ public static class KafkaClusters {
     ///     What a <c>POST …/listKeys</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared even though no handler serves it, because an undeclared response is the one
-    ///     part of the API surface with no contract.</b> What leaves the platform through a
+    ///     ⚠
+    ///     <b>
+    ///         Declared even though no handler serves it, because an undeclared response is the one
+    ///         part of the API surface with no contract.
+    ///     </b> What leaves the platform through a
     ///     <c>secret: true</c> action is exactly the thing that should be written down before it
     ///     leaves. There is no request shape, for the reason <c>ActionRegistration</c> gives.
     /// </remarks>
@@ -547,9 +499,7 @@ public static class KafkaClusters {
                     Required: true,
                     Description: "What a client must configure: SASL_SSL when the listener requires "
                     + "TLS, SASL_PLAINTEXT when it does not."
-                ) {
-                    AllowedValues = ["SASL_SSL", "SASL_PLAINTEXT"]
-                },
+                ) { AllowedValues = ["SASL_SSL", "SASL_PLAINTEXT"] },
                 new("/username", SchemaKind.Text, Required: true, Description: "The SCRAM user."),
                 new(
                     "/password",
@@ -564,8 +514,11 @@ public static class KafkaClusters {
 
     /// <summary>The sizing presets of docs/plan/12 § Sizing vocabulary, c1 family.</summary>
     /// <remarks>
-    ///     ⚠ <b>A second copy of <c>charts/managed/kafka/templates/_helpers.tpl</c>'s
-    ///     <c>kafka.resources</c>, and the duplication is the cost of having no chart renderer</b> —
+    ///     ⚠
+    ///     <b>
+    ///         A second copy of <c>charts/managed/kafka/templates/_helpers.tpl</c>'s
+    ///         <c>kafka.resources</c>, and the duplication is the cost of having no chart renderer
+    ///     </b> —
     ///     <c>CyberCloud.Kubernetes.Charts</c> does not exist (docs/plan/03 § src), so the objects are
     ///     built here. <c>KafkaDeclarationTests.TheSizingTableAgreesWithTheChartsValueForValue</c>
     ///     asserts the two agree value for value.
@@ -587,16 +540,14 @@ public static class KafkaClusters {
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── Addressing ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>The <c>Kafka</c> a cluster owns.</summary>
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>
-    public static ObjectRef KafkaRef(string ns, string name) =>
-        new() { Kind = KafkaKind, Namespace = ns, Name = name };
+    public static ObjectRef KafkaRef(string ns, string name) => new() { Kind = KafkaKind, Namespace = ns, Name = name };
 
     /// <summary>The <c>KafkaNodePool</c> a cluster owns.</summary>
     /// <param name="ns">The resource's namespace.</param>
@@ -627,8 +578,7 @@ public static class KafkaClusters {
 
     /// <summary>Whether the desired body asks for Cruise Control.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static bool CruiseControlEnabled(JsonElement desired) =>
-        Flag(desired, "cruiseControl", "enabled", true);
+    public static bool CruiseControlEnabled(JsonElement desired) => Flag(desired, "cruiseControl", "enabled", true);
 
     /// <summary>Whether the desired body asks for a metrics exporter.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -743,9 +693,7 @@ public static class KafkaClusters {
 
         var spec = new JsonObject {
             ["kafka"] = new JsonObject {
-                ["version"] = Version(desired),
-                ["listeners"] = listeners,
-                ["config"] = config
+                ["version"] = Version(desired), ["listeners"] = listeners, ["config"] = config
             },
             // The topic and user operators are what make a KafkaTopic or a KafkaUser mean anything in
             // this namespace. They are on unconditionally: a cluster without them is one where the
@@ -807,9 +755,7 @@ public static class KafkaClusters {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
             // Requests equal limits — the `c1` family is "guaranteed" in docs/plan/12 § Sizing
             // vocabulary, and guaranteed is a Kubernetes QoS class you get by setting them equal.
-            spec["resources"] = new JsonObject {
-                ["requests"] = quantities.DeepClone(), ["limits"] = quantities
-            };
+            spec["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
         }
 
         return new JsonObject {
@@ -827,9 +773,12 @@ public static class KafkaClusters {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Containment, not equality, and the usual reason for that is <i>not</i> the reason
-    ///         here — which is worth stating because the wrong reason would decay into the wrong
-    ///         rule.</b> The obvious argument is "the operator edits the spec it is given, so equality
+    ///         ⚠
+    ///         <b>
+    ///             Containment, not equality, and the usual reason for that is <i>not</i> the reason
+    ///             here — which is worth stating because the wrong reason would decay into the wrong
+    ///             rule.
+    ///         </b> The obvious argument is "the operator edits the spec it is given, so equality
     ///         reports drift forever". Checked against the operator rather than assumed: Strimzi's
     ///         <c>Kafka</c> CRD at v1beta2 declares <b>no <c>default:</c> anywhere</b>, so the API
     ///         server's structural defaulting adds nothing on write, and the cluster operator writes
@@ -890,7 +839,7 @@ public static class KafkaClusters {
         // stored it".
         var listeners = kafka["listeners"] as JsonArray;
         return listeners?.Count == (ExternalEnabled(desired) ? 2 : 1)
-            && (spec["cruiseControl"] is not null) == CruiseControlEnabled(desired);
+            && spec["cruiseControl"] is not null == CruiseControlEnabled(desired);
     }
 
     static bool MatchesNodePool(JsonObject spec, JsonElement desired) {

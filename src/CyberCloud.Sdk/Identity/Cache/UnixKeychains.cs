@@ -8,8 +8,11 @@ namespace CyberCloud.Sdk;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The tool rather than <c>Security.framework</c>, and it is a trade rather than a
-///         shortcut.</b> <c>SecItemAdd</c> and friends would avoid a process launch, but they cost
+///         ⚠
+///         <b>
+///             The tool rather than <c>Security.framework</c>, and it is a trade rather than a
+///             shortcut.
+///         </b> <c>SecItemAdd</c> and friends would avoid a process launch, but they cost
 ///         about a hundred lines of CoreFoundation marshalling that only ever run on one operating
 ///         system and that no test on any other machine can exercise. <c>/usr/bin/security</c> is
 ///         present on every macOS install, is the interface Apple documents for exactly this, and
@@ -38,29 +41,41 @@ sealed class MacOsKeychainTokenCache : ITokenCache {
             .ConfigureAwait(false);
 
         // Exit code 44 is errSecItemNotFound. Absent is not an error.
-        if (result.ExitCode != 0)
+        if (result.ExitCode != 0) {
             return null;
+        }
 
         return TokenCache.Deserialise(Hex.Decode(result.StandardOutput.Trim()));
     }
 
     /// <inheritdoc />
-    public async ValueTask SetAsync(string key, TokenCacheRecord record, CancellationToken cancellationToken = default) {
+    public async ValueTask SetAsync(
+        string key,
+        TokenCacheRecord record,
+        CancellationToken cancellationToken = default
+    ) {
         var hex = Hex.Encode(TokenCache.Serialise(record));
 
         // -U updates in place when the entry exists, so there is no read-modify-write race with
         // another process holding the same account.
         var result = await Subprocess
-            .RunAsync(Tool, ["add-generic-password", "-U", "-s", TokenCache.ServiceName, "-a", key, "-X", hex], cancellationToken)
+            .RunAsync(
+                Tool,
+                ["add-generic-password", "-U", "-s", TokenCache.ServiceName, "-a", key, "-X", hex],
+                cancellationToken
+            )
             .ConfigureAwait(false);
 
-        if (result.ExitCode != 0)
-            throw new AuthenticationFailedException("The token cache entry could not be written to the macOS Keychain.");
+        if (result.ExitCode != 0) {
+            throw new AuthenticationFailedException(
+                "The token cache entry could not be written to the macOS Keychain."
+            );
+        }
     }
 
     /// <inheritdoc />
-    public async ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default)
-        => await Subprocess
+    public async ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default) =>
+        await Subprocess
             .RunAsync(Tool, ["delete-generic-password", "-s", TokenCache.ServiceName, "-a", key], cancellationToken)
             .ConfigureAwait(false);
 }
@@ -93,7 +108,11 @@ sealed class LibSecretTokenCache : ITokenCache {
     }
 
     /// <inheritdoc />
-    public async ValueTask SetAsync(string key, TokenCacheRecord record, CancellationToken cancellationToken = default) {
+    public async ValueTask SetAsync(
+        string key,
+        TokenCacheRecord record,
+        CancellationToken cancellationToken = default
+    ) {
         var hex = Hex.Encode(TokenCache.Serialise(record));
 
         // ⚠ On stdin, not in argv — see MacOsKeychainTokenCache's remarks. `secret-tool store` reads
@@ -103,16 +122,20 @@ sealed class LibSecretTokenCache : ITokenCache {
                 "secret-tool",
                 ["store", "--label", TokenCache.ServiceName, "service", TokenCache.ServiceName, "account", key],
                 cancellationToken,
-                standardInput: hex)
+                standardInput: hex
+            )
             .ConfigureAwait(false);
 
-        if (result.ExitCode != 0)
-            throw new AuthenticationFailedException("The token cache entry could not be written to the secret service.");
+        if (result.ExitCode != 0) {
+            throw new AuthenticationFailedException(
+                "The token cache entry could not be written to the secret service."
+            );
+        }
     }
 
     /// <inheritdoc />
-    public async ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default)
-        => await Subprocess
+    public async ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default) =>
+        await Subprocess
             .RunAsync("secret-tool", ["clear", "service", TokenCache.ServiceName, "account", key], cancellationToken)
             .ConfigureAwait(false);
 }
@@ -146,7 +169,8 @@ static class Subprocess {
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken,
         string? standardInput = null,
-        TimeSpan? timeout = null) {
+        TimeSpan? timeout = null
+    ) {
         var info = new ProcessStartInfo(fileName) {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -154,17 +178,19 @@ static class Subprocess {
             UseShellExecute = false,
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
 
-        foreach (var argument in arguments)
+        foreach (var argument in arguments) {
             info.ArgumentList.Add(argument);
+        }
 
         using var process = new Process { StartInfo = info };
 
         try {
-            if (!process.Start())
+            if (!process.Start()) {
                 throw new CredentialUnavailableException($"'{fileName}' could not be started.");
+            }
         } catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) {
             throw new CredentialUnavailableException($"'{fileName}' is not installed or is not on the path.", e);
         }
@@ -188,19 +214,25 @@ static class Subprocess {
             throw new CredentialUnavailableException($"'{fileName}' did not exit within the time allowed.");
         }
 
-        return new Result(process.ExitCode, await standardOutput.ConfigureAwait(false), await standardError.ConfigureAwait(false));
+        return new Result(
+            process.ExitCode,
+            await standardOutput.ConfigureAwait(false),
+            await standardError.ConfigureAwait(false)
+        );
     }
 
     /// <summary>Whether an executable is on the path. Used to decide a cache is absent rather than broken.</summary>
     public static bool Exists(string fileName) {
         var path = Environment.GetEnvironmentVariable("PATH");
 
-        if (string.IsNullOrEmpty(path))
+        if (string.IsNullOrEmpty(path)) {
             return false;
+        }
 
         foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)) {
-            if (File.Exists(Path.Combine(directory, fileName)))
+            if (File.Exists(Path.Combine(directory, fileName))) {
                 return true;
+            }
         }
 
         return false;
@@ -209,7 +241,9 @@ static class Subprocess {
     static void Kill(Process process) {
         try {
             process.Kill(entireProcessTree: true);
-        } catch (Exception e) when (e is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception) {
+        } catch (Exception e) when (e is InvalidOperationException
+                                        or NotSupportedException
+                                        or System.ComponentModel.Win32Exception) {
             // The process exited between the timeout and the kill. Nothing to do, and rethrowing would
             // replace the timeout the caller needs to see with a race nobody can act on.
         }

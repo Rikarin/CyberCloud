@@ -12,8 +12,10 @@ namespace CyberCloud.Providers.Storage.Contracts;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>THE AUTHORITY IS docs/plan/15 § The three kinds, AND ITS ROW NAMES BOTH HALVES:</b>
-///         <i>"Object · <c>CyberCloud.Storage/accounts</c> <b>+ <c>/buckets</c></b> · SeaweedFS + S3
-///         gateway"</i>. § The resource model spells the child's surface —
+///         <i>
+///             "Object · <c>CyberCloud.Storage/accounts</c> <b>+ <c>/buckets</c></b> · SeaweedFS + S3
+///             gateway"
+///         </i>. § The resource model spells the child's surface —
 ///         <i>"buckets/{name} ← globally-unique-per-account name, quota, versioning, lifecycle"</i> —
 ///         and <see cref="Schema2026" /> is three quarters of that line. The fourth, <c>lifecycle</c>,
 ///         is <c>BucketLifecyclePolicy</c>, which is docs/plan/15's <c>lifecyclePolicies/{name}</c> and
@@ -44,11 +46,16 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///         <c>conformance.yaml § owed</c>, <c>listkeys-has-no-handler</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT HAPPENS TO A BUCKET WHEN ITS ACCOUNT IS DELETED IS NOT THIS PROVIDER'S TO
-///         DECIDE, AND IT IS ALREADY DECIDED.</b>
+///         ⚠
+///         <b>
+///             WHAT HAPPENS TO A BUCKET WHEN ITS ACCOUNT IS DELETED IS NOT THIS PROVIDER'S TO
+///             DECIDE, AND IT IS ALREADY DECIDED.
+///         </b>
 ///         [08 § Deleting a parent resource that has children](../../../../docs/plan/08-resource-manager.md):
-///         <i>"a delete is refused while the resource still has children — <c>409</c>, not a cascade,
-///         and not a silent orphan"</i>. It is <b>not implemented</b> — the platform cannot enumerate
+///         <i>
+///             "a delete is refused while the resource still has children — <c>409</c>, not a cascade,
+///             and not a silent orphan"
+///         </i>. It is <b>not implemented</b> — the platform cannot enumerate
 ///         children — so today an account's delete leaves its buckets addressable with a ReBAC
 ///         <c>parent</c> tuple pointing at a GUID that no longer resolves. See
 ///         <c>conformance.yaml § owed</c>, <c>parent-delete-orphans-buckets</c>, for what that costs on
@@ -56,10 +63,16 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///         7-day soft-delete window arriving later.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A bucket's reconciler must never re-read its account, and
-///         <c>StorageBucketReconciler</c> does not.</b> docs/plan/08 § Deleting a parent resource that
-///         has children: <i>"What the platform must not do instead is re-check the parent on every
-///         write to a child"</i>. On this type there is a second and sharper reason: the account never
+///         ⚠
+///         <b>
+///             A bucket's reconciler must never re-read its account, and
+///             <c>StorageBucketReconciler</c> does not.
+///         </b> docs/plan/08 § Deleting a parent resource that
+///         has children:
+///         <i>
+///             "What the platform must not do instead is re-check the parent on every
+///             write to a child"
+///         </i>. On this type there is a second and sharper reason: the account never
 ///         reports <c>Succeeded</c> at all, so a bucket that waited for its parent to be healthy would
 ///         never converge for anybody.
 ///     </para>
@@ -145,25 +158,29 @@ public static class StorageBuckets {
 
     /// <summary>The <c>Bucket</c> custom resource.</summary>
     /// <remarks>
-    ///     ⚠ <b>The plural is <c>buckets</c> and it collides with the type path's last segment by
-    ///     coincidence rather than by construction.</b> It is carried for the reason
+    ///     ⚠
+    ///     <b>
+    ///         The plural is <c>buckets</c> and it collides with the type path's last segment by
+    ///         coincidence rather than by construction.
+    ///     </b> It is carried for the reason
     ///     <see cref="GroupVersionKind.Plural" /> gives, and the cluster-backed harness derives a CRD
     ///     stub from it — <c>ClusterConformanceHarness</c> reads group, version, kind and plural off
     ///     <c>ProviderConformanceCase.Objects</c>, which is why this type declares no
     ///     <c>RequiredCrds</c> member and there is none to declare.
     /// </remarks>
     public static GroupVersionKind BucketKind { get; } =
-        new() {
-            Group = "seaweed.seaweedfs.com", Version = "v1", Kind = "Bucket", Plural = "buckets"
-        };
+        new() { Group = "seaweed.seaweedfs.com", Version = "v1", Kind = "Bucket", Plural = "buckets" };
 
     /// <summary>
     ///     The name of the object a bucket renders: its account's name and its own, joined.
     /// </summary>
     /// <param name="id">The bucket's address.</param>
     /// <remarks>
-    ///     ⚠ <b>THE PARENT'S NAME IS IN THE OBJECT NAME BECAUSE THE NAMESPACE DOES NOT DISTINGUISH
-    ///     THEM.</b> <c>ReconcileDriver.NamespaceFor</c> is <c>{subscriptionId:N}-{resourceGroup}</c> —
+    ///     ⚠
+    ///     <b>
+    ///         THE PARENT'S NAME IS IN THE OBJECT NAME BECAUSE THE NAMESPACE DOES NOT DISTINGUISH
+    ///         THEM.
+    ///     </b> <c>ReconcileDriver.NamespaceFor</c> is <c>{subscriptionId:N}-{resourceGroup}</c> —
     ///     a parent resource is <i>inside</i> one namespace, not a namespace of its own — so two
     ///     accounts in one resource group may each hold a bucket called <c>assets</c> and a renderer
     ///     that ignored <see cref="ResourceId.ParentNames" /> would have them fighting over one
@@ -234,10 +251,16 @@ public static class StorageBuckets {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>FOUR OF <c>BucketSpec</c>'S ELEVEN FIELDS ARE DECLARED AND THE SEVEN OMISSIONS ARE
-    ///         EACH A DECISION.</b> <c>charts/managed/seaweedfs/SOURCE</c>'s review records
-    ///         <c>BucketSpec</c> as <c>(name, clusterRef, reclaimPolicy, adoptExisting, versioning,
-    ///         objectLock, quota, owner, access, placement, anonymousRead)</c>. What is here is
+    ///         ⚠
+    ///         <b>
+    ///             FOUR OF <c>BucketSpec</c>'S ELEVEN FIELDS ARE DECLARED AND THE SEVEN OMISSIONS ARE
+    ///             EACH A DECISION.
+    ///         </b> <c>charts/managed/seaweedfs/SOURCE</c>'s review records
+    ///         <c>BucketSpec</c> as
+    ///         <c>
+    /// (name, clusterRef, reclaimPolicy, adoptExisting, versioning,
+    ///         objectLock, quota, owner, access, placement, anonymousRead)
+    ///         </c>. What is here is
     ///         docs/plan/15 § The resource model's own list — <i>"name, quota, versioning"</i> — plus the
     ///         <c>clusterRef</c> that comes from the address. What is not, and why:
     ///     </para>
@@ -246,22 +269,35 @@ public static class StorageBuckets {
     ///             ⚠ <b><c>anonymousRead</c> — THE ONE THAT LOOKS LIKE AN OMISSION AND IS THE OPPOSITE.</b>
     ///             <c>conformance.yaml § owed</c>'s <c>public-access-is-not-a-property</c> said this
     ///             property was waiting for the child type. It was, and it still cannot ship, and the
-    ///             reason has MOVED rather than closed. docs/plan/15: <i>"Public access is off by default
-    ///             at the account level and requires an explicit <b>two-step</b> opt-in"</i>, and calls a
-    ///             publicly readable bucket <i>"the most-reported cloud misconfiguration in
-    ///             existence"</i>. Shipping the bucket half alone is a ONE-step opt-in — precisely the
+    ///             reason has MOVED rather than closed. docs/plan/15:
+    ///             <i>
+    ///                 "Public access is off by default
+    ///                 at the account level and requires an explicit <b>two-step</b> opt-in"
+    ///             </i>, and calls a
+    ///             publicly readable bucket
+    ///             <i>
+    ///                 "the most-reported cloud misconfiguration in
+    ///                 existence"
+    ///             </i>. Shipping the bucket half alone is a ONE-step opt-in — precisely the
     ///             thing that sentence forbids. The first step is an account-level switch, and the
     ///             account's api-version is published and immutable, so it is a new date on the PARENT
     ///             rather than a property here.
     ///         </item>
     ///         <item>
-    ///             <b><c>objectLock</c></b> — docs/plan/15's own caveat says <i>"object lock/WORM … are
-    ///             partial or absent depending on version"</i>, and § The resource model does not list it
+    ///             <b>
+    ///                 <c>objectLock</c>
+    ///             </b> — docs/plan/15's own caveat says
+    ///             <i>
+    ///                 "object lock/WORM … are
+    ///                 partial or absent depending on version"
+    ///             </i>, and § The resource model does not list it
     ///             under buckets. A retention guarantee whose engine may not keep it is the shape
     ///             <c>encryption-at-rest</c> already refused.
     ///         </item>
     ///         <item>
-    ///             <b><c>placement</c></b> — the account decides. <c>conformance.yaml</c>'s
+    ///             <b>
+    ///                 <c>placement</c>
+    ///             </b> — the account decides. <c>conformance.yaml</c>'s
     ///             <c>replication-is-the-declared-placement</c> says in as many words that the account's
     ///             replication is what a new volume inherits and that changing it is refused at the API;
     ///             a per-bucket override would make one account hold two durability promises with nothing
@@ -273,12 +309,16 @@ public static class StorageBuckets {
     ///             See the remarks on this class: a bucket has no credential story of its own.
     ///         </item>
     ///         <item>
-    ///             <b><c>adoptExisting</c></b> — it binds a platform resource to storage the platform did
+    ///             <b>
+    ///                 <c>adoptExisting</c>
+    ///             </b> — it binds a platform resource to storage the platform did
     ///             not create. A tenant who can name a pre-existing bucket can take over one, and the
     ///             quota this type reserves would be reserved against something already full.
     ///         </item>
     ///         <item>
-    ///             <b><c>reclaimPolicy</c></b> — <c>Retain</c> would leave object data alive in an account
+    ///             <b>
+    ///                 <c>reclaimPolicy</c>
+    ///             </b> — <c>Retain</c> would leave object data alive in an account
     ///             with no resource addressing it: untracked, unbilled, and removable only by hand. It is
     ///             also the wrong axis for the problem it looks like it solves — a recovery window is
     ///             docs/plan/06's <c>SupportsSoftDelete</c>, which the manager honours now (docs/plan/08
@@ -315,11 +355,7 @@ public static class StorageBuckets {
                     Description: "The cluster whose namespace holds the bucket. Must be the cluster the "
                     + "account is in — nothing checks that, and a bucket placed elsewhere is applied "
                     + "into a namespace with no object store in it."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
                     "/properties/quota",
                     SchemaKind.Nested,
@@ -332,11 +368,7 @@ public static class StorageBuckets {
                     + "limit other than the account's own provisioned capacity. ⚠ This is a limit "
                     + "inside capacity the account already reserved; it does not add any, and it is not "
                     + "what the bucket is billed on."
-                ) {
-                    Pattern = StorageAccounts.OptionalQuantityPattern,
-                    DefaultJson = "\"\"",
-                    ExampleJson = "\"50Gi\""
-                },
+                ) { Pattern = StorageAccounts.OptionalQuantityPattern, DefaultJson = "\"\"", ExampleJson = "\"50Gi\"" },
                 new(
                     "/properties/versioning",
                     SchemaKind.Boolean,
@@ -345,9 +377,7 @@ public static class StorageBuckets {
                     + "\"good but not complete\" and names object versioning as one of the partial "
                     + "areas, so the supported-operations table for the deployed version — not this "
                     + "property — is what says how completely it behaves."
-                ) {
-                    DefaultJson = "false"
-                }
+                ) { DefaultJson = "false" }
             ]
         );
 
@@ -383,15 +413,12 @@ public static class StorageBuckets {
                     Required: true,
                     Description: "When the two figures above were sampled, RFC 3339. ⚠ Returned because "
                     + "a sampled number with no timestamp is a number a caller will read as live."
-                ) {
-                    Format = SchemaFormat.DateTime
-                }
+                ) { Format = SchemaFormat.DateTime }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -417,8 +444,11 @@ public static class StorageBuckets {
     ///         would give the tenant a bucket at an address neither they nor docs/plan/15 named.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>No <c>reclaimPolicy</c>, no <c>adoptExisting</c>, no <c>anonymousRead</c> and no
-    ///         <c>owner</c>.</b> Each is an omission with an argument, in <see cref="Schema2026" />'s
+    ///         ⚠
+    ///         <b>
+    ///             No <c>reclaimPolicy</c>, no <c>adoptExisting</c>, no <c>anonymousRead</c> and no
+    ///             <c>owner</c>.
+    ///         </b> Each is an omission with an argument, in <see cref="Schema2026" />'s
     ///         remarks. The one worth repeating here is <c>anonymousRead</c>: leaving it unset is what
     ///         honours docs/plan/15's <i>"public access is off by default"</i>, and it is the default
     ///         rather than a rendered <c>false</c> so that the day an account-level first step exists,
@@ -486,8 +516,11 @@ public static class StorageBuckets {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS SPLIT EXISTS BECAUSE OF A LIMIT IN THE SHARED CONFORMANCE HARNESS THAT ONLY A
-    ///         CHILD TYPE MEETS, AND IT IS WORTH STATING RATHER THAN WORKING AROUND SILENTLY.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THIS SPLIT EXISTS BECAUSE OF A LIMIT IN THE SHARED CONFORMANCE HARNESS THAT ONLY A
+    ///             CHILD TYPE MEETS, AND IT IS WORTH STATING RATHER THAN WORKING AROUND SILENTLY.
+    ///         </b>
     ///         <c>ProviderConformanceCase.ObjectMatchesDesired</c> is
     ///         <c>(objectJson, desiredJson) =&gt; bool</c> and carries <b>no address</b> — which is
     ///         exactly right for the five top-level types that ship, whose whole rendered spec is a
@@ -591,6 +624,5 @@ public static class StorageBuckets {
             ? value.GetString() ?? string.Empty
             : string.Empty;
 
-    static bool Flag(JsonElement desired, string name) =>
-        Root(desired, name) is { ValueKind: JsonValueKind.True };
+    static bool Flag(JsonElement desired, string name) => Root(desired, name) is { ValueKind: JsonValueKind.True };
 }

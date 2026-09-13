@@ -259,7 +259,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster) {
         (await cluster.SubscriptionGrain(tenant, subscription).CreateAsync("prod")).IsSuccess
             .ShouldBeTrue();
         (await cluster.SubscriptionGrain(tenant, subscription)
-            .CreateResourceGroupAsync("mine", "eu-central")).IsSuccess.ShouldBeTrue();
+                .CreateResourceGroupAsync("mine", "eu-central")).IsSuccess.ShouldBeTrue();
 
         var elsewhere = new ResourceId(
             tenant,

@@ -65,8 +65,11 @@ public enum CredentialKind {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>An enum rather than a string, and that is a correctness decision rather than a
-///         tidiness one.</b> This value is part of the idempotency key
+///         ⚠
+///         <b>
+///             An enum rather than a string, and that is a correctness decision rather than a
+///             tidiness one.
+///         </b> This value is part of the idempotency key
 ///         <c>CyberCloud.Communication</c> derives a message grain's identity from, and that key is
 ///         compared <b>ordinally and without case folding</b> — <c>CommunicationGrainKeys.Message</c>
 ///         says so. An open string therefore lets two call sites spell the same purpose differently
@@ -77,8 +80,11 @@ public enum CredentialKind {
 ///         compile error.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The purpose is part of the key precisely so that two <i>different</i> reasons do not
-///         collapse.</b> A sign-in code and a password-reset code issued to the same user seconds
+///         ⚠
+///         <b>
+///             The purpose is part of the key precisely so that two <i>different</i> reasons do not
+///             collapse.
+///         </b> A sign-in code and a password-reset code issued to the same user seconds
 ///         apart are two messages, and a key that omitted the purpose would make the second one look
 ///         like a retry of the first.
 ///     </para>
@@ -200,8 +206,11 @@ public enum AuthenticationMethod {
     ///     A one-time code delivered to a verified address — <see cref="OtpPolicy" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Its own member rather than a reuse of <see cref="Totp" />, even though both spell
-    ///     <c>otp</c> in the <c>amr</c> claim.</b> The two are not the same factor: a TOTP secret
+    ///     ⚠
+    ///     <b>
+    ///         Its own member rather than a reuse of <see cref="Totp" />, even though both spell
+    ///         <c>otp</c> in the <c>amr</c> claim.
+    ///     </b> The two are not the same factor: a TOTP secret
     ///     lives in an authenticator the user holds, and a delivered code lives in whatever can read
     ///     their mailbox — so an account recovery that accepted either is only as strong as the
     ///     weaker one. The audit trail is where that difference has to survive, and docs/plan/11

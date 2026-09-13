@@ -140,8 +140,11 @@ public interface IUserGrain : IGrainWithStringKey {
     ///     valid <i>and</i> already spent — which is a replay, and must fail the sign-in.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>The replay block is per (user, counter) and it lives here rather than in the hot
-    ///     tier</b>, unlike the lockout counter. The two look similar and are not: losing a lockout
+    ///     ⚠
+    ///     <b>
+    ///         The replay block is per (user, counter) and it lives here rather than in the hot
+    ///         tier
+    ///     </b>, unlike the lockout counter. The two look similar and are not: losing a lockout
     ///     count costs an attacker a few extra guesses, and losing a spent-counter record lets a
     ///     code observed over someone's shoulder be replayed for up to 90 seconds. docs/plan/11
     ///     § Credentials asks for "replay-blocked per (user, counter)" without saying where; zero
@@ -153,16 +156,21 @@ public interface IUserGrain : IGrainWithStringKey {
     ///     Mints a one-time code, records it and hands it to <see cref="IOtpDeliverySeam" />.
     ///     docs/plan/11 § Credentials' email/SMS/WhatsApp OTP rows.
     /// </summary>
-    /// <param name="purpose">Why. Each purpose has its own challenge, so a sign-in code and a
-    ///     password-reset code outstanding at once do not overwrite each other.</param>
+    /// <param name="purpose">
+    ///     Why. Each purpose has its own challenge, so a sign-in code and a
+    ///     password-reset code outstanding at once do not overwrite each other.
+    /// </param>
     /// <param name="kind">
     ///     Which channel. ⚠ Only <see cref="CredentialKind.EmailOtp" /> works today —
     ///     <see cref="OtpPolicy" />'s last ⚠ says why the other two are refused rather than sent to
     ///     an unproven destination.
     /// </param>
     /// <returns>
-    ///     Success once the challenge is recorded <i>and</i> the message accepted. ⚠ <b>It carries
-    ///     no code, no destination and no expiry</b>, because the caller is an Orleans client in
+    ///     Success once the challenge is recorded <i>and</i> the message accepted. ⚠
+    ///     <b>
+    ///         It carries
+    ///         no code, no destination and no expiry
+    ///     </b>, because the caller is an Orleans client in
     ///     another process and none of the three is anything it needs. The failure carries a real
     ///     sentence for the log; the endpoint above it answers
     ///     <see cref="UniformFailures.OtpSent" /> regardless.
@@ -175,8 +183,11 @@ public interface IUserGrain : IGrainWithStringKey {
     ///         The verified address is a fact this grain already holds.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Called twice inside <see cref="OtpPolicy.ResendCooldown" /> this redelivers the
-    ///         same code rather than minting another</b>, so a retried call reaches the carrier once
+    ///         ⚠
+    ///         <b>
+    ///             Called twice inside <see cref="OtpPolicy.ResendCooldown" /> this redelivers the
+    ///             same code rather than minting another
+    ///         </b>, so a retried call reaches the carrier once
     ///         — see that member for why the discriminator is time and why it can only be time.
     ///     </para>
     ///     <para>
@@ -194,8 +205,11 @@ public interface IUserGrain : IGrainWithStringKey {
     /// <param name="candidate">What was typed.</param>
     /// <returns>
     ///     <c>true</c> only when a live challenge for <paramref name="purpose" /> existed, had
-    ///     attempts left, and matched. ⚠ <b>A <c>true</c> is returned at most once per issued
-    ///     code</b>: the challenge is removed before this call's state write completes, and the
+    ///     attempts left, and matched. ⚠
+    ///     <b>
+    ///         A <c>true</c> is returned at most once per issued
+    ///         code
+    ///     </b>: the challenge is removed before this call's state write completes, and the
     ///     grain is single-threaded, so a second presentation of a correct code finds nothing.
     /// </returns>
     /// <remarks>
@@ -245,8 +259,11 @@ public interface IUserGrain : IGrainWithStringKey {
 ///         tenant-qualified.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Read the membership methods carefully: they write and read ReBAC tuples, they do not
-///         maintain a list.</b> docs/plan/11 § The object model is explicit that a member list in
+///         ⚠
+///         <b>
+///             Read the membership methods carefully: they write and read ReBAC tuples, they do not
+///             maintain a list.
+///         </b> docs/plan/11 § The object model is explicit that a member list in
 ///         grain state "would be a second source of truth and a hot spot for large groups". What this
 ///         grain owns is the group's <i>identity</i> — name, description, who created it. Its
 ///         membership surface is a thin, honest façade over

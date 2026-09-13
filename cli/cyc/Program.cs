@@ -1,6 +1,6 @@
-using System.Reflection;
 using CyberCloud.Cli.Configuration;
 using CyberCloud.Cli.VerbTree;
+using System.Reflection;
 
 namespace CyberCloud.Cli;
 
@@ -26,9 +26,8 @@ static class Program {
                 CycConfigFile.Read(),
                 VerbTreeCatalog.FromAssembly(Assembly.GetExecutingAssembly()),
                 request => CycDefaults.Client(request, credential.Value),
-                CycDefaults.OpenBrowser) {
-                CreateCredential = () => credential.Value,
-            };
+                CycDefaults.OpenBrowser
+            ) { CreateCredential = () => credential.Value };
 
             // ⚠ Started, never awaited — docs/plan/21 § Decisions' "non-blocking". See UpdateCheck.
             _ = UpdateCheck.Start(host, Version);

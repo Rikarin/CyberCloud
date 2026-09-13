@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.ContainerService;
@@ -26,8 +27,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         derivation because a cluster is exactly one cluster and no arithmetic makes that clearer.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE FIRST CHILD TYPE THAT CHANGES ITS PARENT'S CAPACITY, AND THEREFORE THE FIRST WHOSE
-///         QUOTA IS NOT A CREATE-TIME CONSTANT.</b> <c>CyberCloud.Storage/accounts/buckets</c> draws
+///         ⚠
+///         <b>
+///             THE FIRST CHILD TYPE THAT CHANGES ITS PARENT'S CAPACITY, AND THEREFORE THE FIRST WHOSE
+///             QUOTA IS NOT A CREATE-TIME CONSTANT.
+///         </b> <c>CyberCloud.Storage/accounts/buckets</c> draws
 ///         <c>QuotaMeter.Resources</c> and nothing else, because a bucket is a ceiling inside capacity
 ///         its account already reserved. An agent pool <i>is</i> the capacity: a cluster with no pool
 ///         has no worker nodes. And with an autoscaler on, the number of machines is moved by a
@@ -35,8 +39,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         which reserves the ceiling rather than the current count and says what that trade costs.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Three of the things docs/plan/13 asks this row for are not built, and each is named
-///         rather than implied by an absence.</b> <c>listCredentials</c> has a declared response shape
+///         ⚠
+///         <b>
+///             Three of the things docs/plan/13 asks this row for are not built, and each is named
+///             rather than implied by an absence.
+///         </b> <c>listCredentials</c> has a declared response shape
 ///         and no handler, because <see cref="IResourceTypeBuilder.Action" /> takes no handler on any
 ///         type in this platform; <c>addons</c> needs a connection to the cluster this provider
 ///         creates, and nothing in the tree calls <c>IClusterConnectionGrain.AttachAsync</c>; and the
@@ -53,8 +60,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical <c>404</c>,
 ///         holds its name, keeps its committed quota, moves its ReBAC parent edge to the subscription
 ///         and drops its direct role assignments; a restore reverses it and a purge, under its own
-///         permission, ends it. ⚠ <b>And the second sentence below is the one that still decides
-///         it, which is the only kind of reason this line should ever carry.</b> It would be a
+///         permission, ends it. ⚠
+///         <b>
+///             And the second sentence below is the one that still decides
+///             it, which is the only kind of reason this line should ever carry.
+///         </b> It would be a
 ///         strange promise on this type anyway — a soft-deleted cluster whose worker VMs are gone is
 ///         not a cluster anybody can be handed back, so the window would hold capacity for a recovery
 ///         that cannot be delivered. That is a judgement about this type rather than about the
@@ -65,8 +75,11 @@ public sealed class ContainerServiceProvider : IResourceProvider {
     /// <summary>The cluster type's CLI alias, spelled once so a test can name it.</summary>
     /// <remarks>
     ///     ⚠ <b><c>aks</c>, and it is docs/plan/21 § Grammar's own example rather than a choice.</b>
-    ///     That section's alias table reads <i>"<c>aks</c> → <c>containerservice managed-cluster</c>,
-    ///     <c>postgres</c> → <c>dbforpostgresql server</c>"</i>, so this is the second alias in the
+    ///     That section's alias table reads
+    ///     <i>
+    ///         "<c>aks</c> → <c>containerservice managed-cluster</c>,
+    ///         <c>postgres</c> → <c>dbforpostgresql server</c>"
+    ///     </i>, so this is the second alias in the
     ///     tree that the document names by name.
     /// </remarks>
     public const string ClusterShortName = "aks";
@@ -275,8 +288,11 @@ public sealed class ContainerServiceProvider : IResourceProvider {
 
     /// <summary>Storage: every machine's root volume.</summary>
     /// <remarks>
-    ///     ⚠ <b>The root volume only, and a tenant's own PersistentVolumeClaims are not counted
-    ///     here.</b> A workload inside the produced cluster provisions storage through that cluster's
+    ///     ⚠
+    ///     <b>
+    ///         The root volume only, and a tenant's own PersistentVolumeClaims are not counted
+    ///         here.
+    ///     </b> A workload inside the produced cluster provisions storage through that cluster's
     ///     own CSI driver, against volumes in the management cluster, and this platform sees none of
     ///     it — docs/plan/09 § Kubernetes in Kubernetes puts that on <c>kubevirt-csi</c>. So the
     ///     figure below is the floor a pool costs, not the ceiling, and the difference is real:

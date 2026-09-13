@@ -4,9 +4,15 @@ namespace CyberCloud.Sdk;
 ///     Authentication was attempted and failed.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>No message built by this SDK ever contains a client secret, a certificate's private key,
-///     an assertion, a refresh token or an access token</b> — docs/plan/08 § Errors' <i>"no exception
-///     details, ever"</i> read from the client side, and the property
+///     ⚠
+///     <b>
+///         No message built by this SDK ever contains a client secret, a certificate's private key,
+///         an assertion, a refresh token or an access token
+///     </b> — docs/plan/08 § Errors'
+///     <i>
+///         "no exception
+///         details, ever"
+///     </i> read from the client side, and the property
 ///     <c>CredentialsNeverLeakTests</c> asserts over every credential type. The identity server's
 ///     <c>error</c> and <c>error_description</c> are reproduced because they are written for a human
 ///     and contain no secret; the request that produced them is not.
@@ -33,8 +39,11 @@ public class AuthenticationFailedException : Exception {
 ///     file, no environment variables, an empty token cache.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The distinction from <see cref="AuthenticationFailedException" /> is the whole reason
-///     <see cref="ChainedTokenCredential" /> can work.</b> "Not applicable" means try the next one;
+///     ⚠
+///     <b>
+///         The distinction from <see cref="AuthenticationFailedException" /> is the whole reason
+///         <see cref="ChainedTokenCredential" /> can work.
+///     </b> "Not applicable" means try the next one;
 ///     "failed" means stop and tell the user, because a wrong client secret that silently fell
 ///     through to an interactive browser prompt is a credential chain that hides its own
 ///     misconfiguration.

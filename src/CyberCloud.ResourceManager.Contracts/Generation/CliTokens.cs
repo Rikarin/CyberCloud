@@ -30,8 +30,11 @@ public readonly record struct CliDeclaration(string ProviderNamespace, string Ty
 ///         <c>Directory.Packages.props</c> pins.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The scope is the parent command, and getting that wrong is what made the previous
-///         defence check the wrong question.</b> Measured, same version: a short name equal to a
+///         ⚠
+///         <b>
+///             The scope is the parent command, and getting that wrong is what made the previous
+///             defence check the wrong question.
+///         </b> Measured, same version: a short name equal to a
 ///         <i>different</i> group's key parses cleanly, because the two live under different parents;
 ///         a short name equal to its <i>own</i> group's key throws, because the group command's
 ///         dictionary holds its own name. So "this short name is none of the fourteen group keys" was

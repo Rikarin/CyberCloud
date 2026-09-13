@@ -2,8 +2,11 @@ namespace CyberCloud.Communication.Contracts;
 
 /// <summary>
 ///     The per-window counters that stop a runaway loop — docs/plan/17 § The parts that are actually
-///     the work: <i>"An SMS loop is a five-figure incident within an hour, and the limit is the only
-///     thing between a bug and that invoice."</i>
+///     the work:
+///     <i>
+///         "An SMS loop is a five-figure incident within an hour, and the limit is the only
+///         thing between a bug and that invoice."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -30,8 +33,11 @@ namespace CyberCloud.Communication.Contracts;
 ///         if a window's counters are ever in doubt.
 ///     </para>
 ///     <para>
-///         ⚠ <b>One activation per service serializes every send through it, and that is a feature
-///         here.</b> Orleans runs one call at a time per activation, so two concurrent sends cannot
+///         ⚠
+///         <b>
+///             One activation per service serializes every send through it, and that is a feature
+///             here.
+///         </b> Orleans runs one call at a time per activation, so two concurrent sends cannot
 ///         both read a counter below the cap and both pass. A design keyed per (service, channel,
 ///         day) would buy parallelism and cost a key shape <see cref="GrainKeys" /> does not have —
 ///         the same trade metering considered and declined. If a single service ever needs more send
@@ -58,10 +64,16 @@ public interface ISendLimitGrain : IGrainWithStringKey {
     /// <returns>
     ///     <para>The claim, to settle or release.</para>
     ///     <para>
-    ///         ⚠ <b><see cref="ErrorCode.QuotaExceeded" /> when either cap would be crossed, and the
-    ///         message names the limit, the window, the current figure and the request.</b> That
-    ///         shape is docs/plan/22 § Quota's rule — <i>"429 naming the meter, the request, the
-    ///         current usage and the limit. Never a bare 'quota exceeded'"</i> — and it is what turns
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ErrorCode.QuotaExceeded" /> when either cap would be crossed, and the
+    ///             message names the limit, the window, the current figure and the request.
+    ///         </b> That
+    ///         shape is docs/plan/22 § Quota's rule —
+    ///         <i>
+    ///             "429 naming the meter, the request, the
+    ///             current usage and the limit. Never a bare 'quota exceeded'"
+    ///         </i> — and it is what turns
     ///         a refusal into something an on-call engineer can act on at 03:00 without opening a
     ///         dashboard.
     ///     </para>

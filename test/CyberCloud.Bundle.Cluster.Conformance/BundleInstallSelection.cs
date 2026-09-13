@@ -8,8 +8,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every other test in this assembly passes a selector, so until this class existed the
-///         installer had never been run over the whole roster by anything.</b> Both cluster-backed
+///         ⚠
+///         <b>
+///             Every other test in this assembly passes a selector, so until this class existed the
+///             installer had never been run over the whole roster by anything.
+///         </b> Both cluster-backed
 ///         classes pass <c>--phase</c>, and both daemon-free companions pass <c>--dry-run --phase</c>
 ///         — so the loop that walks the phases in order, the loop that picks a phase's components out
 ///         of the roster, and the numeric sort between them were reached exactly once per run, over a
@@ -18,8 +21,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         <c>most-of-the-roster-has-never-been-installed</c>, names.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What this closes is the ORDER, and not the barrier, and the two are different
-///         claims.</b> <c>bundle.yaml</c> § phases says a phase is a barrier: "every component in
+///         ⚠
+///         <b>
+///             What this closes is the ORDER, and not the barrier, and the two are different
+///             claims.
+///         </b> <c>bundle.yaml</c> § phases says a phase is a barrier: "every component in
 ///         phase N is installed and its CRDs are established before phase N+1 begins". The half a
 ///         dry run can answer is <i>which component is attempted when</i>, over all nineteen rows and
 ///         all eight phases, which is what this class asserts. The half it cannot answer is whether
@@ -43,8 +49,11 @@ public sealed class BundleInstallSelection {
     ///     order, grouped under ascending phase headers.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The expected sequence is read out of <c>bundle.yaml</c> and the actual one out of the
-    ///     script's own output, so the two arrive at the order by different routes</b> — the same
+    ///     ⚠
+    ///     <b>
+    ///         The expected sequence is read out of <c>bundle.yaml</c> and the actual one out of the
+    ///         script's own output, so the two arrive at the order by different routes
+    ///     </b> — the same
     ///     rule every other assertion in this assembly follows. Writing the nineteen names here
     ///     would make this file a second place the roster lives, which is the thing
     ///     <c>bundle.yaml</c>'s header forbids for versions and which is worse for an order, because
@@ -72,7 +81,8 @@ public sealed class BundleInstallSelection {
         run.ExitCode.ShouldBe(
             0,
             "charts/bundle/install.sh --dry-run executes nothing and must therefore succeed on any "
-            + "machine with bash. Its output was:\n" + run.Output
+            + "machine with bash. Its output was:\n"
+            + run.Output
         );
 
         var roster = BundleInstaller.Roster();
@@ -97,16 +107,19 @@ public sealed class BundleInstallSelection {
                 + $"charts/bundle/bundle.yaml puts in phase {phase}. A rostered component the "
                 + "installer walks past is one that is never installed, and the only report of it is "
                 + "the operator it was supposed to bring — charts/bundle/README.md § The ordering "
-                + "rule. Its output was:\n" + run.Output
+                + "rule. Its output was:\n"
+                + run.Output
             );
 
-            run.Output.LastIndexOf(line, StringComparison.Ordinal).ShouldBe(
-                at,
-                $"charts/bundle/install.sh --dry-run attempted `{component}` more than once. A "
-                + "component installed twice in one run is a helm upgrade over a release that was "
-                + "just created, which succeeds and hides whichever of the two invocations was "
-                + "wrong. Its output was:\n" + run.Output
-            );
+            run.Output.LastIndexOf(line, StringComparison.Ordinal)
+                .ShouldBe(
+                    at,
+                    $"charts/bundle/install.sh --dry-run attempted `{component}` more than once. A "
+                    + "component installed twice in one run is a helm upgrade over a release that was "
+                    + "just created, which succeeds and hides whichever of the two invocations was "
+                    + "wrong. Its output was:\n"
+                    + run.Output
+                );
 
             at.ShouldBeGreaterThan(
                 previous,
@@ -114,7 +127,8 @@ public sealed class BundleInstallSelection {
                 + $"`{previousName}`, and charts/bundle/bundle.yaml lists them the other way round. "
                 + "The roster carries the ORDER — bundle.yaml's header calls it \"a property of the "
                 + "set\" — and the order is what stops a webhook being installed onto a cluster with "
-                + "no CNI. Its output was:\n" + run.Output
+                + "no CNI. Its output was:\n"
+                + run.Output
             );
 
             previous = at;
@@ -133,7 +147,8 @@ public sealed class BundleInstallSelection {
             at.ShouldBeGreaterThan(
                 phasePrevious,
                 $"charts/bundle/install.sh --dry-run printed no `── phase {phase}` header, or "
-                + "printed it out of order. Its output was:\n" + run.Output
+                + "printed it out of order. Its output was:\n"
+                + run.Output
             );
 
             phasePrevious = at;
@@ -146,8 +161,11 @@ public sealed class BundleInstallSelection {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the SHAPE of the phase barrier and not its truth, and the difference is
-    ///         the whole reason the class comment above splits the two.</b> A dry run executes
+    ///         ⚠
+    ///         <b>
+    ///             This is the SHAPE of the phase barrier and not its truth, and the difference is
+    ///             the whole reason the class comment above splits the two.
+    ///         </b> A dry run executes
     ///         nothing, so what it can say is that the installer emits a
     ///         <c>kubectl wait --for=condition=Established</c> after every <c>manifest:</c> apply and
     ///         before it moves on. What it cannot say is that the wait ever returns true, or that the
@@ -155,8 +173,11 @@ public sealed class BundleInstallSelection {
     ///         <c>the-manifest-path-waits-for-nothing</c>, is the row that owes the second half.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Until #74 that wait fired only for a component declaring a <c>manifestExtra</c>,
-    ///         which is two of the six</b>, so four manifest applies were followed by nothing and the
+    ///         ⚠
+    ///         <b>
+    ///             Until #74 that wait fired only for a component declaring a <c>manifestExtra</c>,
+    ///             which is two of the six
+    ///         </b>, so four manifest applies were followed by nothing and the
     ///         phase they sit in ended with definitions the API server might not yet serve. The
     ///         assertion is per component rather than per phase for the reason install.sh gives at
     ///         the wait itself: phase 40's two providers admit against definitions the rows before
@@ -169,8 +190,11 @@ public sealed class BundleInstallSelection {
     ///         has <c>--wait</c>, and <c>--wait</c> is the clause that was always true.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Sabotage-verified on 2026-09-05 rather than reasoned about, and the part worth
-    ///         keeping is which rows survive it.</b> Moving the wait back inside the
+    ///         ⚠
+    ///         <b>
+    ///             Sabotage-verified on 2026-09-05 rather than reasoned about, and the part worth
+    ///             keeping is which rows survive it.
+    ///         </b> Moving the wait back inside the
     ///         <c>manifestExtra</c> guard — where it sat before #74 — turns FOUR of the six red and
     ///         leaves kubevirt and containerized-data-importer green, because those two are the
     ///         components that declare a second document and so reached the wait already. A
@@ -178,8 +202,11 @@ public sealed class BundleInstallSelection {
     ///         apart from the wait being deleted outright.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The assertion was a containment check until the #74 review, which is weaker than
-    ///         the sentence at the top of this comment and than the method's own name.</b> "Is
+    ///         ⚠
+    ///         <b>
+    ///             The assertion was a containment check until the #74 review, which is weaker than
+    ///             the sentence at the top of this comment and than the method's own name.
+    ///         </b> "Is
     ///         followed by" is an order; <c>ShouldContain</c> is not. A wait emitted BEFORE the apply
     ///         satisfied it, and so did one emitted after the SECOND apply for the two components
     ///         with a <c>manifestExtra</c> — and both of those defeat the barrier while leaving the
@@ -191,9 +218,12 @@ public sealed class BundleInstallSelection {
     ///         the wait sits between is the entire claim.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Two more sabotages were run on 2026-09-05 for the assertion the review added,
-    ///         and the counts are the point: both were fully GREEN under the containment check this
-    ///         replaced.</b> Moving the wait line above the first <c>kubectl apply</c> turns all SIX
+    ///         ⚠
+    ///         <b>
+    ///             Two more sabotages were run on 2026-09-05 for the assertion the review added,
+    ///             and the counts are the point: both were fully GREEN under the containment check this
+    ///             replaced.
+    ///         </b> Moving the wait line above the first <c>kubectl apply</c> turns all SIX
     ///         manifest rows red. Moving it below the <c>manifestExtra</c> apply turns exactly TWO
     ///         red — kubevirt and containerized-data-importer, the only two component.yaml files
     ///         with that key — and leaves the other four green, which is the right answer rather
@@ -220,7 +250,8 @@ public sealed class BundleInstallSelection {
         run.ExitCode.ShouldBe(
             0,
             "charts/bundle/install.sh --dry-run executes nothing and must therefore succeed on any "
-            + "machine with bash. Its output was:\n" + run.Output
+            + "machine with bash. Its output was:\n"
+            + run.Output
         );
 
         var roster = BundleInstaller.Roster();
@@ -278,7 +309,8 @@ public sealed class BundleInstallSelection {
                     + "STORED the objects, so the next component, and the next phase, can be admitted "
                     + "against a definition that is not served yet. charts/bundle/bundle.yaml "
                     + "§ phases calls a phase a barrier and this is the half of it that is "
-                    + "implemented. What install.sh emitted for this component was:\n" + segment
+                    + "implemented. What install.sh emitted for this component was:\n"
+                    + segment
                 );
 
                 // ⚠ The apply is located by the URL out of the component's own component.yaml
@@ -303,7 +335,8 @@ public sealed class BundleInstallSelection {
                 apply.ShouldBeGreaterThanOrEqualTo(
                     0,
                     $"charts/bundle/install.sh never applied `{component}`'s own `manifest:` URL "
-                    + $"{manifest}. What it emitted for this component was:\n" + segment
+                    + $"{manifest}. What it emitted for this component was:\n"
+                    + segment
                 );
 
                 wait.ShouldBeGreaterThan(
@@ -313,7 +346,8 @@ public sealed class BundleInstallSelection {
                     + "had and lets the next component be admitted against definitions the API "
                     + "server has stored and does not serve. That is the barrier defeated while the "
                     + "line is still present, so a check that only looked for the line would stay "
-                    + "green. What install.sh emitted for this component was:\n" + segment
+                    + "green. What install.sh emitted for this component was:\n"
+                    + segment
                 );
 
                 // ⚠ The second apply is a custom resource naming a kind the FIRST document just
@@ -333,7 +367,8 @@ public sealed class BundleInstallSelection {
                         0,
                         $"charts/bundle/{component}/component.yaml declares `manifestExtra: {extra}` "
                         + "and install.sh never applied it, so the custom resource the component "
-                        + "needs is never created. What it emitted was:\n" + segment
+                        + "needs is never created. What it emitted was:\n"
+                        + segment
                     );
 
                     second.ShouldBeGreaterThan(
@@ -342,7 +377,8 @@ public sealed class BundleInstallSelection {
                         + "waiting for the first document's definitions to be Established. The "
                         + "second document is a custom resource naming a kind the first defines, so "
                         + "that ordering loses the race install.sh's own comment says the two "
-                        + "separate applies exist to avoid. What it emitted was:\n" + segment
+                        + "separate applies exist to avoid. What it emitted was:\n"
+                        + segment
                     );
                 }
             } else {
@@ -353,7 +389,8 @@ public sealed class BundleInstallSelection {
                     + $"component.yaml declares `install: {kind}`. A helm component's barrier is "
                     + "helm's own `--wait`; a kubectl line here is a second barrier with no argument "
                     + "behind it, and the argument is the thing this repository checks. What "
-                    + "install.sh emitted for this component was:\n" + segment
+                    + "install.sh emitted for this component was:\n"
+                    + segment
                 );
             }
         }
@@ -380,8 +417,11 @@ public sealed class BundleInstallSelection {
     ///     the sentence saying much the same thing. So the fix is not a better sentence — it is
     ///     removing the number from the sentence. <c>install.sh --help</c> now reads
     ///     <c>bundle.yaml</c> and prints what it finds, and this asserts the two agree.
-    ///     ⚠ <b>The expected line is built from the roster, so this test cannot be the second place
-    ///     the count lives either</b> — the same rule
+    ///     ⚠
+    ///     <b>
+    ///         The expected line is built from the roster, so this test cannot be the second place
+    ///         the count lives either
+    ///     </b> — the same rule
     ///     <see cref="TheDryRunAttemptsEveryRosteredComponentOnceInTheRostersOrder" /> follows for the
     ///     order.
     /// </remarks>
@@ -422,7 +462,8 @@ public sealed class BundleInstallSelection {
                 $"charts/bundle/install.sh --help does not say that phase {phase} holds {count} "
                 + "component(s), which is what charts/bundle/bundle.yaml lists. A usage text that "
                 + "disagrees with the roster is how `--phase` came to be documented as \"repairing "
-                + "one row\" for a phase holding eight of them. Its output was:\n" + run.Output
+                + "one row\" for a phase holding eight of them. Its output was:\n"
+                + run.Output
             );
         }
     }
@@ -436,8 +477,11 @@ public sealed class BundleInstallSelection {
     ///     "Dry run. No command above was executed.", and <c>install.sh --verify --phase 99</c>
     ///     printed <i>"Every pin resolves"</i> having resolved none — over a cluster, the same typo
     ///     under no <c>--dry-run</c> would have reported "Bundle applied." That is the mirror image
-    ///     of the defect <c>verify_component</c>'s own comment records — <i>"a verifier that fails
-    ///     when there is nothing to verify is the same defect as one that passes when there is"</i> —
+    ///     of the defect <c>verify_component</c>'s own comment records —
+    ///     <i>
+    ///         "a verifier that fails
+    ///         when there is nothing to verify is the same defect as one that passes when there is"
+    ///     </i> —
     ///     and it is the more dangerous half, because its output reads like a green run.
     /// </remarks>
     [Fact]
@@ -460,14 +504,16 @@ public sealed class BundleInstallSelection {
             "charts/bundle/install.sh --dry-run --phase 99 selected no component and did not fail. "
             + "bundle.yaml has no phase 99, so this is a typo that reports success — and the same "
             + "typo without --dry-run reports \"Bundle applied\" over a cluster nothing was installed "
-            + "onto. Its output was:\n" + run.Output
+            + "onto. Its output was:\n"
+            + run.Output
         );
 
         run.Output.ShouldContain(
             "selected no component",
             Case.Sensitive,
             "the failure did not say what was wrong. An exit code alone sends the reader to look for "
-            + "a broken pin. Its output was:\n" + run.Output
+            + "a broken pin. Its output was:\n"
+            + run.Output
         );
     }
 
@@ -497,14 +543,16 @@ public sealed class BundleInstallSelection {
             2,
             "charts/bundle/install.sh --dry-run --component cloudnativepg did not fail. The roster's "
             + "row is `cloudnative-pg`; a selector that silently matches nothing turns a typo into a "
-            + "clean run. Its output was:\n" + run.Output
+            + "clean run. Its output was:\n"
+            + run.Output
         );
 
         run.Output.ShouldContain(
             "cloudnativepg",
             Case.Sensitive,
             "the failure did not repeat the name that was typed, which is the one piece of "
-            + "information the reader does not already have. Its output was:\n" + run.Output
+            + "information the reader does not already have. Its output was:\n"
+            + run.Output
         );
     }
 }

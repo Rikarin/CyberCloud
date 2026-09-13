@@ -9,13 +9,19 @@ namespace CyberCloud.Providers.ContainerService;
 ///     <para>
 ///         ⚠ <b>IT NEVER LOOKS ITS CLUSTER UP, AND THAT IS THE MOST IMPORTANT LINE IN THIS FILE.</b>
 ///         docs/plan/12 § Child resources makes the parent a pure function of the address, and
-///         docs/plan/08 § Deleting a parent resource that has children says the platform <i>"must not
-///         re-check the parent on every write to a child"</i> — the check belongs on the create, in
+///         docs/plan/08 § Deleting a parent resource that has children says the platform
+///         <i>
+///             "must not
+///             re-check the parent on every write to a child"
+///         </i> — the check belongs on the create, in
 ///         <c>ResourceManagerService.ResolveAsync</c>, where it runs before the enforcement seam and
 ///         answers the same 404 as an unauthorized read.
 ///         <para>
-///             ⚠ <b>And on THIS type there is a second reason, which is the opposite of the one
-///             <c>StorageBucketReconciler</c> gives.</b> That one cannot wait for its parent because
+///             ⚠
+///             <b>
+///                 And on THIS type there is a second reason, which is the opposite of the one
+///                 <c>StorageBucketReconciler</c> gives.
+///             </b> That one cannot wait for its parent because
 ///             its parent never reports <c>Succeeded</c>. This one <i>could</i> wait — a
 ///             <c>Cluster</c> does report ready — and must not, because Cluster API is built for the
 ///             other order: a <c>MachineDeployment</c> applied before its control plane exists is
@@ -30,8 +36,11 @@ namespace CyberCloud.Providers.ContainerService;
 ///         last, for the reason <c>ManagedClusterReconciler</c> gives about resolvable references.
 ///     </para>
 ///     <para>
-///         ⚠ <b>UNLIKE ITS PARENT, <c>Converged</c> DOES NOT READ A STATUS, AND THAT IS A DECISION
-///         RATHER THAN AN INCONSISTENCY.</b> A cluster's product is an API server and its readiness is
+///         ⚠
+///         <b>
+///             UNLIKE ITS PARENT, <c>Converged</c> DOES NOT READ A STATUS, AND THAT IS A DECISION
+///             RATHER THAN AN INCONSISTENCY.
+///         </b> A cluster's product is an API server and its readiness is
 ///         a claim about whether the tenant has one. A pool's product is machines, and
 ///         <c>MachineDeployment.status.readyReplicas</c> reaching the requested count is a claim about
 ///         whether the <i>workload placed on them</i> can run — which is a question about the cluster
@@ -192,9 +201,7 @@ public sealed class AgentPoolReconciler(IClock clock) : IResourceReconciler {
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the node pool is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the node pool is absent" };
         }
 
         var found = read.GetValueOrThrow();

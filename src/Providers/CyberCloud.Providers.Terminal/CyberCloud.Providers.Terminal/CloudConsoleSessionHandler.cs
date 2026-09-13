@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
@@ -12,24 +13,33 @@ namespace CyberCloud.Providers.Terminal;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS IS THE ONLY CODE IN THE TREE THAT APPLIES A POD, AND IT IS AN ACTION HANDLER
-///         RATHER THAN A RECONCILER ON PURPOSE.</b> A reconciler converges towards a desired state
+///         ⚠
+///         <b>
+///             THIS IS THE ONLY CODE IN THE TREE THAT APPLIES A POD, AND IT IS AN ACTION HANDLER
+///             RATHER THAN A RECONCILER ON PURPOSE.
+///         </b> A reconciler converges towards a desired state
 ///         and is re-driven by a reminder; a shell must exist exactly when somebody is at it and not
 ///         one minute longer. Putting the pod behind a handler makes "a running shell" a consequence
 ///         of a person's click rather than of the platform's schedule — which is what lets the idle
 ///         reclaim delete it without the platform immediately putting it back.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ONE HANDLER FOR TWO ACTIONS, WHICH <see cref="IResourceActionHandler.Action" />
-///         SUPPORTS BY RETURNING AN EMPTY STRING.</b> That interface calls it "the ordinary shape for
+///         ⚠
+///         <b>
+///             ONE HANDLER FOR TWO ACTIONS, WHICH <see cref="IResourceActionHandler.Action" />
+///             SUPPORTS BY RETURNING AN EMPTY STRING.
+///         </b> That interface calls it "the ordinary shape for
 ///         <c>listKeys</c> beside <c>regenerateKeys</c>". Here it is stronger than a convenience:
 ///         connect and terminate are two halves of one object's lifecycle and both have to agree
 ///         about the pod's name, its identity and what "running" means. Two classes would be two
 ///         places to keep that agreement.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT REFUSES A CONSOLE THAT HAS NOT CONVERGED, AND THE REFUSAL IS THE SECURITY
-///         BOUNDARY.</b> The network policy is the last of the three objects the reconciler applies,
+///         ⚠
+///         <b>
+///             IT REFUSES A CONSOLE THAT HAS NOT CONVERGED, AND THE REFUSAL IS THE SECURITY
+///             BOUNDARY.
+///         </b> The network policy is the last of the three objects the reconciler applies,
 ///         so a console mid-provision may have a home volume and an identity and no constraint.
 ///         Starting a shell then would give a person an unconstrained terminal holding a managed
 ///         identity — for a few seconds, which is long enough. So <c>connect</c> reads all three
@@ -42,8 +52,11 @@ namespace CyberCloud.Providers.Terminal;
 ///         handler cannot compare the caller against
 ///         <see cref="CloudConsoles.PrincipalIdPointer" />. The permission check that does happen is
 ///         the registry's <c>connect</c> permission through ReBAC, one layer up. The gap that leaves
-///         is real and is named: <b>anyone who may connect to a console gets a shell holding that
-///         console's identity</b>, whether or not they are that identity.
+///         is real and is named:
+///         <b>
+///             anyone who may connect to a console gets a shell holding that
+///             console's identity
+///         </b>, whether or not they are that identity.
 ///         <c>charts/managed/cloud-shell/conformance.yaml § owed</c>,
 ///         <c>connect-cannot-see-its-caller</c>.
 ///     </para>
@@ -209,7 +222,7 @@ public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
             // terminate that answered while the shell was still printing would be a stop button that
             // does not stop anything, which on a resource holding an identity is the one control a
             // person has to be able to trust.
-            .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
+                .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError)) {
             // ⚠ NOT-FOUND IS A SUCCESS CARRYING `false`, not a 404. The caller's goal is that no shell
@@ -230,8 +243,7 @@ public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
     static JsonObject? Document(string objectJson) {
         try {
             return JsonNode.Parse(objectJson) as JsonObject;
-        }
-        catch (System.Text.Json.JsonException) {
+        } catch (System.Text.Json.JsonException) {
             return null;
         }
     }

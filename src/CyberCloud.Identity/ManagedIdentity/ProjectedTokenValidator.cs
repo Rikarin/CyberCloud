@@ -27,8 +27,11 @@ namespace CyberCloud.Identity.ManagedIdentity;
 ///         anything signed by anyone who can publish a JWKS, which is everyone.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This is ~200 lines of in-house JWS verification, which is the same call docs/plan/11
-///         § Credentials makes for TOTP</b> ("RFC 6238 in-house, ~200 lines"). The alternative is a
+///         ⚠
+///         <b>
+///             This is ~200 lines of in-house JWS verification, which is the same call docs/plan/11
+///             § Credentials makes for TOTP
+///         </b> ("RFC 6238 in-house, ~200 lines"). The alternative is a
 ///         JWT library in <c>CyberCloud.Identity</c>, which that project's <c>.csproj</c> keeps free
 ///         of ASP.NET and of the protocol; the SDK reaches the same conclusion independently in
 ///         <c>IdTokenValidator</c>. ⚠ Two in-house verifiers is one more than there should be — the
@@ -126,7 +129,8 @@ public sealed class ProjectedTokenValidator : IProjectedTokenValidator {
         }
 
         var subject = Text(claims, "sub");
-        if (subject is null || !subject.StartsWith(TokenExchange.ServiceAccountSubjectPrefix, StringComparison.Ordinal)) {
+        if (subject is null
+            || !subject.StartsWith(TokenExchange.ServiceAccountSubjectPrefix, StringComparison.Ordinal)) {
             return Reject("its subject is not a Kubernetes service account");
         }
 

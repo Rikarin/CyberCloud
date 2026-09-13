@@ -8,21 +8,30 @@ namespace CyberCloud.Communication.Contracts;
 ///         <b>This is the seam three built modules are currently stubbing.</b> docs/plan/11
 ///         § Credentials routes email, SMS and WhatsApp OTP through this module; docs/plan/16
 ///         § Alerts fans a firing alert out through it; docs/plan/22 § Invoicing sends every dunning
-///         step through it, and is explicit that <i>"every step notified, with the timeline
-///         stated"</i> — a suspension nobody was told about is the failure that turns a billing
+///         step through it, and is explicit that
+///         <i>
+///             "every step notified, with the timeline
+///             stated"
+///         </i> — a suspension nobody was told about is the failure that turns a billing
 ///         problem into a churn problem.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Interface rather than a grain reference, for the reason
-///         <c>IUsageEmitter</c> gives.</b> A caller in a gateway or a host is not a grain, so
+///         ⚠
+///         <b>
+///             Interface rather than a grain reference, for the reason
+///             <c>IUsageEmitter</c> gives.
+///         </b> A caller in a gateway or a host is not a grain, so
 ///         <c>Orleans.Multitenant</c>'s call filter never sees it and every <c>GetGrain</c> has to
 ///         be qualified with <c>ForTenant</c> — CC1006. Handing callers an interface means exactly
 ///         one place in the tree gets that right, rather than one place per caller.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>It reports failure and never succeeds quietly.</b> That is the same rule
-///         <c>IOtpDeliverySeam</c> states from the identity side: <i>"an OTP factor that reports
-///         delivery and sends nothing locks every user who enrols in it out of their account"</i>.
+///         <c>IOtpDeliverySeam</c> states from the identity side:
+///         <i>
+///             "an OTP factor that reports
+///             delivery and sends nothing locks every user who enrols in it out of their account"
+///         </i>.
 ///     </para>
 /// </remarks>
 public interface IMessageSender {
@@ -34,8 +43,11 @@ public interface IMessageSender {
     ///     attempt. <c>Guid.NewGuid()</c> sends twice and is the mistake this parameter exists to
     ///     prevent.
     ///     <para>
-    ///         ⚠ <b>A clock reading is not the answer either, and this parameter used to recommend
-    ///         one.</b> The suggestion here was <c>$"otp-{userId:N}-{purpose}-{window:O}"</c>, and it
+    ///         ⚠
+    ///         <b>
+    ///             A clock reading is not the answer either, and this parameter used to recommend
+    ///             one.
+    ///         </b> The suggestion here was <c>$"otp-{userId:N}-{purpose}-{window:O}"</c>, and it
     ///         is wrong in both directions — <c>CyberCloud.Identity.Tests.OtpDeliveryTests</c> has
     ///         the evidence. Too coarse a window and two genuinely distinct codes compute one key, so
     ///         the second differs in content and comes back <see cref="ErrorCode.Conflict" />: not a
@@ -79,8 +91,11 @@ public interface IMessageSender {
 ///         because <i><c>STOP</c> handling is legally required in most jurisdictions</i>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The provider parses and the router correlates, and keeping those apart is what makes
-///         a new carrier cheap.</b> A provider implementation knows one carrier's payload shape and
+///         ⚠
+///         <b>
+///             The provider parses and the router correlates, and keeping those apart is what makes
+///             a new carrier cheap.
+///         </b> A provider implementation knows one carrier's payload shape and
 ///         nothing about grains; this knows about grains and nothing about payloads. The alternative
 ///         — every provider reaching into the message grain — is where the correlation logic gets
 ///         written twenty times and gets the late-receipt case wrong nineteen.
@@ -165,8 +180,11 @@ public sealed record WebhookHandling {
 ///     Finds the <see cref="IChannelProvider" /> a channel's configuration names.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A named lookup rather than one provider per channel, because BYO makes the mapping
-///     many-to-one.</b> Two tenants on <see cref="ChannelKind.Sms" /> may be on Twilio and Vonage;
+///     ⚠
+///     <b>
+///         A named lookup rather than one provider per channel, because BYO makes the mapping
+///         many-to-one.
+///     </b> Two tenants on <see cref="ChannelKind.Sms" /> may be on Twilio and Vonage;
 ///     one tenant may move between them. Resolving by <see cref="ChannelConfiguration.Provider" />
 ///     means that is a configuration change rather than a deployment.
 /// </remarks>

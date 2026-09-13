@@ -74,8 +74,11 @@ public interface ICommunicationServiceGrain : IGrainWithStringKey {
     /// <param name="name">The name a send references.</param>
     /// <param name="templateId">The template child resource's GUID.</param>
     /// <remarks>
-    ///     ⚠ <b>The service is the naming authority for its children, which is why this lives here
-    ///     and not on the template.</b> A send names a template by name and the send path has to get
+    ///     ⚠
+    ///     <b>
+    ///         The service is the naming authority for its children, which is why this lives here
+    ///         and not on the template.
+    ///     </b> A send names a template by name and the send path has to get
     ///     from that to a grain key in one hop. The alternative — a digest-keyed index grain per
     ///     name — is what the resource manager does for full resource paths, and it needs a key
     ///     shape and a two-phase claim for a set that is small, per-service, and already being read.
@@ -101,8 +104,11 @@ public interface ICommunicationServiceGrain : IGrainWithStringKey {
 ///         tenant-qualified.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A first-class flow, which is what docs/plan/17 § The channel abstraction asks for by
-///         insisting the product say we are a broker and not a carrier.</b> Sender-id registration,
+///         ⚠
+///         <b>
+///             A first-class flow, which is what docs/plan/17 § The channel abstraction asks for by
+///             insisting the product say we are a broker and not a carrier.
+///         </b> Sender-id registration,
 ///         10DLC campaign approval in the US, and per-country content rules belong to the tenant.
 ///         Making that an afterthought — a text field on a send request — would mean the platform
 ///         quietly attempting sends the carrier will reject and the regulator will attribute to
@@ -161,8 +167,11 @@ public interface ISenderIdentityGrain : IGrainWithStringKey {
     ///         whose obligation it is to move it on.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An empty <see cref="SenderIdentity.Countries" /> means "no country is cleared",
-    ///         not "every country is".</b> The other reading is the one that gets a tenant an SMS
+    ///         ⚠
+    ///         <b>
+    ///             An empty <see cref="SenderIdentity.Countries" /> means "no country is cleared",
+    ///             not "every country is".
+    ///         </b> The other reading is the one that gets a tenant an SMS
     ///         into a jurisdiction their sender id is illegal in — and it is the reading a reasonable
     ///         person reaches for, which is why it is written down here.
     ///     </para>

@@ -11,9 +11,12 @@ namespace CyberCloud.Isolation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FINDING THIS SUITE EXISTS TO PIN: the inheritance chain
-///         docs/plan/07 § Azure RBAC, expressed in it describes stopped one level above where the
-///         document says it starts.</b> That table's first row is
+///         ⚠
+///         <b>
+///             THE FINDING THIS SUITE EXISTS TO PIN: the inheritance chain
+///             docs/plan/07 § Azure RBAC, expressed in it describes stopped one level above where the
+///             document says it starts.
+///         </b> That table's first row is
 ///         <c>subscription:S#owner@user:U</c> and its third says inheritance sub → rg → resource is
 ///         "the <c>From("parent", …)</c> rewrites". Only the last hop of that chain was ever written:
 ///         <c>ReBacResourceRelationWriter</c> writes <c>resource#parent@resourceGroup</c> and nothing
@@ -94,7 +97,8 @@ public sealed class ScopeCreationTests(IsolationCluster cluster) {
         madeGroup.IsSuccess.ShouldBeTrue(
             "a tenant owner could not create a resource group in a subscription they had just "
             + "created — the subscription's parent edge to the tenant is missing, so "
-            + "From(parent, owner) has nothing to follow: " + madeGroup.Error?.Message
+            + "From(parent, owner) has nothing to follow: "
+            + madeGroup.Error?.Message
         );
 
         // ── And a resource in it, through the twelve-step write path, read back by the same user ─
@@ -104,7 +108,15 @@ public sealed class ScopeCreationTests(IsolationCluster cluster) {
         // ParentEdgeTests already sweeps that.
         var target = IsolationCatalog.Targets[0];
 
-        var address = new ResourceId(Chain, subscription, group, target.Type, "chain-res", Guid.Empty, target.ParentNames);
+        var address = new ResourceId(
+            Chain,
+            subscription,
+            group,
+            target.Type,
+            "chain-res",
+            Guid.Empty,
+            target.ParentNames
+        );
 
         var created = await cluster.Manager.WriteAsync(
             new() {
@@ -123,7 +135,8 @@ public sealed class ScopeCreationTests(IsolationCluster cluster) {
         created.IsSuccess.ShouldBeTrue(
             "a tenant owner could not create a resource in a group they created in a subscription "
             + "they created. The chain resource → resourceGroup → subscription → tenant is what "
-            + "docs/plan/07 § Azure RBAC, expressed in it promises: " + created.Error?.Message
+            + "docs/plan/07 § Azure RBAC, expressed in it promises: "
+            + created.Error?.Message
         );
 
         var read = await cluster.Manager.ReadAsync(
@@ -131,9 +144,7 @@ public sealed class ScopeCreationTests(IsolationCluster cluster) {
             TestContext.Current.CancellationToken
         );
 
-        read.IsSuccess.ShouldBeTrue(
-            "the resource is not readable by the tenant owner: " + read.Error?.Message
-        );
+        read.IsSuccess.ShouldBeTrue("the resource is not readable by the tenant owner: " + read.Error?.Message);
     }
 
     [Fact]
@@ -151,14 +162,22 @@ public sealed class ScopeCreationTests(IsolationCluster cluster) {
         var owner = IsolationCluster.Caller(Chain, ChainOwner);
 
         (await cluster.Scopes.CreateAsync(
-            new() { Path = ScopeId.Subscription(Chain, subscription).Path, Body = """{"displayName":"B"}""", Caller = owner },
-            TestContext.Current.CancellationToken
-        )).IsSuccess.ShouldBeTrue();
+                new() {
+                    Path = ScopeId.Subscription(Chain, subscription).Path,
+                    Body = """{"displayName":"B"}""",
+                    Caller = owner
+                },
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
 
         (await cluster.Scopes.CreateAsync(
-            new() { Path = ScopeId.Group(Chain, subscription, group).Path, Body = """{"location":"eu-west-1"}""", Caller = owner },
-            TestContext.Current.CancellationToken
-        )).IsSuccess.ShouldBeTrue();
+                new() {
+                    Path = ScopeId.Group(Chain, subscription, group).Path,
+                    Body = """{"location":"eu-west-1"}""",
+                    Caller = owner
+                },
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
 
         var subscriptionParents = await ParentsOfAsync(
             ObjectTypes.Subscription,
@@ -295,9 +314,7 @@ public sealed class ScopeCreationTests(IsolationCluster cluster) {
 
         var refused = await cluster.Scopes.CreateAsync(
             new() {
-                Path = ScopeId.Tenant(Chain).Path,
-                Body = "{}",
-                Caller = IsolationCluster.Caller(Chain, ChainOwner)
+                Path = ScopeId.Tenant(Chain).Path, Body = "{}", Caller = IsolationCluster.Caller(Chain, ChainOwner)
             },
             TestContext.Current.CancellationToken
         );
@@ -371,13 +388,19 @@ public sealed class ScopeCreationTests(IsolationCluster cluster) {
     ///     it. Idempotent.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The tenant grain is created directly and the directory is not touched, which is the
-    ///     honest boundary of this suite.</b> <c>IScopeManager.CreateTenantAsync</c> also assigns a
+    ///     ⚠
+    ///     <b>
+    ///         The tenant grain is created directly and the directory is not touched, which is the
+    ///         honest boundary of this suite.
+    ///     </b> <c>IScopeManager.CreateTenantAsync</c> also assigns a
     ///     shard and registers a directory entry, and those are what make a tenant <i>reachable</i>
     ///     from a gateway rather than what make its scopes work. Driving them needs the shard map and
     ///     the directory, which this cluster does not configure — so what is owed, and is said here
-    ///     rather than left to be discovered, is that <b>no test drives CreateTenantAsync's happy
-    ///     path end to end</b>. Its two refusals are covered above; its ordering is not.
+    ///     rather than left to be discovered, is that
+    ///     <b>
+    ///         no test drives CreateTenantAsync's happy
+    ///         path end to end
+    ///     </b>. Its two refusals are covered above; its ordering is not.
     /// </remarks>
     async Task SeedTenantAsync() {
         var created = await cluster.For(Chain)

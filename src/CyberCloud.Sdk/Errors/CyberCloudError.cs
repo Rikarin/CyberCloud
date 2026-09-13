@@ -22,7 +22,12 @@ public sealed class CyberCloudError {
     /// <param name="message">The human-readable message, naming the actual numbers.</param>
     /// <param name="target">An RFC 6901 JSON Pointer into the request body, or <see langword="null" />.</param>
     /// <param name="details">Every other problem found. Never <see langword="null" />; possibly empty.</param>
-    public CyberCloudError(string code, string message, string? target = null, IReadOnlyList<CyberCloudError>? details = null) {
+    public CyberCloudError(
+        string code,
+        string message,
+        string? target = null,
+        IReadOnlyList<CyberCloudError>? details = null
+    ) {
         Code = code;
         Message = message;
         Target = target;
@@ -51,8 +56,11 @@ public sealed class CyberCloudError {
     public string? Target { get; }
 
     /// <summary>
-    ///     Every other problem found in the same request. docs/plan/08 § Errors: <i>"A form that has to
-    ///     be fixed one field per round trip is a form nobody finishes."</i>
+    ///     Every other problem found in the same request. docs/plan/08 § Errors:
+    ///     <i>
+    ///         "A form that has to
+    ///         be fixed one field per round trip is a form nobody finishes."
+    ///     </i>
     /// </summary>
     public IReadOnlyList<CyberCloudError> Details { get; }
 
@@ -68,8 +76,9 @@ public sealed class CyberCloudError {
     /// </remarks>
     /// <param name="content">The response body.</param>
     public static CyberCloudError? TryParse(ReadOnlyMemory<byte>? content) {
-        if (content is not { } body || body.IsEmpty)
+        if (content is not { } body || body.IsEmpty) {
             return null;
+        }
 
         try {
             using var document = JsonDocument.Parse(body);
@@ -81,8 +90,9 @@ public sealed class CyberCloudError {
 
             if (element.ValueKind is JsonValueKind.Object
                 && element.TryGetProperty("error", out var wrapped)
-                && wrapped.ValueKind is JsonValueKind.Object)
+                && wrapped.ValueKind is JsonValueKind.Object) {
                 element = wrapped;
+            }
 
             return Read(element);
         } catch (JsonException) {
@@ -91,14 +101,16 @@ public sealed class CyberCloudError {
     }
 
     static CyberCloudError? Read(JsonElement element) {
-        if (element.ValueKind is not JsonValueKind.Object)
+        if (element.ValueKind is not JsonValueKind.Object) {
             return null;
+        }
 
         // `code` and `message` are the two required members — openapi/2026-08-01.json § Error. A body
         // missing either is not the one error shape, and reporting "an error with no code" is worse
         // than reporting the raw status.
-        if (!TryReadString(element, "code", out var code) || !TryReadString(element, "message", out var message))
+        if (!TryReadString(element, "code", out var code) || !TryReadString(element, "message", out var message)) {
             return null;
+        }
 
         // Absent and empty are both "no field to point at". `null` is the one spelling callers branch
         // on, so an empty string never survives to CyberCloudRequestFailedException.Target.
@@ -108,8 +120,9 @@ public sealed class CyberCloudError {
 
         if (element.TryGetProperty("details", out var array) && array.ValueKind is JsonValueKind.Array) {
             foreach (var item in array.EnumerateArray()) {
-                if (Read(item) is not { } detail)
+                if (Read(item) is not { } detail) {
                     continue;
+                }
 
                 details ??= [];
                 details.Add(detail);

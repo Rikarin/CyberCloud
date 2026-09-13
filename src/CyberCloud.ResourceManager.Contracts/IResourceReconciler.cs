@@ -9,9 +9,12 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// <remarks>
 ///     <para>
 ///         <b>This record <i>is</i> clause 2 of the reconciler contract.</b> docs/plan/08 § The
-///         reconcile loop: <i>"No hidden state. Everything it needs comes from
-///         <c>ReconcileContext</c>. A reconciler with a field is a reconciler that breaks when the
-///         grain moves silo."</i> The conformance suite rejects a reconciler type with instance
+///         reconcile loop:
+///         <i>
+///             "No hidden state. Everything it needs comes from
+///             <c>ReconcileContext</c>. A reconciler with a field is a reconciler that breaks when the
+///             grain moves silo."
+///         </i> The conformance suite rejects a reconciler type with instance
 ///         fields for exactly that reason, and this record is what makes the rule livable — a
 ///         reconciler that was tempted to cache something has somewhere to read it from instead.
 ///     </para>
@@ -21,8 +24,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///             <see cref="Cluster" /> is nullable and docs/plan/08's sketch has it non-nullable.
 ///         </b>
 ///         The document's own § What the resource manager deliberately does not do requires the
-///         manager to <i>"work for a provider with no cluster at all (a DNS zone, a mail domain, a
-///         role assignment)"</i>, and a non-nullable connection makes that unrepresentable. So the
+///         manager to
+///         <i>
+///             "work for a provider with no cluster at all (a DNS zone, a mail domain, a
+///             role assignment)"
+///         </i>, and a non-nullable connection makes that unrepresentable. So the
 ///         sketch and the table disagree, and the table wins: a clusterless provider gets
 ///         <see langword="null" /> here and never touches it.
 ///     </para>
@@ -87,8 +93,11 @@ public readonly record struct ReconcileContext(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>An <c>init</c> property rather than a positional parameter, and the reason is that
-    ///         a refusing default is the only safe one.</b> Every construction of this record that
+    ///         ⚠
+    ///         <b>
+    ///             An <c>init</c> property rather than a positional parameter, and the reason is that
+    ///             a refusing default is the only safe one.
+    ///         </b> Every construction of this record that
     ///         predates the mint path names eight arguments and means them; adding a ninth would make
     ///         each of those call sites choose a writer, and the ones that did not care would reach for
     ///         whatever compiled. Initialised here, they all get
@@ -96,8 +105,11 @@ public readonly record struct ReconcileContext(
     ///         does — and only the driver, which knows what the host wired, replaces it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Here rather than on a reconciler's constructor, even though
-    ///         <c>ReconcilerConformance.CheckNoHiddenState</c> would have allowed the constructor.</b>
+    ///         ⚠
+    ///         <b>
+    ///             Here rather than on a reconciler's constructor, even though
+    ///             <c>ReconcilerConformance.CheckNoHiddenState</c> would have allowed the constructor.
+    ///         </b>
     ///         Clause 2 is "everything it needs comes from <see cref="ReconcileContext" />", and
     ///         <see cref="Secrets" /> — the same seam in the other direction — is already here. Two
     ///         halves of one story arriving by two routes is the shape somebody later has to explain.
@@ -111,8 +123,11 @@ public readonly record struct ReconcileContext(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>An <c>init</c> property with a refusing default, for the same reason
-    ///         <see cref="SecretWriter" /> is one.</b> Every construction of this record that predates
+    ///         ⚠
+    ///         <b>
+    ///             An <c>init</c> property with a refusing default, for the same reason
+    ///             <see cref="SecretWriter" /> is one.
+    ///         </b> Every construction of this record that predates
     ///         the cluster-attach path names its arguments and means them; a tenth positional parameter
     ///         would make each of them choose a sink, and the ones that did not care would reach for
     ///         whatever compiled.
@@ -258,8 +273,10 @@ public readonly record struct SecretMint(bool Minted);
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>docs/plan/12 § The pattern, once, piece 5 — "credential provisioning into the tenant's
-///         Vault" — is this interface.</b> That document's table used to assign piece 5 to
+///         <b>
+///             docs/plan/12 § The pattern, once, piece 5 — "credential provisioning into the tenant's
+///             Vault" — is this interface.
+///         </b> That document's table used to assign piece 5 to
 ///         <c>ISecretResolver</c>, which reads and cannot provision anything, and the table is
 ///         corrected. A managed service whose password nobody can produce is not a managed service:
 ///         CloudNativePG happens to generate its own, so <c>CyberCloud.DBforPostgreSQL/servers</c>
@@ -344,8 +361,11 @@ public interface ISecretWriter {
 ///     </list>
 ///     <para>
 ///         ⚠ <b>A reconciler never calls the authorization engine, the quota grain or the index.</b>
-///         docs/plan/07 § The enforcement seam: <i>"Providers never call the engine. A provider that
-///         does is failing a review."</i> The same holds for steps 6 and 7 of docs/plan/08 § The write
+///         docs/plan/07 § The enforcement seam:
+///         <i>
+///             "Providers never call the engine. A provider that
+///             does is failing a review."
+///         </i> The same holds for steps 6 and 7 of docs/plan/08 § The write
 ///         path, end to end. This assembly's reference set is the mechanical half of that rule — a
 ///         reconciler cannot name <c>ICheckGrain</c> or <c>IQuotaGrain</c> because
 ///         <c>CyberCloud.ResourceManager.Contracts</c> does not reference the assemblies that declare
@@ -417,9 +437,12 @@ public interface IResourceReconciler {
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>The provider names and the manager destroys, and the split is the point.</b>
-    ///         docs/plan/08 § Soft delete's owed item reads <i>"a purge still leaves the volumes,
-    ///         because ending a window has to remove exactly what a teardown keeps and
-    ///         <c>IResourceReconciler</c> has no member that asks for that"</i>. This is that member.
+    ///         docs/plan/08 § Soft delete's owed item reads
+    ///         <i>
+    ///             "a purge still leaves the volumes,
+    ///             because ending a window has to remove exactly what a teardown keeps and
+    ///             <c>IResourceReconciler</c> has no member that asks for that"
+    ///         </i>. This is that member.
     ///         Only the provider knows the shape — <c>ContainerRegistries.ClaimTemplate</c> and its
     ///         equivalents — and only the manager knows a purge is happening, so a provider that
     ///         deleted its own claims would need a "this teardown is the final one" flag on
@@ -435,8 +458,11 @@ public interface IResourceReconciler {
     ///         from.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The default returns nothing, and a type with a <c>volumeClaimTemplate</c> that
-    ///         takes the default is a leak rather than a compile error.</b> Twenty-two reconcilers
+    ///         ⚠
+    ///         <b>
+    ///             The default returns nothing, and a type with a <c>volumeClaimTemplate</c> that
+    ///             takes the default is a leak rather than a compile error.
+    ///         </b> Twenty-two reconcilers
     ///         implement this interface and most own no disk at all, so a required member would be
     ///         twenty-two edits to state the same nothing. What closes the gap is a check rather than
     ///         a signature: <c>ProviderConformanceTests</c> reads every <c>volumeClaimTemplates</c>
@@ -447,5 +473,6 @@ public interface IResourceReconciler {
     Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(Result<ImmutableArray<RetainedVolume>>.Success([]));
+    ) =>
+        Task.FromResult(Result<ImmutableArray<RetainedVolume>>.Success([]));
 }

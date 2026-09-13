@@ -16,17 +16,23 @@ namespace CyberCloud.Providers.Messaging.Tests;
 ///         only in a log line.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every expectation below is a LITERAL, and the two sibling files record why in the
-///         strongest possible terms: an earlier version of the Kafka one built the expected path from
-///         the same two constants the emitter reads, and re-casing the constant left the whole suite
-///         green.</b> Two things derived from one constant agree however that constant is spelled. So
+///         ⚠
+///         <b>
+///             Every expectation below is a LITERAL, and the two sibling files record why in the
+///             strongest possible terms: an earlier version of the Kafka one built the expected path from
+///             the same two constants the emitter reads, and re-casing the constant left the whole suite
+///             green.
+///         </b> Two things derived from one constant agree however that constant is spelled. So
 ///         the strings here are typed out by hand, and they are the fourth independent copy after
 ///         docs/plan/12 § The catalogue, <c>charts/managed/rabbitmq/Chart.yaml</c>'s
 ///         <c>cybercloud.io/resource-type</c> and <c>charts/managed/rabbitmq/conformance.yaml</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS TYPE CARRIES A CASING RISK NEITHER SIBLING HAS, AND IT IS IN THE TYPE PATH
-///         ITSELF.</b> The product is written <c>RabbitMQ</c> everywhere — in this type's own
+///         ⚠
+///         <b>
+///             THIS TYPE CARRIES A CASING RISK NEITHER SIBLING HAS, AND IT IS IN THE TYPE PATH
+///             ITSELF.
+///         </b> The product is written <c>RabbitMQ</c> everywhere — in this type's own
 ///         <c>Display</c> name, in docs/plan/12's prose, in the chart description — and the type path
 ///         is <c>rabbitmqClusters</c>, all lower case through the acronym. <c>rabbitMqClusters</c> or
 ///         <c>rabbitMQClusters</c> would compile, would route (<c>ResourceTypeName</c> compares
@@ -88,11 +94,12 @@ public sealed class RabbitmqOpenApiCasingTests {
         // ⚠ THREE SPELLINGS OF ONE WORD, PINNED AGAINST EACH OTHER. The product is `RabbitMQ`, the
         // type path is `rabbitmqClusters`, and the Kubernetes kind is `RabbitmqCluster`. Each is
         // correct in its own place and none is derivable from another, so all three are literals.
-        RabbitmqClusters.Type.ToString().ShouldBe(
-            QualifiedType,
-            "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
-            + "charts/managed/rabbitmq/Chart.yaml's cybercloud.io/resource-type annotation."
-        );
+        RabbitmqClusters.Type.ToString()
+            .ShouldBe(
+                QualifiedType,
+                "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
+                + "charts/managed/rabbitmq/Chart.yaml's cybercloud.io/resource-type annotation."
+            );
 
         RabbitmqClusters.TypePath.ShouldBe("rabbitmqClusters");
 
@@ -111,12 +118,9 @@ public sealed class RabbitmqOpenApiCasingTests {
             "no path carries the provider namespace and type as the catalogue spells them"
         );
 
-        foreach (var path in paths.Where(
-                     x => x.Contains("rabbitmqclusters", StringComparison.OrdinalIgnoreCase)
-                 )) {
-            path.Contains(QualifiedType, StringComparison.Ordinal).ShouldBeTrue(
-                $"'{path}' spells the type in a casing other than '{QualifiedType}'."
-            );
+        foreach (var path in paths.Where(x => x.Contains("rabbitmqclusters", StringComparison.OrdinalIgnoreCase))) {
+            path.Contains(QualifiedType, StringComparison.Ordinal)
+                .ShouldBeTrue($"'{path}' spells the type in a casing other than '{QualifiedType}'.");
         }
     }
 
@@ -129,8 +133,7 @@ public sealed class RabbitmqOpenApiCasingTests {
         var paths = Paths();
 
         foreach (var qualified in new[] {
-                     "CyberCloud.Messaging/rabbitmqClusters",
-                     "CyberCloud.Messaging/kafkaClusters",
+                     "CyberCloud.Messaging/rabbitmqClusters", "CyberCloud.Messaging/kafkaClusters",
                      "CyberCloud.Messaging/natsClusters"
                  }) {
             paths.ShouldContain(
@@ -157,10 +160,11 @@ public sealed class RabbitmqOpenApiCasingTests {
         var value = KubeLabels.ResourceTypeValue(RabbitmqClusters.Type);
 
         value.ShouldBe("cybercloud.messaging_rabbitmqclusters");
-        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType).IsSuccess.ShouldBeTrue(
-            "the resource-type label value is not legal Kubernetes label syntax, so every object this "
-            + "provider applies would be refused at admission rather than at build time."
-        );
+        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType)
+            .IsSuccess.ShouldBeTrue(
+                "the resource-type label value is not legal Kubernetes label syntax, so every object this "
+                + "provider applies would be refused at admission rather than at build time."
+            );
     }
 
     /// <summary>The document the generator would write for this provider alone.</summary>

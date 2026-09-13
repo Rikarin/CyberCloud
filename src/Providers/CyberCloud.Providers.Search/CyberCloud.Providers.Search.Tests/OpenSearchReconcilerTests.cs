@@ -73,9 +73,8 @@ public sealed class OpenSearchReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            OpenSearchServices.Body(ClusterId, dataNodes: 3, storageSize: "100Gi")
-        );
+        using var aliceBody =
+            JsonDocument.Parse(OpenSearchServices.Body(ClusterId, dataNodes: 3, storageSize: "100Gi"));
 
         // ⚠ Bob's body has a DIFFERENT NUMBER OF POOLS, which is the shape only this type has. A cache
         // keyed on anything but the full address would give Alice a coordinating pool she never asked
@@ -157,7 +156,10 @@ public sealed class OpenSearchReconcilerTests {
 
         read.ShouldBe(
             applied,
-            "the reconciler applied " + applied.Count + " object(s) and read back " + read.Count
+            "the reconciler applied "
+            + applied.Count
+            + " object(s) and read back "
+            + read.Count
             + ". An object applied and not read back is one the loop reports Converged without ever "
             + "having observed."
         );
@@ -171,9 +173,7 @@ public sealed class OpenSearchReconcilerTests {
         // in a different order on two passes would make every reconcile a write, and every write a
         // rolling restart of three StatefulSets.
         var connection = new RecordingConnection();
-        using var body = JsonDocument.Parse(
-            OpenSearchServices.Body(ClusterId, coordinatingNodes: 2)
-        );
+        using var body = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, coordinatingNodes: 2));
 
         await Reconcile(connection, body.RootElement);
         var first = connection.Applied.Select(x => x.Body).ToArray();
@@ -302,8 +302,7 @@ public sealed class OpenSearchReconcilerTests {
             Guid.Parse("33333333-3333-4333-8333-333333333333")
         );
 
-    static JsonArray Pools(string objectJson) =>
-        JsonNode.Parse(objectJson)!["spec"]!["nodePools"]!.AsArray();
+    static JsonArray Pools(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!["nodePools"]!.AsArray();
 
     static JsonObject DataPool(string objectJson) =>
         Pools(objectJson).Single(x => x!["component"]!.GetValue<string>() == "data")!.AsObject();
@@ -335,12 +334,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
@@ -445,8 +446,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     puts the same resource name in two tenants, which is the only shape in which one singleton
     ///     reconciler serving both can be caught mixing them.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

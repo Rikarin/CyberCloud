@@ -12,14 +12,20 @@ namespace CyberCloud.Gateway.Host.RateLimiting;
 readonly record struct WindowCount(long Count, TimeSpan RetryAfter);
 
 /// <summary>
-///     The counters behind stage 5. docs/plan/10 § Request pipeline: <i>"Redis-backed sliding
-///     window."</i>
+///     The counters behind stage 5. docs/plan/10 § Request pipeline:
+///     <i>
+///         "Redis-backed sliding
+///         window."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>NOTHING BEHIND THIS INTERFACE MAY TOUCH A GRAIN.</b> docs/plan/10 § Request pipeline
-///         states the reason in one line — <i>"a rate limiter that costs a grain call is a rate
-///         limiter that amplifies an attack"</i> — and it is worth spelling out, because the
+///         states the reason in one line —
+///         <i>
+///             "a rate limiter that costs a grain call is a rate
+///             limiter that amplifies an attack"
+///         </i> — and it is worth spelling out, because the
 ///         implementation that gets this wrong looks perfectly reasonable. A per-subscription counter
 ///         held in a subscription grain would mean a flood against one subscription activates that
 ///         grain, serialises every request in the flood through its single-threaded turn, and holds

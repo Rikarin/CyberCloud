@@ -129,8 +129,11 @@ public sealed class ValkeyQuantityTests {
 
     /// <summary>A quantity past <see cref="long.MaxValue" /> is refused rather than clamped to it.</summary>
     /// <remarks>
-    ///     ⚠ <b>The old parser returned <see cref="long.MaxValue" /> for these and called it a
-    ///     success.</b> Its range check was <c>bytes > long.MaxValue</c> on a <see langword="double" />,
+    ///     ⚠
+    ///     <b>
+    ///         The old parser returned <see cref="long.MaxValue" /> for these and called it a
+    ///         success.
+    ///     </b> Its range check was <c>bytes > long.MaxValue</c> on a <see langword="double" />,
     ///     and <c>(double)long.MaxValue</c> rounds up to 2^63 — so <c>8Ei</c>, which is exactly 2^63,
     ///     compared equal, passed the check, and saturated on the cast. A cache would have been told its
     ///     ceiling was 8 exbibytes of a pod that has nothing like it. Refusing is the honest answer: the
@@ -183,10 +186,11 @@ public sealed class ValkeyQuantityTests {
 
             using var desired = JsonDocument.Parse(BodyWithPreset(preset));
 
-            ValkeyCaches.MaxMemoryBytes(desired.RootElement).ShouldBe(
-                (long)(bytes.Value * ValkeyCaches.MaxMemoryFraction),
-                preset
-            );
+            ValkeyCaches.MaxMemoryBytes(desired.RootElement)
+                .ShouldBe(
+                    (long)(bytes.Value * ValkeyCaches.MaxMemoryFraction),
+                    preset
+                );
         }
     }
 
@@ -263,9 +267,8 @@ public sealed class ValkeyQuantityTests {
 
         var argument = line["maxmemory ".Length..];
 
-        long.TryParse(argument, NumberStyles.None, CultureInfo.InvariantCulture, out _).ShouldBeTrue(
-            $"'{line}' is not `maxmemory <bytes>`"
-        );
+        long.TryParse(argument, NumberStyles.None, CultureInfo.InvariantCulture, out _)
+            .ShouldBeTrue($"'{line}' is not `maxmemory <bytes>`");
     }
 
     static string BodyWithPreset(string preset) {

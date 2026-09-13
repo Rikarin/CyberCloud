@@ -7,12 +7,18 @@ namespace CyberCloud.Cli.VerbTree;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The tree is embedded at build time and the command tree is built from it at run
-///         time, and the split is the decision.</b> The alternative — a source generator that emitted
+///         ⚠
+///         <b>
+///             The tree is embedded at build time and the command tree is built from it at run
+///             time, and the split is the decision.
+///         </b> The alternative — a source generator that emitted
 ///         a <c>System.CommandLine</c> class per verb — was rejected for three reasons, and
-///         <c>CliEmitter</c>'s own remarks give the first: <i>"A generator that emitted C# command
-///         classes instead would fuse the two and make every CLI behaviour change a generator
-///         change."</i> The second is that <c>--api-version</c> selects between trees, and a compiled
+///         <c>CliEmitter</c>'s own remarks give the first:
+///         <i>
+///             "A generator that emitted C# command
+///             classes instead would fuse the two and make every CLI behaviour change a generator
+///             change."
+///         </i> The second is that <c>--api-version</c> selects between trees, and a compiled
 ///         tree can only be the one version it was compiled from — docs/plan/10 § API versioning
 ///         keeps every published version alive.
 ///     </para>
@@ -65,8 +71,9 @@ sealed class VerbTreeCatalog {
         var trees = new Dictionary<string, VerbTreeDocument>(StringComparer.Ordinal);
 
         foreach (var name in assembly.GetManifestResourceNames()) {
-            if (!name.StartsWith(ResourcePrefix, StringComparison.Ordinal))
+            if (!name.StartsWith(ResourcePrefix, StringComparison.Ordinal)) {
                 continue;
+            }
 
             using var stream = assembly.GetManifestResourceStream(name)
                 ?? throw new CycUsageException($"The embedded verb tree '{name}' could not be opened.");
@@ -111,22 +118,27 @@ sealed class VerbTreeCatalog {
     ///     running.
     /// </exception>
     public VerbTreeDocument Select(string? apiVersion) {
-        if (trees.Count == 0)
+        if (trees.Count == 0) {
             throw new CycUsageException(
                 "This build of cyc carries no verb tree, so it has no commands. It was built without "
-                + "generated/cli/*.json — run ./build.sh Generate and rebuild.");
+                + "generated/cli/*.json — run ./build.sh Generate and rebuild."
+            );
+        }
 
-        if (string.IsNullOrEmpty(apiVersion))
+        if (string.IsNullOrEmpty(apiVersion)) {
             return trees[Newest];
+        }
 
-        if (trees.TryGetValue(apiVersion, out var tree))
+        if (trees.TryGetValue(apiVersion, out var tree)) {
             return tree;
+        }
 
         throw new CycUsageException(
             $"'{apiVersion}' is not an api-version this build of cyc knows. Available: "
             + $"{string.Join(", ", ApiVersions)}. There is no 'latest' — docs/plan/10 § API versioning "
             + "makes a version a date, and omitting --api-version uses the newest this build carries "
-            + $"({Newest}).");
+            + $"({Newest})."
+        );
     }
 
     static VerbTreeDocument Read(Stream stream, string resource) {
@@ -148,20 +160,27 @@ sealed class VerbTreeCatalog {
     /// </summary>
     /// <remarks>
     ///     ⚠ <c>CliEmitter.FormatVersion</c> is the file's own shape, not the api-version, and it is
-    ///     checked first: <i>"a host that silently accepted a format it did not understand would
-    ///     mis-parse the flags rather than say so"</i>.
+    ///     checked first:
+    ///     <i>
+    ///         "a host that silently accepted a format it did not understand would
+    ///         mis-parse the flags rather than say so"
+    ///     </i>.
     /// </remarks>
     static VerbTreeDocument Validate(VerbTreeDocument? document, string source) {
-        if (document is null)
+        if (document is null) {
             throw new CycUsageException($"{source} is empty.");
+        }
 
-        if (!string.Equals(document.Format, SupportedFormat, StringComparison.Ordinal))
+        if (!string.Equals(document.Format, SupportedFormat, StringComparison.Ordinal)) {
             throw new CycUsageException(
                 $"{source} announces verb-tree format '{document.Format}' and this build of cyc reads "
-                + $"format '{SupportedFormat}'. Upgrade cyc, or regenerate the tree with a matching build.");
+                + $"format '{SupportedFormat}'. Upgrade cyc, or regenerate the tree with a matching build."
+            );
+        }
 
-        if (document.ApiVersion.Length == 0)
+        if (document.ApiVersion.Length == 0) {
             throw new CycUsageException($"{source} names no api-version.");
+        }
 
         return document;
     }

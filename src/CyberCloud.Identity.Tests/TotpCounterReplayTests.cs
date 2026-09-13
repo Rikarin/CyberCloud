@@ -12,8 +12,11 @@ namespace CyberCloud.Identity.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><see cref="CredentialTests" /> covers <see cref="TotpAuthenticator" /> against RFC
-///         6238's vectors, which is a different claim.</b> "This code is arithmetically correct for
+///         ⚠
+///         <b>
+///             <see cref="CredentialTests" /> covers <see cref="TotpAuthenticator" /> against RFC
+///             6238's vectors, which is a different claim.
+///         </b> "This code is arithmetically correct for
 ///         this secret and this instant" is true for both the user and the attacker who watched them
 ///         type it. The claim here is that the platform spends the counter, and it is a property of
 ///         the grain's durable state rather than of the verifier.
@@ -155,8 +158,8 @@ public sealed class TotpCounterReplayTests(IdentityCluster cluster) {
         // numbers. Carrying the spent list over would refuse the user's first code from their new
         // authenticator, which reads as "the app I just set up does not work".
         (await user.EnrollTotpAsync(
-            Enrollment() with { SecretRef = new SecretRef { Path = "tenants/x/users/u/totp", Field = "secret2" } }
-        )).IsSuccess.ShouldBeTrue();
+                Enrollment() with { SecretRef = new SecretRef { Path = "tenants/x/users/u/totp", Field = "secret2" } }
+            )).IsSuccess.ShouldBeTrue();
 
         (await user.ClaimTotpCounterAsync(counter)).GetValueOrThrow().ShouldBeTrue();
     }

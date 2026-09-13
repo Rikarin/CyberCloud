@@ -71,13 +71,10 @@ public sealed class StorageReconcilerTests {
 
         var connection = new RecordingConnection();
 
-        using var aliceBody = JsonDocument.Parse(
-            StorageAccounts.Body(ClusterId, volumeServers: 3, storageSize: "100Gi")
-        );
+        using var aliceBody =
+            JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers: 3, storageSize: "100Gi"));
 
-        using var bobBody = JsonDocument.Parse(
-            StorageAccounts.Body(ClusterId, volumeServers: 6, storageSize: "500Gi")
-        );
+        using var bobBody = JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers: 6, storageSize: "500Gi"));
 
         // Interleaved, so a cache written on the first pass is read on the third.
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
@@ -145,7 +142,10 @@ public sealed class StorageReconcilerTests {
 
         read.ShouldBe(
             applied,
-            "the reconciler applied " + applied.Count + " object(s) and read back " + read.Count
+            "the reconciler applied "
+            + applied.Count
+            + " object(s) and read back "
+            + read.Count
             + ". An object applied and not read back is one the loop reports Converged without ever "
             + "having observed."
         );
@@ -394,11 +394,12 @@ public sealed class StorageReconcilerTests {
         var working = new RecordingConnection();
         (await Reconcile(working, body.RootElement, vault)).ShouldBe(ReconcileOutcome.Converged);
 
-        vault.Peek(path, StorageAccounts.SecretAccessKeyField).ShouldBe(
-            minted,
-            "the recovery pass minted a second credential, so a tenant who had already read the "
-            + "first one holds a key the gateway no longer accepts"
-        );
+        vault.Peek(path, StorageAccounts.SecretAccessKeyField)
+            .ShouldBe(
+                minted,
+                "the recovery pass minted a second credential, so a tenant who had already read the "
+                + "first one holds a key the gateway no longer accepts"
+            );
 
         vault.Writes.ShouldBe(1);
     }
@@ -424,15 +425,16 @@ public sealed class StorageReconcilerTests {
 
         var claims = StorageAccounts.RetainedClaims("ns", "observed", desired.RootElement);
 
-        claims.Select(x => x.Claim.Name).ShouldBe(
-            [
-                .. Enumerable.Range(0, volumeServers).Select(i => $"mount0-observed-volume-{i}"),
-                // ⚠ The doubled name is real: the operator uses `m.Name + "-filer"` for the
-                // StatefulSet AND for its claim template, and Kubernetes composes
-                // {template}-{set}-{ordinal}.
-                "observed-filer-observed-filer-0"
-            ]
-        );
+        claims.Select(x => x.Claim.Name)
+            .ShouldBe(
+                [
+                    .. Enumerable.Range(0, volumeServers).Select(i => $"mount0-observed-volume-{i}"),
+                    // ⚠ The doubled name is real: the operator uses `m.Name + "-filer"` for the
+                    // StatefulSet AND for its claim template, and Kubernetes composes
+                    // {template}-{set}-{ordinal}.
+                    "observed-filer-observed-filer-0"
+                ]
+            );
 
         foreach (var claim in claims) {
             claim.Claim.Kind.ShouldBe(RetainedVolume.ClaimKind);
@@ -485,10 +487,11 @@ public sealed class StorageReconcilerTests {
         outcome.IsConverged.ShouldBeTrue(outcome.ToString());
 
         foreach (var claim in planted) {
-            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim)).ShouldBeFalse(
-                $"'{claim.Claim}' survived the final teardown, so a purged account returned its quota "
-                + "and left a tenant's objects on disk."
-            );
+            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim))
+                .ShouldBeFalse(
+                    $"'{claim.Claim}' survived the final teardown, so a purged account returned its quota "
+                    + "and left a tenant's objects on disk."
+                );
         }
     }
 
@@ -534,9 +537,7 @@ public sealed class StorageReconcilerTests {
                 connection,
                 store,
                 new NullLog()
-            ) {
-                SecretWriter = store
-            },
+            ) { SecretWriter = store },
             TestContext.Current.CancellationToken
         );
     }
@@ -568,9 +569,7 @@ public sealed class StorageReconcilerTests {
             connection,
             store,
             new NullLog()
-        ) {
-            SecretWriter = store
-        };
+        ) { SecretWriter = store };
     }
 
     /// <summary>An address in a named tenant and its own subscription.</summary>
@@ -584,8 +583,7 @@ public sealed class StorageReconcilerTests {
             Guid.Parse("33333333-3333-4333-8333-333333333333")
         );
 
-    static JsonObject Volume(string objectJson) =>
-        JsonNode.Parse(objectJson)!["spec"]!["volume"]!.AsObject();
+    static JsonObject Volume(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!["volume"]!.AsObject();
 }
 
 /// <summary>
@@ -614,12 +612,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
@@ -743,8 +743,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     puts the same resource name in two tenants, which is the only shape in which one singleton
     ///     reconciler serving both can be caught mixing them.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

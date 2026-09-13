@@ -4,7 +4,6 @@
 // CS0104. See CyberCloud.Tenancy/GlobalUsings.cs, where this was first hit.
 
 global using ErrorCode = CyberCloud.Core.ErrorCode;
-
 global using CyberCloud.Core;
 global using CyberCloud.Core.Resources;
 global using CyberCloud.Identity.Contracts;

@@ -11,10 +11,16 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Conformance;
 ///     <c>CyberCloud.DBforPostgreSQL/servers</c>, registered into the shared provider suite.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This file is the entire cost of putting the second provider under conformance, and that
-///     is the claim being tested rather than restated.</b> docs/plan/03 § Providers: <i>"It is one
-///     xUnit theory that every provider must pass … A provider is not registered in the platform
-///     bundle until it passes."</i> Nothing in <c>test/CyberCloud.Conformance</c> changed to
+///     ⚠
+///     <b>
+///         This file is the entire cost of putting the second provider under conformance, and that
+///         is the claim being tested rather than restated.
+///     </b> docs/plan/03 § Providers:
+///     <i>
+///         "It is one
+///         xUnit theory that every provider must pass … A provider is not registered in the platform
+///         bundle until it passes."
+///     </i> Nothing in <c>test/CyberCloud.Conformance</c> changed to
 ///     accommodate a type that renders two objects instead of one — <c>Objects</c> was already a
 ///     list and <c>ObjectMatchesDesired</c> was already called per object.
 /// </remarks>

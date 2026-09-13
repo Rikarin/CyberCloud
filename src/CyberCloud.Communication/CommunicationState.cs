@@ -8,8 +8,11 @@ namespace CyberCloud.Communication;
 ///     What <c>MessageGrain</c> holds. Hot tier, expiring at <see cref="ExpiresAt" />.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>There is no body, no subject and no template argument here, and that absence is the
-///     single most important line in this file.</b> The body of an OTP message <i>is</i> the
+///     ⚠
+///     <b>
+///         There is no body, no subject and no template argument here, and that absence is the
+///         single most important line in this file.
+///     </b> The body of an OTP message <i>is</i> the
 ///     one-time code; the body of a password-reset message carries a bearer token. Storing either
 ///     would put live credential material into grain state for <see cref="IMessageGrain.Retention" />
 ///     — replicated across silos, present in every serialization trace, and readable by anyone who
@@ -31,8 +34,11 @@ public sealed class MessageState {
     ///     compared and never resolved. It exists precisely so the state does not have to hold the
     ///     inputs.
     ///     <para>
-    ///         ⚠ <b>Named <c>Digest</c> rather than <c>Hash</c> or <c>Fingerprint</c> deliberately,
-    ///         and <b>not</b> <c>RequestKey</c>.</b> The last one would trip CC1005 and would then be
+    ///         ⚠
+    ///         <b>
+    ///             Named <c>Digest</c> rather than <c>Hash</c> or <c>Fingerprint</c> deliberately,
+    ///             and <b>not</b> <c>RequestKey</c>.
+    ///         </b> The last one would trip CC1005 and would then be
     ///         answered with a suppression — and a suppression is a thing a reader has to evaluate.
     ///         A name that never raises the question is better than an argument that settles it.
     ///     </para>
@@ -69,9 +75,9 @@ public sealed class ProviderMessageIndexState {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-            "Not a secret. This is the client-supplied idempotency key of docs/plan/17 § The parts "
-            + "that are actually the work, which is already half of the message grain's id and is "
-            + "deliberately logged and traced. Renaming it would lose the term docs/plan/17 uses."
+        "Not a secret. This is the client-supplied idempotency key of docs/plan/17 § The parts "
+        + "that are actually the work, which is already half of the message grain's id and is "
+        + "deliberately logged and traced. Renaming it would lose the term docs/plan/17 uses."
     )]
     public string IdempotencyKey { get; set; } = string.Empty;
 
@@ -211,8 +217,11 @@ public sealed class SendLimitState {
 ///     The one-way digest a message grain compares a retry against.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>It covers everything that would make two sends different messages, and nothing that
-///     would make them the same one attempted twice.</b> The channel, destination, template, version,
+///     ⚠
+///     <b>
+///         It covers everything that would make two sends different messages, and nothing that
+///         would make them the same one attempted twice.
+///     </b> The channel, destination, template, version,
 ///     locale, arguments and body are in; the idempotency key is not, because it is already the grain
 ///     key and including it would make every digest trivially match.
 /// </remarks>

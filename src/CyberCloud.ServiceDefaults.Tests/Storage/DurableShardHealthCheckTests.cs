@@ -135,13 +135,14 @@ public sealed class DurableShardHealthCheckTests {
         // It is the readiness half of BootstrapProviderLivenessTests: the silo keeps taking traffic,
         // on purpose, and the reason is written down where a future edit has to read it.
         using var provider = Wire(
-            services => services.AddHealthChecks().AddCheck(
-                // Standing in for silo-ready, which needs a running silo. The point of the stand-in
-                // is that the readiness answer must be its answer and nothing else's.
-                "silo-ready",
-                () => HealthCheckResult.Healthy("serving"),
-                [HealthCheckTags.Ready]
-            ),
+            services => services.AddHealthChecks()
+                .AddCheck(
+                    // Standing in for silo-ready, which needs a running silo. The point of the stand-in
+                    // is that the readiness answer must be its answer and nothing else's.
+                    "silo-ready",
+                    () => HealthCheckResult.Healthy("serving"),
+                    [HealthCheckTags.Ready]
+                ),
             null,
             ("durable-00", Dead())
         );
@@ -180,8 +181,7 @@ public sealed class DurableShardHealthCheckTests {
         return report.Entries[DurableShardHealthCheck.Name];
     }
 
-    static ServiceProvider Wire(params (string Shard, string ConnectionString)[] shards) =>
-        Wire(null, null, shards);
+    static ServiceProvider Wire(params (string Shard, string ConnectionString)[] shards) => Wire(null, null, shards);
 
     static ServiceProvider Wire(
         TimeProvider? time,
@@ -286,7 +286,9 @@ sealed class CountingListener : IDisposable {
                     held.Add(client);
                 }
             }
-        } catch (Exception error) when (error is OperationCanceledException or SocketException or ObjectDisposedException) {
+        } catch (Exception error) when (error is OperationCanceledException
+                                            or SocketException
+                                            or ObjectDisposedException) {
             // Disposed.
         }
     }
@@ -307,6 +309,5 @@ sealed class SteppableClock : TimeProvider {
 
     /// <summary>Moves the clock forward.</summary>
     /// <param name="by">How far forward — the staleness window is 30 seconds by default.</param>
-    public void Advance(TimeSpan by) =>
-        Interlocked.Add(ref timestamp, (long)(by.TotalSeconds * TimestampFrequency));
+    public void Advance(TimeSpan by) => Interlocked.Add(ref timestamp, (long)(by.TotalSeconds * TimestampFrequency));
 }

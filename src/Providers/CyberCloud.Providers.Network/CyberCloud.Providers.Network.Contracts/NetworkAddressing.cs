@@ -10,15 +10,21 @@ namespace CyberCloud.Providers.Network.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A type rather than a string, because every question this family asks about an address
-///         space is a question two strings cannot answer.</b> "Does <c>10.20.0.0/16</c> overlap
+///         ⚠
+///         <b>
+///             A type rather than a string, because every question this family asks about an address
+///             space is a question two strings cannot answer.
+///         </b> "Does <c>10.20.0.0/16</c> overlap
 ///         <c>10.20.5.0/24</c>" is true and no comparison of the two spellings says so; and
 ///         <c>10.0.0.5/24</c> and <c>10.0.0.0/24</c> are the same network written two ways, which
 ///         matters here for a reason beyond tidiness — see <see cref="Canonical" />.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Parsing is <see cref="IPAddress" />'s, not a regular expression's, and the two are
-///         used for different jobs on purpose.</b> <see cref="V4Pattern" /> and
+///         ⚠
+///         <b>
+///             Parsing is <see cref="IPAddress" />'s, not a regular expression's, and the two are
+///             used for different jobs on purpose.
+///         </b> <see cref="V4Pattern" /> and
 ///         <see cref="V6Pattern" /> exist to be declared as a <see cref="SchemaProperty.Pattern" />,
 ///         so that a malformed prefix is refused by <c>ResourceSchema.Validate</c> <i>before</i> the
 ///         write path answers <c>202</c>. They are a shape check and nothing more. Everything that
@@ -40,8 +46,11 @@ public readonly record struct Cidr {
 
     /// <summary>The prefix in its one canonical spelling, <c>network/length</c>.</summary>
     /// <remarks>
-    ///     ⚠ <b>This is what Kube-OVN stores, and that is why it is here rather than being a
-    ///     convenience.</b> <c>pkg/controller/subnet.go</c>'s <c>formatCIDR</c> runs every element of
+    ///     ⚠
+    ///     <b>
+    ///         This is what Kube-OVN stores, and that is why it is here rather than being a
+    ///         convenience.
+    ///     </b> <c>pkg/controller/subnet.go</c>'s <c>formatCIDR</c> runs every element of
     ///     <c>spec.cidrBlock</c> through Go's <c>net.ParseCIDR</c> and writes back
     ///     <c>ipNet.String()</c> — so a tenant who sends <c>10.0.0.5/24</c> gets <c>10.0.0.0/24</c>
     ///     stored, on the object, by the controller. A comparison of the sent string against the read
@@ -50,8 +59,7 @@ public readonly record struct Cidr {
     ///     compares parsed networks for exactly this reason, and <c>NetworkMatchesTests</c> pins the
     ///     case.
     /// </remarks>
-    public string Canonical =>
-        Network.ToString() + "/" + PrefixLength.ToString(CultureInfo.InvariantCulture);
+    public string Canonical => Network.ToString() + "/" + PrefixLength.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     ///     Parses a CIDR prefix, clearing host bits.
@@ -141,7 +149,7 @@ public readonly record struct Cidr {
         var bytes = address.GetAddressBytes();
 
         for (var index = 0; index < bytes.Length; index++) {
-            var remaining = prefix - (index * 8);
+            var remaining = prefix - index * 8;
 
             bytes[index] = remaining switch {
                 >= 8 => bytes[index],
@@ -185,18 +193,27 @@ public readonly record struct Cidr {
     ///     <see cref="V4Pattern" />, or the empty string.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>THE WHOLE PATTERN IS WRAPPED IN <c>(…)?</c> AND THE REASON IS A PLATFORM RULE THAT IS
-    ///     EASY TO MEET BY ACCIDENT AND IMPOSSIBLE TO MEET BY GUESSING.</b>
+    ///     ⚠
+    ///     <b>
+    ///         THE WHOLE PATTERN IS WRAPPED IN <c>(…)?</c> AND THE REASON IS A PLATFORM RULE THAT IS
+    ///         EASY TO MEET BY ACCIDENT AND IMPOSSIBLE TO MEET BY GUESSING.
+    ///     </b>
     ///     <c>SchemaProperty.Incoherences</c> runs a declared <c>DefaultJson</c> through the
-    ///     property's <i>own</i> constraints — <i>"a default the schema would reject is a bug that
-    ///     ships as a form nobody can submit"</i> — and it does so at <b>class initialisation</b>,
+    ///     property's <i>own</i> constraints —
+    ///     <i>
+    ///         "a default the schema would reject is a bug that
+    ///         ships as a form nobody can submit"
+    ///     </i> — and it does so at <b>class initialisation</b>,
     ///     which is silo start. So an optional property whose default is <c>""</c> and whose
     ///     <c>Pattern</c> does not admit <c>""</c> is not a validation that never fires: it is a
     ///     <c>TypeInitializationException</c> that takes down the process that would have served the
     ///     type. Found by writing the obvious thing and watching the whole family fail to construct.
     ///     <para>
-    ///         ⚠ <b>The alternative — dropping the pattern on the optional half — is the one that must
-    ///         not be taken</b>, because it is precisely the IPv6 prefix, and docs/plan/14 § IPv6 makes
+    ///         ⚠
+    ///         <b>
+    ///             The alternative — dropping the pattern on the optional half — is the one that must
+    ///             not be taken
+    ///         </b>, because it is precisely the IPv6 prefix, and docs/plan/14 § IPv6 makes
     ///         dual-stack a day-one requirement rather than an afterthought. An unpatterned v6 field
     ///         would be the <c>cidr-shape-is-unenforced</c> gap re-entering the family through the
     ///         optional door. <c>charts/managed/kube-ovn-vpc</c>'s own precedent for the shape is
@@ -216,22 +233,37 @@ public readonly record struct Cidr {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE DECISION THIS CLASS EXISTS TO RECORD, MADE BEFORE ANY CODE WAS WRITTEN AND STATED
-///         HERE BECAUSE THE ALTERNATIVE IS THE DEFECT THIS PLATFORM HAS JUST SHIPPED TWICE.</b>
-///         docs/plan/14 § Virtual networks requires that <i>"the API validates against a per-region
-///         reserved list and rejects with the conflicting range named"</i>. <b>ResourceSchema cannot
-///         express that rule, and this was established rather than assumed.</b>
+///         ⚠
+///         <b>
+///             THE DECISION THIS CLASS EXISTS TO RECORD, MADE BEFORE ANY CODE WAS WRITTEN AND STATED
+///             HERE BECAUSE THE ALTERNATIVE IS THE DEFECT THIS PLATFORM HAS JUST SHIPPED TWICE.
+///         </b>
+///         docs/plan/14 § Virtual networks requires that
+///         <i>
+///             "the API validates against a per-region
+///             reserved list and rejects with the conflicting range named"
+///         </i>.
+///         <b>
+///             ResourceSchema cannot
+///             express that rule, and this was established rather than assumed.
+///         </b>
 ///         <see cref="SchemaProperty" /> carries <c>AllowedValues</c>, <c>Pattern</c>, <c>Format</c>,
-///         <c>Minimum</c>/<c>Maximum</c> and the two lengths — every one of which compares <b>one
-///         value against a constant</b>. A CIDR-overlap check compares one value against a
+///         <c>Minimum</c>/<c>Maximum</c> and the two lengths — every one of which compares
+///         <b>
+///             one
+///             value against a constant
+///         </b>. A CIDR-overlap check compares one value against a
 ///         <i>list</i>, selected by <i>another property</i> (the region), using a
 ///         <i>relation</i> (overlap) that is not equality. <c>ResourceSchema.Validate</c> walks one
 ///         property at a time and never sees a second one; there is no cross-property seam and no
 ///         external-state seam anywhere on it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND THERE IS NO PROVIDER SEAM ANYWHERE ELSE ON THE WRITE PATH EITHER, WHICH IS THE
-///         HALF THAT COST THE MOST TO ESTABLISH.</b> <c>ResourceManagerService</c>'s twelve steps run
+///         ⚠
+///         <b>
+///             AND THERE IS NO PROVIDER SEAM ANYWHERE ELSE ON THE WRITE PATH EITHER, WHICH IS THE
+///             HALF THAT COST THE MOST TO ESTABLISH.
+///         </b> <c>ResourceManagerService</c>'s twelve steps run
 ///         parse → <b>schema validate</b> → ReBAC → locks → policy → quota → index claim → parent edge
 ///         → durable write → <c>202</c>. <c>IResourceTypeBuilder</c> declares
 ///         <c>ApiVersion</c>, <c>Reconciler</c>, <c>Meter</c>, <c>Permissions</c>, <c>Action</c>,
@@ -242,8 +274,11 @@ public readonly record struct Cidr {
 ///         reach it, and a provider that could would be writing tenant policy.
 ///     </para>
 ///     <para>
-///         ⚠ <b>SO THE RULE RUNS IN THE RECONCILER, AFTER THE <c>202</c>, AND THAT IS A DEFECT
-///         RATHER THAN A DESIGN.</b> It is the same shape as the one docs/plan/12's Postgres row just
+///         ⚠
+///         <b>
+///             SO THE RULE RUNS IN THE RECONCILER, AFTER THE <c>202</c>, AND THAT IS A DEFECT
+///             RATHER THAN A DESIGN.
+///         </b> It is the same shape as the one docs/plan/12's Postgres row just
 ///         shipped — a body the API accepts and the substrate refuses — and naming it as such is the
 ///         point of this paragraph. What is done about it here, in descending order of how much it
 ///         helps:
@@ -265,8 +300,11 @@ public readonly record struct Cidr {
 ///         </item>
 ///         <item>
 ///             <b>The reconciler's refusal is terminal and names the conflicting range</b> —
-///             <see cref="ProblemWith" /> produces docs/plan/14's <i>"rejects with the conflicting
-///             range named"</i> sentence, and the reconciler returns
+///             <see cref="ProblemWith" /> produces docs/plan/14's
+///             <i>
+///                 "rejects with the conflicting
+///                 range named"
+///             </i> sentence, and the reconciler returns
 ///             <c>ReconcileOutcome.Failed</c> rather than <c>InProgress</c>, so the resource reaches
 ///             <c>Failed</c> with an actionable message instead of retrying a body that can never
 ///             converge.
@@ -320,14 +358,23 @@ public static class NetworkAddressing {
     }
 
     /// <summary>
-    ///     The ranges a tenant network may not overlap — docs/plan/14's <i>"per-region reserved
-    ///     list"</i>.
+    ///     The ranges a tenant network may not overlap — docs/plan/14's
+    ///     <i>
+    ///         "per-region reserved
+    ///         list"
+    ///     </i>.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>OVERLAPPING WITH ANOTHER TENANT — OR WITH YOUR OWN OTHER VPC — IS NOT ON THIS
-    ///         LIST AND MUST NOT BE.</b> docs/plan/14: <i>"Overlapping CIDRs between a tenant's VPCs
-    ///         is fine; overlapping with the platform's underlay is not."</i> That is the whole point
+    ///         ⚠
+    ///         <b>
+    ///             OVERLAPPING WITH ANOTHER TENANT — OR WITH YOUR OWN OTHER VPC — IS NOT ON THIS
+    ///             LIST AND MUST NOT BE.
+    ///         </b> docs/plan/14:
+    ///         <i>
+    ///             "Overlapping CIDRs between a tenant's VPCs
+    ///             is fine; overlapping with the platform's underlay is not."
+    ///         </i> That is the whole point
     ///         of a VPC and it is what Kube-OVN's per-VPC routing tables deliver. A list that also
     ///         refused tenant-to-tenant overlap would make <c>10.0.0.0/16</c> allocatable exactly once
     ///         across the platform, which is not a cloud.
@@ -343,8 +390,11 @@ public static class NetworkAddressing {
     ///         plus one worked example.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>AND THAT IS THIS TABLE'S REAL LIMIT, STATED RATHER THAN IMPLIED: it is
-    ///         COMPILED-IN.</b> A reserved list that a region's operator cannot edit without a
+    ///         ⚠
+    ///         <b>
+    ///             AND THAT IS THIS TABLE'S REAL LIMIT, STATED RATHER THAN IMPLIED: it is
+    ///             COMPILED-IN.
+    ///         </b> A reserved list that a region's operator cannot edit without a
     ///         release is a list that will be wrong in the first region whose underlay is not
     ///         <c>10.0.0.0/8</c>. It is a constant here because the alternative — configuration
     ///         reaching a provider — has no seam either (<c>ReconcileContext</c> carries a cluster
@@ -470,10 +520,9 @@ public static class NetworkAddressing {
     ///     on the first conflict <see cref="ProblemWith" /> happens to report. A rule that is right
     ///     about the first row and wrong about the eighth is the one a single-case test misses.
     /// </remarks>
-    public static ImmutableArray<string> ConflictsWith(Cidr prefix, string region) =>
-        [
-            .. ReservedRanges
-                .Where(x => x.AppliesIn(region) && prefix.Overlaps(x.Cidr))
-                .Select(x => x.Id)
-        ];
+    public static ImmutableArray<string> ConflictsWith(Cidr prefix, string region) => [
+        .. ReservedRanges
+            .Where(x => x.AppliesIn(region) && prefix.Overlaps(x.Cidr))
+            .Select(x => x.Id)
+    ];
 }

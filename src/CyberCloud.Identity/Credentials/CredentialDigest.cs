@@ -7,8 +7,11 @@ namespace CyberCloud.Identity.Credentials;
 ///     The one-way and constant-time primitives every credential in this module is built from.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Every comparison of anything credential-shaped goes through
-///     <see cref="FixedTimeEquals(string,string)" />.</b> <see cref="string.Equals(string,string)" />
+///     ⚠
+///     <b>
+///         Every comparison of anything credential-shaped goes through
+///         <see cref="FixedTimeEquals(string,string)" />.
+///     </b> <see cref="string.Equals(string,string)" />
 ///     returns as soon as two characters differ, so the time it takes reveals how many leading
 ///     characters were right — which turns a 128-bit recovery code into ten sequential
 ///     sixteen-way guesses. This is not theoretical for a handle that is checked once per refresh.

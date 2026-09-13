@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Storage.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Two class declarations over the case
-///         <c>CyberCloud.Providers.Storage.Conformance</c> already declares.</b> One provider, one
+///         ⚠
+///         <b>
+///             Two class declarations over the case
+///             <c>CyberCloud.Providers.Storage.Conformance</c> already declares.
+///         </b> One provider, one
 ///         <c>ProviderConformanceCase</c>: a second copy here would be a second description of the
 ///         same provider, and the two would disagree the first time either changed.
 ///     </para>
@@ -42,8 +45,11 @@ public sealed class StorageAccountSiloKillConformance : SiloKillConformanceTests
 ///         generic over the case source, so the only thing a child costs here is the two lines below.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What this half does against a real API server that the Docker-free half cannot:
-///         create the ACCOUNT first.</b> <c>ClusterConformanceHarness.CreateAncestorsAsync</c> drives
+///         ⚠
+///         <b>
+///             What this half does against a real API server that the Docker-free half cannot:
+///             create the ACCOUNT first.
+///         </b> <c>ClusterConformanceHarness.CreateAncestorsAsync</c> drives
 ///         the ancestor's own case through the real write path before the child's address is usable,
 ///         so a bucket here is applied into a namespace where a <c>Seaweed</c> genuinely exists —
 ///         and the parent-existence 404 is an assertion about a name that was really claimed rather
@@ -55,7 +61,7 @@ public sealed class StorageAccountSiloKillConformance : SiloKillConformanceTests
 /// <param name="fixture">The harness.</param>
 public sealed class StorageBucketLifecycleConformance(ClusterConformanceFixture<StorageBucketCase> fixture)
     : ClusterConformanceTests<StorageBucketCase>(fixture),
-        IClassFixture<ClusterConformanceFixture<StorageBucketCase>>;
+    IClassFixture<ClusterConformanceFixture<StorageBucketCase>>;
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the bucket child type.</summary>
 public sealed class StorageBucketSiloKillConformance : SiloKillConformanceTests<StorageBucketCase>;

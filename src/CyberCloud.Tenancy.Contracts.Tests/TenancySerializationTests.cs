@@ -25,8 +25,8 @@ public sealed class TenancySerializationTests : IDisposable {
     public TenancySerializationTests() {
         var services = new ServiceCollection();
         services.AddSerializer(builder => builder
-            .AddAssembly(typeof(TenantDescriptor).Assembly)
-            .AddAssembly(typeof(ResultSurrogate).Assembly)
+                .AddAssembly(typeof(TenantDescriptor).Assembly)
+                .AddAssembly(typeof(ResultSurrogate).Assembly)
         );
 
         provider = services.BuildServiceProvider();

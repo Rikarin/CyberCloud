@@ -8,11 +8,17 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The half that made <c>CyberCloud.ContainerService/managedClusters</c> a type whose
-///         product nothing could use.</b> <c>IClusterConnectionGrain.AttachAsync</c> was called by
+///         ⚠
+///         <b>
+///             The half that made <c>CyberCloud.ContainerService/managedClusters</c> a type whose
+///             product nothing could use.
+///         </b> <c>IClusterConnectionGrain.AttachAsync</c> was called by
 ///         tests and by nothing else, so a cluster converged and was then unreachable as a
-///         <c>clusterId</c> forever — which is step 4 of docs/plan/24's M1 exit story, <i>"create a
-///         VPC and a Postgres server <b>in it</b>"</i>.
+///         <c>clusterId</c> forever — which is step 4 of docs/plan/24's M1 exit story,
+///         <i>
+///             "create a
+///             VPC and a Postgres server <b>in it</b>"
+///         </i>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The seam is above the provider because the rule that keeps it there is right.</b>
@@ -95,8 +101,8 @@ public sealed class ClusterAttachTests(ResourceManagerCluster cluster) {
         await Converge(accepted);
 
         var status = (await cluster
-            .Operation(ResourceManagerCluster.Tenant, accepted.OperationId)
-            .GetAsync()).GetValueOrThrow();
+                .Operation(ResourceManagerCluster.Tenant, accepted.OperationId)
+                .GetAsync()).GetValueOrThrow();
 
         status.State.ShouldNotBe(OperationState.Succeeded);
 

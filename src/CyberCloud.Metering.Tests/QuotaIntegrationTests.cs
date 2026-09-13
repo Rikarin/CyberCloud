@@ -1,8 +1,11 @@
 namespace CyberCloud.Metering.Tests;
 
 /// <summary>
-///     The quota integration — docs/plan/22 § Quota: <i>"Distinct from billing and enforced earlier:
-///     a reservation in <c>IQuotaGrain</c> before the provider is called, released on failure."</i>
+///     The quota integration — docs/plan/22 § Quota:
+///     <i>
+///         "Distinct from billing and enforced earlier:
+///         a reservation in <c>IQuotaGrain</c> before the provider is called, released on failure."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -115,8 +118,11 @@ public sealed class QuotaIntegrationTests(MeteringCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A GB-month is not a reservable quantity — the concrete reason docs/plan/08's registry
-    ///     example is the wrong vocabulary.</b> <c>QuotaMeter</c> has no member that could express
+    ///     ⚠
+    ///     <b>
+    ///         A GB-month is not a reservable quantity — the concrete reason docs/plan/08's registry
+    ///         example is the wrong vocabulary.
+    ///     </b> <c>QuotaMeter</c> has no member that could express
     ///     one, so the code cannot even be written; what the write path reserves is
     ///     <c>StorageGb</c>, and <c>StorageGbMonths</c> is what that accrues over time.
     /// </summary>

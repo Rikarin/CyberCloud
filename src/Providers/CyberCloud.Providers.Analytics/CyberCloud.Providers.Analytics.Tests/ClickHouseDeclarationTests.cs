@@ -54,10 +54,10 @@ public sealed class ClickHouseDeclarationTests {
         // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
-            ProviderRegistry.Build([new AnalyticsProvider()]).Types.Select(
-                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
-            )
-        ).ShouldBeEmpty();
+            ProviderRegistry.Build([new AnalyticsProvider()])
+                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        )
+            .ShouldBeEmpty();
 
         // ⚠ THE HALF THE DERIVED CHECK CANNOT MAKE, KEPT FROM THE TEST THAT HELD THE LISTS. Uniqueness
         // says the short name reaches this type; it does not say the short name is the word a person
@@ -83,10 +83,11 @@ public sealed class ClickHouseDeclarationTests {
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
             foreach (var pointer in meter.Derivation.Reads) {
-                ClickHouseClusters.Schema2026.Declares(pointer).ShouldBeTrue(
-                    $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
-                    + "api-version's schema does not declare."
-                );
+                ClickHouseClusters.Schema2026.Declares(pointer)
+                    .ShouldBeTrue(
+                        $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
+                        + "api-version's schema does not declare."
+                    );
             }
         }
     }
@@ -121,10 +122,11 @@ public sealed class ClickHouseDeclarationTests {
                 Overridden(ClickHouseClusters.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
 
-            ClickHouseClusters.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
-                $"the declared default for '{property.JsonPointer}' does not validate inside an "
-                + "otherwise-valid body."
-            );
+            ClickHouseClusters.Schema2026.Validate(body.RootElement, allowTags: true)
+                .IsSuccess.ShouldBeTrue(
+                    $"the declared default for '{property.JsonPointer}' does not validate inside an "
+                    + "otherwise-valid body."
+                );
         }
     }
 
@@ -198,7 +200,8 @@ public sealed class ClickHouseDeclarationTests {
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId));
 
         var nodes = JsonNode.Parse(ClickHouseClusters.ClickHouseJson("events", body.RootElement))!
-            ["spec"]!["configuration"]!["zookeeper"]!["nodes"]!.AsArray();
+            ["spec"]!["configuration"]!["zookeeper"]!["nodes"]!
+            .AsArray();
 
         nodes.Count.ShouldBe(1);
         nodes[0]!["host"]!.GetValue<string>().ShouldBe("keeper-events");
@@ -229,7 +232,9 @@ public sealed class ClickHouseDeclarationTests {
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId, shards: 4));
 
         var layout = JsonNode.Parse(ClickHouseClusters.KeeperJson("events", body.RootElement))!["spec"]!
-            ["configuration"]!["clusters"]!.AsArray()[0]!["layout"]!.AsObject();
+            ["configuration"]!["clusters"]!
+            .AsArray()[0]!["layout"]!
+            .AsObject();
 
         layout["shardsCount"].ShouldBeNull("the Keeper cluster was given a shard axis it does not have");
         layout["replicasCount"].ShouldNotBeNull();
@@ -299,9 +304,11 @@ public sealed class ClickHouseDeclarationTests {
         }
 
         // And the schema offers no way to ask for it either.
-        ClickHouseClusters.Schema2026.Properties.ShouldNotContain(
-            x => x.JsonPointer.Contains("schema", StringComparison.OrdinalIgnoreCase)
-                || x.JsonPointer.Contains("table", StringComparison.OrdinalIgnoreCase)
+        ClickHouseClusters.Schema2026.Properties.ShouldNotContain(x => x.JsonPointer.Contains(
+                "schema",
+                StringComparison.OrdinalIgnoreCase
+            )
+            || x.JsonPointer.Contains("table", StringComparison.OrdinalIgnoreCase)
         );
     }
 
@@ -316,7 +323,8 @@ public sealed class ClickHouseDeclarationTests {
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId));
 
         var configuration = JsonNode.Parse(ClickHouseClusters.ClickHouseJson("events", body.RootElement))!
-            ["spec"]!["configuration"]!.AsObject();
+            ["spec"]!["configuration"]!
+            .AsObject();
 
         configuration["users"].ShouldBeNull(
             "a users block was rendered. Any password in it would have come from the resource body, "

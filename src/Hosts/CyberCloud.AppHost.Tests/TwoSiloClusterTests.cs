@@ -47,8 +47,11 @@ public sealed class TwoSiloClusterTests(LocalTopology topology) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A PRECONDITION, NOT AN ASSERTION, AND THE TWO SAMPLING TESTS BELOW WERE MISSING
-    ///         IT.</b> Each says "40 activations over 2 silos miss one silo with probability
+    ///         ⚠
+    ///         <b>
+    ///             A PRECONDITION, NOT AN ASSERTION, AND THE TWO SAMPLING TESTS BELOW WERE MISSING
+    ///             IT.
+    ///         </b> Each says "40 activations over 2 silos miss one silo with probability
     ///         2^-39" — which is true only once the placement director can SEE two silos. The fixture
     ///         waits for both silos to report healthy and then starts the client, and a silo is
     ///         healthy as soon as its own runtime routes messages; membership reaching the client

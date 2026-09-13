@@ -5,8 +5,11 @@ namespace CyberCloud.ResourceManager;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>In this assembly and not in <c>CyberCloud.Kubernetes</c>, and the reason is a cycle
-///         rather than a preference.</b> The obvious home is beside <c>ClusterConnectionHandle</c>,
+///         ⚠
+///         <b>
+///             In this assembly and not in <c>CyberCloud.Kubernetes</c>, and the reason is a cycle
+///             rather than a preference.
+///         </b> The obvious home is beside <c>ClusterConnectionHandle</c>,
 ///         which is where the grain's other caller lives — but <c>module-layering.txt</c> already
 ///         carries <c>CyberCloud.ResourceManager -&gt; CyberCloud.Kubernetes</c>, so the reverse edge
 ///         would be two modules that have become one, and rule 7 refuses a cycle. What makes this
@@ -16,12 +19,18 @@ namespace CyberCloud.ResourceManager;
 ///         this path, which is what rule 3 is about.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The grain reference is unqualified, and that is <c>CC1006</c>'s documented second
-///         form rather than a hole in it.</b> A cluster connection is null-tenant
+///         ⚠
+///         <b>
+///             The grain reference is unqualified, and that is <c>CC1006</c>'s documented second
+///             form rather than a hole in it.
+///         </b> A cluster connection is null-tenant
 ///         (docs/plan/06 § Grain keys) — there is exactly one activation per cluster platform-wide,
 ///         because the grain holds a live client and a set of watches. Calling <c>ForTenant</c> here
-///         would fork one per tenant. The rule's own message names the alternative: <i>"or a
-///         <c>GrainKeys</c> null-tenant key for a platform grain"</i>, which
+///         would fork one per tenant. The rule's own message names the alternative:
+///         <i>
+///             "or a
+///             <c>GrainKeys</c> null-tenant key for a platform grain"
+///         </i>, which
 ///         <see cref="GrainKeys.ClusterConnection" /> is. <c>ClusterConnectionHandle</c> takes the same
 ///         route for the same reason.
 ///     </para>
@@ -77,15 +86,21 @@ public sealed class GrainClusterConnectionFactory(IGrainFactory grains) : IClust
 ///     <see cref="IKubeClusterConnection" /> over <see cref="IClusterConnectionGrain" />.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The same methods <c>CyberCloud.Kubernetes.Connections.ClusterConnectionHandle</c>
-///     forwards, and the duplication is the cycle's cost.</b> That type cannot be reached from here
+///     ⚠
+///     <b>
+///         The same methods <c>CyberCloud.Kubernetes.Connections.ClusterConnectionHandle</c>
+///         forwards, and the duplication is the cycle's cost.
+///     </b> That type cannot be reached from here
 ///     without <c>CyberCloud.ResourceManager -&gt; CyberCloud.Kubernetes</c> becoming a two-way edge.
 ///     The forwarding is mechanical and the interface is four methods wide, which is what makes
 ///     paying it cheaper than merging two modules — and <see cref="IKubeClusterConnection" /> is
 ///     deliberately smaller than the grain for exactly this reason.
 ///     <para>
-///         ⚠ <b><c>ListNamespaceAsync</c> is overridden here rather than left to the interface's
-///         fail-closed default, and forgetting to would have been invisible.</b> The default refuses,
+///         ⚠
+///         <b>
+///             <c>ListNamespaceAsync</c> is overridden here rather than left to the interface's
+///             fail-closed default, and forgetting to would have been invisible.
+///         </b> The default refuses,
 ///         so a resource-group delete would report "this connection cannot enumerate a namespace"
 ///         against the one connection type that can — a refusal, so nothing would be destroyed, but
 ///         also a feature that never works in production and works in every test.
@@ -97,8 +112,7 @@ sealed class GrainClusterConnection(IGrainFactory grains, Guid clusterId) : IKub
     /// <inheritdoc />
     public Guid ClusterId => clusterId;
 
-    IClusterConnectionGrain Grain =>
-        grains.GetGrain<IClusterConnectionGrain>(GrainKeys.ClusterConnection(clusterId));
+    IClusterConnectionGrain Grain => grains.GetGrain<IClusterConnectionGrain>(GrainKeys.ClusterConnection(clusterId));
 
     /// <inheritdoc />
     public Task<Result<ApplyOutcome>> ApplyAsync(

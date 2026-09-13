@@ -4,8 +4,11 @@ namespace CyberCloud.Sdk;
 ///     An access token and when it stops being usable.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><see cref="RefreshAfter" /> is not <see cref="ExpiresOn" /> and the difference matters at
-///     ten minutes.</b> docs/plan/11 § Protocol makes access tokens ten minutes long. Waiting until
+///     ⚠
+///     <b>
+///         <see cref="RefreshAfter" /> is not <see cref="ExpiresOn" /> and the difference matters at
+///         ten minutes.
+///     </b> docs/plan/11 § Protocol makes access tokens ten minutes long. Waiting until
 ///     expiry to refresh means every request that lands on the boundary blocks on a token request;
 ///     refreshing early means none of them ever does. A credential that knows a better moment — one
 ///     holding a refresh token, say — says so here; otherwise
@@ -32,8 +35,8 @@ public readonly struct AccessToken : IEquatable<AccessToken> {
     public DateTimeOffset? RefreshAfter { get; }
 
     /// <inheritdoc />
-    public bool Equals(AccessToken other)
-        => string.Equals(Token, other.Token, StringComparison.Ordinal) && ExpiresOn == other.ExpiresOn;
+    public bool Equals(AccessToken other) =>
+        string.Equals(Token, other.Token, StringComparison.Ordinal) && ExpiresOn == other.ExpiresOn;
 
     /// <inheritdoc />
     public override bool Equals(object? obj) => obj is AccessToken other && Equals(other);
@@ -64,7 +67,10 @@ public readonly struct TokenRequestContext {
     ///     § Sign-up and tenant creation makes a user belong to exactly one tenant, so this is how the
     ///     portal's account switcher asks for the other one's token.
     /// </param>
-    /// <param name="claims">Additional claims the service demanded — a step-up challenge (docs/plan/11 § Protocol's <c>amr</c>).</param>
+    /// <param name="claims">
+    ///     Additional claims the service demanded — a step-up challenge (docs/plan/11 § Protocol's
+    ///     <c>amr</c>).
+    /// </param>
     public TokenRequestContext(string[] scopes, string? tenantId = null, string? claims = null) {
         Scopes = scopes;
         TenantId = tenantId;
@@ -87,8 +93,11 @@ public readonly struct TokenRequestContext {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The shape transfers; the implementations do not, and docs/plan/21 § The .NET SDK is
-///         now explicit about the difference.</b> <c>DefaultAzureCredential</c> and its family
+///         ⚠
+///         <b>
+///             The shape transfers; the implementations do not, and docs/plan/21 § The .NET SDK is
+///             now explicit about the difference.
+///         </b> <c>DefaultAzureCredential</c> and its family
 ///         authenticate against Entra. They will never produce a token this platform accepts. What a
 ///         developer carries over is the pattern — one abstract async call returning a token and an
 ///         expiry, chainable, injectable — and that is worth having on its own.
@@ -113,5 +122,8 @@ public abstract class TokenCredential {
     ///     anything else.
     /// </exception>
     /// <exception cref="AuthenticationFailedException">The credential is applicable and authentication failed.</exception>
-    public abstract ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken = default);
+    public abstract ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken = default
+    );
 }

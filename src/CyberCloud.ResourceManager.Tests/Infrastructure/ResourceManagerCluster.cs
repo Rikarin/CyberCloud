@@ -1,8 +1,8 @@
-using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Core.Contracts;
+using CyberCloud.Core.Time;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Expiry;
-using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -20,8 +20,11 @@ namespace CyberCloud.ResourceManager.Tests.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The real <c>ReBacResourceAuthorizer</c> is <i>not</i> what most of these tests use, and
-///         the reason is what they are testing.</b> The property under test in the write path is
+///         ⚠
+///         <b>
+///             The real <c>ReBacResourceAuthorizer</c> is <i>not</i> what most of these tests use, and
+///             the reason is what they are testing.
+///         </b> The property under test in the write path is
 ///         <b>when</b> the check happens relative to quota and the index claim, and <b>which answer</b>
 ///         a refusal produces. Standing up a whole ReBAC schema and tuple set to get a "no" would test
 ///         docs/plan/07's engine, which has its own suite, and would make a step-ordering failure look
@@ -48,8 +51,11 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     ///     Resources this caller cannot read at all — a <c>404</c> whatever permission is asked for.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Keyed on the resource's GUID and not on a permission, because a listing's filter is
-    ///     the one caller that varies the answer <i>per resource</i>.</b> <see cref="Granted" /> is a
+    ///     ⚠
+    ///     <b>
+    ///         Keyed on the resource's GUID and not on a permission, because a listing's filter is
+    ///         the one caller that varies the answer <i>per resource</i>.
+    ///     </b> <see cref="Granted" /> is a
     ///     permission set, so with it alone every member of a group gets the same verdict and a
     ///     filter that returned everything or nothing would pass — which is exactly the shape of a
     ///     check that answers a narrower question than it appears to.
@@ -183,8 +189,11 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
     ///     The direct role assignments each resource carries, as <c>{role}@{subject}</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Seeded by a test and dropped by the double, because docs/plan/08 § Soft delete asks for
-    ///     a test that a grant written directly on a resource is <i>absent</i> after a restore.</b> A
+    ///     ⚠
+    ///     <b>
+    ///         Seeded by a test and dropped by the double, because docs/plan/08 § Soft delete asks for
+    ///         a test that a grant written directly on a resource is <i>absent</i> after a restore.
+    ///     </b> A
     ///     double with no assignments at all could not tell "the drop ran" from "there was nothing to
     ///     drop", which is the shape of a test that passes for the wrong reason.
     /// </remarks>
@@ -305,9 +314,7 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
             return Task.FromResult(Result<int>.Failure(ErrorCode.InternalError, "the tuple store is down"));
         }
 
-        return Task.FromResult(
-            Result<int>.Success(Assignments.TryRemove(id.Id, out var held) ? held.Count : 0)
-        );
+        return Task.FromResult(Result<int>.Success(Assignments.TryRemove(id.Id, out var held) ? held.Count : 0));
     }
 
     /// <summary>
@@ -315,8 +322,11 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A double that always recorded the group would agree with a writer that always wrote
-    ///         the group, which is the bug this pair exists to surface</b> — so the branch is mirrored
+    ///         ⚠
+    ///         <b>
+    ///             A double that always recorded the group would agree with a writer that always wrote
+    ///             the group, which is the bug this pair exists to surface
+    ///         </b> — so the branch is mirrored
     ///         here even though this class writes no tuples.
     ///     </para>
     ///     <para>
@@ -421,8 +431,11 @@ public sealed class ScriptedInterestAuthorizer : IInterestAuthorizer {
 /// <summary>The clock the silo reads, shared with the test so it can be advanced.</summary>
 /// <remarks>
 ///     ⚠ Static for the same reason <c>CyberCloud.Kubernetes.Tests</c>'s is: the silo runs in this
-///     process but resolves its own services, and the 60-minute timeout is caused by <i>time
-///     passing</i> — there is nothing to call to make it happen, and the alternative is a test nobody
+///     process but resolves its own services, and the 60-minute timeout is caused by
+///     <i>
+///         time
+///         passing
+///     </i> — there is nothing to call to make it happen, and the alternative is a test nobody
 ///     runs. Advancing is monotonic and forward only.
 /// </remarks>
 public sealed class TestClock : IClock {
@@ -464,8 +477,11 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     ///     A second subscription in <see cref="Tenant" />, with a quota budget of its own.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><see cref="Subscription" /> is shared by every class in the collection and its Vcpu
-    ///     quota is a finite, cumulative budget that nothing gives back.</b> A converged create
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="Subscription" /> is shared by every class in the collection and its Vcpu
+    ///         quota is a finite, cumulative budget that nothing gives back.
+    ///     </b> A converged create
     ///     commits its lease for the rest of the run, so the suite's committed total only ever climbs
     ///     — it sat at 99 of 100 before this existed. That makes the budget a hidden coupling between
     ///     unrelated classes: a class that adds a couple of creates pushes a class that runs after it
@@ -487,8 +503,11 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     ///     The write path, constructed on the <b>client</b> side of the cluster.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Built here rather than resolved from the silo, and that is the faithful shape rather
-    ///     than a convenience.</b> <c>IResourceManager</c> is documented as a service held by the
+    ///     ⚠
+    ///     <b>
+    ///         Built here rather than resolved from the silo, and that is the faithful shape rather
+    ///         than a convenience.
+    ///     </b> <c>IResourceManager</c> is documented as a service held by the
     ///     gateway, and docs/plan/03 and docs/plan/10 make the gateway an Orleans <i>client</i> — so
     ///     the grain factory it holds is <c>TestCluster.GrainFactory</c>, not the silo's.
     ///     <c>TestCluster.ServiceProvider</c> is the client's container and never sees what
@@ -505,8 +524,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     public IProviderRegistry Registry { get; private set; } = null!;
 
     /// <summary>A tenant-qualified grain factory.</summary>
-    public TenantGrainFactory For(Guid tenant) =>
-        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>The quota grain steps 6 and 9 use.</summary>
     public IQuotaGrain Quota(Guid tenant, Guid subscription) =>
@@ -557,9 +575,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     /// </remarks>
     public IExpirySweeperGrain Sweeper(ResourceId address) =>
         For(address.TenantId)
-            .GetGrain<IExpirySweeperGrain>(
-                GrainKeys.ExpirySweeper(address.SubscriptionId, address.ResourceGroup)
-            );
+            .GetGrain<IExpirySweeperGrain>(GrainKeys.ExpirySweeper(address.SubscriptionId, address.ResourceGroup));
 
     /// <summary>The resource grain.</summary>
     public IResourceGrain Resource(Guid tenant, Guid resourceId) =>
@@ -604,12 +620,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
     /// <param name="subject">The subject id.</param>
     public static CallerContext Caller(Guid? tenant = null, string subject = "alice") =>
-        new() {
-            TenantId = tenant ?? Tenant,
-            SubjectType = "user",
-            SubjectId = subject,
-            CorrelationId = "test"
-        };
+        new() { TenantId = tenant ?? Tenant, SubjectType = "user", SubjectId = subject, CorrelationId = "test" };
 
     /// <summary>Puts every switchable double back to its default.</summary>
     public static void ResetDoubles() {

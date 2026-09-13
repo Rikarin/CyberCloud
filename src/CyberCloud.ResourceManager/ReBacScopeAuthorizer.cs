@@ -18,17 +18,23 @@ namespace CyberCloud.ResourceManager;
 ///         boundary.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A create is checked against the PARENT scope, exactly as a resource create is checked
-///         against its group.</b> A subscription that does not exist has no tuple on it, so a check
+///         ⚠
+///         <b>
+///             A create is checked against the PARENT scope, exactly as a resource create is checked
+///             against its group.
+///         </b> A subscription that does not exist has no tuple on it, so a check
 ///         against it fails closed and would make every create impossible — which is the shape of the
 ///         <c>resourcegroup</c> casing bug this file's neighbour records. <see cref="ScopeId.Parent" />
 ///         is the address the caller has to hold <c>write</c> on, and
 ///         <c>ScopeManagerService</c> is what passes it.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="AuthorizePlatformAsync" /> is the only check in the platform that names
-///         <c>platform:root</c>, and it is the first caller of the relation
-///         docs/plan/06 § Platform administration has described since it was written.</b> That section
+///         ⚠
+///         <b>
+///             <see cref="AuthorizePlatformAsync" /> is the only check in the platform that names
+///             <c>platform:root</c>, and it is the first caller of the relation
+///             docs/plan/06 § Platform administration has described since it was written.
+///         </b> That section
 ///         gives the tuple as <c>platform:root#operator@user:X</c>;
 ///         <c>CyberCloudSchema</c> defines the type, the relation and
 ///         <c>Permissions.Administer</c> over it; nothing checked it. <c>PlatformObjectId</c> below is
@@ -57,8 +63,11 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
     ///     docs/plan/06 § Platform administration's <c>platform:root#operator@user:X</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>One spelling, in one place, because the alternative is the failure this repository has
-    ///     already shipped twice.</b> An object id nothing else agrees with produces a check against
+    ///     ⚠
+    ///     <b>
+    ///         One spelling, in one place, because the alternative is the failure this repository has
+    ///         already shipped twice.
+    ///     </b> An object id nothing else agrees with produces a check against
     ///     an object no tuple names, which evaluates false, which the seam renders as a refusal — with
     ///     nothing in any log to say the id was the problem. There is no second declaration of this
     ///     string anywhere; if one ever appears, it belongs here instead.
@@ -70,8 +79,11 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
     ///     <see cref="Guid.Empty" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><see cref="Guid.Empty" /> here is the PLATFORM TENANT and not the null tenant, and
-    ///     docs/plan/06 § Platform administration spends a table on the difference.</b> The platform
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="Guid.Empty" /> here is the PLATFORM TENANT and not the null tenant, and
+    ///         docs/plan/06 § Platform administration spends a table on the difference.
+    ///     </b> The platform
     ///     tenant is "an ordinary tenant id that happens to be all zeroes", whose grains are
     ///     tenant-qualified like any other; the null tenant is the <i>absence</i> of qualification,
     ///     which <c>Orleans.Multitenant</c> spells as the literal string <c>"Null"</c>. A
@@ -196,10 +208,13 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
     /// </summary>
     /// <param name="scope">The scope.</param>
     /// <remarks>
-    ///     ⚠ <b>The two ids here must be the same strings
-    ///     <see cref="ReBacResourceAuthorizer.GroupObjectId" /> and
-    ///     <see cref="ReBacResourceAuthorizer.SubscriptionObjectId" /> build, and nothing in the
-    ///     compiler says so</b> — they are computed from a <see cref="ScopeId" /> here and from a
+    ///     ⚠
+    ///     <b>
+    ///         The two ids here must be the same strings
+    ///         <see cref="ReBacResourceAuthorizer.GroupObjectId" /> and
+    ///         <see cref="ReBacResourceAuthorizer.SubscriptionObjectId" /> build, and nothing in the
+    ///         compiler says so
+    ///     </b> — they are computed from a <see cref="ScopeId" /> here and from a
     ///     <c>ResourceId</c> there. A disagreement would put a resource's <c>parent</c> edge on one
     ///     object and the group's own role assignments on another, so a group owner would be unable to
     ///     see the resources in their own group while every test of either half passed.

@@ -102,7 +102,7 @@ public sealed class AsyncVoidAnalyzer : DiagnosticAnalyzer {
         }
 
         if (context.SemanticModel.GetSymbolInfo(node, context.CancellationToken).Symbol
-                is not IMethodSymbol lambda
+            is not IMethodSymbol lambda
             || !lambda.ReturnsVoid) {
             return;
         }

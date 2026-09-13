@@ -1,9 +1,12 @@
 namespace CyberCloud.Communication.Tests;
 
 /// <summary>
-///     docs/plan/17 § The parts that are actually the work: <i>"Bounces, complaints, opt-outs — per
-///     tenant, honoured before dispatch. Ignoring a complaint is how a sending domain gets
-///     blocked."</i>
+///     docs/plan/17 § The parts that are actually the work:
+///     <i>
+///         "Bounces, complaints, opt-outs — per
+///         tenant, honoured before dispatch. Ignoring a complaint is how a sending domain gets
+///         blocked."
+///     </i>
 /// </summary>
 [Collection(CommunicationClusterFixture.Name)]
 public sealed class SuppressionTests(CommunicationCluster cluster) {
@@ -15,7 +18,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
 
         (await cluster.Suppression(service)
-            .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.Complaint, "marked as spam"))
+                .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.Complaint, "marked as spam"))
             .IsSuccess.ShouldBeTrue();
 
         var refused = await cluster.SendAsync(
@@ -123,10 +126,10 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         again.IsSuccess.ShouldBeTrue("a carrier redelivers its webhooks and a handset re-sends STOP");
         again.GetValueOrThrow()
             .SuppressedAt
-            .ShouldBe(
-                first.GetValueOrThrow().SuppressedAt,
-                "the opt-out happened once; a second copy of the same event must not restart the clock"
-            );
+                .ShouldBe(
+                    first.GetValueOrThrow().SuppressedAt,
+                    "the opt-out happened once; a second copy of the same event must not restart the clock"
+                );
     }
 
     // ── The refusal that is the point of ReleaseAsync ───────────────────────────────────────────
@@ -203,7 +206,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
 
         (await cluster.Suppression(service)
-            .SuppressAsync(ChannelKind.Sms, "+420777000006", SuppressionReason.Unknown, string.Empty))
+                .SuppressAsync(ChannelKind.Sms, "+420777000006", SuppressionReason.Unknown, string.Empty))
             .Error!
             .Code
             .ShouldBe(ErrorCode.InvalidRequestBody);

@@ -10,13 +10,19 @@ namespace CyberCloud.Vault.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FAILURE CLASS IS A SECRET IN A LOG, A TRACE OR AN EXCEPTION MESSAGE, AND ALL
-///         THREE ARE PLACES THE VALUE ARRIVES BY ACCIDENT RATHER THAN BY DESIGN.</b> Nobody writes
+///         ⚠
+///         <b>
+///             THE FAILURE CLASS IS A SECRET IN A LOG, A TRACE OR AN EXCEPTION MESSAGE, AND ALL
+///             THREE ARE PLACES THE VALUE ARRIVES BY ACCIDENT RATHER THAN BY DESIGN.
+///         </b> Nobody writes
 ///         <c>logger.LogInformation(password)</c>. What happens is that a diagnostic grows: an
 ///         operator detail starts quoting a response body, an <c>Activity</c> tag is added "to see
 ///         what came back", an exception message includes the JSON it failed on. docs/plan/18 §
-///         Platform security asks for exactly this — <i>"never in a log — analyzer + admission policy
-///         + a log-scanning canary"</i> — and this is the canary at the source.
+///         Platform security asks for exactly this —
+///         <i>
+///             "never in a log — analyzer + admission policy
+///             + a log-scanning canary"
+///         </i> — and this is the canary at the source.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The value is distinctive on purpose.</b> A password of <c>hunter2</c> could appear in
@@ -24,8 +30,11 @@ namespace CyberCloud.Vault.Tests;
 ///         anywhere except by having travelled.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The success path is checked, not only the failure paths, and that is the harder
-///         half.</b> A failure never has the value; the successful read is the one call where the
+///         ⚠
+///         <b>
+///             The success path is checked, not only the failure paths, and that is the harder
+///             half.
+///         </b> A failure never has the value; the successful read is the one call where the
 ///         value exists in the process, and it is the call that writes the audit line.
 ///     </para>
 /// </remarks>
@@ -59,12 +68,13 @@ public sealed class SecretNeverLeaksTests(OpenBaoFixture vault) {
         var (result, logs, activities) = await Read("admin_password");
 
         result.IsFailure.ShouldBeTrue();
-        string.Join("\n", logs).ShouldContain(
-            "adminPassword",
-            Case.Sensitive,
-            "the operator detail lists the keys that ARE there, which is what turns a hunt into a "
-            + "glance"
-        );
+        string.Join("\n", logs)
+            .ShouldContain(
+                "adminPassword",
+                Case.Sensitive,
+                "the operator detail lists the keys that ARE there, which is what turns a hunt into a "
+                + "glance"
+            );
 
         Assert(logs, activities);
     }
@@ -82,10 +92,11 @@ public sealed class SecretNeverLeaksTests(OpenBaoFixture vault) {
 
         var logs = new CapturingLogger();
 
-        var resolved = await vault.Resolver(OpenBaoFixture.RootToken, options, logs).ResolveAsync(
-            new() { Path = "health", Field = "adminPassword" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver(OpenBaoFixture.RootToken, options, logs)
+            .ResolveAsync(
+                new() { Path = "health", Field = "adminPassword" },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsFailure.ShouldBeTrue();
 
@@ -106,11 +117,11 @@ public sealed class SecretNeverLeaksTests(OpenBaoFixture vault) {
         var options = vault.Options();
         options.Address = "http://127.0.0.1:1";
 
-        await Should.NotThrowAsync(
-            async () => await vault.Resolver("x", options).ResolveAsync(
-                new() { Path = Path, Field = "adminPassword" },
-                TestContext.Current.CancellationToken
-            )
+        await Should.NotThrowAsync(async () => await vault.Resolver("x", options)
+                .ResolveAsync(
+                    new() { Path = Path, Field = "adminPassword" },
+                    TestContext.Current.CancellationToken
+                )
         );
     }
 
@@ -144,7 +155,7 @@ public sealed class SecretNeverLeaksTests(OpenBaoFixture vault) {
                 }
 
                 tags.Add(activity.DisplayName);
-            },
+            }
         };
 
         ActivitySource.AddActivityListener(listener);
@@ -154,10 +165,11 @@ public sealed class SecretNeverLeaksTests(OpenBaoFixture vault) {
 
         var token = (await vault.IssueTokenAsync(["canary-reader"])).Token;
 
-        var result = await vault.Resolver(token, logger: logs).ResolveAsync(
-            new() { Path = Path, Field = field },
-            TestContext.Current.CancellationToken
-        );
+        var result = await vault.Resolver(token, logger: logs)
+            .ResolveAsync(
+                new() { Path = Path, Field = field },
+                TestContext.Current.CancellationToken
+            );
 
         activity?.Stop();
 
@@ -192,8 +204,7 @@ public sealed class CapturingLogger : ILogger<OpenBaoSecretResolver> {
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull =>
-        null;
+        where TState : notnull => null;
 
     /// <inheritdoc />
     public bool IsEnabled(LogLevel logLevel) => true;

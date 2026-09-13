@@ -13,20 +13,35 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/12 § The catalogue, <i>"NATS — <c>CyberCloud.Messaging/natsClusters</c> · M1 ·
-///         0.8 EM"</i> — <i>"the cheapest provider in the catalogue, because we run NATS for ourselves
-///         (ADR-005) and therefore already know how"</i>. It is the third and last M1 row, and the one
+///         docs/plan/12 § The catalogue,
+///         <i>
+///             "NATS — <c>CyberCloud.Messaging/natsClusters</c> · M1 ·
+///             0.8 EM"
+///         </i> —
+///         <i>
+///             "the cheapest provider in the catalogue, because we run NATS for ourselves
+///             (ADR-005) and therefore already know how"
+///         </i>. It is the third and last M1 row, and the one
 ///         that closes that milestone's data-services gap.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT IS THE FIRST SERVICE IN THE CATALOGUE WITH NO OPERATOR, AND THAT IS A FACT ABOUT
-///         NATS RATHER THAN A CHOICE MADE HERE.</b> docs/plan/12's pattern assumes an operator: the
+///         ⚠
+///         <b>
+///             IT IS THE FIRST SERVICE IN THE CATALOGUE WITH NO OPERATOR, AND THAT IS A FACT ABOUT
+///             NATS RATHER THAN A CHOICE MADE HERE.
+///         </b> docs/plan/12's pattern assumes an operator: the
 ///         first three services render a <c>Cluster</c>, a <c>RedisFailover</c> and a <c>Kafka</c>,
 ///         and a controller turns each into pods. <c>nats-io/nats-operator</c> — the only project
 ///         that ever offered a <c>NatsCluster</c> CRD (<c>nats.io/v1alpha2</c>) — was
-///         <b>archived on 2025-04-10</b> and its own README says <i>"the recommended way of running
-///         NATS on Kubernetes is by using the Helm charts"</i> and that it <i>"is not recommended to
-///         be used for new deployments"</i>. Checked against the repository rather than against a
+///         <b>archived on 2025-04-10</b> and its own README says
+///         <i>
+///             "the recommended way of running
+///             NATS on Kubernetes is by using the Helm charts"
+///         </i> and that it
+///         <i>
+///             "is not recommended to
+///             be used for new deployments"
+///         </i>. Checked against the repository rather than against a
 ///         summary of it; <c>charts/managed/nats/SOURCE</c> records the date.
 ///     </para>
 ///     <para>
@@ -48,17 +63,28 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 ///             written here and is a decision rather than an inheritance.
 ///         </item>
 ///         <item>
-///             <b>docs/plan/12 § The pattern, once, piece 6's <i>second</i> branch is the only one
-///             available</b> — <i>"hand-write one into the chart only when there is no operator to
-///             ask"</i> — and unlike Kafka, where the branch was reached and the object was still
+///             <b>
+///                 docs/plan/12 § The pattern, once, piece 6's <i>second</i> branch is the only one
+///                 available
+///             </b> —
+///             <i>
+///                 "hand-write one into the chart only when there is no operator to
+///                 ask"
+///             </i> — and unlike Kafka, where the branch was reached and the object was still
 ///             owed, it is <b>discharged</b> here: the reconciler owns the pod labels, so it can emit
 ///             a <c>PodMonitor</c> that selects them exactly. See <see cref="PodMonitorKind" />.
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The catalogue's sub-resources are not declared, and the reason has changed since the
-///         Kafka row was written.</b> docs/plan/12 says <i>"Accounts and users as sub-resources, with
-///         NKey/JWT credentials into Vault"</i>. The grammar is no longer the obstacle — docs/plan/12
+///         ⚠
+///         <b>
+///             The catalogue's sub-resources are not declared, and the reason has changed since the
+///             Kafka row was written.
+///         </b> docs/plan/12 says
+///         <i>
+///             "Accounts and users as sub-resources, with
+///             NKey/JWT credentials into Vault"
+///         </i>. The grammar is no longer the obstacle — docs/plan/12
 ///         § Child resources landed on 2026-08-12 and <see cref="ResourceId.Parent" /> is a pure
 ///         function of the address. Two other things are, and they are named at
 ///         <c>charts/managed/nats/conformance.yaml § owed</c> rather than implied by an absence:
@@ -76,8 +102,11 @@ namespace CyberCloud.Providers.Messaging.Contracts;
 public static class NatsClusters {
     /// <summary>The provider namespace, as docs/plan/12 § The catalogue spells it.</summary>
     /// <remarks>
-    ///     ⚠ <b>The same string as <see cref="KafkaClusters.ProviderNamespace" />, and that is the
-    ///     point rather than a copy.</b> This is the platform's first provider namespace with two
+    ///     ⚠
+    ///     <b>
+    ///         The same string as <see cref="KafkaClusters.ProviderNamespace" />, and that is the
+    ///         point rather than a copy.
+    ///     </b> This is the platform's first provider namespace with two
     ///     resource types in it — see <c>MessagingProvider</c> for what that exercised.
     /// </remarks>
     public const string ProviderNamespace = KafkaClusters.ProviderNamespace;
@@ -143,8 +172,11 @@ public static class NatsClusters {
     ///     <c>IKubeCommandBuilder.WithTemplateLabels</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The claims hold the JetStream file store, which is every stream and every consumer
-    ///     this broker has.</b> They are made by the StatefulSet controller rather than applied by
+    ///     ⚠
+    ///     <b>
+    ///         The claims hold the JetStream file store, which is every stream and every consumer
+    ///         this broker has.
+    ///     </b> They are made by the StatefulSet controller rather than applied by
     ///     this provider, so ADR-013's seven never reached them: the builder writes into an object's
     ///     own <c>metadata.labels</c> and a claim is a different object. Declaring the path stamps
     ///     <see cref="KubeLabels.LifetimeStable" /> onto the template, and the controller copies a
@@ -158,10 +190,16 @@ public static class NatsClusters {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the first time piece 6's corrected second branch is actually
-    ///         discharged.</b> That correction reads: <i>"ask the operator for the scrape object
-    ///         wherever the operator accepts the request, and hand-write one into the chart only when
-    ///         there is no operator to ask."</i> CloudNativePG answered the first branch with
+    ///         ⚠
+    ///         <b>
+    ///             This is the first time piece 6's corrected second branch is actually
+    ///             discharged.
+    ///         </b> That correction reads:
+    ///         <i>
+    ///             "ask the operator for the scrape object
+    ///             wherever the operator accepts the request, and hand-write one into the chart only when
+    ///             there is no operator to ask."
+    ///         </i> CloudNativePG answered the first branch with
     ///         <c>spec.monitoring.enablePodMonitor</c>; Strimzi reached the second branch and left the
     ///         object owed, because a hand-written scrape has to hard-code somebody else's pod labels
     ///         and this document warns that the operator changes one in a minor release and the scrape
@@ -182,9 +220,7 @@ public static class NatsClusters {
     ///     </para>
     /// </remarks>
     public static GroupVersionKind PodMonitorKind { get; } =
-        new() {
-            Group = "monitoring.coreos.com", Version = "v1", Kind = "PodMonitor", Plural = "podmonitors"
-        };
+        new() { Group = "monitoring.coreos.com", Version = "v1", Kind = "PodMonitor", Plural = "podmonitors" };
 
     // ── Ports ─────────────────────────────────────────────────────────────────────────────────
 
@@ -202,8 +238,11 @@ public static class NatsClusters {
 
     /// <summary>The port the metrics sidecar serves <c>/metrics</c> on.</summary>
     /// <remarks>
-    ///     ⚠ <b>A sidecar exists because <c>nats-server</c> serves no Prometheus endpoint, which was
-    ///     checked in <c>server/monitor.go</c> rather than assumed.</b> The monitoring port answers
+    ///     ⚠
+    ///     <b>
+    ///         A sidecar exists because <c>nats-server</c> serves no Prometheus endpoint, which was
+    ///         checked in <c>server/monitor.go</c> rather than assumed.
+    ///     </b> The monitoring port answers
     ///     <c>/varz</c>, <c>/connz</c>, <c>/routez</c>, <c>/subsz</c>, <c>/leafz</c>, <c>/jsz</c>,
     ///     <c>/raftz</c> and <c>/healthz</c> — all JSON, none of them Prometheus text. A
     ///     <see cref="PodMonitorKind" /> pointed at <c>8222/metrics</c> would apply cleanly, select
@@ -278,8 +317,11 @@ public static class NatsClusters {
     /// <param name="desired">The validated desired body, which is where the server count lives.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This type declares no recovery window and still leaks its disks, which is the
-    ///         same defect one step earlier than docs/plan/08 § Soft delete states it.</b> That
+    ///         ⚠
+    ///         <b>
+    ///             This type declares no recovery window and still leaks its disks, which is the
+    ///             same defect one step earlier than docs/plan/08 § Soft delete states it.
+    ///         </b> That
     ///         section's owed item is about a purge; but deleting a <c>StatefulSet</c> leaves its
     ///         claims whether or not a window is involved, so a plain hard delete of a
     ///         <c>CyberCloud.Messaging/natsClusters</c> has always returned the tenant's quota and
@@ -358,16 +400,22 @@ public static class NatsClusters {
 
     /// <inheritdoc cref="KubeQuantity.Pattern" />
     /// <remarks>
-    ///     ⚠ <b>Pointed at <see cref="KubeQuantity" /> rather than copied, which is the whole of what
-    ///     that type's remarks ask for.</b> <c>QuantityParserTests</c> exists because the last time a
+    ///     ⚠
+    ///     <b>
+    ///         Pointed at <see cref="KubeQuantity" /> rather than copied, which is the whole of what
+    ///         that type's remarks ask for.
+    ///     </b> <c>QuantityParserTests</c> exists because the last time a
     ///     provider kept its own copy of the grammar, somebody wrote a second <i>parser</i> next to
     ///     it — and it disagreed on value rather than on verdict, which is the quieter half. A fresh
     ///     copy is what that test now fails on. There is no rule-2 problem in reaching for it:
     ///     <see cref="KubeQuantity" /> lives in <c>CyberCloud.ResourceManager.Contracts</c>, which
     ///     every provider may reference.
     ///     <para>
-    ///         ⚠ <b>This remark said the three earlier copies "still carry byte-identical literals",
-    ///         and that stopped being true while this type was being written.</b> Corrected against
+    ///         ⚠
+    ///         <b>
+    ///             This remark said the three earlier copies "still carry byte-identical literals",
+    ///             and that stopped being true while this type was being written.
+    ///         </b> Corrected against
     ///         the tree rather than left standing: <c>KafkaClusters</c>, <c>PostgresServers</c> and
     ///         <c>TestProvider</c> all point here now, so this is the fourth of four rather than the
     ///         one clean declaration among four.
@@ -380,30 +428,42 @@ public static class NatsClusters {
 
     /// <summary>An IPv4 CIDR block. ⚠ Written down, tested, and enforced by nothing — see below.</summary>
     /// <remarks>
-    ///     ⚠ <b>The second sighting of the gap <c>KafkaClusters.CidrPattern</c> reported, and a
-    ///     second sighting is what turns it into a measurement.</b> The registry would take this as
+    ///     ⚠
+    ///     <b>
+    ///         The second sighting of the gap <c>KafkaClusters.CidrPattern</c> reported, and a
+    ///         second sighting is what turns it into a measurement.
+    ///     </b> The registry would take this as
     ///     <c>Pattern</c> on <see cref="Schema2026" />'s <c>allowedCidrs</c> and enforce it per
     ///     element; <c>./build.sh Charts</c> refuses <c>@pattern</c> on a <c>{array}</c> while
     ///     emitting <c>@enum</c> there as <c>items.enum</c>, which is the same per-element shape. The
     ///     full argument is at the Kafka constant and is not repeated; what this adds is that the gap
-    ///     is not specific to one type's allow-list — <b>every service in docs/plan/12 § Cross-cutting
-    ///     decisions gets the same firewall list</b>, so it will be found once per remaining service
+    ///     is not specific to one type's allow-list —
+    ///     <b>
+    ///         every service in docs/plan/12 § Cross-cutting
+    ///         decisions gets the same firewall list
+    ///     </b>, so it will be found once per remaining service
     ///     until it is closed.
     /// </remarks>
     public const string CidrPattern = KafkaClusters.CidrPattern;
 
     /// <summary>The sizing presets of docs/plan/12 § Sizing vocabulary, <c>c1</c> family.</summary>
     /// <remarks>
-    ///     ⚠ <b>The <c>c1</c> family, which docs/plan/12 § Sizing vocabulary assigns to
-    ///     <i>"CPU-bound — brokers, gateways"</i>.</b> A NATS server with JetStream on file storage is
+    ///     ⚠
+    ///     <b>
+    ///         The <c>c1</c> family, which docs/plan/12 § Sizing vocabulary assigns to
+    ///         <i>"CPU-bound — brokers, gateways"</i>.
+    ///     </b> A NATS server with JetStream on file storage is
     ///     arguably closer to <c>s1</c> (1:4, <i>"general"</i>), and the table was followed rather than
     ///     second-guessed: the vocabulary exists so that "large" means one thing across the catalogue,
     ///     and a service that picks a different family because its author reasoned about its workload
     ///     is the drift the table was written to stop. If NATS belongs in <c>s1</c>, that is a change
     ///     to docs/plan/12 and then to this row, in that order.
     ///     <para>
-    ///         ⚠ <b>It is deliberately not <c>KafkaClusters.Presets</c>, even though the values are
-    ///         identical and the two types are in one assembly.</b> Sharing them would make a change
+    ///         ⚠
+    ///         <b>
+    ///             It is deliberately not <c>KafkaClusters.Presets</c>, even though the values are
+    ///             identical and the two types are in one assembly.
+    ///         </b> Sharing them would make a change
     ///         to Kafka's sizing a silent change to this one, and the two rows have different reasons
     ///         to move — Kafka's is a broker's CPU, this one's is whatever docs/plan/12 decides a NATS
     ///         server is. <c>NatsSizingTests</c> asserts this table against the chart's
@@ -453,11 +513,7 @@ public static class NatsClusters {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the NATS servers."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -466,10 +522,7 @@ public static class NatsClusters {
                     Required: true,
                     Description: "NATS server version. Minor upgrades are applied automatically in the "
                     + "maintenance window; a major upgrade is an explicit update to this field."
-                ) {
-                    AllowedValues = ["2.10", "2.11"],
-                    DefaultJson = "\"2.11\""
-                },
+                ) { AllowedValues = ["2.10", "2.11"], DefaultJson = "\"2.11\"" },
                 new(
                     "/properties/servers",
                     SchemaKind.WholeNumber,
@@ -478,11 +531,7 @@ public static class NatsClusters {
                     + "replicates through a Raft group, so an even count buys no extra fault tolerance "
                     + "over the odd count below it. One is offered for development only and has no "
                     + "quorum at all."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "3" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -503,19 +552,13 @@ public static class NatsClusters {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -527,20 +570,12 @@ public static class NatsClusters {
                     Required: true,
                     Description: "JetStream file-store volume size per server, in Kubernetes quantity "
                     + "form. Grows online; never shrinks."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"10Gi\"",
-                    ExampleJson = "\"10Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"10Gi\"", ExampleJson = "\"10Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name. Empty means the cluster default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/jetstream",
                     SchemaKind.Nested,
@@ -554,11 +589,7 @@ public static class NatsClusters {
                     + "Empty means no memory store at all, so every stream is file-backed — which is "
                     + "what docs/plan/12 asks for and what the volume above is sized for. A value here "
                     + "must leave room for the server itself inside the container's memory limit."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\"",
-                    ExampleJson = "\"256Mi\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"", ExampleJson = "\"256Mi\"" },
                 new(
                     "/properties/limits",
                     SchemaKind.Nested,
@@ -570,20 +601,12 @@ public static class NatsClusters {
                     Description: "Largest message a client may publish, in bytes. Raising it costs "
                     + "memory on every server, because a server buffers a whole message before routing "
                     + "it."
-                ) {
-                    Minimum = 1024,
-                    Maximum = 67108864,
-                    DefaultJson = "1048576"
-                },
+                ) { Minimum = 1024, Maximum = 67108864, DefaultJson = "1048576" },
                 new(
                     "/properties/limits/maxConnections",
                     SchemaKind.WholeNumber,
                     Description: "Largest number of client connections one server accepts."
-                ) {
-                    Minimum = 16,
-                    Maximum = 65536,
-                    DefaultJson = "65536"
-                },
+                ) { Minimum = 16, Maximum = 65536, DefaultJson = "65536" },
                 new(
                     "/properties/leafNodes",
                     SchemaKind.Nested,
@@ -596,9 +619,7 @@ public static class NatsClusters {
                     Description: "Whether the servers accept leaf-node connections. Off by default: a "
                     + "leaf node joins the cluster's subject space, so it is a topology change rather "
                     + "than a client."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/external",
                     SchemaKind.Nested,
@@ -612,9 +633,7 @@ public static class NatsClusters {
                     + "cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external "
                     + "exposure never the default, because a managed broker on a public IP with a weak "
                     + "password is the most common cloud breach there is."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/external/allowedCidrs",
                     SchemaKind.Array,
@@ -627,9 +646,7 @@ public static class NatsClusters {
                     // registry-versus-surface gap KafkaClusters reports at the same property, for the
                     // same reason, and this is its second sighting. Declaring it would make
                     // `./build.sh Charts` red for every future run.
-                    ElementKind = SchemaKind.Text,
-                    DefaultJson = "[]",
-                    ExampleJson = "[\"203.0.113.0/24\"]"
+                    ElementKind = SchemaKind.Text, DefaultJson = "[]", ExampleJson = "[\"203.0.113.0/24\"]"
                 },
                 new(
                     "/properties/monitoring",
@@ -643,9 +660,7 @@ public static class NatsClusters {
                     + "by default — docs/plan/12: \"a managed service the tenant cannot see the health "
                     + "of is a black box they will not trust with production\". The endpoint itself is "
                     + "always served; this decides whether anything scrapes it."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -653,8 +668,11 @@ public static class NatsClusters {
     ///     What a <c>POST …/listKeys</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared even though no handler serves it, because an undeclared response is the one
-    ///     part of the API surface with no contract.</b> What leaves the platform through a
+    ///     ⚠
+    ///     <b>
+    ///         Declared even though no handler serves it, because an undeclared response is the one
+    ///         part of the API surface with no contract.
+    ///     </b> What leaves the platform through a
     ///     <c>secret: true</c> action is exactly the thing that should be written down before it
     ///     leaves. There is no request shape, for the reason <c>ActionRegistration</c> gives.
     /// </remarks>
@@ -690,8 +708,7 @@ public static class NatsClusters {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -708,8 +725,7 @@ public static class NatsClusters {
 
     /// <summary>The file-store volume size per server a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string StorageSize(JsonElement desired) =>
-        Text(desired, "storage", "size", DefaultStorageSize);
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", DefaultStorageSize);
 
     /// <summary>Whether the desired body asks for a leaf-node listener.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -785,16 +801,22 @@ public static class NatsClusters {
     ///         replica, which turns a replica count change into an object-set change.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The routes are written out one per ordinal rather than as the headless service's
-    ///         own name.</b> A single <c>nats://x-headless:6222</c> resolves to every ready pod, which
+    ///         ⚠
+    ///         <b>
+    ///             The routes are written out one per ordinal rather than as the headless service's
+    ///             own name.
+    ///         </b> A single <c>nats://x-headless:6222</c> resolves to every ready pod, which
     ///         is exactly the problem: at first start no pod is ready, so the list is empty and no
     ///         cluster forms. Naming <c>x-0.x-headless</c> … addresses a record that exists as soon as
     ///         the <c>StatefulSet</c> does, and the headless <c>Service</c> sets
     ///         <c>publishNotReadyAddresses</c> so it stays addressable while the server is starting.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Byte sizes are written as integers, through <see cref="KubeQuantity.TryParse" />
-    ///         and no other parser — and the reason is one suffix out of fourteen.</b> The obvious
+    ///         ⚠
+    ///         <b>
+    ///             Byte sizes are written as integers, through <see cref="KubeQuantity.TryParse" />
+    ///             and no other parser — and the reason is one suffix out of fourteen.
+    ///         </b> The obvious
     ///         alternative is to pass the quantity through, and it very nearly works: NATS'
     ///         <c>conf/parse.go</c> accepts <c>k kb ki kib m mb mi mib g gb gi gib</c> and the
     ///         <c>t</c>/<c>p</c>/<c>e</c> families, <b>lower-cased before comparison</b>, with
@@ -952,9 +974,7 @@ public static class NatsClusters {
             spec["loadBalancerSourceRanges"] = ranges;
         }
 
-        return new JsonObject {
-            ["metadata"] = new JsonObject { ["name"] = name }, ["spec"] = spec
-        }.ToJsonString();
+        return new JsonObject { ["metadata"] = new JsonObject { ["name"] = name }, ["spec"] = spec }.ToJsonString();
     }
 
     /// <summary>The <c>StatefulSet</c> document a desired body becomes.</summary>
@@ -962,8 +982,11 @@ public static class NatsClusters {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>podManagementPolicy: Parallel</c>, and the default would deadlock the first
-    ///         start.</b> The default is <c>OrderedReady</c>: pod 1 is not created until pod 0 is
+    ///         ⚠
+    ///         <b>
+    ///             <c>podManagementPolicy: Parallel</c>, and the default would deadlock the first
+    ///             start.
+    ///         </b> The default is <c>OrderedReady</c>: pod 1 is not created until pod 0 is
     ///         ready. Pod 0's readiness probe hits <c>/healthz</c>, which a clustered server does not
     ///         pass until it has a Raft quorum, which needs pod 1. <c>Parallel</c> is what makes a
     ///         three-server cluster reach quorum at all, and it is the kind of default an operator
@@ -1003,9 +1026,7 @@ public static class NatsClusters {
             ["env"] = new JsonArray {
                 new JsonObject {
                     ["name"] = "POD_NAME",
-                    ["valueFrom"] = new JsonObject {
-                        ["fieldRef"] = new JsonObject { ["fieldPath"] = "metadata.name" }
-                    }
+                    ["valueFrom"] = new JsonObject { ["fieldRef"] = new JsonObject { ["fieldPath"] = "metadata.name" } }
                 }
             },
             ["volumeMounts"] = new JsonArray {
@@ -1025,18 +1046,14 @@ public static class NatsClusters {
         var (cpu, memory) = Resources(desired);
         if (cpu.Length > 0 && memory.Length > 0) {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
-            container["resources"] = new JsonObject {
-                ["requests"] = quantities.DeepClone(), ["limits"] = quantities
-            };
+            container["resources"] = new JsonObject { ["requests"] = quantities.DeepClone(), ["limits"] = quantities };
         }
 
         var claim = new JsonObject {
             ["metadata"] = new JsonObject { ["name"] = StoreVolume },
             ["spec"] = new JsonObject {
                 ["accessModes"] = new JsonArray { "ReadWriteOnce" },
-                ["resources"] = new JsonObject {
-                    ["requests"] = new JsonObject { ["storage"] = StorageSize(desired) }
-                }
+                ["resources"] = new JsonObject { ["requests"] = new JsonObject { ["storage"] = StorageSize(desired) } }
             }
         };
 
@@ -1091,8 +1108,7 @@ public static class NatsClusters {
                     ["containers"] = containers,
                     ["volumes"] = new JsonArray {
                         new JsonObject {
-                            ["name"] = "config",
-                            ["configMap"] = new JsonObject { ["name"] = ConfigMapName(name) }
+                            ["name"] = "config", ["configMap"] = new JsonObject { ["name"] = ConfigMapName(name) }
                         }
                     }
                 }
@@ -1100,9 +1116,7 @@ public static class NatsClusters {
             ["volumeClaimTemplates"] = new JsonArray { claim }
         };
 
-        return new JsonObject {
-            ["metadata"] = new JsonObject { ["name"] = name }, ["spec"] = spec
-        }.ToJsonString();
+        return new JsonObject { ["metadata"] = new JsonObject { ["name"] = name }, ["spec"] = spec }.ToJsonString();
     }
 
     /// <summary>The <c>PodMonitor</c> document — piece 6's second branch, discharged.</summary>
@@ -1121,9 +1135,8 @@ public static class NatsClusters {
                 // ⚠ The SIDECAR's port, not the server's. See ExporterPort — nats-server serves no
                 // Prometheus endpoint at all, so `monitor` here would scrape a 404 forever behind an
                 // object that applied cleanly and selected the right pods.
-                ["podMetricsEndpoints"] = new JsonArray {
-                    new JsonObject { ["port"] = "metrics", ["path"] = "/metrics" }
-                }
+                ["podMetricsEndpoints"] =
+                    new JsonArray { new JsonObject { ["port"] = "metrics", ["path"] = "/metrics" } }
             }
         }.ToJsonString();
     }
@@ -1136,9 +1149,12 @@ public static class NatsClusters {
     /// <returns><c>true</c> when the fields this provider owns hold the desired values.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Containment, not equality, and here the ordinary reason is the true one — which is
-    ///         the opposite of what <c>KafkaClusters.Matches</c> found and is worth stating as a
-    ///         contrast rather than as a restatement.</b> That type checked Strimzi's CRD and found
+    ///         ⚠
+    ///         <b>
+    ///             Containment, not equality, and here the ordinary reason is the true one — which is
+    ///             the opposite of what <c>KafkaClusters.Matches</c> found and is worth stating as a
+    ///             contrast rather than as a restatement.
+    ///         </b> That type checked Strimzi's CRD and found
     ///         <b>no <c>default:</c> anywhere</b>, so the "the API server defaults fields on write"
     ///         argument was false for it and the rule was kept for other reasons. Every object here is
     ///         a <b>built-in</b> kind, and built-in kinds are the most heavily defaulted objects in

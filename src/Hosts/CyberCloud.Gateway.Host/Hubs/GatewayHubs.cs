@@ -20,9 +20,11 @@ namespace CyberCloud.Gateway.Host.Hubs;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Reconnect carries a <c>since</c> version.</b> docs/plan/10 § SignalR:
-///         <i>"Reconnect uses SignalR's automatic reconnect plus a <c>since</c> version on
-///         resubscribe, so a portal tab that slept through a deploy catches up rather than showing
-///         stale state forever."</i> The parameter is on <see cref="SubscribeAsync" /> and is passed
+///         <i>
+///             "Reconnect uses SignalR's automatic reconnect plus a <c>since</c> version on
+///             resubscribe, so a portal tab that slept through a deploy catches up rather than showing
+///             stale state forever."
+///         </i> The parameter is on <see cref="SubscribeAsync" /> and is passed
 ///         through to the stream replay; the replay itself needs the stream bridge that
 ///         <see cref="IConnectionGrain" /> documents as owed — and which is now buildable, because
 ///         the grain lives in a silo rather than in this client.
@@ -143,8 +145,11 @@ public sealed class MetricsHub(IGrainFactory grains, IConcurrencyLimiter limiter
 }
 
 /// <summary>
-///     The cloud shell. docs/plan/10 § SignalR: <i>"Direct to the session grain — binary, no
-///     backplane."</i>
+///     The cloud shell. docs/plan/10 § SignalR:
+///     <i>
+///         "Direct to the session grain — binary, no
+///         backplane."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>No interest set and no connection grain, deliberately.</b> A terminal is one caller and

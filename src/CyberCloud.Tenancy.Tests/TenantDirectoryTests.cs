@@ -19,16 +19,16 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
             .GetValueOrThrow();
 
         var entry = (await cluster.DirectoryGrain()
-            .RegisterAsync(
-                new() {
-                    TenantId = tenant,
-                    Slug = "dir-1",
-                    HomeRegion = "eu-central",
-                    HotShard = assignment.HotHashTag,
-                    DurableShard = assignment.DurableShard,
-                    Status = TenantStatus.Provisioning
-                }
-            )).GetValueOrThrow();
+                .RegisterAsync(
+                    new() {
+                        TenantId = tenant,
+                        Slug = "dir-1",
+                        HomeRegion = "eu-central",
+                        HotShard = assignment.HotHashTag,
+                        DurableShard = assignment.DurableShard,
+                        Status = TenantStatus.Provisioning
+                    }
+                )).GetValueOrThrow();
 
         entry.DirectoryVersion.ShouldBeGreaterThan(0);
         entry.DurableShard.ShouldBe(assignment.DurableShard);
@@ -36,7 +36,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow().Slug.ShouldBe("dir-1");
         (await cluster.DirectoryGrain().LookupBySlugAsync("dir-1")).GetValueOrThrow()
             .TenantId
-            .ShouldBe(tenant);
+                .ShouldBe(tenant);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
         // The entry itself stays, so the id can never be reissued either.
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
             .Status
-            .ShouldBe(TenantStatus.Purged);
+                .ShouldBe(TenantStatus.Purged);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
 
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
             .Slug
-            .ShouldBe("dir-durable");
+                .ShouldBe("dir-durable");
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster) {
         var registered = await Register(tenant, "dir-status");
 
         var suspended = (await cluster.DirectoryGrain()
-            .SetStatusAsync(tenant, TenantStatus.Suspended)).GetValueOrThrow();
+                .SetStatusAsync(tenant, TenantStatus.Suspended)).GetValueOrThrow();
 
         suspended.Status.ShouldBe(TenantStatus.Suspended);
         suspended.DirectoryVersion.ShouldBeGreaterThan(registered.DirectoryVersion);

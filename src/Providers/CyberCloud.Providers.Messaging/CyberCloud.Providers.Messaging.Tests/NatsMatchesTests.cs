@@ -8,11 +8,17 @@ namespace CyberCloud.Providers.Messaging.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The usual argument for containment is "the operator edits the spec it is given", and
-///         for this type the argument that actually holds is a DIFFERENT one — which is worth pinning
-///         because the two providers before this one reached opposite findings.</b>
-///         <c>charts/managed/kafka/SOURCE</c> records that Strimzi's CRD declares <b>no
-///         <c>default:</c> anywhere</b>, so the API server's structural defaulting adds nothing on
+///         ⚠
+///         <b>
+///             The usual argument for containment is "the operator edits the spec it is given", and
+///             for this type the argument that actually holds is a DIFFERENT one — which is worth pinning
+///             because the two providers before this one reached opposite findings.
+///         </b>
+///         <c>charts/managed/kafka/SOURCE</c> records that Strimzi's CRD declares
+///         <b>
+///             no
+///             <c>default:</c> anywhere
+///         </b>, so the API server's structural defaulting adds nothing on
 ///         write and the premise is false there. Every object this type renders is a <b>built-in</b>
 ///         kind, and built-in kinds are the most heavily defaulted objects in Kubernetes. So the
 ///         premise is not merely true here, it is true on every single object.
@@ -38,12 +44,10 @@ public sealed class NatsMatchesTests {
         var spec = read["spec"]!.AsObject();
         spec["revisionHistoryLimit"] = 10;
         spec["updateStrategy"] = new JsonObject {
-            ["type"] = "RollingUpdate",
-            ["rollingUpdate"] = new JsonObject { ["partition"] = 0 }
+            ["type"] = "RollingUpdate", ["rollingUpdate"] = new JsonObject { ["partition"] = 0 }
         };
-        spec["persistentVolumeClaimRetentionPolicy"] = new JsonObject {
-            ["whenDeleted"] = "Retain", ["whenScaled"] = "Retain"
-        };
+        spec["persistentVolumeClaimRetentionPolicy"] =
+            new JsonObject { ["whenDeleted"] = "Retain", ["whenScaled"] = "Retain" };
 
         var podSpec = spec["template"]!["spec"]!.AsObject();
         podSpec["dnsPolicy"] = "ClusterFirst";
@@ -57,14 +61,14 @@ public sealed class NatsMatchesTests {
         container["terminationMessagePolicy"] = "File";
 
         read["status"] = new JsonObject { ["replicas"] = 0, ["observedGeneration"] = 1 };
-        read["metadata"]!.AsObject()["managedFields"] = new JsonArray {
-            new JsonObject { ["manager"] = "cybercloud/cybercloud.messaging" }
-        };
+        read["metadata"]!.AsObject()["managedFields"] =
+            new JsonArray { new JsonObject { ["manager"] = "cybercloud/cybercloud.messaging" } };
 
-        NatsClusters.Matches(read.ToJsonString(), desired.RootElement).ShouldBeTrue(
-            "a StatefulSet read back with the fields the API server defaults was reported as drifted. "
-            + "That resource would never leave InProgress while being perfectly correct."
-        );
+        NatsClusters.Matches(read.ToJsonString(), desired.RootElement)
+            .ShouldBeTrue(
+                "a StatefulSet read back with the fields the API server defaults was reported as drifted. "
+                + "That resource would never leave InProgress while being perfectly correct."
+            );
     }
 
     [Fact]
@@ -98,9 +102,8 @@ public sealed class NatsMatchesTests {
         // What `kubectl scale` or an autoscaler writes through the scale subresource.
         read["spec"]!["replicas"] = 3;
 
-        NatsClusters.Matches(read.ToJsonString(), desired.RootElement).ShouldBeFalse(
-            "a StatefulSet scaled away from the declared server count read back as matching."
-        );
+        NatsClusters.Matches(read.ToJsonString(), desired.RootElement)
+            .ShouldBeFalse("a StatefulSet scaled away from the declared server count read back as matching.");
     }
 
     [Fact]
@@ -128,9 +131,8 @@ public sealed class NatsMatchesTests {
         read["kind"] = "ConfigMap";
 
         NatsClusters.Matches(read.ToJsonString(), three.RootElement).ShouldBeTrue();
-        NatsClusters.Matches(read.ToJsonString(), five.RootElement).ShouldBeFalse(
-            "a three-route configuration read back as satisfying a five-server body."
-        );
+        NatsClusters.Matches(read.ToJsonString(), five.RootElement)
+            .ShouldBeFalse("a three-route configuration read back as satisfying a five-server body.");
     }
 
     [Fact]

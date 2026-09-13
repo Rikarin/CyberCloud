@@ -11,25 +11,37 @@ namespace CyberCloud.Providers.Messaging.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One case object and two class declarations, in a project that already holds another
-///         provider's — which is the first evidence that docs/plan/03's five-project shape is per
-///         NAMESPACE rather than per TYPE.</b> Three providers had said the shape was cheap; this is
+///         ⚠
+///         <b>
+///             One case object and two class declarations, in a project that already holds another
+///             provider's — which is the first evidence that docs/plan/03's five-project shape is per
+///             NAMESPACE rather than per TYPE.
+///         </b> Three providers had said the shape was cheap; this is
 ///         the first to add a resource type without adding a project.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Nothing in <c>test/CyberCloud.Conformance</c> changed to accommodate a type that
-///         renders FIVE objects across three API groups, two of which share a kind.</b> That is the
+///         ⚠
+///         <b>
+///             Nothing in <c>test/CyberCloud.Conformance</c> changed to accommodate a type that
+///             renders FIVE objects across three API groups, two of which share a kind.
+///         </b> That is the
 ///         claim <see cref="ProviderConformanceCase.Objects" /> was making and it has not been tested
 ///         this hard before: the sample renders one <c>ConfigMap</c>, PostgreSQL two custom
 ///         resources, Kafka two. ⚠ The one thing that did have to be right is that
-///         <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> is <b>one function over every
-///         object the resource owns</b> — which is why <see cref="NatsClusters.Matches" /> dispatches
+///         <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> is
+///         <b>
+///             one function over every
+///             object the resource owns
+///         </b> — which is why <see cref="NatsClusters.Matches" /> dispatches
 ///         on <c>kind</c>, and why it tells the two <c>Service</c>s apart by <c>clusterIP</c> rather
 ///         than by name: the function is not given the resource's name.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The cluster-backed half needs exactly ONE definition stub, where Kafka needed
-///         two.</b> <c>ClusterConformanceHarness</c> derives them from
+///         ⚠
+///         <b>
+///             The cluster-backed half needs exactly ONE definition stub, where Kafka needed
+///             two.
+///         </b> <c>ClusterConformanceHarness</c> derives them from
 ///         <see cref="ProviderConformanceCase.Objects" />, and four of the five kinds here are core
 ///         or <c>apps</c> kinds a bare k3s already serves. The exception is <c>PodMonitor</c>, which
 ///         the platform bundle installs rather than Kubernetes.

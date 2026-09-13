@@ -9,8 +9,11 @@ namespace CyberCloud.Isolation;
 ///     <para>
 ///         ⚠ <b>Why this is worth testing at all, when the gateway is the only public door.</b>
 ///         docs/plan/07 § The enforcement seam is one check in one place, which is the right design
-///         and is also a single point of failure: everything below it is protected by the <i>grain
-///         key</i> rather than by a check. ADR-002 puts the tenant id in that key and
+///         and is also a single point of failure: everything below it is protected by the
+///         <i>
+///             grain
+///             key
+///         </i> rather than by a check. ADR-002 puts the tenant id in that key and
 ///         <c>Orleans.Multitenant</c> refuses a crossing — so the question this class asks is whether
 ///         the second layer is really there, or whether the platform has one layer and a belief.
 ///     </para>
@@ -125,10 +128,11 @@ public sealed class BelowTheManagerTests(IsolationCluster cluster) {
             .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address))
             .GetAsync();
 
-        mine.GetValueOrThrow().State.ShouldBe(
-            IndexEntryState.Free,
-            "the victim's index entry was readable under the attacker's tenant qualification"
-        );
+        mine.GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.Free,
+                "the victim's index entry was readable under the attacker's tenant qualification"
+            );
 
         mine.GetValueOrThrow().BoundTo.ShouldBe(Guid.Empty);
     }

@@ -24,18 +24,27 @@ namespace CyberCloud.ResourceManager;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Step 1 resolves the index, and that is a read rather than the claim.</b>
-///         docs/plan/08's step 1 is <i>"parse path → ResourceId; look up the provider + type +
-///         api-version in the registry"</i>, and docs/plan/06 § Identifiers says a parsed path yields
-///         <c>Guid.Empty</c> and <i>"resolving it to a real identity is a lookup through
-///         <c>IResourceIndexGrain</c>"</i>. So the resolve belongs to step 1. It matters that it is
+///         docs/plan/08's step 1 is
+///         <i>
+///             "parse path → ResourceId; look up the provider + type +
+///             api-version in the registry"
+///         </i>, and docs/plan/06 § Identifiers says a parsed path yields
+///         <c>Guid.Empty</c> and
+///         <i>
+///             "resolving it to a real identity is a lookup through
+///             <c>IResourceIndexGrain</c>"
+///         </i>. So the resolve belongs to step 1. It matters that it is
 ///         there and not later, because step 3 has to know <b>whether the resource exists</b> to know
 ///         whether to check the resource or its parent group — and because step 6 has to know whether
 ///         this is a create (which draws quota) or an update (which does not, the resource is already
 ///         counted). Neither the reservation at 6 nor the claim at 7 moves.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Step 8 writes a ReBAC tuple, and it is the only step that writes to the authorization
-///         store.</b> docs/plan/07 § The model makes a resource's permissions inherit through
+///         ⚠
+///         <b>
+///             Step 8 writes a ReBAC tuple, and it is the only step that writes to the authorization
+///             store.
+///         </b> docs/plan/07 § The model makes a resource's permissions inherit through
 ///         <c>From("parent", …)</c>, which follows a <c>resource:X#parent@resourceGroup:Y</c> edge —
 ///         and nothing wrote one, so a create used to succeed and the creator then got <c>404</c> on
 ///         what they had just made. The step sits between the index claim and the durable write for
@@ -96,8 +105,7 @@ public sealed class ResourceManagerService(
         JsonDocument body;
         try {
             body = JsonDocument.Parse(request.Body);
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             return Result<WriteAccepted>.Failure(
                 ErrorCode.InvalidRequestBody,
                 // The parser's message describes the caller's own input, not our stack —
@@ -264,7 +272,8 @@ public sealed class ResourceManagerService(
         var candidates = members
             .GetValueOrThrow()
             .Where(x => x.CanonicalPath.StartsWith(canonicalPrefix, StringComparison.Ordinal)
-                && x.CanonicalPath.IndexOf('/', canonicalPrefix.Length) < 0)
+                && x.CanonicalPath.IndexOf('/', canonicalPrefix.Length) < 0
+            )
             .Where(x => string.CompareOrdinal(x.CanonicalPath, request.Continuation) > 0)
             .OrderBy(x => x.CanonicalPath, StringComparer.Ordinal)
             .Take(request.PageSize)
@@ -343,8 +352,11 @@ public sealed class ResourceManagerService(
 
     /// <summary>The canonical-path prefix every member of a collection shares.</summary>
     /// <remarks>
-    ///     ⚠ <b>Built from a member address rather than from <c>ResourceCollectionId.Path</c>,
-    ///     because the two case-fold differently.</b> <c>ResourceGroupMember.CanonicalPath</c> is
+    ///     ⚠
+    ///     <b>
+    ///         Built from a member address rather than from <c>ResourceCollectionId.Path</c>,
+    ///         because the two case-fold differently.
+    ///     </b> <c>ResourceGroupMember.CanonicalPath</c> is
     ///     <c>ResourceId.CanonicalPath</c>, which lower-cases the provider namespace and the type
     ///     while <c>Path</c> preserves their case — see <c>ResourceId.CanonicalPath</c>. Comparing a
     ///     collection's <c>Path</c> against a member's <c>CanonicalPath</c> ordinally would match
@@ -492,7 +504,7 @@ public sealed class ResourceManagerService(
         var live = await Resource(target).GetAsync(target.ApiVersion.Value, []);
         if (live.IsSuccess
             && live.GetValueOrThrow().ProvisioningState
-                is ProvisioningState.Creating or ProvisioningState.Updating or ProvisioningState.Deleting) {
+            is ProvisioningState.Creating or ProvisioningState.Updating or ProvisioningState.Deleting) {
             return Result<WriteAccepted>.Failure(
                 ErrorCode.OperationInProgress,
                 $"Operation {live.GetValueOrThrow().OperationId:D} is already driving "
@@ -542,8 +554,7 @@ public sealed class ResourceManagerService(
             if (parked.TryGetError(out var parkError)) {
                 return Result<WriteAccepted>.Failure(parkError);
             }
-        }
-        else {
+        } else {
             var released = await Index(target).ReleaseAsync(target.Id.Id);
             if (released.TryGetError(out var releaseError)) {
                 return Result<WriteAccepted>.Failure(releaseError);
@@ -1059,8 +1070,11 @@ public sealed class ResourceManagerService(
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>THE WHOLE OF WHAT MAKES THIS SAFE IS THAT IT REACHES <see cref="PurgeCoreAsync" />
-    ///     THROUGH A DIFFERENT FRONT RATHER THAN THROUGH A DIFFERENT SUBJECT.</b> The mechanism below
+    ///     ⚠
+    ///     <b>
+    ///         THE WHOLE OF WHAT MAKES THIS SAFE IS THAT IT REACHES <see cref="PurgeCoreAsync" />
+    ///         THROUGH A DIFFERENT FRONT RATHER THAN THROUGH A DIFFERENT SUBJECT.
+    ///     </b> The mechanism below
     ///     is byte for byte the one an authorized purge runs; what changes is the precondition in
     ///     front of it. <see cref="PurgeAsync" /> asks the authorizer whether a caller may destroy
     ///     this; this asks the index grain whether the window it was destroying <i>into</i> has ended.
@@ -1138,8 +1152,11 @@ public sealed class ResourceManagerService(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Shared by the authorized front and the clock-driven one, and sharing it is the
-    ///         decision rather than a tidying.</b> docs/plan/07 § Azure RBAC records why: a purge that
+    ///         ⚠
+    ///         <b>
+    ///             Shared by the authorized front and the clock-driven one, and sharing it is the
+    ///             decision rather than a tidying.
+    ///         </b> docs/plan/07 § Azure RBAC records why: a purge that
     ///         the clock drove through a <i>different</i> body would be a second implementation of
     ///         the platform's one irreversible operation, and the two would drift in the direction
     ///         nobody is watching — the one nobody types.
@@ -1308,8 +1325,11 @@ public sealed class ResourceManagerService(
     ///     The GUID of the soft-deleted resource at this address, or the canonical <c>404</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The failure is <c>NotFound</c> from the same helper every other absence uses, and
-    ///     that identity is the property.</b> A name that never existed, a live resource, a soft-deleted
+    ///     ⚠
+    ///     <b>
+    ///         The failure is <c>NotFound</c> from the same helper every other absence uses, and
+    ///         that identity is the property.
+    ///     </b> A name that never existed, a live resource, a soft-deleted
     ///     resource in another tenant and one whose window has passed all answer the same sentence.
     ///     Anything else here is the enumeration oracle docs/plan/07 § The enforcement seam closes,
     ///     reopened by the two verbs that know soft delete exists.
@@ -1333,9 +1353,15 @@ public sealed class ResourceManagerService(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The registry's invariant is <i>an entry exists only while the index says
-    ///         <c>SoftDeleted</c></i>, and this is the only place that repairs it rather than
-    ///         maintaining it.</b> <c>RestoreAsync</c> clears the entry before the index write that
+    ///         ⚠
+    ///         <b>
+    ///             The registry's invariant is
+    ///             <i>
+    ///                 an entry exists only while the index says
+    ///                 <c>SoftDeleted</c>
+    ///             </i>, and this is the only place that repairs it rather than
+    ///             maintaining it.
+    ///         </b> <c>RestoreAsync</c> clears the entry before the index write that
     ///         would make it false — the order docs/plan/08 § Soft delete fixes, because a registry
     ///         that over-reports offers a restore that answers <c>404</c> and tells a caller who may
     ///         list the collection but may not read the resource that the name is held. The cost of
@@ -1345,8 +1371,11 @@ public sealed class ResourceManagerService(
     ///         This puts it back instead.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The index is asked again rather than the refusal being read, and that is what
-    ///         makes the repair safe.</b> A blind re-park would resurrect an entry for a resource a
+    ///         ⚠
+    ///         <b>
+    ///             The index is asked again rather than the refusal being read, and that is what
+    ///             makes the repair safe.
+    ///         </b> A blind re-park would resurrect an entry for a resource a
     ///         concurrent purge had just released: that purge unparks and then releases, so a restore
     ///         interleaved with it can find the binding <c>Free</c> at
     ///         <c>IndexClaimMachine.Restore</c> — and an entry written after the name came back is
@@ -1357,8 +1386,11 @@ public sealed class ResourceManagerService(
     ///         other answer, short is the correct state and staying short is the repair.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>NARROWED, NOT CLOSED, and said here because the paragraph above reads as though
-    ///         it were closed.</b> The guard holds at <i>read</i> time: this is a read of the index
+    ///         ⚠
+    ///         <b>
+    ///             NARROWED, NOT CLOSED, and said here because the paragraph above reads as though
+    ///             it were closed.
+    ///         </b> The guard holds at <i>read</i> time: this is a read of the index
     ///         followed by a write to the registry, two grain calls, and a purge that unparks and
     ///         releases in the gap still leaves an entry naming a name that is free. That is the
     ///         "long" the ordering exists to prevent, and it needs a purge and a restore of
@@ -1370,17 +1402,26 @@ public sealed class ResourceManagerService(
     ///         name has been given away.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>AND THE PARAGRAPH ABOVE USED TO END "PERMANENTLY", WHICH IS THE HALF ISSUE #12
-    ///         CHANGED (2026-09-05).</b> It read that the entry would stand for ever "since nothing
-    ///         can address that resource again", and it warned that <i>"#12's sweeper makes
-    ///         purge-of-an-expired-resource concurrent with restore-of-an-expired-resource the
-    ///         likeliest pair in the tree, so this paragraph is the one to re-read when that driver
-    ///         is built"</i>. Both halves came true at once. The driver — <c>IExpirySweeperGrain</c>
+    ///         ⚠
+    ///         <b>
+    ///             AND THE PARAGRAPH ABOVE USED TO END "PERMANENTLY", WHICH IS THE HALF ISSUE #12
+    ///             CHANGED (2026-09-05).
+    ///         </b> It read that the entry would stand for ever "since nothing
+    ///         can address that resource again", and it warned that
+    ///         <i>
+    ///             "#12's sweeper makes
+    ///             purge-of-an-expired-resource concurrent with restore-of-an-expired-resource the
+    ///             likeliest pair in the tree, so this paragraph is the one to re-read when that driver
+    ///             is built"
+    ///         </i>. Both halves came true at once. The driver — <c>IExpirySweeperGrain</c>
     ///         — does make that pair ordinary, because the moment a window closes is exactly the
     ///         moment a sweep starts purging and a tenant's restore starts being refused, and both of
     ///         those reach <see cref="RepairParkedRegistryAsync" />. What it also does is take the
-    ///         permanence away: <b>a sweep asks the index about every entry it finds and removes the
-    ///         ones the index no longer agrees with</b>, so a resurrected entry naming a freed name
+    ///         permanence away:
+    ///         <b>
+    ///             a sweep asks the index about every entry it finds and removes the
+    ///             ones the index no longer agrees with
+    ///         </b>, so a resurrected entry naming a freed name
     ///         now lives at most one <c>IExpirySweeperGrain.SweepPeriod</c> rather than for ever.
     ///         Something can address that resource again after all — the sweeper, which holds the
     ///         path and the GUID and asks <c>ResolveSoftDeletedAsync</c> directly.
@@ -1393,8 +1434,11 @@ public sealed class ResourceManagerService(
     ///         no longer does.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The re-park's own failure is not propagated, because the caller's answer belongs
-    ///         to the refusal that brought us here.</b> A failed repair leaves the state the defect
+    ///         ⚠
+    ///         <b>
+    ///             The re-park's own failure is not propagated, because the caller's answer belongs
+    ///             to the refusal that brought us here.
+    ///         </b> A failed repair leaves the state the defect
     ///         left and is no worse; what makes it recoverable rather than permanent is that a
     ///         retried restore reaches a repair again — the expired screen in <c>RestoreAsync</c>
     ///         calls this method before it returns for exactly that reason. <c>ParkAsync</c> is
@@ -1437,8 +1481,7 @@ public sealed class ResourceManagerService(
         // failure rather than only for the ones shaped like a Result.
         try {
             _ = await Sweeper(addressed).ArmAsync();
-        }
-        catch (Exception error) when (error is not OperationCanceledException) {
+        } catch (Exception error) when (error is not OperationCanceledException) {
             logger.LogWarning(
                 error,
                 "'{Path}' was put back into its resource group's parked registry but the group's "
@@ -1486,8 +1529,11 @@ public sealed class ResourceManagerService(
 
     /// <summary>Whether this resource has purge protection turned on.</summary>
     /// <remarks>
-    ///     ⚠ <b>Absent, unparseable and non-boolean all read as OFF, and that is the only safe
-    ///     direction even though it is the failing-open one.</b> The failing-closed reading is worse: a
+    ///     ⚠
+    ///     <b>
+    ///         Absent, unparseable and non-boolean all read as OFF, and that is the only safe
+    ///         direction even though it is the failing-open one.
+    ///     </b> The failing-closed reading is worse: a
     ///     type whose pointer named nothing would refuse every purge of every resource forever, and
     ///     there is no request that clears it. What keeps the fail-open from being silent is
     ///     <c>ProviderBuilder.CheckPurgeProtection</c>, which refuses at silo start a type whose
@@ -1502,8 +1548,7 @@ public sealed class ResourceManagerService(
         JsonDocument body;
         try {
             body = JsonDocument.Parse(properties);
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             return false;
         }
 
@@ -1703,8 +1748,11 @@ public sealed class ResourceManagerService(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The resource is read for the handler and again for the reply, and the two reads are
-    ///         different things.</b> <c>GetReconcileInputAsync</c> gives the stored <i>superset</i> —
+    ///         ⚠
+    ///         <b>
+    ///             The resource is read for the handler and again for the reply, and the two reads are
+    ///             different things.
+    ///         </b> <c>GetReconcileInputAsync</c> gives the stored <i>superset</i> —
     ///         which is what a handler wants, because it reads facts about the resource rather than
     ///         rendering it — and <c>GetAsync</c> gives the api-version's projection, which is what the
     ///         caller gets back. Handing the handler the projection would hide a property from it the
@@ -1728,9 +1776,7 @@ public sealed class ResourceManagerService(
             return Result<WriteAccepted>.Failure(inputError);
         }
 
-        using var body = JsonDocument.Parse(
-            string.IsNullOrWhiteSpace(request.Body) ? "{}" : request.Body
-        );
+        using var body = JsonDocument.Parse(string.IsNullOrWhiteSpace(request.Body) ? "{}" : request.Body);
 
         var invoked = await actions.InvokeAsync(
             target.Id,
@@ -1770,8 +1816,11 @@ public sealed class ResourceManagerService(
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>The count and the type are the whole point of the message.</b> docs/plan/08
-    ///         § Deleting a parent resource that has children: <i>"The refusal names how many children
-    ///         there are and their type, so the caller can go and delete them"</i>, and the ⚠ beside it
+    ///         § Deleting a parent resource that has children:
+    ///         <i>
+    ///             "The refusal names how many children
+    ///             there are and their type, so the caller can go and delete them"
+    ///         </i>, and the ⚠ beside it
     ///         says why a bare refusal is not enough — refusing creates a real failure mode where a
     ///         child whose own delete is stuck holds its parent undeletable, and the only thing that
     ///         makes that recoverable is being able to see what is holding it.
@@ -1785,8 +1834,7 @@ public sealed class ResourceManagerService(
     ///     </para>
     /// </remarks>
     static string ChildRefusal(string path, ImmutableArray<ChildTypeCount> children) {
-        var parts = children.Select(
-            x => string.Create(
+        var parts = children.Select(x => string.Create(
                 CultureInfo.InvariantCulture,
                 $"{x.Count} of type '{x.Type}'"
             )
@@ -1817,8 +1865,7 @@ public sealed class ResourceManagerService(
         JsonDocument parsed;
         try {
             parsed = JsonDocument.Parse(text);
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             return new(
                 ErrorCode.InvalidRequestBody,
                 $"The body of '{type}/{action}' is not valid JSON: {exception.Message}",
@@ -2409,8 +2456,11 @@ public sealed class ResourceManagerService(
     ///     the parent its address names is a resource that exists.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The two ownership checks are the first two things that happen and they are in this
-    ///     order on purpose.</b> Everything below them describes the platform to the caller — the
+    ///     ⚠
+    ///     <b>
+    ///         The two ownership checks are the first two things that happen and they are in this
+    ///         order on purpose.
+    ///     </b> Everything below them describes the platform to the caller — the
     ///     registry names api-versions, the index says whether a name is taken — and a description
     ///     handed out through a path the caller does not own is an oracle even when no data comes
     ///     with it. The isolation suite's <c>OracleTests</c> drive exactly that.
@@ -2554,8 +2604,11 @@ public sealed class ResourceManagerService(
     ///     The leases step 6 took, and the amounts they will commit to.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Both halves, because the delete path cannot recompute the second one and the create
-    ///     path can.</b> The lease ids are what step 9 needs in order to commit or release; the
+    ///     ⚠
+    ///     <b>
+    ///         Both halves, because the delete path cannot recompute the second one and the create
+    ///         path can.
+    ///     </b> The lease ids are what step 9 needs in order to commit or release; the
     ///     amounts are what a <i>delete</i> needs in order to give back exactly what was committed
     ///     (<see cref="QuotaCommitment" />). They are produced by the same loop, from the same body,
     ///     so they cannot disagree.
@@ -2627,8 +2680,11 @@ public sealed class ResourceManagerService(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The same function over the same body the create used, which is what makes it
-    ///         exact rather than an approximation.</b> <see cref="AmountFor" /> reads the meter's
+    ///         ⚠
+    ///         <b>
+    ///             The same function over the same body the create used, which is what makes it
+    ///             exact rather than an approximation.
+    ///         </b> <see cref="AmountFor" /> reads the meter's
     ///         declared pointer, and the body handed in here is the resource grain's stored
     ///         <i>superset</i> — <c>BeginDeleteAsync</c> projects with an empty pointer list, which is
     ///         the whole stored shape rather than one api-version's view of it. For a resource that
@@ -2636,8 +2692,11 @@ public sealed class ResourceManagerService(
     ///         number the create reserved and committed.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A <see cref="MeterRegistration.Derivation" /> keeps that symmetry only because it is
-    ///         a pure function of the body.</b> The seam lets a provider compute an amount the body does
+    ///         ⚠
+    ///         <b>
+    ///             A <see cref="MeterRegistration.Derivation" /> keeps that symmetry only because it is
+    ///             a pure function of the body.
+    ///         </b> The seam lets a provider compute an amount the body does
     ///         not spell — <c>replicas × sizing.cpu</c>, a preset resolved to a quantity — and the
     ///         create and the delete both run that same function over the same stored JSON, so the two
     ///         cannot disagree. A derivation that consulted a clock, configuration, or anything outside
@@ -2650,8 +2709,11 @@ public sealed class ResourceManagerService(
     ///         committed usage already does not track a body that grew. Closing that needs quota to be
     ///         re-evaluated on update, which is a change to step 6 and not to the delete path; what
     ///         this method must not do is invent a different number, so it derives the same way step 6
-    ///         does and inherits step 6's answer. <b>The seam makes that closable rather than closing
-    ///         it</b>: <see cref="AmountFor" /> is now a total function from a body to an amount or a
+    ///         does and inherits step 6's answer.
+    ///         <b>
+    ///             The seam makes that closable rather than closing
+    ///             it
+    ///         </b>: <see cref="AmountFor" /> is now a total function from a body to an amount or a
     ///         stated refusal, so re-reserving on a <c>PATCH</c> is running it over the new body and
     ///         moving the difference — which is a change to step 6, deliberately not made here.
     ///     </para>
@@ -2664,8 +2726,7 @@ public sealed class ResourceManagerService(
         JsonDocument body;
         try {
             body = JsonDocument.Parse(properties.Length == 0 ? "{}" : properties);
-        }
-        catch (JsonException) {
+        } catch (JsonException) {
             // Grain state that is not JSON is a platform fault. Returning nothing means the delete
             // gives nothing back, which is the behaviour that existed before this method — a drift
             // upward — rather than a wrong credit, which would be worse.
@@ -2711,8 +2772,11 @@ public sealed class ResourceManagerService(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The one step both a create and a delete go through, which is what makes them
-    ///         symmetric.</b> Anything that changes how an amount is derived changes it for both at
+    ///         ⚠
+    ///         <b>
+    ///             The one step both a create and a delete go through, which is what makes them
+    ///             symmetric.
+    ///         </b> Anything that changes how an amount is derived changes it for both at
     ///         once; a second derivation on either side is the bug <c>DeletePathTests</c>'
     ///         <c>ADeleteReturnsExactlyWhatTheCreateCommittedOnEveryMeter</c> pins.
     ///     </para>
@@ -2884,8 +2948,11 @@ public sealed class ResourceManagerService(
     ///     Reads the cluster id out of the body, at the pointer the type's own registration names.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The pointer used to be written here, and that is what made <c>RequiresCluster()</c> a
-    ///     flag with no schema consequence.</b> The manager looked for <c>/properties/clusterId</c>
+    ///     ⚠
+    ///     <b>
+    ///         The pointer used to be written here, and that is what made <c>RequiresCluster()</c> a
+    ///         flag with no schema consequence.
+    ///     </b> The manager looked for <c>/properties/clusterId</c>
     ///     whatever the type's schema declared, and nothing checked that a type declaring the flag
     ///     declared the property — so a provider that forgot it got <c>Guid.Empty</c> here, a
     ///     <c>202</c> to the caller, and a reconcile failure per resource.
@@ -2970,16 +3037,17 @@ public sealed class ResourceManagerService(
     ///     <see cref="PurgeExpiredAsync" /> (issue #12, docs/plan/07 § Azure RBAC).
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Reached from exactly one place in this file — <see cref="RepairParkedRegistryAsync" />
-    ///     — and it is reached to <i>arm</i>, never to sweep.</b> A request path that swept would put
+    ///     ⚠
+    ///     <b>
+    ///         Reached from exactly one place in this file — <see cref="RepairParkedRegistryAsync" />
+    ///         — and it is reached to <i>arm</i>, never to sweep.
+    ///     </b> A request path that swept would put
     ///     a whole group's purges inside one caller's request, and the sweeper is a clock precisely so
     ///     that nobody's request is the thing that ends somebody else's window.
     /// </remarks>
     IExpirySweeperGrain Sweeper(WriteTarget target) =>
         Tenant(target)
-            .GetGrain<IExpirySweeperGrain>(
-                GrainKeys.ExpirySweeper(target.Id.SubscriptionId, target.Id.ResourceGroup)
-            );
+            .GetGrain<IExpirySweeperGrain>(GrainKeys.ExpirySweeper(target.Id.SubscriptionId, target.Id.ResourceGroup));
 
     TenantGrainFactory Tenant(WriteTarget target) =>
         grains.ForTenant(target.Id.TenantId.ToString("D", CultureInfo.InvariantCulture));
@@ -3002,8 +3070,11 @@ public sealed class ResourceManagerService(
     ///     The GUID of the resource <see cref="ResourceId.Parent" /> names, or <see cref="Guid.Empty" />
     ///     when the address is top-level or this is not a create.
     ///     <para>
-    ///         ⚠ <b>Resolved here and carried, rather than looked up again at step 8, and the reason is
-    ///         the DELETE path.</b> <c>ResolveAsync</c> already reads this binding to answer the child's
+    ///         ⚠
+    ///         <b>
+    ///             Resolved here and carried, rather than looked up again at step 8, and the reason is
+    ///             the DELETE path.
+    ///         </b> <c>ResolveAsync</c> already reads this binding to answer the child's
     ///         404, so a second read would be a second chance to disagree with the first. That is the
     ///         small reason. The large one is that <c>IResourceRelationWriter</c> must be able to
     ///         reconstruct the tuple it wrote when the resource is <i>gone</i> — <c>OperationGrain</c>

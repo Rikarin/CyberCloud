@@ -101,10 +101,7 @@ public sealed class TemplateAndSenderTests(CommunicationCluster cluster) {
         var refused = await cluster.SendAsync(
             CommunicationCluster.Tenant,
             new() {
-                ServiceId = service,
-                Channel = ChannelKind.Sms,
-                Destination = "+420777123456",
-                IdempotencyKey = "otp-4"
+                ServiceId = service, Channel = ChannelKind.Sms, Destination = "+420777123456", IdempotencyKey = "otp-4"
             }
         );
 
@@ -170,7 +167,7 @@ public sealed class TemplateAndSenderTests(CommunicationCluster cluster) {
         var templateId = await TemplateAsync(service, "otp", ChannelKind.WhatsApp);
 
         (await cluster.Template(templateId)
-            .RecordApprovalAsync(1, SenderRegistrationStatus.Approved, "otp_v1_en"))
+                .RecordApprovalAsync(1, SenderRegistrationStatus.Approved, "otp_v1_en"))
             .IsSuccess.ShouldBeTrue();
 
         var sent = await cluster.SendAsync(
@@ -188,7 +185,7 @@ public sealed class TemplateAndSenderTests(CommunicationCluster cluster) {
         sent.IsSuccess.ShouldBeTrue();
         TestProviders.WhatsApp.Sent.Single()
             .ProviderTemplateName
-            .ShouldBe("otp_v1_en", "Meta accepts a template name and arguments, never a body");
+                .ShouldBe("otp_v1_en", "Meta accepts a template name and arguments, never a body");
     }
 
     [Fact]
@@ -515,30 +512,46 @@ public sealed class ChannelConfigurationTests(CommunicationCluster cluster) {
 
     [Fact]
     public void EveryChannelHasARefusingSeamRegisteredForIt() {
-        var registry = new ChannelProviderRegistry([
-            new UnavailableSmsProvider(Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableSmsProvider>.Instance),
-            new UnavailableWhatsAppProvider(Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableWhatsAppProvider>.Instance),
-            new UnavailableEmailProvider(Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableEmailProvider>.Instance),
-            new UnavailablePushProvider(Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailablePushProvider>.Instance),
-            new UnavailableVoiceProvider(Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableVoiceProvider>.Instance)
-        ]);
+        var registry = new ChannelProviderRegistry(
+            [
+                new UnavailableSmsProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableSmsProvider>.Instance
+                ),
+                new UnavailableWhatsAppProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableWhatsAppProvider>.Instance
+                ),
+                new UnavailableEmailProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableEmailProvider>.Instance
+                ),
+                new UnavailablePushProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailablePushProvider>.Instance
+                ),
+                new UnavailableVoiceProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableVoiceProvider>.Instance
+                )
+            ]
+        );
 
         foreach (var channel in Enum.GetValues<ChannelKind>().Where(x => x != ChannelKind.Unknown)) {
             registry.Resolve(channel, "unavailable")
                 .IsSuccess
-                .ShouldBeTrue(
-                    $"a {channel} send with no carrier must fail with a sentence saying so and what a "
-                    + "real implementation owes, not with a wiring error"
-                );
+                    .ShouldBeTrue(
+                        $"a {channel} send with no carrier must fail with a sentence saying so and what a "
+                        + "real implementation owes, not with a wiring error"
+                    );
         }
     }
 
     [Fact]
     public void AnUnnamedProviderWithSeveralCandidatesIsRefusedRatherThanPickedByRegistrationOrder() {
-        var registry = new ChannelProviderRegistry([
-            new InMemoryChannelProvider(ChannelKind.Sms),
-            new UnavailableSmsProvider(Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableSmsProvider>.Instance)
-        ]);
+        var registry = new ChannelProviderRegistry(
+            [
+                new InMemoryChannelProvider(ChannelKind.Sms),
+                new UnavailableSmsProvider(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<UnavailableSmsProvider>.Instance
+                )
+            ]
+        );
 
         registry.Resolve(ChannelKind.Sms, string.Empty)
             .Error!

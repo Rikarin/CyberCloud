@@ -93,8 +93,11 @@ public enum ProvisioningState {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This lives here rather than in <c>CyberCloud.ResourceManager.Contracts</c>, and the
-///         reason is the word "inherited".</b> A lock is set at a <i>scope</i> — a resource, a
+///         ⚠
+///         <b>
+///             This lives here rather than in <c>CyberCloud.ResourceManager.Contracts</c>, and the
+///             reason is the word "inherited".
+///         </b> A lock is set at a <i>scope</i> — a resource, a
 ///         resource group, a subscription, eventually a management group — and every scope above the
 ///         resource is docs/plan/06's, owned by <c>IResourceGroupGrain</c> and
 ///         <c>ISubscriptionGrain</c> in this assembly. This assembly cannot reference the resource
@@ -145,10 +148,10 @@ public static class LockLevels {
     /// </remarks>
     public static LockLevel Strongest(LockLevel first, LockLevel second) =>
         first == LockLevel.ReadOnly || second == LockLevel.ReadOnly
-            ? LockLevel.ReadOnly
-            : first == LockLevel.CanNotDelete || second == LockLevel.CanNotDelete
-                ? LockLevel.CanNotDelete
-                : LockLevel.None;
+        ? LockLevel.ReadOnly
+        : first == LockLevel.CanNotDelete || second == LockLevel.CanNotDelete
+            ? LockLevel.CanNotDelete
+            : LockLevel.None;
 }
 
 /// <summary>
@@ -198,8 +201,11 @@ public enum QuotaMeter {
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="SoftDeleted" /> is one state and not a second mechanism</b>, which is what
-///         docs/plan/08 § Soft delete asks for: <i>"IResourceIndexGrain is where this lands and it
-///         needs one new IndexEntryState, not a new mechanism"</i>. Everything soft delete needs from
+///         docs/plan/08 § Soft delete asks for:
+///         <i>
+///             "IResourceIndexGrain is where this lands and it
+///             needs one new IndexEntryState, not a new mechanism"
+///         </i>. Everything soft delete needs from
 ///         the index falls out of the two refusals that state carries — see its own remarks.
 ///     </para>
 /// </remarks>
@@ -219,8 +225,11 @@ public enum IndexEntryState {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Two refusals, and between them they are the whole of docs/plan/08 § Soft delete's
-    ///         second decision.</b>
+    ///         ⚠
+    ///         <b>
+    ///             Two refusals, and between them they are the whole of docs/plan/08 § Soft delete's
+    ///             second decision.
+    ///         </b>
     ///     </para>
     ///     <list type="bullet">
     ///         <item>
@@ -228,14 +237,19 @@ public enum IndexEntryState {
     ///             <c>404</c> on its old address is <i>free</i>: the write path's step 1 reads
     ///             <c>Exists = false</c> and every later step answers the same canonical absence a
     ///             name that was never taken gets. Nothing gains an "unless deleted" clause, which is
-    ///             the failure the document weighs this against — <i>"the feature is then only as good
-    ///             as the least-remembered of them"</i>. § Deleting a parent resource that has children
+    ///             the failure the document weighs this against —
+    ///             <i>
+    ///                 "the feature is then only as good
+    ///                 as the least-remembered of them"
+    ///             </i>. § Deleting a parent resource that has children
     ///             reads it correctly with no change for the same reason.
     ///         </item>
     ///         <item>
     ///             <b><c>TryClaimAsync</c> refuses it</b>, because the name is taken. Azure holds it —
-    ///             <i>"You can't reuse the name of a key vault that was soft-deleted, until the
-    ///             retention period expires"</i> — and releasing it breaks restore: a name taken by
+    ///             <i>
+    ///                 "You can't reuse the name of a key vault that was soft-deleted, until the
+    ///                 retention period expires"
+    ///             </i> — and releasing it breaks restore: a name taken by
     ///             somebody else leaves a restore with nowhere to go, so it would have to fail or
     ///             overwrite and both are worse than making the tenant wait.
     ///         </item>

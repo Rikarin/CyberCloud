@@ -10,8 +10,11 @@ namespace CyberCloud.Communication.Contracts;
 ///     <para>
 ///         docs/plan/17 § The parts that are actually the work asks for templates that are
 ///         <i>"named, versioned, localised, with typed parameters"</i>, and gives two reasons:
-///         WhatsApp <i>requires</i> pre-approved templates, and <i>"the alternative is string
-///         concatenation in twenty providers"</i>. This type is the second reason answered — one
+///         WhatsApp <i>requires</i> pre-approved templates, and
+///         <i>
+///             "the alternative is string
+///             concatenation in twenty providers"
+///         </i>. This type is the second reason answered — one
 ///         substitution, in one place, that every channel shares.
 ///     </para>
 ///     <para>
@@ -71,8 +74,8 @@ public static class TemplateRenderer {
                 $"Template version {version.Version} requires "
                 + $"{string.Join(", ", missing.Select(x => $"'{x}'"))} and the send supplied "
                 + (supplied.Length == 0
-                    ? "no arguments"
-                    : $"only {string.Join(", ", supplied.Select(x => $"'{x.Name}'"))}")
+                        ? "no arguments"
+                        : $"only {string.Join(", ", supplied.Select(x => $"'{x.Name}'"))}")
                 + ". Refused before dispatch — docs/plan/17 § The parts that are actually the work. "
                 + "A carrier would have sent the placeholder text to the recipient."
             );

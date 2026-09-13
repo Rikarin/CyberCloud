@@ -12,8 +12,11 @@ namespace CyberCloud.ResourceManager;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The edge this writes is the one that made a create readable, and until it existed a
-///         create was not.</b> docs/plan/07 § The model:
+///         ⚠
+///         <b>
+///             The edge this writes is the one that made a create readable, and until it existed a
+///             create was not.
+///         </b> docs/plan/07 § The model:
 ///         <i>
 ///             "<c>From(x, y)</c> is Zanzibar's tupleset-to-userset … It is the whole of hierarchical
 ///             inheritance and it is why a role assignment at a subscription grants on every resource
@@ -25,8 +28,11 @@ namespace CyberCloud.ResourceManager;
 ///         the walk cannot leave. That distinction is the whole of defect 1.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Through <see cref="ITupleStoreGrain" /> and never through
-///         <c>IObjectRelationsGrain</c> directly.</b> That grain's own remarks say why: a tuple
+///         ⚠
+///         <b>
+///             Through <see cref="ITupleStoreGrain" /> and never through
+///             <c>IObjectRelationsGrain</c> directly.
+///         </b> That grain's own remarks say why: a tuple
 ///         written straight into the forward index is one the reverse index never learns about and
 ///         does not bump the tenant's relation version, so no consistency token covers it and no check
 ///         cache is invalidated. A resource created that way would be readable by a caller whose cache
@@ -46,15 +52,21 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
     ///     The relation name of the scope one level up. docs/plan/07 § The model's <c>parent</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This used to be its own <c>"parent"</c> literal, for exactly the reason
-    ///     <see cref="ReBacResourceAuthorizer.ResourceGroupObjectType" /> was one</b> — the vocabulary
+    ///     ⚠
+    ///     <b>
+    ///         This used to be its own <c>"parent"</c> literal, for exactly the reason
+    ///         <see cref="ReBacResourceAuthorizer.ResourceGroupObjectType" /> was one
+    ///     </b> — the vocabulary
     ///     lived in <c>CyberCloud.Authorization</c> and this assembly references only its
     ///     <c>.Contracts</c>. It <b>is</b> <see cref="Relations.Parent" /> now, so the isolation suite
     ///     no longer asserts the two strings agree; they cannot differ, and a misspelling is
     ///     <c>CS0117</c>.
     ///     <para>
-    ///         ⚠ <b>What is still not a compile error is naming the wrong <i>defined</i> relation, and
-    ///         on this string that failure is silent in a way the casing bug was not.</b> An object
+    ///         ⚠
+    ///         <b>
+    ///             What is still not a compile error is naming the wrong <i>defined</i> relation, and
+    ///             on this string that failure is silent in a way the casing bug was not.
+    ///         </b> An object
     ///         type the schema does not define is rejected, but a tuple naming a relation the resource
     ///         type does not declare is written <b>successfully</b> against a relation no rewrite
     ///         follows: every create reports 202 and every resource is invisible, with nothing in any
@@ -204,12 +216,18 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE NEW EDGE IS WRITTEN BEFORE THE OLD ONE IS REMOVED, AND THAT ORDER IS THE WHOLE
-    ///         DESIGN.</b> A silo lost between the two leaves the resource holding <i>two</i> parents
+    ///         ⚠
+    ///         <b>
+    ///             THE NEW EDGE IS WRITTEN BEFORE THE OLD ONE IS REMOVED, AND THAT ORDER IS THE WHOLE
+    ///             DESIGN.
+    ///         </b> A silo lost between the two leaves the resource holding <i>two</i> parents
     ///         for a while; the other order leaves it holding <i>none</i>. docs/plan/08 § Soft delete
-    ///         chose re-parenting over dropping the edge precisely so that <i>"the resource is never
-    ///         parentless … a resource nobody can see, and a silo lost in that window leaving it that
-    ///         way — cannot happen during the recovery window either"</i>, and writing first is the
+    ///         chose re-parenting over dropping the edge precisely so that
+    ///         <i>
+    ///             "the resource is never
+    ///             parentless … a resource nobody can see, and a silo lost in that window leaving it that
+    ///             way — cannot happen during the recovery window either"
+    ///         </i>, and writing first is the
     ///         only ordering that keeps that true. It is the same trade the write path's step 8 makes:
     ///         an inert extra row over an invisible resource, at every fork.
     ///     </para>

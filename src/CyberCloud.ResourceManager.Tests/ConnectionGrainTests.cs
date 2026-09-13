@@ -37,8 +37,7 @@ public sealed class ConnectionGrainTests(ResourceManagerCluster cluster) {
     static readonly string AnotherResource = ResourceManagerCluster.Address("watched-too").Path;
     static readonly string AThirdResource = ResourceManagerCluster.Address("watched-thrice").Path;
 
-    static CallerContext Caller(Guid? tenant = null) =>
-        ResourceManagerCluster.Caller(tenant, "alice");
+    static CallerContext Caller(Guid? tenant = null) => ResourceManagerCluster.Caller(tenant, "alice");
 
     IConnectionGrain Connection(string id) => cluster.Connection(ResourceManagerCluster.Tenant, id);
 
@@ -88,9 +87,12 @@ public sealed class ConnectionGrainTests(ResourceManagerCluster cluster) {
     ///     THE revoke path. Access is granted, subscribed, then taken away — and the interest goes.
     /// </summary>
     /// <remarks>
-    ///     ⚠ docs/plan/10 § SignalR: <i>"A user who loses access to a resource group must stop
-    ///     receiving its events — otherwise the live-update channel is an authorization bypass with a
-    ///     nice UI."</i> The REST API would keep answering <c>404</c> correctly the whole time, which
+    ///     ⚠ docs/plan/10 § SignalR:
+    ///     <i>
+    ///         "A user who loses access to a resource group must stop
+    ///         receiving its events — otherwise the live-update channel is an authorization bypass with a
+    ///         nice UI."
+    ///     </i> The REST API would keep answering <c>404</c> correctly the whole time, which
     ///     is what makes the bypass invisible. In production the tenant's relation-version stream calls
     ///     <c>RecheckAsync</c>; that bridge is owed, and it is <i>buildable</i> now only because the
     ///     grain runs in a silo — a type declared in an Orleans client can subscribe to nothing.
@@ -239,9 +241,7 @@ public sealed class ConnectionGrainTests(ResourceManagerCluster cluster) {
     /// </summary>
     [Fact]
     public async Task AnUnqualifiedActivationIsRefused() {
-        var unqualified = cluster.Grains.GetGrain<IConnectionGrain>(
-            ConnectionGrainKeys.Connection("no-tenant")
-        );
+        var unqualified = cluster.Grains.GetGrain<IConnectionGrain>(ConnectionGrainKeys.Connection("no-tenant"));
 
         await Should.ThrowAsync<Exception>(async () => await unqualified.InterestsAsync());
     }

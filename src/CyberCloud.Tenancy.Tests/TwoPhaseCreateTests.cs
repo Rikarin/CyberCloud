@@ -73,7 +73,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster) {
         // 3. Confirm.
         (await index.ConfirmAsync(address.Id)).GetValueOrThrow()
             .State
-            .ShouldBe(IndexEntryState.Confirmed);
+                .ShouldBe(IndexEntryState.Confirmed);
 
         (await index.ResolveAsync()).GetValueOrThrow().ShouldBe(address.Id);
 
@@ -473,7 +473,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster) {
             .ShouldBeTrue();
 
         (await cluster.SubscriptionGrain(tenant, subscription)
-            .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
+                .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
 
         return new(
             tenant,

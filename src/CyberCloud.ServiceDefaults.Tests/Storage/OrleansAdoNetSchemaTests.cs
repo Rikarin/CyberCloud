@@ -27,8 +27,11 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///     </code>
 ///     <para>
 ///         ⚠ <b>Point it at a scratch database.</b> Every test starts by running the recovery SQL from
-///         <c>deploy/README.md § Idempotence</c> — <c>DROP TABLE IF EXISTS orleansstorage,
-///         orleansquery</c> — which is destructive of exactly the tables a real shard holds tenant
+///         <c>deploy/README.md § Idempotence</c> —
+///         <c>
+/// DROP TABLE IF EXISTS orleansstorage,
+///         orleansquery
+///         </c> — which is destructive of exactly the tables a real shard holds tenant
 ///         state in. Running the documented recovery is also the point: if the README's SQL stops
 ///         working, these stop passing.
 ///     </para>
@@ -39,9 +42,9 @@ public sealed class OrleansAdoNetSchemaTests {
 
     /// <summary>The recovery SQL from <c>deploy/README.md § Idempotence</c>, verbatim.</summary>
     const string Recovery = """
-        DROP TABLE IF EXISTS orleansstorage, orleansquery;
-        DROP FUNCTION IF EXISTS writetostorage;
-        """;
+                            DROP TABLE IF EXISTS orleansstorage, orleansquery;
+                            DROP FUNCTION IF EXISTS writetostorage;
+                            """;
 
     static string? Shard => Environment.GetEnvironmentVariable(ShardVariable);
 
@@ -77,9 +80,9 @@ public sealed class OrleansAdoNetSchemaTests {
         // The cheap path stays cheap: no advisory lock is taken on it, so nothing is waiting on
         // anything. pg_locks is the observable form of that claim.
         (await ScalarAsync(
-            shard,
-            "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory';"
-        )).ShouldBe(0L);
+                shard,
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory';"
+            )).ShouldBe(0L);
     }
 
     [Fact]
@@ -114,8 +117,10 @@ public sealed class OrleansAdoNetSchemaTests {
         // drop every tenant's durable state on this shard.
         await ExecuteAsync(shard, "DROP INDEX ix_orleansstorage;");
 
-        var failure = await Should.ThrowAsync<InvalidOperationException>(
-            () => OrleansAdoNetSchema.ApplyAsync(shard, TestContext.Current.CancellationToken)
+        var failure = await Should.ThrowAsync<InvalidOperationException>(() => OrleansAdoNetSchema.ApplyAsync(
+                shard,
+                TestContext.Current.CancellationToken
+            )
         );
 
         failure.Message.ShouldContain("ix_orleansstorage=MISSING");

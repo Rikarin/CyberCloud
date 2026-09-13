@@ -7,8 +7,11 @@ namespace CyberCloud.Providers.Mail.ClusterConformance;
 /// <summary>The cluster-backed suite, run against the managed-mail provider.</summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>FOUR OF THE FIVE OBJECTS ARE CORE API, so a green run here is genuine evidence that
-///         the objects exist — and no evidence at all that the harness' CRD derivation works.</b> A
+///         ⚠
+///         <b>
+///             FOUR OF THE FIVE OBJECTS ARE CORE API, so a green run here is genuine evidence that
+///             the objects exist — and no evidence at all that the harness' CRD derivation works.
+///         </b> A
 ///         Secret, a ConfigMap, a Service and a StatefulSet are real in a bare k3s; only the
 ///         <c>PodMonitor</c> needs a definition derived from the case's own <c>Objects</c>.
 ///     </para>

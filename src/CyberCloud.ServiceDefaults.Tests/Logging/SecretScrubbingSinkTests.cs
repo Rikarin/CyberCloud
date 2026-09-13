@@ -28,8 +28,11 @@ sealed class CollectingSink : ILogEventSink {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>These tests drive a real Serilog pipeline rather than calling the scrubber
-///         directly.</b> The failure this control is exposed to is not "the regex is wrong" —
+///         ⚠
+///         <b>
+///             These tests drive a real Serilog pipeline rather than calling the scrubber
+///             directly.
+///         </b> The failure this control is exposed to is not "the regex is wrong" —
 ///         <c>CyberCloud.Core.Tests.SecretShapedTextTests</c> covers that — it is "the scrubber was
 ///         attached somewhere the events do not go". A test that calls <c>Scrub</c> on a hand-built
 ///         <see cref="LogEvent" /> passes just as happily when the wrapper has been detached from the
@@ -58,8 +61,8 @@ public class SecretScrubbingSinkTests {
     );
 
     /// <summary>A logger wired exactly as a host wires it, writing into <paramref name="sink" />.</summary>
-    static Logger Pipeline(CollectingSink sink)
-        => new LoggerConfiguration()
+    static Logger Pipeline(CollectingSink sink) =>
+        new LoggerConfiguration()
             .MinimumLevel.Verbose()
             .WriteTo.ScrubbingSecrets(sinks => sinks.Sink(sink))
             .CreateLogger();

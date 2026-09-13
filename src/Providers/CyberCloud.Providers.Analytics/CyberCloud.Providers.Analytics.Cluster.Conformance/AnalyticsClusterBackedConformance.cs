@@ -9,14 +9,20 @@ namespace CyberCloud.Providers.Analytics.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Two class declarations over the case
-///         <c>CyberCloud.Providers.Analytics.Conformance</c> already declares.</b> One provider, one
+///         ⚠
+///         <b>
+///             Two class declarations over the case
+///             <c>CyberCloud.Providers.Analytics.Conformance</c> already declares.
+///         </b> One provider, one
 ///         <c>ProviderConformanceCase</c>: a second copy here would be a second description of the
 ///         same provider, and the two would disagree the first time either changed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two CRD stubs, derived, in two API groups — and the second group is what this
-///         provider adds to the harness's evidence.</b>
+///         ⚠
+///         <b>
+///             Two CRD stubs, derived, in two API groups — and the second group is what this
+///             provider adds to the harness's evidence.
+///         </b>
 ///         <c>ClusterConformanceHarness.EnsureCustomResourceDefinitionsAsync</c> reads group, version,
 ///         kind and plural off the case's own <c>Objects</c> and waits for <c>Established</c>. Every
 ///         earlier custom-resource provider needed one or two stubs in <i>one</i> group; this needs

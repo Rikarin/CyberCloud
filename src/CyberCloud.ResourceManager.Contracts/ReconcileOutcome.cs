@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///     <para>
 ///         docs/plan/08 § The reconcile loop:
 ///         <i>
-///             "<c>ReconcileOutcome</c> is one of <c>Converged</c>, <c>InProgress(reason,
-///             retryAfter)</c>, <c>Failed(error, retryable)</c>. Nothing else. A reconciler that wants
+///             "<c>ReconcileOutcome</c> is one of <c>Converged</c>,
+///             <c>
+/// InProgress(reason,
+///             retryAfter)
+///             </c>, <c>Failed(error, retryable)</c>. Nothing else. A reconciler that wants
 ///             to say something else wants to log, and <c>IReconcileLog</c> is how."
 ///         </i>
 ///     </para>
@@ -25,8 +28,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         make the default.
 ///     </para>
 ///     <para>
-///         ⚠ <b>There is no <c>Unknown</c> member and <c>default(ReconcileOutcome)</c> is
-///         <see langword="null" />.</b> This is a class rather than a record struct precisely so that
+///         ⚠
+///         <b>
+///             There is no <c>Unknown</c> member and <c>default(ReconcileOutcome)</c> is
+///             <see langword="null" />.
+///         </b> This is a class rather than a record struct precisely so that
 ///         "never assigned" is a null reference the nullable analysis catches at compile time, rather
 ///         than a fourth enum value every switch has to handle. That is the opposite of the choice
 ///         <see cref="Result" /> makes, and for the opposite reason: a <see cref="Result" /> is a
@@ -35,9 +41,12 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///     </para>
 ///     <para>
 ///         <b>The meaning of <see cref="Converged" /> is a contract clause, not a convenience.</b>
-///         Clause 4 of docs/plan/08 § The reconcile loop — <i>"Observes, never assumes.
-///         <c>Converged</c> means it <b>read back</b> the desired shape, not that the apply returned
-///         200."</i> The conformance suite enforces it by making the observed world disagree with the
+///         Clause 4 of docs/plan/08 § The reconcile loop —
+///         <i>
+///             "Observes, never assumes.
+///             <c>Converged</c> means it <b>read back</b> the desired shape, not that the apply returned
+///             200."
+///         </i> The conformance suite enforces it by making the observed world disagree with the
 ///         desired one after a reconciler has reported <see cref="Converged" />, and asserting the
 ///         next pass no longer does.
 ///     </para>
@@ -139,14 +148,20 @@ public sealed record ReconcileOutcome {
 
     /// <summary>
     ///     Fails with the retryability <paramref name="error" />'s own code implies, rather than one
-    ///     the caller asserts. <b>This is what a reconciler should return for a failure it did not
-    ///     produce itself</b> — an apply, a read or a delete that came back from the cluster.
+    ///     the caller asserts.
+    ///     <b>
+    ///         This is what a reconciler should return for a failure it did not
+    ///         produce itself
+    ///     </b> — an apply, a read or a delete that came back from the cluster.
     /// </summary>
     /// <param name="error">The failure, as the connection reported it.</param>
     /// <exception cref="ArgumentNullException"><paramref name="error" /> is null.</exception>
     /// <remarks>
-    ///     ⚠ <b>It exists because every reconciler was passing <c>retryable: true</c> and the sentence
-    ///     justifying it was not true.</b> The claim was that a body the API server rejects outright
+    ///     ⚠
+    ///     <b>
+    ///         It exists because every reconciler was passing <c>retryable: true</c> and the sentence
+    ///         justifying it was not true.
+    ///     </b> The claim was that a body the API server rejects outright
     ///     "comes back as a non-retryable code", which nothing implemented: an admission refusal
     ///     escaped as a raw client exception, and once <c>KubeFailures.Classify</c> did start mapping
     ///     one to <see cref="ErrorCode.PolicyViolation" />, no reconciler read the code. The cost is
@@ -169,8 +184,10 @@ public sealed record ReconcileOutcome {
     /// <param name="code">The code of a failure a reconcile pass is about to report.</param>
     /// <remarks>
     ///     <para>
-    ///         <b>The four terminal codes are the four refusals, and each one is a decision that will
-    ///         be made the same way every time it is asked:</b>
+    ///         <b>
+    ///             The four terminal codes are the four refusals, and each one is a decision that will
+    ///             be made the same way every time it is asked:
+    ///         </b>
     ///         <see cref="ErrorCode.PolicyViolation" /> is admission control or Pod Security declining
     ///         the object, <see cref="ErrorCode.InvalidRequestBody" /> is a body the API server will
     ///         not type-check, <see cref="ErrorCode.InvalidResourceType" /> is a kind the cluster does
@@ -179,8 +196,11 @@ public sealed record ReconcileOutcome {
     ///         fixed by a person, and telling them an hour late is the same as not telling them.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Everything else is retryable, including
-    ///         <see cref="ErrorCode.InternalError" />.</b> That is the code a transport fault arrives
+    ///         ⚠
+    ///         <b>
+    ///             Everything else is retryable, including
+    ///             <see cref="ErrorCode.InternalError" />.
+    ///         </b> That is the code a transport fault arrives
     ///         under — "the cluster did not answer" — and it is by far the commonest failure a
     ///         reconciler sees. The default therefore has to be the safe one: a terminal-by-default
     ///         rule would end an operation on a dropped connection, which is the mirror-image bug and
@@ -188,8 +208,11 @@ public sealed record ReconcileOutcome {
     ///         failure that was not warranted costs a resource.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see cref="ErrorCode.ResourceNotFound" />, <see cref="ErrorCode.Conflict" /> and
-    ///         <see cref="ErrorCode.PreconditionFailed" /> are deliberately <i>not</i> here</b>, even
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ErrorCode.ResourceNotFound" />, <see cref="ErrorCode.Conflict" /> and
+    ///             <see cref="ErrorCode.PreconditionFailed" /> are deliberately <i>not</i> here
+    ///         </b>, even
     ///         though <c>KubeFailures.MeansTheClusterAnswered</c> lists them alongside the four. That
     ///         predicate answers a different question — whether the cluster is healthy enough to keep
     ///         out of the degradation window — and all three of these are states a later pass really

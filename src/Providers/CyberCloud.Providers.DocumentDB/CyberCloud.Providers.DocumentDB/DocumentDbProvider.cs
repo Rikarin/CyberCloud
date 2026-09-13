@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.DocumentDB;
@@ -11,13 +12,18 @@ namespace CyberCloud.Providers.DocumentDB;
 /// <remarks>
 ///     <para>
 ///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md):
-///         <i>"MongoDB-compatible — <c>CyberCloud.DocumentDB/accounts</c> · M2 · 1.2 EM. FerretDB
-///         (Apache-2.0) over a CloudNativePG cluster."</i> The sixth provider namespace and the
+///         <i>
+///             "MongoDB-compatible — <c>CyberCloud.DocumentDB/accounts</c> · M2 · 1.2 EM. FerretDB
+///             (Apache-2.0) over a CloudNativePG cluster."
+///         </i> The sixth provider namespace and the
 ///         eighth resource type.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE FIRST ROW THAT IS TWO WORKLOADS RATHER THAN ONE, AND IT IS WHY EVERY OTHER
-///         FINDING HERE IS PAIRED.</b> An account is a CloudNativePG <c>Cluster</c> — operator-run,
+///         ⚠
+///         <b>
+///             THE FIRST ROW THAT IS TWO WORKLOADS RATHER THAN ONE, AND IT IS WHY EVERY OTHER
+///             FINDING HERE IS PAIRED.
+///         </b> An account is a CloudNativePG <c>Cluster</c> — operator-run,
 ///         with failover, backup and its own scrape object — <i>and</i> a FerretDB <c>Deployment</c>,
 ///         which has no operator at all. Four objects across four API groups. The consequences run
 ///         through the whole provider: piece 6 takes both of its branches at once, the quota meters
@@ -25,9 +31,15 @@ namespace CyberCloud.Providers.DocumentDB;
 ///         independent reasons instead of one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ADR-011 IS THE REASON THIS ROW EXISTS AND THE HONESTY RULE IS ENFORCED RATHER THAN
-///         WRITTEN DOWN.</b> Real MongoDB is SSPL — <i>"offering software as a service is exactly the
-///         use that several 2023–2025 licence changes exist to prevent"</i> — so the catalogue's
+///         ⚠
+///         <b>
+///             ADR-011 IS THE REASON THIS ROW EXISTS AND THE HONESTY RULE IS ENFORCED RATHER THAN
+///             WRITTEN DOWN.
+///         </b> Real MongoDB is SSPL —
+///         <i>
+///             "offering software as a service is exactly the
+///             use that several 2023–2025 licence changes exist to prevent"
+///         </i> — so the catalogue's
 ///         document database is FerretDB, which is Apache-2.0 (verified at that repository's own
 ///         <c>LICENSE</c>, not at a badge), over the <c>documentdb</c> extension, which is MIT.
 ///         docs/plan/12 requires the row to publish a supported-subset table;
@@ -37,8 +49,11 @@ namespace CyberCloud.Providers.DocumentDB;
 ///         <c>summary</c>, which is what <c>cyc documentdb accounts --help</c> prints.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ADR-010 CLAUSE 1's SURVEY NAMES "FerretDB" AMONG THE OPERATORS AND THERE IS NO
-///         FERRETDB OPERATOR.</b> Checked against the GitHub API on 2026-08-12 rather than a README:
+///         ⚠
+///         <b>
+///             ADR-010 CLAUSE 1's SURVEY NAMES "FerretDB" AMONG THE OPERATORS AND THERE IS NO
+///             FERRETDB OPERATOR.
+///         </b> Checked against the GitHub API on 2026-08-12 rather than a README:
 ///         no operator, no CRD, no Helm chart in that organisation. <b>SECOND SIGHTING</b> —
 ///         <c>charts/managed/nats</c> found <c>nats-operator</c> archived — so clause 1 is a survey of
 ///         <i>software choices</i> that is only sometimes a survey of <i>operators</i>. Two of the six
@@ -46,8 +61,11 @@ namespace CyberCloud.Providers.DocumentDB;
 ///         either service, and it belongs in ADR-010 rather than in a provider.
 ///     </para>
 ///     <para>
-///         ⚠ <b>docs/plan/12 SAYS THE POSTGRES HALF IS "ALREADY BUILT FOR THE ROW ABOVE" AND NOTHING
-///         WAS REUSABLE.</b> <c>src/Providers/README.md § Hard rule</c> forbids the assembly
+///         ⚠
+///         <b>
+///             docs/plan/12 SAYS THE POSTGRES HALF IS "ALREADY BUILT FOR THE ROW ABOVE" AND NOTHING
+///             WAS REUSABLE.
+///         </b> <c>src/Providers/README.md § Hard rule</c> forbids the assembly
 ///         reference, so this provider renders the <c>Cluster</c> CRD independently — and writing that
 ///         second rendering found a defect in the first, which is the strongest available argument for
 ///         the rule. <c>CyberCloud.DBforPostgreSQL/servers</c> puts
@@ -72,8 +90,11 @@ namespace CyberCloud.Providers.DocumentDB;
 ///         therefore mints.
 ///     </para>
 ///     <para>
-///         ⚠ <b>FerretDB adds nothing to that story, which is why an unauthenticated caller gets
-///         nowhere.</b> It neither stores nor invents a credential — it forwards a client's to
+///         ⚠
+///         <b>
+///             FerretDB adds nothing to that story, which is why an unauthenticated caller gets
+///             nowhere.
+///         </b> It neither stores nor invents a credential — it forwards a client's to
 ///         PostgreSQL and returns PostgreSQL's verdict, so an anonymous caller connects and can do
 ///         nothing. ⚠ The three-way comparison this paragraph used to draw has expired in all three
 ///         directions: <c>CyberCloud.DBforPostgreSQL/servers</c> no longer merely fails to hand the
@@ -83,8 +104,11 @@ namespace CyberCloud.Providers.DocumentDB;
 ///     <para>
 ///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the five providers before this one give</b>:
 ///         the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the platform
-///         does not honour is a promise made to the users most likely to test it. ⚠ <b>THAT REASON HAS
-///         EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED ONE.</b>
+///         does not honour is a promise made to the users most likely to test it. ⚠
+///         <b>
+///             THAT REASON HAS
+///             EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED ONE.
+///         </b>
 ///         docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks the
 ///         resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical
 ///         <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to the
@@ -206,12 +230,12 @@ public sealed class DocumentDbProvider : IResourceProvider {
                 "/properties/gateway/replicas"
             ],
             body => KubeQuantity.TryParse(DocumentDbAccounts.Resources(body).Cpu, out var cores)
-            && KubeQuantity.TryParse(DocumentDbAccounts.GatewayCpu, out var share)
-                ? Result<decimal>.Success(
-                    (DocumentDbAccounts.Instances(body) * cores)
-                    + (DocumentDbAccounts.GatewayReplicas(body) * share)
-                )
-                : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
+                && KubeQuantity.TryParse(DocumentDbAccounts.GatewayCpu, out var share)
+                    ? Result<decimal>.Success(
+                        DocumentDbAccounts.Instances(body) * cores
+                        + DocumentDbAccounts.GatewayReplicas(body) * share
+                    )
+                    : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
 
     /// <summary>Memory: the same two populations, in gibibytes.</summary>
@@ -226,12 +250,12 @@ public sealed class DocumentDbProvider : IResourceProvider {
                 "/properties/gateway/replicas"
             ],
             body => KubeQuantity.TryGibibytes(DocumentDbAccounts.Resources(body).Memory, out var gibibytes)
-            && KubeQuantity.TryGibibytes(DocumentDbAccounts.GatewayMemory, out var share)
-                ? Result<decimal>.Success(
-                    (DocumentDbAccounts.Instances(body) * gibibytes)
-                    + (DocumentDbAccounts.GatewayReplicas(body) * share)
-                )
-                : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
+                && KubeQuantity.TryGibibytes(DocumentDbAccounts.GatewayMemory, out var share)
+                    ? Result<decimal>.Success(
+                        DocumentDbAccounts.Instances(body) * gibibytes
+                        + DocumentDbAccounts.GatewayReplicas(body) * share
+                    )
+                    : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
 
     /// <summary>Storage: every PostgreSQL instance's data volume.</summary>

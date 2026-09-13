@@ -183,10 +183,10 @@ public sealed class WireContractTests {
     public void TheIdManifestMatchesTheBaseline() {
         var actual = GeneratedSerializerTypes
             .SelectMany(type => type
-                .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                .Where(x => x.id is not null)
-                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
+                    .GetMembers(BindingFlags.Public | BindingFlags.Instance)
+                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(x => x.id is not null)
+                    .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .ThenBy(x => x.Id)
@@ -250,8 +250,11 @@ public sealed class WireContractTests {
     ///     Every <i>settable</i> public property carries an <c>[Id(n)]</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Settable, because a computed property is not state and numbering one would be the
-    ///     mistake rather than the fix.</b> The bug this catches is a <c>{ get; init; }</c> added
+    ///     ⚠
+    ///     <b>
+    ///         Settable, because a computed property is not state and numbering one would be the
+    ///         mistake rather than the fix.
+    ///     </b> The bug this catches is a <c>{ get; init; }</c> added
     ///     without a number: it holds data, the far side never receives it, and nothing says so. A
     ///     get-only property — <see cref="SecretRef.IsEmpty" /> is the first one in this assembly —
     ///     has nothing to serialize <i>into</i>, so Orleans could not populate it even if it were
@@ -263,13 +266,13 @@ public sealed class WireContractTests {
         // is invisible to Orleans and is silently dropped on the wire.
         var unnumbered = GeneratedSerializerTypes
             .SelectMany(type => type
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.SetMethod is not null && p.GetCustomAttribute<IdAttribute>() is null)
-                .Select(p => string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"{type.Name}.{p.Name}"
+                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.SetMethod is not null && p.GetCustomAttribute<IdAttribute>() is null)
+                    .Select(p => string.Create(
+                            CultureInfo.InvariantCulture,
+                            $"{type.Name}.{p.Name}"
+                        )
                     )
-                )
             )
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();

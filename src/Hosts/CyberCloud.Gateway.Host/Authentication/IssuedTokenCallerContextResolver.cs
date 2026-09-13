@@ -9,8 +9,11 @@ namespace CyberCloud.Gateway.Host.Authentication;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is the test implementation of the identity seam, and it is deliberately not a
-///         JWT library with the signature check removed.</b> Two properties matter and both come from
+///         ⚠
+///         <b>
+///             This is the test implementation of the identity seam, and it is deliberately not a
+///             JWT library with the signature check removed.
+///         </b> Two properties matter and both come from
 ///         the shape rather than from care:
 ///     </para>
 ///     <list type="number">
@@ -56,29 +59,33 @@ sealed class IssuedTokenCallerContextResolver(IClock clock) : ICallerContextReso
         var header = request.Headers.Authorization.ToString();
 
         if (header.Length == 0) {
-            return Task.FromResult(Result<TokenClaims>.Failure(Http.GatewayErrors.Unauthenticated(
-                "no Authorization header"
-            )));
+            return Task.FromResult(
+                Result<TokenClaims>.Failure(Http.GatewayErrors.Unauthenticated("no Authorization header"))
+            );
         }
 
         if (!header.StartsWith(BearerPrefix, StringComparison.Ordinal)) {
-            return Task.FromResult(Result<TokenClaims>.Failure(Http.GatewayErrors.Unauthenticated(
-                "the Authorization header is not a bearer token"
-            )));
+            return Task.FromResult(
+                Result<TokenClaims>.Failure(
+                    Http.GatewayErrors.Unauthenticated("the Authorization header is not a bearer token")
+                )
+            );
         }
 
         // ⚠ The lookup IS the validation. A value this process did not issue has no claims to read,
         // so there is no path on which a caller-supplied `tid` is believed.
         if (!issued.TryGetValue(header[BearerPrefix.Length..], out var claims)) {
-            return Task.FromResult(Result<TokenClaims>.Failure(Http.GatewayErrors.Unauthenticated(
-                "the bearer token was not issued by this platform"
-            )));
+            return Task.FromResult(
+                Result<TokenClaims>.Failure(
+                    Http.GatewayErrors.Unauthenticated("the bearer token was not issued by this platform")
+                )
+            );
         }
 
         if (claims.ExpiresAt <= clock.UtcNow) {
-            return Task.FromResult(Result<TokenClaims>.Failure(Http.GatewayErrors.Unauthenticated(
-                "the bearer token has expired"
-            )));
+            return Task.FromResult(
+                Result<TokenClaims>.Failure(Http.GatewayErrors.Unauthenticated("the bearer token has expired"))
+            );
         }
 
         return Task.FromResult(Result<TokenClaims>.Success(claims));

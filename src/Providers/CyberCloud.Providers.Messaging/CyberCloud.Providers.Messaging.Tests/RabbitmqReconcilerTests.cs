@@ -11,8 +11,11 @@ namespace CyberCloud.Providers.Messaging.Tests;
 ///     The RabbitMQ reconciler against a connection that misbehaves in the ways a real cluster does.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The file exists a third time for a third reconciler in one assembly, and that is not
-///     duplication for its own sake.</b> Clause 2 is a property of an <i>instance</i>: a singleton
+///     ⚠
+///     <b>
+///         The file exists a third time for a third reconciler in one assembly, and that is not
+///         duplication for its own sake.
+///     </b> Clause 2 is a property of an <i>instance</i>: a singleton
 ///     <c>KafkaClusterReconciler</c> and a singleton <c>NatsClusterReconciler</c> being stateless say
 ///     nothing about a singleton <c>RabbitmqClusterReconciler</c>, and the container registers all
 ///     three separately by concrete type. What IS shared is the harness —
@@ -108,15 +111,17 @@ public sealed class RabbitmqReconcilerTests {
 
         outcome.ShouldBe(ReconcileOutcome.Converged);
 
-        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target)).ToHashSet(
-            StringComparer.Ordinal
-        );
+        var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+            .ToHashSet(StringComparer.Ordinal);
 
         var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
 
         read.ShouldBe(
             applied,
-            "the reconciler applied " + applied.Count + " object(s) and read back " + read.Count
+            "the reconciler applied "
+            + applied.Count
+            + " object(s) and read back "
+            + read.Count
             + ". An object rendered and not read back is one the loop reports Converged without "
             + "ever having observed."
         );
@@ -230,17 +235,19 @@ public sealed class RabbitmqReconcilerTests {
 
         var spec = Spec(Stored(connection, Address("observed", TenantA, SubscriptionA)));
 
-        spec.ContainsKey("service").ShouldBeFalse(
-            "spec.service is written, and the only value of it this type could want is the CRD's own "
-            + "default of {type: ClusterIP}. Writing it takes permanent ownership of the field under "
-            + "server-side apply, and the only other value is a LoadBalancer this row declines."
-        );
+        spec.ContainsKey("service")
+            .ShouldBeFalse(
+                "spec.service is written, and the only value of it this type could want is the CRD's own "
+                + "default of {type: ClusterIP}. Writing it takes permanent ownership of the field under "
+                + "server-side apply, and the only other value is a LoadBalancer this row declines."
+            );
 
-        spec.ContainsKey("override").ShouldBeFalse(
-            "spec.override is written. That is the only route to loadBalancerSourceRanges on this "
-            + "CRD, and it is a strategic-merge patch against a corev1.ServiceSpec — see "
-            + "charts/managed/rabbitmq/conformance.yaml § owed, external-exposure-moves-three-ports."
-        );
+        spec.ContainsKey("override")
+            .ShouldBeFalse(
+                "spec.override is written. That is the only route to loadBalancerSourceRanges on this "
+                + "CRD, and it is a strategic-merge patch against a corev1.ServiceSpec — see "
+                + "charts/managed/rabbitmq/conformance.yaml § owed, external-exposure-moves-three-ports."
+            );
     }
 
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
@@ -303,9 +310,7 @@ public sealed class RabbitmqReconcilerTests {
 
     static string Stored(RecordingConnection connection, ResourceId address) =>
         connection.Objects[
-            RecordingConnection.Key(
-                RabbitmqClusters.ClusterRef(ReconcileDriver.NamespaceFor(address), address.Name)
-            )
+            RecordingConnection.Key(RabbitmqClusters.ClusterRef(ReconcileDriver.NamespaceFor(address), address.Name))
         ];
 
     static JsonObject Spec(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!.AsObject();

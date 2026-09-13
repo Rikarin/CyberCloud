@@ -15,7 +15,7 @@ public enum WaitUntil {
     Started,
 
     /// <summary>Poll until the operation reaches a terminal state, then return.</summary>
-    Completed,
+    Completed
 }
 
 /// <summary>
@@ -37,11 +37,14 @@ public enum OperationState {
 
     /// <summary>
     ///     Cancelled. ⚠ docs/plan/08 § Long-running operations: this state is reached only <i>after</i>
-    ///     the delete path has run for everything already applied — <i>"a 'cancelled' create that
-    ///     leaves resources running is a billing dispute waiting to happen, so cancellation completes
-    ///     rather than abandoning"</i>. Nothing is left behind by the time a caller sees it.
+    ///     the delete path has run for everything already applied —
+    ///     <i>
+    ///         "a 'cancelled' create that
+    ///         leaves resources running is a billing dispute waiting to happen, so cancellation completes
+    ///         rather than abandoning"
+    ///     </i>. Nothing is left behind by the time a caller sees it.
     /// </summary>
-    Canceled,
+    Canceled
 }
 
 /// <summary>
@@ -49,7 +52,12 @@ public enum OperationState {
 ///     <c>GET /operations/{operationId}</c>.
 /// </summary>
 public sealed class OperationStatus {
-    OperationStatus(OperationState state, int? percentComplete, IReadOnlyList<OperationProgress> progress, CyberCloudError? error) {
+    OperationStatus(
+        OperationState state,
+        int? percentComplete,
+        IReadOnlyList<OperationProgress> progress,
+        CyberCloudError? error
+    ) {
         State = state;
         PercentComplete = percentComplete;
         Progress = progress;
@@ -100,11 +108,13 @@ public sealed class OperationStatus {
             if (root.ValueKind is not JsonValueKind.Object
                 || !root.TryGetProperty("status", out var status)
                 || status.ValueKind is not JsonValueKind.String
-                || !Enum.TryParse<OperationState>(status.GetString(), ignoreCase: false, out var state))
+                || !Enum.TryParse<OperationState>(status.GetString(), ignoreCase: false, out var state)) {
                 throw new CyberCloudRequestFailedException(
                     "The operation status response has no recognised 'status'. Expected one of "
                     + string.Join(", ", Enum.GetNames<OperationState>())
-                    + " — openapi/2026-08-01.json § OperationState.");
+                    + " — openapi/2026-08-01.json § OperationState."
+                );
+            }
 
             var percent = root.TryGetProperty("percentComplete", out var p) && p.ValueKind is JsonValueKind.Number
                 ? p.GetInt32()
@@ -119,14 +129,16 @@ public sealed class OperationStatus {
     }
 
     static List<OperationProgress> ReadProgress(JsonElement root) {
-        if (!root.TryGetProperty("progress", out var array) || array.ValueKind is not JsonValueKind.Array)
+        if (!root.TryGetProperty("progress", out var array) || array.ValueKind is not JsonValueKind.Array) {
             return [];
+        }
 
         var entries = new List<OperationProgress>(array.GetArrayLength());
 
         foreach (var item in array.EnumerateArray()) {
-            if (OperationProgress.TryRead(item) is { } entry)
+            if (OperationProgress.TryRead(item) is { } entry) {
                 entries.Add(entry);
+            }
         }
 
         return entries;

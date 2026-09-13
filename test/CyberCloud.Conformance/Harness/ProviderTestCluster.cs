@@ -51,8 +51,7 @@ public static class ConformanceIds {
     ///     the suite is about the child, and a parent per test would spend a create per assertion to
     ///     prove nothing the parent's own run does not already prove.
     /// </remarks>
-    public static string AncestorName(int level) =>
-        "ancestor-" + level.ToString(CultureInfo.InvariantCulture);
+    public static string AncestorName(int level) => "ancestor-" + level.ToString(CultureInfo.InvariantCulture);
 }
 
 /// <summary>
@@ -75,8 +74,11 @@ public static class ConformanceState<TSource>
     ///     The one test vault this provider's harness mints into and reads back from.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Static for the same reason <see cref="Cluster" /> is, and it is the same defect if it
-    ///     is not.</b> The reconciler mints inside the SILO and a synchronous action resolves inside
+    ///     ⚠
+    ///     <b>
+    ///         Static for the same reason <see cref="Cluster" /> is, and it is the same defect if it
+    ///         is not.
+    ///     </b> The reconciler mints inside the SILO and a synchronous action resolves inside
     ///     the test process, so two instances would be a <c>listKeys</c> that cannot find the
     ///     credential its own create wrote — and the failure would read as a provider bug.
     /// </remarks>
@@ -140,8 +142,11 @@ public static class ConformanceState<TSource>
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>In-memory grain storage and in-memory reminders, which is a deviation from ADR-018 and
-///         is owed back.</b> The same deviation, for the same reason and with the same cost, as
+///         ⚠
+///         <b>
+///             In-memory grain storage and in-memory reminders, which is a deviation from ADR-018 and
+///             is owed back.
+///         </b> The same deviation, for the same reason and with the same cost, as
 ///         <c>CyberCloud.ResourceManager.Tests</c>: no container could be started in the environment
 ///         this was written in. What it costs here specifically:
 ///     </para>
@@ -198,15 +203,23 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     ///     requires it — so building the registry twice is the same arrangement
     ///     <c>AddCyberCloudProvider</c> relies on.
     ///     <para>
-    ///         ⚠ <b>THE HARNESS'S OWN SEAMS ARE REGISTERED ALONGSIDE THE HANDLERS, AND THEY WERE NOT
-    ///         UNTIL A HANDLER FIRST DECLARED A DEPENDENCY.</b> This container held nothing but the
+    ///         ⚠
+    ///         <b>
+    ///             THE HARNESS'S OWN SEAMS ARE REGISTERED ALONGSIDE THE HANDLERS, AND THEY WERE NOT
+    ///             UNTIL A HANDLER FIRST DECLARED A DEPENDENCY.
+    ///         </b> This container held nothing but the
     ///         handler types, which worked for exactly as long as every handler had a parameterless
     ///         constructor — one did, for one provider. The first handler to take an
     ///         <c>IClock</c> failed to activate with
-    ///         <i>"Unable to resolve service for type 'CyberCloud.Core.Time.IClock' while attempting
-    ///         to activate '…'"</i>, thrown from <c>ActionDispatcher</c>'s <c>GetService</c> — which
-    ///         names the handler and the harness and reads like a provider bug. ⚠ <b>And it is a
-    ///         harness bug: a real host has these.</b> <c>AddCyberCloudResourceManager</c> registers
+    ///         <i>
+    ///             "Unable to resolve service for type 'CyberCloud.Core.Time.IClock' while attempting
+    ///             to activate '…'"
+    ///         </i>, thrown from <c>ActionDispatcher</c>'s <c>GetService</c> — which
+    ///         names the handler and the harness and reads like a provider bug. ⚠
+    ///         <b>
+    ///             And it is a
+    ///             harness bug: a real host has these.
+    ///         </b> <c>AddCyberCloudResourceManager</c> registers
     ///         <c>IClock</c>, <c>IClusterConnectionFactory</c> and <c>ISecretResolver</c>, and
     ///         <c>AddCyberCloudProvider</c> adds the handler into that <i>same</i> container. Building
     ///         a separate one with strictly less in it made the suite ask less than the platform
@@ -233,10 +246,10 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         services.AddSingleton<ISecretWriter>(Vault);
 
         foreach (var handler in Registry.Types
-            .SelectMany(x => x.Actions)
-            .Select(x => x.HandlerType)
-            .OfType<Type>()
-            .Distinct()) {
+                     .SelectMany(x => x.Actions)
+                     .Select(x => x.HandlerType)
+                     .OfType<Type>()
+                     .Distinct()) {
             services.AddSingleton(handler);
         }
 
@@ -271,8 +284,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
 
     /// <summary>A tenant-qualified grain factory.</summary>
     /// <param name="tenant">The tenant.</param>
-    public TenantGrainFactory For(Guid tenant) =>
-        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>The resource grain.</summary>
     /// <param name="tenant">The tenant.</param>
@@ -299,8 +311,11 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     ///     not the type's own ancestor.
     /// </exception>
     /// <remarks>
-    ///     ⚠ <b>This is what makes <see cref="IProviderCaseSource.Ancestors" />' default safe, and it
-    ///     is deliberately the FIRST thing anything touching an address goes through.</b> Without it a
+    ///     ⚠
+    ///     <b>
+    ///         This is what makes <see cref="IProviderCaseSource.Ancestors" />' default safe, and it
+    ///         is deliberately the FIRST thing anything touching an address goes through.
+    ///     </b> Without it a
     ///     depth-2 source that left the member empty fails inside <c>ResourceId</c>'s constructor —
     ///     an <c>ArgumentException</c> about parent-name counts, raised from a static helper, on
     ///     <i>every</i> test in the class at once, naming neither the case nor the member that is
@@ -357,8 +372,11 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     /// <param name="tenant">The tenant, defaulting to <see cref="ConformanceIds.Tenant" />.</param>
     /// <param name="subscription">The subscription, defaulting to <see cref="ConformanceIds.Subscription" />.</param>
     /// <remarks>
-    ///     ⚠ <b>The ancestor names come from the harness, not from the case, and that is why a child's
-    ///     run is the same suite rather than a copy of it.</b> Every assertion in
+    ///     ⚠
+    ///     <b>
+    ///         The ancestor names come from the harness, not from the case, and that is why a child's
+    ///         run is the same suite rather than a copy of it.
+    ///     </b> Every assertion in
     ///     <c>ProviderConformanceTests</c> addresses through this one method, so making it interleave
     ///     the ancestors it created is the whole of what a depth-2 type needed: the 27 assertions run
     ///     unchanged, against <c>…/probes/ancestor-0/samples/{name}</c> instead of
@@ -490,8 +508,11 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     /// <param name="tenant">The tenant.</param>
     /// <param name="subscription">The subscription.</param>
     /// <remarks>
-    ///     ⚠ <b>Every declared meter, rather than the ones the provider under test happens to
-    ///     draw.</b> A harness that lifted only what today's providers use would go back to being a
+    ///     ⚠
+    ///     <b>
+    ///         Every declared meter, rather than the ones the provider under test happens to
+    ///         draw.
+    ///     </b> A harness that lifted only what today's providers use would go back to being a
     ///     budget the day somebody declared <see cref="QuotaMeter.PublicIps" />, and the failure would
     ///     name quota rather than the harness — which is exactly what made this cost a provider author
     ///     an afternoon the first time.
@@ -558,11 +579,12 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
 
             var bound = await Index(address).GetAsync();
 
-            bound.GetValueOrThrow().State.ShouldBe(
-                IndexEntryState.Confirmed,
-                $"'{address.Path}' did not reach a confirmed binding, so every create under it will "
-                + "answer the parent-not-found 404 and the failure will name the CHILD's path"
-            );
+            bound.GetValueOrThrow()
+                .State.ShouldBe(
+                    IndexEntryState.Confirmed,
+                    $"'{address.Path}' did not reach a confirmed binding, so every create under it will "
+                    + "answer the parent-not-found 404 and the failure will name the CHILD's path"
+                );
         }
     }
 
@@ -627,9 +649,9 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // create failing inside the silo — as a resolution error nothing on the request
                     // path can attribute to the harness.
                     foreach (var reconciler in TSource.Ancestors
-                        .Select(x => x.ReconcilerType)
-                        .Where(x => x != TSource.ProviderCase.ReconcilerType)
-                        .Distinct()) {
+                                 .Select(x => x.ReconcilerType)
+                                 .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                                 .Distinct()) {
                         services.AddSingleton(reconciler);
                     }
 
@@ -638,11 +660,11 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // container. A LongRunning action driven inside the silo would otherwise refuse
                     // with a message about the container, naming the harness rather than the case.
                     foreach (var handler in ProviderRegistry.Build([TSource.ProviderCase.CreateProvider()])
-                        .Types
-                        .SelectMany(x => x.Actions)
-                        .Select(x => x.HandlerType)
-                        .OfType<Type>()
-                        .Distinct()) {
+                                 .Types
+                                     .SelectMany(x => x.Actions)
+                                     .Select(x => x.HandlerType)
+                                     .OfType<Type>()
+                                     .Distinct()) {
                         services.AddSingleton(handler);
                     }
 

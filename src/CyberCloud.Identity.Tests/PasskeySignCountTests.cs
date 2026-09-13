@@ -10,8 +10,11 @@ namespace CyberCloud.Identity.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The rule is "reject a decrease from a non-zero counter", not "require an
-///         increase".</b> A large number of authenticators — every one that keeps no per-credential
+///         ⚠
+///         <b>
+///             The rule is "reject a decrease from a non-zero counter", not "require an
+///             increase".
+///         </b> A large number of authenticators — every one that keeps no per-credential
 ///         state, which includes most platform authenticators — reports a constant zero, and that is
 ///         legal. Requiring an increase rejects those users on their <em>second</em> sign-in, and it
 ///         looks like a broken key rather than a policy choice, so it is the kind of mistake that

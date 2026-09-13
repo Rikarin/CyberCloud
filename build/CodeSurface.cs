@@ -7,21 +7,24 @@
 // shipped graph — mixing the two subjects into one reader is how a gate ends up inspecting a set it
 // did not mean to.
 
+using Nuke.Common.IO;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
-using Nuke.Common.IO;
 
 /// <summary>
 ///     Every type this repository compiles, by unqualified name, with the members it declares.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Read from compiled metadata rather than parsed out of source, and the difference is
-///         the difference between a gate and a guess.</b> A regular expression over <c>.cs</c> files
+///         ⚠
+///         <b>
+///             Read from compiled metadata rather than parsed out of source, and the difference is
+///             the difference between a gate and a guess.
+///         </b> A regular expression over <c>.cs</c> files
 ///         misses an enum member, a positional record parameter, a primary-constructor property, an
 ///         inherited member and anything a source generator emitted — every one of which a doc
 ///         comment may legitimately cite. Measured on this tree while designing the gate: a
@@ -44,70 +47,74 @@ using Nuke.Common.IO;
 ///         towards vaguer citations, which is the opposite of the point.
 ///     </para>
 /// </remarks>
-static class CodeSurface
-{
+static class CodeSurface {
     /// <summary>
     ///     Unqualified type name to every member name declared on it, unioned across assemblies.
     /// </summary>
-    public static Dictionary<string, HashSet<string>> Read(IEnumerable<AbsolutePath> assemblies)
-    {
+    public static Dictionary<string, HashSet<string>> Read(IEnumerable<AbsolutePath> assemblies) {
         var surface = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
-        foreach (var dll in assemblies.Where(x => x.FileExists()))
+        foreach (var dll in assemblies.Where(x => x.FileExists())) {
             ReadOne(dll, surface);
+        }
 
         return surface;
     }
 
-    static void ReadOne(AbsolutePath dll, Dictionary<string, HashSet<string>> surface)
-    {
+    static void ReadOne(AbsolutePath dll, Dictionary<string, HashSet<string>> surface) {
         using var stream = File.OpenRead(dll);
         using var pe = new PEReader(stream);
 
-        if (!pe.HasMetadata)
+        if (!pe.HasMetadata) {
             return;
+        }
 
         var metadata = pe.GetMetadataReader();
 
-        foreach (var handle in metadata.TypeDefinitions)
-        {
+        foreach (var handle in metadata.TypeDefinitions) {
             var type = metadata.GetTypeDefinition(handle);
             var name = Unqualified(metadata.GetString(type.Name));
 
             // The compiler's own artefacts — <>c__DisplayClass, an async state machine, an iterator.
             // They are not names anybody cites and letting them in would resolve a citation that
             // should have failed.
-            if (name.Length == 0 || name[0] == '<')
+            if (name.Length == 0 || name[0] == '<') {
                 continue;
+            }
 
             var members = Members(surface, name);
 
-            foreach (var method in type.GetMethods())
+            foreach (var method in type.GetMethods()) {
                 Add(members, metadata.GetString(metadata.GetMethodDefinition(method).Name));
+            }
 
-            foreach (var field in type.GetFields())
+            foreach (var field in type.GetFields()) {
                 Add(members, metadata.GetString(metadata.GetFieldDefinition(field).Name));
+            }
 
-            foreach (var property in type.GetProperties())
+            foreach (var property in type.GetProperties()) {
                 Add(members, metadata.GetString(metadata.GetPropertyDefinition(property).Name));
+            }
 
-            foreach (var @event in type.GetEvents())
+            foreach (var @event in type.GetEvents()) {
                 Add(members, metadata.GetString(metadata.GetEventDefinition(@event).Name));
+            }
 
-            foreach (var nested in type.GetNestedTypes())
+            foreach (var nested in type.GetNestedTypes()) {
                 Add(members, metadata.GetString(metadata.GetTypeDefinition(nested).Name));
+            }
         }
     }
 
-    static HashSet<string> Members(Dictionary<string, HashSet<string>> surface, string type)
-        => surface.TryGetValue(type, out var members)
+    static HashSet<string> Members(Dictionary<string, HashSet<string>> surface, string type) =>
+        surface.TryGetValue(type, out var members)
             ? members
             : surface[type] = new HashSet<string>(StringComparer.Ordinal);
 
-    static void Add(HashSet<string> members, string name)
-    {
-        if (name.Length == 0 || name[0] == '<')
+    static void Add(HashSet<string> members, string name) {
+        if (name.Length == 0 || name[0] == '<') {
             return;
+        }
 
         // `get_Foo` and `set_Foo` are the property's accessors; the property itself is added from
         // GetProperties above. `.ctor` is not a name anybody writes after a dot.
@@ -115,8 +122,7 @@ static class CodeSurface
             || name.StartsWith("set_", StringComparison.Ordinal)
             || name.StartsWith("add_", StringComparison.Ordinal)
             || name.StartsWith("remove_", StringComparison.Ordinal)
-            || name[0] == '.')
-        {
+            || name[0] == '.') {
             return;
         }
 
@@ -126,8 +132,9 @@ static class CodeSurface
         // name a doc comment cites is `Bar`.
         var last = name.LastIndexOf('.');
 
-        if (last >= 0 && last < name.Length - 1)
+        if (last >= 0 && last < name.Length - 1) {
             members.Add(name[(last + 1)..]);
+        }
     }
 
     /// <summary>
@@ -138,8 +145,7 @@ static class CodeSurface
     ///     declaring type, so this only has to strip the generic arity — <c>ResultSurrogate`1</c> is
     ///     cited as <c>ResultSurrogate</c>.
     /// </remarks>
-    static string Unqualified(string name)
-    {
+    static string Unqualified(string name) {
         var tick = name.IndexOf('`', StringComparison.Ordinal);
 
         return tick < 0 ? name : name[..tick];

@@ -64,8 +64,9 @@ public sealed class SchemaType {
         Relations = [
             .. this.members.Values.Where(x => !x.IsPermission).Select(x => x.Name).Order(StringComparer.Ordinal)
         ];
-        Permissions =
-            [.. this.members.Values.Where(x => x.IsPermission).Select(x => x.Name).Order(StringComparer.Ordinal)];
+        Permissions = [
+            .. this.members.Values.Where(x => x.IsPermission).Select(x => x.Name).Order(StringComparer.Ordinal)
+        ];
         Roles = [.. this.members.Values.Where(x => x.IsRole).Select(x => x.Name).Order(StringComparer.Ordinal)];
     }
 

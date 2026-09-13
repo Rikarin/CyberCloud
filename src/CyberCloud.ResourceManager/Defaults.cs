@@ -9,9 +9,12 @@ namespace CyberCloud.ResourceManager;
 ///     The policy evaluator a platform with no policy engine registers. Step 5, M3.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Returns <see cref="PolicyEffect.NotSupported" /> rather than
-///     <see cref="PolicyEffect.Allow" />, and the difference is what an audit log has to be able to
-///     state.</b> An <see cref="PolicyEffect.Allow" /> is indistinguishable from a policy engine that
+///     ⚠
+///     <b>
+///         Returns <see cref="PolicyEffect.NotSupported" /> rather than
+///         <see cref="PolicyEffect.Allow" />, and the difference is what an audit log has to be able to
+///         state.
+///     </b> An <see cref="PolicyEffect.Allow" /> is indistinguishable from a policy engine that
 ///     evaluated and permitted; <see cref="PolicyEffect.NotSupported" /> says no engine ran. The write
 ///     path treats both as "carry on", so the step stays in its place in the order from the first day
 ///     — and the ordering is the thing that must not move later.
@@ -60,19 +63,28 @@ public sealed class LoggingResourceChangedSink(ILogger<LoggingResourceChangedSin
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/06 § Tags, locks makes locks <c>CanNotDelete</c> / <c>ReadOnly</c>, <i>"inherited
-///         down the hierarchy"</i>, and docs/plan/08 § The write path, end to end's step 4 reads
+///         docs/plan/06 § Tags, locks makes locks <c>CanNotDelete</c> / <c>ReadOnly</c>,
+///         <i>
+///             "inherited
+///             down the hierarchy"
+///         </i>, and docs/plan/08 § The write path, end to end's step 4 reads
 ///         <i>"locks: CanNotDelete / ReadOnly inherited from rg, sub, mg"</i>. This walks
 ///         <b>resource → resource group → subscription</b> and takes the strongest lock found at any
 ///         of the three.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The management group is the one scope that is still missing, and it is missing
-///         because it does not exist.</b> docs/plan/06 § The hierarchy makes the management-group tree
+///         ⚠
+///         <b>
+///             The management group is the one scope that is still missing, and it is missing
+///             because it does not exist.
+///         </b> docs/plan/06 § The hierarchy makes the management-group tree
 ///         optional and docs/plan/01 puts it at M2: there is no <c>IManagementGroupGrain</c>, no
 ///         grain key for one and no parent pointer from a subscription to one. So this walk stops at
-///         the subscription, and <b>a lock set on a management group is not merely unread — it cannot
-///         be set at all.</b> Stated here so that the day the tree lands, the missing link is a known
+///         the subscription, and
+///         <b>
+///             a lock set on a management group is not merely unread — it cannot
+///             be set at all.
+///         </b> Stated here so that the day the tree lands, the missing link is a known
 ///         one line rather than a discovered incident. Adding it is one more <c>Strongest</c> above
 ///         the subscription read; nothing else about this class changes.
 ///     </para>
@@ -84,8 +96,11 @@ public sealed class LoggingResourceChangedSink(ILogger<LoggingResourceChangedSin
 ///         resource, and the two ancestors are read exactly as they are for an update.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A scope that does not exist contributes <see cref="LockLevel.None" /> rather than
-///         failing the walk.</b> Fail-closed sounds safer and is wrong here: the resource group and
+///         ⚠
+///         <b>
+///             A scope that does not exist contributes <see cref="LockLevel.None" /> rather than
+///             failing the walk.
+///         </b> Fail-closed sounds safer and is wrong here: the resource group and
 ///         subscription grains are created by an admin path that the resource manager does not drive,
 ///         so a platform whose lock walk refused every write against an unrecorded group would be a
 ///         platform where nothing could be created. Absence of a lock record is absence of a lock.
@@ -149,15 +164,21 @@ public sealed class ResourceScopeLockResolver(IGrainFactory grains) : ILockResol
 ///     provision. docs/plan/08 § What the resource manager deliberately does not do routes the real
 ///     implementation to OpenBao via <c>CyberCloud.Vault</c>.
 ///     <para>
-///         ⚠ <b>THIS IS NOW A <i>WIRING</i> FAILURE RATHER THAN A MISSING FEATURE, AND THE MESSAGE
-///         SAYS SO.</b> <c>CyberCloud.Vault</c> exists and <c>OpenBaoSecretResolver</c> reads a real
+///         ⚠
+///         <b>
+///             THIS IS NOW A <i>WIRING</i> FAILURE RATHER THAN A MISSING FEATURE, AND THE MESSAGE
+///             SAYS SO.
+///         </b> <c>CyberCloud.Vault</c> exists and <c>OpenBaoSecretResolver</c> reads a real
 ///         value; reaching this type means the host did not call <c>AddOpenBaoSecretResolver</c>. The
 ///         remarks here used to end "which does not exist yet", and that sentence outliving the
 ///         assembly is the failure mode this paragraph replaces.
 ///     </para>
 ///     <para>
-///         ⚠ <b>And this stays the <c>TryAdd</c> default, which is a layering fact rather than a
-///         preference.</b> Registering the OpenBao resolver here would need
+///         ⚠
+///         <b>
+///             And this stays the <c>TryAdd</c> default, which is a layering fact rather than a
+///             preference.
+///         </b> Registering the OpenBao resolver here would need
 ///         <c>CyberCloud.ResourceManager → CyberCloud.Vault</c>, and <c>CyberCloud.Vault</c> reaches
 ///         this assembly for <see cref="ISecretResolver" /> itself — module-layering.txt's third
 ///         direction refuses the cycle. So a silo with a vault opts in and every other silo keeps
@@ -189,8 +210,11 @@ public sealed class UnavailableSecretResolver : ISecretResolver {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Refuses rather than succeeding without writing, and the difference is a service that
-///         comes up open.</b> A no-op mint returns "the credential exists" to a reconciler that then
+///         ⚠
+///         <b>
+///             Refuses rather than succeeding without writing, and the difference is a service that
+///             comes up open.
+///         </b> A no-op mint returns "the credential exists" to a reconciler that then
 ///         renders a manifest against a secret nobody wrote — and on
 ///         <c>CyberCloud.Storage/accounts</c> an S3 gateway with no identities file
 ///         <i>authenticates nobody and authorises everybody</i>. So the refusal is the safe answer for
@@ -248,8 +272,11 @@ public sealed class NoClusterConnectionFactory : IClusterConnectionFactory {
 ///     The <see cref="IClusterConnectionRegistrar" /> a host with no cluster fabric registers.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>It refuses, which turns a cluster that would have converged unreachable into a cluster
-///     that does not converge.</b> That is deliberate and it is the harsher of the two answers.
+///     ⚠
+///     <b>
+///         It refuses, which turns a cluster that would have converged unreachable into a cluster
+///         that does not converge.
+///     </b> That is deliberate and it is the harsher of the two answers.
 ///     <c>ReconcileDriver</c> turns this failure into the pass's outcome, so a
 ///     <c>CyberCloud.ContainerService/managedClusters</c> create on a host with no registrar reports
 ///     the missing wiring instead of reporting <c>Succeeded</c> for a cluster nothing can then place a
@@ -281,8 +308,11 @@ public sealed class UnavailableClusterConnectionRegistrar : IClusterConnectionRe
 ///     The <see cref="IClusterObjectInventory" /> a silo with no informer bridge registers.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Fails rather than returning empty, and the difference is the whole safety of the drift
-///     scan.</b> An empty inventory says <i>every resource on this cluster is a stray</i> — that
+///     ⚠
+///     <b>
+///         Fails rather than returning empty, and the difference is the whole safety of the drift
+///         scan.
+///     </b> An empty inventory says <i>every resource on this cluster is a stray</i> — that
 ///     somebody deleted all of production — and a scan that believed it would re-apply an entire
 ///     cluster's worth of objects. A failure says <i>do not conclude anything</i>, which is the only
 ///     honest answer from a component that cannot see the cluster.
@@ -314,16 +344,22 @@ public sealed class UnavailableClusterObjectInventory : IClusterObjectInventory 
 ///     The <see cref="INamespaceInventory" /> every silo registers, because there is no other one.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Fails rather than returning empty, and here the stakes are higher than the drift
-///     inventory's.</b> An empty namespace listing is not a wrong report — it is a licence to run a
+///     ⚠
+///     <b>
+///         Fails rather than returning empty, and here the stakes are higher than the drift
+///         inventory's.
+///     </b> An empty namespace listing is not a wrong report — it is a licence to run a
 ///     recursive delete over whatever is actually in there: a tenant's database, an operator's
 ///     <c>Secret</c>, and the volume claims docs/plan/08 § Soft delete keeps so that a restore has
 ///     something to restore from. <c>NamespaceReclaim.Decide</c> reads "no occupants" as
 ///     <c>Deletable</c>, which is correct given a <i>complete</i> listing and catastrophic given a
 ///     silent one, so the only safe stub is one that never answers.
 ///     <para>
-///         ⚠ <b>The real one is not a smaller version of this and is not owed to
-///         <c>UnavailableClusterObjectInventory</c>'s informer.</b> Listing a namespace's whole
+///         ⚠
+///         <b>
+///             The real one is not a smaller version of this and is not owed to
+///             <c>UnavailableClusterObjectInventory</c>'s informer.
+///         </b> Listing a namespace's whole
 ///         contents is a discovery of every namespaced <c>APIResource</c> the cluster serves, CRDs
 ///         included, and a list per kind. <see cref="INamespaceInventory" /> says what that costs.
 ///     </para>

@@ -16,18 +16,18 @@ namespace CyberCloud.Cli.Tests;
 /// </remarks>
 public sealed class JmesPathEdgeTests {
     const string Document = """
-        {
-          "value": [
-            {"name":"w1","location":"eu-central","properties":{"tier":"free","replicas":10}},
-            {"name":"w2","location":"us-east","properties":{"tier":"premium","replicas":9}},
-            {"name":"w3","location":"eu-central","properties":{"tier":"premium","replicas":100}}
-          ],
-          "empty": [],
-          "flag": true,
-          "count": 7,
-          "nextLink": null
-        }
-        """;
+                            {
+                              "value": [
+                                {"name":"w1","location":"eu-central","properties":{"tier":"free","replicas":10}},
+                                {"name":"w2","location":"us-east","properties":{"tier":"premium","replicas":9}},
+                                {"name":"w3","location":"eu-central","properties":{"tier":"premium","replicas":100}}
+                              ],
+                              "empty": [],
+                              "flag": true,
+                              "count": 7,
+                              "nextLink": null
+                            }
+                            """;
 
     [Theory]
     // A filter that matches nothing is an empty array, and stays an array through the projection

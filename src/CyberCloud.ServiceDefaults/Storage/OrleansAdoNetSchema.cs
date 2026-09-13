@@ -175,10 +175,10 @@ public static class OrleansAdoNetSchema {
         }
 
         await using (var gate = new NpgsqlCommand(
-            $"SELECT pg_advisory_xact_lock({AdvisoryLockClass}, {AdvisoryLockKey});",
-            connection,
-            transaction
-        )) {
+                         $"SELECT pg_advisory_xact_lock({AdvisoryLockClass}, {AdvisoryLockKey});",
+                         connection,
+                         transaction
+                     )) {
             await gate.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -301,19 +301,19 @@ public static class OrleansAdoNetSchema {
         bool queryTable, storageTable, storageIndex, writeFunction;
 
         await using (var objects = new NpgsqlCommand(
-            """
-            SELECT to_regclass('orleansquery')::text     IS NOT NULL,
-                   to_regclass('orleansstorage')::text   IS NOT NULL,
-                   to_regclass('ix_orleansstorage')::text IS NOT NULL,
-                   EXISTS (SELECT 1
-                           FROM pg_proc p
-                           JOIN pg_namespace n ON n.oid = p.pronamespace
-                           WHERE p.proname = 'writetostorage'
-                             AND n.nspname = ANY (current_schemas(false)));
-            """,
-            connection,
-            transaction
-        )) {
+                         """
+                         SELECT to_regclass('orleansquery')::text     IS NOT NULL,
+                                to_regclass('orleansstorage')::text   IS NOT NULL,
+                                to_regclass('ix_orleansstorage')::text IS NOT NULL,
+                                EXISTS (SELECT 1
+                                        FROM pg_proc p
+                                        JOIN pg_namespace n ON n.oid = p.pronamespace
+                                        WHERE p.proname = 'writetostorage'
+                                          AND n.nspname = ANY (current_schemas(false)));
+                         """,
+                         connection,
+                         transaction
+                     )) {
             await using var reader = await objects.ExecuteReaderAsync(cancellationToken);
             await reader.ReadAsync(cancellationToken);
 

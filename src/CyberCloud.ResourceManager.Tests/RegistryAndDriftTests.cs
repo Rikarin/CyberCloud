@@ -152,9 +152,10 @@ public sealed class ProviderRegistryTests {
 
     [Fact]
     public void TwoProvidersCannotShareANamespace() {
-        Should.Throw<InvalidOperationException>(
-                () => ProviderRegistry.Build([new TestingProvider(), new TestingProvider()])
+        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build(
+                [new TestingProvider(), new TestingProvider()]
             )
+        )
             .Message.ShouldContain("shadow");
     }
 
@@ -461,40 +462,43 @@ public sealed class StubbedSeamTests {
         public static NullGrainFactory Instance { get; } = new();
 
         public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string? grainClassNamePrefix = null)
-            where TGrainInterface : IGrainWithGuidKey =>
-            throw new NotSupportedException();
+            where TGrainInterface : IGrainWithGuidKey => throw new NotSupportedException();
 
         public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string? grainClassNamePrefix = null)
-            where TGrainInterface : IGrainWithIntegerKey =>
-            throw new NotSupportedException();
+            where TGrainInterface : IGrainWithIntegerKey => throw new NotSupportedException();
 
         public TGrainInterface GetGrain<TGrainInterface>(string primaryKey, string? grainClassNamePrefix = null)
-            where TGrainInterface : IGrainWithStringKey =>
-            throw new NotSupportedException();
+            where TGrainInterface : IGrainWithStringKey => throw new NotSupportedException();
 
-        public TGrainInterface GetGrain<TGrainInterface>(Guid primaryKey, string keyExtension, string? grainClassNamePrefix = null)
+        public TGrainInterface GetGrain<TGrainInterface>(
+            Guid primaryKey,
+            string keyExtension,
+            string? grainClassNamePrefix = null
+        )
             where TGrainInterface : IGrainWithGuidCompoundKey =>
             throw new NotSupportedException();
 
-        public TGrainInterface GetGrain<TGrainInterface>(long primaryKey, string keyExtension, string? grainClassNamePrefix = null)
+        public TGrainInterface GetGrain<TGrainInterface>(
+            long primaryKey,
+            string keyExtension,
+            string? grainClassNamePrefix = null
+        )
             where TGrainInterface : IGrainWithIntegerCompoundKey =>
             throw new NotSupportedException();
 
         public IAddressable GetGrain(GrainId grainId) => throw new NotSupportedException();
 
-        public IAddressable GetGrain(GrainId grainId, GrainInterfaceType interfaceType) => throw new NotSupportedException();
+        public IAddressable GetGrain(GrainId grainId, GrainInterfaceType interfaceType) =>
+            throw new NotSupportedException();
 
         public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-            where TGrainObserverInterface : IGrainObserver =>
-            throw new NotSupportedException();
+            where TGrainObserverInterface : IGrainObserver => throw new NotSupportedException();
 
         public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-            where TGrainObserverInterface : IGrainObserver =>
-            throw new NotSupportedException();
+            where TGrainObserverInterface : IGrainObserver => throw new NotSupportedException();
 
         public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
-            where TGrainInterface : IAddressable =>
-            throw new NotSupportedException();
+            where TGrainInterface : IAddressable => throw new NotSupportedException();
 
         public IGrain GetGrain(Type grainInterfaceType, Guid grainPrimaryKey) => throw new NotSupportedException();
 

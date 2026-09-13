@@ -260,10 +260,10 @@ public sealed class TenancyWireContractTests {
     public void TheIdManifestMatchesTheBaseline() {
         var actual = GeneratedSerializerTypes
             .SelectMany(type => type
-                .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                .Where(x => x.id is not null)
-                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
+                    .GetMembers(BindingFlags.Public | BindingFlags.Instance)
+                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(x => x.id is not null)
+                    .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .ThenBy(x => x.Id)
@@ -290,9 +290,9 @@ public sealed class TenancyWireContractTests {
     public void TheBaselineNamesEveryPublicMemberOfEveryWireType() {
         var unnumbered = GeneratedSerializerTypes
             .SelectMany(type => type
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
-                .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
+                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
+                    .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
             )
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();

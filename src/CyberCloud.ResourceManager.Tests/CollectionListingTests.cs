@@ -8,8 +8,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every case here starts at <see cref="IResourceManager" />, for the reason
-///         <see cref="GroupMembershipTests" /> gives.</b> The enumeration source is
+///         ⚠
+///         <b>
+///             Every case here starts at <see cref="IResourceManager" />, for the reason
+///             <see cref="GroupMembershipTests" /> gives.
+///         </b> The enumeration source is
 ///         <c>IResourceGroupGrain</c>'s membership, and until that grain's methods were called by the
 ///         write path a listing built on it answered "no resources" for a group full of them
 ///         <i>and was right</i>. A suite that seeded membership by calling the grain would test the
@@ -25,7 +28,10 @@ namespace CyberCloud.ResourceManager.Tests;
 ///         names belongs.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ResourceManagerCluster.IsolatedSubscription" /></b>, for the reason that
+///         ⚠
+///         <b>
+///             <see cref="ResourceManagerCluster.IsolatedSubscription" />
+///         </b>, for the reason that
 ///         property's remarks give: this class creates a dozen resources whose committed quota
 ///         nothing gives back.
 ///     </para>
@@ -37,8 +43,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     // ── What a listing returns ─────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A created resource is in its type's collection, at its own address, before the
-    ///     operation converges.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A created resource is in its type's collection, at its own address, before the
+    ///         operation converges.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The two halves are the same pair <c>GroupMembershipTests</c> asserts on membership: a
@@ -63,8 +72,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A collection holds one type, and a resource of another type in the same group is not
-    ///     in it.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A collection holds one type, and a resource of another type in the same group is not
+    ///         in it.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     Membership is per resource <i>group</i> and holds every type in it; the address being
@@ -91,8 +103,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A nested collection lists the children of the parent its address names, and not the
-    ///     children of a sibling.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A nested collection lists the children of the parent its address names, and not the
+    ///         children of a sibling.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <c>ResourceCollectionId</c> interleaves the way <c>ResourceId</c> does, so
@@ -123,13 +138,18 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A resource being torn down is still listed, and it is listed in
-    ///     <see cref="ProvisioningState.Deleting" />.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A resource being torn down is still listed, and it is listed in
+    ///         <see cref="ProvisioningState.Deleting" />.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     docs/plan/06 § Two-phase create: a resource whose data-plane teardown has not converged is
-    ///     <i>"visible in listings with that state — never silently gone while its pods still run and
-    ///     its meter still ticks"</i>. That sentence is about <b>this</b> endpoint, and it was
+    ///     <i>
+    ///         "visible in listings with that state — never silently gone while its pods still run and
+    ///         its meter still ticks"
+    ///     </i>. That sentence is about <b>this</b> endpoint, and it was
     ///     unassertable until there was one.
     /// </remarks>
     [Fact]
@@ -154,8 +174,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     // ── The filter ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A resource the caller may not read is absent from the page and leaves no trace of
-    ///     itself in it.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A resource the caller may not read is absent from the page and leaves no trace of
+    ///         itself in it.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -165,8 +188,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     ///         the caller has no permission on.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Both halves are asserted: the name is gone, and nothing says a name was
-    ///         removed.</b> A page that reported "1 of 2 hidden" would pass the first half and would
+    ///         ⚠
+    ///         <b>
+    ///             Both halves are asserted: the name is gone, and nothing says a name was
+    ///             removed.
+    ///         </b> A page that reported "1 of 2 hidden" would pass the first half and would
     ///         be the same enumeration oracle the enforcement seam closes by answering <c>404</c>
     ///         rather than <c>403</c>.
     ///     </para>
@@ -226,8 +252,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     // ── Paging ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A page bounds the members <i>examined</i>, and the continuation advances past ones
-    ///     the filter dropped.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A page bounds the members <i>examined</i>, and the continuation advances past ones
+    ///         the filter dropped.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -237,8 +266,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     ///         the continuation therefore names the last member <i>examined</i>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A continuation that named the last member <i>returned</i> is the bug this
-    ///         pins.</b> A caller whose first page is entirely filtered out would get an empty
+    ///         ⚠
+    ///         <b>
+    ///             A continuation that named the last member <i>returned</i> is the bug this
+    ///             pins.
+    ///         </b> A caller whose first page is entirely filtered out would get an empty
     ///         continuation, either stopping early — losing every resource after the hidden ones — or,
     ///         if the token defaulted to empty meaning "start again", looping on the same page
     ///         forever.
@@ -274,8 +306,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A <c>$top</c> above <see cref="ListRequest.MaxPageSize" /> is clamped rather than
-    ///     refused.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A <c>$top</c> above <see cref="ListRequest.MaxPageSize" /> is clamped rather than
+    ///         refused.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     A refusal would make a client that asked for too much fail rather than page, and the cap
@@ -293,8 +328,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     // ── The absences ───────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A collection in a group that does not exist is the canonical <c>404</c>, byte for
-    ///     byte the one an absent resource gets.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A collection in a group that does not exist is the canonical <c>404</c>, byte for
+    ///         byte the one an absent resource gets.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     An empty page would be a statement about a group the caller has been told exists, which
@@ -307,7 +345,9 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
         var collection = Collection(Address("never-made", "listing-nowhere"));
 
         var listed = await cluster.Manager.ListAsync(
-            new() { Path = collection.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
+            new() {
+                Path = collection.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller()
+            },
             TestContext.Current.CancellationToken
         );
 
@@ -317,8 +357,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A collection path naming another tenant is the same <c>404</c>, and the tenant check
-    ///     runs before the registry is consulted.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A collection path naming another tenant is the same <c>404</c>, and the tenant check
+    ///         runs before the registry is consulted.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The ordering is the property: everything below the ownership checks describes the platform
@@ -338,7 +381,9 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
         );
 
         var listed = await cluster.Manager.ListAsync(
-            new() { Path = elsewhere.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
+            new() {
+                Path = elsewhere.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller()
+            },
             TestContext.Current.CancellationToken
         );
 
@@ -348,8 +393,11 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A resource path is not a collection path, and the refusal says which grammar it
-    ///     failed.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A resource path is not a collection path, and the refusal says which grammar it
+    ///         failed.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The two are disjoint by construction — an even tail is a resource, an odd one is a
@@ -443,11 +491,7 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
 
     Task<Result<WriteAccepted>> Delete(ResourceId address) =>
         cluster.Manager.DeleteAsync(
-            new() {
-                Path = address.Path,
-                ApiVersion = TestingProvider.V2026,
-                Caller = ResourceManagerCluster.Caller()
-            },
+            new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
             TestContext.Current.CancellationToken
         );
 

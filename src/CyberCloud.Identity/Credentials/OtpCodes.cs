@@ -10,8 +10,11 @@ namespace CyberCloud.Identity.Credentials;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The whole of this type is the difference between a hash and a keyed hash, and for a
-///         six-digit code that difference is everything.</b> <see cref="OtpPolicy.Digits" /> is six,
+///         ⚠
+///         <b>
+///             The whole of this type is the difference between a hash and a keyed hash, and for a
+///             six-digit code that difference is everything.
+///         </b> <see cref="OtpPolicy.Digits" /> is six,
 ///         so the space is a million values. An unkeyed SHA-256 of one is therefore not a one-way
 ///         function in any useful sense — anybody holding the digest enumerates the whole space
 ///         faster than they can read it. What makes the stored value useless on its own is the
@@ -45,8 +48,11 @@ public sealed class OtpCodeProtector(ReadOnlySpan<byte> pepper) {
     /// </summary>
     /// <returns>The plaintext. ⚠ The only place it exists — see <see cref="Digest" />.</returns>
     /// <remarks>
-    ///     ⚠ <b><see cref="RandomNumberGenerator.GetInt32(int,int)" /> and not
-    ///     <c>Random.Shared</c>, and not <c>bytes[0] % 10</c> either.</b> The first is not a
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="RandomNumberGenerator.GetInt32(int,int)" /> and not
+    ///         <c>Random.Shared</c>, and not <c>bytes[0] % 10</c> either.
+    ///     </b> The first is not a
     ///     cryptographic generator and its output is predictable from a handful of samples, which an
     ///     attacker gets by asking for codes on their own account. The second is the modulo bias
     ///     every hand-rolled digit generator has: 256 is not a multiple of 10, so digits 0-5 come up
@@ -103,8 +109,6 @@ public sealed class OtpCodeProtector(ReadOnlySpan<byte> pepper) {
             .Append(code ?? string.Empty)
             .ToString();
 
-        return CredentialDigest.Base64Url(
-            HMACSHA256.HashData(pepper, Encoding.UTF8.GetBytes(material))
-        );
+        return CredentialDigest.Base64Url(HMACSHA256.HashData(pepper, Encoding.UTF8.GetBytes(material)));
     }
 }

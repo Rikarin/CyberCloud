@@ -6,13 +6,18 @@ namespace CyberCloud.Identity.Tests;
 
 /// <summary>
 ///     docs/plan/11 § Sign-up and tenant creation: <i>"a user belongs to exactly one tenant"</i> and
-///     <i>"email uniqueness is per tenant, enforced by <c>IEmailIndexGrain</c> keyed by
-///     <c>hash(tenantId + normalized email)</c>"</i>.
+///     <i>
+///         "email uniqueness is per tenant, enforced by <c>IEmailIndexGrain</c> keyed by
+///         <c>hash(tenantId + normalized email)</c>"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Both directions are asserted, because getting one right and the other wrong is easy
-///         and each failure is expensive in a different way.</b> Global uniqueness would make the
+///         ⚠
+///         <b>
+///             Both directions are asserted, because getting one right and the other wrong is easy
+///             and each failure is expensive in a different way.
+///         </b> Global uniqueness would make the
 ///         same person unable to be a customer of two tenants — and would need a global index on the
 ///         sign-up path, which is precisely what docs/plan/05 § The two tiers is arranged to avoid.
 ///         No uniqueness at all would let two accounts in one tenant claim one address, which makes
@@ -113,11 +118,12 @@ public sealed class EmailUniquenessTests(IdentityCluster cluster) {
     public async Task AUserCannotBeReCreatedUnderADifferentAddress() {
         var userId = await cluster.CreateUserAsync("original@example.com");
 
-        var reCreate = await cluster.User(userId).CreateAsync(
-            "different@example.com",
-            "Test User",
-            UserStatus.Active
-        );
+        var reCreate = await cluster.User(userId)
+            .CreateAsync(
+                "different@example.com",
+                "Test User",
+                UserStatus.Active
+            );
 
         // ⚠ A conflict rather than a rename. Renaming has to move the index claim too, and doing it
         // silently here would leave the old claim held forever — the address would be permanently

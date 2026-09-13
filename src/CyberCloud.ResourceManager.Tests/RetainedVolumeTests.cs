@@ -12,12 +12,18 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Most of this file makes the guard FIRE, and that is deliberate rather than
-///         thorough.</b> A guard nobody ever made refuse has not been verified — the same discipline
+///         ⚠
+///         <b>
+///             Most of this file makes the guard FIRE, and that is deliberate rather than
+///             thorough.
+///         </b> A guard nobody ever made refuse has not been verified — the same discipline
 ///         that found two defects in the namespace-reclaim guard, one of which meant every refusal
 ///         threw instead of refusing. So each case below hands the reclaimer a claim it must not
-///         touch and asserts two things together: that it refused, and that the claim is <b>still
-///         there</b> afterwards. The second half is what separates "refused" from "deleted it and
+///         touch and asserts two things together: that it refused, and that the claim is
+///         <b>
+///             still
+///             there
+///         </b> afterwards. The second half is what separates "refused" from "deleted it and
 ///         then reported a problem".
 ///     </para>
 ///     <para>
@@ -57,8 +63,11 @@ public sealed class RetainedVolumeTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>A claim that is already gone converges, because a reclaim is re-driven from a
-    ///     reminder and its second pass must be able to finish.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A claim that is already gone converges, because a reclaim is re-driven from a
+    ///         reminder and its second pass must be able to finish.
+    ///     </b>
     /// </summary>
     [Fact]
     public async Task AClaimThatIsAlreadyGoneConvergesAndDeletesNothing() {
@@ -128,8 +137,11 @@ public sealed class RetainedVolumeTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>A claim missing one of the labels is refused, not accepted on the strength of the
-    ///     others.</b> Ownership is every pair or none — a subset match would accept any claim of the
+    ///     ⚠
+    ///     <b>
+    ///         A claim missing one of the labels is refused, not accepted on the strength of the
+    ///         others.
+    ///     </b> Ownership is every pair or none — a subset match would accept any claim of the
     ///     same component belonging to a different instance.
     /// </summary>
     [Fact]
@@ -260,8 +272,11 @@ public sealed class RetainedVolumeTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>A reclaim with claims to remove and no cluster to remove them from does not
-    ///     converge.</b> A reconciler's own <c>DeleteAsync</c> converges in that state, because a
+    ///     ⚠
+    ///     <b>
+    ///         A reclaim with claims to remove and no cluster to remove them from does not
+    ///         converge.
+    ///     </b> A reconciler's own <c>DeleteAsync</c> converges in that state, because a
     ///     teardown with nothing to reach has nothing left to remove; here the provider has just said
     ///     there is something left, so converging would report disks destroyed that were never
     ///     reached.
@@ -363,8 +378,7 @@ public sealed class RetainedVolumeTests {
     /// </summary>
     [Fact]
     public void OfSetRefusesToDeclareClaimsWithNoOwnershipLabels() =>
-        Should.Throw<ArgumentException>(
-            () => RetainedVolume.OfSet(
+        Should.Throw<ArgumentException>(() => RetainedVolume.OfSet(
                 Namespace,
                 "store",
                 "broker",
@@ -384,10 +398,10 @@ public sealed class RetainedVolumeTests {
     static ReconcileContext Context(IKubeClusterConnection? cluster) =>
         new(
             ResourceId.ParsePath(
-                    "/tenants/11111111-1111-1111-1111-111111111111"
-                    + "/subscriptions/22222222-2222-2222-2222-222222222222"
-                    + "/resourceGroups/rg/providers/CyberCloud.Testing/vaults/vault"
-                )
+                "/tenants/11111111-1111-1111-1111-111111111111"
+                + "/subscriptions/22222222-2222-2222-2222-222222222222"
+                + "/resourceGroups/rg/providers/CyberCloud.Testing/vaults/vault"
+            )
                 .GetValueOrThrow()
                 .WithId(Guid.Parse("33333333-3333-3333-3333-333333333333")),
             TestingProvider.V2026,
@@ -403,13 +417,22 @@ public sealed class RetainedVolumeTests {
     sealed class DeclaringReconciler(ImmutableArray<RetainedVolume> volumes) : IResourceReconciler {
         public ResourceTypeName Type => TestingProvider.VaultTypeName;
 
-        public Task<ReconcileOutcome> ReconcileAsync(ReconcileContext context, CancellationToken cancellationToken = default) =>
+        public Task<ReconcileOutcome> ReconcileAsync(
+            ReconcileContext context,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(ReconcileOutcome.Converged);
 
-        public Task<ReconcileOutcome> DeleteAsync(ReconcileContext context, CancellationToken cancellationToken = default) =>
+        public Task<ReconcileOutcome> DeleteAsync(
+            ReconcileContext context,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(ReconcileOutcome.Converged);
 
-        public Task<ObservedState> ObserveAsync(ObserveContext context, CancellationToken cancellationToken = default) =>
+        public Task<ObservedState> ObserveAsync(
+            ObserveContext context,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(ObservedState.Absent);
 
         public Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
@@ -423,13 +446,22 @@ public sealed class RetainedVolumeTests {
     sealed class KeepsNothingReconciler : IResourceReconciler {
         public ResourceTypeName Type => TestingProvider.VaultTypeName;
 
-        public Task<ReconcileOutcome> ReconcileAsync(ReconcileContext context, CancellationToken cancellationToken = default) =>
+        public Task<ReconcileOutcome> ReconcileAsync(
+            ReconcileContext context,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(ReconcileOutcome.Converged);
 
-        public Task<ReconcileOutcome> DeleteAsync(ReconcileContext context, CancellationToken cancellationToken = default) =>
+        public Task<ReconcileOutcome> DeleteAsync(
+            ReconcileContext context,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(ReconcileOutcome.Converged);
 
-        public Task<ObservedState> ObserveAsync(ObserveContext context, CancellationToken cancellationToken = default) =>
+        public Task<ObservedState> ObserveAsync(
+            ObserveContext context,
+            CancellationToken cancellationToken = default
+        ) =>
             Task.FromResult(ObservedState.Absent);
     }
 
@@ -458,9 +490,7 @@ public sealed class RetainedVolumeTests {
         public bool DeletesAreInert { get; init; }
 
         public void Plant(ObjectRef target, ImmutableDictionary<string, string> labels, bool labelled = true) {
-            var metadata = new JsonObject {
-                ["name"] = target.Name, ["namespace"] = target.Namespace
-            };
+            var metadata = new JsonObject { ["name"] = target.Name, ["namespace"] = target.Namespace };
 
             if (labelled) {
                 var written = new JsonObject();
@@ -472,15 +502,16 @@ public sealed class RetainedVolumeTests {
             }
 
             objects[Key(target)] = new JsonObject {
-                ["apiVersion"] = target.Kind.ApiVersion,
-                ["kind"] = target.Kind.Kind,
-                ["metadata"] = metadata
+                ["apiVersion"] = target.Kind.ApiVersion, ["kind"] = target.Kind.Kind, ["metadata"] = metadata
             }.ToJsonString();
         }
 
         public bool Holds(ObjectRef target) => objects.ContainsKey(Key(target));
 
-        public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) =>
             throw new NotSupportedException("A reclaim applies nothing.");
 
         public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) {

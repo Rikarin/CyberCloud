@@ -68,11 +68,12 @@ public class ScopeIdTests {
     [Fact]
     public void NoScopePathIsAlsoAResourcePath() {
         foreach (var path in EveryShape()) {
-            ResourceId.TryParsePath(path, out _).ShouldBeFalse(
-                $"'{path}' parses as BOTH a scope and a resource id. GatewayRouter tries the scope "
-                + "grammar first, so the resource reading would be unreachable — and which one wins "
-                + "would be a precedence rule nobody wrote down."
-            );
+            ResourceId.TryParsePath(path, out _)
+                .ShouldBeFalse(
+                    $"'{path}' parses as BOTH a scope and a resource id. GatewayRouter tries the scope "
+                    + "grammar first, so the resource reading would be unreachable — and which one wins "
+                    + "would be a precedence rule nobody wrote down."
+                );
         }
     }
 
@@ -80,16 +81,19 @@ public class ScopeIdTests {
     // A top-level resource: eight fixed segments plus one {type}/{name} pair.
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/redis/main")]
     // A child: two pairs.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/pg/databases/orders")]
+    [InlineData(
+        "/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/pg/databases/orders"
+    )]
     public void NoResourcePathIsAlsoAScopePath(string template) {
         var path = Fill(template);
 
         ResourceId.TryParsePath(path, out _).ShouldBeTrue("the fixture is not a resource path");
 
-        ScopeId.TryParsePath(path, out _).ShouldBeFalse(
-            $"'{path}' parses as a scope, so the scope grammar would swallow a resource address and "
-            + "the router would never reach ResolveResource for it."
-        );
+        ScopeId.TryParsePath(path, out _)
+            .ShouldBeFalse(
+                $"'{path}' parses as a scope, so the scope grammar would swallow a resource address and "
+                + "the router would never reach ResolveResource for it."
+            );
     }
 
     // ── Refusals ───────────────────────────────────────────────────────────────────────────────
@@ -139,7 +143,8 @@ public class ScopeIdTests {
         ScopeId.TryParsePath(
             $"/tenants/{Tenant:D}/subscriptions/{Subscription:D}/resourceGroups/{name}",
             out _
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
 
     [Fact]
     public void TheStructuralLiteralsAreMatchedCaseInsensitivelyAndTheValuesAreNot() {
@@ -148,7 +153,8 @@ public class ScopeIdTests {
         ScopeId.TryParsePath(
             $"/Tenants/{Tenant:D}/Subscriptions/{Subscription:D}/ResourceGroups/prod",
             out var scope
-        ).ShouldBeTrue();
+        )
+            .ShouldBeTrue();
 
         // ⚠ And the rendered path is the canonical spelling, so a round trip normalises.
         scope.Path.ShouldBe($"/tenants/{Tenant:D}/subscriptions/{Subscription:D}/resourceGroups/prod");

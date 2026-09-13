@@ -31,8 +31,11 @@ public interface ISubscriptionGrain : IGrainWithStringKey {
     ///     The subscription's record, or <c>SubscriptionNotFound</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Step 1 of the write path calls this on every request, and the answer is the
-    ///     subscription's <i>existence</i> as much as its content.</b> A path may name any GUID as a
+    ///     ⚠
+    ///     <b>
+    ///         Step 1 of the write path calls this on every request, and the answer is the
+    ///         subscription's <i>existence</i> as much as its content.
+    ///     </b> A path may name any GUID as a
     ///     subscription; only this grain can say whether the caller's tenant has one. See
     ///     <c>ResourceManagerService.ResolveAsync</c> — a subscription that does not exist and one
     ///     that belongs to another tenant are answered identically, and both as <c>404</c> on the

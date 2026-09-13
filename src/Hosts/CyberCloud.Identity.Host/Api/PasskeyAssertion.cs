@@ -16,8 +16,11 @@ namespace CyberCloud.Identity.Host.Api;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The id read here is untrusted and the code treats it that way.</b> It selects a
-///         lookup and nothing else; the assertion is then verified against <i>that stored
-///         credential's</i> public key and against the challenge this server issued. A caller who
+///         lookup and nothing else; the assertion is then verified against
+///         <i>
+///             that stored
+///             credential's
+///         </i> public key and against the challenge this server issued. A caller who
 ///         names somebody else's credential id gets a signature check against a key they do not hold.
 ///     </para>
 /// </remarks>

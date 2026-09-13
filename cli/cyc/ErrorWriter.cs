@@ -1,6 +1,6 @@
-using System.CommandLine.Parsing;
 using CyberCloud.Cli.Execution;
 using CyberCloud.Cli.Output;
+using System.CommandLine.Parsing;
 
 namespace CyberCloud.Cli;
 
@@ -9,16 +9,22 @@ namespace CyberCloud.Cli;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Nothing here ever touches stdout, and that is the contract this type exists to
-///         keep.</b> <c>cyc … --output json</c> is read by scripts; a CLI that printed a human error
+///         ⚠
+///         <b>
+///             Nothing here ever touches stdout, and that is the contract this type exists to
+///             keep.
+///         </b> <c>cyc … --output json</c> is read by scripts; a CLI that printed a human error
 ///         into that stream would break every one of them the first time a request failed. So stdout
 ///         carries the payload or carries nothing, and everything below goes to stderr — including,
 ///         under <c>--output json</c>, an error rendered <i>as</i> JSON, because a script that
 ///         captures stderr should be able to read it too.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The exit code is chosen from the platform's status, not from the exception's
-///         type.</b> docs/plan/21 § Decisions makes the six codes a contract CI branches on;
+///         ⚠
+///         <b>
+///             The exit code is chosen from the platform's status, not from the exception's
+///             type.
+///         </b> docs/plan/21 § Decisions makes the six codes a contract CI branches on;
 ///         <c>401</c> and <c>403</c> answer <see cref="ExitCode.Auth" /> rather than
 ///         <see cref="ExitCode.ClientError" /> so that "retry with a fresh credential" and "this
 ///         request is wrong" are different answers.
@@ -38,13 +44,23 @@ static class ErrorWriter {
         var (code, message, detail) = Classify(failure);
 
         if (format == OutputFormat.Json) {
-            var payload = Payload.Object([
-                new KeyValuePair<string, Payload>("error", Payload.Object([
-                    new KeyValuePair<string, Payload>("code", detail is null ? Payload.Null : Payload.Text(detail)),
-                    new KeyValuePair<string, Payload>("message", Payload.Text(message)),
-                    new KeyValuePair<string, Payload>("exitCode", Payload.Number((int)code)),
-                ])),
-            ]);
+            var payload = Payload.Object(
+                [
+                    new KeyValuePair<string, Payload>(
+                        "error",
+                        Payload.Object(
+                            [
+                                new KeyValuePair<string, Payload>(
+                                    "code",
+                                    detail is null ? Payload.Null : Payload.Text(detail)
+                                ),
+                                new KeyValuePair<string, Payload>("message", Payload.Text(message)),
+                                new KeyValuePair<string, Payload>("exitCode", Payload.Number((int)code))
+                            ]
+                        )
+                    )
+                ]
+            );
 
             console.Error.WriteLine(payload.ToJson(indented: true));
         } else {
@@ -54,8 +70,9 @@ static class ErrorWriter {
         // ⚠ The stack is verbose-only and it is on stderr. docs/plan/08 § Errors bans exception detail
         // in a response body; this is the client's own stack, which is the one thing a bug report
         // needs and the one thing an ordinary failure must not be cluttered with.
-        if (verbose)
+        if (verbose) {
             console.Error.WriteLine($"cyc: {failure}");
+        }
 
         console.Error.Flush();
 
@@ -72,11 +89,16 @@ static class ErrorWriter {
 
         var message = string.Join(Environment.NewLine, errors.Select(x => x.Message));
 
-        return Report(console, format, new CycUsageException(message.Length > 0 ? message : "The command line could not be parsed."), verbose: false);
+        return Report(
+            console,
+            format,
+            new CycUsageException(message.Length > 0 ? message : "The command line could not be parsed."),
+            verbose: false
+        );
     }
 
-    static (ExitCode Code, string Message, string? Detail) Classify(Exception failure)
-        => failure switch {
+    static (ExitCode Code, string Message, string? Detail) Classify(Exception failure) =>
+        failure switch {
             CycUsageException usage => (ExitCode.Usage, usage.Message, "UsageError"),
 
             CycRequestException request => (
@@ -92,12 +114,14 @@ static class ErrorWriter {
                 sdk.ErrorCode),
 
             CredentialUnavailableException credential => (ExitCode.Auth, credential.Message, "CredentialUnavailable"),
-            AuthenticationFailedException authentication => (ExitCode.Auth, authentication.Message, authentication.ErrorCode ?? "AuthenticationFailed"),
+            AuthenticationFailedException authentication => (ExitCode.Auth, authentication.Message,
+                authentication.ErrorCode ?? "AuthenticationFailed"),
 
             // ⚠ Cancellation reaches here only from --timeout: Ctrl-C is handled by the runtime's
             // POSIX signal handling before this, and a caller-cancelled operation in a CLI is a
             // deadline by definition.
-            OperationCanceledException => (ExitCode.Timeout, "The command did not finish before --timeout elapsed.", "Timeout"),
+            OperationCanceledException => (ExitCode.Timeout, "The command did not finish before --timeout elapsed.",
+                "Timeout"),
             TimeoutException timeout => (ExitCode.Timeout, timeout.Message, "Timeout"),
 
             CycClientException client => (ExitCode.ClientError, client.Message, "ClientError"),
@@ -105,14 +129,15 @@ static class ErrorWriter {
             // ⚠ A transport failure is a client error rather than a server one: nothing reached the
             // platform, so retrying the same request against the same broken network is not the
             // advice exit 4 gives.
-            HttpRequestException transport => (ExitCode.ClientError, $"The request could not be sent: {transport.Message}", "TransportError"),
+            HttpRequestException transport => (ExitCode.ClientError,
+                $"The request could not be sent: {transport.Message}", "TransportError"),
             IOException io => (ExitCode.ClientError, io.Message, "IOError"),
 
             _ => (ExitCode.ClientError, failure.Message, failure.GetType().Name),
         };
 
-    static ExitCode CodeFor(int status)
-        => status switch {
+    static ExitCode CodeFor(int status) =>
+        status switch {
             401 or 403 => ExitCode.Auth,
             408 or 504 => ExitCode.Timeout,
             >= 500 => ExitCode.ServerError,
@@ -123,8 +148,10 @@ static class ErrorWriter {
     static string Describe(CycRequestException request) {
         var message = new StringBuilder(request.Message);
 
-        if (request.Flag is { Length: > 0 } flag)
-            message.Append(Environment.NewLine).Append(CultureInfo.InvariantCulture, $"The rejected value came from {flag}.");
+        if (request.Flag is { Length: > 0 } flag) {
+            message.Append(Environment.NewLine)
+                .Append(CultureInfo.InvariantCulture, $"The rejected value came from {flag}.");
+        }
 
         return message.ToString();
     }

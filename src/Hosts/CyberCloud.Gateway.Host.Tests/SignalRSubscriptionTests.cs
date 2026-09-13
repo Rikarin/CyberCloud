@@ -8,8 +8,11 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///     trip through the pipeline.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The interest-set behaviour is no longer tested here, because it is no longer implemented
-///     here.</b> <c>IConnectionGrain</c> and <c>ConnectionGrain</c> moved to
+///     ⚠
+///     <b>
+///         The interest-set behaviour is no longer tested here, because it is no longer implemented
+///         here.
+///     </b> <c>IConnectionGrain</c> and <c>ConnectionGrain</c> moved to
 ///     <c>CyberCloud.ResourceManager(.Contracts)</c> — a grain needs a silo to activate it and this
 ///     host is an Orleans client, so the type that shipped here could not be loaded by any silo and
 ///     was kept working only by the tests constructing it with <c>new</c>. Per-subscribe

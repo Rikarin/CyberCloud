@@ -9,9 +9,12 @@ namespace CyberCloud.ResourceManager.Contracts.Tests;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>This file exists because expressiveness without enforcement is documentation.</b>
-///         docs/plan/08 § The provider registry: <i>"the same registry that generates the CLI is the
-///         one that validates the request body. That identity is what makes drift impossible rather
-///         than merely detectable."</i> A declaration the emitter renders and
+///         docs/plan/08 § The provider registry:
+///         <i>
+///             "the same registry that generates the CLI is the
+///             one that validates the request body. That identity is what makes drift impossible rather
+///             than merely detectable."
+///         </i> A declaration the emitter renders and
 ///         <see cref="ResourceSchema.Validate" /> ignores would satisfy the first half and break the
 ///         claim — the API would publish a constraint it does not apply, which is worse than
 ///         publishing none.
@@ -24,8 +27,7 @@ namespace CyberCloud.ResourceManager.Contracts.Tests;
 public sealed class SchemaExpressivenessTests {
     // ⚠ ImmutableArray rather than an array, and it matters at the call site: with `params T[]` the
     // compiler targets `new(…)` at the array type and every `{ AllowedValues = … }` fails to bind.
-    static ResourceSchema Schema(params ImmutableArray<SchemaProperty> properties) =>
-        ResourceSchema.Of(properties);
+    static ResourceSchema Schema(params ImmutableArray<SchemaProperty> properties) => ResourceSchema.Of(properties);
 
     static Result Validate(ResourceSchema schema, string body) {
         using var document = JsonDocument.Parse(body);
@@ -67,9 +69,11 @@ public sealed class SchemaExpressivenessTests {
     public void AnEnumerationOnANonStringIsRefusedAtDeclarationTime() =>
         // ⚠ At silo start, not at the first request: Describe runs once and a nonsense declaration
         // should fail the process that would have served it.
-        Should.Throw<ArgumentException>(
-            () => Schema(new SchemaProperty("/count", SchemaKind.WholeNumber) { AllowedValues = ["1", "2"] })
-        ).Message.ShouldContain("AllowedValues");
+        Should.Throw<ArgumentException>(() => Schema(
+                new SchemaProperty("/count", SchemaKind.WholeNumber) { AllowedValues = ["1", "2"] }
+            )
+        )
+            .Message.ShouldContain("AllowedValues");
 
     // ── 2. Array element shape ─────────────────────────────────────────────────────────────────
 
@@ -87,10 +91,9 @@ public sealed class SchemaExpressivenessTests {
 
     [Fact]
     public void AnElementCarriesTheArraysOwnConstraints() {
-        var schema = Schema(new SchemaProperty("/tiers", SchemaKind.Array) {
-            ElementKind = SchemaKind.Text,
-            AllowedValues = ["a", "b"]
-        });
+        var schema = Schema(
+            new SchemaProperty("/tiers", SchemaKind.Array) { ElementKind = SchemaKind.Text, AllowedValues = ["a", "b"] }
+        );
 
         Validate(schema, """{"tiers":["a","b","a"]}""").IsSuccess.ShouldBeTrue();
         Validate(schema, """{"tiers":["a","c"]}""").Error!.Target.ShouldBe("/tiers/1");
@@ -105,9 +108,11 @@ public sealed class SchemaExpressivenessTests {
     public void AnArrayOfObjectsIsRefusedRatherThanHalfModelled() =>
         // See the remarks on SchemaKind.Array: an element schema needs its own pointer space, and the
         // flat list is what makes Validate an index rather than a tree walk.
-        Should.Throw<ArgumentException>(
-            () => Schema(new SchemaProperty("/rules", SchemaKind.Array) { ElementKind = SchemaKind.Nested })
-        ).Message.ShouldContain("scalar");
+        Should.Throw<ArgumentException>(() => Schema(
+                new SchemaProperty("/rules", SchemaKind.Array) { ElementKind = SchemaKind.Nested }
+            )
+        )
+            .Message.ShouldContain("scalar");
 
     // ── 3. Nullability ─────────────────────────────────────────────────────────────────────────
 
@@ -140,7 +145,9 @@ public sealed class SchemaExpressivenessTests {
         // `Nullable` on an array says the array may be null, and that was already consumed. A null
         // element is a declaration this model does not have, so it is refused — the safe direction.
         Validate(
-            Schema(new SchemaProperty("/ports", SchemaKind.Array) { ElementKind = SchemaKind.WholeNumber, Nullable = true }),
+            Schema(
+                new SchemaProperty("/ports", SchemaKind.Array) { ElementKind = SchemaKind.WholeNumber, Nullable = true }
+            ),
             """{"ports":[1,null]}"""
         ).Error!.Target.ShouldBe("/ports/1");
 
@@ -169,7 +176,10 @@ public sealed class SchemaExpressivenessTests {
     [InlineData(SchemaFormat.Region, "\"eu-central\"", true)]
     [InlineData(SchemaFormat.Region, "\"EU Central\"", false)]
     public void AFormatIsCheckedRatherThanAnnotated(SchemaFormat format, string value, bool accepted) {
-        var validated = Validate(Schema(new SchemaProperty("/v", SchemaKind.Text) { Format = format }), $$"""{"v":{{value}}}""");
+        var validated = Validate(
+            Schema(new SchemaProperty("/v", SchemaKind.Text) { Format = format }),
+            $$"""{"v":{{value}}}"""
+        );
 
         validated.IsSuccess.ShouldBe(accepted);
     }
@@ -185,9 +195,11 @@ public sealed class SchemaExpressivenessTests {
 
     [Fact]
     public void AFormatOnANonStringIsRefusedAtDeclarationTime() =>
-        Should.Throw<ArgumentException>(
-            () => Schema(new SchemaProperty("/n", SchemaKind.Number) { Format = SchemaFormat.Uuid })
-        ).Message.ShouldContain("refines a string");
+        Should.Throw<ArgumentException>(() => Schema(
+                new SchemaProperty("/n", SchemaKind.Number) { Format = SchemaFormat.Uuid }
+            )
+        )
+            .Message.ShouldContain("refines a string");
 
     // ── 5. Bounds ──────────────────────────────────────────────────────────────────────────────
 
@@ -225,9 +237,11 @@ public sealed class SchemaExpressivenessTests {
 
     [Fact]
     public void AnImpossibleBoundIsRefusedAtDeclarationTime() =>
-        Should.Throw<ArgumentException>(
-            () => Schema(new SchemaProperty("/n", SchemaKind.Number) { Minimum = 10, Maximum = 1 })
-        ).Message.ShouldContain("no value satisfies it");
+        Should.Throw<ArgumentException>(() => Schema(
+                new SchemaProperty("/n", SchemaKind.Number) { Minimum = 10, Maximum = 1 }
+            )
+        )
+            .Message.ShouldContain("no value satisfies it");
 
     [Fact]
     public void AMalformedPatternIsRefusedAtDeclarationTime() =>
@@ -255,8 +269,11 @@ public sealed class SchemaExpressivenessTests {
     ///         <c>CyberCloud.Core.Tests.SecretShapedTextTests.ALongHostileStringIsAnsweredInLinearTimeRatherThanEventually</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And there is deliberately no elapsed-time bound, which this test carried for one
-    ///         review cycle and should not have.</b> A wall-clock assertion is the exact instrument
+    ///         ⚠
+    ///         <b>
+    ///             And there is deliberately no elapsed-time bound, which this test carried for one
+    ///             review cycle and should not have.
+    ///         </b> A wall-clock assertion is the exact instrument
     ///         #76 removes everywhere else: it turns a busy or oversubscribed agent into a red about
     ///         the host rather than about the tree, which is the flake family (#67) this issue exists
     ///         to stop growing. It also asserted nothing the message assertion does not already:
@@ -298,14 +315,12 @@ public sealed class SchemaExpressivenessTests {
     /// </remarks>
     [Fact]
     public void ADeclarationIsCheckedOnItsMeritsRatherThanAgainstAClock() =>
-        Should.Throw<ArgumentException>(
-                () => Schema(
-                    new SchemaProperty("/s", SchemaKind.Text) {
-                        Pattern = "(a+)+b",
-                        DefaultJson = "\"" + new string('a', 60) + "!\""
-                    }
-                )
+        Should.Throw<ArgumentException>(() => Schema(
+                new SchemaProperty("/s", SchemaKind.Text) {
+                    Pattern = "(a+)+b", DefaultJson = "\"" + new string('a', 60) + "!\""
+                }
             )
+        )
             .Message.ShouldContain("does not match", Case.Sensitive, "the declaration was judged by a stopwatch");
 
     /// <summary>
@@ -320,9 +335,10 @@ public sealed class SchemaExpressivenessTests {
     /// </remarks>
     [Fact]
     public void APatternTheLinearEngineCannotRunIsRefusedAtDeclarationTime() =>
-        Should.Throw<ArgumentException>(
-                () => Schema(new SchemaProperty("/s", SchemaKind.Text) { Pattern = "(?=[a-z])[a-z0-9]+" })
+        Should.Throw<ArgumentException>(() => Schema(
+                new SchemaProperty("/s", SchemaKind.Text) { Pattern = "(?=[a-z])[a-z0-9]+" }
             )
+        )
             .Message.ShouldContain("non-backtracking");
 
     /// <summary>
@@ -345,8 +361,11 @@ public sealed class SchemaExpressivenessTests {
     ///         <c>NetworkSecurityGroups</c>' patterned properties is declared that way.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The default has to be a well-formed string of the property's own kind for this to
-    ///         test anything.</b> <c>ResourceSchema.ValueProblems</c> reports a kind mismatch and stops
+    ///         ⚠
+    ///         <b>
+    ///             The default has to be a well-formed string of the property's own kind for this to
+    ///             test anything.
+    ///         </b> <c>ResourceSchema.ValueProblems</c> reports a kind mismatch and stops
     ///         — a <c>42</c> here would never reach the constraint checks, so the pattern would never
     ///         be built a second time and the test would pass against the defect. <c>"abc"</c> reaches
     ///         them; <c>MinLength</c> is the independent problem, and it is checked <i>before</i> the
@@ -360,12 +379,9 @@ public sealed class SchemaExpressivenessTests {
     /// </remarks>
     [Fact]
     public void APatternTheLinearEngineCannotRunIsRefusedByNameEvenWithADefaultAlongside() {
-        var refusal = Should.Throw<ArgumentException>(
-            () => Schema(
+        var refusal = Should.Throw<ArgumentException>(() => Schema(
                 new SchemaProperty("/s", SchemaKind.Text) {
-                    Pattern = "(?=[a-z])[a-z0-9]+",
-                    MinLength = 10,
-                    DefaultJson = "\"abc\""
+                    Pattern = "(?=[a-z])[a-z0-9]+", MinLength = 10, DefaultJson = "\"abc\""
                 }
             )
         );
@@ -391,11 +407,10 @@ public sealed class SchemaExpressivenessTests {
     /// </remarks>
     [Fact]
     public void AMalformedPatternIsRefusedByNameEvenWithAnExampleAlongside() =>
-        Should.Throw<ArgumentException>(
-                () => Schema(
-                    new SchemaProperty("/s", SchemaKind.Text) { Pattern = "[a-", ExampleJson = "\"abc\"" }
-                )
+        Should.Throw<ArgumentException>(() => Schema(
+                new SchemaProperty("/s", SchemaKind.Text) { Pattern = "[a-", ExampleJson = "\"abc\"" }
             )
+        )
             .Message.ShouldContain("does not compile");
 
     // ── 9. Defaults and examples ───────────────────────────────────────────────────────────────
@@ -404,22 +419,23 @@ public sealed class SchemaExpressivenessTests {
     public void ADefaultTheSchemaWouldRejectIsRefusedAtDeclarationTime() =>
         // A default that fails its own property ships as a form nobody can submit, and the failure is
         // discovered by whoever opens the form.
-        Should.Throw<ArgumentException>(
-            () => Schema(new SchemaProperty("/n", SchemaKind.WholeNumber) { Minimum = 1, DefaultJson = "0" })
-        ).Message.ShouldContain("DefaultJson");
+        Should.Throw<ArgumentException>(() => Schema(
+                new SchemaProperty("/n", SchemaKind.WholeNumber) { Minimum = 1, DefaultJson = "0" }
+            )
+        )
+            .Message.ShouldContain("DefaultJson");
 
     [Fact]
     public void ADefaultOfTheWrongKindIsRefusedAtDeclarationTime() =>
-        Should.Throw<ArgumentException>(
-            () => Schema(new SchemaProperty("/s", SchemaKind.Text) { DefaultJson = "42" })
-        ).Message.ShouldContain("must be a string");
+        Should.Throw<ArgumentException>(() => Schema(new SchemaProperty("/s", SchemaKind.Text) { DefaultJson = "42" }))
+            .Message.ShouldContain("must be a string");
 
     [Fact]
     public void ALiteralThatIsNotJsonIsRefusedAtDeclarationTime() =>
         // ⚠ A string default is spelled with its quotes. "free" is not JSON; "\"free\"" is.
-        Should.Throw<ArgumentException>(
-            () => Schema(new SchemaProperty("/s", SchemaKind.Text) { DefaultJson = "free" })
-        ).Message.ShouldContain("not JSON");
+        Should.Throw<ArgumentException>(() => Schema(new SchemaProperty("/s", SchemaKind.Text) { DefaultJson = "free" })
+        )
+            .Message.ShouldContain("not JSON");
 
     [Fact]
     public void ADefaultIsNotAppliedByTheValidator() {

@@ -21,14 +21,20 @@ namespace CyberCloud.Providers.Storage.Application;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers its
-///         resource types into <c>CyberCloud.ResourceManager</c>."</i> Both halves happen here — a host
+///         docs/plan/03 § Providers:
+///         <i>
+///             "Each is an ABP module (<c>[DependsOn]</c>), each registers its
+///             resource types into <c>CyberCloud.ResourceManager</c>."
+///         </i> Both halves happen here — a host
 ///         that <c>[DependsOn]</c> this module gets the provider, its reconcilers and its action
 ///         handlers, and there is no second call it can forget.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The paragraph that used to be here said the second half could not be done, and it was
-///         wrong by the time it was written.</b> It read: registering a provider is
+///         ⚠
+///         <b>
+///             The paragraph that used to be here said the second half could not be done, and it was
+///             wrong by the time it was written.
+///         </b> It read: registering a provider is
 ///         <c>ISiloBuilder.AddCyberCloudProvider&lt;StorageProvider&gt;()</c>, which runs before the
 ///         container is built, while an ABP module's <c>ConfigureServices</c> runs after — so a host
 ///         has to make two calls. The registry had already stopped being built at wiring time: it is a

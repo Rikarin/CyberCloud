@@ -145,7 +145,10 @@ public sealed class ClickHouseReconcilerTests {
 
         read.ShouldBe(
             applied,
-            "the reconciler applied " + applied.Count + " object(s) and read back " + read.Count
+            "the reconciler applied "
+            + applied.Count
+            + " object(s) and read back "
+            + read.Count
             + ". An object applied and not read back is one the loop reports Converged without ever "
             + "having observed."
         );
@@ -177,9 +180,9 @@ public sealed class ClickHouseReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        connection.Applied.Select(x => x.Target.Kind.Group).Order(StringComparer.Ordinal).ShouldBe(
-            ["clickhouse-keeper.altinity.com", "clickhouse.altinity.com"]
-        );
+        connection.Applied.Select(x => x.Target.Kind.Group)
+            .Order(StringComparer.Ordinal)
+            .ShouldBe(["clickhouse-keeper.altinity.com", "clickhouse.altinity.com"]);
     }
 
     [Fact]
@@ -199,7 +202,8 @@ public sealed class ClickHouseReconcilerTests {
         await Reconcile(connection, body.RootElement);
 
         foreach (var applied in connection.Applied) {
-            JsonNode.Parse(applied.Body)!["kind"]!.GetValue<string>()
+            JsonNode.Parse(applied.Body)!["kind"]!
+                .GetValue<string>()
                 .ShouldBe(applied.Target.Kind.Kind);
         }
     }
@@ -220,7 +224,9 @@ public sealed class ClickHouseReconcilerTests {
         var hosts = connection.Applied
             .Where(x => x.Target.Kind.Kind == "ClickHouseInstallation")
             .Select(x => JsonNode.Parse(x.Body)!["spec"]!["configuration"]!["zookeeper"]!["nodes"]!
-                .AsArray()[0]!["host"]!.GetValue<string>())
+                    .AsArray()[0]!["host"]!
+                    .GetValue<string>()
+            )
             .ToList();
 
         hosts.ShouldBe(["keeper-events", "keeper-orders"]);
@@ -281,10 +287,11 @@ public sealed class ClickHouseReconcilerTests {
 
         deleted.ShouldBe(ReconcileOutcome.Converged);
 
-        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(
-            ["ClickHouseInstallation", "ClickHouseKeeperInstallation"],
-            "the installation is deleted first, so servers do not outlive their coordination"
-        );
+        connection.Deleted.Select(x => x.Kind.Kind)
+            .ShouldBe(
+                ["ClickHouseInstallation", "ClickHouseKeeperInstallation"],
+                "the installation is deleted first, so servers do not outlive their coordination"
+            );
     }
 
     // ── Failure class (f), at the object: no credential is ever rendered ─────────────────────────
@@ -367,12 +374,15 @@ public sealed class ClickHouseReconcilerTests {
         );
 
     static JsonObject Layout(string objectJson) =>
-        JsonNode.Parse(objectJson)!["spec"]!["configuration"]!["clusters"]!.AsArray()[0]!["layout"]!
+        JsonNode.Parse(objectJson)!["spec"]!["configuration"]!["clusters"]!
+            .AsArray()[0]!["layout"]!
             .AsObject();
 
     static JsonObject Claim(string objectJson) =>
-        JsonNode.Parse(objectJson)!["spec"]!["templates"]!["volumeClaimTemplates"]!.AsArray()[0]!
-            ["spec"]!["resources"]!["requests"]!.AsObject();
+        JsonNode.Parse(objectJson)!["spec"]!["templates"]!["volumeClaimTemplates"]!
+            .AsArray()[0]!
+            ["spec"]!["resources"]!["requests"]!
+            .AsObject();
 }
 
 /// <summary>
@@ -401,12 +411,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
@@ -513,8 +525,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     applies two objects that share a name — a key without it would make the second apply
     ///     overwrite the first and every read-back return the wrong document.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

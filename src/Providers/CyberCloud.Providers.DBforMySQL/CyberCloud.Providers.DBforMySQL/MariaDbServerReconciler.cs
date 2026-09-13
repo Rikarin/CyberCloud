@@ -1,5 +1,6 @@
 // ⚠ For `Result<T>` on the retained-volume seam. Safe beside the GlobalUsings ErrorCode alias, which
 // is what disambiguates the one name this namespace collides with.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Collections.Immutable;
@@ -38,16 +39,22 @@ namespace CyberCloud.Providers.DBforMySQL;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>Converged here means "the CR is applied and reads back", not "MariaDB is accepting
-///         connections".</b> The honest stronger check is <c>status.conditions[type=Ready]</c>, and
+///         ⚠
+///         <b>
+///             Converged here means "the CR is applied and reads back", not "MariaDB is accepting
+///             connections".
+///         </b> The honest stronger check is <c>status.conditions[type=Ready]</c>, and
 ///         it is not made because nothing in this repository can produce that status without the
 ///         operator: the Docker-free harness is a dictionary and the cluster-backed one runs a k3s
 ///         with no mariadb-operator in it. <c>charts/managed/mariadb/conformance.yaml</c>'s
 ///         <c>connect-with-a-mysql-client</c> assertion is where it is written down as owed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>. On this type
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>. On this type
 ///         the other manager is very plausibly the operator itself: <c>MariaDB.SetDefaults</c> writes
 ///         eleven fields into the spec it is handed, including a whole
 ///         <c>storage.volumeClaimTemplate</c> and a <c>tls</c> block this provider never asked for.
@@ -194,7 +201,7 @@ public sealed class MariaDbServerReconciler(IClock clock) : IResourceReconciler 
             // whose own text says the declaration "is the last step, not the first". Picking a
             // retention policy before there is a restore path to read a retained volume back through
             // would be picking it blind.
-            .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
+                .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(deleteError);
@@ -221,8 +228,11 @@ public sealed class MariaDbServerReconciler(IClock clock) : IResourceReconciler 
     /// <inheritdoc />
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The other half of the <c>pvcRetentionPolicy</c> paragraph in
-    ///         <see cref="DeleteAsync" />, and it settles what that paragraph left open.</b> That
+    ///         ⚠
+    ///         <b>
+    ///             The other half of the <c>pvcRetentionPolicy</c> paragraph in
+    ///             <see cref="DeleteAsync" />, and it settles what that paragraph left open.
+    ///         </b> That
     ///         comment said the fate of the data volumes was "the StatefulSet's default rather than a
     ///         choice this platform made", recorded as owed under
     ///         <c>volumes-outlive-the-resource</c>, and that picking a retention policy before there
@@ -234,8 +244,11 @@ public sealed class MariaDbServerReconciler(IClock clock) : IResourceReconciler 
     ///         and made the seven-day window an advertisement.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The claims are named from mariadb-operator's conventions and this platform does
-    ///         not render the <c>StatefulSet</c></b> — see <see cref="MariaDbServers.OperatorSetName" />
+    ///         ⚠
+    ///         <b>
+    ///             The claims are named from mariadb-operator's conventions and this platform does
+    ///             not render the <c>StatefulSet</c>
+    ///         </b> — see <see cref="MariaDbServers.OperatorSetName" />
     ///         for the version coupling that creates and for which direction a stale reading fails in.
     ///     </para>
     /// </remarks>
@@ -264,9 +277,7 @@ public sealed class MariaDbServerReconciler(IClock clock) : IResourceReconciler 
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the MariaDB is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the MariaDB is absent" };
         }
 
         var found = read.GetValueOrThrow();

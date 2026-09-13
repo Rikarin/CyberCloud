@@ -49,8 +49,11 @@ namespace CyberCloud.AppHost.Tests;
 ///         <c>Program.cs</c> passes nothing and behaves exactly as it did.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The request path itself had to become callable, and that is a production fix rather
-///         than a test affordance.</b> The one <c>app.Use</c> that runs the pipeline lived in
+///         ⚠
+///         <b>
+///             The request path itself had to become callable, and that is a production fix rather
+///             than a test affordance.
+///         </b> The one <c>app.Use</c> that runs the pipeline lived in
 ///         <c>Program.cs</c>, whose own header explains that top-level statements cannot be called
 ///         from a test — an argument it made about composition while holding the request path. It is
 ///         <c>GatewayComposition.MapGateway</c> now, and <c>Program.cs</c> calls it.
@@ -201,7 +204,8 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             + subscription.Body
         );
 
-        Json(subscription.Body).GetProperty("id").GetString()
+        Json(subscription.Body).GetProperty("id")
+            .GetString()
             .ShouldBe(ScopeId.Subscription(Tenant, Subscription).Path);
 
         // ── Step 2: the resource group. ─────────────────────────────────────────────────────────
@@ -214,7 +218,8 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         group.Status.ShouldBe(
             HttpStatusCode.Created,
             "the scope route refused a resource group in a subscription the same caller had just "
-            + "created over the same connection: " + group.Body
+            + "created over the same connection: "
+            + group.Body
         );
 
         // ── Step 3: the resource. 202, with both headers docs/plan/10 requires. ─────────────────
@@ -222,16 +227,18 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
 
         accepted.Status.ShouldBe(
             HttpStatusCode.Accepted,
-            "the write path refused a create the caller is entitled to make: " + accepted.Body
+            "the write path refused a create the caller is entitled to make: "
+            + accepted.Body
             + " ⚠ A 404 here is the enforcement seam answering for a check that could not be made "
             + "rather than for a resource that does not exist — see the silo's "
             + "CyberCloud.Authorization reference."
         );
 
-        accepted.Headers.Contains("Azure-AsyncOperation").ShouldBeTrue(
-            "a 202 without Azure-AsyncOperation is a 202 every client has to special-case — "
-            + "docs/plan/10 § Long-running operations."
-        );
+        accepted.Headers.Contains("Azure-AsyncOperation")
+            .ShouldBeTrue(
+                "a 202 without Azure-AsyncOperation is a 202 every client has to special-case — "
+                + "docs/plan/10 § Long-running operations."
+            );
 
         accepted.Headers.Contains("Retry-After").ShouldBeTrue();
 
@@ -249,11 +256,14 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         // PROCESS Orleans placed the grain on.
         var terminal = await ConvergeAsync(operationId, cancellationToken);
 
-        Json(terminal).GetProperty("status").GetString().ShouldBe(
-            "Succeeded",
-            "the operation did not succeed. Its body, which carries the progress array and the "
-            + "error if there is one, is: " + terminal
-        );
+        Json(terminal).GetProperty("status")
+            .GetString()
+            .ShouldBe(
+                "Succeeded",
+                "the operation did not succeed. Its body, which carries the progress array and the "
+                + "error if there is one, is: "
+                + terminal
+            );
 
         // ── Step 5: read it back through the same front door. ───────────────────────────────────
         var read = await GetAsync(Address.Path, cancellationToken);
@@ -262,11 +272,13 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
 
         var resource = Json(read.Body);
 
-        resource.GetProperty("provisioningState").GetString().ShouldBe(
-            "Succeeded",
-            "the operation reported Succeeded and the resource did not follow it — a caller polling "
-            + "the operation and a caller reading the resource get different answers."
-        );
+        resource.GetProperty("provisioningState")
+            .GetString()
+            .ShouldBe(
+                "Succeeded",
+                "the operation reported Succeeded and the resource did not follow it — a caller polling "
+                + "the operation and a caller reading the resource get different answers."
+            );
 
         resource.GetProperty("name").GetString().ShouldBe(Widget);
 
@@ -379,9 +391,7 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         using var request = new HttpRequestMessage(
             HttpMethod.Put,
             new Uri(path + Version, UriKind.Relative)
-        ) {
-            Content = new StringContent(body, Encoding.UTF8, "application/json")
-        };
+        ) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
         return await SendAsync(request, cancellationToken);
     }
@@ -437,9 +447,12 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     /// <param name="cancellationToken">The test's token.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The directory entry is the part <see cref="ReconcileThroughTheRealHostTests" />
-    ///         does not need and this file cannot do without, and that difference is itself the
-    ///         point.</b> Stage 3 resolves a token's tenant through <c>TenantDirectoryCache</c> and
+    ///         ⚠
+    ///         <b>
+    ///             The directory entry is the part <see cref="ReconcileThroughTheRealHostTests" />
+    ///             does not need and this file cannot do without, and that difference is itself the
+    ///             point.
+    ///         </b> Stage 3 resolves a token's tenant through <c>TenantDirectoryCache</c> and
     ///         answers <c>404</c> on a miss, so a tenant with a record, a shard and an owner is still
     ///         unreachable over HTTP until it is in the directory. A suite that calls
     ///         <c>IResourceManager</c> directly never meets that rule — which is one more thing the
@@ -472,7 +485,8 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
                 .GetValueOrThrow(),
             Relations.Owner,
             SubjectRef.Create(SubjectTypes.User, Subject).GetValueOrThrow()
-        ).GetValueOrThrow();
+        )
+            .GetValueOrThrow();
 
         var granted = await tenant
             .GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(Tenant))
@@ -485,12 +499,7 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         var registered = await topology.Client
             .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
             .RegisterAsync(
-                new() {
-                    TenantId = Tenant,
-                    Slug = Slug,
-                    HomeRegion = "eu-central",
-                    Status = TenantStatus.Active
-                }
+                new() { TenantId = Tenant, Slug = Slug, HomeRegion = "eu-central", Status = TenantStatus.Active }
             );
 
         registered.IsSuccess.ShouldBeTrue(

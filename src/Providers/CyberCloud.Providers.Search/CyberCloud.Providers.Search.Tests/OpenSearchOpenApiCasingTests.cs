@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.Search.Tests;
 ///         only in a log line.
 ///     </para>
 ///     <para>
-///         ⚠ <b>EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
-///         STAYED GREEN BECAUSE IT WAS NOT.</b> That version built the expected path from the same two
+///         ⚠
+///         <b>
+///             EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
+///             STAYED GREEN BECAUSE IT WAS NOT.
+///         </b> That version built the expected path from the same two
 ///         constants the emitter reads, so re-casing the constant left the whole suite green — two
 ///         things derived from one constant agree however that constant is spelled. The strings here
 ///         are typed out by hand, and they are the fourth independent copy after
@@ -25,8 +28,11 @@ namespace CyberCloud.Providers.Search.Tests;
 ///         <c>cybercloud.io/resource-type</c> and <c>charts/managed/opensearch/conformance.yaml</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This type's casing risk is concentrated in three names, and the dangerous one is
-///         <c>masterNodes</c>.</b> The API property is <c>masterNodes</c>; the <i>role</i> the rendered
+///         ⚠
+///         <b>
+///             This type's casing risk is concentrated in three names, and the dangerous one is
+///             <c>masterNodes</c>.
+///         </b> The API property is <c>masterNodes</c>; the <i>role</i> the rendered
 ///         object carries is <c>cluster_manager</c>; the operator's own filter accepts <c>master</c>
 ///         as well. Three vocabularies for one concept, two of them snake-cased, one of them the API —
 ///         and the property that would read most naturally in the document, <c>clusterManagerNodes</c>,
@@ -107,11 +113,12 @@ public sealed class OpenSearchOpenApiCasingTests {
         // path through ResourceTypeName — which is case-INSENSITIVE. So a mis-cased document would
         // still route, and this test is not about routing: it is about what a generated client, a
         // portal breadcrumb and docs/plan/12's prose all copy.
-        OpenSearchServices.Type.ToString().ShouldBe(
-            QualifiedType,
-            "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
-            + "charts/managed/opensearch/Chart.yaml's cybercloud.io/resource-type annotation."
-        );
+        OpenSearchServices.Type.ToString()
+            .ShouldBe(
+                QualifiedType,
+                "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
+                + "charts/managed/opensearch/Chart.yaml's cybercloud.io/resource-type annotation."
+            );
 
         var paths = Paths();
 
@@ -120,12 +127,9 @@ public sealed class OpenSearchOpenApiCasingTests {
             "no path carries the provider namespace and type as docs/plan/12 spells them"
         );
 
-        foreach (var path in paths.Where(
-                     x => x.Contains("search/services", StringComparison.OrdinalIgnoreCase)
-                 )) {
-            path.Contains(QualifiedType, StringComparison.Ordinal).ShouldBeTrue(
-                $"'{path}' spells the type in a casing other than '{QualifiedType}'."
-            );
+        foreach (var path in paths.Where(x => x.Contains("search/services", StringComparison.OrdinalIgnoreCase))) {
+            path.Contains(QualifiedType, StringComparison.Ordinal)
+                .ShouldBeTrue($"'{path}' spells the type in a casing other than '{QualifiedType}'.");
         }
     }
 
@@ -151,10 +155,11 @@ public sealed class OpenSearchOpenApiCasingTests {
         var value = KubeLabels.ResourceTypeValue(OpenSearchServices.Type);
 
         value.ShouldBe("cybercloud.search_services");
-        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType).IsSuccess.ShouldBeTrue(
-            "the resource-type label value is not legal Kubernetes label syntax, so every object this "
-            + "provider applies would be refused at admission rather than at build time."
-        );
+        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType)
+            .IsSuccess.ShouldBeTrue(
+                "the resource-type label value is not legal Kubernetes label syntax, so every object this "
+                + "provider applies would be refused at admission rather than at build time."
+            );
     }
 
     [Fact]

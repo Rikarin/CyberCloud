@@ -9,9 +9,12 @@ namespace CyberCloud.Providers.Messaging.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><c>CyberCloud.Messaging</c> is the only provider namespace in the platform with more
-///         than one type in it, and the disambiguation ladders every generated surface uses were
-///         built for a world where a namespace had one.</b> <c>SdkEmitter</c>'s first tier resolves a
+///         ⚠
+///         <b>
+///             <c>CyberCloud.Messaging</c> is the only provider namespace in the platform with more
+///             than one type in it, and the disambiguation ladders every generated surface uses were
+///             built for a world where a namespace had one.
+///         </b> <c>SdkEmitter</c>'s first tier resolves a
 ///         colliding display name by prefixing the provider namespace's last segment — which cannot
 ///         separate two colliding types in the <i>same</i> namespace, because the prefix is
 ///         identical. Its second tier falls back to the type path and its third throws.
@@ -25,9 +28,15 @@ namespace CyberCloud.Providers.Messaging.Tests;
 ///         all three types reach both surfaces, under distinct names, with none swallowing another.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE PREDICTION THIS FILE MADE WAS HALF RIGHT, AND THE HALF IT GOT WRONG IS RECORDED
-///         RATHER THAN QUIETLY EDITED.</b> It said the claim <i>"a third type in this namespace —
-///         <c>rabbitmqClusters</c> is next in docs/plan/12 — can break"</i>, naming the SDK ladder as
+///         ⚠
+///         <b>
+///             THE PREDICTION THIS FILE MADE WAS HALF RIGHT, AND THE HALF IT GOT WRONG IS RECORDED
+///             RATHER THAN QUIETLY EDITED.
+///         </b> It said the claim
+///         <i>
+///             "a third type in this namespace —
+///             <c>rabbitmqClusters</c> is next in docs/plan/12 — can break"
+///         </i>, naming the SDK ladder as
 ///         the reason. The third type landed on 2026-08-12 and the SDK ladder was never entered:
 ///         <c>SdkEmitter.Pascal("RabbitMQ cluster")</c> is <c>RabbitMQCluster</c>, which collides with
 ///         neither sibling. What the third type <i>did</i> exercise for the first time is the shape

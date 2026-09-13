@@ -7,8 +7,11 @@ namespace CyberCloud.Gateway.Host.RateLimiting;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Connections per tenant and streams per connection — two limits, because they stop two
-///         different things.</b> The per-tenant connection cap stops one tenant's automation from
+///         ⚠
+///         <b>
+///             Connections per tenant and streams per connection — two limits, because they stop two
+///             different things.
+///         </b> The per-tenant connection cap stops one tenant's automation from
 ///         exhausting a pod's socket budget and taking every other tenant's portal down with it. The
 ///         per-connection stream cap stops one connection from subscribing to a tenant's entire
 ///         resource graph, which costs a stream subscription and a re-check per relation change for

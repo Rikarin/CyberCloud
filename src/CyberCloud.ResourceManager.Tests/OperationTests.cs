@@ -160,8 +160,9 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
         var accepted = await Create(address);
         var operation = cluster.Operation(ResourceManagerCluster.Tenant, accepted.GetValueOrThrow().OperationId);
 
-        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Reserved
-            .ShouldBeGreaterThan(before.Reserved, "step 6 reserved");
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Reserved
+                .ShouldBeGreaterThan(before.Reserved, "step 6 reserved");
 
         await operation.CancelAsync("changed my mind");
         await operation.DriveAsync();
@@ -233,8 +234,9 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
         var accepted = await Create(ResourceManagerCluster.Address("abandoned"));
         accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
 
-        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Reserved
-            .ShouldBeGreaterThan(before.Reserved);
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Reserved
+                .ShouldBeGreaterThan(before.Reserved);
 
         var operationId = accepted.GetValueOrThrow().OperationId;
 
@@ -290,8 +292,9 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
         refused.Error.Message.ShouldContain("Vcpu");
         refused.Error.Message.ShouldContain(oversized.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-        (await cluster.Index(address).GetAsync()).GetValueOrThrow().State
-            .ShouldBe(IndexEntryState.Free, "a quota refusal must not have claimed the name");
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State
+                .ShouldBe(IndexEntryState.Free, "a quota refusal must not have claimed the name");
     }
 
     // ── Backoff and the ceiling ─────────────────────────────────────────────────────────────────
@@ -308,11 +311,12 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
         var status = await operation.DriveAsync();
 
         status.GetValueOrThrow().State.ShouldBe(OperationState.Running);
-        status.GetValueOrThrow().Progress.ShouldContain(
-            x => x.Step == "waiting" && x.Detail.Contains("replicas", StringComparison.Ordinal)
-        );
+        status.GetValueOrThrow()
+            .Progress.ShouldContain(x => x.Step == "waiting" && x.Detail.Contains("replicas", StringComparison.Ordinal)
+            );
 
-        status.GetValueOrThrow().Progress.ShouldContain(x => x.Detail.Contains("Next attempt in", StringComparison.Ordinal));
+        status.GetValueOrThrow()
+            .Progress.ShouldContain(x => x.Detail.Contains("Next attempt in", StringComparison.Ordinal));
     }
 
     [Fact]

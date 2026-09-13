@@ -26,8 +26,11 @@ using System.Xml.Linq;
 ///     mean by "70 % coverage", and choosing the stricter reading of an ambiguous requirement is how
 ///     a gate ends up disabled.
 ///     <para>
-///         ⚠ <b>That second reason used to be "and branch coverage is not measured here anyway",
-///         and it has stopped being true.</b> dotnet-coverage reported <c>branch-rate="1"</c> for
+///         ⚠
+///         <b>
+///             That second reason used to be "and branch coverage is not measured here anyway",
+///             and it has stopped being true.
+///         </b> dotnet-coverage reported <c>branch-rate="1"</c> for
 ///         every assembly in this repository, so under it a branch floor would have gated on
 ///         nothing. coverlet reports real branch rates — measured on <c>CyberCloud.Identity</c>,
 ///         58.7 % branch against 64.4 % line — so a branch floor is now a decision somebody could
@@ -36,14 +39,15 @@ using System.Xml.Linq;
 ///         and not to this file.
 ///     </para>
 /// </remarks>
-sealed class CoverageReport
-{
+sealed class CoverageReport {
     /// <summary>Covered and coverable line counts for one assembly.</summary>
-    /// <param name="Assembly">The assembly name, which is also the project name — Directory.Build.props § "Assembly and namespace naming".</param>
+    /// <param name="Assembly">
+    ///     The assembly name, which is also the project name — Directory.Build.props § "Assembly and
+    ///     namespace naming".
+    /// </param>
     /// <param name="Covered">Lines with at least one hit.</param>
     /// <param name="Coverable">Lines the compiler emitted sequence points for.</param>
-    public sealed record Module(string Assembly, int Covered, int Coverable)
-    {
+    public sealed record Module(string Assembly, int Covered, int Coverable) {
         /// <summary>Covered ÷ coverable, or 1 for an assembly with no coverable lines at all.</summary>
         /// <remarks>
         ///     ⚠ An assembly with zero coverable lines is 100 %, not 0 %. It happens — a project that
@@ -62,20 +66,24 @@ sealed class CoverageReport
 
     readonly Dictionary<string, Module> modules;
 
-    CoverageReport(Dictionary<string, Module> modules) => this.modules = modules;
+    CoverageReport(Dictionary<string, Module> modules) {
+        this.modules = modules;
+    }
 
     /// <summary>Every assembly the report mentions, ordered by name.</summary>
-    public IReadOnlyList<Module> Modules =>
-        modules.Values.OrderBy(x => x.Assembly, StringComparer.Ordinal).ToList();
+    public IReadOnlyList<Module> Modules => modules.Values.OrderBy(x => x.Assembly, StringComparer.Ordinal).ToList();
 
     /// <summary>
     ///     Reads one or more Cobertura reports as a single answer.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Several reports rather than one, merged here rather than by the collector's own
-    ///         merge — <c>coverlet --merge-with</c>, or <c>dotnet-coverage merge</c> before
-    ///         it.</b> Every suite produces its own report and most
+    ///         ⚠
+    ///         <b>
+    ///             Several reports rather than one, merged here rather than by the collector's own
+    ///             merge — <c>coverlet --merge-with</c>, or <c>dotnet-coverage merge</c> before
+    ///             it.
+    ///         </b> Every suite produces its own report and most
     ///         assemblies appear in several of them — <c>CyberCloud.Core</c> is loaded by nearly
     ///         every suite in the tree. Summing per-report totals would count the same line once per
     ///         suite that loaded it, which inflates both halves of the ratio and, worse, makes the
@@ -94,39 +102,52 @@ sealed class CoverageReport
     ///         whether the project has no tests or a broken one.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The file a line belongs to comes from its nearest <c>&lt;class&gt;</c> ancestor,
-    ///         not from its grandparent.</b> Cobertura lists most lines TWICE — once under
+    ///         ⚠
+    ///         <b>
+    ///             The file a line belongs to comes from its nearest <c>&lt;class&gt;</c> ancestor,
+    ///             not from its grandparent.
+    ///         </b> Cobertura lists most lines TWICE — once under
     ///         <c>&lt;class&gt;&lt;lines&gt;</c> and again under
     ///         <c>&lt;method&gt;&lt;lines&gt;</c> — and the grandparent of the second copy is the
     ///         <c>&lt;method&gt;</c>, which carries no <c>filename</c>. Every method-level line in
     ///         the report therefore keyed as (assembly, "", number), which did two wrong things at
     ///         once: it counted each line a second time, and it collapsed line 17 of one file into
     ///         line 17 of every other. Measured on <c>CyberCloud.Identity</c>: the old key reported
-    ///         <b>1 837 of 2 775 lines, 66.2 %</b> for an assembly that is <b>1 392 of 2 163,
-    ///         64.4 %</b> — a 1.8-point inflation of a 70 % floor, from a report that was correct.
+    ///         <b>1 837 of 2 775 lines, 66.2 %</b> for an assembly that is
+    ///         <b>
+    ///             1 392 of 2 163,
+    ///             64.4 %
+    ///         </b> — a 1.8-point inflation of a 70 % floor, from a report that was correct.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And a <c>filename</c> is relative to that report's own
-    ///         <c>&lt;sources&gt;</c> root, which is not the same root in every report.</b> coverlet
+    ///         ⚠
+    ///         <b>
+    ///             And a <c>filename</c> is relative to that report's own
+    ///             <c>&lt;sources&gt;</c> root, which is not the same root in every report.
+    ///         </b> coverlet
     ///         emits the deepest directory common to the files it instrumented, so a suite that
     ///         touched only <c>src/</c> projects writes <c>…/src/</c> and one that also touched a
     ///         host writes the repository root. Measured over the 71 reports of one run: <b>56</b>
     ///         said the repository root and <b>15</b> said <c>src/</c>. Keying on the raw string
-    ///         therefore split one file into two — <c>src/CyberCloud.Communication/Providers/
-    ///         ChannelProviders.cs</c> and <c>CyberCloud.Communication/Providers/
-    ///         ChannelProviders.cs</c> counted as 382 lines rather than 191, and the two hit sets
+    ///         therefore split one file into two —
+    ///         <c>
+    /// src/CyberCloud.Communication/Providers/
+    ///         ChannelProviders.cs
+    ///         </c> and
+    ///         <c>
+    /// CyberCloud.Communication/Providers/
+    ///         ChannelProviders.cs
+    ///         </c> counted as 382 lines rather than 191, and the two hit sets
     ///         were never unioned, so lines covered by one suite read as uncovered because another
     ///         suite spelled the path differently. The key is the resolved absolute path.
     ///     </para>
     /// </remarks>
-    public static CoverageReport Read(params string[] paths)
-    {
+    public static CoverageReport Read(params string[] paths) {
         var hits = new Dictionary<(string Assembly, string File, string Line), int>();
 
-        foreach (var path in paths)
-        {
+        foreach (var path in paths) {
             var root = XDocument.Load(path).Root
-                       ?? throw new FormatException($"{path} is empty.");
+                ?? throw new FormatException($"{path} is empty.");
 
             var sources = root.Element("sources")?.Elements("source").Select(x => x.Value).ToList() ?? [];
 
@@ -134,26 +155,25 @@ sealed class CoverageReport
             // either, and picking one would merge some files correctly and split others — which is
             // the failure this whole paragraph exists to remove, arriving silently a second time.
             // coverlet writes exactly one; a report with more came from something else.
-            if (sources.Count > 1)
-            {
+            if (sources.Count > 1) {
                 throw new FormatException(
                     $"{path} declares {sources.Count} <source> roots, so a <class filename=\"…\"> in "
                     + "it cannot be resolved to one path. Every line would key on a string that means "
                     + "different files in different reports, and the merge below would count some "
-                    + "lines twice and union none of them. CoverageReport.cs § Read.");
+                    + "lines twice and union none of them. CoverageReport.cs § Read."
+                );
             }
 
             var source = sources.Count == 1 ? sources[0] : string.Empty;
 
-            foreach (var package in root.Descendants("package"))
-            {
+            foreach (var package in root.Descendants("package")) {
                 var assembly = package.Attribute("name")?.Value;
 
-                if (string.IsNullOrEmpty(assembly))
+                if (string.IsNullOrEmpty(assembly)) {
                     continue;
+                }
 
-                foreach (var line in package.Descendants("line"))
-                {
+                foreach (var line in package.Descendants("line")) {
                     var file = line.Ancestors("class").FirstOrDefault()?.Attribute("filename")?.Value;
 
                     var key = (
@@ -165,9 +185,10 @@ sealed class CoverageReport
                         line.Attribute("hits")?.Value,
                         NumberStyles.Integer,
                         CultureInfo.InvariantCulture,
-                        out var parsed)
-                        ? parsed
-                        : 0;
+                        out var parsed
+                    )
+                            ? parsed
+                            : 0;
 
                     hits[key] = hits.TryGetValue(key, out var existing) ? Math.Max(existing, count) : count;
                 }
@@ -179,7 +200,8 @@ sealed class CoverageReport
             .ToDictionary(
                 group => group.Key,
                 group => new Module(group.Key, group.Count(x => x.Value > 0), group.Count()),
-                StringComparer.Ordinal);
+                StringComparer.Ordinal
+            );
 
         return new(modules);
     }
@@ -193,27 +215,24 @@ sealed class CoverageReport
     ///     split this method exists to close would come back the moment a tool stopped writing the
     ///     trailing slash.
     /// </remarks>
-    static string Resolve(string source, string? file)
-    {
-        if (string.IsNullOrEmpty(file))
+    static string Resolve(string source, string? file) {
+        if (string.IsNullOrEmpty(file)) {
             return string.Empty;
+        }
 
-        if (string.IsNullOrEmpty(source))
+        if (string.IsNullOrEmpty(source)) {
             return file.Replace('\\', '/');
+        }
 
-        try
-        {
+        try {
             return Path.GetFullPath(Path.Combine(source, file)).Replace('\\', '/');
         }
         // A filename or root this platform will not accept as a path. Falling back to the raw
         // string keeps the two spellings distinct, which is the pre-existing behaviour and is
         // visible as an inflated line count rather than as a wrong pass.
-        catch (ArgumentException)
-        {
+        catch (ArgumentException) {
             return file.Replace('\\', '/');
-        }
-        catch (PathTooLongException)
-        {
+        } catch (PathTooLongException) {
             return file.Replace('\\', '/');
         }
     }
@@ -224,14 +243,20 @@ sealed class CoverageReport
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the half that tells "fully covered, nothing to instrument" apart from
-    ///         "nothing tests this".</b> Both produce the same thing in a Cobertura report — no
+    ///         ⚠
+    ///         <b>
+    ///             This is the half that tells "fully covered, nothing to instrument" apart from
+    ///             "nothing tests this".
+    ///         </b> Both produce the same thing in a Cobertura report — no
     ///         <c>&lt;package&gt;</c> element at all — and <see cref="Violations" /> has to call one
     ///         of them a pass and the other a failure.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Sequence points, minus anything carrying
-    ///         <c>[ExcludeFromCodeCoverage]</c>.</b> That subtraction is not a nicety, it is the
+    ///         ⚠
+    ///         <b>
+    ///             Sequence points, minus anything carrying
+    ///             <c>[ExcludeFromCodeCoverage]</c>.
+    ///         </b> That subtraction is not a nicety, it is the
     ///         whole measurement. Measured on <c>CyberCloud.Providers.Sample.Application</c>, whose
     ///         only source file is a body-less class declaration: the PDB holds two sequence points,
     ///         both inside <c>Metadata_CyberCloudProvidersSampleApplication.ConfigureInner</c>, which
@@ -263,15 +288,14 @@ sealed class CoverageReport
     ///     could not be read. ⚠ <see langword="null" /> means "not known", and callers must not read
     ///     it as zero: "we could not tell" has to stay distinguishable from "there is nothing here".
     /// </returns>
-    public static int? CoverableLines(string assemblyPath)
-    {
+    public static int? CoverableLines(string assemblyPath) {
         var pdbPath = Path.ChangeExtension(assemblyPath, ".pdb");
 
-        if (!File.Exists(assemblyPath) || !File.Exists(pdbPath))
+        if (!File.Exists(assemblyPath) || !File.Exists(pdbPath)) {
             return null;
+        }
 
-        try
-        {
+        try {
             using var assemblyStream = File.OpenRead(assemblyPath);
             using var peReader = new PEReader(assemblyStream);
             var metadata = peReader.GetMetadataReader();
@@ -282,31 +306,34 @@ sealed class CoverageReport
 
             var coverable = 0;
 
-            foreach (var handle in pdb.MethodDebugInformation)
-            {
+            foreach (var handle in pdb.MethodDebugInformation) {
                 var debugInformation = pdb.GetMethodDebugInformation(handle);
 
-                if (debugInformation.SequencePointsBlob.IsNil)
+                if (debugInformation.SequencePointsBlob.IsNil) {
                     continue;
+                }
 
                 // Hidden sequence points (line 0xfeefee) mark compiler-emitted IL that maps to no
                 // source line, so no report ever counts them either.
                 var points = debugInformation.GetSequencePoints().Count(x => !x.IsHidden);
 
-                if (points == 0)
+                if (points == 0) {
                     continue;
+                }
 
                 // MethodDebugInformation is a parallel table: row N describes MethodDef row N.
                 var method = metadata.GetMethodDefinition(
                     (MethodDefinitionHandle)MetadataTokens.Handle(
                         TableIndex.MethodDef,
-                        MetadataTokens.GetRowNumber(handle)));
+                        MetadataTokens.GetRowNumber(handle)
+                    )
+                );
 
                 if (IsExcludedFromCoverage(metadata, method.GetCustomAttributes())
                     || IsExcludedFromCoverage(
                         metadata,
-                        metadata.GetTypeDefinition(method.GetDeclaringType()).GetCustomAttributes()))
-                {
+                        metadata.GetTypeDefinition(method.GetDeclaringType()).GetCustomAttributes()
+                    )) {
                     continue;
                 }
 
@@ -318,12 +345,9 @@ sealed class CoverageReport
         // Both answer "not known", which the caller turns into a violation with a message rather
         // than into a pass. An unreadable assembly is a worse thing to crash the floor over than to
         // report, and it stays reported either way.
-        catch (BadImageFormatException)
-        {
+        catch (BadImageFormatException) {
             return null;
-        }
-        catch (IOException)
-        {
+        } catch (IOException) {
             return null;
         }
     }
@@ -334,26 +358,25 @@ sealed class CoverageReport
     ///     checked because there is one attribute with this name in the framework and a same-named
     ///     one somebody wrote deliberately means the same thing.
     /// </remarks>
-    static bool IsExcludedFromCoverage(MetadataReader metadata, CustomAttributeHandleCollection attributes)
-    {
-        foreach (var handle in attributes)
-        {
+    static bool IsExcludedFromCoverage(MetadataReader metadata, CustomAttributeHandleCollection attributes) {
+        foreach (var handle in attributes) {
             var attribute = metadata.GetCustomAttribute(handle);
 
             // A MemberReference constructor means the attribute type lives in another assembly,
             // which is true of every framework attribute. An attribute declared in this assembly
             // arrives as a MethodDefinition instead, and none of those is this one.
-            if (attribute.Constructor.Kind != HandleKind.MemberReference)
+            if (attribute.Constructor.Kind != HandleKind.MemberReference) {
                 continue;
+            }
 
             var parent = metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor).Parent;
 
-            if (parent.Kind != HandleKind.TypeReference)
+            if (parent.Kind != HandleKind.TypeReference) {
                 continue;
+            }
 
             if (metadata.GetString(metadata.GetTypeReference((TypeReferenceHandle)parent).Name)
-                is "ExcludeFromCodeCoverageAttribute")
-            {
+                is "ExcludeFromCodeCoverageAttribute") {
                 return true;
             }
         }
@@ -366,8 +389,7 @@ sealed class CoverageReport
     ///     ⚠ Empty means the profiler never loaded, <b>not</b> that nothing is covered — see
     ///     Build.Test.cs § EnforceCoverageFloor, which refuses to enforce a floor against it.
     /// </remarks>
-    public IReadOnlySet<string> MentionedAssemblies =>
-        modules.Keys.ToHashSet(StringComparer.Ordinal);
+    public IReadOnlySet<string> MentionedAssemblies => modules.Keys.ToHashSet(StringComparer.Ordinal);
 
     /// <summary>A pinned rate from the baseline file, and the line it is written on.</summary>
     /// <param name="Rate">The measured fraction, as recorded.</param>
@@ -430,8 +452,11 @@ sealed class CoverageReport
     /// </param>
     /// <param name="baselineFile">The file's name, for every message that asks a reader to edit it.</param>
     /// <remarks>
-    ///     ⚠ <b>Four rules, and three of them exist to keep the baseline from becoming a permission
-    ///     slip.</b> The model is <c>actions-without-handlers.txt</c>, whose gate fails just as loudly
+    ///     ⚠
+    ///     <b>
+    ///         Four rules, and three of them exist to keep the baseline from becoming a permission
+    ///         slip.
+    ///     </b> The model is <c>actions-without-handlers.txt</c>, whose gate fails just as loudly
     ///     when a row outlives its debt as when a new gap appears unlisted. A debt list nobody is
     ///     forced to prune is a list in which no reader can tell the live rows from the dead ones,
     ///     and at that point it stops being evidence and becomes an exemption list — which is the
@@ -442,32 +467,29 @@ sealed class CoverageReport
         double floor,
         IReadOnlySet<string> nothingToCover,
         IReadOnlyDictionary<string, Pin> baseline,
-        string baselineFile)
-    {
+        string baselineFile
+    ) {
         ArgumentNullException.ThrowIfNull(baseline);
 
         var violations = new List<string>();
         var unmatched = new HashSet<string>(baseline.Keys, StringComparer.Ordinal);
 
-        foreach (var project in projects.OrderBy(x => x, StringComparer.Ordinal))
-        {
+        foreach (var project in projects.OrderBy(x => x, StringComparer.Ordinal)) {
             var listed = baseline.TryGetValue(project, out var pin) ? pin : null;
             unmatched.Remove(project);
 
-            if (!modules.TryGetValue(project, out var module))
-            {
+            if (!modules.TryGetValue(project, out var module)) {
                 // Fully covered by definition: there is no line here for a test to reach. Counting
                 // it as 0 % would fail a project for containing no executable code, which the same
                 // reasoning as Module.Rate above says no amount of testing could fix.
-                if (nothingToCover.Contains(project))
-                {
-                    if (listed is not null)
-                    {
+                if (nothingToCover.Contains(project)) {
+                    if (listed is not null) {
                         violations.Add(
                             $"{baselineFile} line {listed.Line} pins {project} at {listed.Rate:P1} and "
                             + "that project has no coverable line at all, so the floor never applied "
                             + "to it. Delete the row — a pin on a project that cannot be measured is "
-                            + "a number nobody can check");
+                            + "a number nobody can check"
+                        );
                     }
 
                     continue;
@@ -481,18 +503,28 @@ sealed class CoverageReport
             }
 
             violations.AddRange(
-                Judge(project, module.Rate, module.Covered, module.Coverable, floor, listed, baselineFile, absent: false));
+                Judge(
+                    project,
+                    module.Rate,
+                    module.Covered,
+                    module.Coverable,
+                    floor,
+                    listed,
+                    baselineFile,
+                    absent: false
+                )
+            );
         }
 
         // ⚠ The direction that keeps the file honest, and the one actions-without-handlers.txt's
         // gate calls out by name. A row naming a project that is not a shipping project any more is
         // standing permission for a gap that may not exist.
-        foreach (var stale in unmatched.OrderBy(x => x, StringComparer.Ordinal))
-        {
+        foreach (var stale in unmatched.OrderBy(x => x, StringComparer.Ordinal)) {
             violations.Add(
                 $"{baselineFile} line {baseline[stale].Line} pins '{stale}' and no shipping project "
                 + "has that name. Either it was renamed and the row did not follow, or it is gone and "
-                + "so is the reason for the row");
+                + "so is the reason for the row"
+            );
         }
 
         return violations;
@@ -507,17 +539,17 @@ sealed class CoverageReport
         double floor,
         Pin? listed,
         string baselineFile,
-        bool absent)
-    {
+        bool absent
+    ) {
         var measured = absent
             ? "does not appear in the coverage report at all — no test loaded it, so its coverage is 0 %"
             : $"is at {rate:P1} ({covered} of {coverable} lines)";
 
-        if (listed is null)
-        {
+        if (listed is null) {
             // Rule 1 — the floor, unchanged. An unlisted project is held to 70 %.
-            if (rate >= floor)
+            if (rate >= floor) {
                 yield break;
+            }
 
             yield return
                 $"{project} {measured}, below the {floor:P0} floor in docs/plan/23 § Test layers. "
@@ -531,8 +563,7 @@ sealed class CoverageReport
         // Rule 2 — a listed project that has reached the floor must lose its row, before anything
         // else is said about it. Reporting a pin drift on a project that now passes would be reading
         // out a number nobody should be looking at any more.
-        if (rate >= floor)
-        {
+        if (rate >= floor) {
             yield return
                 $"{project} is at {rate:P1} ({covered} of {coverable} lines), which meets the "
                 + $"{floor:P0} floor — and {baselineFile} line {listed.Line} still lists it as debt. "
@@ -544,8 +575,7 @@ sealed class CoverageReport
         }
 
         // Rule 3 — the ratchet. Below the pin by more than the noise band.
-        if (rate < listed.Rate - PinTolerance)
-        {
+        if (rate < listed.Rate - PinTolerance) {
             yield return
                 $"{project} {measured} and {baselineFile} line {listed.Line} pins it at "
                 + $"{listed.Rate:P1}. It has DROPPED by {(listed.Rate - rate) * 100:F1} point(s), "
@@ -559,8 +589,7 @@ sealed class CoverageReport
         // Rule 4 — the other half of the ratchet, and the reason the tolerance is not a budget.
         // Without this, a project could sit half a point below its pin forever and re-pin nothing,
         // and the band would be spendable a tenth at a time.
-        if (rate > listed.Rate + PinTolerance)
-        {
+        if (rate > listed.Rate + PinTolerance) {
             yield return
                 $"{project} is at {rate:P1} ({covered} of {coverable} lines) and {baselineFile} line "
                 + $"{listed.Line} still pins it at {listed.Rate:P1}. It has IMPROVED by "

@@ -84,8 +84,7 @@ sealed record GatewayTrace {
     }
 
     /// <inheritdoc />
-    public override string ToString() =>
-        Reached.IsDefaultOrEmpty ? "(no stages)" : string.Join(" → ", Reached);
+    public override string ToString() => Reached.IsDefaultOrEmpty ? "(no stages)" : string.Join(" → ", Reached);
 }
 
 /// <summary>

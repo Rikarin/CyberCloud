@@ -52,9 +52,8 @@ public sealed class UnauthenticatedApiCallsGet401Tests {
         await context.Options.Events.RedirectToLogin(context);
 
         context.Response.StatusCode.ShouldBe(StatusCodes.Status401Unauthorized);
-        context.Response.Headers.Location.ToString().ShouldBeEmpty(
-            "a redirect here turns an unauthenticated XHR into a 200 carrying a login page"
-        );
+        context.Response.Headers.Location.ToString()
+            .ShouldBeEmpty("a redirect here turns an unauthenticated XHR into a 200 carrying a login page");
     }
 
     [Theory]

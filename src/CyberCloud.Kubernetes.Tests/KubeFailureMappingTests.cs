@@ -1,12 +1,12 @@
 using CyberCloud.Core.Resources;
 using CyberCloud.Kubernetes.Apply;
 using CyberCloud.Kubernetes.Tests.Infrastructure;
-using k8s;
-using k8s.Models;
 using Microsoft.Extensions.Logging;
 using Shouldly;
 using System.Text;
 using System.Text.Json;
+using k8s;
+using k8s.Models;
 
 namespace CyberCloud.Kubernetes.Tests;
 
@@ -161,9 +161,7 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
             TestContext.Current.CancellationToken
         );
 
-        outcome.IsFailure.ShouldBeTrue(
-            "a delete that could not have happened must not report the desired end state."
-        );
+        outcome.IsFailure.ShouldBeTrue("a delete that could not have happened must not report the desired end state.");
         outcome.Error!.Code.ShouldBe(ErrorCode.InvalidResourceType);
     }
 
@@ -176,16 +174,16 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         var token = TestContext.Current.CancellationToken;
 
         (await api.GetAsync(
-            new() { Kind = Deployments, Namespace = K3sFixture.Namespace, Name = "no-such-thing" },
-            token
-        )).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+                new() { Kind = Deployments, Namespace = K3sFixture.Namespace, Name = "no-such-thing" },
+                token
+            )).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
 
         await EnsureWidgetCrdAsync(token);
 
         (await api.GetAsync(
-            new() { Kind = Widgets, Namespace = K3sFixture.Namespace, Name = "no-such-thing" },
-            token
-        )).Error!.Code.ShouldBe(
+                new() { Kind = Widgets, Namespace = K3sFixture.Namespace, Name = "no-such-thing" },
+                token
+            )).Error!.Code.ShouldBe(
             ErrorCode.ResourceNotFound,
             "a served CRD whose object is absent is an ordinary missing object."
         );
@@ -193,10 +191,10 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         // And the delete of an absent object still converges, which is the behaviour
         // ADeleteOfAKindTheClusterDoesNotServeIsNotAConvergedTeardown must not have broken.
         (await api.DeleteAsync(
-            new() { Kind = Widgets, Namespace = K3sFixture.Namespace, Name = "no-such-thing" },
-            CascadePolicy.Background,
-            token
-        )).IsSuccess.ShouldBeTrue();
+                new() { Kind = Widgets, Namespace = K3sFixture.Namespace, Name = "no-such-thing" },
+                CascadePolicy.Background,
+                token
+            )).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]
@@ -207,11 +205,7 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         // JSON at all. Reading details.kind to tell these apart — the obvious approach — reads a
         // field that is absent in both. details.name is the only signal that survives all three.
         var outcome = await api.GetAsync(
-            new() {
-                Kind = Deployments with { Version = "v9" },
-                Namespace = K3sFixture.Namespace,
-                Name = "anything"
-            },
+            new() { Kind = Deployments with { Version = "v9" }, Namespace = K3sFixture.Namespace, Name = "anything" },
             TestContext.Current.CancellationToken
         );
 
@@ -316,8 +310,8 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         // ⚠ And the tenant's copy names nothing internal. Same shape as
         // ManagedIdentityTests.ATokenFromAnUntrustedIssuerIsRefusedAndTheRefusalNamesNothing.
         foreach (var leak in new[] {
-                     "system:serviceaccount", "cc-nobody", "serviceaccount", "User \"",
-                     "cannot get", "cannot patch", "RBAC", "clusterrole", "rolebinding"
+                     "system:serviceaccount", "cc-nobody", "serviceaccount", "User \"", "cannot get", "cannot patch",
+                     "RBAC", "clusterrole", "rolebinding"
                  }) {
             outcome.Error.Message.ShouldNotContain(leak, Case.Insensitive);
         }
@@ -402,27 +396,27 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
 
         Result[] refusals = [
             (await api.ApplyAsync(Command("cc-refused-y", Deployments, DeploymentJson("cc-refused-y")), token))
-            .ToResult(),
+                .ToResult(),
             (await api.ApplyAsync(
-                Command(
-                    "cc-psa2",
-                    Pods,
-                    """
-                    { "metadata": { "name": "cc-psa2" },
-                      "spec": { "containers": [ { "name": "c", "image": "registry.k8s.io/pause:3.10" } ] } }
-                    """,
-                    RestrictedNamespace
-                ),
-                token
-            )).ToResult(),
+                    Command(
+                        "cc-psa2",
+                        Pods,
+                        """
+                        { "metadata": { "name": "cc-psa2" },
+                          "spec": { "containers": [ { "name": "c", "image": "registry.k8s.io/pause:3.10" } ] } }
+                        """,
+                        RestrictedNamespace
+                    ),
+                    token
+                )).ToResult(),
             (await unprivileged.GetAsync(
-                new() { Kind = Deployments, Namespace = K3sFixture.Namespace, Name = "cc-403" },
-                token
-            )).ToResult(),
+                    new() { Kind = Deployments, Namespace = K3sFixture.Namespace, Name = "cc-403" },
+                    token
+                )).ToResult(),
             (await api.GetAsync(
-                new() { Kind = Gadgets, Namespace = K3sFixture.Namespace, Name = "x" },
-                token
-            )).ToResult(),
+                    new() { Kind = Gadgets, Namespace = K3sFixture.Namespace, Name = "x" },
+                    token
+                )).ToResult(),
             await api.DeleteAsync(
                 new() { Kind = Gadgets, Namespace = K3sFixture.Namespace, Name = "x" },
                 CascadePolicy.Background,
@@ -437,10 +431,11 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
                 $"'{refusal.Error.Message}' is the cluster answering, not the cluster going quiet."
             );
 
-            KubeFailures.MeansTheClusterAnswered(refusal.Error.Code).ShouldBeTrue(
-                $"{refusal.Error.Code} must keep the cluster healthy — see "
-                + "ClusterConnectionGrain.Answered."
-            );
+            KubeFailures.MeansTheClusterAnswered(refusal.Error.Code)
+                .ShouldBeTrue(
+                    $"{refusal.Error.Code} must keep the cluster healthy — see "
+                    + "ClusterConnectionGrain.Answered."
+                );
 
             refusal.Error.Message.ShouldNotContain("did not answer");
         }
@@ -454,10 +449,11 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         // something a test can do reliably.
         await Task.CompletedTask;
 
-        KubeFailures.MeansTheClusterAnswered(ErrorCode.InternalError).ShouldBeFalse(
-            "InternalError is what Unreachable carries, and it is the one code that degrades a "
-            + "cluster."
-        );
+        KubeFailures.MeansTheClusterAnswered(ErrorCode.InternalError)
+            .ShouldBeFalse(
+                "InternalError is what Unreachable carries, and it is the one code that degrades a "
+                + "cluster."
+            );
     }
 
     // ── The sweep ──────────────────────────────────────────────────────────────────────────────
@@ -520,8 +516,8 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
             await k3s.Raw.CoreV1.CreateNamespaceAsync(new() { Metadata = metadata }, cancellationToken: token);
         } catch (k8s.Autorest.HttpOperationException ex)
             when (ex.Response?.StatusCode == System.Net.HttpStatusCode.Conflict) {
-            // Already there from an earlier test in the collection.
-        }
+                // Already there from an earlier test in the collection.
+            }
     }
 
     async Task EnsureServiceAccountAsync(CancellationToken token) {
@@ -533,8 +529,8 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
             );
         } catch (k8s.Autorest.HttpOperationException ex)
             when (ex.Response?.StatusCode == System.Net.HttpStatusCode.Conflict) {
-            // Already there.
-        }
+                // Already there.
+            }
     }
 
     async Task EnsureWidgetCrdAsync(CancellationToken token) {
@@ -562,9 +558,10 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         // kind.
         await WaitUntilAsync(
             async () => (await api.GetAsync(
-                new() { Kind = Widgets, Namespace = K3sFixture.Namespace, Name = "probe" },
-                token
-            )).Error!.Code == ErrorCode.ResourceNotFound,
+                    new() { Kind = Widgets, Namespace = K3sFixture.Namespace, Name = "probe" },
+                    token
+                )).Error!.Code
+                == ErrorCode.ResourceNotFound,
             "the widgets CRD never became served",
             token
         );
@@ -613,9 +610,9 @@ public sealed class KubeFailureMappingTests(K3sFixture k3s) : IAsyncLifetime {
         // Same reasoning as the CRD: polled until the policy actually refuses.
         await WaitUntilAsync(
             async () => (await api.ApplyAsync(
-                Command("cc-refused-probe", Deployments, DeploymentJson("cc-refused-probe")),
-                token
-            )).IsFailure,
+                    Command("cc-refused-probe", Deployments, DeploymentJson("cc-refused-probe")),
+                    token
+                )).IsFailure,
             "the admission policy never took effect",
             token
         );
@@ -723,8 +720,7 @@ public sealed class CapturingLogger : ILogger {
 
     /// <inheritdoc />
     public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull =>
-        null;
+        where TState : notnull => null;
 
     /// <inheritdoc />
     public bool IsEnabled(LogLevel logLevel) => true;

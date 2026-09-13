@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.Storage.Tests;
 ///     The bucket reconciler, and the two things about a child type that no shared suite can assert.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>THIS FILE EXISTS BECAUSE <c>ProviderConformanceCase.ObjectMatchesDesired</c> CANNOT SEE AN
-///     ADDRESS.</b> That member is <c>(objectJson, desiredJson) =&gt; bool</c>, so the shared suite's
+///     ⚠
+///     <b>
+///         THIS FILE EXISTS BECAUSE <c>ProviderConformanceCase.ObjectMatchesDesired</c> CANNOT SEE AN
+///         ADDRESS.
+///     </b> That member is <c>(objectJson, desiredJson) =&gt; bool</c>, so the shared suite's
 ///     comparison for a bucket is <see cref="StorageBuckets.MatchesBody" /> — versioning and quota —
 ///     and the two fields that make a bucket a <i>child</i>, <c>spec.name</c> and
 ///     <c>spec.clusterRef</c>, are outside it by construction. They are asserted here against real
@@ -154,21 +157,23 @@ public sealed class StorageBucketReconcilerTests {
 
         await Pass(new StorageBucketReconciler(new FixedClock()), connection, address, body.RootElement);
 
-        Spec(connection.Applied[0].Body)["clusterRef"]!.GetValue<string>().ShouldBe(
-            "media",
-            "the Bucket does not reference the Seaweed of the account it is addressed under, so the "
-            + "operator would reconcile it against a different account's cluster or against none."
-        );
+        Spec(connection.Applied[0].Body)["clusterRef"]!.GetValue<string>()
+            .ShouldBe(
+                "media",
+                "the Bucket does not reference the Seaweed of the account it is addressed under, so the "
+                + "operator would reconcile it against a different account's cluster or against none."
+            );
 
         // ⚠ A LITERAL, not StorageBuckets.ClusterRefOf(address). Deriving the expectation the same way
         // the renderer does would compare the renderer to itself, which is the shape that let an
         // earlier provider's casing sabotage stay green.
-        body.RootElement.GetRawText().ShouldNotContain(
-            "media",
-            Case.Sensitive,
-            "the body carries the account's name. A child's parent belongs in the address only — two "
-            + "spellings of one fact is one fact and one thing to keep in step with it."
-        );
+        body.RootElement.GetRawText()
+            .ShouldNotContain(
+                "media",
+                Case.Sensitive,
+                "the body carries the account's name. A child's parent belongs in the address only — two "
+                + "spellings of one fact is one fact and one thing to keep in step with it."
+            );
     }
 
     [Fact]
@@ -291,9 +296,8 @@ public sealed class StorageBucketReconcilerTests {
 
         await Pass(new StorageBucketReconciler(new FixedClock()), connection, address, body.RootElement);
 
-        Spec(connection.Applied[0].Body).ContainsKey("quota").ShouldBeFalse(
-            "an unset quota rendered a quota field anyway"
-        );
+        Spec(connection.Applied[0].Body).ContainsKey("quota")
+            .ShouldBeFalse("an unset quota rendered a quota field anyway");
     }
 
     // ── Failure class (f), at the object: a bucket carries no credential and no public switch ────
@@ -320,8 +324,7 @@ public sealed class StorageBucketReconcilerTests {
         await Pass(new StorageBucketReconciler(new FixedClock()), connection, address, body.RootElement);
 
         foreach (var forbidden in new[] {
-                     "anonymousRead", "accessKey", "secretKey", "secretAccessKey", "stringData",
-                     "configSecret", "owner"
+                     "anonymousRead", "accessKey", "secretKey", "secretAccessKey", "stringData", "configSecret", "owner"
                  }) {
             connection.Applied[0].Body.ShouldNotContain(forbidden, Case.Sensitive, forbidden);
         }
@@ -403,10 +406,12 @@ sealed class BucketReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }

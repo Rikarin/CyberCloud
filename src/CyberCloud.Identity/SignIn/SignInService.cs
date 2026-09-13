@@ -66,8 +66,11 @@ public sealed record SignInContext {
 ///         <item>
 ///             <b>Check the lockout counter, before anything else.</b> The key is derived from the
 ///             tenant and the address by hashing — no grain, no lookup. A locked identifier is
-///             refused here, and <b>this is the only path an unauthenticated attacker can drive at
-///             volume</b>. docs/plan/11 § Credentials: "an authentication endpoint whose failure path
+///             refused here, and
+///             <b>
+///                 this is the only path an unauthenticated attacker can drive at
+///                 volume
+///             </b>. docs/plan/11 § Credentials: "an authentication endpoint whose failure path
 ///             costs a grain activation is a denial-of-service amplifier."
 ///         </item>
 ///         <item>
@@ -143,8 +146,11 @@ public sealed class SignInService(
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Still no mail, and it is now a deliberate omission rather than a missing
-    ///         feature.</b> <c>IUserGrain.IssueOtpAsync</c> exists, takes
+    ///         ⚠
+    ///         <b>
+    ///             Still no mail, and it is now a deliberate omission rather than a missing
+    ///             feature.
+    ///         </b> <c>IUserGrain.IssueOtpAsync</c> exists, takes
     ///         <see cref="OtpPurpose.PasswordReset" />, and would be one call from here. It is not
     ///         made because it would break the other half of the sentence this method implements:
     ///         issuing a code awaits an <c>IMessageGrain</c> dispatch, which awaits a mail provider,
@@ -311,8 +317,11 @@ public sealed class SignInService(
     /// <param name="cancellationToken">Cancels the lookup.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Public for the same reason <see cref="OpenSessionAsync" /> is, and it carries the
-    ///         same warning.</b> A passkey assertion is verified by the host — the host is what holds
+    ///         ⚠
+    ///         <b>
+    ///             Public for the same reason <see cref="OpenSessionAsync" /> is, and it carries the
+    ///             same warning.
+    ///         </b> A passkey assertion is verified by the host — the host is what holds
     ///         the WebAuthn challenge — and verifying one means looking up the credential the
     ///         assertion names, which means resolving the address first. Exposing the lookup here
     ///         keeps <c>IEmailIndexGrain</c> inside this module: the alternative was the identity
@@ -390,9 +399,7 @@ public sealed class SignInService(
     // discriminator is the TYPE rather than the syntax — ForTenant returns a distinct factory with
     // its own GetGrain — so widening this helper to IGrainFactory would erase exactly the thing the
     // analyzer reads, and every call below would become an unqualified reference again.
-    TenantGrainFactory Tenant(Guid tenantId) =>
-        grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture));
+    TenantGrainFactory Tenant(Guid tenantId) => grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture));
 
-    static string Digest(Guid tenantId, string address) =>
-        LockoutKey.ForIdentifier(tenantId, address).Value;
+    static string Digest(Guid tenantId, string address) => LockoutKey.ForIdentifier(tenantId, address).Value;
 }

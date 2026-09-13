@@ -3,8 +3,11 @@ using CyberCloud.Cli.Output;
 namespace CyberCloud.Cli.Tests;
 
 /// <summary>
-///     The <c>--query</c> subset — docs/plan/21 § Decisions: <i>"Azure CLI's convention; a huge
-///     productivity feature and a well-specified language."</i>
+///     The <c>--query</c> subset — docs/plan/21 § Decisions:
+///     <i>
+///         "Azure CLI's convention; a huge
+///         productivity feature and a well-specified language."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     ⚠ The expressions here are the ones a control plane actually gets typed at it. What is
@@ -13,15 +16,15 @@ namespace CyberCloud.Cli.Tests;
 /// </remarks>
 public sealed class JmesPathTests {
     const string Document = """
-        {
-          "value": [
-            {"name":"w1","location":"eu-central","tags":{"env":"prod"},"properties":{"tier":"free","replicas":1,"cidrs":["10.0.0.0/8"]}},
-            {"name":"w2","location":"us-east","tags":{"env":"dev"},"properties":{"tier":"premium","replicas":3,"cidrs":["10.1.0.0/16","10.2.0.0/16"]}},
-            {"name":"w3","location":"eu-central","tags":{},"properties":{"tier":"premium","replicas":2,"cidrs":[]}}
-          ],
-          "nextLink": null
-        }
-        """;
+                            {
+                              "value": [
+                                {"name":"w1","location":"eu-central","tags":{"env":"prod"},"properties":{"tier":"free","replicas":1,"cidrs":["10.0.0.0/8"]}},
+                                {"name":"w2","location":"us-east","tags":{"env":"dev"},"properties":{"tier":"premium","replicas":3,"cidrs":["10.1.0.0/16","10.2.0.0/16"]}},
+                                {"name":"w3","location":"eu-central","tags":{},"properties":{"tier":"premium","replicas":2,"cidrs":[]}}
+                              ],
+                              "nextLink": null
+                            }
+                            """;
 
     [Theory]
     // Field access and nesting.
@@ -103,8 +106,11 @@ public sealed class JmesPathTests {
     public void NamesTheFunctionsItHasWhenAskedForOneItDoesNot() {
         using var document = JsonDocument.Parse(Document);
 
-        var failure = Should.Throw<CycUsageException>(
-            () => JmesPath.Evaluate("map(&name, value)", Payload.Of(document.RootElement)));
+        var failure = Should.Throw<CycUsageException>(() => JmesPath.Evaluate(
+                "map(&name, value)",
+                Payload.Of(document.RootElement)
+            )
+        );
 
         failure.Message.ShouldContain("'map' is not a function");
         failure.Message.ShouldContain("length");

@@ -8,16 +8,22 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Strictly less than <see cref="ReconcileContext" />, and the two omissions are the
-///         contract.</b> An action carries no <see cref="IReconcileLog" />, because a synchronous
+///         ⚠
+///         <b>
+///             Strictly less than <see cref="ReconcileContext" />, and the two omissions are the
+///             contract.
+///         </b> An action carries no <see cref="IReconcileLog" />, because a synchronous
 ///         action has no operation to report progress against — it answers the caller directly and is
 ///         over. And it carries no <see cref="ObservedState" />, because an action reads the world
 ///         itself if it needs to; handing it a cached observation would invite one to answer from a
 ///         reading somebody else took minutes ago.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Body" /> has already been validated and <see cref="Desired" /> has not been
-///         projected.</b> The manager checks the body against
+///         ⚠
+///         <b>
+///             <see cref="Body" /> has already been validated and <see cref="Desired" /> has not been
+///             projected.
+///         </b> The manager checks the body against
 ///         <c>ActionRegistration.Request</c> before a handler is reached, on the same terms a
 ///         resource body is checked, so a handler may assume every declared parameter is present and
 ///         well-typed. <see cref="Desired" /> is the resource's stored superset rather than a view at
@@ -63,8 +69,11 @@ public readonly record struct ActionContext(
 ///         <c>OperationGrain</c> does with any operation that is not a delete.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Resolved from the container by concrete type, exactly as
-///         <c>ResourceTypeRegistration.ReconcilerType</c> is.</b> The registry stores
+///         ⚠
+///         <b>
+///             Resolved from the container by concrete type, exactly as
+///             <c>ResourceTypeRegistration.ReconcilerType</c> is.
+///         </b> The registry stores
 ///         <see cref="Registry.ActionRegistration.HandlerType" /> and <c>ActionDispatcher</c> resolves
 ///         it, so a second mechanism — a delegate on the registration, a scan for implementations —
 ///         was not invented. What follows from that precedent also follows here: register the

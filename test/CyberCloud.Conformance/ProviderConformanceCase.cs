@@ -7,22 +7,31 @@ namespace CyberCloud.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/03 § Providers: <i>"The conformance suite is what makes the catalogue safe to
-///         grow. It is one xUnit theory that every provider must pass … A provider is not registered
-///         in the platform bundle until it passes."</i> The suite is parameterised on this record so
+///         docs/plan/03 § Providers:
+///         <i>
+///             "The conformance suite is what makes the catalogue safe to
+///             grow. It is one xUnit theory that every provider must pass … A provider is not registered
+///             in the platform bundle until it passes."
+///         </i> The suite is parameterised on this record so
 ///         that adding the twentieth provider is a case object and two class declarations in that
 ///         provider's own <c>.Conformance</c> project — not a copy of the suite.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Everything here is data or a pure function, and none of it is a hook the suite calls
-///         to decide whether the provider passed.</b> A case supplies bodies, addresses and the
+///         ⚠
+///         <b>
+///             Everything here is data or a pure function, and none of it is a hook the suite calls
+///             to decide whether the provider passed.
+///         </b> A case supplies bodies, addresses and the
 ///         objects a resource owns; the <i>assertions</i> are the suite's and are the same for every
 ///         provider. A case that could supply an assertion would be a provider grading its own
 ///         homework.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ObjectMatchesDesired" /> is read <i>around</i> the reconciler and must
-///         stay that way.</b> It is the ground truth of clause 4 — <c>ReconcilerConformance</c>'s
+///         ⚠
+///         <b>
+///             <see cref="ObjectMatchesDesired" /> is read <i>around</i> the reconciler and must
+///             stay that way.
+///         </b> It is the ground truth of clause 4 — <c>ReconcilerConformance</c>'s
 ///         remarks explain why the harness cannot use the reconciler's own <c>ObserveAsync</c> for
 ///         this: an observer is exactly as unreliable as the reconciler it belongs to. Implement it
 ///         against the object's JSON and nothing else.
@@ -84,8 +93,10 @@ public sealed record ProviderConformanceCase {
     /// <remarks>
     ///     The suite asserts <see cref="ErrorCode.InvalidRequestBody" /> and that
     ///     <see cref="Error.Target" /> is <see cref="InvalidBodyTarget" /> — docs/plan/08 § Errors:
-    ///     <i>"<c>target</c> is a JSON Pointer into the request body so the portal can highlight the
-    ///     field."</i>
+    ///     <i>
+    ///         "<c>target</c> is a JSON Pointer into the request body so the portal can highlight the
+    ///         field."
+    ///     </i>
     /// </remarks>
     public required Func<Guid, string> InvalidBody { get; init; }
 
@@ -98,8 +109,11 @@ public sealed record ProviderConformanceCase {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS WAS <c>required</c> UNTIL A TYPE WITH NO ACTIONS EXISTED, AND THE HARNESS
-    ///         COULD NOT EXPRESS ONE AT ALL.</b> Thirteen provider families had each declared at
+    ///         ⚠
+    ///         <b>
+    ///             THIS WAS <c>required</c> UNTIL A TYPE WITH NO ACTIONS EXISTED, AND THE HARNESS
+    ///             COULD NOT EXPRESS ONE AT ALL.
+    ///         </b> Thirteen provider families had each declared at
     ///         least one action, so "every type has an action" had never been tested as an
     ///         assumption — it was simply true of the sample so far.
     ///         <c>CyberCloud.Mail/domains</c> is the first that declares none, and deliberately:
@@ -117,8 +131,11 @@ public sealed record ProviderConformanceCase {
     ///         ⚠ <b>IT IS STILL <c>required</c>, AND THAT MATTERS MORE THAN IT LOOKS.</b> The first
     ///         attempt at this made the member optional with a default of <c>""</c>, and
     ///         <c>ReferenceConformance.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
-    ///         went red — correctly. Its rule is that <i>"an optional one is an assertion the suite
-    ///         quietly stops making for the provider that omits it"</i>, and a defaulted member is
+    ///         went red — correctly. Its rule is that
+    ///         <i>
+    ///             "an optional one is an assertion the suite
+    ///             quietly stops making for the provider that omits it"
+    ///         </i>, and a defaulted member is
     ///         omitted by <b>every</b> case that never thinks about it, including ones that do have
     ///         an action and simply forgot. Keeping it required costs a no-action provider one
     ///         explicit <c>ActionName = string.Empty</c> — a line a reviewer can see and ask about —
@@ -138,8 +155,11 @@ public sealed record ProviderConformanceCase {
 
     /// <summary>Whether an object read out of the cluster carries what a desired body asked for.</summary>
     /// <remarks>
-    ///     ⚠ <b>Takes a <see cref="MatchContext" /> rather than two strings, and the address in it is
-    ///     the point.</b> See that type's remarks: without it a child's suite checks strictly less
+    ///     ⚠
+    ///     <b>
+    ///         Takes a <see cref="MatchContext" /> rather than two strings, and the address in it is
+    ///         the point.
+    ///     </b> See that type's remarks: without it a child's suite checks strictly less
     ///     than a parent's, and two provider families each recorded that in their own notes rather
     ///     than fixing it.
     /// </remarks>
@@ -150,8 +170,10 @@ public sealed record ProviderConformanceCase {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         <b>Every managed service whose credential is generated rather than minted needs this,
-    ///         and nothing in the harness could express it.</b> A <c>listKeys</c> on
+    ///         <b>
+    ///             Every managed service whose credential is generated rather than minted needs this,
+    ///             and nothing in the harness could express it.
+    ///         </b> A <c>listKeys</c> on
     ///         <c>CyberCloud.DBforPostgreSQL/servers</c> reads <c>{cluster}-app</c> — a Secret
     ///         CloudNativePG creates while bringing the cluster up. The reconciler does not apply it,
     ///         so <see cref="Objects" /> must not name it (that member is what the suite asserts a
@@ -172,8 +194,11 @@ public sealed record ProviderConformanceCase {
     ///         takes.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>required</c> like every other member, and it was written with a default
-    ///         first.</b> <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
+    ///         ⚠
+    ///         <b>
+    ///             <c>required</c> like every other member, and it was written with a default
+    ///             first.
+    ///         </b> <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
     ///         refused that within one run, and its reason applies here exactly: a member with a
     ///         default is an assertion the suite quietly stops making for the provider that omits it,
     ///         and the provider most likely to omit this one is the next one to grow an
@@ -215,13 +240,19 @@ public sealed record ProviderConformanceCase {
 }
 
 /// <summary>
-///     One object read out of the cluster, the body it should carry, and <b>the address it was
-///     rendered for</b>.
+///     One object read out of the cluster, the body it should carry, and
+///     <b>
+///         the address it was
+///         rendered for
+///     </b>.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This type exists for <see cref="Id" />, and everything else on it was already
-///         reachable.</b> <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> used to be
+///         ⚠
+///         <b>
+///             This type exists for <see cref="Id" />, and everything else on it was already
+///             reachable.
+///         </b> <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> used to be
 ///         <c>(objectJson, desiredJson) =&gt; bool</c>. That is enough for a top-level type, whose
 ///         whole rendered spec is a function of its body, and it is <i>not</i> enough for a child: a
 ///         bucket's <c>spec.name</c> is its own name and its <c>spec.clusterRef</c> is its parent's,
@@ -232,8 +263,11 @@ public sealed record ProviderConformanceCase {
 ///         again by the Network family before it was fixed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A record rather than more positional parameters, and that is what makes the next
-///         member cheap.</b> The harness constructs this and a case only reads it, so adding a member
+///         ⚠
+///         <b>
+///             A record rather than more positional parameters, and that is what makes the next
+///             member cheap.
+///         </b> The harness constructs this and a case only reads it, so adding a member
 ///         later touches <c>ProviderConformanceTests</c>, <c>ClusterConformanceTests</c> and
 ///         <c>SiloKillConformanceTests</c> — and nothing in the fourteen provider families. A third
 ///         positional parameter would have touched all fourteen again, which is the cost this change
@@ -241,8 +275,11 @@ public sealed record ProviderConformanceCase {
 ///         were also one transposition away from a suite that passed for the wrong reason.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every member is <c>required</c>, for the reason
-///         <see cref="ProviderConformanceCase" />'s are.</b> Here the rule points the other way — an
+///         ⚠
+///         <b>
+///             Every member is <c>required</c>, for the reason
+///             <see cref="ProviderConformanceCase" />'s are.
+///         </b> Here the rule points the other way — an
 ///         optional member would be something the <i>harness</i> quietly stops telling the case, and
 ///         a case cannot assert on a fact it was not given.
 ///         <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
@@ -330,25 +367,35 @@ public interface IProviderCaseSource {
     ///         harness guessing at a provider's own validation rules.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It is here, on the source, rather than a member of
-    ///         <see cref="ProviderConformanceCase" />, and that is the whole design.</b> Every member
+    ///         ⚠
+    ///         <b>
+    ///             It is here, on the source, rather than a member of
+    ///             <see cref="ProviderConformanceCase" />, and that is the whole design.
+    ///         </b> Every member
     ///         of that record is <c>required</c> on purpose and
     ///         <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
-    ///         enforces it — <i>"an optional member is an assertion the suite quietly stops making for
-    ///         the provider that leaves it out"</i>, which a nullable <c>ParentCase</c> would be
+    ///         enforces it —
+    ///         <i>
+    ///             "an optional member is an assertion the suite quietly stops making for
+    ///             the provider that leaves it out"
+    ///         </i>, which a nullable <c>ParentCase</c> would be
     ///         exactly. A <c>required</c> one would be no better from the other side: the four
     ///         providers that ship today have no child, and making them each write
     ///         <c>Ancestors = []</c> would put the cost of the first child type on every provider that
     ///         does not have one.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A <c>static virtual</c> with a default is an optional member, and the reason it is
-    ///         not the failure that rule describes is that omitting it is not silent.</b> The rule's
+    ///         ⚠
+    ///         <b>
+    ///             A <c>static virtual</c> with a default is an optional member, and the reason it is
+    ///             not the failure that rule describes is that omitting it is not silent.
+    ///         </b> The rule's
     ///         objection is to an assertion that <i>stops being made</i>. Nothing stops here: a
     ///         depth-1 case has no ancestors to describe, and a depth-2 case that leaves this empty
     ///         does not run a smaller suite — it runs no suite at all.
     ///         <c>ProviderTestCluster.AncestorsOf</c> refuses the mismatch by name before a single
-    ///         test does anything, and <c>SuiteRejectionTests.ADepthTwoSourceWithNoAncestorsIsRefusedByNameRatherThanFailingEveryTestAtOnce</c>
+    ///         test does anything, and
+    ///         <c>SuiteRejectionTests.ADepthTwoSourceWithNoAncestorsIsRefusedByNameRatherThanFailingEveryTestAtOnce</c>
     ///         is the calibration that says so. The count is checked against
     ///         <c>ResourceTypeName.Depth</c>, which is derived from the type path and cannot be
     ///         under-declared any more than <see cref="ProviderConformanceCase.Objects" /> can.

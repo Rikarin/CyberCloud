@@ -15,9 +15,12 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every assertion here is about what happens when the reclaim says NO, because the
-///         cost of a wrong yes is a tenant's live data and the cost of a wrong no is a namespace an
-///         operator deletes by hand.</b> The one success case exists so that "refuses always" cannot
+///         ⚠
+///         <b>
+///             Every assertion here is about what happens when the reclaim says NO, because the
+///             cost of a wrong yes is a tenant's live data and the cost of a wrong no is a namespace an
+///             operator deletes by hand.
+///         </b> The one success case exists so that "refuses always" cannot
 ///         pass for correct.
 ///     </para>
 ///     <para>
@@ -71,11 +74,12 @@ public sealed class GroupReclaimTests(ResourceManagerCluster cluster) {
 
         record.IsSuccess.ShouldBeTrue("the group's record stays while its namespace does.");
 
-        record.GetValueOrThrow().State.ShouldBe(
-            ProvisioningState.Deleting,
-            "a delete that began and did not finish stays visible in Deleting, exactly as a member's "
-            + "does — and the choreography is re-drivable from there."
-        );
+        record.GetValueOrThrow()
+            .State.ShouldBe(
+                ProvisioningState.Deleting,
+                "a delete that began and did not finish stays visible in Deleting, exactly as a member's "
+                + "does — and the choreography is re-drivable from there."
+            );
     }
 
     [Fact]
@@ -284,8 +288,7 @@ public sealed class GroupReclaimTests(ResourceManagerCluster cluster) {
             return Task.FromResult(
                 Result<IReadOnlyList<KubeObjectSummary>>.Success(
                     [
-                        .. Occupants.Select(
-                            x => new KubeObjectSummary {
+                        .. Occupants.Select(x => new KubeObjectSummary {
                                 Kind = new() { Group = "", Version = "v1", Kind = x.Kind, Plural = "" },
                                 Namespace = ns,
                                 Name = x.Name,
@@ -300,7 +303,6 @@ public sealed class GroupReclaimTests(ResourceManagerCluster cluster) {
 
     /// <summary>Hands out one connection, exactly as <c>GrainClusterConnectionFactory</c> does.</summary>
     sealed class OneConnectionFactory(IKubeClusterConnection connection) : IClusterConnectionFactory {
-        public IKubeClusterConnection? Connect(Guid clusterId) =>
-            clusterId == connection.ClusterId ? connection : null;
+        public IKubeClusterConnection? Connect(Guid clusterId) => clusterId == connection.ClusterId ? connection : null;
     }
 }

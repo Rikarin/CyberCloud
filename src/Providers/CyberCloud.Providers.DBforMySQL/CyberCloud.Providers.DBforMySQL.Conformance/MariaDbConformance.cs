@@ -12,8 +12,11 @@ namespace CyberCloud.Providers.DBforMySQL.Conformance;
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>This file is the entire cost of putting the sixth provider under conformance.</b>
-///     docs/plan/03 § Providers: <i>"It is one xUnit theory that every provider must pass … A provider
-///     is not registered in the platform bundle until it passes."</i>
+///     docs/plan/03 § Providers:
+///     <i>
+///         "It is one xUnit theory that every provider must pass … A provider
+///         is not registered in the platform bundle until it passes."
+///     </i>
 /// </remarks>
 public sealed class MariaDbCase : IProviderCaseSource {
     /// <inheritdoc />
@@ -81,8 +84,11 @@ public sealed class MariaDbServerConformance(ProviderTestCluster<MariaDbCase> cl
 
 /// <summary>The container-backed half, skipped loudly, against the managed-MariaDB provider.</summary>
 /// <remarks>
-///     ⚠ <b>Still declared, even though this provider has a real <c>*.Cluster.Conformance</c> project
-///     that makes the same assertions against a real API server.</b> The skips are not redundant with
+///     ⚠
+///     <b>
+///         Still declared, even though this provider has a real <c>*.Cluster.Conformance</c> project
+///         that makes the same assertions against a real API server.
+///     </b> The skips are not redundant with
 ///     it: they run on a machine with no Docker daemon and say, by name, which criteria were not
 ///     checked. Deleting them here would make "conformance: green" readable as "the cluster-backed
 ///     criteria were met" on exactly the machines where they were not.

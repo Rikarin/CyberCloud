@@ -55,13 +55,20 @@ public abstract class Response {
     /// </summary>
     public TimeSpan? RetryAfter {
         get {
-            if (!TryGetHeader(CyberCloudHeaders.RetryAfter, out var value))
+            if (!TryGetHeader(CyberCloudHeaders.RetryAfter, out var value)) {
                 return null;
+            }
 
-            if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds))
+            if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)) {
                 return TimeSpan.FromSeconds(seconds);
+            }
 
-            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var when)) {
+            if (DateTimeOffset.TryParse(
+                    value,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal,
+                    out var when
+                )) {
                 var delay = when - DateTimeOffset.UtcNow;
 
                 return delay > TimeSpan.Zero ? delay : TimeSpan.Zero;
@@ -145,11 +152,14 @@ sealed class ValueResponse<T> : Response<T> {
 sealed class NoValueResponse<T> : NullableResponse<T> {
     readonly Response response;
 
-    internal NoValueResponse(Response response) => this.response = response;
+    internal NoValueResponse(Response response) {
+        this.response = response;
+    }
 
-    public override T Value
-        => throw new InvalidOperationException(
-            $"The response carries no value (status {response.Status}). Check HasValue first.");
+    public override T Value =>
+        throw new InvalidOperationException(
+            $"The response carries no value (status {response.Status}). Check HasValue first."
+        );
 
     public override bool HasValue => false;
 
@@ -161,7 +171,13 @@ sealed class BufferedHttpResponse : Response {
     readonly HttpResponseHeaders headers;
     readonly HttpContentHeaders? contentHeaders;
 
-    BufferedHttpResponse(int status, string? reasonPhrase, ReadOnlyMemory<byte> content, HttpResponseHeaders headers, HttpContentHeaders? contentHeaders) {
+    BufferedHttpResponse(
+        int status,
+        string? reasonPhrase,
+        ReadOnlyMemory<byte> content,
+        HttpResponseHeaders headers,
+        HttpContentHeaders? contentHeaders
+    ) {
         Status = status;
         ReasonPhrase = reasonPhrase;
         Content = content;
@@ -177,14 +193,17 @@ sealed class BufferedHttpResponse : Response {
 
     public override IEnumerable<KeyValuePair<string, string>> Headers {
         get {
-            foreach (var header in headers)
+            foreach (var header in headers) {
                 yield return new KeyValuePair<string, string>(header.Key, string.Join(",", header.Value));
+            }
 
-            if (contentHeaders is null)
+            if (contentHeaders is null) {
                 yield break;
+            }
 
-            foreach (var header in contentHeaders)
+            foreach (var header in contentHeaders) {
                 yield return new KeyValuePair<string, string>(header.Key, string.Join(",", header.Value));
+            }
         }
     }
 
@@ -201,7 +220,10 @@ sealed class BufferedHttpResponse : Response {
     }
 
     /// <summary>Buffers a live response. The <see cref="HttpResponseMessage" /> may be disposed afterwards.</summary>
-    public static async ValueTask<BufferedHttpResponse> CreateAsync(HttpResponseMessage message, CancellationToken cancellationToken) {
+    public static async ValueTask<BufferedHttpResponse> CreateAsync(
+        HttpResponseMessage message,
+        CancellationToken cancellationToken
+    ) {
         var bytes = await message.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
 
         return new BufferedHttpResponse(
@@ -209,6 +231,7 @@ sealed class BufferedHttpResponse : Response {
             message.ReasonPhrase,
             bytes,
             message.Headers,
-            message.Content.Headers);
+            message.Content.Headers
+        );
     }
 }

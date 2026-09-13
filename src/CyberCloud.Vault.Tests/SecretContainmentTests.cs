@@ -7,8 +7,11 @@ namespace CyberCloud.Vault.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>CC1005 IS SWITCHED OFF IN <c>CyberCloud.Vault</c>, WHICH IS WHY THESE ARE TESTS AND
-///         NOT A COMMENT SAYING "THE ANALYZER COVERS IT".</b>
+///         ⚠
+///         <b>
+///             CC1005 IS SWITCHED OFF IN <c>CyberCloud.Vault</c>, WHICH IS WHY THESE ARE TESTS AND
+///             NOT A COMMENT SAYING "THE ANALYZER COVERS IT".
+///         </b>
 ///         <c>SecretInGrainStateAnalyzer.OnCompilationStart</c> returns early when
 ///         <c>Compilation.AssemblyName</c> matches <c>WellKnown.VaultAssembly</c> exactly or by
 ///         dotted prefix — that exemption is the reason this assembly is allowed to hold a value at
@@ -44,9 +47,7 @@ public sealed class SecretContainmentTests {
             .Select(x => x.FullName)
             .ToArray();
 
-        serializable.ShouldBeEmpty(
-            "CyberCloud.Vault must declare nothing Orleans can serialize — see the remarks"
-        );
+        serializable.ShouldBeEmpty("CyberCloud.Vault must declare nothing Orleans can serialize — see the remarks");
 
         var identified = Vault
             .GetTypes()
@@ -75,7 +76,7 @@ public sealed class SecretContainmentTests {
                 typeof(HttpClient),
                 typeof(IVaultTokenSource),
                 typeof(VaultOptions),
-                typeof(Microsoft.Extensions.Logging.ILogger<OpenBaoSecretResolver>),
+                typeof(Microsoft.Extensions.Logging.ILogger<OpenBaoSecretResolver>)
             ],
             ignoreOrder: true,
             "the resolver's fields are its collaborators and nothing else; a resolved value lives in "
@@ -98,7 +99,7 @@ public sealed class SecretContainmentTests {
                 typeof(VaultOptions),
                 typeof(CyberCloud.Core.Time.IClock),
                 typeof(SemaphoreSlim),
-                typeof(VaultToken),
+                typeof(VaultToken)
             ],
             ignoreOrder: true,
             "the token source holds one credential — the leased token — and its collaborators"

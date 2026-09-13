@@ -186,7 +186,7 @@ public sealed class TwoGrainWriteTests(AuthorizationCluster cluster) {
         await cluster.WriteAsync(tenant, "subscription:s1#owner@group:eng#member");
 
         var entries = (await cluster.SubjectIndex(tenant, SubjectRef.Of(ObjectTypes.Group, "eng"))
-            .ListAsync()).GetValueOrThrow();
+                .ListAsync()).GetValueOrThrow();
 
         entries.Count.ShouldBe(2);
         entries.ShouldAllBe(x => x.SubjectRelation == Relations.Member);

@@ -10,7 +10,8 @@ namespace CyberCloud.Tenancy;
 ///     <see cref="IQuotaGrain" /> — Coordinator, Durable, key <c>sub/{subscriptionId:N}</c>.
 /// </summary>
 public sealed class QuotaGrain(
-    [PersistentState("quota", StorageTiers.Durable)] IPersistentState<QuotaState> state,
+    [PersistentState("quota", StorageTiers.Durable)]
+    IPersistentState<QuotaState> state,
     IClock clock
 )
     : Grain, IQuotaGrain {

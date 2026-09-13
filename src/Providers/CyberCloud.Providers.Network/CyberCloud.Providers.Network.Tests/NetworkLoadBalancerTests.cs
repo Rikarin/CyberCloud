@@ -47,13 +47,9 @@ public sealed class NetworkLoadBalancerTests {
         var alice = Address("web", TenantOne, SubscriptionOne);
         var bob = Address("web", TenantTwo, SubscriptionTwo);
 
-        using var aliceBody = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11")
-        );
+        using var aliceBody = JsonDocument.Parse(LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11"));
 
-        using var bobBody = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.99")
-        );
+        using var bobBody = JsonDocument.Parse(LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.99"));
 
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
         await Pass(reconciler, connection, bob, bobBody.RootElement);
@@ -97,29 +93,26 @@ public sealed class NetworkLoadBalancerTests {
         // keeps going to the old servers for as long as the pod lives.
         var id = Address("web", TenantOne, SubscriptionOne);
 
-        using var before = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11")
-        );
+        using var before = JsonDocument.Parse(LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11"));
 
-        using var after = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11,10.20.1.12")
-        );
+        using var after = JsonDocument.Parse(LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11,10.20.1.12"));
 
         var first = Annotations(LoadBalancers.DeploymentJson("ns", id, before.RootElement));
         var second = Annotations(LoadBalancers.DeploymentJson("ns", id, after.RootElement));
 
-        first[LoadBalancers.ConfigChecksumAnnotation]!.GetValue<string>().ShouldNotBe(
-            second[LoadBalancers.ConfigChecksumAnnotation]!.GetValue<string>(),
-            "the pod template does not change when the configuration does, so a backend change "
-            + "converges instantly and changes nothing about where traffic goes"
-        );
+        first[LoadBalancers.ConfigChecksumAnnotation]!.GetValue<string>()
+            .ShouldNotBe(
+                second[LoadBalancers.ConfigChecksumAnnotation]!.GetValue<string>(),
+                "the pod template does not change when the configuration does, so a backend change "
+                + "converges instantly and changes nothing about where traffic goes"
+            );
 
         // And the same body twice is the same template — otherwise the proxy rolls once per
         // reconcile reminder, forever.
         Annotations(LoadBalancers.DeploymentJson("ns", id, before.RootElement))
             [LoadBalancers.ConfigChecksumAnnotation]!
-            .GetValue<string>()
-            .ShouldBe(first[LoadBalancers.ConfigChecksumAnnotation]!.GetValue<string>());
+                .GetValue<string>()
+                .ShouldBe(first[LoadBalancers.ConfigChecksumAnnotation]!.GetValue<string>());
     }
 
     [Fact]
@@ -128,22 +121,19 @@ public sealed class NetworkLoadBalancerTests {
         // count as converged, or the reconciler reports Succeeded for a proxy running the old file.
         var id = Address("web", TenantOne, SubscriptionOne);
 
-        using var before = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11")
-        );
+        using var before = JsonDocument.Parse(LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11"));
 
-        using var after = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11,10.20.1.12")
-        );
+        using var after = JsonDocument.Parse(LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11,10.20.1.12"));
 
         var stale = LoadBalancers.DeploymentJson("ns", id, before.RootElement);
 
         LoadBalancers.Matches(stale, "ns", id, before.RootElement).ShouldBeTrue();
 
-        LoadBalancers.Matches(stale, "ns", id, after.RootElement).ShouldBeFalse(
-            "a Deployment whose pod template carries the previous configuration's hash was accepted "
-            + "as converged"
-        );
+        LoadBalancers.Matches(stale, "ns", id, after.RootElement)
+            .ShouldBeFalse(
+                "a Deployment whose pod template carries the previous configuration's hash was accepted "
+                + "as converged"
+            );
     }
 
     [Fact]
@@ -181,30 +171,26 @@ public sealed class NetworkLoadBalancerTests {
         // separate pods. A semicolon here would leave this proxy's v6 half unallocated.
         var id = Address("web", TenantOne, SubscriptionOne);
 
-        using var body = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, frontendV6: "fd00:20:1::10")
-        );
+        using var body = JsonDocument.Parse(LoadBalancers.Body(Cluster, frontendV6: "fd00:20:1::10"));
 
         Annotations(LoadBalancers.DeploymentJson("ns", id, body.RootElement))
             [LoadBalancers.IpPoolAnnotation]!
-            .GetValue<string>()
-            .ShouldBe("10.20.1.10,fd00:20:1::10");
+                .GetValue<string>()
+                .ShouldBe("10.20.1.10,fd00:20:1::10");
 
         using var v4Only = JsonDocument.Parse(LoadBalancers.Body(Cluster));
 
         Annotations(LoadBalancers.DeploymentJson("ns", id, v4Only.RootElement))
             [LoadBalancers.IpPoolAnnotation]!
-            .GetValue<string>()
-            .ShouldBe("10.20.1.10", "an unrequested v6 half rendered a trailing comma");
+                .GetValue<string>()
+                .ShouldBe("10.20.1.10", "an unrequested v6 half rendered a trailing comma");
     }
 
     [Fact]
     public void AnIpv6BackendIsBracketedAndAnIpv4OneIsNot() {
         // `server s1 fd00::11:8080` is ambiguous to HAProxy's own parser and it refuses to start —
         // one backend written in the other family would take the whole load balancer down.
-        using var body = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11,fd00:20:1::11")
-        );
+        using var body = JsonDocument.Parse(LoadBalancers.Body(Cluster, backendAddresses: "10.20.1.11,fd00:20:1::11"));
 
         var config = LoadBalancers.HaproxyConfig(body.RootElement);
 
@@ -241,9 +227,7 @@ public sealed class NetworkLoadBalancerTests {
         var reconciler = new LoadBalancerReconciler(new FixedClock());
         var connection = new RecordingConnection();
 
-        using var body = JsonDocument.Parse(
-            LoadBalancers.Body(Cluster, backendAddresses: backends)
-        );
+        using var body = JsonDocument.Parse(LoadBalancers.Body(Cluster, backendAddresses: backends));
 
         var outcome = await Pass(
             reconciler,
@@ -262,8 +246,7 @@ public sealed class NetworkLoadBalancerTests {
 
     [Fact]
     public void AnAddressWithNoParentThrowsRatherThanRenderingACollidingName() =>
-        Should.Throw<ArgumentException>(
-            () => LoadBalancers.ObjectNameOf(
+        Should.Throw<ArgumentException>(() => LoadBalancers.ObjectNameOf(
                 new ResourceId(
                     TenantOne,
                     SubscriptionOne,

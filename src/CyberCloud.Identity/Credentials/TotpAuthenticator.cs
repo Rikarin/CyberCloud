@@ -53,8 +53,7 @@ public static class TotpAuthenticator {
     ///     particular it does not go into grain state — docs/plan/11 § Credentials: "secret stored as
     ///     a Vault <c>SecretRef</c>, never in grain state".
     /// </remarks>
-    public static string GenerateSecret() =>
-        Base32Encode(RandomNumberGenerator.GetBytes(TotpParameters.SecretBytes));
+    public static string GenerateSecret() => Base32Encode(RandomNumberGenerator.GetBytes(TotpParameters.SecretBytes));
 
     /// <summary>
     ///     The <c>otpauth://</c> URI an authenticator app scans.
@@ -79,8 +78,7 @@ public static class TotpAuthenticator {
 
     /// <summary>The step number for an instant. RFC 6238's <c>T</c>.</summary>
     /// <param name="instant">When.</param>
-    public static long CounterFor(DateTimeOffset instant) =>
-        instant.ToUnixTimeSeconds() / TotpParameters.PeriodSeconds;
+    public static long CounterFor(DateTimeOffset instant) => instant.ToUnixTimeSeconds() / TotpParameters.PeriodSeconds;
 
     /// <summary>The code for one step. RFC 4226's HOTP, with RFC 6238's counter.</summary>
     /// <param name="base32Secret">The shared secret.</param>
@@ -89,13 +87,13 @@ public static class TotpAuthenticator {
         "Security",
         "CA5350:Do Not Use Weak Cryptographic Algorithms",
         Justification =
-            "RFC 6238's default and the only algorithm authenticator apps interoperate on. SHA-1's "
-            + "published weaknesses are collision weaknesses; HMAC-SHA1 depends on neither collision "
-            + "resistance nor preimage resistance of the compression function, and no attack on it is "
-            + "known. The alternative is worse in practice rather than in theory: several widely used "
-            + "apps silently ignore `algorithm=SHA256` in an otpauth URI and generate SHA-1 codes "
-            + "anyway, which produces codes that never verify and a failure nobody can debug from "
-            + "either end. The security parameter that matters here is the 160-bit shared secret."
+        "RFC 6238's default and the only algorithm authenticator apps interoperate on. SHA-1's "
+        + "published weaknesses are collision weaknesses; HMAC-SHA1 depends on neither collision "
+        + "resistance nor preimage resistance of the compression function, and no attack on it is "
+        + "known. The alternative is worse in practice rather than in theory: several widely used "
+        + "apps silently ignore `algorithm=SHA256` in an otpauth URI and generate SHA-1 codes "
+        + "anyway, which produces codes that never verify and a failure nobody can debug from "
+        + "either end. The security parameter that matters here is the 160-bit shared secret."
     )]
     public static string Compute(string base32Secret, long counter) {
         var secret = Base32Decode(base32Secret);
@@ -126,8 +124,11 @@ public static class TotpAuthenticator {
     /// <param name="now">The current instant, from <c>IClock</c>.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>±1 step, per docs/plan/11 § Credentials, and every step in the window is
-    ///         evaluated even after a match.</b> Returning early on the first hit would make the
+    ///         ⚠
+    ///         <b>
+    ///             ±1 step, per docs/plan/11 § Credentials, and every step in the window is
+    ///             evaluated even after a match.
+    ///         </b> Returning early on the first hit would make the
     ///         verification time depend on <i>which</i> step matched, and the step is a function of
     ///         the victim's clock skew — a small leak, but a free one to close and the kind that
     ///         compounds with the ones that are not free.

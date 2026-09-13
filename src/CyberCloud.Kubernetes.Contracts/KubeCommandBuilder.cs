@@ -472,8 +472,11 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     ///         string naming a template rather than a template.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A template that already carries a <c>metadata</c> that is not an object is left
-    ///         alone rather than replaced.</b> Overwriting it would turn a body the API server would
+    ///         ⚠
+    ///         <b>
+    ///             A template that already carries a <c>metadata</c> that is not an object is left
+    ///             alone rather than replaced.
+    ///         </b> Overwriting it would turn a body the API server would
     ///         have rejected with a clear message into one it rejects with a confusing one.
     ///     </para>
     /// </remarks>

@@ -101,9 +101,7 @@ public sealed class ClickHouseQuotaTests {
 
     [Fact]
     public void AnExplicitOverrideBeatsThePresetAndIsCountedPerServer() {
-        var amounts = Amounts(
-            WithSizing(ClickHouseClusters.Body(ClusterId, shards: 2, replicas: 2), "1", "4Gi")
-        );
+        var amounts = Amounts(WithSizing(ClickHouseClusters.Body(ClusterId, shards: 2, replicas: 2), "1", "4Gi"));
 
         amounts[QuotaMeter.Vcpu].ShouldBe(4.75m, "1 core × 4 servers is 4, plus 3 Keepers × 250m");
         amounts[QuotaMeter.MemoryGb].ShouldBe(17.5m, "4Gi × 4 is 16, plus 3 × 512Mi is 1.5");
@@ -129,15 +127,12 @@ public sealed class ClickHouseQuotaTests {
         var registry = ProviderRegistry.Build([new AnalyticsProvider()]);
         registry.TryGetType(ClickHouseClusters.Type, out var registration).ShouldBeTrue();
 
-        using var body = JsonDocument.Parse(
-            WithSizing(ClickHouseClusters.Body(ClusterId), "not-a-quantity", "4Gi")
-        );
+        using var body = JsonDocument.Parse(WithSizing(ClickHouseClusters.Body(ClusterId), "not-a-quantity", "4Gi"));
 
         var vcpu = registration.Meters.Single(x => x.Meter == QuotaMeter.Vcpu).Derivation!;
 
-        vcpu.Amount(body.RootElement).IsFailure.ShouldBeTrue(
-            "a body whose cpu quantity does not parse reserved an amount instead of refusing."
-        );
+        vcpu.Amount(body.RootElement)
+            .IsFailure.ShouldBeTrue("a body whose cpu quantity does not parse reserved an amount instead of refusing.");
     }
 
     [Fact]
@@ -191,9 +186,7 @@ public sealed class ClickHouseQuotaTests {
 
     static string WithSizing(string body, string cpu, string memory) {
         var node = JsonNode.Parse(body)!.AsObject();
-        node["properties"]!.AsObject()["sizing"] = new JsonObject {
-            ["cpu"] = cpu, ["memory"] = memory
-        };
+        node["properties"]!.AsObject()["sizing"] = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
 
         return node.ToJsonString();
     }

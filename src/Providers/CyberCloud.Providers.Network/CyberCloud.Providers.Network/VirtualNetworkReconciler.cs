@@ -7,10 +7,16 @@ namespace CyberCloud.Providers.Network;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>IT REFUSES A BODY THE API ALREADY ACCEPTED, AND THAT IS THE MOST IMPORTANT AND THE
-///         LEAST SATISFACTORY THING IN THIS FILE.</b> docs/plan/14 requires that the <i>API</i>
-///         validate a tenant's address space against a per-region reserved list and <i>"reject with
-///         the conflicting range named"</i>. It cannot: <c>ResourceSchema</c> compares one value
+///         ⚠
+///         <b>
+///             IT REFUSES A BODY THE API ALREADY ACCEPTED, AND THAT IS THE MOST IMPORTANT AND THE
+///             LEAST SATISFACTORY THING IN THIS FILE.
+///         </b> docs/plan/14 requires that the <i>API</i>
+///         validate a tenant's address space against a per-region reserved list and
+///         <i>
+///             "reject with
+///             the conflicting range named"
+///         </i>. It cannot: <c>ResourceSchema</c> compares one value
 ///         against constants, and there is no provider-supplied predicate anywhere on
 ///         <c>ResourceManagerService</c>'s write path — the whole argument, and the one seam that
 ///         would close it, is on <see cref="NetworkAddressing" />. So the check runs here, after the
@@ -19,8 +25,10 @@ namespace CyberCloud.Providers.Network;
 ///     </para>
 ///     <list type="bullet">
 ///         <item>
-///             <b>The refusal is <c>ReconcileOutcome.Failed</c>, not
-///             <see cref="ReconcileOutcome.InProgress" />.</b> A body whose address space overlaps the
+///             <b>
+///                 The refusal is <c>ReconcileOutcome.Failed</c>, not
+///                 <see cref="ReconcileOutcome.InProgress" />.
+///             </b> A body whose address space overlaps the
 ///             underlay can never converge, and retrying it every thirty seconds forever would leave
 ///             the resource in a state that reads as "still working on it". This is the one branch in
 ///             the family where a terminal failure is the correct answer rather than the lazy one.
@@ -60,8 +68,11 @@ namespace CyberCloud.Providers.Network;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>THE OBJECT IT APPLIES IS CLUSTER-SCOPED, AND THE NAMESPACE IT IS HANDED IS USED AS A
-///         NAME COMPONENT INSTEAD OF AS A PLACEMENT.</b> See
+///         ⚠
+///         <b>
+///             THE OBJECT IT APPLIES IS CLUSTER-SCOPED, AND THE NAMESPACE IT IS HANDED IS USED AS A
+///             NAME COMPONENT INSTEAD OF AS A PLACEMENT.
+///         </b> See
 ///         <see cref="VirtualNetworks.ObjectNameOf" />. This is the first reconciler in the tree for
 ///         which <c>context.Namespace</c> does not reach <c>InNamespace</c>, and reading it as a
 ///         placement — the thing every other provider correctly does — would put two subscriptions'
@@ -105,10 +116,10 @@ public sealed class VirtualNetworkReconciler(IClock clock) : IResourceReconciler
             // this reconcile was handed is already inside `name` — VirtualNetworks.ObjectNameOf —
             // which is what keeps two subscriptions' networks apart now that the API server's own
             // namespacing does not.
-            .WithKind(VirtualNetworks.VpcKind)
-            .WithApiVersion(context.ApiVersion)
-            .ObjectJson(VirtualNetworks.VpcJson(context.Namespace, context.Id.Name, context.Desired))
-            .ApplyAsync(cancellationToken);
+                .WithKind(VirtualNetworks.VpcKind)
+                .WithApiVersion(context.ApiVersion)
+                .ObjectJson(VirtualNetworks.VpcJson(context.Namespace, context.Id.Name, context.Desired))
+                .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
             return ReconcileOutcome.FromFailure(applyError);
@@ -166,10 +177,16 @@ public sealed class VirtualNetworkReconciler(IClock clock) : IResourceReconciler
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>THE SUBNETS INSIDE THE NETWORK ARE NOT TOUCHED, AND THIS IS THE ONE PLACE THAT
-    ///     DECISION IS VISIBLE AS CODE.</b> docs/plan/08 § Deleting a parent resource that has
-    ///     children: <i>"a delete is refused while the resource still has children — 409, not a
-    ///     cascade, and not a silent orphan"</i>. That refusal is <b>not implemented</b> — the
+    ///     ⚠
+    ///     <b>
+    ///         THE SUBNETS INSIDE THE NETWORK ARE NOT TOUCHED, AND THIS IS THE ONE PLACE THAT
+    ///         DECISION IS VISIBLE AS CODE.
+    ///     </b> docs/plan/08 § Deleting a parent resource that has
+    ///     children:
+    ///     <i>
+    ///         "a delete is refused while the resource still has children — 409, not a
+    ///         cascade, and not a silent orphan"
+    ///     </i>. That refusal is <b>not implemented</b> — the
     ///     platform cannot enumerate children — so today deleting a network leaves its subnets
     ///     addressable, drawing quota, and bound through <c>spec.vpc</c> to a <c>Vpc</c> that is gone.
     ///     ⚠ On this family that is worse than on
@@ -238,9 +255,7 @@ public sealed class VirtualNetworkReconciler(IClock clock) : IResourceReconciler
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the virtual network is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the virtual network is absent" };
         }
 
         var found = read.GetValueOrThrow();

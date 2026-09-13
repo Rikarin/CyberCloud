@@ -230,8 +230,11 @@ public interface IKubeCommandBuilder {
     ///         make the resource unreconcilable the first time a tenant called at a newer version.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>This changes the applied body of an object that may already exist, and for a
-    ///         <c>StatefulSet</c> that apply is refused.</b> Adopting it on a cluster that already
+    ///         ⚠
+    ///         <b>
+    ///             This changes the applied body of an object that may already exist, and for a
+    ///             <c>StatefulSet</c> that apply is refused.
+    ///         </b> Adopting it on a cluster that already
     ///         runs one needs the set deleted with <c>--cascade=orphan</c> — measured to leave the
     ///         pods and the claims in place — and the next reconcile re-creates it. The claims that
     ///         already exist stay unlabelled either way: the StatefulSet controller stamps a claim

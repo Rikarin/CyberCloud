@@ -9,13 +9,17 @@ namespace CyberCloud.Communication.Grains;
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>Nothing here decides anything, and that is the whole point.</b> docs/plan/17 § The
-///     channel abstraction: <i>"Sender-id registration, 10DLC campaign approval in the US, WhatsApp
-///     template pre-approval, and per-country content rules are the tenant's compliance obligations
-///     with our tooling, not obligations we assume."</i> This grain records what was submitted and
+///     channel abstraction:
+///     <i>
+///         "Sender-id registration, 10DLC campaign approval in the US, WhatsApp
+///         template pre-approval, and per-country content rules are the tenant's compliance obligations
+///         with our tooling, not obligations we assume."
+///     </i> This grain records what was submitted and
 ///     what the carrier answered, and refuses to send through a sender they have not approved.
 /// </remarks>
 public sealed class SenderIdentityGrain(
-    [PersistentState("sender-identity", StorageTiers.Durable)] IPersistentState<SenderIdentityState> state,
+    [PersistentState("sender-identity", StorageTiers.Durable)]
+    IPersistentState<SenderIdentityState> state,
     IClock clock
 )
     : Grain, ISenderIdentityGrain {
@@ -106,8 +110,8 @@ public sealed class SenderIdentityGrain(
         // could walk a rejected sender back to looking un-submitted, which is how a sender that a
         // carrier refused ends up being tried again on a schedule.
         if (status is not (SenderRegistrationStatus.Approved
-            or SenderRegistrationStatus.Rejected
-            or SenderRegistrationStatus.Revoked)) {
+                or SenderRegistrationStatus.Rejected
+                or SenderRegistrationStatus.Revoked)) {
             return Result<SenderIdentity>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"{status} is not a carrier decision. Record Approved, Rejected or Revoked."
@@ -214,8 +218,11 @@ public sealed class SenderIdentityGrain(
 ///     <c>res/{derived(serviceId, providerMessageId):N}</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>An unknown id activates this grain empty and <see cref="LookupAsync" /> deactivates it
-///     on the way out.</b> Late, duplicate and orphaned webhooks are the normal case
+///     ⚠
+///     <b>
+///         An unknown id activates this grain empty and <see cref="LookupAsync" /> deactivates it
+///         on the way out.
+///     </b> Late, duplicate and orphaned webhooks are the normal case
 ///     (docs/plan/17 § The parts that are actually the work), so the activation this creates has to
 ///     cost as little as possible and must not sit in the collection cycle holding nothing.
 /// </remarks>

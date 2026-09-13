@@ -23,8 +23,11 @@ enum RouteKind {
     ///     <c>ScopeRoutingTests</c> pins both halves, the admitted shapes and the ones that still
     ///     answer <c>400</c>.
     ///     <para>
-    ///         ⚠ <b>It is separate from <see cref="Resource" /> for the reason <see cref="Action" /> is
-    ///         separate from it: the dispatch target differs.</b> A scope goes to
+    ///         ⚠
+    ///         <b>
+    ///             It is separate from <see cref="Resource" /> for the reason <see cref="Action" /> is
+    ///             separate from it: the dispatch target differs.
+    ///         </b> A scope goes to
     ///         <c>IScopeManager</c> and a resource to <c>IResourceManager</c> — see
     ///         <c>IScopeManager</c>'s remarks on why those are two components. Folding the two kinds
     ///         together would mean <c>DispatchStage</c> re-deciding, per request, which manager a
@@ -207,16 +210,22 @@ static class GatewayRouter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The collection is tried second and only on a <c>GET</c>, and the order is not
-    ///         arbitrary.</b> The two grammars are disjoint — <c>ResourceCollectionId</c>'s remarks
+    ///         ⚠
+    ///         <b>
+    ///             The collection is tried second and only on a <c>GET</c>, and the order is not
+    ///             arbitrary.
+    ///         </b> The two grammars are disjoint — <c>ResourceCollectionId</c>'s remarks
     ///         set out why an even tail is a resource and an odd one is a collection — so neither
     ///         parser can accept the other's path and the order cannot change which one matches. What
     ///         it does change is the <i>message</i> a malformed path gets, and
     ///         <c>ResourceId.ParsePath</c>'s is the one nearly every caller needs.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A <c>PUT</c>, <c>PATCH</c> or <c>DELETE</c> on a collection path is a <c>400</c>
-    ///         with the resource parser's message and is deliberately not a <c>405</c>.</b> There is
+    ///         ⚠
+    ///         <b>
+    ///             A <c>PUT</c>, <c>PATCH</c> or <c>DELETE</c> on a collection path is a <c>400</c>
+    ///             with the resource parser's message and is deliberately not a <c>405</c>.
+    ///         </b> There is
     ///         no bulk write and no bulk delete: docs/plan/06 § Two-phase create makes a resource
     ///         group the lifecycle unit and a resource the thing written, and an endpoint that
     ///         deleted "every widget here" would tear down an unknown number of resources the caller
@@ -229,29 +238,33 @@ static class GatewayRouter {
 
         if (parsed.TryGetError(out var error)) {
             if (HttpMethods.IsGet(method) && ResourceCollectionId.TryParsePath(path, out var collection)) {
-                return Result<GatewayRoute>.Success(new(
-                    RouteKind.Collection,
-                    default,
-                    "",
-                    Guid.Empty,
-                    "",
-                    // ⚠ NAMED, because this record now carries two optional address kinds. The
-                    // positional form put a collection into Scope and still compiled for as long as
-                    // the two were one parameter apart.
-                    Collection: collection with { TenantId = tenantId }
-                ));
+                return Result<GatewayRoute>.Success(
+                    new(
+                        RouteKind.Collection,
+                        default,
+                        "",
+                        Guid.Empty,
+                        "",
+                        // ⚠ NAMED, because this record now carries two optional address kinds. The
+                        // positional form put a collection into Scope and still compiled for as long as
+                        // the two were one parameter apart.
+                        Collection: collection with { TenantId = tenantId }
+                    )
+                );
             }
 
             return Result<GatewayRoute>.Failure(error);
         }
 
-        return Result<GatewayRoute>.Success(new(
-            RouteKind.Resource,
-            parsed.GetValueOrThrow() with { TenantId = tenantId },
-            "",
-            Guid.Empty,
-            ""
-        ));
+        return Result<GatewayRoute>.Success(
+            new(
+                RouteKind.Resource,
+                parsed.GetValueOrThrow() with { TenantId = tenantId },
+                "",
+                Guid.Empty,
+                ""
+            )
+        );
     }
 
     /// <summary>
@@ -262,8 +275,11 @@ static class GatewayRouter {
     ///     Resource types nest (<c>servers/databases/{name}</c>), so
     ///     <c>…/servers/main/restart</c> parses equally well as the resource <c>restart</c> of type
     ///     <c>servers/main</c>. Nothing in the path distinguishes them. docs/plan/08 § The write path,
-    ///     end to end removes the ambiguity from the other end — <c>POST</c> <i>"appears only for
-    ///     actions on an existing resource … never for creation"</i> — so on this verb the tail is an
+    ///     end to end removes the ambiguity from the other end — <c>POST</c>
+    ///     <i>
+    ///         "appears only for
+    ///         actions on an existing resource … never for creation"
+    ///     </i> — so on this verb the tail is an
     ///     action by definition, and the registry decides whether it is a <i>known</i> one.
     /// </remarks>
     static Result<GatewayRoute> ResolveAction(string path, Guid tenantId) {
@@ -282,13 +298,15 @@ static class GatewayRouter {
             return Result<GatewayRoute>.Failure(error);
         }
 
-        return Result<GatewayRoute>.Success(new(
-            RouteKind.Action,
-            parsed.GetValueOrThrow() with { TenantId = tenantId },
-            path[(lastSlash + 1)..],
-            Guid.Empty,
-            ""
-        ));
+        return Result<GatewayRoute>.Success(
+            new(
+                RouteKind.Action,
+                parsed.GetValueOrThrow() with { TenantId = tenantId },
+                path[(lastSlash + 1)..],
+                Guid.Empty,
+                ""
+            )
+        );
     }
 
     /// <summary>
@@ -300,8 +318,11 @@ static class GatewayRouter {
     ///     request is a long-poll or a hub handshake, because docs/plan/10 § Rate limiting exempts
     ///     both from the request-count buckets. Waiting for stage 6 would mean rate limiting after
     ///     routing, and routing reads the provider registry — which is exactly the work stage 5 exists
-    ///     to keep off a flood's path. So the classification here is a <b>prefix test on the raw
-    ///     path</b>: no registry, no allocation beyond a substring, and it cannot fail.
+    ///     to keep off a flood's path. So the classification here is a
+    ///     <b>
+    ///         prefix test on the raw
+    ///         path
+    ///     </b>: no registry, no allocation beyond a substring, and it cannot fail.
     /// </remarks>
     public static RequestClass Classify(string path, string method, IQueryCollection query) {
         ArgumentNullException.ThrowIfNull(path);

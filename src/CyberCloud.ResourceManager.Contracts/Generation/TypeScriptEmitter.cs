@@ -9,8 +9,11 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE DECISION ISSUE #21 ASKED FOR: THIS READS THE PUBLISHED OPENAPI DOCUMENT, NOT THE
-///         REGISTRY.</b> docs/plan/21 § Generation's one hop is what makes the compatibility diff over
+///         ⚠
+///         <b>
+///             THE DECISION ISSUE #21 ASKED FOR: THIS READS THE PUBLISHED OPENAPI DOCUMENT, NOT THE
+///             REGISTRY.
+///         </b> docs/plan/21 § Generation's one hop is what makes the compatibility diff over
 ///         that document cover the CLI, the SDK and the forms at once; a client generated from the
 ///         registry instead would sit outside that guarantee — it could describe a field the published
 ///         contract does not have, and no gate would notice. <see cref="ChartAnnotationEmitter" /> is
@@ -24,8 +27,11 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///         <c>HttpClient</c>, with its interceptors, its bearer token and its error handling.
 ///         Generating the fetch would put authentication in a file that is overwritten on every
 ///         build, and would make the portal's transport a second HTTP client beside the one the app
-///         already has — portal/README.md § Rules: <i>"The portal has no privileged path. It calls
-///         the same public REST API as the CLI, with the same token."</i>
+///         already has — portal/README.md § Rules:
+///         <i>
+///             "The portal has no privileged path. It calls
+///             the same public REST API as the CLI, with the same token."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Every file carries a banner in its first 2 KB, including <c>package.json</c>.</b>
@@ -63,8 +69,11 @@ public static class TypeScriptEmitter {
     /// <param name="document">An emitted OpenAPI document.</param>
     /// <returns>The files, ordered by path.</returns>
     /// <remarks>
-    ///     ⚠ <b>One api-version per package rather than one file per version, which is where this
-    ///     surface differs from the other three.</b> The CLI carries every version it was built with
+    ///     ⚠
+    ///     <b>
+    ///         One api-version per package rather than one file per version, which is where this
+    ///         surface differs from the other three.
+    ///     </b> The CLI carries every version it was built with
     ///     and selects between them at run time (<c>--api-version</c>); a portal build is deployed
     ///     against one platform and its bundle budget is measured in kilobytes — docs/plan/23's
     ///     row — so shipping N versions of every model to every browser to use one of them is a cost
@@ -98,7 +107,8 @@ public static class TypeScriptEmitter {
             // ⚠ First member, because the architecture gate reads the first 2 KB and a manifest
             // whose banner sat after a long dependency list would fail a check it satisfies.
             ["//"] = "@generated — DO NOT EDIT. Emitted by ./build.sh Generate from openapi/"
-                + version + ".json; docs/plan/03 § Assembly graph rules, rule 6.",
+                + version
+                + ".json; docs/plan/03 § Assembly graph rules, rule 6.",
             ["name"] = PackageName,
             ["version"] = "0.0.0",
             // ⚠ Private: this package is a workspace library, not something published to a registry.
@@ -140,18 +150,19 @@ public static class TypeScriptEmitter {
     ///     </para>
     /// </remarks>
     static string ProjectFile() =>
-        Banner + "\n"
+        Banner
+        + "\n"
         + "// ./build.sh Generate overwrites this file. docs/plan/03 § Assembly graph rules, rule 6.\n"
         + """
-        {
-          "extends": "../../tsconfig.base.json",
-          "compilerOptions": {
-            "noEmit": true,
-            "types": []
-          },
-          "include": ["src/**/*.ts"]
-        }
-        """;
+          {
+            "extends": "../../tsconfig.base.json",
+            "compilerOptions": {
+              "noEmit": true,
+              "types": []
+            },
+            "include": ["src/**/*.ts"]
+          }
+          """;
 
     // ── src/index.ts ───────────────────────────────────────────────────────────────────────────
 
@@ -167,8 +178,11 @@ public static class TypeScriptEmitter {
     ///     The seam the portal fills in.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Generated even though it varies with nothing, because everything under
-    ///     <c>libs/api</c> is generated.</b> docs/plan/03 § Assembly graph rules, rule 6: the
+    ///     ⚠
+    ///     <b>
+    ///         Generated even though it varies with nothing, because everything under
+    ///         <c>libs/api</c> is generated.
+    ///     </b> docs/plan/03 § Assembly graph rules, rule 6: the
     ///     generator owns the directory. A hand-written file here would be the one file in the
     ///     package a regeneration does not overwrite, and the gate would fail it.
     /// </remarks>
@@ -176,88 +190,90 @@ public static class TypeScriptEmitter {
         Head()
         + """
 
-        /** One request the client wants made. */
-        export interface ApiRequest {
-          /** The HTTP method. */
-          readonly method: 'GET' | 'PUT' | 'PATCH' | 'POST' | 'DELETE';
+          /** One request the client wants made. */
+          export interface ApiRequest {
+            /** The HTTP method. */
+            readonly method: 'GET' | 'PUT' | 'PATCH' | 'POST' | 'DELETE';
+
+            /**
+             * The path, relative to the platform endpoint, with every placeholder already filled and
+             * every segment already encoded.
+             */
+            readonly path: string;
+
+            /**
+             * The query parameters, unencoded. ⚠ `api-version` is NOT here: the transport puts it on
+             * every request, exactly as the .NET SDK's ApiVersionHandler does, so no call site can
+             * forget it and no two call sites can disagree about it.
+             */
+            readonly query?: Readonly<Record<string, string>>;
+
+            /** The request body, already a plain object. Absent on a read. */
+            readonly body?: unknown;
+          }
+
+          /** What came back. */
+          export interface ApiResponse<T> {
+            /** The HTTP status. ⚠ A scope PUT answers 201 the first time and 200 on a repeat. */
+            readonly status: number;
+
+            /** The parsed body. */
+            readonly value: T;
+
+            /**
+             * The operation URL a 202 returned, from the Azure-AsyncOperation header, or undefined.
+             * docs/plan/10 § Long-running operations, over HTTP.
+             */
+            readonly operationUrl?: string;
+          }
 
           /**
-           * The path, relative to the platform endpoint, with every placeholder already filled and
-           * every segment already encoded.
-           */
-          readonly path: string;
-
-          /**
-           * The query parameters, unencoded. ⚠ `api-version` is NOT here: the transport puts it on
-           * every request, exactly as the .NET SDK's ApiVersionHandler does, so no call site can
-           * forget it and no two call sites can disagree about it.
-           */
-          readonly query?: Readonly<Record<string, string>>;
-
-          /** The request body, already a plain object. Absent on a read. */
-          readonly body?: unknown;
-        }
-
-        /** What came back. */
-        export interface ApiResponse<T> {
-          /** The HTTP status. ⚠ A scope PUT answers 201 the first time and 200 on a repeat. */
-          readonly status: number;
-
-          /** The parsed body. */
-          readonly value: T;
-
-          /**
-           * The operation URL a 202 returned, from the Azure-AsyncOperation header, or undefined.
-           * docs/plan/10 § Long-running operations, over HTTP.
-           */
-          readonly operationUrl?: string;
-        }
-
-        /**
-         * How the client reaches the platform.
-         *
-         * ⚠ Supplied by the portal rather than generated. The portal calls the same public REST API
-         * as `cyc`, with the same token (portal/README.md § Rules), and its bearer token, its
-         * interceptors and its error handling belong to the app rather than to a file that is
-         * overwritten on every build. Generating the fetch here would put authentication in
-         * generated code and give the portal a second HTTP client beside the one it already has.
-         */
-        export interface ApiTransport {
-          /** Makes one request. */
-          send<T>(request: ApiRequest): Promise<ApiResponse<T>>;
-        }
-
-        /** One page of a collection — docs/plan/08 § The read path. */
-        export interface Page<T> {
-          /** The resources on this page, ordered by id. */
-          readonly value: readonly T[];
-
-          /**
-           * The absolute URL of the next page, absent on the last one.
+           * How the client reaches the platform.
            *
-           * ⚠ A short page never means "that is all there is". A listing runs a permission check per
-           * member and the page is clamped, and the envelope deliberately carries no count — a total
-           * would say how many resources exist that the caller may not see. Stop when `nextLink` is
-           * absent, never when a page is smaller than you asked for.
+           * ⚠ Supplied by the portal rather than generated. The portal calls the same public REST API
+           * as `cyc`, with the same token (portal/README.md § Rules), and its bearer token, its
+           * interceptors and its error handling belong to the app rather than to a file that is
+           * overwritten on every build. Generating the fetch here would put authentication in
+           * generated code and give the portal a second HTTP client beside the one it already has.
            */
-          readonly nextLink?: string;
-        }
+          export interface ApiTransport {
+            /** Makes one request. */
+            send<T>(request: ApiRequest): Promise<ApiResponse<T>>;
+          }
 
-        /** How many resources a listing may examine, and where to resume. */
-        export interface PageRequest {
-          /**
-           * ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this
-           * bounds the work and not the number of results.
-           */
-          readonly top?: number;
+          /** One page of a collection — docs/plan/08 § The read path. */
+          export interface Page<T> {
+            /** The resources on this page, ordered by id. */
+            readonly value: readonly T[];
 
-          /** Take it from the previous page's `nextLink` rather than constructing one. */
-          readonly skipToken?: string;
-        }
+            /**
+             * The absolute URL of the next page, absent on the last one.
+             *
+             * ⚠ A short page never means "that is all there is". A listing runs a permission check per
+             * member and the page is clamped, and the envelope deliberately carries no count — a total
+             * would say how many resources exist that the caller may not see. Stop when `nextLink` is
+             * absent, never when a page is smaller than you asked for.
+             */
+            readonly nextLink?: string;
+          }
 
-        """
+          /** How many resources a listing may examine, and where to resume. */
+          export interface PageRequest {
+            /**
+             * ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this
+             * bounds the work and not the number of results.
+             */
+            readonly top?: number;
+
+            /** Take it from the previous page's `nextLink` rather than constructing one. */
+            readonly skipToken?: string;
+          }
+
+          """
         + "/** The api-version every request this client makes is sent at. */\n"
-        + "export const apiVersion = " + Quote(version) + " as const;\n";
+        + "export const apiVersion = "
+        + Quote(version)
+        + " as const;\n";
 
     // ── src/models.ts ──────────────────────────────────────────────────────────────────────────
 
@@ -273,9 +289,7 @@ public static class TypeScriptEmitter {
         built.Append("\n/** A stable, documented, greppable identifier. ⚠ Part of the API contract. */\n")
             .Append("export type CyberCloudErrorCode =\n");
 
-        var codes = DocumentReader.EnumOf(
-            document["components"]?["schemas"]?["ErrorCode"] as JsonObject ?? []
-        );
+        var codes = DocumentReader.EnumOf(document["components"]?["schemas"]?["ErrorCode"] as JsonObject ?? []);
 
         if (codes.IsEmpty) {
             built.Append("  string;\n");
@@ -365,7 +379,9 @@ public static class TypeScriptEmitter {
 
         AppendUnions(built, model, leaves);
 
-        built.Append("\n/** ").Append(Comment(type.DisplayName)).Append(". ")
+        built.Append("\n/** ")
+            .Append(Comment(type.DisplayName))
+            .Append(". ")
             .Append(Comment(type.Summary))
             .Append(" */\n")
             .Append("export interface ")
@@ -375,13 +391,21 @@ public static class TypeScriptEmitter {
         AppendObject(built, "  ", EnumNaming.For(model, leaves), type.Body);
 
         built.Append("}\n")
-            .Append("\n/** One ").Append(Comment(type.DisplayName)).Append(", as the API returns it. */\n")
-            .Append("export interface ").Append(model).Append("Resource {\n")
+            .Append("\n/** One ")
+            .Append(Comment(type.DisplayName))
+            .Append(", as the API returns it. */\n")
+            .Append("export interface ")
+            .Append(model)
+            .Append("Resource {\n")
             .Append("  /** The resource's fully qualified id. */\n")
             .Append("  readonly id: string;\n")
             .Append("  readonly name: string;\n")
-            .Append("  readonly type: ").Append(Quote(type.ResourceType)).Append(";\n")
-            .Append("  readonly properties?: ").Append(model).Append("Data['properties'];\n")
+            .Append("  readonly type: ")
+            .Append(Quote(type.ResourceType))
+            .Append(";\n")
+            .Append("  readonly properties?: ")
+            .Append(model)
+            .Append("Data['properties'];\n")
             .Append("}\n");
 
         foreach (var action in type.Actions) {
@@ -395,8 +419,12 @@ public static class TypeScriptEmitter {
 
             AppendUnions(built, name, DocumentReader.LeavesOf(request));
 
-            built.Append("\n/** The parameters of ").Append(Comment(action.Name)).Append(". */\n")
-                .Append("export interface ").Append(name).Append(" {\n");
+            built.Append("\n/** The parameters of ")
+                .Append(Comment(action.Name))
+                .Append(". */\n")
+                .Append("export interface ")
+                .Append(name)
+                .Append(" {\n");
 
             AppendObject(built, "  ", EnumNaming.For(name, DocumentReader.LeavesOf(request)), request);
 
@@ -415,10 +443,14 @@ public static class TypeScriptEmitter {
             // #73, which is the gate that would find it today.
             AppendUnions(built, name, DocumentReader.LeavesOf(response));
 
-            built.Append("\n/** What ").Append(Comment(action.Name)).Append(" returns.")
+            built.Append("\n/** What ")
+                .Append(Comment(action.Name))
+                .Append(" returns.")
                 .Append(action.Secret ? " ⚠ Secret material — never log or persist this." : string.Empty)
                 .Append(" */\n")
-                .Append("export interface ").Append(name).Append(" {\n");
+                .Append("export interface ")
+                .Append(name)
+                .Append(" {\n");
 
             AppendObject(built, "  ", EnumNaming.For(name, DocumentReader.LeavesOf(response)), response);
 
@@ -506,8 +538,11 @@ public static class TypeScriptEmitter {
     ///     One object schema's own members, nested inline.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Nested inline rather than flattened into a dotted name, which is the opposite of what
-    ///     <c>CliEmitter</c> does — and both are right for their surface.</b> A command line has no
+    ///     ⚠
+    ///     <b>
+    ///         Nested inline rather than flattened into a dotted name, which is the opposite of what
+    ///         <c>CliEmitter</c> does — and both are right for their surface.
+    ///     </b> A command line has no
     ///     nesting, so a flag has to be <c>--sku-name</c>; a JSON body does, and a portal that
     ///     assembled <c>{ properties: { sku: { name } } }</c> out of flat fields would be
     ///     re-deriving the shape the document already states.
@@ -519,8 +554,11 @@ public static class TypeScriptEmitter {
     /// <param name="pointer">
     ///     This object's own pointer within the body, so a nested leaf's is the whole of it.
     ///     <para>
-    ///         ⚠ <b>Carried rather than rebuilt from the member name, and the first version did
-    ///         rebuild it.</b> A leaf under <c>/properties/persistence</c> arrived with the pointer
+    ///         ⚠
+    ///         <b>
+    ///             Carried rather than rebuilt from the member name, and the first version did
+    ///             rebuild it.
+    ///         </b> A leaf under <c>/properties/persistence</c> arrived with the pointer
     ///         <c>/mode</c>, so the nested form of a colliding union name — which is derived from the
     ///         pointer — would have been <c>Mode</c> for both members of the pair, and the collision
     ///         would have survived the fix for it.
@@ -674,9 +712,12 @@ public static class TypeScriptEmitter {
 
         built.Append("} from './models';\n")
             .Append("\n/** The api-version this client was generated at. */\n")
-            .Append("export const generatedApiVersion = ").Append(Quote(version)).Append(" as const;\n");
+            .Append("export const generatedApiVersion = ")
+            .Append(Quote(version))
+            .Append(" as const;\n");
 
-        built.Append("""
+        built.Append(
+            """
 
             /**
              * The public REST API, typed.
@@ -689,7 +730,8 @@ public static class TypeScriptEmitter {
             export class CyberCloudApi {
               constructor(private readonly transport: ApiTransport) {}
 
-            """);
+            """
+        );
 
         foreach (var scope in scopes) {
             AppendScopeMethods(built, scope);
@@ -699,7 +741,8 @@ public static class TypeScriptEmitter {
             AppendTypeMethods(built, type);
         }
 
-        built.Append("""
+        built.Append(
+            """
               /** Percent-encodes one path segment. ⚠ A name is caller data and a '/' in one would forge a path. */
               private static segment(value: string): string {
                 return encodeURIComponent(value);
@@ -727,7 +770,8 @@ public static class TypeScriptEmitter {
               }
             }
 
-            """);
+            """
+        );
 
         return built.ToString();
     }
@@ -737,8 +781,13 @@ public static class TypeScriptEmitter {
         var placeholders = DocumentReader.PlaceholdersOf(scope.Path);
         var parameters = string.Join(", ", placeholders.Select(x => Camel(x) + ": string"));
 
-        built.Append("  /** Reads one ").Append(Comment(scope.DisplayName.ToLowerInvariant())).Append(". */\n")
-            .Append("  get").Append(name).Append('(').Append(parameters)
+        built.Append("  /** Reads one ")
+            .Append(Comment(scope.DisplayName.ToLowerInvariant()))
+            .Append(". */\n")
+            .Append("  get")
+            .Append(name)
+            .Append('(')
+            .Append(parameters)
             .Append("): Promise<ApiResponse<ScopeResource>> {\n")
             .Append("    return this.transport.send<ScopeResource>({ method: 'GET', path: ")
             .Append(PathExpression(scope.Path))
@@ -747,7 +796,8 @@ public static class TypeScriptEmitter {
         if (!scope.Creatable) {
             // ⚠ Said in the generated file, because a class with one method reads the same whether
             // the create was decided against or forgotten.
-            built.Append("  // ⚠ There is no create").Append(name)
+            built.Append("  // ⚠ There is no create")
+                .Append(name)
                 .Append(", and the absence is the contract. A request's tenant\n")
                 .Append("  // is resolved from its token, so a call creating another tenant carries a token\n")
                 .Append("  // that is not that tenant's and is refused before routing runs.\n\n");
@@ -755,13 +805,17 @@ public static class TypeScriptEmitter {
             return;
         }
 
-        built.Append("  /** Creates one ").Append(Comment(scope.DisplayName.ToLowerInvariant()))
+        built.Append("  /** Creates one ")
+            .Append(Comment(scope.DisplayName.ToLowerInvariant()))
             .Append(", or returns the existing one unchanged. */\n")
             .Append("  /** ⚠ 201 the first time and 200 on a repeat, and no operation to poll. */\n")
-            .Append("  create").Append(name).Append('(')
+            .Append("  create")
+            .Append(name)
+            .Append('(')
             .Append(parameters)
             .Append(placeholders.IsEmpty ? string.Empty : ", ")
-            .Append("content: ").Append(ScopeInterface(scope))
+            .Append("content: ")
+            .Append(ScopeInterface(scope))
             .Append("): Promise<ApiResponse<ScopeResource>> {\n")
             .Append("    return this.transport.send<ScopeResource>({ method: 'PUT', path: ")
             .Append(PathExpression(scope.Path))
@@ -774,41 +828,75 @@ public static class TypeScriptEmitter {
         var parameters = string.Join(", ", placeholders.Select(x => Camel(x) + ": string"));
         var verb = Pascal(type.DisplayName is { Length: > 0 } ? type.DisplayName : type.TypePath);
 
-        built.Append("  /** Reads one ").Append(Comment(type.DisplayName)).Append(". */\n")
-            .Append("  get").Append(verb).Append('(').Append(parameters)
-            .Append("): Promise<ApiResponse<").Append(model).Append("Resource>> {\n")
-            .Append("    return this.transport.send<").Append(model).Append("Resource>({ method: 'GET', path: ")
+        built.Append("  /** Reads one ")
+            .Append(Comment(type.DisplayName))
+            .Append(". */\n")
+            .Append("  get")
+            .Append(verb)
+            .Append('(')
+            .Append(parameters)
+            .Append("): Promise<ApiResponse<")
+            .Append(model)
+            .Append("Resource>> {\n")
+            .Append("    return this.transport.send<")
+            .Append(model)
+            .Append("Resource>({ method: 'GET', path: ")
             .Append(PathExpression(type.Path))
             .Append(" });\n  }\n\n");
 
-        built.Append("  /** Creates or replaces one ").Append(Comment(type.DisplayName))
+        built.Append("  /** Creates or replaces one ")
+            .Append(Comment(type.DisplayName))
             .Append(". ⚠ Long-running: the response is a 202 carrying operationUrl. */\n")
-            .Append("  createOrUpdate").Append(verb).Append('(').Append(parameters)
+            .Append("  createOrUpdate")
+            .Append(verb)
+            .Append('(')
+            .Append(parameters)
             .Append(placeholders.IsEmpty ? string.Empty : ", ")
-            .Append("data: ").Append(model).Append("Data")
-            .Append("): Promise<ApiResponse<").Append(model).Append("Resource>> {\n")
-            .Append("    return this.transport.send<").Append(model).Append("Resource>({ method: 'PUT', path: ")
+            .Append("data: ")
+            .Append(model)
+            .Append("Data")
+            .Append("): Promise<ApiResponse<")
+            .Append(model)
+            .Append("Resource>> {\n")
+            .Append("    return this.transport.send<")
+            .Append(model)
+            .Append("Resource>({ method: 'PUT', path: ")
             .Append(PathExpression(type.Path))
             .Append(", body: data });\n  }\n\n");
 
-        built.Append("  /** Amends one ").Append(Comment(type.DisplayName))
+        built.Append("  /** Amends one ")
+            .Append(Comment(type.DisplayName))
             .Append(". A merge patch: what is not set is not changed. */\n")
-            .Append("  update").Append(verb).Append('(').Append(parameters)
+            .Append("  update")
+            .Append(verb)
+            .Append('(')
+            .Append(parameters)
             .Append(placeholders.IsEmpty ? string.Empty : ", ")
-            .Append("data: Partial<").Append(model).Append("Data>")
-            .Append("): Promise<ApiResponse<").Append(model).Append("Resource>> {\n")
-            .Append("    return this.transport.send<").Append(model).Append("Resource>({ method: 'PATCH', path: ")
+            .Append("data: Partial<")
+            .Append(model)
+            .Append("Data>")
+            .Append("): Promise<ApiResponse<")
+            .Append(model)
+            .Append("Resource>> {\n")
+            .Append("    return this.transport.send<")
+            .Append(model)
+            .Append("Resource>({ method: 'PATCH', path: ")
             .Append(PathExpression(type.Path))
             .Append(", body: data });\n  }\n\n");
 
-        built.Append("  /** Deletes one ").Append(Comment(type.DisplayName)).Append('.')
+        built.Append("  /** Deletes one ")
+            .Append(Comment(type.DisplayName))
+            .Append('.')
             .Append(
                 type.SoftDeleteDays > 0
                     ? " ⚠ Recoverable for " + DocumentReader.Count(type.SoftDeleteDays) + " day(s)."
                     : " ⚠ Permanent: this type declares no soft-delete window."
             )
             .Append(" */\n")
-            .Append("  delete").Append(verb).Append('(').Append(parameters)
+            .Append("  delete")
+            .Append(verb)
+            .Append('(')
+            .Append(parameters)
             .Append("): Promise<ApiResponse<void>> {\n")
             .Append("    return this.transport.send<void>({ method: 'DELETE', path: ")
             .Append(PathExpression(type.Path))
@@ -817,14 +905,20 @@ public static class TypeScriptEmitter {
         if (type.CollectionPath.Length > 0) {
             var collectionPlaceholders = DocumentReader.PlaceholdersOf(type.CollectionPath);
 
-            built.Append("  /** One page of the ").Append(Comment(type.DisplayPlural))
+            built.Append("  /** One page of the ")
+                .Append(Comment(type.DisplayPlural))
                 .Append(" in a resource group. ⚠ A short page never means \"that is all there is\". */\n")
-                .Append("  list").Append(verb).Append('(')
+                .Append("  list")
+                .Append(verb)
+                .Append('(')
                 .Append(string.Join(", ", collectionPlaceholders.Select(x => Camel(x) + ": string")))
                 .Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
                 .Append("page: PageRequest = {}")
-                .Append("): Promise<ApiResponse<Page<").Append(model).Append("Resource>>> {\n")
-                .Append("    return this.transport.send<Page<").Append(model)
+                .Append("): Promise<ApiResponse<Page<")
+                .Append(model)
+                .Append("Resource>>> {\n")
+                .Append("    return this.transport.send<Page<")
+                .Append(model)
                 .Append("Resource>>({ method: 'GET', path: ")
                 .Append(PathExpression(type.CollectionPath))
                 .Append(", query: CyberCloudApi.pageQuery(page) });\n  }\n\n");
@@ -833,20 +927,34 @@ public static class TypeScriptEmitter {
         foreach (var action in type.Actions) {
             var result = action.Response is null ? "unknown" : model + Pascal(action.Name) + "Result";
 
-            built.Append("  /** ").Append(Comment(action.Name)).Append(" — permission '")
-                .Append(Comment(action.Permission)).Append("'.")
+            built.Append("  /** ")
+                .Append(Comment(action.Name))
+                .Append(" — permission '")
+                .Append(Comment(action.Permission))
+                .Append("'.")
                 .Append(action.Secret ? " ⚠ The response carries secret material." : string.Empty)
                 .Append(action.LongRunning ? " ⚠ Long-running." : string.Empty)
                 .Append(" */\n")
-                .Append("  ").Append(Camel(action.Name)).Append(verb).Append('(').Append(parameters);
+                .Append("  ")
+                .Append(Camel(action.Name))
+                .Append(verb)
+                .Append('(')
+                .Append(parameters);
 
             if (action.Request is not null) {
                 built.Append(placeholders.IsEmpty ? string.Empty : ", ")
-                    .Append("content: ").Append(model).Append(Pascal(action.Name)).Append("Content");
+                    .Append("content: ")
+                    .Append(model)
+                    .Append(Pascal(action.Name))
+                    .Append("Content");
             }
 
-            built.Append("): Promise<ApiResponse<").Append(result).Append(">> {\n")
-                .Append("    return this.transport.send<").Append(result).Append(">({ method: 'POST', path: ")
+            built.Append("): Promise<ApiResponse<")
+                .Append(result)
+                .Append(">> {\n")
+                .Append("    return this.transport.send<")
+                .Append(result)
+                .Append(">({ method: 'POST', path: ")
                 .Append(PathExpression(type.Path + "/" + action.Name))
                 .Append(action.Request is null ? string.Empty : ", body: content")
                 .Append(" });\n  }\n\n");
@@ -896,8 +1004,11 @@ public static class TypeScriptEmitter {
     /// <param name="files">The emitted files.</param>
     /// <returns>Empty when the package is sound.</returns>
     /// <remarks>
-    ///     ⚠ <b>This exists because nothing in the .NET build type-checks TypeScript and
-    ///     <c>portal/eslint.config.mjs</c> ignores this directory.</b> The .NET SDK emitter shipped a
+    ///     ⚠
+    ///     <b>
+    ///         This exists because nothing in the .NET build type-checks TypeScript and
+    ///         <c>portal/eslint.config.mjs</c> ignores this directory.
+    ///     </b> The .NET SDK emitter shipped a
     ///     property typed with a name it never declared, in a file no build in this repository
     ///     compiled — issue #73 has since given that file a compiler too, and this check is what
     ///     found the shape in the first place; the same mistake here would reach the portal's
@@ -924,7 +1035,8 @@ public static class TypeScriptEmitter {
         var exported = models.Split('\n')
             .Select(x => x.Trim())
             .Where(x => x.StartsWith("export interface ", StringComparison.Ordinal)
-                        || x.StartsWith("export type ", StringComparison.Ordinal))
+                || x.StartsWith("export type ", StringComparison.Ordinal)
+            )
             .Select(x => x.Split(' ')[2].TrimEnd('{', ' ', '='))
             .ToHashSet(StringComparer.Ordinal);
 
@@ -971,7 +1083,8 @@ public static class TypeScriptEmitter {
     // ── Small shared machinery ─────────────────────────────────────────────────────────────────
 
     static string Head() =>
-        Banner + "\n"
+        Banner
+        + "\n"
         + "// Generated from the published OpenAPI document — docs/plan/21 § Generation's one hop.\n"
         + "// ./build.sh Generate overwrites this file and ./build.sh Architecture fails on a\n"
         + "// difference. docs/plan/03 § Assembly graph rules, rule 6.\n";
@@ -990,21 +1103,23 @@ public static class TypeScriptEmitter {
     ///     construction — the registry keys on it — so there is no collision to resolve and no
     ///     second-pass rule that could disagree with the first.
     /// </remarks>
-    static string ModelOf(DocumentType type) =>
-        Pascal(type.ProviderNamespace.Split('.')[^1]) + Pascal(type.TypePath);
+    static string ModelOf(DocumentType type) => Pascal(type.ProviderNamespace.Split('.')[^1]) + Pascal(type.TypePath);
 
     static string Member(string name) =>
-        name.Length > 0 && (char.IsAsciiLetter(name[0]) || name[0] is '_' or '$')
+        name.Length > 0
+        && (char.IsAsciiLetter(name[0]) || name[0] is '_' or '$')
         && name.All(x => char.IsAsciiLetterOrDigit(x) || x is '_' or '$')
             ? name
             : Quote(name);
 
     /// <summary>A TypeScript single-quoted string literal.</summary>
     static string Quote(string value) =>
-        "'" + value.Replace("\\", "\\\\", StringComparison.Ordinal)
+        "'"
+        + value.Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("'", "\\'", StringComparison.Ordinal)
             .Replace("\r\n", " ", StringComparison.Ordinal)
-            .Replace("\n", " ", StringComparison.Ordinal) + "'";
+            .Replace("\n", " ", StringComparison.Ordinal)
+        + "'";
 
     /// <summary>
     ///     Text that is safe inside a <c>/** … */</c> comment, on one line.

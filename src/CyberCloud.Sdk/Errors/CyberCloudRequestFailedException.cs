@@ -7,8 +7,11 @@ namespace CyberCloud.Sdk;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b><see cref="Target" /> is the member the API exists to deliver.</b> docs/plan/08
-///         § Errors: <i>"<c>target</c> is a JSON Pointer into the request body so the portal can
-///         highlight the field."</i> A pointer that reaches the SDK and stops there turns "this input
+///         § Errors:
+///         <i>
+///             "<c>target</c> is a JSON Pointer into the request body so the portal can
+///             highlight the field."
+///         </i> A pointer that reaches the SDK and stops there turns "this input
 ///         was rejected" back into "the request was rejected", and a form that cannot say which box is
 ///         wrong is a form the user fixes by guessing. <c>ErrorTargetSurvivesTests</c> follows one
 ///         from a scripted <c>400</c> to this property.
@@ -30,11 +33,17 @@ public class CyberCloudRequestFailedException : Exception {
     /// <summary>Creates the exception.</summary>
     /// <param name="message">What went wrong.</param>
     /// <param name="innerException">The cause.</param>
-    public CyberCloudRequestFailedException(string message, Exception? innerException) : base(message, innerException) { }
+    public CyberCloudRequestFailedException(string message, Exception? innerException) : base(
+        message,
+        innerException
+    ) { }
 
     /// <summary>Builds the exception from a failed response, parsing its body for the error shape.</summary>
     /// <param name="response">The response.</param>
-    public CyberCloudRequestFailedException(Response response) : this(response, CyberCloudError.TryParse(response?.Content)) { }
+    public CyberCloudRequestFailedException(Response response) : this(
+        response,
+        CyberCloudError.TryParse(response?.Content)
+    ) { }
 
     /// <summary>Builds the exception from a response and an already-parsed error.</summary>
     /// <param name="response">
@@ -84,8 +93,9 @@ public class CyberCloudRequestFailedException : Exception {
     public Response? RawResponse { get; }
 
     static string Describe(Response? response, CyberCloudError? error) {
-        if (response is null)
+        if (response is null) {
             return "The request failed.";
+        }
 
         var builder = new StringBuilder();
         builder.Append(CultureInfo.InvariantCulture, $"Status: {response.Status} ({response.ReasonPhrase})");
@@ -94,17 +104,20 @@ public class CyberCloudRequestFailedException : Exception {
             builder.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}ErrorCode: {error.Code}");
             builder.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}Message: {error.Message}");
 
-            if (error.Target is not null)
+            if (error.Target is not null) {
                 builder.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}Target: {error.Target}");
+            }
 
-            foreach (var detail in error.Details)
+            foreach (var detail in error.Details) {
                 builder.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}  • {detail}");
+            }
         }
 
         // ⚠ The request id and nothing else about the request. docs/plan/08 § Errors puts the
         // correlation id in the header precisely so that this line can replace a body dump.
-        if (response.ServiceRequestId is { } id)
+        if (response.ServiceRequestId is { } id) {
             builder.Append(CultureInfo.InvariantCulture, $"{Environment.NewLine}RequestId: {id}");
+        }
 
         return builder.ToString();
     }

@@ -5,8 +5,11 @@ namespace CyberCloud.Identity.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><see cref="TenantId" /> exists because there is no way to derive it, and that is a
-///         real gap rather than a configuration preference.</b> docs/plan/11 § Sign-up and tenant
+///         ⚠
+///         <b>
+///             <see cref="TenantId" /> exists because there is no way to derive it, and that is a
+///             real gap rather than a configuration preference.
+///         </b> docs/plan/11 § Sign-up and tenant
 ///         creation makes email uniqueness <i>per tenant</i> and refuses a global email index —
 ///         "global email uniqueness would be a global index, the thing we do not have and do not
 ///         want". <c>IEmailIndexGrain</c> is keyed by <c>hash(tenantId + normalized email)</c>, so an

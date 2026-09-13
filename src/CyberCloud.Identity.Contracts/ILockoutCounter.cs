@@ -16,8 +16,11 @@ namespace CyberCloud.Identity.Contracts;
 ///         amplifier."
 ///     </para>
 ///     <para>
-///         Those two sentences cannot both be satisfied. A sign-in request carries an <i>email
-///         address</i>, and turning an address into a user id means resolving
+///         Those two sentences cannot both be satisfied. A sign-in request carries an
+///         <i>
+///             email
+///             address
+///         </i>, and turning an address into a user id means resolving
 ///         <c>IEmailIndexGrain</c> — which is a grain activation, on the failure path, before the
 ///         counter keyed by user id can be read. A counter that can only be consulted after the
 ///         thing it is meant to prevent has already happened prevents nothing.

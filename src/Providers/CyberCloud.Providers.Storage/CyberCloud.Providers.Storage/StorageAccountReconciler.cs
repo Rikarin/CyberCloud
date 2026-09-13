@@ -1,5 +1,6 @@
 // ⚠ For `Result<T>` on the credential path. See StorageProvider for why this import is safe beside
 // the ErrorCode alias.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Collections.Immutable;
@@ -30,8 +31,11 @@ namespace CyberCloud.Providers.Storage;
 ///         <item>
 ///             <b>Idempotent.</b> The apply is server-side and
 ///             <see cref="StorageAccounts.SeaweedJson" /> is a pure function of the name and the body.
-///             Nothing here counts, appends or timestamps. ⚠ <b>The credential path looks like a
-///             violation and is not:</b> <see cref="StorageAccounts.GenerateKeyPair" /> returns a
+///             Nothing here counts, appends or timestamps. ⚠
+///             <b>
+///                 The credential path looks like a
+///                 violation and is not:
+///             </b> <see cref="StorageAccounts.GenerateKeyPair" /> returns a
 ///             different pair every call, and every pass after the first has that candidate discarded
 ///             by mint-once and renders what it <i>resolved back</i> instead. So the rendered
 ///             <c>Secret</c> is byte-stable across passes over a generator that is not, and
@@ -49,8 +53,11 @@ namespace CyberCloud.Providers.Storage;
 ///             <b>Bounded.</b> One apply and one read, on the caller's token. ⚠ There is no wait for
 ///             the cluster to be <i>ready</i> — a master Raft group plus volume registration takes
 ///             minutes and clause 3's budget is thirty seconds, so readiness is reported as
-///             <see cref="ReconcileOutcome.InProgress" /> and the reminder comes back. ⚠ <b>Two applies
-///             and two reads now, plus a mint and two resolves</b> — the vault round trips are the new
+///             <see cref="ReconcileOutcome.InProgress" /> and the reminder comes back. ⚠
+///             <b>
+///                 Two applies
+///                 and two reads now, plus a mint and two resolves
+///             </b> — the vault round trips are the new
 ///             cost, and <c>OpenBaoSecretResolver</c> caches nothing on purpose, for reasons its own
 ///             remarks set out at length.
 ///         </item>
@@ -60,8 +67,11 @@ namespace CyberCloud.Providers.Storage;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The <c>Seaweed</c> kind is one a cluster may not serve, and the failure now names
-///         itself.</b> <c>seaweed.seaweedfs.com/v1</c> is installed by the platform bundle rather than
+///         ⚠
+///         <b>
+///             The <c>Seaweed</c> kind is one a cluster may not serve, and the failure now names
+///             itself.
+///         </b> <c>seaweed.seaweedfs.com/v1</c> is installed by the platform bundle rather than
 ///         by Kubernetes, and a cluster without it answers the apply with a <c>404</c>. Until
 ///         2026-08-12 an unmapped 4xx escaped as <c>k8s.Autorest.HttpOperationException</c> with no
 ///         status code and Orleans reported <c>CodecNotFoundException</c>; it comes back naming the
@@ -69,8 +79,11 @@ namespace CyberCloud.Providers.Storage;
 ///         what is missing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
 ///         would let the platform silently overwrite the operator, which writes <c>.status</c> on this
 ///         object and — the case that matters — could plausibly be given ownership of
 ///         <c>spec.volume.replicas</c> by a tenant's own autoscaler.
@@ -218,8 +231,11 @@ public sealed class StorageAccountReconciler(IClock clock) : IResourceReconciler
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
-    ///         IDEMPOTENT.</b> <see cref="StorageAccounts.GenerateKeyPair" /> produces a different pair
+    ///         ⚠
+    ///         <b>
+    ///             THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
+    ///             IDEMPOTENT.
+    ///         </b> <see cref="StorageAccounts.GenerateKeyPair" /> produces a different pair
     ///         every call — it has to, or a credential would be derivable from a resource id. What
     ///         reaches a manifest is never that pair: it is what
     ///         <see cref="ISecretResolver.ResolveAsync" /> returns afterwards, which is the pair the
@@ -276,9 +292,7 @@ public sealed class StorageAccountReconciler(IClock clock) : IResourceReconciler
 
         return secretAccessKey.TryGetError(out var secretKeyError)
             ? Result<(string, string)>.Failure(secretKeyError)
-            : Result<(string, string)>.Success(
-                (accessKeyId.GetValueOrThrow(), secretAccessKey.GetValueOrThrow())
-            );
+            : Result<(string, string)>.Success((accessKeyId.GetValueOrThrow(), secretAccessKey.GetValueOrThrow()));
     }
 
     /// <summary>
@@ -364,7 +378,7 @@ public sealed class StorageAccountReconciler(IClock clock) : IResourceReconciler
                 // bounded PASS budget runs out of passes waiting for a controller it does not drive.
                 // The read-back below is what makes Background safe: this returns Converged when the
                 // objects are GONE, not when the deletes were issued.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError)
                 && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -450,9 +464,7 @@ public sealed class StorageAccountReconciler(IClock clock) : IResourceReconciler
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the Seaweed cluster is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the Seaweed cluster is absent" };
         }
 
         var found = read.GetValueOrThrow();

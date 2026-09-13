@@ -5,13 +5,19 @@ namespace CyberCloud.Sdk;
 
 /// <summary>
 ///     Retries the requests that can succeed on a second attempt and no others — docs/plan/21 § The
-///     .NET SDK's <i>"Retry, <c>Retry-After</c> on 429, correlation ids … Ours, over <c>Polly</c>
-///     8.6.5, already in the register"</i>.
+///     .NET SDK's
+///     <i>
+///         "Retry, <c>Retry-After</c> on 429, correlation ids … Ours, over <c>Polly</c>
+///         8.6.5, already in the register"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A <c>4xx</c> that is not <c>429</c> is never retried, and that is a correctness rule
-///         rather than a politeness one.</b> A <c>409</c> from docs/plan/06 § Two-phase create means
+///         ⚠
+///         <b>
+///             A <c>4xx</c> that is not <c>429</c> is never retried, and that is a correctness rule
+///             rather than a politeness one.
+///         </b> A <c>409</c> from docs/plan/06 § Two-phase create means
 ///         the name is taken; a <c>400</c> means the body failed the api-version's JSON Schema
 ///         (docs/plan/10 § Request pipeline, stage 7). Replaying either produces the same answer,
 ///         three times slower — and for a <c>409</c> raised after a partial write it invites the
@@ -19,8 +25,11 @@ namespace CyberCloud.Sdk;
 ///     </para>
 ///     <para>
 ///         ⚠ <b><c>429</c> waits exactly as long as the service asked.</b> docs/plan/10 § Rate
-///         limiting sends <c>Retry-After</c> with every <c>429</c> <i>"because every cloud SDK's retry
-///         policy already understands those headers"</i>. <see cref="RetryStrategyOptions{T}.DelayGenerator" />
+///         limiting sends <c>Retry-After</c> with every <c>429</c>
+///         <i>
+///             "because every cloud SDK's retry
+///             policy already understands those headers"
+///         </i>. <see cref="RetryStrategyOptions{T}.DelayGenerator" />
 ///         is where that becomes true of this one: it reads the header and returns it, and Polly's
 ///         exponential backoff is used only when the service did not say.
 ///     </para>
@@ -51,41 +60,46 @@ public sealed class RetryHandler : DelegatingHandler {
         }
 
         pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
-            .AddRetry(new RetryStrategyOptions<HttpResponseMessage> {
-                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                    .HandleResult(static response => IsRetriable(response.StatusCode))
-                    // A connection that never opened and a DNS failure are the retriable exceptions.
-                    // ⚠ OperationCanceledException is NOT among them: retrying a cancelled request is
-                    // how a cancelled WaitForCompletionAsync keeps polling after the caller left.
-                    .Handle<HttpRequestException>()
-                    .Handle<TimeoutException>(),
-                MaxRetryAttempts = options.MaxRetries,
-                BackoffType = DelayBackoffType.Exponential,
-                UseJitter = true,
-                Delay = options.Delay,
-                MaxDelay = options.MaxDelay,
-                DelayGenerator = static arguments => new ValueTask<TimeSpan?>(RetryAfter(arguments.Outcome.Result)),
-            })
+            .AddRetry(
+                new RetryStrategyOptions<HttpResponseMessage> {
+                    ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                        .HandleResult(static response => IsRetriable(response.StatusCode))
+                        // A connection that never opened and a DNS failure are the retriable exceptions.
+                        // ⚠ OperationCanceledException is NOT among them: retrying a cancelled request is
+                        // how a cancelled WaitForCompletionAsync keeps polling after the caller left.
+                        .Handle<HttpRequestException>()
+                        .Handle<TimeoutException>(),
+                    MaxRetryAttempts = options.MaxRetries,
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    Delay = options.Delay,
+                    MaxDelay = options.MaxDelay,
+                    DelayGenerator = static arguments => new ValueTask<TimeSpan?>(RetryAfter(arguments.Outcome.Result))
+                }
+            )
             .Build();
     }
 
     /// <summary>The statuses worth a second attempt.</summary>
     /// <param name="status">The status.</param>
-    public static bool IsRetriable(HttpStatusCode status)
-        => status switch {
-            HttpStatusCode.RequestTimeout => true,       // 408
-            HttpStatusCode.TooManyRequests => true,      // 429 — docs/plan/10 § Rate limiting
-            HttpStatusCode.InternalServerError => true,  // 500
-            HttpStatusCode.BadGateway => true,           // 502
-            HttpStatusCode.ServiceUnavailable => true,   // 503
-            HttpStatusCode.GatewayTimeout => true,       // 504
+    public static bool IsRetriable(HttpStatusCode status) =>
+        status switch {
+            HttpStatusCode.RequestTimeout => true, // 408
+            HttpStatusCode.TooManyRequests => true, // 429 — docs/plan/10 § Rate limiting
+            HttpStatusCode.InternalServerError => true, // 500
+            HttpStatusCode.BadGateway => true, // 502
+            HttpStatusCode.ServiceUnavailable => true, // 503
+            HttpStatusCode.GatewayTimeout => true, // 504
             // ⚠ 501 Not Implemented is deliberately absent: the route will not exist on the second
             // attempt either, and a client that hammers it turns a clear answer into a slow one.
             _ => false,
         };
 
     /// <inheritdoc />
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(request);
 
         // The body is read once here rather than per attempt: HttpContent is also single-use, and a
@@ -98,20 +112,24 @@ public sealed class RetryHandler : DelegatingHandler {
         var contentType = request.Content?.Headers.ContentType;
 
         return await pipeline.ExecuteAsync(
-                async (state, token) => await base.SendAsync(Clone(state.request, state.body, state.contentType), token).ConfigureAwait(false),
-                (request, body, contentType),
-                cancellationToken)
+            async (state, token) => await base.SendAsync(Clone(state.request, state.body, state.contentType), token)
+                .ConfigureAwait(false),
+            (request, body, contentType),
+            cancellationToken
+        )
             .ConfigureAwait(false);
     }
 
     static TimeSpan? RetryAfter(HttpResponseMessage? response) {
         var value = response?.Headers.RetryAfter;
 
-        if (value is null)
+        if (value is null) {
             return null;
+        }
 
-        if (value.Delta is { } delta)
+        if (value.Delta is { } delta) {
             return delta;
+        }
 
         if (value.Date is { } date) {
             var wait = date - DateTimeOffset.UtcNow;
@@ -122,19 +140,26 @@ public sealed class RetryHandler : DelegatingHandler {
         return null;
     }
 
-    static HttpRequestMessage Clone(HttpRequestMessage request, byte[]? body, System.Net.Http.Headers.MediaTypeHeaderValue? contentType) {
+    static HttpRequestMessage Clone(
+        HttpRequestMessage request,
+        byte[]? body,
+        System.Net.Http.Headers.MediaTypeHeaderValue? contentType
+    ) {
         var clone = new HttpRequestMessage(request.Method, request.RequestUri) { Version = request.Version };
 
-        foreach (var header in request.Headers)
+        foreach (var header in request.Headers) {
             clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
 
-        if (body is null)
+        if (body is null) {
             return clone;
+        }
 
         clone.Content = new ByteArrayContent(body);
 
-        if (contentType is not null)
+        if (contentType is not null) {
             clone.Content.Headers.ContentType = contentType;
+        }
 
         return clone;
     }

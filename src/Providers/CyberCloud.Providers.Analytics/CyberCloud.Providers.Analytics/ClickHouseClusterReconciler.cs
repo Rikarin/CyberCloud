@@ -8,16 +8,22 @@ namespace CyberCloud.Providers.Analytics;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>TWO OBJECTS IN TWO DIFFERENT API GROUPS, AND THE ORDER THEY ARE APPLIED IN IS PART OF
-///         THE DESIGN.</b> The Keeper goes first, because the installation names the Keeper's
+///         ⚠
+///         <b>
+///             TWO OBJECTS IN TWO DIFFERENT API GROUPS, AND THE ORDER THEY ARE APPLIED IN IS PART OF
+///             THE DESIGN.
+///         </b> The Keeper goes first, because the installation names the Keeper's
 ///         <c>Service</c> in <c>spec.configuration.zookeeper.nodes</c> and a ClickHouse server that
 ///         cannot reach its coordination logs and retries rather than failing. Applying them the other
 ///         way round would produce a cluster that converges either way and spends the gap writing
 ///         errors nobody asked for.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Neither object waits for the other, and that is the same decision stated from the other
-///         side.</b> There is no "the Keeper is ready" check between the two applies: readiness of a
+///         ⚠
+///         <b>
+///             Neither object waits for the other, and that is the same decision stated from the other
+///             side.
+///         </b> There is no "the Keeper is ready" check between the two applies: readiness of a
 ///         Raft quorum takes longer than clause 3's budget, the installation is declarative and will
 ///         connect when the Service appears, and a reconciler that blocked would burn passes doing
 ///         nothing. Both applies happen every pass; convergence is decided by the read-back below.
@@ -59,8 +65,11 @@ namespace CyberCloud.Providers.Analytics;
 ///         the operator of a cluster missing half the bundle finds out <i>which</i> half.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing would
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing would
 ///         let the platform silently overwrite the operator, and on this CRD there is a second party
 ///         with a legitimate claim on the same subtree — <c>spec.templating.policy: auto</c> lets a
 ///         cluster-scoped <c>ClickHouseInstallationTemplate</c> merge into <c>spec.templates</c>, which
@@ -193,7 +202,7 @@ public sealed class ClickHouseClusterReconciler(IClock clock) : IResourceReconci
                 // of passes waiting for a controller it does not drive. The read-back below is what
                 // makes Background safe: this returns Converged when the objects are GONE, not when
                 // the deletes were issued.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError)
                 && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -239,9 +248,7 @@ public sealed class ClickHouseClusterReconciler(IClock clock) : IResourceReconci
 
         if (installation.TryGetError(out _)) {
             return new() {
-                Exists = false,
-                ObservedAt = clock.UtcNow,
-                Summary = "the ClickHouse installation is absent"
+                Exists = false, ObservedAt = clock.UtcNow, Summary = "the ClickHouse installation is absent"
             };
         }
 
@@ -295,9 +302,9 @@ public sealed class ClickHouseClusterReconciler(IClock clock) : IResourceReconci
             // ⚠ Both installations keep their claim templates at the same path, and the entries have
             // no metadata of their own — see ClickHouseClusters.ClaimTemplatePath, including what
             // this does and does not prove about a CRD the operator, not this platform, expands.
-            .WithTemplateLabels(ClickHouseClusters.ClaimTemplatePath)
-            .ObjectJson(objectJson)
-            .ApplyAsync(cancellationToken);
+                .WithTemplateLabels(ClickHouseClusters.ClaimTemplatePath)
+                .ObjectJson(objectJson)
+                .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
             // ⚠ The code decides, not this call site. An apply that could not reach the cluster is a

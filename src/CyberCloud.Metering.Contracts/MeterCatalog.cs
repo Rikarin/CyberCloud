@@ -30,8 +30,11 @@ public readonly record struct MeterDefinition(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>docs/plan/08 § The provider registry and docs/plan/06 § Quota disagree, and 08 is the
-///         one that is wrong.</b> 08's registry example writes
+///         ⚠
+///         <b>
+///             docs/plan/08 § The provider registry and docs/plan/06 § Quota disagree, and 08 is the
+///             one that is wrong.
+///         </b> 08's registry example writes
 ///         <c>.Meters(Meter.VCpuHours, Meter.StorageGbMonths, Meter.BackupGbMonths)</c> — those are
 ///         <i>billing</i> meters. 06 § Quota's families are <c>vcpu</c>, <c>memoryGb</c>,
 ///         <c>storageGb</c>, <c>publicIps</c>, <c>clusters</c>, <c>resources</c>, and that is what
@@ -64,8 +67,11 @@ public readonly record struct MeterDefinition(
 ///         quota-limited and free, and nothing would report it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What that costs, stated rather than hidden: event-based meters have no quota family
-///         and therefore cannot be derived.</b> <see cref="BillingMeter.Requests" />,
+///         ⚠
+///         <b>
+///             What that costs, stated rather than hidden: event-based meters have no quota family
+///             and therefore cannot be derived.
+///         </b> <see cref="BillingMeter.Requests" />,
 ///         <see cref="BillingMeter.EgressGb" /> and <see cref="BillingMeter.MessagesSent" /> map to
 ///         <see cref="QuotaMeter.Unknown" /> and no registry declaration reaches them — a provider
 ///         emits them through <see cref="IUsageEmitter" /> and the catalogue's job is only to say
@@ -80,8 +86,11 @@ public static class MeterCatalog {
     ///     The billing month, for <c>*GbMonths</c>: 730 hours.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A fixed 730 hours, not a calendar month, and the difference is a bug report waiting
-    ///     to happen either way.</b> 730 is 8 760 / 12 — the convention every cloud with a GB-month
+    ///     ⚠
+    ///     <b>
+    ///         A fixed 730 hours, not a calendar month, and the difference is a bug report waiting
+    ///         to happen either way.
+    ///     </b> 730 is 8 760 / 12 — the convention every cloud with a GB-month
     ///     meter uses. A calendar month would mean the same disk costs 7 % more in March than in
     ///     February, which is correct only if the price list says so and is a support ticket in
     ///     every other case. Because accrual is per five-minute window and each window contributes
@@ -98,8 +107,20 @@ public static class MeterCatalog {
         new(BillingMeter.StorageGbMonths, MeterKind.StateBased, "GiB-month", QuotaMeter.StorageGb, BillingMonth),
         new(BillingMeter.BackupGbMonths, MeterKind.StateBased, "GiB-month", QuotaMeter.StorageGb, BillingMonth),
         new(BillingMeter.PublicIpHours, MeterKind.StateBased, "IP-hour", QuotaMeter.PublicIps, TimeSpan.FromHours(1)),
-        new(BillingMeter.ClusterHours, MeterKind.StateBased, "cluster-hour", QuotaMeter.Clusters, TimeSpan.FromHours(1)),
-        new(BillingMeter.ResourceHours, MeterKind.StateBased, "resource-hour", QuotaMeter.Resources, TimeSpan.FromHours(1)),
+        new(
+            BillingMeter.ClusterHours,
+            MeterKind.StateBased,
+            "cluster-hour",
+            QuotaMeter.Clusters,
+            TimeSpan.FromHours(1)
+        ),
+        new(
+            BillingMeter.ResourceHours,
+            MeterKind.StateBased,
+            "resource-hour",
+            QuotaMeter.Resources,
+            TimeSpan.FromHours(1)
+        ),
         new(BillingMeter.Requests, MeterKind.EventBased, "request", QuotaMeter.Unknown, TimeSpan.Zero),
         new(BillingMeter.EgressGb, MeterKind.EventBased, "GiB", QuotaMeter.Unknown, TimeSpan.Zero),
         new(BillingMeter.MessagesSent, MeterKind.EventBased, "message", QuotaMeter.Unknown, TimeSpan.Zero)

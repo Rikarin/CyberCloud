@@ -8,9 +8,12 @@ using System.Reflection;
 namespace CyberCloud.Identity.Host.Tests;
 
 /// <summary>
-///     docs/plan/11 § Hosts: <i>"a session cookie must never be a credential the resource API
-///     accepts. If it is, every CSRF becomes a control-plane write. Separate hosts on separate
-///     origins makes that structural instead of a middleware configuration somebody will change."</i>
+///     docs/plan/11 § Hosts:
+///     <i>
+///         "a session cookie must never be a credential the resource API
+///         accepts. If it is, every CSRF becomes a control-plane write. Separate hosts on separate
+///         origins makes that structural instead of a middleware configuration somebody will change."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>

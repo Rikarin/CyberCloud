@@ -120,7 +120,8 @@ public sealed class AgentPoolReconcilerTests {
 
         using var body = JsonDocument.Parse(AgentPools.Body(ClusterId));
 
-        body.RootElement.GetProperty("properties").TryGetProperty("clusterName", out _)
+        body.RootElement.GetProperty("properties")
+            .TryGetProperty("clusterName", out _)
             .ShouldBeFalse("the body now names the cluster, which is the fact the address carries");
 
         await Pass(
@@ -305,15 +306,12 @@ public sealed class AgentPoolReconcilerTests {
             .ShouldNotContainKey(AgentPools.AutoscaleMinAnnotation);
 
         var on = new RecordingConnection();
-        using var withAutoscaler = JsonDocument.Parse(
-            AgentPools.Body(ClusterId, autoscale: true, minCount: 2, maxCount: 9)
-        );
+        using var withAutoscaler =
+            JsonDocument.Parse(AgentPools.Body(ClusterId, autoscale: true, minCount: 2, maxCount: 9));
 
         await Pass(reconciler, on, address, withAutoscaler.RootElement);
 
-        var annotations = Metadata(
-            on.Applied.Single(x => x.Target.Kind.Kind == "MachineDeployment").Body
-        );
+        var annotations = Metadata(on.Applied.Single(x => x.Target.Kind.Kind == "MachineDeployment").Body);
 
         annotations[AgentPools.AutoscaleMinAnnotation]!.GetValue<string>().ShouldBe("2");
         annotations[AgentPools.AutoscaleMaxAnnotation]!.GetValue<string>().ShouldBe("9");
@@ -428,10 +426,12 @@ sealed class PoolReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }

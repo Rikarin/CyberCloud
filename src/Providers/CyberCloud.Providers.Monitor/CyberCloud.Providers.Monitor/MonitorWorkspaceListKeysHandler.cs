@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Globalization;
 using System.Text.Json.Nodes;
@@ -13,11 +14,16 @@ namespace CyberCloud.Providers.Monitor;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>The second action handler in the tree, and the first whose response is mostly not
-///         secret.</b> <c>CyberCloud.Storage/accounts</c>' returns a credential and two facts about
+///         <b>
+///             The second action handler in the tree, and the first whose response is mostly not
+///             secret.
+///         </b> <c>CyberCloud.Storage/accounts</c>' returns a credential and two facts about
 ///         where to use it. This one returns six endpoints and one credential, because docs/plan/16
-///         gives the workspace a <c>dataSources</c> row — <i>"read-only endpoints for the tenant's
-///         own Grafana or an external one"</i> — and an endpoint the platform computes from the
+///         gives the workspace a <c>dataSources</c> row —
+///         <i>
+///             "read-only endpoints for the tenant's
+///             own Grafana or an external one"
+///         </i> — and an endpoint the platform computes from the
 ///         resource's own id is an output rather than a setting. Putting it here rather than in the
 ///         body means the portal has no property to grey out and the write path has none to refuse.
 ///     </para>

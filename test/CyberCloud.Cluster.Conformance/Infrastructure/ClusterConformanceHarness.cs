@@ -7,8 +7,6 @@ using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.ServiceDefaults.Storage;
-using k8s;
-using k8s.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -19,6 +17,8 @@ using Orleans.TestingHost;
 using StackExchange.Redis;
 using System.Globalization;
 using System.Text;
+using k8s;
+using k8s.Models;
 
 namespace CyberCloud.Cluster.Conformance.Infrastructure;
 
@@ -122,8 +122,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     ///     ⚠ Built from the registry rather than from a member on the case — the provider already
     ///     says which handler serves which action, and a second declaration is one that can disagree.
     ///     <para>
-    ///         ⚠ <b>THE SEAMS ARE REGISTERED ALONGSIDE, FOR THE REASON
-    ///         <c>ProviderTestCluster.Handlers</c> RECORDS IN FULL.</b> This container held only the
+    ///         ⚠
+    ///         <b>
+    ///             THE SEAMS ARE REGISTERED ALONGSIDE, FOR THE REASON
+    ///             <c>ProviderTestCluster.Handlers</c> RECORDS IN FULL.
+    ///         </b> This container held only the
     ///         handler types, which worked for exactly as long as every handler had a parameterless
     ///         constructor. A handler taking an <c>IClock</c> fails to activate with a message naming
     ///         the handler, thrown from <c>ActionDispatcher</c>'s <c>GetService</c> — and it is a
@@ -142,10 +145,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
 
         foreach (var handler in Registry.Types
-            .SelectMany(x => x.Actions)
-            .Select(x => x.HandlerType)
-            .OfType<Type>()
-            .Distinct()) {
+                     .SelectMany(x => x.Actions)
+                     .Select(x => x.HandlerType)
+                     .OfType<Type>()
+                     .Distinct()) {
             services.AddSingleton(handler);
         }
 
@@ -195,8 +198,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
     /// <summary>A tenant-qualified grain factory.</summary>
     /// <param name="tenant">The tenant.</param>
-    public TenantGrainFactory For(Guid tenant) =>
-        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>The operation grain.</summary>
     /// <param name="tenant">The tenant.</param>
@@ -207,8 +209,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     /// <summary>Builds an address for the type under test.</summary>
     /// <param name="name">The resource name. DNS-1123, per docs/plan/06 § Identifiers.</param>
     /// <remarks>
-    ///     ⚠ <b>The ancestors are interleaved here for the same reason
-    ///     <c>ProviderTestCluster.Address</c> does it:</b> this is the one method every assertion in
+    ///     ⚠
+    ///     <b>
+    ///         The ancestors are interleaved here for the same reason
+    ///         <c>ProviderTestCluster.Address</c> does it:
+    ///     </b> this is the one method every assertion in
     ///     the container-backed suite addresses through, so a depth-2 case runs the same four criteria
     ///     against <c>…/probes/ancestor-0/samples/{name}</c> rather than against a copy of them. The
     ///     count check and its message live on <c>ProviderTestCluster.Ancestors</c> and are shared —
@@ -321,7 +326,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             // ⚠ The same test vault the silo's container holds, for the reason ProviderTestCluster
             // gives: a synchronous action runs HERE and the mint that produced its credential ran in
             // the silo, so two instances would be a listKeys that cannot find its own create.
-            new ActionDispatcher(harness.Handlers(), new NoClusterConnectionFactory(), ClusterConformanceState<TSource>.Vault),
+            new ActionDispatcher(
+                harness.Handlers(),
+                new NoClusterConnectionFactory(),
+                ClusterConformanceState<TSource>.Vault
+            ),
             NullLogger<ResourceManagerService>.Instance
         );
 
@@ -376,7 +385,8 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     Caller = Caller()
                 },
                 cancellationToken
-            ).ConfigureAwait(false);
+            )
+                .ConfigureAwait(false);
 
             if (accepted.TryGetError(out var error)) {
                 throw new InvalidOperationException(
@@ -524,8 +534,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
     /// <summary>Creates the harness namespace before the silo comes up.</summary>
     /// <remarks>
-    ///     ⚠ <b>No longer the only thing that creates it, and it is kept for what runs
-    ///     <i>outside</i> a pass.</b> <c>NamespaceEnsurer</c> now applies the same namespace, labelled,
+    ///     ⚠
+    ///     <b>
+    ///         No longer the only thing that creates it, and it is kept for what runs
+    ///         <i>outside</i> a pass.
+    ///     </b> <c>NamespaceEnsurer</c> now applies the same namespace, labelled,
     ///     on the reconcile driver's path — so on the driven path this is redundant. It stays because
     ///     this harness also reads and writes the namespace with the raw client before any operation
     ///     has been driven (<c>RivalApplyAsync</c>, <c>ReadFromClusterAsync</c>,
@@ -552,10 +565,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                 .ConfigureAwait(false);
         } catch (k8s.Autorest.HttpOperationException ex)
             when (ex.Response?.StatusCode == System.Net.HttpStatusCode.Conflict) {
-            // ⚠ Two harnesses in one process race here — the lifecycle fixture and the silo-kill
-            // test share one k3s and both want the same namespace. A 409 is the other one having
-            // won, which is the desired end state; the list above is the cheap path, not the check.
-        }
+                // ⚠ Two harnesses in one process race here — the lifecycle fixture and the silo-kill
+                // test share one k3s and both want the same namespace. A 409 is the other one having
+                // won, which is the desired end state; the list above is the cheap path, not the check.
+            }
     }
 
     /// <summary>
@@ -566,8 +579,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     /// <param name="cancellationToken">The harness's token.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Without this, a provider whose objects are custom resources fails every
-    ///         cluster-backed assertion, and fails them namelessly.</b> A bare k3s serves no REST
+    ///         ⚠
+    ///         <b>
+    ///             Without this, a provider whose objects are custom resources fails every
+    ///             cluster-backed assertion, and fails them namelessly.
+    ///         </b> A bare k3s serves no REST
     ///         path for <c>kafka.strimzi.io/v1beta2</c>, so the apply comes back as a
     ///         <c>k8s.Autorest.HttpOperationException</c> <b>carrying no status code</b> — the client
     ///         cannot even discover the group to report a 404 against — and the failure names neither
@@ -576,8 +592,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     ///         custom resource is where it does.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The list is DERIVED from <c>ProviderConformanceCase.Objects</c> rather than
-    ///         declared as a member of the case, and the difference matters.</b> A declared list is a
+    ///         ⚠
+    ///         <b>
+    ///             The list is DERIVED from <c>ProviderConformanceCase.Objects</c> rather than
+    ///             declared as a member of the case, and the difference matters.
+    ///         </b> A declared list is a
     ///         claim a provider author can get wrong by omission — and the failure of an omitted CRD
     ///         is the nameless one above, so the claim would be checked by the worst possible error
     ///         message. Every fact a minimal CRD needs is already in the <see cref="ObjectRef" /> the
@@ -608,17 +627,18 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         // remove — and it would fail during setup, where the message names nothing at all.
         var candidates = ProviderTestCluster<TSource>.Ancestors
             .Select((ancestor, level) => ancestor.Objects(
-                new ResourceId(
-                    ConformanceIds.Tenant,
-                    ConformanceIds.Subscription,
-                    ConformanceIds.ResourceGroup,
-                    ancestor.Type,
-                    ConformanceIds.AncestorName(level),
-                    Guid.NewGuid(),
-                    string.Join('/', Enumerable.Range(0, level).Select(ConformanceIds.AncestorName))
-                ),
-                Namespace
-            ))
+                    new ResourceId(
+                        ConformanceIds.Tenant,
+                        ConformanceIds.Subscription,
+                        ConformanceIds.ResourceGroup,
+                        ancestor.Type,
+                        ConformanceIds.AncestorName(level),
+                        Guid.NewGuid(),
+                        string.Join('/', Enumerable.Range(0, level).Select(ConformanceIds.AncestorName))
+                    ),
+                    Namespace
+                )
+            )
             .Aggregate(
                 Case.Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).AsEnumerable(),
                 (all, next) => all.Concat(next)
@@ -698,9 +718,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                             // status to be separately writable exactly as they are upstream.
                             Subresources = new() { Status = new() },
                             Schema = new() {
-                                OpenAPIV3Schema = new() {
-                                    Type = "object", XKubernetesPreserveUnknownFields = true
-                                }
+                                OpenAPIV3Schema = new() { Type = "object", XKubernetesPreserveUnknownFields = true }
                             }
                         }
                     ]
@@ -713,10 +731,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     .ConfigureAwait(false);
             } catch (k8s.Autorest.HttpOperationException ex)
                 when (ex.Response?.StatusCode == System.Net.HttpStatusCode.Conflict) {
-                // Two harnesses share one k3s — the lifecycle fixture and the silo-kill test — and
-                // both install the same definitions. A 409 is the other one having won, which is the
-                // desired end state.
-            }
+                    // Two harnesses share one k3s — the lifecycle fixture and the silo-kill test — and
+                    // both install the same definitions. A 409 is the other one having won, which is the
+                    // desired end state.
+                }
         }
 
         // ⚠ A CRD is served by the API server ASYNCHRONOUSLY: `Established` is a condition the
@@ -811,10 +829,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                 .ReadCustomResourceDefinitionAsync(name, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            if (definition.Status?.Conditions?.Any(
-                    x => string.Equals(x.Type, "Established", StringComparison.Ordinal)
-                        && string.Equals(x.Status, "True", StringComparison.Ordinal)
-                ) == true) {
+            if (definition.Status?.Conditions?.Any(x => string.Equals(x.Type, "Established", StringComparison.Ordinal)
+                    && string.Equals(x.Status, "True", StringComparison.Ordinal)
+                )
+                == true) {
                 return;
             }
 
@@ -865,7 +883,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             // ── Reminders. Redis, so the table outlives a silo. ─────────────────────────────────
             silo.UseRedisReminderService(options =>
                 options.ConfigurationOptions =
-                    ConfigurationOptions.Parse(ClusterConformanceState<TSource>.RedisConnectionString)
+                ConfigurationOptions.Parse(ClusterConformanceState<TSource>.RedisConnectionString)
             );
 
             silo.ConfigureServices(services => {
@@ -888,9 +906,9 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     // this container by the concrete type the registry stores, so a parent whose
                     // reconciler is missing fails inside the silo rather than on the request path.
                     foreach (var reconciler in TSource.Ancestors
-                        .Select(x => x.ReconcilerType)
-                        .Where(x => x != TSource.ProviderCase.ReconcilerType)
-                        .Distinct()) {
+                                 .Select(x => x.ReconcilerType)
+                                 .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                                 .Distinct()) {
                         services.AddSingleton(reconciler);
                     }
 
@@ -898,11 +916,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                     services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
 
                     foreach (var handler in ProviderRegistry.Build([TSource.ProviderCase.CreateProvider()])
-                        .Types
-                        .SelectMany(x => x.Actions)
-                        .Select(x => x.HandlerType)
-                        .OfType<Type>()
-                        .Distinct()) {
+                                 .Types
+                                     .SelectMany(x => x.Actions)
+                                     .Select(x => x.HandlerType)
+                                     .OfType<Type>()
+                                     .Distinct()) {
                         services.AddSingleton(handler);
                     }
 

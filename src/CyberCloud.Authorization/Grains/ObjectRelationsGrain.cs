@@ -9,7 +9,8 @@ namespace CyberCloud.Authorization.Grains;
 ///     <see cref="IObjectRelationsGrain" /> — Entity, Durable, key <c>rel/obj/{type}/{id}</c>.
 /// </summary>
 public sealed class ObjectRelationsGrain(
-    [PersistentState("relations", StorageTiers.Durable)] IPersistentState<ObjectRelationsState> state
+    [PersistentState("relations", StorageTiers.Durable)]
+    IPersistentState<ObjectRelationsState> state
 )
     : Grain, IObjectRelationsGrain {
     ObjectRef self = new();

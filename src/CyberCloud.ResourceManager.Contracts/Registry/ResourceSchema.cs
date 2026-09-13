@@ -11,9 +11,15 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><see cref="JsonPointer" /> is an RFC 6901 JSON Pointer and doubles as
-///         <see cref="Error.Target" />.</b> docs/plan/08 § Errors: <i>"<c>target</c> is a JSON Pointer
-///         into the request body so the portal can highlight the field."</i> Storing the pointer
+///         ⚠
+///         <b>
+///             <see cref="JsonPointer" /> is an RFC 6901 JSON Pointer and doubles as
+///             <see cref="Error.Target" />.
+///         </b> docs/plan/08 § Errors:
+///         <i>
+///             "<c>target</c> is a JSON Pointer
+///             into the request body so the portal can highlight the field."
+///         </i> Storing the pointer
 ///         rather than a dotted path means a validation failure already holds the exact string the
 ///         error body needs, so there is no second place that could format it differently.
 ///     </para>
@@ -30,8 +36,11 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///         <c>ResourceGrain.SubmitDesiredAsync</c> untransformed — the policy engine is the only hook
 ///         that may rewrite it and it is secret-blind — so a <c>Secret</c> property lands in the
 ///         grain's superset in plaintext, and docs/plan/05 § What is deliberately not in either tier
-///         says what that costs: <i>"Grain state is JSON in Postgres and in backups. A secret there is
-///         a secret in every backup forever."</i> <c>CC1005</c> cannot catch it either — the analyzer
+///         says what that costs:
+///         <i>
+///             "Grain state is JSON in Postgres and in backups. A secret there is
+///             a secret in every backup forever."
+///         </i> <c>CC1005</c> cannot catch it either — the analyzer
 ///         matches C# member names, and this value rides inside a JSON string. docs/plan/02 § ADR-010
 ///         records the gap and puts it on the resource manager rather than on any provider.
 ///     </para>
@@ -41,8 +50,11 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///         the read path: <c>ResourceManagerService.ReadablePointers</c> withholds the pointer, so a
 ///         <c>GET</c> and a write's own response never carry the value back. ⚠ That is a projection
 ///         filter and not confidentiality — the value is still in the superset, and
-///         <c>OperationSpec.Desired</c> holds a second copy. <b>So until the substitution exists, don't
-///         mark a body property <c>Secret</c>.</b> Take a
+///         <c>OperationSpec.Desired</c> holds a second copy.
+///         <b>
+///             So until the substitution exists, don't
+///             mark a body property <c>Secret</c>.
+///         </b> Take a
 ///         <see cref="SecretRef" /> from the caller instead, or keep the value out of the API and let
 ///         the reconciler mint it into Vault — which is what <c>CyberCloud.DBforPostgreSQL/servers</c>
 ///         does with its bootstrap password, with <c>PostgresSecretTests</c> holding the line for that
@@ -115,8 +127,11 @@ public readonly record struct SchemaProperty(
     ///         value, so the API accepted what no reconciler could honour.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Values are compared ordinally and are legal on
-    ///         <see cref="SchemaKind.Text" /> only.</b> A numeric enumeration is expressible as
+    ///         ⚠
+    ///         <b>
+    ///             Values are compared ordinally and are legal on
+    ///             <see cref="SchemaKind.Text" /> only.
+    ///         </b> A numeric enumeration is expressible as
     ///         <see cref="Minimum" />/<see cref="Maximum" /> or is a modelling mistake; comparing
     ///         <c>1.0</c> and <c>1</c> for membership is a question with no answer that survives a
     ///         round trip through a JSON parser.
@@ -158,8 +173,11 @@ public readonly record struct SchemaProperty(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The decision, written down for the first time: every property is non-nullable
-    ///         unless it says otherwise, and a nullable property should be rare.</b> The behaviour was
+    ///         ⚠
+    ///         <b>
+    ///             The decision, written down for the first time: every property is non-nullable
+    ///             unless it says otherwise, and a nullable property should be rare.
+    ///         </b> The behaviour was
     ///         already this — <c>Matches</c> refused <see cref="JsonValueKind.Null" /> for every kind
     ///         — but it was an accident of a <c>switch</c> rather than a rule anyone had stated, so
     ///         there was no way to opt out and no reason on record for why not.
@@ -208,8 +226,11 @@ public readonly record struct SchemaProperty(
     ///         spelled.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And matched by the non-backtracking engine, which is a correctness property and
-    ///         not a performance one.</b> A declared pattern runs against a caller-supplied string on
+    ///         ⚠
+    ///         <b>
+    ///             And matched by the non-backtracking engine, which is a correctness property and
+    ///             not a performance one.
+    ///         </b> A declared pattern runs against a caller-supplied string on
     ///         the request path, so it is the classic place a crafted value turns one regular
     ///         expression into a request thread that never returns.
     ///         <see cref="RegexOptions.NonBacktracking" /> is linear in the input by construction, so
@@ -236,8 +257,11 @@ public readonly record struct SchemaProperty(
     ///     Whether the value may not change after create — docs/plan/20's <c>x-immutable</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A declaration with no enforcement <i>here</i>, and it says so rather than implying
-    ///     otherwise.</b> Enforcing it needs the previous body, which <see cref="ResourceSchema" />
+    ///     ⚠
+    ///     <b>
+    ///         A declaration with no enforcement <i>here</i>, and it says so rather than implying
+    ///         otherwise.
+    ///     </b> Enforcing it needs the previous body, which <see cref="ResourceSchema" />
     ///     does not have — <see cref="ResourceSchema.Validate" /> sees one document. It is honoured by
     ///     the portal (disabled after create, with a tooltip) and is what the update path will consult
     ///     when it grows the comparison. It is <i>not</i> <see cref="ReadOnly" />: read-only means the
@@ -251,8 +275,11 @@ public readonly record struct SchemaProperty(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Raw JSON text rather than a <c>JsonNode</c>, because a <c>JsonNode</c> is mutable
-    ///         and this type is a value.</b> Two properties holding the same node would alias, and
+    ///         ⚠
+    ///         <b>
+    ///             Raw JSON text rather than a <c>JsonNode</c>, because a <c>JsonNode</c> is mutable
+    ///             and this type is a value.
+    ///         </b> Two properties holding the same node would alias, and
     ///         record equality over a mutable reference is equality that changes under you.
     ///     </para>
     ///     <para>
@@ -300,8 +327,11 @@ public readonly record struct SchemaProperty(
     /// </summary>
     /// <returns>Every problem, empty when the declaration is sound.</returns>
     /// <remarks>
-    ///     ⚠ <b>Run at construction, so a nonsense declaration fails at silo start rather than at the
-    ///     first request that happens to reach it.</b> "A <see cref="Minimum" /> on a boolean" and
+    ///     ⚠
+    ///     <b>
+    ///         Run at construction, so a nonsense declaration fails at silo start rather than at the
+    ///         first request that happens to reach it.
+    ///     </b> "A <see cref="Minimum" /> on a boolean" and
     ///     "an array with no <see cref="ElementKind" />" are provider bugs whose symptom is otherwise a
     ///     constraint that silently does nothing — which is the worst of the three possible outcomes,
     ///     because the document promises it and the write path does not deliver it.
@@ -371,9 +401,7 @@ public readonly record struct SchemaProperty(
 
         if ((Minimum is not null || Maximum is not null)
             && value is not (SchemaKind.Number or SchemaKind.WholeNumber)) {
-            problems.Add(
-                $"'{JsonPointer}' declares a numeric bound and is a {Describe(value)}."
-            );
+            problems.Add($"'{JsonPointer}' declares a numeric bound and is a {Describe(value)}.");
         }
 
         if (Minimum is { } low && Maximum is { } high && low > high) {
@@ -423,7 +451,9 @@ public readonly record struct SchemaProperty(
                 _ = Matcher(Pattern);
             } catch (ArgumentException malformed) {
                 patternRuns = false;
-                problems.Add($"'{JsonPointer}' declares the pattern '{Pattern}', which does not compile: {malformed.Message}");
+                problems.Add(
+                    $"'{JsonPointer}' declares the pattern '{Pattern}', which does not compile: {malformed.Message}"
+                );
             } catch (NotSupportedException unsupported) {
                 patternRuns = false;
                 // The non-backtracking engine's refusal, and it is deliberately a declaration-time
@@ -502,9 +532,7 @@ public readonly record struct SchemaProperty(
         }
 
         foreach (var problem in ValueProblems(against, parsed, JsonPointer)) {
-            problems.Add(
-                $"'{JsonPointer}' declares a {member} this property's own schema rejects: {problem.Message}"
-            );
+            problems.Add($"'{JsonPointer}' declares a {member} this property's own schema rejects: {problem.Message}");
         }
     }
 
@@ -536,8 +564,11 @@ public readonly record struct SchemaProperty(
     ///         rather than read.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Raising the budget would have been the wrong repair, because a budget was the
-    ///         wrong instrument.</b> A time budget is a guess about a hostile input, and a schema is
+    ///         ⚠
+    ///         <b>
+    ///             Raising the budget would have been the wrong repair, because a budget was the
+    ///             wrong instrument.
+    ///         </b> A time budget is a guess about a hostile input, and a schema is
     ///         <i>declared</i> from text this repository compiled — a provider's own pattern against a
     ///         provider's own default. There is no adversary at declaration time, so the budget bought
     ///         nothing there and cost a flake. Where there <i>is</i> an adversary — a caller's string
@@ -552,8 +583,11 @@ public readonly record struct SchemaProperty(
     ///         schema pattern did not never held: both run over untrusted text.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Cached, and the cache is what makes "it compiled at silo start" mean "it runs at
-    ///         request time".</b> <see cref="Incoherences" /> calls this while the schema is being
+    ///         ⚠
+    ///         <b>
+    ///             Cached, and the cache is what makes "it compiled at silo start" mean "it runs at
+    ///             request time".
+    ///         </b> <see cref="Incoherences" /> calls this while the schema is being
     ///         declared, so every registered pattern is built and kept before the first request — and
     ///         a pattern the engine refuses fails the process that would have served it rather than
     ///         the first caller who reached the property, which is what
@@ -639,8 +673,11 @@ public readonly record struct SchemaProperty(
 ///         is exactly where drift comes back.
 ///     </para>
 ///     <para>
-///         ⚠ <b>All five of ADR-012's surfaces read this type, and every member on
-///         <see cref="SchemaProperty" /> reaches the first four.</b> A property's pointer, kind,
+///         ⚠
+///         <b>
+///             All five of ADR-012's surfaces read this type, and every member on
+///             <see cref="SchemaProperty" /> reaches the first four.
+///         </b> A property's pointer, kind,
 ///         requiredness, closed set, element kind, nullability, format, bounds, widget hint, default
 ///         and example become an OpenAPI schema
 ///         (<c>CyberCloud.ResourceManager.Contracts.Generation.OpenApiEmitter</c>), a <c>cyc</c> flag
@@ -661,8 +698,11 @@ public readonly record struct SchemaProperty(
 ///         back in play.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The projection is the other half of the immutable-date rule, and it does not live
-///         here.</b> The grain's state is a superset of every version's properties; a read at an old
+///         ⚠
+///         <b>
+///             The projection is the other half of the immutable-date rule, and it does not live
+///             here.
+///         </b> The grain's state is a superset of every version's properties; a read at an old
 ///         version keeps exactly the properties that version declared and drops the rest, which is what
 ///         stops an SDK generated against <c>2026-08-01</c> from receiving a field it has no member
 ///         for. <c>ResourceGrain.Project</c> runs it, over the pointer list
@@ -744,7 +784,8 @@ public sealed record ResourceSchema {
         if (problems.Count > 0) {
             throw new ArgumentException(
                 $"{problems.Count.ToString(CultureInfo.InvariantCulture)} incoherent property "
-                + "declaration(s): " + string.Join(" ", problems),
+                + "declaration(s): "
+                + string.Join(" ", problems),
                 nameof(properties)
             );
         }
@@ -779,8 +820,11 @@ public sealed record ResourceSchema {
     ///         <see cref="Error.Details" />, which is what that field is for (docs/plan/08 § Errors).
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><paramref name="allowTags" /> exists because <c>SupportsTags</c> was otherwise
-    ///         undeliverable, and the first provider found that out.</b>
+    ///         ⚠
+    ///         <b>
+    ///             <paramref name="allowTags" /> exists because <c>SupportsTags</c> was otherwise
+    ///             undeliverable, and the first provider found that out.
+    ///         </b>
     ///         <c>IResourceTypeBuilder.SupportsTags</c> declares that a type carries tags, and the
     ///         write path reads them out of a root-level <c>tags</c> object — but a schema declares
     ///         only the type's own properties, and <see cref="RejectsUnknownProperties" /> defaults to
@@ -791,9 +835,12 @@ public sealed record ResourceSchema {
     ///     </para>
     ///     <para>
     ///         The flag rather than an unconditional exemption, because
-    ///         <c>IResourceTypeBuilder.SupportsTags</c>' own remarks require the other half: <i>"A type
-    ///         that does not declare this refuses a body with tags rather than accepting and dropping
-    ///         them."</i> Both branches are now real.
+    ///         <c>IResourceTypeBuilder.SupportsTags</c>' own remarks require the other half:
+    ///         <i>
+    ///             "A type
+    ///             that does not declare this refuses a body with tags rather than accepting and dropping
+    ///             them."
+    ///         </i> Both branches are now real.
     ///     </para>
     /// </remarks>
     public Result Validate(JsonElement body, bool requireRequired = true, bool allowTags = false) {
@@ -1029,8 +1076,11 @@ public sealed record ResourceSchema {
     ///     reported at <c>…/0</c>, <c>…/1</c>, which is what lets a portal highlight the failing row.
     /// </param>
     /// <remarks>
-    ///     ⚠ <b>This is the one place a value is judged, and it is shared with
-    ///     <see cref="SchemaProperty.Incoherences" />.</b> A declared default is checked by running it
+    ///     ⚠
+    ///     <b>
+    ///         This is the one place a value is judged, and it is shared with
+    ///         <see cref="SchemaProperty.Incoherences" />.
+    ///     </b> A declared default is checked by running it
     ///     through this method, so "what the write path refuses" and "what a default may be" are the
     ///     same predicate by construction rather than by two lists that agree today.
     /// </remarks>
@@ -1069,9 +1119,7 @@ public sealed record ResourceSchema {
                 // already consumed above. `[null]` is a null element, which is a separate declaration
                 // this model does not have — so it is refused, which is the safe direction.
                 var elementProperty = property with {
-                    Kind = property.ElementKind,
-                    ElementKind = SchemaKind.Unknown,
-                    Nullable = false
+                    Kind = property.ElementKind, ElementKind = SchemaKind.Unknown, Nullable = false
                 };
 
                 foreach (var problem in ValueProblems(
@@ -1173,8 +1221,11 @@ public sealed record ResourceSchema {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the request-path match — <paramref name="value" /> came out of a caller's
-    ///         body — and it has no time budget because it no longer needs one (#76).</b>
+    ///         ⚠
+    ///         <b>
+    ///             This is the request-path match — <paramref name="value" /> came out of a caller's
+    ///             body — and it has no time budget because it no longer needs one (#76).
+    ///         </b>
     ///         <see cref="SchemaProperty.Matcher" /> builds the matcher with
     ///         <see cref="RegexOptions.NonBacktracking" />, which is linear in the input by
     ///         construction; the catastrophic backtrack the old 100 ms budget existed to cut short
@@ -1197,8 +1248,11 @@ public sealed record ResourceSchema {
     ///         a <c>400</c> aimed at a caller who did nothing wrong.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Which is only true because <see cref="SchemaProperty.Incoherences" /> keeps it
-    ///         true, and that is not free.</b> <c>Incoherences</c> checks a declared
+    ///         ⚠
+    ///         <b>
+    ///             Which is only true because <see cref="SchemaProperty.Incoherences" /> keeps it
+    ///             true, and that is not free.
+    ///         </b> <c>Incoherences</c> checks a declared
     ///         <c>DefaultJson</c>/<c>ExampleJson</c> by running it through this very path, so a
     ///         property that declares BOTH an unrunnable pattern and a literal would arrive here
     ///         <i>from</i> the method whose job is to report that pattern as a problem — and the throw
@@ -1209,8 +1263,11 @@ public sealed record ResourceSchema {
     ///         time owes the same care.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And one other thing already did, through a door <c>Incoherences</c> does not
-    ///         cover.</b> <c>ChartAnnotationEmitter.CheckAgainstOwnConstraints</c> checks a chart key's
+    ///         ⚠
+    ///         <b>
+    ///             And one other thing already did, through a door <c>Incoherences</c> does not
+    ///             cover.
+    ///         </b> <c>ChartAnnotationEmitter.CheckAgainstOwnConstraints</c> checks a chart key's
     ///         declared <c>DefaultJson</c> the same way, in an emitter that never calls
     ///         <c>Incoherences</c> — so it reached this method with an unrunnable pattern and threw out
     ///         of a method whose contract is to return problems (#78). It now runs its own compile
@@ -1218,8 +1275,11 @@ public sealed record ResourceSchema {
     ///         <see cref="SchemaProperty.Pattern" /> the same way.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>So the doors are enumerated rather than assumed, because a per-site fix that leaves
-    ///         the next one open is how this hole was reopened once already.</b> Counted 2026-09-05
+    ///         ⚠
+    ///         <b>
+    ///             So the doors are enumerated rather than assumed, because a per-site fix that leaves
+    ///             the next one open is how this hole was reopened once already.
+    ///         </b> Counted 2026-09-05
     ///         with <c>grep -rn "ValueProblems(" --include=*.cs . | grep -v "///"</c> from the
     ///         repository root, which reports SEVEN occurrences and all seven are code: two
     ///         declarations (this method and the private forwarder on
@@ -1230,9 +1290,12 @@ public sealed record ResourceSchema {
     ///         <c>ChartAnnotationEmitter.CheckAgainstOwnConstraints</c> (guarded as of #78).
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The <c>| grep -v "///"</c> is load-bearing, and #78 shipped this paragraph without
-    ///         it — which made the count wrong in the same commit that pinned it, and #78's review
-    ///         caught it.</b> The trailing parenthesis does real work: it drops every place that names
+    ///         ⚠
+    ///         <b>
+    ///             The <c>| grep -v "///"</c> is load-bearing, and #78 shipped this paragraph without
+    ///             it — which made the count wrong in the same commit that pinned it, and #78's review
+    ///             caught it.
+    ///         </b> The trailing parenthesis does real work: it drops every place that names
     ///         the method in prose without calling it — the bare <c>ResourceSchema.ValueProblems</c>
     ///         spellings in <c>ChartAnnotationEmitter</c>, <c>OpenApiEmitter</c> and the two test
     ///         files, and the <c>ValueProblems → ConstraintProblems → PatternProblem</c> chain in the
@@ -1247,8 +1310,11 @@ public sealed record ResourceSchema {
     ///         teaches them that the counts in this tree are not worth re-running, which is the
     ///         opposite of what pinning one is for. Dropping <c>///</c> lines costs the tripwire
     ///         nothing, because a caller is code and not a doc comment: a real fourth one still
-    ///         appears. ⚠ <b>What would make this
-    ///         stale:</b> a fourth caller. If it judges a provider-declared literal before
+    ///         appears. ⚠
+    ///         <b>
+    ///             What would make this
+    ///             stale:
+    ///         </b> a fourth caller. If it judges a provider-declared literal before
     ///         <see cref="Of" /> has run, it owes the same probe-and-clear; if it is a request path, it
     ///         owes nothing and the throw is the point.
     ///     </para>
@@ -1280,8 +1346,8 @@ public sealed record ResourceSchema {
                 DateTimeStyles.RoundtripKind,
                 out _
             )
-                ? null
-                : "a timestamp is RFC 3339 with an offset; a local time has no meaning on the wire.",
+                    ? null
+                    : "a timestamp is RFC 3339 with an offset; a local time has no meaning on the wire.",
             SchemaFormat.Uri => IsAbsoluteUri(value)
                 ? null
                 : "a uri is absolute and carries its scheme. A relative one is refused because a "
@@ -1304,8 +1370,11 @@ public sealed record ResourceSchema {
     ///     Whether a string is an absolute URI that <i>says</i> its scheme.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><see cref="Uri.TryCreate(string,UriKind,out Uri)" /> alone is not this check, and the
-    ///     difference is platform-dependent.</b> On Unix it parses <c>/relative</c> as an absolute
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="Uri.TryCreate(string,UriKind,out Uri)" /> alone is not this check, and the
+    ///         difference is platform-dependent.
+    ///     </b> On Unix it parses <c>/relative</c> as an absolute
     ///     <c>file:</c> URI and returns <see langword="true" />, so a validator built on it would
     ///     accept a relative path on Linux and refuse it on Windows — the same body, two answers,
     ///     depending on which silo took the request. Requiring the original string to begin with the
@@ -1328,9 +1397,9 @@ public sealed record ResourceSchema {
 
         var domain = value[(at + 1)..];
         return domain.Contains('.', StringComparison.Ordinal)
-               && domain[0] != '.'
-               && domain[^1] != '.'
-               && !value.Contains(' ', StringComparison.Ordinal);
+            && domain[0] != '.'
+            && domain[^1] != '.'
+            && !value.Contains(' ', StringComparison.Ordinal);
     }
 
     static bool Matches(SchemaKind kind, JsonElement value) =>

@@ -4,8 +4,11 @@ namespace CyberCloud.Vault;
 ///     One OpenBao token and when it stops being usable.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A class rather than a record struct, and the identity is what makes
-///     <see cref="IVaultTokenSource.Invalidate" /> safe.</b> The resolver hands back the exact
+///     ⚠
+///     <b>
+///         A class rather than a record struct, and the identity is what makes
+///         <see cref="IVaultTokenSource.Invalidate" /> safe.
+///     </b> The resolver hands back the exact
 ///     instance it was given so the source can tell "throw away the token I am holding" from "throw
 ///     away a token somebody else already replaced". Two concurrent resolves both hitting a
 ///     <c>403</c> would otherwise re-login twice, and the second would discard the first's fresh
@@ -34,8 +37,11 @@ public sealed record VaultToken(string Value, DateTimeOffset ExpiresAt);
 ///         behaviour in this assembly is testable against a real OpenBao container.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Registering an implementation of this in a production host is a way to put a static
-///         token into the platform, and there is no other.</b> <see cref="VaultOptions" /> has no
+///         ⚠
+///         <b>
+///             Registering an implementation of this in a production host is a way to put a static
+///             token into the platform, and there is no other.
+///         </b> <see cref="VaultOptions" /> has no
 ///         token member precisely so that the shortcut has to be written in code by somebody who
 ///         meant it. If a review ever finds one, that is what it found.
 ///     </para>

@@ -47,16 +47,22 @@ namespace CyberCloud.Providers.ContainerService.Contracts;
 ///         <see cref="ObjectNameOf" /> and <see cref="ClusterNameOf" />, both of which take the id.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT RENDERS THREE OBJECTS IN THREE API GROUPS, WHICH IS EXACTLY WHAT ITS PARENT
-///         RENDERS, AND NO CHILD HAS EVER DONE THAT.</b> A bucket renders one object against its
+///         ⚠
+///         <b>
+///             IT RENDERS THREE OBJECTS IN THREE API GROUPS, WHICH IS EXACTLY WHAT ITS PARENT
+///             RENDERS, AND NO CHILD HAS EVER DONE THAT.
+///         </b> A bucket renders one object against its
 ///         account's one. Here both halves are Cluster API compositions — a machine template, a
 ///         bootstrap template, and a <c>MachineDeployment</c> that names both — so "a child is a
 ///         smaller thing than its parent" turns out to be a fact about object storage rather than
 ///         about child types.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE VERSION-SKEW RULE LIVES BETWEEN THIS TYPE AND ITS PARENT AND IS ENFORCED BY
-///         NEITHER.</b> See <see cref="ManagedClusters.MaxKubeletMinorsBehind" />: docs/plan/13 promises
+///         ⚠
+///         <b>
+///             THE VERSION-SKEW RULE LIVES BETWEEN THIS TYPE AND ITS PARENT AND IS ENFORCED BY
+///             NEITHER.
+///         </b> See <see cref="ManagedClusters.MaxKubeletMinorsBehind" />: docs/plan/13 promises
 ///         the API enforces it, <see cref="ResourceSchema" /> validates one body against constants, and
 ///         a parent's version is in another resource. <c>ManagedClusters.SkewIsLegal</c> exists, is
 ///         tested, and is called by nothing on the write path.
@@ -67,8 +73,11 @@ public static class AgentPools {
     public const string ProviderNamespace = ManagedClusters.ProviderNamespace;
 
     /// <summary>
-    ///     The type path. ⚠ <b><c>managedClusters/agentPools</c>, interleaved — not a flattened
-    ///     <c>agentPools</c>.</b>
+    ///     The type path. ⚠
+    ///     <b>
+    ///         <c>managedClusters/agentPools</c>, interleaved — not a flattened
+    ///         <c>agentPools</c>.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     docs/plan/12 § Child resources chose <c>…/managedClusters/{c}/agentPools/{p}</c> over the
@@ -99,8 +108,11 @@ public static class AgentPools {
 
     /// <summary>The pointer <c>RequiresCluster</c> names.</summary>
     /// <remarks>
-    ///     ⚠ <b>A pool carries its own <c>clusterId</c> and NOTHING CHECKS IT AGAINST ITS CLUSTER'S —
-    ///     second sighting, and worse than the first.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A pool carries its own <c>clusterId</c> and NOTHING CHECKS IT AGAINST ITS CLUSTER'S —
+    ///         second sighting, and worse than the first.
+    ///     </b>
     ///     <c>charts/managed/seaweedfs-bucket/conformance.yaml</c> recorded this as
     ///     <c>bucket-cluster-may-differ-from-its-accounts</c>: a body naming a different management
     ///     cluster from the parent's produces objects applied into a namespace whose parent objects are
@@ -115,8 +127,11 @@ public static class AgentPools {
 
     /// <summary>The action that rolls the pool onto the current node image.</summary>
     /// <remarks>
-    ///     ⚠ <b>Declared with no handler — <see cref="IResourceTypeBuilder" /> takes none, on any
-    ///     type.</b> It exists because docs/plan/13 § Upgrades separates two things a PUT cannot: a
+    ///     ⚠
+    ///     <b>
+    ///         Declared with no handler — <see cref="IResourceTypeBuilder" /> takes none, on any
+    ///         type.
+    ///     </b> It exists because docs/plan/13 § Upgrades separates two things a PUT cannot: a
     ///     <i>version</i> change, which is a body change and therefore a PUT, and a <i>node image</i>
     ///     refresh at the same version, which changes no property a tenant can see and so has no body
     ///     to send. Azure spells the second one the same way. Its mechanism when it exists is a rolling
@@ -127,8 +142,11 @@ public static class AgentPools {
 
     /// <summary>The permission <see cref="UpgradeNodeImageAction" /> checks.</summary>
     /// <remarks>
-    ///     ⚠ <b><c>write</c>, and unlike the cluster's <c>listCredentials</c> it needs no permission of
-    ///     its own.</b> Nothing leaves the platform through it — it is a request to replace machines,
+    ///     ⚠
+    ///     <b>
+    ///         <c>write</c>, and unlike the cluster's <c>listCredentials</c> it needs no permission of
+    ///         its own.
+    ///     </b> Nothing leaves the platform through it — it is a request to replace machines,
     ///     which is exactly the authority a PUT on this resource already carries.
     /// </remarks>
     public const string UpgradeNodeImagePermission = "write";
@@ -149,10 +167,7 @@ public static class AgentPools {
     /// </remarks>
     public static GroupVersionKind MachineDeploymentKind { get; } =
         new() {
-            Group = "cluster.x-k8s.io",
-            Version = "v1beta2",
-            Kind = "MachineDeployment",
-            Plural = "machinedeployments"
+            Group = "cluster.x-k8s.io", Version = "v1beta2", Kind = "MachineDeployment", Plural = "machinedeployments"
         };
 
     /// <summary>The <c>KubevirtMachineTemplate</c> — what one worker VM looks like.</summary>
@@ -183,8 +198,11 @@ public static class AgentPools {
     /// </summary>
     /// <param name="id">The pool's address.</param>
     /// <remarks>
-    ///     ⚠ <b>THE PARENT'S NAME IS IN THE OBJECT NAME BECAUSE THE NAMESPACE DOES NOT DISTINGUISH
-    ///     THEM.</b> <c>ReconcileDriver.NamespaceFor</c> is <c>{subscriptionId:N}-{resourceGroup}</c> —
+    ///     ⚠
+    ///     <b>
+    ///         THE PARENT'S NAME IS IN THE OBJECT NAME BECAUSE THE NAMESPACE DOES NOT DISTINGUISH
+    ///         THEM.
+    ///     </b> <c>ReconcileDriver.NamespaceFor</c> is <c>{subscriptionId:N}-{resourceGroup}</c> —
     ///     a parent resource is <i>inside</i> one namespace, not a namespace of its own — so two
     ///     clusters in one resource group may each hold a pool called <c>workers</c>, and a renderer
     ///     that ignored <see cref="ResourceId.ParentNames" /> would have them fighting over one
@@ -258,8 +276,11 @@ public static class AgentPools {
     /// <summary>The container-disk image a worker VM boots.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>READ OFF THE REGISTRY ON 2026-08-18, AND THE REPOSITORY IS RIGHT WHILE THE TAGS
-    ///         THIS PLATFORM RENDERED WERE NOT.</b> <c>quay.io/capk/ubuntu-2404-container-disk</c>
+    ///         ⚠
+    ///         <b>
+    ///             READ OFF THE REGISTRY ON 2026-08-18, AND THE REPOSITORY IS RIGHT WHILE THE TAGS
+    ///             THIS PLATFORM RENDERED WERE NOT.
+    ///         </b> <c>quay.io/capk/ubuntu-2404-container-disk</c>
     ///         exists and carries exactly four tags: <c>v1.31.5</c>, <c>v1.32.1</c>, <c>v1.33.5</c>
     ///         and <c>v1.34.1</c>. <c>ManagedClusters.PinnedPatch</c> named <c>v1.32.9</c> and
     ///         <c>v1.33.4</c>, so every worker VM in every pool pulled a tag that does not exist.
@@ -279,14 +300,20 @@ public static class AgentPools {
     ///         credential for the cluster.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>RE-READ 2026-08-19: THE SAME FOUR TAGS, AND THE REPOSITORY IS ABANDONED RATHER
-    ///         THAN MERELY SPARSE.</b> The tag API answers <c>has_additional: false</c> over
+    ///         ⚠
+    ///         <b>
+    ///             RE-READ 2026-08-19: THE SAME FOUR TAGS, AND THE REPOSITORY IS ABANDONED RATHER
+    ///             THAN MERELY SPARSE.
+    ///         </b> The tag API answers <c>has_additional: false</c> over
     ///         <c>v1.31.5</c>, <c>v1.32.1</c>, <c>v1.33.5</c> and <c>v1.34.1</c>, and nothing has been
     ///         pushed since 2025-09-27 — eleven months. Upstream automates no container-disk build at
     ///         all: CAPK's image workflow pushes only the manager images, which is why the newest tag
     ///         is nine patches behind 1.34's current 1.34.10 and why 1.35 and 1.36 have no image here
-    ///         or in any sibling repository under <c>capk</c>. <b>Anything this platform wants to
-    ///         offer at a supported minor, it has to build</b> —
+    ///         or in any sibling repository under <c>capk</c>.
+    ///         <b>
+    ///             Anything this platform wants to
+    ///             offer at a supported minor, it has to build
+    ///         </b> —
     ///         <c>kubernetes-sigs/image-builder</c>'s KubeVirt targets are the documented route.
     ///         <see cref="ManagedClusters.PinnedPatch" /> carries the consequence for the offered set.
     ///     </para>
@@ -297,8 +324,10 @@ public static class AgentPools {
     /// <param name="preset">A key of <see cref="ManagedClusters.Presets" />.</param>
     /// <remarks>
     ///     ⚠ <b>THE PRESET NAME IS THE OBJECT NAME, AND A DOT IS LEGAL THERE.</b> docs/plan/09 wants
-    ///     <i>"an instancetype from a platform catalogue, which is where the <c>t1.micro</c>/<c>c1.large</c>
-    ///     vocabulary from ADR-010 is defined once and reused by every provider"</i>. A Kubernetes
+    ///     <i>
+    ///         "an instancetype from a platform catalogue, which is where the <c>t1.micro</c>/<c>c1.large</c>
+    ///         vocabulary from ADR-010 is defined once and reused by every provider"
+    ///     </i>. A Kubernetes
     ///     object name is a DNS-1123 <i>subdomain</i>, in which <c>.</c> is legal — unlike a label
     ///     <i>value</i>, where it is not, which is the rule <c>KubeLabels.ResourceTypeValue</c> exists
     ///     for and the reason this looks like it should need mangling and does not.
@@ -327,11 +356,17 @@ public static class AgentPools {
 
     /// <summary>The annotations Cluster API's autoscaler contract reads.</summary>
     /// <remarks>
-    ///     ⚠ <b>ANNOTATIONS ON THE <c>MachineDeployment</c>, WHICH IS CLUSTER API'S OWN MECHANISM AND
-    ///     NOT A CONVENTION INVENTED HERE.</b> Cluster API's <c>MachineDeployment</c> defaulting
+    ///     ⚠
+    ///     <b>
+    ///         ANNOTATIONS ON THE <c>MachineDeployment</c>, WHICH IS CLUSTER API'S OWN MECHANISM AND
+    ///         NOT A CONVENTION INVENTED HERE.
+    ///     </b> Cluster API's <c>MachineDeployment</c> defaulting
     ///     webhook reads exactly these two when it decides what <c>spec.replicas</c> should be, and the
-    ///     cluster-autoscaler's Cluster API provider reads them to find its bounds. ⚠ <b>Nothing in
-    ///     this platform installs a cluster-autoscaler</b>, so on a bundle without one these are inert
+    ///     cluster-autoscaler's Cluster API provider reads them to find its bounds. ⚠
+    ///     <b>
+    ///         Nothing in
+    ///         this platform installs a cluster-autoscaler
+    ///     </b>, so on a bundle without one these are inert
     ///     and the pool sits at its declared count — which is a safe failure and is not a silent one
     ///     only because it is written down. <c>conformance.yaml § owed</c>,
     ///     <c>autoscaling-needs-an-autoscaler-in-the-bundle</c>.
@@ -348,8 +383,11 @@ public static class AgentPools {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>NO <c>taints</c> AND NO <c>labels</c>, AND BOTH ARE THINGS AN AKS NODE POOL
-    ///         HAS.</b> They are node properties written by <c>kubeadm</c> at join time, so they are
+    ///         ⚠
+    ///         <b>
+    ///             NO <c>taints</c> AND NO <c>labels</c>, AND BOTH ARE THINGS AN AKS NODE POOL
+    ///             HAS.
+    ///         </b> They are node properties written by <c>kubeadm</c> at join time, so they are
     ///         renderable — <c>joinConfiguration.nodeRegistration</c> takes both. They are left out
     ///         because a taint is the one property whose misuse is unrecoverable from the API: a pool
     ///         tainted so that nothing schedules on it looks identical to a pool whose VMs never
@@ -393,11 +431,7 @@ public static class AgentPools {
                     + "the one the cluster is in — nothing checks that, and a pool placed elsewhere "
                     + "produces a MachineDeployment naming a Cluster that is not there, which Cluster "
                     + "API accepts and never reconciles."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
                     "/properties/count",
                     SchemaKind.WholeNumber,
@@ -405,11 +439,7 @@ public static class AgentPools {
                     Description: "How many worker VMs the pool runs. ⚠ When autoscaling is on this is "
                     + "the starting size and the autoscaler moves it; quota is reserved against the "
                     + "maximum in that case, not against this."
-                ) {
-                    Minimum = 1,
-                    Maximum = 100,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 100, DefaultJson = "3" },
                 new(
                     "/properties/size",
                     SchemaKind.Text,
@@ -433,8 +463,7 @@ public static class AgentPools {
                     + "does not check that — the cluster's version is a different resource — so an "
                     + "illegal pair is accepted here and produces nodes that join and then misbehave."
                 ) {
-                    AllowedValues = ManagedClusters.Versions,
-                    DefaultJson = "\"" + ManagedClusters.DefaultVersion + "\""
+                    AllowedValues = ManagedClusters.Versions, DefaultJson = "\"" + ManagedClusters.DefaultVersion + "\""
                 },
                 new(
                     "/properties/osDiskSize",
@@ -461,19 +490,13 @@ public static class AgentPools {
                     + "it on changes what the pool costs: quota is then reserved against maxCount, "
                     + "because a pool that may grow to twenty machines has to have twenty machines' "
                     + "worth of headroom to grow into."
-                ) {
-                    DefaultJson = "false"
-                },
+                ) { DefaultJson = "false" },
                 new(
                     "/properties/autoscale/minCount",
                     SchemaKind.WholeNumber,
                     Description: "The smallest the autoscaler may shrink the pool to. Ignored when "
                     + "autoscaling is off."
-                ) {
-                    Minimum = 1,
-                    Maximum = 100,
-                    DefaultJson = "1"
-                },
+                ) { Minimum = 1, Maximum = 100, DefaultJson = "1" },
                 new(
                     "/properties/autoscale/maxCount",
                     SchemaKind.WholeNumber,
@@ -481,11 +504,7 @@ public static class AgentPools {
                     + "reserved against while autoscaling is on. ⚠ Nothing checks that it is at least "
                     + "minCount — that is a relation between two properties of one body, which the "
                     + "schema validates nothing about."
-                ) {
-                    Minimum = 1,
-                    Maximum = 100,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 100, DefaultJson = "3" },
                 new(
                     "/properties/upgrade",
                     SchemaKind.Nested,
@@ -497,11 +516,7 @@ public static class AgentPools {
                     Description: "How many extra machines may exist during a rolling replacement. One "
                     + "means a new VM boots and joins before an old one is removed, which is why it is "
                     + "the default: it costs one machine's capacity and loses none."
-                ) {
-                    Minimum = 0,
-                    Maximum = 10,
-                    DefaultJson = "1"
-                },
+                ) { Minimum = 0, Maximum = 10, DefaultJson = "1" },
                 new(
                     "/properties/upgrade/maxUnavailable",
                     SchemaKind.WholeNumber,
@@ -509,17 +524,12 @@ public static class AgentPools {
                     + "with a surge of one is the safe pair; raising it is faster and reduces the "
                     + "pool's capacity while it runs. ⚠ Both being zero would make an upgrade unable to "
                     + "start, and nothing refuses that pair."
-                ) {
-                    Minimum = 0,
-                    Maximum = 10,
-                    DefaultJson = "0"
-                }
+                ) { Minimum = 0, Maximum = 10, DefaultJson = "0" }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -533,8 +543,7 @@ public static class AgentPools {
 
     /// <summary>The Kubernetes minor a body asks its nodes for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string Version(JsonElement desired) =>
-        Text(desired, "version", ManagedClusters.DefaultVersion);
+    public static string Version(JsonElement desired) => Text(desired, "version", ManagedClusters.DefaultVersion);
 
     /// <summary>The full version <see cref="Version" /> is rendered as.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -559,19 +568,20 @@ public static class AgentPools {
 
     /// <summary>The autoscaler's floor.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int MinCount(JsonElement desired) =>
-        NestedNumber(desired, "autoscale", "minCount", DefaultMinCount);
+    public static int MinCount(JsonElement desired) => NestedNumber(desired, "autoscale", "minCount", DefaultMinCount);
 
     /// <summary>The autoscaler's ceiling.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int MaxCount(JsonElement desired) =>
-        NestedNumber(desired, "autoscale", "maxCount", DefaultMaxCount);
+    public static int MaxCount(JsonElement desired) => NestedNumber(desired, "autoscale", "maxCount", DefaultMaxCount);
 
     /// <summary>How many machines the platform must have room for.</summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>THE CEILING WHEN AUTOSCALING IS ON, AND THIS IS THE FINDING THIS TYPE EXISTS TO
-    ///     MAKE.</b> Every quota meter in this platform is a pure function of a body, reserved at write
+    ///     ⚠
+    ///     <b>
+    ///         THE CEILING WHEN AUTOSCALING IS ON, AND THIS IS THE FINDING THIS TYPE EXISTS TO
+    ///         MAKE.
+    ///     </b> Every quota meter in this platform is a pure function of a body, reserved at write
     ///     time and re-derived from the stored body at delete time — <c>ResourceManagerService</c>
     ///     requires exactly that, and nine providers have satisfied it by being sized once. A node pool
     ///     with an autoscaler is the first resource whose real consumption is moved by something the
@@ -591,8 +601,7 @@ public static class AgentPools {
 
     /// <summary>How many extra machines a rolling replacement may create.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int MaxSurge(JsonElement desired) =>
-        NestedNumber(desired, "upgrade", "maxSurge", DefaultMaxSurge);
+    public static int MaxSurge(JsonElement desired) => NestedNumber(desired, "upgrade", "maxSurge", DefaultMaxSurge);
 
     /// <summary>How many machines a rolling replacement may take away.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -630,15 +639,21 @@ public static class AgentPools {
     ///         <c>a-green-cluster-suite-proves-the-apply-path-only</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>NO CLOUD-INIT VOLUME AND NO SSH KEY, AND LEAVING THEM OUT IS REQUIRED RATHER THAN
-    ///         TIDY.</b> The KubeVirt provider's machine controller <i>appends</i> a
+    ///         ⚠
+    ///         <b>
+    ///             NO CLOUD-INIT VOLUME AND NO SSH KEY, AND LEAVING THEM OUT IS REQUIRED RATHER THAN
+    ///             TIDY.
+    ///         </b> The KubeVirt provider's machine controller <i>appends</i> a
     ///         <c>CloudInitConfigDrive</c> volume and a matching disk to whatever this renders, writing
     ///         the bootstrap data and its own <c>capk</c> user into it. A template that supplied one
     ///         would end up with two, which is a VM that boots from the wrong config drive.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>No <c>virtualMachineBootstrapCheck</c>, so the CRD's own default of <c>ssh</c>
-    ///         stands</b> — the same "render nothing and take the default" position
+    ///         ⚠
+    ///         <b>
+    ///             No <c>virtualMachineBootstrapCheck</c>, so the CRD's own default of <c>ssh</c>
+    ///             stands
+    ///         </b> — the same "render nothing and take the default" position
     ///         <c>StorageBuckets.BucketJson</c> takes on <c>reclaimPolicy</c>, and it matches the
     ///         Kamaji provider's own published KubeVirt template. ⚠ It is the riskiest default on this
     ///         type: an SSH bootstrap check needs a key that the KubeVirt controller generates while
@@ -681,8 +696,7 @@ public static class AgentPools {
                         ["devices"] = new JsonObject {
                             ["disks"] = new JsonArray(
                                 new JsonObject {
-                                    ["name"] = RootVolumeName,
-                                    ["disk"] = new JsonObject { ["bus"] = "virtio" }
+                                    ["name"] = RootVolumeName, ["disk"] = new JsonObject { ["bus"] = "virtio" }
                                 }
                             ),
                             ["interfaces"] = new JsonArray(
@@ -690,13 +704,10 @@ public static class AgentPools {
                             )
                         }
                     },
-                    ["networks"] = new JsonArray(
-                        new JsonObject { ["name"] = "default", ["pod"] = new JsonObject() }
-                    ),
+                    ["networks"] = new JsonArray(new JsonObject { ["name"] = "default", ["pod"] = new JsonObject() }),
                     ["volumes"] = new JsonArray(
                         new JsonObject {
-                            ["name"] = RootVolumeName,
-                            ["dataVolume"] = new JsonObject { ["name"] = RootVolumeName }
+                            ["name"] = RootVolumeName, ["dataVolume"] = new JsonObject { ["name"] = RootVolumeName }
                         }
                     ),
                     // ⚠ `External`, because a KubeVirt VM backing a Kubernetes node must not be
@@ -759,13 +770,19 @@ public static class AgentPools {
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>spec.selector</c> AND <c>spec.template.metadata.labels</c> ARE THE SAME MAP
-    ///         WRITTEN TWICE, AND CLUSTER API REFUSES THE OBJECT WHEN THEY DISAGREE.</b> See
+    ///         ⚠
+    ///         <b>
+    ///             <c>spec.selector</c> AND <c>spec.template.metadata.labels</c> ARE THE SAME MAP
+    ///             WRITTEN TWICE, AND CLUSTER API REFUSES THE OBJECT WHEN THEY DISAGREE.
+    ///         </b> See
     ///         <see cref="PoolLabel" />. They are built from one expression here for that reason.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>clusterName</c> APPEARS TWICE — ON THE SPEC AND ON THE MACHINE TEMPLATE — AND
-    ///         BOTH COME FROM THE ADDRESS.</b> Cluster API requires both and does not derive one from
+    ///         ⚠
+    ///         <b>
+    ///             <c>clusterName</c> APPEARS TWICE — ON THE SPEC AND ON THE MACHINE TEMPLATE — AND
+    ///             BOTH COME FROM THE ADDRESS.
+    ///         </b> Cluster API requires both and does not derive one from
     ///         the other; a pool whose two disagreed would be adopted by one cluster and counted by
     ///         another.
     ///     </para>
@@ -811,8 +828,7 @@ public static class AgentPools {
                     ["strategy"] = new JsonObject {
                         ["type"] = "RollingUpdate",
                         ["rollingUpdate"] = new JsonObject {
-                            ["maxSurge"] = MaxSurge(desired),
-                            ["maxUnavailable"] = MaxUnavailable(desired)
+                            ["maxSurge"] = MaxSurge(desired), ["maxUnavailable"] = MaxUnavailable(desired)
                         }
                     }
                 },
@@ -823,9 +839,7 @@ public static class AgentPools {
                         ["version"] = RenderedVersion(desired),
                         ["bootstrap"] = new JsonObject {
                             ["configRef"] = new JsonObject {
-                                ["apiGroup"] = BootstrapKind.Group,
-                                ["kind"] = BootstrapKind.Kind,
-                                ["name"] = name
+                                ["apiGroup"] = BootstrapKind.Group, ["kind"] = BootstrapKind.Kind, ["name"] = name
                             }
                         },
                         ["infrastructureRef"] = new JsonObject {
@@ -873,8 +887,11 @@ public static class AgentPools {
     /// <param name="desired">The desired body.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE SPLIT EXISTS BECAUSE OF A LIMIT IN THE SHARED CONFORMANCE HARNESS THAT ONLY A
-    ///         CHILD TYPE MEETS — SECOND SIGHTING.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THE SPLIT EXISTS BECAUSE OF A LIMIT IN THE SHARED CONFORMANCE HARNESS THAT ONLY A
+    ///             CHILD TYPE MEETS — SECOND SIGHTING.
+    ///         </b>
     ///         <c>ProviderConformanceCase.ObjectMatchesDesired</c> is
     ///         <c>(objectJson, desiredJson) =&gt; bool</c> and carries <b>no address</b>, so the
     ///         predicate the shared suite can evaluate for a pool is strictly smaller than the one the
@@ -891,9 +908,12 @@ public static class AgentPools {
     ///         <c>MachineDeploymentSpec</c> nor <c>MachineSpec</c> carries a single
     ///         <c>+kubebuilder:default</c>; Cluster API's <b>mutating webhook</b> writes
     ///         <c>replicas</c>, the whole <c>rollout.strategy</c>, two <c>cluster.x-k8s.io/*</c> labels
-    ///         into the selector and the template, and a <c>v</c> prefix onto the version. ⚠ <b>So an
-    ///         equality comparison here fails against a real API server and passes in BOTH conformance
-    ///         suites</b> — a derived CRD stub has no webhook behind it any more than it has defaults.
+    ///         into the selector and the template, and a <c>v</c> prefix onto the version. ⚠
+    ///         <b>
+    ///             So an
+    ///             equality comparison here fails against a real API server and passes in BOTH conformance
+    ///             suites
+    ///         </b> — a derived CRD stub has no webhook behind it any more than it has defaults.
     ///     </para>
     /// </remarks>
     public static bool MatchesBody(string objectJson, JsonElement desired) {

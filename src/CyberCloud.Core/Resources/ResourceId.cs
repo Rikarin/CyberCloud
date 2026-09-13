@@ -11,9 +11,7 @@ namespace CyberCloud.Core.Resources;
 ///     </code>
 ///     A nested type <b>interleaves</b>, exactly as Azure does — see
 ///     <see cref="ParentNames" />:
-///     <code>
-///     …/providers/CyberCloud.DBforPostgreSQL/servers/{serverName}/databases/{databaseName}
-///     </code>
+///     <code>    …/providers/CyberCloud.DBforPostgreSQL/servers/{serverName}/databases/{databaseName}</code>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -130,8 +128,11 @@ public readonly record struct ResourceId(
     ///         the resource group, and a child nobody can inherit permission to.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A joined string rather than a collection, for the same reason
-    ///         <see cref="ResourceTypeName" /> stores <c>servers/databases</c> as one.</b> A record
+    ///         ⚠
+    ///         <b>
+    ///             A joined string rather than a collection, for the same reason
+    ///             <see cref="ResourceTypeName" /> stores <c>servers/databases</c> as one.
+    ///         </b> A record
     ///         struct gets its equality from its members, and
     ///         <c>ImmutableArray&lt;string&gt;.Equals</c> is <i>reference</i> equality on the
     ///         underlying array — two ids with the same ancestors built separately would compare
@@ -180,8 +181,11 @@ public readonly record struct ResourceId(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the property the interleaved grammar exists to provide, and it is why
-    ///         docs/plan/12 § Child resources chose that grammar.</b>
+    ///         ⚠
+    ///         <b>
+    ///             This is the property the interleaved grammar exists to provide, and it is why
+    ///             docs/plan/12 § Child resources chose that grammar.
+    ///         </b>
     ///         <c>IResourceRelationWriter.LinkToParentAsync</c> takes a <see cref="ResourceId" /> and
     ///         nothing else — no body, no registration, no grain call. Under a grammar that spelled a
     ///         child <c>…/servers/databases/{name}</c> the parent's <i>name</i> would simply not be
@@ -448,14 +452,22 @@ public readonly record struct ResourceId(
     /// </remarks>
     string Render(string providerNamespace, string typePath) {
         var built = new StringBuilder(128)
-            .Append('/').Append(TenantsSegment)
-            .Append('/').Append(TenantId.ToString("D", CultureInfo.InvariantCulture))
-            .Append('/').Append(SubscriptionsSegment)
-            .Append('/').Append(SubscriptionId.ToString("D", CultureInfo.InvariantCulture))
-            .Append('/').Append(ResourceGroupsSegment)
-            .Append('/').Append(ResourceGroup)
-            .Append('/').Append(ProvidersSegment)
-            .Append('/').Append(providerNamespace);
+            .Append('/')
+            .Append(TenantsSegment)
+            .Append('/')
+            .Append(TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .Append('/')
+            .Append(SubscriptionsSegment)
+            .Append('/')
+            .Append(SubscriptionId.ToString("D", CultureInfo.InvariantCulture))
+            .Append('/')
+            .Append(ResourceGroupsSegment)
+            .Append('/')
+            .Append(ResourceGroup)
+            .Append('/')
+            .Append(ProvidersSegment)
+            .Append('/')
+            .Append(providerNamespace);
 
         var typeSegments = typePath.Split('/');
         var names = SplitParents(ParentNames);
@@ -463,8 +475,10 @@ public readonly record struct ResourceId(
         // The invariant makes names one shorter than typeSegments, so the last pass — and only the
         // last — falls through to this resource's own name.
         for (var i = 0; i < typeSegments.Length; i++) {
-            built.Append('/').Append(typeSegments[i])
-                .Append('/').Append(i < names.Length ? names[i] : Name);
+            built.Append('/')
+                .Append(typeSegments[i])
+                .Append('/')
+                .Append(i < names.Length ? names[i] : Name);
         }
 
         return built.ToString();
@@ -484,8 +498,11 @@ public readonly record struct ResourceId(
     ///     Enforces <c>ParentNames.Count == Type.Depth - 1</c> and validates each ancestor.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Throws rather than returning a <see cref="Result" />, like the rest of this type's
-    ///     construction-time validation.</b> A mismatched pair in code is a bug — the caller built an
+    ///     ⚠
+    ///     <b>
+    ///         Throws rather than returning a <see cref="Result" />, like the rest of this type's
+    ///         construction-time validation.
+    ///     </b> A mismatched pair in code is a bug — the caller built an
     ///     address for a <c>servers/databases</c> without saying which server — and the failure has
     ///     to be loud, because the quiet version is a path that renders with a missing segment and
     ///     re-parses as something else. <see cref="ParsePath" /> is the <see cref="Result" />-shaped

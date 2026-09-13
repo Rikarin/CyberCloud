@@ -8,13 +8,19 @@ namespace CyberCloud.Providers.Analytics.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Failure class (c): <c>Matches</c> must be containment, not equality, if anything else
-///         edits the spec — and the reason here is NOT the reason three of the five providers before
-///         this one give.</b> Their argument is structural defaulting: <c>NatsClusters</c> because
+///         ⚠
+///         <b>
+///             Failure class (c): <c>Matches</c> must be containment, not equality, if anything else
+///             edits the spec — and the reason here is NOT the reason three of the five providers before
+///             this one give.
+///         </b> Their argument is structural defaulting: <c>NatsClusters</c> because
 ///         built-in kinds are the most heavily defaulted objects in Kubernetes,
 ///         <c>StorageAccounts</c> because the seaweedfs CRD carries <c>+kubebuilder:default</c>
-///         markers. <b>Checked in the CRD rather than in a README: neither Altinity CRD declares a
-///         single <c>default:</c>, and this operator ships no admission webhook.</b> That is the third
+///         markers.
+///         <b>
+///             Checked in the CRD rather than in a README: neither Altinity CRD declares a
+///             single <c>default:</c>, and this operator ships no admission webhook.
+///         </b> That is the third
 ///         sighting of <c>KafkaClusters</c>' finding, and it means the usual argument is <i>false</i>
 ///         here.
 ///     </para>
@@ -37,12 +43,14 @@ public sealed class ClickHouseMatchesTests {
         ClickHouseClusters.Matches(
             ClickHouseClusters.ClickHouseJson("events", body.RootElement),
             body.RootElement
-        ).ShouldBeTrue();
+        )
+            .ShouldBeTrue();
 
         ClickHouseClusters.Matches(
             ClickHouseClusters.KeeperJson("events", body.RootElement),
             body.RootElement
-        ).ShouldBeTrue();
+        )
+            .ShouldBeTrue();
     }
 
     [Fact]
@@ -55,9 +63,7 @@ public sealed class ClickHouseMatchesTests {
         // installed one, with the workload perfectly correct.
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId));
 
-        var document = JsonNode.Parse(
-            ClickHouseClusters.ClickHouseJson("events", body.RootElement)
-        )!.AsObject();
+        var document = JsonNode.Parse(ClickHouseClusters.ClickHouseJson("events", body.RootElement))!.AsObject();
 
         document["spec"]!["templating"] = new JsonObject { ["policy"] = "auto" };
         document["spec"]!["taskID"] = "e7c1";
@@ -66,9 +72,8 @@ public sealed class ClickHouseMatchesTests {
         };
         document["metadata"]!["finalizers"] = new JsonArray { "finalizer.clickhouseinstallation.altinity.com" };
 
-        ClickHouseClusters.Matches(document.ToJsonString(), body.RootElement).ShouldBeTrue(
-            "an equality comparison would report drift for fields nobody in this platform wrote."
-        );
+        ClickHouseClusters.Matches(document.ToJsonString(), body.RootElement)
+            .ShouldBeTrue("an equality comparison would report drift for fields nobody in this platform wrote.");
     }
 
     [Fact]
@@ -79,9 +84,7 @@ public sealed class ClickHouseMatchesTests {
         // read-back carries whatever any manager put there.
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId));
 
-        var document = JsonNode.Parse(
-            ClickHouseClusters.ClickHouseJson("events", body.RootElement)
-        )!.AsObject();
+        var document = JsonNode.Parse(ClickHouseClusters.ClickHouseJson("events", body.RootElement))!.AsObject();
 
         document["spec"]!["configuration"]!["settings"]!["max_concurrent_queries"] = 200;
         document["spec"]!["templates"]!["podTemplates"]!.AsArray()[0]!["spec"]!["nodeSelector"] =
@@ -103,17 +106,19 @@ public sealed class ClickHouseMatchesTests {
         ClickHouseClusters.Matches(
             ClickHouseClusters.ClickHouseJson("events", body.RootElement),
             bigger.RootElement
-        ).ShouldBe(
-            // `keeperNodes` does not reach the installation at all, so a changed keeper count is not
-            // drift THERE — it is drift on the Keeper, which the next assertion covers. Stating both
-            // in one test is what stops somebody "fixing" the asymmetry by comparing the wrong object.
-            property == "keeperNodes"
-        );
+        )
+            .ShouldBe(
+                // `keeperNodes` does not reach the installation at all, so a changed keeper count is not
+                // drift THERE — it is drift on the Keeper, which the next assertion covers. Stating both
+                // in one test is what stops somebody "fixing" the asymmetry by comparing the wrong object.
+                property == "keeperNodes"
+            );
 
         ClickHouseClusters.Matches(
             ClickHouseClusters.KeeperJson("events", body.RootElement),
             bigger.RootElement
-        ).ShouldBe(property != "keeperNodes");
+        )
+            .ShouldBe(property != "keeperNodes");
     }
 
     [Fact]
@@ -124,9 +129,7 @@ public sealed class ClickHouseMatchesTests {
         // cluster that starts, answers, converges and cannot replicate.
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId));
 
-        var document = JsonNode.Parse(
-            ClickHouseClusters.ClickHouseJson("events", body.RootElement)
-        )!.AsObject();
+        var document = JsonNode.Parse(ClickHouseClusters.ClickHouseJson("events", body.RootElement))!.AsObject();
 
         document["spec"]!["configuration"]!["zookeeper"]!["nodes"]!.AsArray()[0]!["host"] =
             "keeper-somebody-else";
@@ -142,9 +145,7 @@ public sealed class ClickHouseMatchesTests {
         // cluster can come up" is a change that would look like a fix.
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId));
 
-        var document = JsonNode.Parse(
-            ClickHouseClusters.ClickHouseJson("events", body.RootElement)
-        )!.AsObject();
+        var document = JsonNode.Parse(ClickHouseClusters.ClickHouseJson("events", body.RootElement))!.AsObject();
 
         document["spec"]!["configuration"]!.AsObject().Remove("zookeeper");
 
@@ -174,11 +175,10 @@ public sealed class ClickHouseMatchesTests {
         using var body = JsonDocument.Parse(ClickHouseClusters.Body(ClusterId));
 
         ClickHouseClusters.Matches(
-            new JsonObject {
-                ["kind"] = "ConfigMap", ["spec"] = new JsonObject()
-            }.ToJsonString(),
+            new JsonObject { ["kind"] = "ConfigMap", ["spec"] = new JsonObject() }.ToJsonString(),
             body.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
     }
 
     [Fact]

@@ -29,8 +29,10 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 ///         <b>the operator finds out, the load balancer does not act.</b>
 ///     </para>
 ///     <para>
-///         <b>The alternative that was rejected: a <see cref="HealthStatus.Degraded" /> check tagged
-///         <see cref="HealthCheckTags.Ready" />.</b> It is worse in both directions at once. ASP.NET's
+///         <b>
+///             The alternative that was rejected: a <see cref="HealthStatus.Degraded" /> check tagged
+///             <see cref="HealthCheckTags.Ready" />.
+///         </b> It is worse in both directions at once. ASP.NET's
 ///         default probe predicate treats <c>Degraded</c> as <i>passing</i> — only <c>Unhealthy</c>
 ///         becomes a 503 — so on the readiness probe it would report a shard outage as a 200 and
 ///         change nothing, which is a lie with extra steps. And it would sit one word away from
@@ -65,8 +67,10 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 ///             proves PostgreSQL is there.
 ///         </item>
 ///         <item>
-///             <b>The arithmetic, since "a <c>SELECT 1</c> per shard on a timer" is not free at 16+
-///             shards.</b> Per silo per interval it is one short-lived backend per shard, held for a
+///             <b>
+///                 The arithmetic, since "a <c>SELECT 1</c> per shard on a timer" is not free at 16+
+///                 shards.
+///             </b> Per silo per interval it is one short-lived backend per shard, held for a
 ///             connect plus one round trip. At the 30-second default, 16 shards and 30 silos, each
 ///             shard sees one probe connection per second and at most 30 concurrent if every silo
 ///             aligned — against the 150 pooled connections those same silos already hold there. Silos

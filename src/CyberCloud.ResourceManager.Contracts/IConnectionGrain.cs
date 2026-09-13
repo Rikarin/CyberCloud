@@ -5,8 +5,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 
 /// <summary>What one connection has asked to hear about.</summary>
 /// <remarks>
-///     ⚠ <b>An interest is a resource path, not a topic string, and that is what makes it
-///     authorizable.</b> A free-form topic could not be checked against anything — the question
+///     ⚠
+///     <b>
+///         An interest is a resource path, not a topic string, and that is what makes it
+///         authorizable.
+///     </b> A free-form topic could not be checked against anything — the question
 ///     "may this caller read this?" needs an object, and docs/plan/07 § The model types its objects.
 /// </remarks>
 /// <param name="Hub">
@@ -21,8 +24,10 @@ namespace CyberCloud.ResourceManager.Contracts;
 [GenerateSerializer]
 [Alias("CyberCloud.Gateway.ConnectionInterest")]
 public readonly record struct ConnectionInterest(
-    [property: Id(0)] string Hub,
-    [property: Id(1)] string ResourcePath
+    [property: Id(0)]
+    string Hub,
+    [property: Id(1)]
+    string ResourcePath
 ) {
     /// <inheritdoc />
     public override string ToString() => $"{Hub}:{ResourcePath}";
@@ -39,9 +44,11 @@ public readonly record struct ConnectionInterest(
 ///     <para>
 ///         ⚠ <b>Why a grain at all, when the connection is pinned to one pod:</b> because the
 ///         <i>fan-out</i> is not. docs/plan/10 § SignalR rejects a Redis backplane because it
-///         <i>"broadcasts every message to every server, which is the wrong shape here: our fan-out
-///         is already tenant → interested connections, and Orleans streams already do exactly
-///         that"</i>. The grain subscribes to the streams its connection cares about, so a message
+///         <i>
+///             "broadcasts every message to every server, which is the wrong shape here: our fan-out
+///             is already tenant → interested connections, and Orleans streams already do exactly
+///             that"
+///         </i>. The grain subscribes to the streams its connection cares about, so a message
 ///         reaches the one pod holding that connection — <c>O(interested)</c> rather than
 ///         <c>O(pods)</c>.
 ///     </para>
@@ -54,8 +61,11 @@ public readonly record struct ConnectionInterest(
 ///         would be a durable record of a socket that no longer exists.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Here rather than in <c>CyberCloud.Gateway.Host</c>, because a client hosts no
-///         grains.</b> docs/plan/10 § SignalR names the connection grain and says nothing about where
+///         ⚠
+///         <b>
+///             Here rather than in <c>CyberCloud.Gateway.Host</c>, because a client hosts no
+///             grains.
+///         </b> docs/plan/10 § SignalR names the connection grain and says nothing about where
 ///         it runs, and the gateway is the only component the document hands it to — so the interface
 ///         and its implementation shipped there. But docs/plan/03 § Hosts and docs/plan/10 § Shape
 ///         both make the gateway an Orleans <b>client</b> (<c>CreateClient</c>), and a client's
@@ -116,10 +126,16 @@ public interface IConnectionGrain : IGrainWithStringKey {
     /// </summary>
     /// <returns>How many interests were dropped.</returns>
     /// <remarks>
-    ///     ⚠ <b>This is the method that keeps the live channel from being an authorization
-    ///     bypass.</b> docs/plan/10 § SignalR: <i>"A user who loses access to a resource group must
-    ///     stop receiving its events — otherwise the live-update channel is an authorization bypass
-    ///     with a nice UI."</i> A per-connect check would pass at 09:00 and still be delivering that
+    ///     ⚠
+    ///     <b>
+    ///         This is the method that keeps the live channel from being an authorization
+    ///         bypass.
+    ///     </b> docs/plan/10 § SignalR:
+    ///     <i>
+    ///         "A user who loses access to a resource group must
+    ///         stop receiving its events — otherwise the live-update channel is an authorization bypass
+    ///         with a nice UI."
+    ///     </i> A per-connect check would pass at 09:00 and still be delivering that
     ///     resource group's events at 17:00 to somebody who was removed at 09:05.
     /// </remarks>
     Task<int> RecheckAsync();
@@ -141,8 +157,11 @@ public interface IConnectionGrain : IGrainWithStringKey {
 ///     The connection grain's key.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Here rather than in <c>CyberCloud.Core.Resources.GrainKeys</c>, and the reason is that
-///     docs/plan/06 § Grain keys does not have a row for it.</b> Every kind <c>GrainKeys</c> parses is
+///     ⚠
+///     <b>
+///         Here rather than in <c>CyberCloud.Core.Resources.GrainKeys</c>, and the reason is that
+///         docs/plan/06 § Grain keys does not have a row for it.
+///     </b> Every kind <c>GrainKeys</c> parses is
 ///     a durable entity with a place in docs/plan/06's hierarchy; a SignalR connection id is neither —
 ///     it is a socket's name, minted by the SignalR server and gone with the socket. Giving it a
 ///     <c>GrainKeyKind</c> would put an ephemeral session into the parser that also validates

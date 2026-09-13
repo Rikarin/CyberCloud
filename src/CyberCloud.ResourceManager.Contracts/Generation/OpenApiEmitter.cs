@@ -29,9 +29,12 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///     <list type="number">
 ///         <item>
 ///             <b>The registry</b> — every path, every body, every permission and every api-version.
-///             docs/plan/08 § The provider registry: <i>"the same registry that generates the CLI is
-///             the one that validates the request body. That identity is what makes drift impossible
-///             rather than merely detectable."</i> Nothing provider-shaped is written down here; if
+///             docs/plan/08 § The provider registry:
+///             <i>
+///                 "the same registry that generates the CLI is
+///                 the one that validates the request body. That identity is what makes drift impossible
+///                 rather than merely detectable."
+///             </i> Nothing provider-shaped is written down here; if
 ///             the registry cannot say it, this emitter does not say it either, and the gap is
 ///             reported rather than filled in. Filling one in is how the registry stops being the
 ///             single source.
@@ -81,6 +84,7 @@ public static class OpenApiEmitter {
     const string OperationStatusSchema = "OperationStatus";
     const string OperationProgressSchema = "OperationProgress";
     const string OperationStateSchema = "OperationState";
+
     /// <summary>
     ///     The component every scope's <c>200</c> body points at.
     /// </summary>
@@ -98,8 +102,11 @@ public static class OpenApiEmitter {
 
     /// <summary>The tenant scope's path template.</summary>
     /// <remarks>
-    ///     ⚠ <b>The resource path is built from these rather than beside them, so the scope API and
-    ///     the resource API cannot come to disagree about the envelope.</b> docs/plan/10 § Shape says
+    ///     ⚠
+    ///     <b>
+    ///         The resource path is built from these rather than beside them, so the scope API and
+    ///         the resource API cannot come to disagree about the envelope.
+    ///     </b> docs/plan/10 § Shape says
     ///     the scope API <i>is</i> the first four and six segments of the resource path; writing the
     ///     prefix twice would be the sentence's mechanism removed and the sentence left behind.
     /// </remarks>
@@ -241,12 +248,16 @@ public static class OpenApiEmitter {
                         response,
                         withTags: false,
                         responseComponent,
-                        "What " + type.Type + "/" + action.Name + " returns."
+                        "What "
+                        + type.Type
+                        + "/"
+                        + action.Name
+                        + " returns."
                         + (action.Secret
-                            ? " ⚠ Secret material. docs/plan/08 § The provider registry makes a "
-                            + "secret action the only path a secret value leaves by; this schema is "
-                            + "therefore the complete list of what does."
-                            : string.Empty)
+                                ? " ⚠ Secret material. docs/plan/08 § The provider registry makes a "
+                                + "secret action the only path a secret value leaves by; this schema is "
+                                + "therefore the complete list of what does."
+                                : string.Empty)
                     );
                 }
 
@@ -275,7 +286,9 @@ public static class OpenApiEmitter {
                 ["title"] = Title,
                 ["version"] = version.Value,
                 ["description"] =
-                    "The Cyber Cloud resource API at api-version " + version.Value + ". Generated from "
+                    "The Cyber Cloud resource API at api-version "
+                    + version.Value
+                    + ". Generated from "
                     + "the provider registry (docs/plan/02 § ADR-012); hand edits are overwritten by "
                     + "./build.sh Generate and fail the Generated surfaces gate."
             },
@@ -290,9 +303,7 @@ public static class OpenApiEmitter {
             },
             ["paths"] = Sorted(paths),
             ["components"] = new JsonObject {
-                ["parameters"] = Parameters(version),
-                ["responses"] = Responses(),
-                ["schemas"] = Sorted(schemas)
+                ["parameters"] = Parameters(version), ["responses"] = Responses(), ["schemas"] = Sorted(schemas)
             },
             // What the run inspected, in the artifact itself. A document that covers nothing and a
             // document that was never generated are otherwise the same file.
@@ -316,8 +327,11 @@ public static class OpenApiEmitter {
     ///         This is that: one file whose name does not change, listing the files whose names do.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It is a real OpenAPI document rather than a bespoke manifest, and that is what
-    ///         makes the empty-registry case honest.</b> With no providers registered there are no
+    ///         ⚠
+    ///         <b>
+    ///             It is a real OpenAPI document rather than a bespoke manifest, and that is what
+    ///             makes the empty-registry case honest.
+    ///         </b> With no providers registered there are no
     ///         api-versions and therefore no per-version documents, and a generator that wrote
     ///         nothing at all would be indistinguishable from one that crashed before writing. This
     ///         file is always written, always valid, and says <c>0</c> in three places when the answer
@@ -329,10 +343,7 @@ public static class OpenApiEmitter {
 
         var versions = new JsonArray();
         foreach (var version in ApiVersionsOf(registry)) {
-            versions.Add(new JsonObject {
-                ["apiVersion"] = version.Value,
-                ["document"] = FileNameOf(version)
-            });
+            versions.Add(new JsonObject { ["apiVersion"] = version.Value, ["document"] = FileNameOf(version) });
         }
 
         var namespaces = new JsonArray();
@@ -348,14 +359,16 @@ public static class OpenApiEmitter {
                 declaredVersions.Add(version);
             }
 
-            types.Add(new JsonObject {
-                ["type"] = type.Type.ToString(),
-                ["apiVersions"] = declaredVersions,
-                // The CLI's verb tree is built from this file rather than from every per-version
-                // document, so the name and the short form have to be here too — docs/plan/21
-                // § Grammar's alias table, generated.
-                ["display"] = Display(type)
-            });
+            types.Add(
+                new JsonObject {
+                    ["type"] = type.Type.ToString(),
+                    ["apiVersions"] = declaredVersions,
+                    // The CLI's verb tree is built from this file rather than from every per-version
+                    // document, so the name and the short form have to be here too — docs/plan/21
+                    // § Grammar's alias table, generated.
+                    ["display"] = Display(type)
+                }
+            );
         }
 
         return new JsonObject {
@@ -369,9 +382,7 @@ public static class OpenApiEmitter {
                     + "Generated from the provider registry — docs/plan/02 § ADR-012."
             },
             ["paths"] = new JsonObject(),
-            ["components"] = new JsonObject {
-                ["schemas"] = Sorted(EnvelopeSchemas())
-            },
+            ["components"] = new JsonObject { ["schemas"] = Sorted(EnvelopeSchemas()) },
             ["x-cybercloud-providers"] = namespaces,
             ["x-cybercloud-resource-types"] = types,
             ["x-cybercloud-api-versions"] = versions
@@ -399,8 +410,11 @@ public static class OpenApiEmitter {
     ///         exists to hold. docs/plan/12 § Child resources records why the grammar is that shape.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A top-level type's template is byte-identical to what this emitted before the
-    ///         grammar changed</b>, and that is deliberate rather than lucky: the two shapes differ
+    ///         ⚠
+    ///         <b>
+    ///             A top-level type's template is byte-identical to what this emitted before the
+    ///             grammar changed
+    ///         </b>, and that is deliberate rather than lucky: the two shapes differ
     ///         only from depth 2, the resource's own name keeps the parameter name
     ///         <c>resourceName</c> at every depth, and the ancestors are appended rather than
     ///         renaming anything. So no published path in <c>openapi/</c> moves and the
@@ -408,8 +422,11 @@ public static class OpenApiEmitter {
     ///         remarks on why a changed published path would be breaking.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An ancestor's parameter is the type segment verbatim plus <c>Name</c>
-    ///         (<c>{serversName}</c>), not a singularised <c>{serverName}</c>.</b> English
+    ///         ⚠
+    ///         <b>
+    ///             An ancestor's parameter is the type segment verbatim plus <c>Name</c>
+    ///             (<c>{serversName}</c>), not a singularised <c>{serverName}</c>.
+    ///         </b> English
     ///         pluralisation is not computable — <see cref="SdkEmitter" />'s model naming carries the
     ///         same warning and <c>GroupVersionKind.Plural</c> is carried rather than derived for the
     ///         same reason — so singularising is a guess that works until <c>addresses</c>. Ugly and
@@ -425,7 +442,8 @@ public static class OpenApiEmitter {
         var segments = type.Type.Split('/');
 
         for (var i = 0; i < segments.Length; i++) {
-            built.Append('/').Append(segments[i])
+            built.Append('/')
+                .Append(segments[i])
                 .Append(i == segments.Length - 1 ? "/{resourceName}" : "/{" + segments[i] + "Name}");
         }
 
@@ -454,16 +472,13 @@ public static class OpenApiEmitter {
     ///     <see cref="ResourceTypeName" />'s segments cannot contain either character —
     ///     <see cref="OpenApiStructure" /> re-checks the result rather than trusting that sentence.
     /// </remarks>
-    static string ComponentNameOf(ResourceTypeName type) =>
-        type.Namespace + "." + type.Type.Replace('/', '.');
+    static string ComponentNameOf(ResourceTypeName type) => type.Namespace + "." + type.Type.Replace('/', '.');
 
     static JsonObject ResourcePathItem(ResourceTypeRegistration type, string component, DateOnly? retiresOn) {
         var body = new JsonObject {
             ["required"] = true,
             ["content"] = new JsonObject {
-                ["application/json"] = new JsonObject {
-                    ["schema"] = Ref("schemas", component)
-                }
+                ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", component) }
             }
         };
 
@@ -482,9 +497,7 @@ public static class OpenApiEmitter {
                     ["200"] = new JsonObject {
                         ["description"] = "The resource.",
                         ["content"] = new JsonObject {
-                            ["application/json"] = new JsonObject {
-                                ["schema"] = Ref("schemas", component)
-                            }
+                            ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", component) }
                         }
                     }
                 }.WithErrors(),
@@ -631,25 +644,27 @@ public static class OpenApiEmitter {
                 reads.Add(pointer);
             }
 
-            meters.Add(new JsonObject {
-                ["meter"] = meter.Meter.ToString(),
-                ["amountPointer"] = meter.AmountPointer,
-                ["fallback"] = meter.Fallback,
-                // ⚠ THE TWO MEMBERS THAT KEEP A COMPUTED AMOUNT GENERABLE.
-                //
-                // This used to carry a pointer and a fallback and nothing else, on the argument that
-                // "a pointer rather than a delegate is what makes this generable at all". The argument
-                // was right about delegates and wrong about the conclusion: every managed service's
-                // real amount is a Kubernetes quantity, is usually absent from the body and named by a
-                // preset, and is per-instance × instances — so a pointer could not address any of them
-                // and the honest generated document for a Postgres server listed one meter, `Resources`,
-                // reserving one. A published pointer that was never the amount is not more generable
-                // than a published formula; it is less true. MeterDerivation therefore has to declare
-                // both of these, and every meter — flat, pointed or derived — reports them the same
-                // way, so "what moves this quota" is answerable from the document for every type.
-                ["expression"] = meter.Expression,
-                ["reads"] = reads
-            });
+            meters.Add(
+                new JsonObject {
+                    ["meter"] = meter.Meter.ToString(),
+                    ["amountPointer"] = meter.AmountPointer,
+                    ["fallback"] = meter.Fallback,
+                    // ⚠ THE TWO MEMBERS THAT KEEP A COMPUTED AMOUNT GENERABLE.
+                    //
+                    // This used to carry a pointer and a fallback and nothing else, on the argument that
+                    // "a pointer rather than a delegate is what makes this generable at all". The argument
+                    // was right about delegates and wrong about the conclusion: every managed service's
+                    // real amount is a Kubernetes quantity, is usually absent from the body and named by a
+                    // preset, and is per-instance × instances — so a pointer could not address any of them
+                    // and the honest generated document for a Postgres server listed one meter, `Resources`,
+                    // reserving one. A published pointer that was never the amount is not more generable
+                    // than a published formula; it is less true. MeterDerivation therefore has to declare
+                    // both of these, and every meter — flat, pointed or derived — reports them the same
+                    // way, so "what moves this quota" is answerable from the document for every type.
+                    ["expression"] = meter.Expression,
+                    ["reads"] = reads
+                }
+            );
         }
 
         return meters;
@@ -687,16 +702,22 @@ public static class OpenApiEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Derived from <see cref="PathOf" /> rather than rebuilt, so the two cannot
-    ///         disagree.</b> Two interleavers would be two chances for a collection and the resources
+    ///         ⚠
+    ///         <b>
+    ///             Derived from <see cref="PathOf" /> rather than rebuilt, so the two cannot
+    ///             disagree.
+    ///         </b> Two interleavers would be two chances for a collection and the resources
     ///         in it to name different ancestors, and the disagreement is silent: both paths parse,
     ///         both look right, and a client pages a collection that holds none of the resources it
     ///         then reads.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The result ends on a type segment, which is exactly what
-    ///         <c>ResourceId.ParsePath</c> refuses and <c>ResourceCollectionId.ParsePath</c>
-    ///         requires.</b> The two grammars partition the paths carrying the fixed prefix — an even
+    ///         ⚠
+    ///         <b>
+    ///             The result ends on a type segment, which is exactly what
+    ///             <c>ResourceId.ParsePath</c> refuses and <c>ResourceCollectionId.ParsePath</c>
+    ///             requires.
+    ///         </b> The two grammars partition the paths carrying the fixed prefix — an even
     ///         tail is a resource, an odd one is a collection — so the gateway decides which of them a
     ///         URL is from the URL alone, and never from the method.
     ///     </para>
@@ -712,8 +733,11 @@ public static class OpenApiEmitter {
     ///     The list envelope: <c>{ "value": [ … ], "nextLink": … }</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A component rather than an inline schema, for the reason an action's request and
-    ///     response are components:</b> an SDK generator names a model after the component key, and
+    ///     ⚠
+    ///     <b>
+    ///         A component rather than an inline schema, for the reason an action's request and
+    ///         response are components:
+    ///     </b> an SDK generator names a model after the component key, and
     ///     an inline schema gets an invented name that changes when the generator does.
     /// </remarks>
     static JsonObject CollectionSchema(ResourceTypeRegistration type, string component, string self) =>
@@ -721,7 +745,9 @@ public static class OpenApiEmitter {
             ["type"] = "object",
             ["title"] = self,
             ["description"] =
-                "One page of " + type.Type + ". ⚠ The page holds what the caller may read: a "
+                "One page of "
+                + type.Type
+                + ". ⚠ The page holds what the caller may read: a "
                 + "listing runs a permission check per member (docs/plan/07 § The enforcement seam), "
                 + "so a short or empty page means \"that is what you may see\" and never \"that is "
                 + "all there is\". Stop when nextLink is absent, never when a page is smaller than "
@@ -776,9 +802,7 @@ public static class OpenApiEmitter {
                     ["200"] = new JsonObject {
                         ["description"] = "One page.",
                         ["content"] = new JsonObject {
-                            ["application/json"] = new JsonObject {
-                                ["schema"] = Ref("schemas", collectionComponent)
-                            }
+                            ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", collectionComponent) }
                         }
                     }
                 }.WithErrors(),
@@ -796,8 +820,11 @@ public static class OpenApiEmitter {
     ///     <see cref="ResourceParameters" /> without <c>ResourceName</c>, plus the paging query.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Dropping <c>ResourceName</c> is not optional and <see cref="OpenApiStructure" /> is
-    ///     what enforces it.</b> That validator checks the declared parameters against the template in
+    ///     ⚠
+    ///     <b>
+    ///         Dropping <c>ResourceName</c> is not optional and <see cref="OpenApiStructure" /> is
+    ///         what enforces it.
+    ///     </b> That validator checks the declared parameters against the template in
     ///     both directions, so a collection path that reused <see cref="ResourceParameters" /> would
     ///     declare a <c>{resourceName}</c> that appears nowhere in its template and fail
     ///     <c>Generate</c> — which is the right failure and is why this is a second builder rather
@@ -864,22 +891,20 @@ public static class OpenApiEmitter {
                 "An action never creates: a POST to a name that does not exist is a 404 — "
                 + "docs/plan/08 § The write path, end to end."
                 + (action.Secret
-                    ? " ⚠ The response carries secret material. It is always audited and is never "
-                    + "cached — docs/plan/08 § The provider registry."
-                    : string.Empty)
+                        ? " ⚠ The response carries secret material. It is always audited and is never "
+                        + "cached — docs/plan/08 § The provider registry."
+                        : string.Empty)
                 + (action.LongRunning
-                    ? " This action is long-running: it answers 202 and an operation to poll, like "
-                    + "every other write."
-                    : string.Empty)
+                        ? " This action is long-running: it answers 202 and an operation to poll, like "
+                        + "every other write."
+                        : string.Empty)
         };
 
         if (requestComponent is { }) {
             post["requestBody"] = new JsonObject {
                 ["required"] = true,
                 ["content"] = new JsonObject {
-                    ["application/json"] = new JsonObject {
-                        ["schema"] = Ref("schemas", requestComponent)
-                    }
+                    ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", requestComponent) }
                 }
             };
         }
@@ -932,8 +957,11 @@ public static class OpenApiEmitter {
     /// <param name="target">The object to fill. An existing key is replaced.</param>
     /// <remarks>
     ///     ⚠ <b>Detached rather than assigned across.</b> A <see cref="JsonNode" /> belongs to
-    ///     exactly one parent, so <c>target[k] = source[k]</c> throws <i>"The node already has a
-    ///     parent"</i> — the same fact <c>CliFlag.ToJson</c> deep-clones for.
+    ///     exactly one parent, so <c>target[k] = source[k]</c> throws
+    ///     <i>
+    ///         "The node already has a
+    ///         parent"
+    ///     </i> — the same fact <c>CliFlag.ToJson</c> deep-clones for.
     /// </remarks>
     static void Move(JsonObject source, JsonObject target) {
         foreach (var member in source.ToList()) {
@@ -949,8 +977,11 @@ public static class OpenApiEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE DECISION ISSUE #63 ASKED FOR, AND THE OTHER ANSWER IS WRITTEN DOWN BECAUSE IT
-    ///         WAS DEFENSIBLE.</b> A scope has no provider, no resource type and no api-version, so
+    ///         ⚠
+    ///         <b>
+    ///             THE DECISION ISSUE #63 ASKED FOR, AND THE OTHER ANSWER IS WRITTEN DOWN BECAUSE IT
+    ///             WAS DEFENSIBLE.
+    ///         </b> A scope has no provider, no resource type and no api-version, so
     ///         ADR-012's five surfaces — all emitted from the provider registry — knew nothing about
     ///         <c>PUT /tenants/{t}/subscriptions/{s}</c>. The alternative was to document the scope
     ///         API by hand and exclude it from generation. It was rejected for one reason: the
@@ -1083,11 +1114,7 @@ public static class OpenApiEmitter {
             // rebuilding it from the kind. ScopeTypeNames' own remarks call these display strings
             // that decide nothing — which is exactly why a second spelling of one would be silent.
             ["x-cybercloud-scope-type"] = typeName,
-            ["x-cybercloud-display"] = new JsonObject {
-                ["name"] = display,
-                ["plural"] = plural,
-                ["summary"] = summary
-            }
+            ["x-cybercloud-display"] = new JsonObject { ["name"] = display, ["plural"] = plural, ["summary"] = summary }
         };
 
         if (createComponent is null) {
@@ -1133,8 +1160,11 @@ public static class OpenApiEmitter {
     ///     The scope response and the two create bodies.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The property names come from <see cref="ScopeBodyProperties" />, which is in this
-    ///     assembly precisely so that they can.</b> They were <c>ScopeManagerService</c>'s, in an
+    ///     ⚠
+    ///     <b>
+    ///         The property names come from <see cref="ScopeBodyProperties" />, which is in this
+    ///         assembly precisely so that they can.
+    ///     </b> They were <c>ScopeManagerService</c>'s, in an
     ///     assembly this one cannot see; a copy retyped here would be two constants agreeing by hand,
     ///     and the failure would be a flag spelled correctly writing a property nobody reads.
     /// </remarks>
@@ -1149,8 +1179,7 @@ public static class OpenApiEmitter {
                     + "call returns, which is the visible half of \"a scope is not a resource\".",
                 ["properties"] = new JsonObject {
                     ["id"] = new JsonObject {
-                        ["type"] = "string",
-                        ["description"] = "The scope's own path — docs/plan/06 § Identifiers."
+                        ["type"] = "string", ["description"] = "The scope's own path — docs/plan/06 § Identifiers."
                     },
                     ["location"] = new JsonObject {
                         ["type"] = "string",
@@ -1159,17 +1188,12 @@ public static class OpenApiEmitter {
                             + "than empty where the scope has none, so a client tests for the "
                             + "property instead of comparing against \"\"."
                     },
-                    ["name"] = new JsonObject {
-                        ["type"] = "string",
-                        ["description"] = "The name a human reads."
-                    },
+                    ["name"] = new JsonObject { ["type"] = "string", ["description"] = "The name a human reads." },
                     ["type"] = new JsonObject {
                         ["type"] = "string",
                         ["description"] = "The Azure-shaped type string.",
                         ["enum"] = new JsonArray {
-                            ScopeTypeNames.ResourceGroup,
-                            ScopeTypeNames.Subscription,
-                            ScopeTypeNames.Tenant
+                            ScopeTypeNames.ResourceGroup, ScopeTypeNames.Subscription, ScopeTypeNames.Tenant
                         }
                     }
                 },
@@ -1213,10 +1237,7 @@ public static class OpenApiEmitter {
 
     static JsonObject OperationPathItem() =>
         new() {
-            ["parameters"] = new JsonArray {
-                Ref("parameters", "OperationId"),
-                Ref("parameters", "ApiVersion")
-            },
+            ["parameters"] = new JsonArray { Ref("parameters", "OperationId"), Ref("parameters", "ApiVersion") },
             ["get"] = new JsonObject {
                 ["operationId"] = "Operations_Get",
                 ["summary"] = "Poll a long-running operation.",
@@ -1228,9 +1249,7 @@ public static class OpenApiEmitter {
                     ["200"] = new JsonObject {
                         ["description"] = "The operation's current state.",
                         ["content"] = new JsonObject {
-                            ["application/json"] = new JsonObject {
-                                ["schema"] = Ref("schemas", OperationStatusSchema)
-                            }
+                            ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", OperationStatusSchema) }
                         }
                     }
                 }.WithErrors()
@@ -1241,8 +1260,11 @@ public static class OpenApiEmitter {
     ///     The five shared parameters, plus one inline parameter per ancestor of a nested type.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The ancestors are inline rather than <c>$ref</c>s to <c>/components/parameters</c>,
-    ///     and they have to be:</b> their names come from the type path, so a shared component would
+    ///     ⚠
+    ///     <b>
+    ///         The ancestors are inline rather than <c>$ref</c>s to <c>/components/parameters</c>,
+    ///         and they have to be:
+    ///     </b> their names come from the type path, so a shared component would
     ///     need one entry per distinct ancestor segment across every provider — a component set that
     ///     grows with the registry and collides the moment two providers both nest under
     ///     <c>servers</c> with different descriptions. <see cref="OpenApiStructure" /> checks that
@@ -1251,9 +1273,7 @@ public static class OpenApiEmitter {
     /// </remarks>
     static JsonArray ResourceParameters(ResourceTypeName type) {
         var parameters = new JsonArray {
-            Ref("parameters", "TenantId"),
-            Ref("parameters", "SubscriptionId"),
-            Ref("parameters", "ResourceGroupName")
+            Ref("parameters", "TenantId"), Ref("parameters", "SubscriptionId"), Ref("parameters", "ResourceGroupName")
         };
 
         foreach (var ancestor in AncestorParametersOf(type)) {
@@ -1345,7 +1365,9 @@ public static class OpenApiEmitter {
     ///             that fails every PUT twice.
     ///         </item>
     ///         <item>
-    ///             <b><see cref="SchemaKind.Unknown" /></b> — the never-assigned member, which reaches
+    ///             <b>
+    ///                 <see cref="SchemaKind.Unknown" />
+    ///             </b> — the never-assigned member, which reaches
     ///             a schema only through <c>default(SchemaProperty)</c>.
     ///         </item>
     ///     </list>
@@ -1356,7 +1378,9 @@ public static class OpenApiEmitter {
             schema,
             type.SupportsTags,
             type.Type.ToString(),
-            "The body of a " + type.Type + ". Generated from the provider registry's schema, which is "
+            "The body of a "
+            + type.Type
+            + ". Generated from the provider registry's schema, which is "
             + "the same object the write path validates against — docs/plan/08 § The provider registry."
         );
 
@@ -1370,8 +1394,11 @@ public static class OpenApiEmitter {
     /// <param name="title">The <c>title</c> keyword.</param>
     /// <param name="description">The <c>description</c> keyword.</param>
     /// <remarks>
-    ///     ⚠ <b>An action's body goes through the same method as a resource's, and that is the point of
-    ///     giving <c>ActionRegistration</c> schemas at all.</b> An action's parameters are now
+    ///     ⚠
+    ///     <b>
+    ///         An action's body goes through the same method as a resource's, and that is the point of
+    ///         giving <c>ActionRegistration</c> schemas at all.
+    ///     </b> An action's parameters are now
     ///     described, constrained and generated by exactly the machinery a resource's properties are,
     ///     rather than by a second convention nobody would keep in step.
     /// </remarks>
@@ -1515,10 +1542,7 @@ public static class OpenApiEmitter {
             }
         }
 
-        var node = new JsonObject {
-            ["type"] = "object",
-            ["properties"] = properties
-        };
+        var node = new JsonObject { ["type"] = "object", ["properties"] = properties };
 
         if (required.Count > 0) {
             node["required"] = required;
@@ -1769,8 +1793,11 @@ public static class OpenApiEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Derived from <see cref="ErrorCode.HttpStatuses" />, and it used to be a list
-    ///         written here from the plan's prose.</b> That was a reported gap: the emitter and the
+    ///         ⚠
+    ///         <b>
+    ///             Derived from <see cref="ErrorCode.HttpStatuses" />, and it used to be a list
+    ///             written here from the plan's prose.
+    ///         </b> That was a reported gap: the emitter and the
     ///         gateway would each have carried a copy of the code-to-status mapping and would have had
     ///         to agree by hand. <see cref="ErrorCode.HttpStatus" /> is now where it lives, so adding a
     ///         code with a status nothing else uses adds the response to every operation in every
@@ -1826,19 +1853,19 @@ public static class OpenApiEmitter {
     static string StatusDescription(int status) =>
         status switch {
             400 => "The request is malformed: an invalid body, an unknown property, a missing or "
-                   + "unparseable api-version.",
+                + "unparseable api-version.",
             403 => "The caller can read the resource but may not perform this action — "
-                   + "docs/plan/07 § The enforcement seam.",
+                + "docs/plan/07 § The enforcement seam.",
             404 => "The resource does not exist, or the caller may not read it. ⚠ The two are "
-                   + "deliberately indistinguishable — docs/plan/07 § The enforcement seam.",
+                + "deliberately indistinguishable — docs/plan/07 § The enforcement seam.",
             409 => "The write conflicts: the name is taken, an operation is already running, or the "
-                   + "scope is locked.",
+                + "scope is locked.",
             412 => "An If-Match etag did not match — docs/plan/06 § Tags, locks. A conditional retry "
-                   + "keys on this rather than on the 409.",
+                + "keys on this rather than on the 409.",
             429 => "The caller is being rate limited, or a quota meter would be exceeded — "
-                   + "docs/plan/10 § Rate limiting and docs/plan/06 § Quota.",
+                + "docs/plan/10 § Rate limiting and docs/plan/06 § Quota.",
             500 => "An internal error. ⚠ Never carries exception detail: the correlation id is in the "
-                   + "response header and the detail is in the trace — docs/plan/08 § Errors.",
+                + "response header and the detail is in the trace — docs/plan/08 § Errors.",
             _ => "An error."
         };
 
@@ -1846,9 +1873,7 @@ public static class OpenApiEmitter {
         new() {
             ["description"] = description,
             ["content"] = new JsonObject {
-                ["application/json"] = new JsonObject {
-                    ["schema"] = Ref("schemas", ErrorResponseSchema)
-                }
+                ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", ErrorResponseSchema) }
             },
             ["x-cybercloud-error-codes"] = codes
         };
@@ -1921,9 +1946,7 @@ public static class OpenApiEmitter {
             [ErrorResponseSchema] = new JsonObject {
                 ["type"] = "object",
                 ["description"] = "One shape, everywhere, Azure's. docs/plan/08 § Errors.",
-                ["properties"] = new JsonObject {
-                    ["error"] = Ref("schemas", ErrorSchema)
-                },
+                ["properties"] = new JsonObject { ["error"] = Ref("schemas", ErrorSchema) },
                 ["required"] = new JsonArray { "error" },
                 ["additionalProperties"] = false
             },
@@ -1942,8 +1965,7 @@ public static class OpenApiEmitter {
                 ["properties"] = new JsonObject {
                     ["at"] = new JsonObject { ["type"] = "string", ["format"] = "date-time" },
                     ["message"] = new JsonObject {
-                        ["type"] = "string",
-                        ["description"] = "What happened, naming the actual numbers."
+                        ["type"] = "string", ["description"] = "What happened, naming the actual numbers."
                     },
                     ["percentComplete"] = Percent(),
                     ["step"] = new JsonObject {
@@ -1964,8 +1986,7 @@ public static class OpenApiEmitter {
                     ["error"] = Ref("schemas", ErrorSchema),
                     ["percentComplete"] = Percent(),
                     ["progress"] = new JsonObject {
-                        ["type"] = "array",
-                        ["items"] = Ref("schemas", OperationProgressSchema)
+                        ["type"] = "array", ["items"] = Ref("schemas", OperationProgressSchema)
                     },
                     ["status"] = Ref("schemas", OperationStateSchema)
                 },
@@ -1975,17 +1996,11 @@ public static class OpenApiEmitter {
         };
     }
 
-    static JsonObject Percent() =>
-        new() {
-            ["type"] = "integer",
-            ["minimum"] = 0,
-            ["maximum"] = 100
-        };
+    static JsonObject Percent() => new() { ["type"] = "integer", ["minimum"] = 0, ["maximum"] = 100 };
 
     // ── Small shared machinery ─────────────────────────────────────────────────────────────────
 
-    static JsonObject Ref(string section, string name) =>
-        new() { ["$ref"] = "#/components/" + section + "/" + name };
+    static JsonObject Ref(string section, string name) => new() { ["$ref"] = "#/components/" + section + "/" + name };
 
     /// <summary>
     ///     An <c>operationId</c>, which the specification requires to be unique across the whole
@@ -2058,6 +2073,5 @@ static class OpenApiEmitterExtensions {
         return responses;
     }
 
-    static JsonObject Reference(string name) =>
-        new() { ["$ref"] = "#/components/responses/" + name };
+    static JsonObject Reference(string name) => new() { ["$ref"] = "#/components/responses/" + name };
 }

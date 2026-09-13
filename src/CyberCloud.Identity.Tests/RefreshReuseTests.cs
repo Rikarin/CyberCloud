@@ -4,8 +4,11 @@ using CyberCloud.Identity.Tests.Infrastructure;
 namespace CyberCloud.Identity.Tests;
 
 /// <summary>
-///     docs/plan/11 § Protocol: refresh tokens are <i>"rotating, one-time-use, with reuse detection →
-///     revoke the whole chain"</i>.
+///     docs/plan/11 § Protocol: refresh tokens are
+///     <i>
+///         "rotating, one-time-use, with reuse detection →
+///         revoke the whole chain"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>"Revoke the whole chain" is the part that is easy to get wrong and hard to notice.</b> An
@@ -101,10 +104,11 @@ public sealed class RefreshReuseTests(IdentityCluster cluster) {
         (await mine.RefreshAsync(theirHandle.Handle)).IsFailure.ShouldBeTrue();
         (await mine.RefreshAsync("not-a-handle-at-all")).IsFailure.ShouldBeTrue();
 
-        (await mine.IsLiveAsync()).GetValueOrThrow().ShouldBeTrue(
-            "an unrecognised handle must not revoke the session — that would be a free denial of "
-            + "service against any session id an attacker can guess or observe"
-        );
+        (await mine.IsLiveAsync()).GetValueOrThrow()
+            .ShouldBeTrue(
+                "an unrecognised handle must not revoke the session — that would be a free denial of "
+                + "service against any session id an attacker can guess or observe"
+            );
 
         (await mine.RefreshAsync(myHandle.Handle)).IsSuccess.ShouldBeTrue();
     }

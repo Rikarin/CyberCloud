@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Search.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Two class declarations over the case
-///         <c>CyberCloud.Providers.Search.Conformance</c> already declares.</b> One provider, one
+///         ⚠
+///         <b>
+///             Two class declarations over the case
+///             <c>CyberCloud.Providers.Search.Conformance</c> already declares.
+///         </b> One provider, one
 ///         <c>ProviderConformanceCase</c>: a second copy here would be a second description of the
 ///         same provider, and the two would disagree the first time either changed.
 ///     </para>
@@ -23,8 +26,11 @@ namespace CyberCloud.Providers.Search.ClusterConformance;
 ///         run an OpenSearch operator, so nothing here observes a running search cluster.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND THE OPEN SCHEMA IS WHY THIS SUITE CANNOT SEE THIS PROVIDER'S OWN LARGEST
-///         HAZARD.</b> <c>OpenSearchServices.Matches</c> is a containment check because the real CRD
+///         ⚠
+///         <b>
+///             AND THE OPEN SCHEMA IS WHY THIS SUITE CANNOT SEE THIS PROVIDER'S OWN LARGEST
+///             HAZARD.
+///         </b> <c>OpenSearchServices.Matches</c> is a containment check because the real CRD
 ///         carries <c>+kubebuilder:default=true</c> and <c>+kubebuilder:validation:Required</c> on
 ///         <c>spec.confMgmt.smartScaler</c>, so a real API server writes a field back that this
 ///         provider never sent. A derived stub has no defaults at all, so a read-back here returns
@@ -37,7 +43,7 @@ namespace CyberCloud.Providers.Search.ClusterConformance;
 /// <param name="fixture">The harness.</param>
 public sealed class OpenSearchServiceLifecycleConformance(ClusterConformanceFixture<OpenSearchCase> fixture)
     : ClusterConformanceTests<OpenSearchCase>(fixture),
-        IClassFixture<ClusterConformanceFixture<OpenSearchCase>>;
+    IClassFixture<ClusterConformanceFixture<OpenSearchCase>>;
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the managed search provider.</summary>
 public sealed class OpenSearchServiceSiloKillConformance : SiloKillConformanceTests<OpenSearchCase>;

@@ -33,8 +33,11 @@ public static class IdentitySiloBuilderExtensions {
     ///         host calls it unconditionally.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see cref="ILockoutCounter" /> is registered as
-    ///         <see cref="InMemoryLockoutCounter" /> here and that is wrong for production.</b> A
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ILockoutCounter" /> is registered as
+    ///             <see cref="InMemoryLockoutCounter" /> here and that is wrong for production.
+    ///         </b> A
     ///         per-process counter gives an attacker spread across N silos N times the free attempts.
     ///         The production registration is <see cref="RedisLockoutCounter" /> over the hot tier's
     ///         multiplexer, which the host wires because the host is what has the connection. This
@@ -78,8 +81,7 @@ public static class IdentitySiloBuilderExtensions {
         // EXPECTED answer for a BYO cluster with no public endpoint (docs/plan/11 § Managed identity),
         // and a tenant sitting in front of a binding form should be told so in seconds.
         builder.Services.TryAddSingleton<IProjectedTokenValidator, ProjectedTokenValidator>();
-        builder.Services.TryAddSingleton<IClusterOidcDiscovery>(
-            services => new HttpClusterOidcDiscovery(
+        builder.Services.TryAddSingleton<IClusterOidcDiscovery>(services => new HttpClusterOidcDiscovery(
                 new() { Timeout = TimeSpan.FromSeconds(10) },
                 services.GetRequiredService<IClock>()
             )
@@ -108,9 +110,12 @@ public static class IdentitySiloBuilderExtensions {
     /// <returns>The same builder, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><see cref="ServiceCollectionDescriptorExtensions.Replace" /> rather than
-    ///         <c>TryAdd</c> or <c>Add</c> — but <b>not</b> for the reason this paragraph used to
-    ///         give, which was wrong.</b> It claimed a plain <c>Add</c> "would <i>win</i> or lose
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ServiceCollectionDescriptorExtensions.Replace" /> rather than
+    ///             <c>TryAdd</c> or <c>Add</c> — but <b>not</b> for the reason this paragraph used to
+    ///             give, which was wrong.
+    ///         </b> It claimed a plain <c>Add</c> "would <i>win</i> or lose
     ///         depending on which order a host happened to write two lines in". It would not:
     ///         <see cref="AddCyberCloudIdentity" /> registers <see cref="UnavailableOtpDelivery" />
     ///         with <c>TryAdd</c>, and <c>TryAdd</c> is a no-op once <i>any</i> descriptor for the
@@ -132,8 +137,11 @@ public static class IdentitySiloBuilderExtensions {
     ///         red if this becomes <c>Add</c> again.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>ISiloBuilder</c> is the right receiver, and that was worth re-deriving rather
-    ///         than assuming.</b> The seam's only caller is <c>UserGrain.IssueOtpAsync</c>, which
+    ///         ⚠
+    ///         <b>
+    ///             <c>ISiloBuilder</c> is the right receiver, and that was worth re-deriving rather
+    ///             than assuming.
+    ///         </b> The seam's only caller is <c>UserGrain.IssueOtpAsync</c>, which
     ///         runs on a silo — so the process that needs an <see cref="IOtpDeliverySeam" /> is
     ///         exactly the one this extension can be called on. <see cref="OtpPolicy" /> carries the
     ///         four-property argument for why issuance is a grain's job; the consequence for this
@@ -157,15 +165,13 @@ public static class IdentitySiloBuilderExtensions {
     ) {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var route = new OtpDeliveryRoute {
-            TenantId = tenantId,
-            ServiceId = serviceId,
-            TemplateName = templateName
-        };
+        var route = new OtpDeliveryRoute { TenantId = tenantId, ServiceId = serviceId, TemplateName = templateName };
 
         builder.Services.Replace(
-            ServiceDescriptor.Singleton<IOtpDeliverySeam>(
-                services => new CommunicationOtpDelivery(services.GetRequiredService<IMessageSender>(), route)
+            ServiceDescriptor.Singleton<IOtpDeliverySeam>(services => new CommunicationOtpDelivery(
+                    services.GetRequiredService<IMessageSender>(),
+                    route
+                )
             )
         );
 

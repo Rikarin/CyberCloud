@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.Messaging.Tests;
 ///         each was written in a different file.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This type's exposure is different from the PostgreSQL provider's and needs its own
-///         test rather than inheriting the argument.</b> That one's risk is the <i>namespace</i>:
+///         ⚠
+///         <b>
+///             This type's exposure is different from the PostgreSQL provider's and needs its own
+///             test rather than inheriting the argument.
+///         </b> That one's risk is the <i>namespace</i>:
 ///         <c>CyberCloud.DBforPostgreSQL</c> has three internal case changes. This namespace,
 ///         <c>CyberCloud.Messaging</c>, has none — and the risk moved to the <b>type path</b>.
 ///         <c>kafkaClusters</c> is camel-cased where <c>servers</c> and <c>widgets</c> are one lower
@@ -76,11 +79,12 @@ public sealed class KafkaOpenApiCasingTests {
         // still route, and this test is not about routing: it is about what a generated client, a
         // portal breadcrumb and docs/plan/12's prose all copy. Three surfaces are generated FROM this
         // document, so a `kafkaclusters` here is `kafkaclusters` in the CLI, the SDK and the form.
-        KafkaClusters.Type.ToString().ShouldBe(
-            QualifiedType,
-            "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
-            + "charts/managed/kafka/Chart.yaml's cybercloud.io/resource-type annotation."
-        );
+        KafkaClusters.Type.ToString()
+            .ShouldBe(
+                QualifiedType,
+                "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
+                + "charts/managed/kafka/Chart.yaml's cybercloud.io/resource-type annotation."
+            );
 
         var paths = Paths();
 
@@ -89,12 +93,9 @@ public sealed class KafkaOpenApiCasingTests {
             "no path carries the provider namespace and type as the catalogue spells them"
         );
 
-        foreach (var path in paths.Where(
-                     x => x.Contains("kafkaclusters", StringComparison.OrdinalIgnoreCase)
-                 )) {
-            path.Contains(QualifiedType, StringComparison.Ordinal).ShouldBeTrue(
-                $"'{path}' spells the type in a casing other than '{QualifiedType}'."
-            );
+        foreach (var path in paths.Where(x => x.Contains("kafkaclusters", StringComparison.OrdinalIgnoreCase))) {
+            path.Contains(QualifiedType, StringComparison.Ordinal)
+                .ShouldBeTrue($"'{path}' spells the type in a casing other than '{QualifiedType}'.");
         }
     }
 
@@ -119,10 +120,11 @@ public sealed class KafkaOpenApiCasingTests {
         var value = KubeLabels.ResourceTypeValue(KafkaClusters.Type);
 
         value.ShouldBe("cybercloud.messaging_kafkaclusters");
-        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType).IsSuccess.ShouldBeTrue(
-            "the resource-type label value is not legal Kubernetes label syntax, so every object this "
-            + "provider applies would be refused at admission rather than at build time."
-        );
+        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType)
+            .IsSuccess.ShouldBeTrue(
+                "the resource-type label value is not legal Kubernetes label syntax, so every object this "
+                + "provider applies would be refused at admission rather than at build time."
+            );
     }
 
     /// <summary>The document the generator would write for this provider alone.</summary>

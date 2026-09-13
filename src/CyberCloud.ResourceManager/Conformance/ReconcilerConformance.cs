@@ -81,8 +81,11 @@ public readonly record struct ConformanceReport(string Reconciler, ImmutableArra
 }
 
 /// <summary>
-///     The conformance suite of docs/plan/08 § The reconcile loop — <i>"The contract every reconciler
-///     must satisfy, checked by the conformance suite"</i>.
+///     The conformance suite of docs/plan/08 § The reconcile loop —
+///     <i>
+///         "The contract every reconciler
+///         must satisfy, checked by the conformance suite"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -92,8 +95,11 @@ public readonly record struct ConformanceReport(string Reconciler, ImmutableArra
 ///         same argument docs/plan/08 makes for the write path being one component.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Clause 4 is checked by making the world disagree, which is the only way to check
-///         it.</b> A reconciler that <i>assumes</i> and one that <i>observes</i> are
+///         ⚠
+///         <b>
+///             Clause 4 is checked by making the world disagree, which is the only way to check
+///             it.
+///         </b> A reconciler that <i>assumes</i> and one that <i>observes</i> are
 ///         indistinguishable while the apply keeps working — both report
 ///         <see cref="ReconcileOutcome.Converged" />. So the harness converges the reconciler, then
 ///         asks the caller's <c>breakTheWorld</c> to remove what was applied, and asserts
@@ -103,8 +109,11 @@ public readonly record struct ConformanceReport(string Reconciler, ImmutableArra
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Clause 2 is checked structurally, in two shapes.</b> Instance fields are what
-///         docs/plan/08 names — <i>"a reconciler with a field is a reconciler that breaks when the
-///         grain moves silo"</i> — and <see cref="CheckNoHiddenState" /> reports both the mutable
+///         docs/plan/08 names —
+///         <i>
+///             "a reconciler with a field is a reconciler that breaks when the
+///             grain moves silo"
+///         </i> — and <see cref="CheckNoHiddenState" /> reports both the mutable
 ///         field and the <c>readonly</c> field holding a mutable collection, which is the same
 ///         accident wearing a keyword that does not stop it.
 ///     </para>
@@ -280,8 +289,11 @@ public static class ReconcilerConformance {
     ///         which is the thing that breaks when the grain moves silo.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see langword="readonly" /> excludes the <i>reference</i>, not what it points
-    ///         at.</b> An injected dependency assigned once in a constructor is the normal shape and is
+    ///         ⚠
+    ///         <b>
+    ///             <see langword="readonly" /> excludes the <i>reference</i>, not what it points
+    ///             at.
+    ///         </b> An injected dependency assigned once in a constructor is the normal shape and is
     ///         not per-pass state, which is why a <see langword="readonly" /> field is usually fine. A
     ///         <see langword="readonly" /> <i>mutable collection</i> is not: <c>readonly</c> stops the
     ///         field being reassigned and stops nothing about the dictionary it holds, so
@@ -290,8 +302,11 @@ public static class ReconcilerConformance {
     ///         finding this check can report.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Immutability is decided by namespace, and the direction it errs in is the safe
-    ///         one.</b> <see langword="string" /> and everything in <c>System.Collections.Immutable</c>
+    ///         ⚠
+    ///         <b>
+    ///             Immutability is decided by namespace, and the direction it errs in is the safe
+    ///             one.
+    ///         </b> <see langword="string" /> and everything in <c>System.Collections.Immutable</c>
     ///         and <c>System.Collections.Frozen</c> are held to be values; every other
     ///         <see cref="System.Collections.IEnumerable" /> is held to be an accumulator. So a
     ///         <c>readonly IReadOnlyList&lt;T&gt;</c> lookup table — which nothing can mutate
@@ -317,7 +332,12 @@ public static class ReconcilerConformance {
         var type = reconciler.GetType();
 
         for (var current = type; current is not null && current != typeof(object); current = current.BaseType) {
-            foreach (var field in current.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)) {
+            foreach (var field in current.GetFields(
+                         BindingFlags.Instance
+                         | BindingFlags.Public
+                         | BindingFlags.NonPublic
+                         | BindingFlags.DeclaredOnly
+                     )) {
                 if (IsPrimaryConstructorCapture(field)) {
                     continue;
                 }
@@ -392,8 +412,8 @@ public static class ReconcilerConformance {
             }
 
             return outcome;
-        }
-        catch (OperationCanceledException) when (source.IsCancellationRequested && !cancellationToken.IsCancellationRequested) {
+        } catch (OperationCanceledException) when (source.IsCancellationRequested
+                                                   && !cancellationToken.IsCancellationRequested) {
             findings.Add(
                 new(
                     ReconcilerClause.Bounded,
@@ -418,8 +438,7 @@ public static class ReconcilerConformance {
                 new(context.Id, context.ApiVersion, context.Desired, context.Namespace, context.Cluster),
                 cancellationToken
             );
-        }
-        catch (OperationCanceledException) {
+        } catch (OperationCanceledException) {
             return null;
         }
     }
@@ -428,8 +447,11 @@ public static class ReconcilerConformance {
     ///     Whether a field is the compiler's capture of a primary-constructor parameter.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Matched on the unspeakable name, because that is the only thing that distinguishes
-    ///     it.</b> Roslyn emits <c>&lt;name&gt;P</c> for a captured primary-constructor parameter, and
+    ///     ⚠
+    ///     <b>
+    ///         Matched on the unspeakable name, because that is the only thing that distinguishes
+    ///         it.
+    ///     </b> Roslyn emits <c>&lt;name&gt;P</c> for a captured primary-constructor parameter, and
     ///     the angle brackets make the name unspeakable in C# — so a hand-written field cannot collide
     ///     with the pattern. There is no attribute and no metadata flag; this was verified against the
     ///     emitted IL rather than assumed, and it is the same shape the compiler has used since C# 12.
@@ -454,8 +476,11 @@ public static class ReconcilerConformance {
     ///         provider's per-tenant cache passing the check.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Nested types under those namespaces are refused, and that is
-    ///         <c>ImmutableArray&lt;T&gt;.Builder</c>.</b> A builder is a mutable accumulator that
+    ///         ⚠
+    ///         <b>
+    ///             Nested types under those namespaces are refused, and that is
+    ///             <c>ImmutableArray&lt;T&gt;.Builder</c>.
+    ///         </b> A builder is a mutable accumulator that
     ///         lives in <c>System.Collections.Immutable</c>, so a bare namespace test would bless the
     ///         one type in that namespace this check most needs to catch. Nothing nested there is a
     ///         value worth holding in a field, so refusing the whole nested set costs nothing.

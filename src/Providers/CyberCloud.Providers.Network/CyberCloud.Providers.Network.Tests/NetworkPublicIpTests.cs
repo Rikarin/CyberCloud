@@ -50,13 +50,9 @@ public sealed class NetworkPublicIpTests {
         var alice = Address("edge", TenantOne, SubscriptionOne);
         var bob = Address("edge", TenantTwo, SubscriptionTwo);
 
-        using var aliceBody = JsonDocument.Parse(
-            PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.7")
-        );
+        using var aliceBody = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.7"));
 
-        using var bobBody = JsonDocument.Parse(
-            PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.9")
-        );
+        using var bobBody = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.9"));
 
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
         await Pass(reconciler, connection, bob, bobBody.RootElement);
@@ -99,9 +95,8 @@ public sealed class NetworkPublicIpTests {
 
         var spec = Spec(PublicIpAddresses.OvnEipJson("ns", "edge", body.RootElement));
 
-        spec.ContainsKey("v4Ip").ShouldBeFalse(
-            "the rendered OvnEip carries a v4Ip key for a body that asked for no particular address"
-        );
+        spec.ContainsKey("v4Ip")
+            .ShouldBeFalse("the rendered OvnEip carries a v4Ip key for a body that asked for no particular address");
 
         spec.ContainsKey("v6Ip").ShouldBeFalse();
 
@@ -141,9 +136,8 @@ public sealed class NetworkPublicIpTests {
         // controller REWRITES what it was sent, here it FILLS IN what it was not.
         using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster));
 
-        PublicIpAddresses.Matches(AfterTheController("10.100.0.7"), body.RootElement).ShouldBeTrue(
-            "an address the fabric picked was reported as drift, so the resource never converges"
-        );
+        PublicIpAddresses.Matches(AfterTheController("10.100.0.7"), body.RootElement)
+            .ShouldBeTrue("an address the fabric picked was reported as drift, so the resource never converges");
     }
 
     [Fact]
@@ -153,9 +147,7 @@ public sealed class NetworkPublicIpTests {
         // address that is not theirs — the fabric refused the static request and allocated something
         // else — and reporting that as converged would publish the wrong address through
         // showAllocation with the resource saying Succeeded.
-        using var body = JsonDocument.Parse(
-            PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.7")
-        );
+        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: "10.100.0.7"));
 
         PublicIpAddresses.Matches(AfterTheController("10.100.0.9"), body.RootElement).ShouldBeFalse();
         PublicIpAddresses.Matches(AfterTheController("10.100.0.7"), body.RootElement).ShouldBeTrue();
@@ -189,9 +181,7 @@ public sealed class NetworkPublicIpTests {
         // object. There is no field on an OvnEip that publishes anything.
         using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster));
 
-        var document = JsonNode.Parse(
-            PublicIpAddresses.OvnEipJson("ns", "edge", body.RootElement)
-        )!.AsObject();
+        var document = JsonNode.Parse(PublicIpAddresses.OvnEipJson("ns", "edge", body.RootElement))!.AsObject();
 
         document["kind"]!.GetValue<string>().ShouldBe("OvnEip");
 
@@ -202,10 +192,11 @@ public sealed class NetworkPublicIpTests {
         spec.Select(x => x.Key).ShouldBe(["type"]);
 
         foreach (var forbidden in new[] { "nat", "fip", "dnat", "snat", "externalSubnet" }) {
-            spec.ContainsKey(forbidden).ShouldBeFalse(
-                $"the rendered OvnEip carries '{forbidden}', so an address created with an empty body "
-                + "is doing something on the fabric"
-            );
+            spec.ContainsKey(forbidden)
+                .ShouldBeFalse(
+                    $"the rendered OvnEip carries '{forbidden}', so an address created with an empty body "
+                    + "is doing something on the fabric"
+                );
         }
     }
 
@@ -252,16 +243,10 @@ public sealed class NetworkPublicIpTests {
         // It runs in the reconciler, terminally, because a body naming the wrong family can never
         // converge and retrying it forever would hide that behind a spinner.
         PublicIpAddresses.Schema2026
-            .Validate(
-                JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV6: "10.100.0.7")).RootElement
-            )
-            .IsSuccess.ShouldBeTrue(
-                "the v6 pattern admits digits and dots, so the API cannot refuse this"
-            );
+            .Validate(JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV6: "10.100.0.7")).RootElement)
+            .IsSuccess.ShouldBeTrue("the v6 pattern admits digits and dots, so the API cannot refuse this");
 
-        using var body = JsonDocument.Parse(
-            PublicIpAddresses.Body(Cluster, addressV6: "10.100.0.7")
-        );
+        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV6: "10.100.0.7"));
 
         PublicIpAddresses.AddressProblem(body.RootElement)
             .ShouldNotBeNull()
@@ -274,17 +259,13 @@ public sealed class NetworkPublicIpTests {
         // contains an upper-case character — util.ContainsUppercase — and it does so in the
         // controller, which is after this platform has answered 202. Refusing it in the reconciler
         // costs nothing and turns a silent non-convergence into a message with a pointer in it.
-        using var body = JsonDocument.Parse(
-            PublicIpAddresses.Body(Cluster, addressV6: "FD00:FF::7")
-        );
+        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV6: "FD00:FF::7"));
 
         PublicIpAddresses.AddressProblem(body.RootElement)
             .ShouldNotBeNull()
             .ShouldContain("lower case");
 
-        using var lower = JsonDocument.Parse(
-            PublicIpAddresses.Body(Cluster, addressV6: "fd00:ff::7")
-        );
+        using var lower = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV6: "fd00:ff::7"));
 
         PublicIpAddresses.AddressProblem(lower.RootElement).ShouldBeNull();
     }
@@ -294,9 +275,7 @@ public sealed class NetworkPublicIpTests {
         var reconciler = new PublicIpAddressReconciler(new FixedClock());
         var connection = new RecordingConnection();
 
-        using var body = JsonDocument.Parse(
-            PublicIpAddresses.Body(Cluster, addressV4: "fd00:ff::7")
-        );
+        using var body = JsonDocument.Parse(PublicIpAddresses.Body(Cluster, addressV4: "fd00:ff::7"));
 
         var outcome = await Pass(
             reconciler,
@@ -326,8 +305,11 @@ public sealed class NetworkPublicIpTests {
     ///     <c>Update()</c>, and the same values again into <c>.status</c> through a merge patch on the
     ///     status subresource.
     ///     <para>
-    ///         ⚠ <b><c>spec.externalSubnet</c> stays EMPTY here on purpose, and getting that wrong
-    ///         would have made this fixture flatter than the truth.</b> Only
+    ///         ⚠
+    ///         <b>
+    ///             <c>spec.externalSubnet</c> stays EMPTY here on purpose, and getting that wrong
+    ///             would have made this fixture flatter than the truth.
+    ///         </b> Only
     ///         <c>createOrUpdateOvnEipCR</c>'s <i>create</i> branch — for EIPs the controller makes
     ///         itself — sets that field; the update branch leaves it exactly as it was applied. So on
     ///         an object this provider owns the pool is visible on the

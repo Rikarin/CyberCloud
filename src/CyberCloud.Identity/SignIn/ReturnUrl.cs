@@ -5,8 +5,11 @@ namespace CyberCloud.Identity.SignIn;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A sign-in page that redirects to a caller-supplied URL is the classic phishing
-///         primitive</b>, and it is worth spelling out why it is worse here than on an ordinary site.
+///         ⚠
+///         <b>
+///             A sign-in page that redirects to a caller-supplied URL is the classic phishing
+///             primitive
+///         </b>, and it is worth spelling out why it is worse here than on an ordinary site.
 ///         The attacker sends <c>https://id.cybercloud.io/signin?returnUrl=https://evil.example</c>.
 ///         The victim reads the origin, sees the real identity host, and types a real password into a
 ///         real sign-in page — everything they were taught to check passes. They are then handed to

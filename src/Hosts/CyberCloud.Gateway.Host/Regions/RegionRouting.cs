@@ -9,8 +9,11 @@ enum RegionAction {
     Proxy,
 
     /// <summary>
-    ///     A second hop was about to happen. ⚠ Refuse — docs/plan/10 § Request pipeline: <i>"One hop,
-    ///     never two."</i>
+    ///     A second hop was about to happen. ⚠ Refuse — docs/plan/10 § Request pipeline:
+    ///     <i>
+    ///         "One hop,
+    ///         never two."
+    ///     </i>
     /// </summary>
     RefuseSecondHop
 }
@@ -112,11 +115,13 @@ sealed class UnconfiguredRegionProxy : IRegionProxy {
         RegionDecision decision,
         CancellationToken cancellationToken = default
     ) =>
-        Task.FromResult(Result.Failure(
-            ErrorCode.InternalError,
-            $"This gateway runs in region '{decision.ThisRegion}' and the tenant's home region is "
-            + $"'{decision.HomeRegion}'. No cross-region proxy is configured, so the request cannot "
-            + $"be served here. Call the '{decision.HomeRegion}' gateway — docs/plan/10 "
-            + "§ Request pipeline."
-        ));
+        Task.FromResult(
+            Result.Failure(
+                ErrorCode.InternalError,
+                $"This gateway runs in region '{decision.ThisRegion}' and the tenant's home region is "
+                + $"'{decision.HomeRegion}'. No cross-region proxy is configured, so the request cannot "
+                + $"be served here. Call the '{decision.HomeRegion}' gateway — docs/plan/10 "
+                + "§ Request pipeline."
+            )
+        );
 }

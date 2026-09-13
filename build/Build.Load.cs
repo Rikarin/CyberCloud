@@ -12,17 +12,16 @@
 // releases is still "under 25 ms". Both checks are here, and the trend one is the reason
 // LoadBaselineFile is a committed file rather than a build artefact.
 
+using Nuke.Common;
+using Nuke.Common.IO;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json.Nodes;
-using Nuke.Common;
-using Nuke.Common.IO;
-using Serilog;
 
-partial class Build
-{
+partial class Build {
     /// <summary>
     ///     One number a load run has to produce, and what it has to be under.
     /// </summary>
@@ -35,8 +34,11 @@ partial class Build
     /// <summary>
     ///     The six scenarios of docs/plan/23 § The load scenarios, as the numbers they assert.
     ///     <para>
-    ///         ⚠ <b>Two of the doc's assertions are prose and are operationalised here, which is a
-    ///         decision this build is making and doc 23 is not.</b> "Reconcile queue does not grow
+    ///         ⚠
+    ///         <b>
+    ///             Two of the doc's assertions are prose and are operationalised here, which is a
+    ///             decision this build is making and doc 23 is not.
+    ///         </b> "Reconcile queue does not grow
     ///         unboundedly" becomes a queue-depth slope with a ceiling of zero, and "no activation
     ///         thrash" becomes an activation-churn rate with a ceiling of zero. Both are the
     ///         narrowest reading of the words; if the intent was "grows sublinearly" or "some churn
@@ -50,8 +52,7 @@ partial class Build
     ///         so on every run rather than leaving the gap silent.
     ///     </para>
     /// </summary>
-    static readonly LoadMetric[] LoadMetrics =
-    [
+    static readonly LoadMetric[] LoadMetrics = [
         new("10 000 tenants, 1 000 000 resources, 5 000 rps reads", "control-plane-read-p99-ms", 25, "ms"),
         new("500 writes/s sustained", "control-plane-write-p99-ms", 60, "ms"),
         new("500 writes/s sustained", "reconcile-queue-depth-slope-per-minute", 0, "items/min"),
@@ -60,7 +61,7 @@ partial class Build
         new("2 000 000 resident grains", "silo-working-set-gb", 12, "GB"),
         new("2 000 000 resident grains", "grain-activation-churn-per-minute", 0, "activations/min"),
         new("1 000 concurrent terminal sessions", "terminal-stream-p99-ms", 80, "ms"),
-        new("500 000 spans/s ingest", "span-ingest-drops", 0, "spans"),
+        new("500 000 spans/s ingest", "span-ingest-drops", 0, "spans")
     ];
 
     /// <summary>
@@ -94,25 +95,28 @@ partial class Build
     ///     trend" would mean "re-run the load suite", which nobody does, which is how the trend rule
     ///     stops being enforced.
     /// </remarks>
-    [Parameter("A load results JSON file to gate on instead of driving the scenarios. Used by the release gate to re-check the weekly run's numbers.")]
+    [Parameter(
+        "A load results JSON file to gate on instead of driving the scenarios. Used by the release gate to re-check the weekly run's numbers."
+    )]
     readonly string? LoadResults;
 
     /// <summary>
     ///     ⚠ The deployment is an input rather than a dependency — see the note beside the target
     ///     graph in <c>Build.cs</c>.
     /// </summary>
-    void RunLoadTests()
-    {
+    void RunLoadTests() {
         Log.Information(
             "Load: {Count} metric(s) across {Scenarios} scenario(s) — docs/plan/23 § The load "
             + "scenarios, budgets from docs/plan/00 § The quality bar",
             LoadMetrics.Length,
-            LoadMetrics.Select(x => x.Scenario).Distinct(StringComparer.Ordinal).Count());
+            LoadMetrics.Select(x => x.Scenario).Distinct(StringComparer.Ordinal).Count()
+        );
 
         Log.Warning(
             "Load: \"ingest pods scale linearly\" (docs/plan/23 § The load scenarios, scenario 6) is "
             + "NOT gated. It asserts the shape of a curve and this target compares numbers; a "
-            + "single-number stand-in would report a pass on a claim nobody checked.");
+            + "single-number stand-in would report a pass on a claim nobody checked."
+        );
 
         var results = LoadResults is not null
             ? ReadLoadNumbers((AbsolutePath)LoadResults, "the results file passed to --load-results")
@@ -124,8 +128,7 @@ partial class Build
     /// <summary>
     ///     Runs the suite against a real deployment, returning what it measured.
     /// </summary>
-    Dictionary<string, double> DriveScenarios()
-    {
+    Dictionary<string, double> DriveScenarios() {
         var suites = ProjectsIn(TestSuite.Load);
         var resultsFile = ArtifactsDirectory / "load" / "results.json";
         var preconditions = new TargetPreconditions(nameof(Load));
@@ -135,7 +138,8 @@ partial class Build
             "there is no load suite — no project under test/ is named CyberCloud.Load",
             "create test/CyberCloud.Load (docs/plan/03 § test/), driving the scenarios and writing "
             + $"the metric names in Build.Load.cs § LoadMetrics to {resultsFile.Name}. "
-            + "Build.Test.cs § SuiteOwning already routes that name here");
+            + "Build.Test.cs § SuiteOwning already routes that name here"
+        );
 
         preconditions.Require(
             !string.IsNullOrWhiteSpace(E2EBaseUrl),
@@ -143,7 +147,8 @@ partial class Build
             "pass --e2e-base-url for an environment that can actually be driven to the numbers — "
             + "10 000 tenants, 5 000 rps, 2 000 000 resident grains. docs/plan/23 § Environments and "
             + "rollout puts the weekly suite on staging, and a smaller environment does not produce a "
-            + "smaller version of these answers, it produces different ones");
+            + "smaller version of these answers, it produces different ones"
+        );
 
         preconditions.Require(
             LoadBaselineFile.FileExists(),
@@ -152,76 +157,78 @@ partial class Build
             $"commit {LoadBaselineFile.Name} with the previous release's numbers, one key per metric "
             + "in Build.Load.cs § LoadMetrics. ⚠ Until it exists the 20 % rule in docs/plan/23 § The "
             + "load scenarios is unenforceable, and the budgets alone would pass a release that got "
-            + "five times slower while staying under them");
+            + "five times slower while staying under them"
+        );
 
         preconditions.AssertSatisfied(
             "docs/plan/23 § Test layers, row Load: the docs/plan/00 quality bar at scale, gating "
-            + "\"budgets met\" before a release.");
+            + "\"budgets met\" before a release."
+        );
 
         RunSuites(
             nameof(Load),
             suites,
-            new Dictionary<string, string>
-            {
-                ["CYBERCLOUD_LOAD_BASE_URL"] = E2EBaseUrl!,
-                ["CYBERCLOUD_LOAD_RESULTS"] = resultsFile,
-            });
+            new Dictionary<string, string> {
+                ["CYBERCLOUD_LOAD_BASE_URL"] = E2EBaseUrl!, ["CYBERCLOUD_LOAD_RESULTS"] = resultsFile
+            }
+        );
 
-        return ReadLoadNumbers(resultsFile, $"what {string.Join(", ", suites.Select(x => x.NameWithoutExtension))} measured");
+        return ReadLoadNumbers(
+            resultsFile,
+            $"what {string.Join(", ", suites.Select(x => x.NameWithoutExtension))} measured"
+        );
     }
 
     /// <summary>Both halves of the gate: the six budgets, and the 20 % trend.</summary>
-    void Gate(Dictionary<string, double> results)
-    {
+    void Gate(Dictionary<string, double> results) {
         var baseline = LoadBaselineFile.FileExists()
             ? ReadLoadNumbers(LoadBaselineFile, $"the previous release, from {LoadBaselineFile.Name}")
             : new Dictionary<string, double>();
 
         var violations = new List<string>();
 
-        foreach (var metric in LoadMetrics)
-        {
-            if (!results.TryGetValue(metric.Metric, out var measured))
-            {
+        foreach (var metric in LoadMetrics) {
+            if (!results.TryGetValue(metric.Metric, out var measured)) {
                 violations.Add(
                     $"{metric.Metric} is not in the results. docs/plan/23 § The load scenarios asserts "
                     + $"it for \"{metric.Scenario}\", and a missing number is an unrun scenario, not a "
-                    + "pass");
+                    + "pass"
+                );
 
                 continue;
             }
 
-            if (measured > metric.Budget)
-            {
+            if (measured > metric.Budget) {
                 violations.Add(
                     $"{metric.Metric} = {Number(measured)} {metric.Unit}, over its budget of "
-                    + $"{Number(metric.Budget)} {metric.Unit} — \"{metric.Scenario}\"");
+                    + $"{Number(metric.Budget)} {metric.Unit} — \"{metric.Scenario}\""
+                );
             }
 
-            if (!baseline.TryGetValue(metric.Metric, out var previous))
-            {
+            if (!baseline.TryGetValue(metric.Metric, out var previous)) {
                 Log.Warning(
                     "  ○ {Metric} = {Measured} {Unit} — no previous release recorded, so the 20 % "
                     + "rule did not apply to it",
                     metric.Metric,
                     Number(measured),
-                    metric.Unit);
+                    metric.Unit
+                );
 
                 continue;
             }
 
             var limit = previous * (1 + RegressionLimit);
 
-            if (measured > limit)
-            {
+            if (measured > limit) {
                 violations.Add(
                     $"{metric.Metric} regressed {Percent(previous, measured)} against the previous "
                     + $"release ({Number(previous)} → {Number(measured)} {metric.Unit}), past the "
                     + $"{RegressionLimit:P0} limit. ⚠ THIS BLOCKS THE RELEASE EVEN THOUGH "
                     + (measured > metric.Budget
-                        ? $"it is also over budget."
-                        : $"{Number(measured)} is still under the {Number(metric.Budget)} {metric.Unit} "
-                        + "budget — docs/plan/23 § The load scenarios: \"the trend is the signal\""));
+                            ? $"it is also over budget."
+                            : $"{Number(measured)} is still under the {Number(metric.Budget)} {metric.Unit} "
+                            + "budget — docs/plan/23 § The load scenarios: \"the trend is the signal\"")
+                );
 
                 continue;
             }
@@ -233,33 +240,35 @@ partial class Build
                 metric.Unit,
                 Number(metric.Budget),
                 Number(previous),
-                Percent(previous, measured));
+                Percent(previous, measured)
+            );
         }
 
-        if (violations.Count == 0)
-        {
+        if (violations.Count == 0) {
             Log.Information(
                 "Load: {Count} metric(s) within budget and within {Limit:P0} of the previous release",
                 LoadMetrics.Length,
-                RegressionLimit);
+                RegressionLimit
+            );
 
             return;
         }
 
-        foreach (var violation in violations)
+        foreach (var violation in violations) {
             Log.Error("Load: {Violation}", violation);
+        }
 
         Assert.Fail(
             $"{violations.Count} load violation(s), listed above. docs/plan/23 § The load scenarios "
             + "makes both halves release blockers: a missed budget, and a 20 % regression between "
-            + "releases even where the budget still passes.");
+            + "releases even where the budget still passes."
+        );
     }
 
-    static string Number(double value)
-        => value.ToString("0.###", CultureInfo.InvariantCulture);
+    static string Number(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
-    static string Percent(double previous, double measured)
-        => previous == 0
+    static string Percent(double previous, double measured) =>
+        previous == 0
             ? measured == 0 ? "0 → 0" : "up from zero"
             : ((measured - previous) / previous).ToString("+0.#%;-0.#%;0%", CultureInfo.InvariantCulture);
 
@@ -273,30 +282,30 @@ partial class Build
     ///     mistaken for a clean release.
     /// </remarks>
     // Dictionary rather than IReadOnlyDictionary: CA1859 is an error here and this is a private helper.
-    static Dictionary<string, double> ReadLoadNumbers(AbsolutePath file, string what)
-    {
+    static Dictionary<string, double> ReadLoadNumbers(AbsolutePath file, string what) {
         Assert.FileExists(
             file,
-            $"{file} does not exist, and it is where this target reads {what}.");
+            $"{file} does not exist, and it is where this target reads {what}."
+        );
 
         var root = JsonNode.Parse(file.ReadAllBytes())?.AsObject()
-                   ?? throw new System.Text.Json.JsonException($"{file} is not a JSON object.");
+            ?? throw new System.Text.Json.JsonException($"{file} is not a JSON object.");
 
         // "metrics" if it is there, the root object otherwise — the baseline is a bare map and a
         // results file may want to carry a release name beside its numbers.
         var metrics = root["metrics"]?.AsObject() ?? root;
         var numbers = new Dictionary<string, double>(StringComparer.Ordinal);
 
-        foreach (var (key, value) in metrics)
-        {
-            if (value is null || value.GetValueKind() != System.Text.Json.JsonValueKind.Number)
-            {
-                if (value?.GetValueKind() == System.Text.Json.JsonValueKind.Object)
+        foreach (var (key, value) in metrics) {
+            if (value is null || value.GetValueKind() != System.Text.Json.JsonValueKind.Number) {
+                if (value?.GetValueKind() == System.Text.Json.JsonValueKind.Object) {
                     continue;
+                }
 
                 Assert.Fail(
                     $"{file}: \"{key}\" is not a number. A load result that is not a number is a "
-                    + "scenario that did not produce one, and this target must not read that as a pass.");
+                    + "scenario that did not produce one, and this target must not read that as a pass."
+                );
             }
 
             numbers[key] = value!.GetValue<double>();

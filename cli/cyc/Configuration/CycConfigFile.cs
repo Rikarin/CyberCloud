@@ -19,9 +19,15 @@ namespace CyberCloud.Cli.Configuration;
 ///     endpoint     = https://api.lab.internal/
 ///     </code>
 ///     <para>
-///         ⚠ <b>No token, no secret, no credential of any kind is ever written here, and nothing in
-///         this type can write one.</b> docs/plan/21 § Decisions: <i>"Never a plaintext file — that is
-///         how CI credentials leak into container images."</i> The refresh token lives in the OS
+///         ⚠
+///         <b>
+///             No token, no secret, no credential of any kind is ever written here, and nothing in
+///             this type can write one.
+///         </b> docs/plan/21 § Decisions:
+///         <i>
+///             "Never a plaintext file — that is
+///             how CI credentials leak into container images."
+///         </i> The refresh token lives in the OS
 ///         keychain and the SDK owns it (<c>TokenCache.CreatePersistent</c>); the CLI never sees it.
 ///         <see cref="Set" /> refuses a key that looks like a credential, so the rule survives someone
 ///         adding <c>cyc config set token …</c> in a hurry.
@@ -55,14 +61,22 @@ sealed class CycConfigFile {
 
     /// <summary>An empty configuration — what a machine with no <c>~/.cyc/config</c> has.</summary>
     public static CycConfigFile Empty { get; } =
-        new(path: null, DefaultProfileName, new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase));
+        new(
+            path: null,
+            DefaultProfileName,
+            new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
+        );
 
     /// <summary>The directory the CLI keeps its state in — <c>~/.cyc</c>.</summary>
     /// <remarks>⚠ <c>~/.cyc</c>, never <c>~/.cc</c>. See cyc.csproj.</remarks>
-    public static string DirectoryPath
-        => System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, Environment.SpecialFolderOption.DoNotVerify),
-            ".cyc");
+    public static string DirectoryPath =>
+        System.IO.Path.Combine(
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.UserProfile,
+                Environment.SpecialFolderOption.DoNotVerify
+            ),
+            ".cyc"
+        );
 
     /// <summary>The configuration file's path.</summary>
     public static string FilePath => System.IO.Path.Combine(DirectoryPath, "config");
@@ -73,8 +87,9 @@ sealed class CycConfigFile {
     public static CycConfigFile Read(string? path = null) {
         path ??= FilePath;
 
-        if (!File.Exists(path))
+        if (!File.Exists(path)) {
             return Empty;
+        }
 
         try {
             return Parse(File.ReadAllText(path), path);
@@ -98,8 +113,9 @@ sealed class CycConfigFile {
 
             // `#` and `;` both start a comment: git config uses one and every INI writer in the
             // world uses the other, and refusing either is a surprise nobody needs.
-            if (line.Length == 0 || line[0] is '#' or ';')
+            if (line.Length == 0 || line[0] is '#' or ';') {
                 continue;
+            }
 
             if (line[0] == '[' && line[^1] == ']') {
                 current = line[1..^1].Trim();
@@ -110,8 +126,9 @@ sealed class CycConfigFile {
 
             var separator = line.IndexOf('=', StringComparison.Ordinal);
 
-            if (separator < 0)
+            if (separator < 0) {
                 continue;
+            }
 
             var key = line[..separator].Trim();
             var value = line[(separator + 1)..].Trim();
@@ -136,15 +153,15 @@ sealed class CycConfigFile {
     /// <summary>One setting's value in one profile, or <c>null</c>.</summary>
     /// <param name="profile">The profile name.</param>
     /// <param name="key">The setting's key.</param>
-    public string? Value(string profile, string key)
-        => profiles.TryGetValue(profile, out var settings) && settings.TryGetValue(key, out var value)
+    public string? Value(string profile, string key) =>
+        profiles.TryGetValue(profile, out var settings) && settings.TryGetValue(key, out var value)
             ? value
             : null;
 
     /// <summary>Every setting in one profile.</summary>
     /// <param name="profile">The profile name.</param>
-    public IReadOnlyDictionary<string, string> Settings(string profile)
-        => profiles.TryGetValue(profile, out var settings)
+    public IReadOnlyDictionary<string, string> Settings(string profile) =>
+        profiles.TryGetValue(profile, out var settings)
             ? settings
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -164,13 +181,15 @@ sealed class CycConfigFile {
         ArgumentException.ThrowIfNullOrWhiteSpace(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        if (LooksLikeCredential(key))
+        if (LooksLikeCredential(key)) {
             throw new CycUsageException(
                 $"'{key}' is credential-shaped and ~/.cyc/config is a plaintext file. docs/plan/21 "
                 + "§ Decisions: \"Never a plaintext file — that is how CI credentials leak into "
                 + "container images.\" Sign in with 'cyc login', which stores the refresh token in the "
                 + "OS keychain, or pass a service principal through the CYC_CLIENT_* environment "
-                + "variables.");
+                + "variables."
+            );
+        }
 
         var copy = new Dictionary<string, Dictionary<string, string>>(profiles, StringComparer.OrdinalIgnoreCase);
 
@@ -196,15 +215,17 @@ sealed class CycConfigFile {
         var text = new StringBuilder();
 
         text.Append("# cyc configuration — docs/plan/21 § Decisions.").Append('\n');
-        text.Append("# ⚠ No credential is ever written here. 'cyc login' puts the refresh token in the OS keychain.").Append('\n');
+        text.Append("# ⚠ No credential is ever written here. 'cyc login' puts the refresh token in the OS keychain.")
+            .Append('\n');
         text.Append('\n');
         text.Append(CultureInfo.InvariantCulture, $"default = {DefaultProfile}").Append('\n');
 
         foreach (var profile in profiles.OrderBy(x => x.Key, StringComparer.Ordinal)) {
             text.Append('\n').Append('[').Append(profile.Key).Append(']').Append('\n');
 
-            foreach (var setting in profile.Value.OrderBy(x => x.Key, StringComparer.Ordinal))
+            foreach (var setting in profile.Value.OrderBy(x => x.Key, StringComparer.Ordinal)) {
                 text.Append(CultureInfo.InvariantCulture, $"{setting.Key} = {setting.Value}").Append('\n');
+            }
         }
 
         return text.ToString();
@@ -217,8 +238,9 @@ sealed class CycConfigFile {
 
         var directory = System.IO.Path.GetDirectoryName(path);
 
-        if (!string.IsNullOrEmpty(directory))
+        if (!string.IsNullOrEmpty(directory)) {
             Directory.CreateDirectory(directory);
+        }
 
         File.WriteAllText(path, Render());
     }
@@ -231,10 +253,10 @@ sealed class CycConfigFile {
     ///     the same reason: the words people reach for when they are about to store a secret are a
     ///     short and stable list.
     /// </remarks>
-    internal static bool LooksLikeCredential(string key)
-        => key.Contains("secret", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("password", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("token", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("credential", StringComparison.OrdinalIgnoreCase)
-            || key.EndsWith("key", StringComparison.OrdinalIgnoreCase);
+    internal static bool LooksLikeCredential(string key) =>
+        key.Contains("secret", StringComparison.OrdinalIgnoreCase)
+        || key.Contains("password", StringComparison.OrdinalIgnoreCase)
+        || key.Contains("token", StringComparison.OrdinalIgnoreCase)
+        || key.Contains("credential", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("key", StringComparison.OrdinalIgnoreCase);
 }

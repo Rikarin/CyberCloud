@@ -27,8 +27,11 @@ namespace CyberCloud.Providers.Terminal.Application;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>IT REGISTERS A PROVIDER AND NOTHING ELSE, AND THIS IS THE FIRST FAMILY WHOSE
-///         <c>Describe</c> DECLARES BOTH A RECONCILER AND A HANDLER.</b>
+///         ⚠
+///         <b>
+///             IT REGISTERS A PROVIDER AND NOTHING ELSE, AND THIS IS THE FIRST FAMILY WHOSE
+///             <c>Describe</c> DECLARES BOTH A RECONCILER AND A HANDLER.
+///         </b>
 ///         <c>AddCyberCloudProvider</c> runs <c>Describe</c> against
 ///         <c>DiscoveringProviderBuilder</c> and registers each reconciler type and each handler type
 ///         as a singleton by concrete type. Eleven families exercised the first half of that walk;

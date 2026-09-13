@@ -11,8 +11,11 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 /// <remarks>
 ///     <para>
 ///         docs/plan/02 § ADR-012's CLI row is "Verb tree, flags, help, completion", and
-///         docs/plan/21 § Grammar fixes the shape: <c>cyc &lt;group&gt; &lt;subgroup...&gt;
-///         &lt;verb&gt; [--flags]</c>.
+///         docs/plan/21 § Grammar fixes the shape:
+///         <c>
+/// cyc &lt;group&gt; &lt;subgroup...&gt;
+///         &lt;verb&gt; [--flags]
+///         </c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>This emits the <i>description</i>, not the CLI.</b> The <c>cyc</c> host — its
@@ -23,8 +26,11 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///         two and make every CLI behaviour change a generator change.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The alias table is generated, and docs/plan/21 § Grammar calls it "the <i>only</i>
-///         hand-maintained part of the CLI's surface".</b> A table listing twenty providers' short
+///         ⚠
+///         <b>
+///             The alias table is generated, and docs/plan/21 § Grammar calls it "the <i>only</i>
+///             hand-maintained part of the CLI's surface".
+///         </b> A table listing twenty providers' short
 ///         names, kept in the CLI, is a table nobody adding the twenty-first provider will find.
 ///         Declared next to the type (<c>IResourceTypeBuilder.Display</c>) it arrives here for free
 ///         and a duplicate is a build failure rather than a verb that resolves to one of two things.
@@ -115,9 +121,7 @@ public static class CliEmitter {
         // have hit the ArgumentException that produces. Derived from the document rather than from a
         // list, because the two lists this replaces went stale twice — CliTokens' own remarks.
         var collisions = CliTokens.Collisions(
-            DocumentReader.TypesOf(document).Select(
-                x => new CliDeclaration(x.ProviderNamespace, x.TypePath, x.Alias)
-            )
+            DocumentReader.TypesOf(document).Select(x => new CliDeclaration(x.ProviderNamespace, x.TypePath, x.Alias))
         );
 
         if (collisions.Length > 0) {
@@ -132,7 +136,9 @@ public static class CliEmitter {
             // derived artifact that does not name its source is one nobody can re-derive.
             ["generatedFrom"] = OpenApiArtifacts.DirectoryName + "/" + version + ".json",
             ["description"] =
-                "The cyc verb tree at api-version " + version + ". Generated from the OpenAPI "
+                "The cyc verb tree at api-version "
+                + version
+                + ". Generated from the OpenAPI "
                 + "document — docs/plan/21 § Generation. Hand edits are overwritten by ./build.sh "
                 + "Generate and fail the Generated surfaces gate.",
             ["globalFlags"] = GlobalFlags(version),
@@ -255,8 +261,11 @@ public static class CliEmitter {
             // than about what it intends to do — docs/plan/08 § Soft delete is built, so the verb
             // parks the resource and `purge` is what ends the window.
             type.SoftDeleteDays > 0
-                ? "Delete a " + type.DisplayName + ". Recoverable for "
-                + DocumentReader.Count(type.SoftDeleteDays) + " day(s); purge to end that early."
+                ? "Delete a "
+                + type.DisplayName
+                + ". Recoverable for "
+                + DocumentReader.Count(type.SoftDeleteDays)
+                + " day(s); purge to end that early."
                 : "Delete a " + type.DisplayName + ". Permanent.",
             "DELETE",
             type,
@@ -372,8 +381,8 @@ public static class CliEmitter {
             // cache for the same reason a shell history full of key material is a leak.
             verb["secret"] = true;
             verb["summary"] = verb["summary"]!.GetValue<string>()
-                              + " ⚠ The response carries secret material — it is always audited and "
-                              + "must not be written to a log or a shell history.";
+                + " ⚠ The response carries secret material — it is always audited and "
+                + "must not be written to a log or a shell history.";
         }
 
         if (action.Request is null) {
@@ -437,7 +446,15 @@ public static class CliEmitter {
         var verbs = new JsonObject();
         var address = ScopeAddress(scope);
 
-        verbs["show"] = ScopeVerb("show", "Read a " + scope.DisplayName.ToLowerInvariant() + ".", "GET", scope, version, address, []);
+        verbs["show"] = ScopeVerb(
+            "show",
+            "Read a " + scope.DisplayName.ToLowerInvariant() + ".",
+            "GET",
+            scope,
+            version,
+            address,
+            []
+        );
 
         if (scope.Creatable) {
             // ⚠ `create` and NOT long-running, which is the one place a scope verb differs from a
@@ -446,7 +463,8 @@ public static class CliEmitter {
             // answers 404.
             verbs["create"] = ScopeVerb(
                 "create",
-                "Create a " + scope.DisplayName.ToLowerInvariant()
+                "Create a "
+                + scope.DisplayName.ToLowerInvariant()
                 + ". Repeating it with the same name is a success and changes nothing.",
                 "PUT",
                 scope,
@@ -512,8 +530,11 @@ public static class CliEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The scope's own segment is <c>--name</c> and is required, even when that segment
-    ///         is <c>{subscriptionId}</c>.</b> The obvious alternative — reuse <c>--subscription</c>,
+    ///         ⚠
+    ///         <b>
+    ///             The scope's own segment is <c>--name</c> and is required, even when that segment
+    ///             is <c>{subscriptionId}</c>.
+    ///         </b> The obvious alternative — reuse <c>--subscription</c>,
     ///         which is the flag every resource verb fills that placeholder from — would make
     ///         <c>cyc scope subscription create</c> read the profile's current subscription and
     ///         create <i>that</i> when the flag was omitted. Creating a scope the caller did not name
@@ -521,8 +542,11 @@ public static class CliEmitter {
     ///         never the flag that remembers where you are working.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The ancestors keep their profile-backed flags, which is the same asymmetry the
-    ///         resource verbs have.</b> A subscription's tenant is context; a group's subscription is
+    ///         ⚠
+    ///         <b>
+    ///             The ancestors keep their profile-backed flags, which is the same asymmetry the
+    ///             resource verbs have.
+    ///         </b> A subscription's tenant is context; a group's subscription is
     ///         context; the thing on the end of the path is not.
     ///     </para>
     /// </remarks>
@@ -547,7 +571,8 @@ public static class CliEmitter {
             new(
                 "--name",
                 "string",
-                "The " + scope.DisplayName.ToLowerInvariant()
+                "The "
+                + scope.DisplayName.ToLowerInvariant()
                 + "'s own name. ⚠ Required, and never taken from the profile: the flag that names "
                 + "what you are addressing is never the flag that remembers where you are working, "
                 + "or a create with the flag left off would create the scope you are already in.",
@@ -576,9 +601,9 @@ public static class CliEmitter {
     ///     works for one command and not the next.
     /// </remarks>
     static CliFlag? ProfileFlagFor(string placeholder) =>
-        PlatformFlags.FirstOrDefault(
-            x => string.Equals(x.PathPlaceholder, placeholder, StringComparison.Ordinal)
-        ) is { Name.Length: > 0 } flag
+        PlatformFlags.FirstOrDefault(x => string.Equals(x.PathPlaceholder, placeholder, StringComparison.Ordinal)) is {
+            Name.Length: > 0
+        } flag
             ? flag
             : null;
 
@@ -621,8 +646,11 @@ public static class CliEmitter {
     /// </param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Read off the path template's own placeholders rather than listed, and until
-    ///         2026-08-12 that sentence was in these remarks and was not true.</b> The method returned
+    ///         ⚠
+    ///         <b>
+    ///             Read off the path template's own placeholders rather than listed, and until
+    ///             2026-08-12 that sentence was in these remarks and was not true.
+    ///         </b> The method returned
     ///         a hard-coded four — <c>--name</c>, <c>--resource-group</c>, <c>--subscription</c>,
     ///         <c>--tenant</c> — so a command for a nested type could name the database and never the
     ///         server. That is a URL the CLI cannot build at all, and nothing said so: the flag list
@@ -685,8 +713,11 @@ public static class CliEmitter {
     /// <param name="type">The resource type, whose collection path item supplies the parameters.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Read off the document's declared parameters rather than named here, and that is
-    ///         the whole of issue #64's second half.</b> The first half was that <c>CliFlag</c> had no
+    ///         ⚠
+    ///         <b>
+    ///             Read off the document's declared parameters rather than named here, and that is
+    ///             the whole of issue #64's second half.
+    ///         </b> The first half was that <c>CliFlag</c> had no
     ///         query binding, so a <c>--top</c> would have been accepted, parsed and never sent. The
     ///         second is subtler and outlives the fix: <c>$top</c> and <c>$skipToken</c> written here
     ///         would be a second copy of what
@@ -696,8 +727,11 @@ public static class CliEmitter {
     ///         anywhere saying so.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The flag name drops the <c>$</c> and kebabs what is left; the wire name keeps
-    ///         it.</b> <c>--$top</c> is not a flag any shell makes easy to type, and
+    ///         ⚠
+    ///         <b>
+    ///             The flag name drops the <c>$</c> and kebabs what is left; the wire name keeps
+    ///             it.
+    ///         </b> <c>--$top</c> is not a flag any shell makes easy to type, and
     ///         <see cref="CliFlag.QueryParameter" /> carries the name the request needs, so the two
     ///         never have to be derived from each other.
     ///     </para>
@@ -786,11 +820,12 @@ public static class CliEmitter {
             // resource's name and must not share its flag — and for a nested type the reserved set is
             // longer than four, which is why the list is passed in rather than rebuilt from nothing.
             var collides = taken[leaf.Name] > 1
-                           || address.Any(x => string.Equals(
-                               x.Name,
-                               "--" + Kebab(leaf.Name),
-                               StringComparison.Ordinal
-                           ));
+                || address.Any(x => string.Equals(
+                        x.Name,
+                        "--" + Kebab(leaf.Name),
+                        StringComparison.Ordinal
+                    )
+                );
 
             var name = collides ? PathName(leaf.JsonPointer) : Kebab(leaf.Name);
             var type = DocumentReader.TypeOf(leaf.Schema);
@@ -802,20 +837,20 @@ public static class CliEmitter {
                 DocumentReader.Text(leaf.Schema["description"]),
                 leaf.Required
             ) {
-                JsonPointer = leaf.JsonPointer,
-                Repeated = type == "array",
-                Nullable = DocumentReader.IsNullable(leaf.Schema),
-                // ⚠ THE ENUM GAP, CASHED IN. A closed set is a flag whose completion is the set and
-                // whose invalid value is refused before a request is sent. Without it the CLI could
-                // only forward whatever was typed and let the server answer 400.
-                Choices = values,
-                Secret = DocumentReader.Flag(leaf.Schema["x-cybercloud-secret"]),
-                ReadOnly = DocumentReader.Flag(leaf.Schema["readOnly"]),
-                Immutable = DocumentReader.Flag(leaf.Schema["x-cybercloud-immutable"]),
-                Widget = DocumentReader.Text(leaf.Schema["x-cybercloud-widget"]),
-                Default = leaf.Schema["default"]?.DeepClone(),
-                Example = leaf.Schema["example"]?.DeepClone()
-            };
+                    JsonPointer = leaf.JsonPointer,
+                    Repeated = type == "array",
+                    Nullable = DocumentReader.IsNullable(leaf.Schema),
+                    // ⚠ THE ENUM GAP, CASHED IN. A closed set is a flag whose completion is the set and
+                    // whose invalid value is refused before a request is sent. Without it the CLI could
+                    // only forward whatever was typed and let the server answer 400.
+                    Choices = values,
+                    Secret = DocumentReader.Flag(leaf.Schema["x-cybercloud-secret"]),
+                    ReadOnly = DocumentReader.Flag(leaf.Schema["readOnly"]),
+                    Immutable = DocumentReader.Flag(leaf.Schema["x-cybercloud-immutable"]),
+                    Widget = DocumentReader.Text(leaf.Schema["x-cybercloud-widget"]),
+                    Default = leaf.Schema["default"]?.DeepClone(),
+                    Example = leaf.Schema["example"]?.DeepClone()
+                };
 
             if (string.Equals(leaf.JsonPointer, clusterIdPointer, StringComparison.Ordinal)) {
                 // ⚠ THE CLUSTER-POINTER GAP, CASHED IN. `requires-cluster: true` alone told the CLI
@@ -885,7 +920,13 @@ public static class CliEmitter {
                 ["name"] = "--output",
                 ["type"] = "string",
                 ["summary"] = "table for humans, json for scripts. tsv because cut exists.",
-                ["choices"] = new JsonArray { "table", "json", "yaml", "tsv", "none" },
+                ["choices"] = new JsonArray {
+                    "table",
+                    "json",
+                    "yaml",
+                    "tsv",
+                    "none"
+                },
                 ["default"] = "table"
             },
             new JsonObject {
@@ -973,8 +1014,11 @@ public readonly record struct CliFlag(string Name, string Type, string Summary, 
     ///     body flag.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><see cref="JsonPointer" />'s address-side twin, and a nested type is what made it
-    ///     necessary.</b> With four fixed address flags the host could hard-code which placeholder
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="JsonPointer" />'s address-side twin, and a nested type is what made it
+    ///         necessary.
+    ///     </b> With four fixed address flags the host could hard-code which placeholder
     ///     each one filled. A child's ancestors are per-type — <c>{serversName}</c> for one, a
     ///     different segment for the next — so a host inferring them from the flag NAME would be
     ///     re-deriving a convention this emitter owns, and the two would drift the first time either
@@ -1049,11 +1093,7 @@ public readonly record struct CliFlag(string Name, string Type, string Summary, 
     ///     and the host's default for an absent member is the same <see langword="false" />.
     /// </remarks>
     public JsonObject ToJson() {
-        var node = new JsonObject {
-            ["name"] = Name,
-            ["type"] = Type,
-            ["required"] = Required
-        };
+        var node = new JsonObject { ["name"] = Name, ["type"] = Type, ["required"] = Required };
 
         if (Alias.Length > 0) {
             node["alias"] = Alias;

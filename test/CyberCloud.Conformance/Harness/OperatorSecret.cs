@@ -9,8 +9,10 @@ namespace CyberCloud.Conformance.Harness;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Shared because five providers need the same three lines and the base64 is the part that
-///         is easy to get wrong in a way that still looks right.</b> A fixture that put the plaintext
+///         <b>
+///             Shared because five providers need the same three lines and the base64 is the part that
+///             is easy to get wrong in a way that still looks right.
+///         </b> A fixture that put the plaintext
 ///         straight into <c>data</c> would satisfy a handler that forgot to decode and fail one that
 ///         did — the exact inversion of what the test is for.
 ///     </para>
@@ -37,10 +39,7 @@ public static class OperatorSecret {
         return new JsonObject {
             ["apiVersion"] = "v1",
             ["kind"] = "Secret",
-            ["metadata"] = new JsonObject {
-                ["name"] = target.Name,
-                ["namespace"] = target.Namespace
-            },
+            ["metadata"] = new JsonObject { ["name"] = target.Name, ["namespace"] = target.Namespace },
             ["type"] = "Opaque",
             ["data"] = data
         }.ToJsonString();

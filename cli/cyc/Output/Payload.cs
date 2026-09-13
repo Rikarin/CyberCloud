@@ -43,8 +43,8 @@ sealed class Payload {
 
     /// <summary>Wraps a parsed response body or any part of one.</summary>
     /// <param name="element">The element. Its owning <see cref="JsonDocument" /> must outlive the payload.</param>
-    public static Payload Of(JsonElement element)
-        => element.ValueKind switch {
+    public static Payload Of(JsonElement element) =>
+        element.ValueKind switch {
             JsonValueKind.Null or JsonValueKind.Undefined => Null,
             _ => new Payload(PayloadKind.Element, element, null, null),
         };
@@ -55,7 +55,8 @@ sealed class Payload {
 
     /// <summary>An object built in memory — a multiselect hash.</summary>
     /// <param name="values">The members, in declaration order.</param>
-    public static Payload Object(List<KeyValuePair<string, Payload>> values) => new(PayloadKind.Object, default, null, values);
+    public static Payload Object(List<KeyValuePair<string, Payload>> values) =>
+        new(PayloadKind.Object, default, null, values);
 
     /// <summary>A string that was not in the response — the result of <c>join()</c> or <c>to_string()</c>.</summary>
     /// <param name="value">The text.</param>
@@ -78,8 +79,8 @@ sealed class Payload {
     double Numeric { get; init; }
 
     /// <summary>What this value is, in <see cref="JsonValueKind" />'s vocabulary.</summary>
-    public JsonValueKind ValueKind
-        => kind switch {
+    public JsonValueKind ValueKind =>
+        kind switch {
             PayloadKind.Element => element.ValueKind,
             PayloadKind.Array => JsonValueKind.Array,
             PayloadKind.Object => JsonValueKind.Object,
@@ -103,11 +104,13 @@ sealed class Payload {
     /// <summary>The elements of an array, or nothing.</summary>
     public IEnumerable<Payload> Items {
         get {
-            if (items is not null)
+            if (items is not null) {
                 return items;
+            }
 
-            if (kind == PayloadKind.Element && element.ValueKind == JsonValueKind.Array)
+            if (kind == PayloadKind.Element && element.ValueKind == JsonValueKind.Array) {
                 return element.EnumerateArray().Select(Of);
+            }
 
             return [];
         }
@@ -116,21 +119,23 @@ sealed class Payload {
     /// <summary>The members of an object, in order, or nothing.</summary>
     public IEnumerable<KeyValuePair<string, Payload>> Members {
         get {
-            if (members is not null)
+            if (members is not null) {
                 return members;
+            }
 
-            if (kind == PayloadKind.Element && element.ValueKind == JsonValueKind.Object)
+            if (kind == PayloadKind.Element && element.ValueKind == JsonValueKind.Object) {
                 return element.EnumerateObject().Select(x => new KeyValuePair<string, Payload>(x.Name, Of(x.Value)));
+            }
 
             return [];
         }
     }
 
     /// <summary>How many elements or members there are; <c>0</c> for anything else.</summary>
-    public int Count
-        => items?.Count
-            ?? members?.Count
-            ?? (kind == PayloadKind.Element
+    public int Count =>
+        items?.Count
+        ?? members?.Count
+        ?? (kind == PayloadKind.Element
                 ? element.ValueKind switch {
                     JsonValueKind.Array => element.GetArrayLength(),
                     JsonValueKind.Object => element.EnumerateObject().Count(),
@@ -144,15 +149,19 @@ sealed class Payload {
     public Payload Member(string name) {
         if (members is not null) {
             foreach (var member in members) {
-                if (string.Equals(member.Key, name, StringComparison.Ordinal))
+                if (string.Equals(member.Key, name, StringComparison.Ordinal)) {
                     return member.Value;
+                }
             }
 
             return Missing;
         }
 
-        if (kind == PayloadKind.Element && element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value))
+        if (kind == PayloadKind.Element
+            && element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(name, out var value)) {
             return Of(value);
+        }
 
         return Missing;
     }
@@ -160,12 +169,14 @@ sealed class Payload {
     /// <summary>One element of an array by index, negative counting from the end, or <see cref="Missing" />.</summary>
     /// <param name="index">The index.</param>
     public Payload At(int index) {
-        var all = items ?? (kind == PayloadKind.Element && element.ValueKind == JsonValueKind.Array
-            ? [.. element.EnumerateArray().Select(Of)]
-            : null);
+        var all = items
+            ?? (kind == PayloadKind.Element && element.ValueKind == JsonValueKind.Array
+                    ? [.. element.EnumerateArray().Select(Of)]
+                    : null);
 
-        if (all is null)
+        if (all is null) {
             return Missing;
+        }
 
         var resolved = index < 0 ? all.Count + index : index;
 
@@ -173,16 +184,16 @@ sealed class Payload {
     }
 
     /// <summary>The text of a JSON string, or <c>null</c> when this is not one.</summary>
-    public string? AsString()
-        => kind switch {
+    public string? AsString() =>
+        kind switch {
             PayloadKind.String => Literal,
             PayloadKind.Element when element.ValueKind == JsonValueKind.String => element.GetString(),
             _ => null,
         };
 
     /// <summary>The value of a JSON number, or <c>null</c> when this is not one.</summary>
-    public double? AsNumber()
-        => kind switch {
+    public double? AsNumber() =>
+        kind switch {
             PayloadKind.Number => Numeric,
             PayloadKind.Element when element.ValueKind == JsonValueKind.Number => element.GetDouble(),
             _ => null,
@@ -193,8 +204,8 @@ sealed class Payload {
     ///     string, an empty array, an empty object and an absent value are false; everything else,
     ///     including <c>0</c>, is true.
     /// </summary>
-    public bool IsTruthy
-        => ValueKind switch {
+    public bool IsTruthy =>
+        ValueKind switch {
             JsonValueKind.Undefined or JsonValueKind.Null or JsonValueKind.False => false,
             JsonValueKind.True => true,
             JsonValueKind.String => AsString() is { Length: > 0 },
@@ -207,8 +218,9 @@ sealed class Payload {
     public bool SameAs(Payload other) {
         ArgumentNullException.ThrowIfNull(other);
 
-        if (ValueKind != other.ValueKind)
+        if (ValueKind != other.ValueKind) {
             return false;
+        }
 
         return ValueKind switch {
             JsonValueKind.String => string.Equals(AsString(), other.AsString(), StringComparison.Ordinal),
@@ -232,8 +244,9 @@ sealed class Payload {
             case PayloadKind.Array:
                 writer.WriteStartArray();
 
-                foreach (var item in items!)
+                foreach (var item in items!) {
                     item.WriteTo(writer);
+                }
 
                 writer.WriteEndArray();
 
@@ -282,7 +295,10 @@ sealed class Payload {
     /// <param name="indented">Whether to pretty-print. Scripts do not care; humans do.</param>
     public string ToJson(bool indented) {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = indented, Encoder = Encoder })) {
+        using (var writer = new Utf8JsonWriter(
+                   buffer,
+                   new JsonWriterOptions { Indented = indented, Encoder = Encoder }
+               )) {
             WriteTo(writer);
         }
 
@@ -293,8 +309,11 @@ sealed class Payload {
     ///     The JSON escaper. Relaxed, deliberately.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>"Unsafe" in this encoder's name means "unsafe to paste into an HTML attribute", and
-    ///     nothing here is going into one.</b> The strict default escapes every non-ASCII character
+    ///     ⚠
+    ///     <b>
+    ///         "Unsafe" in this encoder's name means "unsafe to paste into an HTML attribute", and
+    ///         nothing here is going into one.
+    ///     </b> The strict default escapes every non-ASCII character
     ///     and every quote, so a message quoting a resource name arrives as
     ///     <c>'w1' is not …</c> and this codebase's own <c>§</c> becomes <c>§</c> —
     ///     correct JSON that a person reading a terminal cannot read and that <c>grep</c> cannot
@@ -309,8 +328,8 @@ sealed class Payload {
     ///     The value as one cell of a table or a TSV row: a string as itself, a scalar as its literal
     ///     text, and anything structured as compact JSON.
     /// </summary>
-    public string ToCell()
-        => ValueKind switch {
+    public string ToCell() =>
+        ValueKind switch {
             JsonValueKind.Undefined or JsonValueKind.Null => string.Empty,
             JsonValueKind.String => AsString() ?? string.Empty,
             JsonValueKind.True => "true",
@@ -328,6 +347,6 @@ sealed class Payload {
         Number,
         True,
         False,
-        Null,
+        Null
     }
 }

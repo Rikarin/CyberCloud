@@ -41,8 +41,11 @@ namespace CyberCloud.ResourceManager.Grains;
 ///         <c>GrainKeys.ExpirySweeper</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This is the first place the write path runs <i>inside a grain</i>, and the
-///         consequence is in the platform's favour rather than against it.</b>
+///         ⚠
+///         <b>
+///             This is the first place the write path runs <i>inside a grain</i>, and the
+///             consequence is in the platform's favour rather than against it.
+///         </b>
 ///         <c>IResourceManager</c> is documented as a service held by the gateway, and the gateway is
 ///         an Orleans <i>client</i> — which <c>CyberCloud.Tenancy</c>'s tenant-separation wiring says
 ///         in as many words is outside <c>TenantSeparatingCallFilter</c>, because that filter reads
@@ -73,8 +76,11 @@ public sealed class ExpirySweeperGrain(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE ROTATION <c>IExpirySweeperGrain.MaxPerSweep</c> ARGUES FOR, AND IT IS IN
-    ///         MEMORY BECAUSE MAKING IT DURABLE WOULD COST MORE THAN LOSING IT DOES.</b> Losing it —
+    ///         ⚠
+    ///         <b>
+    ///             THE ROTATION <c>IExpirySweeperGrain.MaxPerSweep</c> ARGUES FOR, AND IT IS IN
+    ///             MEMORY BECAUSE MAKING IT DURABLE WOULD COST MORE THAN LOSING IT DOES.
+    ///         </b> Losing it —
     ///         a silo restart, a migration, a collection between ticks — restarts the rotation at the
     ///         head of the ordering, which is where every pass started before this field existed; it
     ///         cannot make a pass act on the wrong entry, because the entry is re-read from the
@@ -127,8 +133,7 @@ public sealed class ExpirySweeperGrain(
     public async Task<Result<bool>> IsArmedAsync() {
         try {
             return Result<bool>.Success(await this.GetReminder(ReminderName) is not null);
-        }
-        catch (InvalidOperationException) {
+        } catch (InvalidOperationException) {
             // A silo with no reminder service has no row and never will have one, which is exactly
             // what `false` says to the operator asking. The arm that would have created it has
             // already logged the warning; repeating it on a read would print one line per question.
@@ -268,19 +273,28 @@ public sealed class ExpirySweeperGrain(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE INDEX RATHER THAN THE MANAGER, BECAUSE THE MANAGER CANNOT TELL THIS PASS
-    ///         APART FROM AN UNEXPIRED WINDOW AND MUST NOT.</b>
+    ///         ⚠
+    ///         <b>
+    ///             THE INDEX RATHER THAN THE MANAGER, BECAUSE THE MANAGER CANNOT TELL THIS PASS
+    ///             APART FROM AN UNEXPIRED WINDOW AND MUST NOT.
+    ///         </b>
     ///         <c>IResourceIndexGrain.ResolveExpiredAsync</c> answers the canonical absence for both
     ///         "there is no parked resource here" and "its window has not ended yet", and its own
-    ///         remarks say why that identity is deliberate: <i>"a mechanism that could tell them
-    ///         apart would be a mechanism whose retries encode how much window is left"</i>. So a
+    ///         remarks say why that identity is deliberate:
+    ///         <i>
+    ///             "a mechanism that could tell them
+    ///             apart would be a mechanism whose retries encode how much window is left"
+    ///         </i>. So a
     ///         sweep that inferred staleness from a refused purge would be inferring it from a
     ///         sentence written not to carry it. <c>ResolveSoftDeletedAsync</c> is a different
     ///         question with a different answer and no deadline in it at all.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An index that did not answer leaves the entry alone, which is
-    ///         <c>ResourceGroupGrain.ReapOrphansAsync</c>'s rule and for its reason:</b> reaping on a
+    ///         ⚠
+    ///         <b>
+    ///             An index that did not answer leaves the entry alone, which is
+    ///             <c>ResourceGroupGrain.ReapOrphansAsync</c>'s rule and for its reason:
+    ///         </b> reaping on a
     ///         shard that is unreachable turns a storage outage into resources vanishing from a
     ///         listing. The only failure this grain can actually receive is
     ///         <see cref="ErrorCode.ResourceNotFound" /> — the index answered and said the binding is
@@ -319,9 +333,15 @@ public sealed class ExpirySweeperGrain(
     ///         where it is, and the next tick asks again.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The api-version is the type's newest, and that is a substitution rather than a
-    ///         lookup.</b> <see cref="ExpiredPurgeRequest" /> says a driver <i>"records the version
-    ///         the resource was stored under and hands it back"</i>; nothing durable records it —
+    ///         ⚠
+    ///         <b>
+    ///             The api-version is the type's newest, and that is a substitution rather than a
+    ///             lookup.
+    ///         </b> <see cref="ExpiredPurgeRequest" /> says a driver
+    ///         <i>
+    ///             "records the version
+    ///             the resource was stored under and hands it back"
+    ///         </i>; nothing durable records it —
     ///         <c>ResourceState.ApiVersion</c> is the version of the last write, but
     ///         <c>IResourceGrain.GetAsync</c> needs a version in order to be asked and echoes back
     ///         the one it was given, so there is no version-free way to read it. What makes the
@@ -357,9 +377,7 @@ public sealed class ExpirySweeperGrain(
         }
 
         var ended = await manager.PurgeExpiredAsync(
-            new() {
-                Path = address.Path, ApiVersion = registration.Newest.Value, CorrelationId = correlationId
-            }
+            new() { Path = address.Path, ApiVersion = registration.Newest.Value, CorrelationId = correlationId }
         );
 
         if (ended.IsSuccess) {
@@ -385,15 +403,21 @@ public sealed class ExpirySweeperGrain(
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Armed only while there is something to sweep, which is
-    ///         <c>ResourceGroupGrain.ArmOrDisarmAsync</c>'s cost decision reached from the other
-    ///         side.</b> A standing reminder per resource group platform-wide would be a row per
+    ///         ⚠
+    ///         <b>
+    ///             Armed only while there is something to sweep, which is
+    ///             <c>ResourceGroupGrain.ArmOrDisarmAsync</c>'s cost decision reached from the other
+    ///             side.
+    ///         </b> A standing reminder per resource group platform-wide would be a row per
     ///         group and a tick per group per hour, for ever, to look at a registry that is empty for
     ///         all but a few days of a group's life.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>IT ARMS AS WELL AS DISARMS, AND IT USED TO ONLY DISARM (2026-09-05, #12
-    ///         review).</b> The arm costs nothing when the row is already there — <see cref="ArmCoreAsync" />
+    ///         ⚠
+    ///         <b>
+    ///             IT ARMS AS WELL AS DISARMS, AND IT USED TO ONLY DISARM (2026-09-05, #12
+    ///             review).
+    ///         </b> The arm costs nothing when the row is already there — <see cref="ArmCoreAsync" />
     ///         reads <c>GetReminder</c> first — and it is what makes a hand-driven
     ///         <see cref="SweepAsync" /> a repair rather than a single pass: an operator sweeping a
     ///         group whose row was lost, or was never written because the park ran on a silo with no
@@ -402,8 +426,11 @@ public sealed class ExpirySweeperGrain(
     ///         it is running on.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The registry is listed AGAIN rather than the pass's own list being reused, and
-    ///         the second read is the point.</b> Between the list at the top of a pass and this line
+    ///         ⚠
+    ///         <b>
+    ///             The registry is listed AGAIN rather than the pass's own list being reused, and
+    ///             the second read is the point.
+    ///         </b> Between the list at the top of a pass and this line
     ///         sits every purge the pass drove, and a delete in the same group can park a resource in
     ///         that whole interval; disarming on the older answer would cancel the sweeper of a group
     ///         that had just acquired a window. Re-reading narrows the window to the one grain call
@@ -445,8 +472,7 @@ public sealed class ExpirySweeperGrain(
             if (await this.GetReminder(ReminderName) is { } existing) {
                 await this.UnregisterReminder(existing);
             }
-        }
-        catch (InvalidOperationException error) {
+        } catch (InvalidOperationException error) {
             // The silo that has no reminder service also has nothing to cancel — the arm that would
             // have created this row already logged and carried on. Swallowed for the same reason.
             logger.LogDebug(
@@ -469,8 +495,11 @@ public sealed class ExpirySweeperGrain(
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE <c>GetReminder</c> GUARD IS THE WHOLE POINT OF THIS METHOD AND THE FIX IT
-    ///         CARRIES (2026-09-05, #12 review).</b> <c>RegisterOrUpdateReminder</c> rewrites an
+    ///         ⚠
+    ///         <b>
+    ///             THE <c>GetReminder</c> GUARD IS THE WHOLE POINT OF THIS METHOD AND THE FIX IT
+    ///             CARRIES (2026-09-05, #12 review).
+    ///         </b> <c>RegisterOrUpdateReminder</c> rewrites an
     ///         existing row with <c>StartAt = UtcNow + dueTime</c> and restarts the local timer, so
     ///         calling it unconditionally with a due time of <c>SweepPeriod</c> pushed the next tick
     ///         a full hour out on every arm. Every converged delete arms
@@ -512,8 +541,7 @@ public sealed class ExpirySweeperGrain(
             );
 
             return true;
-        }
-        catch (InvalidOperationException error) {
+        } catch (InvalidOperationException error) {
             logger.LogWarning(
                 "Resource group '{Group}' in subscription {Subscription} could not arm its expired-"
                 + "window sweeper because this silo has no reminder service: {Reason} Recovery "
@@ -538,16 +566,22 @@ public sealed class ExpirySweeperGrain(
     /// </param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Resumed <i>inclusively</i> from a path rather than from an index, because the
-    ///         registry moves between passes.</b> An index would name a different entry after a purge
+    ///         ⚠
+    ///         <b>
+    ///             Resumed <i>inclusively</i> from a path rather than from an index, because the
+    ///             registry moves between passes.
+    ///         </b> An index would name a different entry after a purge
     ///         removed something earlier in the ordering; a path names the same entry, or — when that
     ///         entry has gone — the next one after it, which is where the rotation should carry on
     ///         anyway. A cursor that has fallen off the end of a shrunken registry restarts at the
     ///         head, which is the only other place it could sensibly go.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The wrap is what bounds the wait, and it is the half a plain "skip forward" would
-    ///         not have.</b> Without it a cursor past the last entry would sweep a short tail and
+    ///         ⚠
+    ///         <b>
+    ///             The wrap is what bounds the wait, and it is the half a plain "skip forward" would
+    ///             not have.
+    ///         </b> Without it a cursor past the last entry would sweep a short tail and
     ///         then start again, so the entries just before the cursor would be examined half as
     ///         often as the rest. Taking <c>MaxPerSweep</c> entries from the cursor <i>around</i> the
     ///         ordering makes every entry's turn come exactly once per rotation.

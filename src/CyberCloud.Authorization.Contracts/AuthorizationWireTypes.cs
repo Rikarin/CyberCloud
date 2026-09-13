@@ -351,7 +351,7 @@ public sealed record Consistency {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification = "A ConsistencyToken is Zanzibar's zookie — a public {tenantId}.{version} "
-            + "pair, not a credential. docs/plan/07 § Consistency."
+        + "pair, not a credential. docs/plan/07 § Consistency."
     )]
     public ConsistencyToken? Token { get; init; }
 
@@ -392,7 +392,7 @@ public sealed record CheckResult {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification = "A ConsistencyToken is Zanzibar's zookie — a public {tenantId}.{version} "
-            + "pair, not a credential. docs/plan/07 § Consistency."
+        + "pair, not a credential. docs/plan/07 § Consistency."
     )]
     public ConsistencyToken Token { get; init; } = new();
 

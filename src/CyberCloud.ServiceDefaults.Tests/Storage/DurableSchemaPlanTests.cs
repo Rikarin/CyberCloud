@@ -8,8 +8,11 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>These run without Docker, and that is the point of splitting
-///         <see cref="DurableSchemaState" /> off from <c>OrleansAdoNetSchema</c>.</b> "Which objects
+///         ⚠
+///         <b>
+///             These run without Docker, and that is the point of splitting
+///             <see cref="DurableSchemaState" /> off from <c>OrleansAdoNetSchema</c>.
+///         </b> "Which objects
 ///         are on the shard" needs PostgreSQL; "given these objects, what should run" does not, and
 ///         the second is where the bug lived. The old probe asked one question —
 ///         <c>to_regclass('orleansquery')</c> — and a shard that had the first script and not the

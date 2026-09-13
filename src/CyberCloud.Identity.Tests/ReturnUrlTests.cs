@@ -35,8 +35,7 @@ public sealed class ReturnUrlTests {
     ///     The rejected corpus as plain strings, so <see cref="EveryOutputIsASameOriginPath" /> can
     ///     iterate it without unwrapping xUnit's row type.
     /// </summary>
-    static string[] RejectedSpellings =>
-    [
+    static string[] RejectedSpellings => [
         // ── Plainly absolute ──────────────────────────────────────────────────────────────────
         "https://evil.example",
         "https://evil.example/signin",
@@ -79,8 +78,7 @@ public sealed class ReturnUrlTests {
     ];
 
     /// <summary>The accepted corpus as plain strings.</summary>
-    static string[] AcceptedSpellings =>
-    [
+    static string[] AcceptedSpellings => [
         "/",
         "/signin",
         "/authorize?client_id=portal&response_type=code",
@@ -95,10 +93,11 @@ public sealed class ReturnUrlTests {
     [Theory]
     [MemberData(nameof(Rejected))]
     public void AnOffOriginTargetIsRefusedAndReplacedWithTheDefault(string candidate) {
-        ReturnUrl.IsSafe(candidate).ShouldBeFalse(
-            $"'{candidate}' can send a user who signed in on this origin somewhere else, which is "
-            + "the phishing primitive ReturnUrl exists to remove."
-        );
+        ReturnUrl.IsSafe(candidate)
+            .ShouldBeFalse(
+                $"'{candidate}' can send a user who signed in on this origin somewhere else, which is "
+                + "the phishing primitive ReturnUrl exists to remove."
+            );
 
         // ⚠ The second half is the one that catches a fail-open refactor: a Sanitize that returned
         // its input regardless would still satisfy the IsSafe assertion above.

@@ -1,5 +1,6 @@
 // ⚠ For `Result<T>` on the credential path. See ContainerRegistryProvider for why this import is safe
 // beside the ErrorCode alias.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Collections.Immutable;
@@ -31,15 +32,21 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///             <b>Idempotent.</b> Every render is a pure function of the name and the body. Nothing
 ///             counts, appends or timestamps, and every credential reaches a workload as a
 ///             <c>secretKeyRef</c> rather than as a value — so the fourteen non-<c>Secret</c> documents
-///             do not change when the vault changes. ⚠ <b>The credential path looks like a violation
-///             and is not:</b> <see cref="ContainerRegistries.GenerateCredentials" /> returns a
+///             do not change when the vault changes. ⚠
+///             <b>
+///                 The credential path looks like a violation
+///                 and is not:
+///             </b> <see cref="ContainerRegistries.GenerateCredentials" /> returns a
 ///             different set every call, and every pass after the first has that candidate discarded by
 ///             mint-once and renders what it <i>resolved back</i> instead.
 ///         </item>
 ///         <item>
 ///             <b>No hidden state.</b> The only field is the primary constructor's <see cref="IClock" />,
-///             which is a dependency rather than a memory. ⚠ A reconciler is registered <b>as a
-///             singleton, by concrete type</b>, so one instance serves every tenant in the process — and
+///             which is a dependency rather than a memory. ⚠ A reconciler is registered
+///             <b>
+///                 as a
+///                 singleton, by concrete type
+///             </b>, so one instance serves every tenant in the process — and
 ///             a <c>readonly</c> field holding a mutable dictionary is the shape that gets past a
 ///             structural check, because the field never reassigns.
 ///             <c>ContainerRegistryReconcilerTests</c> asserts both halves.
@@ -68,8 +75,11 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         <c>converged-is-not-serving</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>. On this type
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>. On this type
 ///         the plausible one is a <c>Deployment</c>'s <c>spec.replicas</c>, which any horizontal
 ///         autoscaler a tenant runs over their own cluster ends up owning; forcing would fight it every
 ///         pass.
@@ -148,9 +158,9 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
                 // ⚠ Not the seven, and not the object's own labels. This puts the six lifetime-stable
                 // labels into the claim template so that the PersistentVolumeClaims the StatefulSet
                 // controller makes are findable by selector — see ContainerRegistries.ClaimTemplatePath.
-                .WithTemplateLabels(ContainerRegistries.ClaimTemplatePath)
-                .ObjectJson(body)
-                .ApplyAsync(cancellationToken);
+                    .WithTemplateLabels(ContainerRegistries.ClaimTemplatePath)
+                    .ObjectJson(body)
+                    .ApplyAsync(cancellationToken);
 
             if (applied.TryGetError(out var applyError)) {
                 // ⚠ The code decides, not this call site. An apply that could not reach the cluster is
@@ -204,8 +214,11 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
-    ///         IDEMPOTENT.</b> <see cref="ContainerRegistries.GenerateCredentials" /> produces a
+    ///         ⚠
+    ///         <b>
+    ///             THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
+    ///             IDEMPOTENT.
+    ///         </b> <see cref="ContainerRegistries.GenerateCredentials" /> produces a
     ///         different set every call — it has to, or an administrator password would be derivable
     ///         from a resource id. What reaches a manifest is never that set: it is what
     ///         <see cref="ISecretResolver.ResolveAsync" /> returns afterwards, which is the set the
@@ -220,8 +233,11 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
     ///         forever. One path makes the whole set atomic.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Six resolves, one per field, because a <c>SecretRef</c> addresses one field by
-    ///         design.</b> That is six round trips per pass and it is the cost of a resolver that
+    ///         ⚠
+    ///         <b>
+    ///             Six resolves, one per field, because a <c>SecretRef</c> addresses one field by
+    ///             design.
+    ///         </b> That is six round trips per pass and it is the cost of a resolver that
     ///         cannot hand back a value nobody asked for — see <c>SecretRef</c>'s own remarks.
     ///     </para>
     /// </remarks>
@@ -396,8 +412,7 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
         ];
 
         return ContainerRegistries.MonitoringEnabled(desired)
-            ?
-            [
+            ? [
                 .. always,
                 (ContainerRegistries.PodMonitorRef(string.Empty, name),
                     ContainerRegistries.PodMonitorJson(name))
@@ -444,7 +459,7 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
                 // revisions and their pods — while a converge loop with a bounded PASS budget runs out
                 // of passes waiting for a controller it does not drive. The read-back below is what
                 // makes Background safe: this returns Converged when the objects are GONE.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError)
                 && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -492,11 +507,17 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
     /// <inheritdoc />
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The other half of <see cref="DeleteAsync" />'s closing paragraph, and it closes
-    ///         the item that paragraph records as owed.</b> That comment says the images, the database
-    ///         and the job queue are all still on disk after a teardown, <i>"what ends them is the
-    ///         StorageClass's reclaim policy once somebody removes the claims, which nothing in this
-    ///         platform does yet"</i>. This is the somebody. It names the three claims and the labels
+    ///         ⚠
+    ///         <b>
+    ///             The other half of <see cref="DeleteAsync" />'s closing paragraph, and it closes
+    ///             the item that paragraph records as owed.
+    ///         </b> That comment says the images, the database
+    ///         and the job queue are all still on disk after a teardown,
+    ///         <i>
+    ///             "what ends them is the
+    ///             StorageClass's reclaim policy once somebody removes the claims, which nothing in this
+    ///             platform does yet"
+    ///         </i>. This is the somebody. It names the three claims and the labels
     ///         that prove them; <c>VolumeReclaimer</c>, driven from a hard delete's or a purge's
     ///         convergence, is what removes them.
     ///     </para>
@@ -546,9 +567,7 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the registry's core is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the registry's core is absent" };
         }
 
         var found = read.GetValueOrThrow();

@@ -1,10 +1,10 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Authentication;
+using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
 using CyberCloud.Gateway.Host.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
-using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.ResourceManager;
 using CyberCloud.Tenancy;
 using CyberCloud.Tenancy.Directory;
@@ -27,15 +27,21 @@ static class GatewayServiceCollectionExtensions {
     /// <returns>The same collection, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The stages are registered in document order and the order is checked
-    ///         anyway.</b> Registration order is what <c>IEnumerable&lt;IGatewayStage&gt;</c> resolves
+    ///         ⚠
+    ///         <b>
+    ///             The stages are registered in document order and the order is checked
+    ///             anyway.
+    ///         </b> Registration order is what <c>IEnumerable&lt;IGatewayStage&gt;</c> resolves
     ///         to, so keeping these lines in order is <i>necessary</i> — and
     ///         <see cref="GatewayPipeline" /> sorts and validates regardless, because a rule upheld
     ///         by the order of eight lines in a file is a rule one merge away from being wrong.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The resource manager is composed by <b>one call into its own assembly</b> and not
-    ///         by a list repeated here.</b> <c>AddCyberCloudResourceManager</c> has an
+    ///         ⚠
+    ///         <b>
+    ///             The resource manager is composed by <b>one call into its own assembly</b> and not
+    ///             by a list repeated here.
+    ///         </b> <c>AddCyberCloudResourceManager</c> has an
     ///         <c>IServiceCollection</c> overload for exactly this: the silo overload takes an
     ///         <c>ISiloBuilder</c> (docs/plan/04 § Silo composition) and the gateway is a client, so
     ///         there is no builder to hand it. Repeating the registrations here would mean naming
@@ -113,21 +119,30 @@ static class GatewayServiceCollectionExtensions {
     /// <param name="services">The container.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Separate from <see cref="AddCyberCloudGateway" /> so that a production host
-    ///         cannot get it by accident.</b> A host that calls only <c>AddCyberCloudGateway</c> has
+    ///         ⚠
+    ///         <b>
+    ///             Separate from <see cref="AddCyberCloudGateway" /> so that a production host
+    ///             cannot get it by accident.
+    ///         </b> A host that calls only <c>AddCyberCloudGateway</c> has
     ///         no <see cref="ICallerContextResolver" /> registered and cannot resolve the pipeline —
     ///         which is the failure you want, rather than a gateway that authenticates nobody and
     ///         serves anyway.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THAT FAILURE ARRIVES AT THE FIRST REQUEST AND NOT AT START-UP, and this remark
-    ///         used to say the opposite.</b> The pipeline is a singleton the one middleware resolves
+    ///         ⚠
+    ///         <b>
+    ///             THAT FAILURE ARRIVES AT THE FIRST REQUEST AND NOT AT START-UP, and this remark
+    ///             used to say the opposite.
+    ///         </b> The pipeline is a singleton the one middleware resolves
     ///         per request, and <c>OrleansApplication.CreateClient</c> calls
     ///         <c>builder.Host.UseAutofac()</c> — so ASP.NET Core's <c>ValidateOnBuild</c>, which
     ///         belongs to the default provider factory, never runs and cannot catch it. A gateway
     ///         with no identity implementation therefore starts, passes its health checks, and
-    ///         answers <c>500</c> to everything else. ⚠ <b>And no host in this tree calls this
-    ///         method</b>: its only caller is <c>CyberCloud.AppHost.Tests</c>'
+    ///         answers <c>500</c> to everything else. ⚠
+    ///         <b>
+    ///             And no host in this tree calls this
+    ///             method
+    ///         </b>: its only caller is <c>CyberCloud.AppHost.Tests</c>'
     ///         <c>TenantOverHttpTests</c>, through <c>GatewayComposition.BuildAsync</c>'s
     ///         <c>configure</c> parameter. Until <c>CyberCloud.Identity.Host</c> issues real tokens
     ///         (docs/plan/11), the shipping gateway can serve no authenticated request at all — which
@@ -149,8 +164,7 @@ static class GatewayServiceCollectionExtensions {
 
         services.TryAddSingleton<IClock, SystemClock>();
         services.TryAddSingleton<IssuedTokenCallerContextResolver>();
-        services.TryAddSingleton<ICallerContextResolver>(
-            provider => provider.GetRequiredService<IssuedTokenCallerContextResolver>()
+        services.TryAddSingleton<ICallerContextResolver>(provider => provider.GetRequiredService<IssuedTokenCallerContextResolver>()
         );
 
         return services;

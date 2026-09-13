@@ -55,11 +55,12 @@ public sealed class StorageDeclarationTests {
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
             foreach (var pointer in meter.Derivation.Reads) {
-                StorageAccounts.Schema2026.Declares(pointer).ShouldBeTrue(
-                    $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
-                    + "api-version's schema does not declare. A read set that names a property the "
-                    + "schema dropped is what an api-version bump has to be diffed against."
-                );
+                StorageAccounts.Schema2026.Declares(pointer)
+                    .ShouldBeTrue(
+                        $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
+                        + "api-version's schema does not declare. A read set that names a property the "
+                        + "schema dropped is what an api-version bump has to be diffed against."
+                    );
             }
         }
 
@@ -96,7 +97,8 @@ public sealed class StorageDeclarationTests {
 
         CliTokens.Collisions(
             registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
-        ).ShouldBeEmpty();
+        )
+            .ShouldBeEmpty();
 
         // ⚠ A LITERAL, and deliberately so. The derived check says the short name collides with
         // nothing; only this says it is not the one word this namespace could not have.
@@ -117,10 +119,11 @@ public sealed class StorageDeclarationTests {
                 Overridden(StorageAccounts.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
 
-            StorageAccounts.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
-                $"the declared default for '{property.JsonPointer}' does not validate inside an "
-                + "otherwise-valid body."
-            );
+            StorageAccounts.Schema2026.Validate(body.RootElement, allowTags: true)
+                .IsSuccess.ShouldBeTrue(
+                    $"the declared default for '{property.JsonPointer}' does not validate inside an "
+                    + "otherwise-valid body."
+                );
         }
     }
 
@@ -249,7 +252,8 @@ public sealed class StorageDeclarationTests {
         using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers: 16));
 
         var filer = JsonNode.Parse(StorageAccounts.SeaweedJson("assets", body.RootElement))!["spec"]!
-            ["filer"]!.AsObject();
+            ["filer"]!
+            .AsObject();
 
         filer["replicas"]!.GetValue<int>().ShouldBe(1);
         filer["persistence"]!["enabled"]!.GetValue<bool>().ShouldBeTrue();
@@ -272,10 +276,11 @@ public sealed class StorageDeclarationTests {
             .AsObject();
 
         spec["s3"].ShouldNotBeNull();
-        (spec["filer"]!.AsObject()["s3"]).ShouldBeNull(
-            "spec.filer.s3 and spec.s3 are both set, which the operator's validating webhook rejects "
-            + "outright."
-        );
+        spec["filer"]!.AsObject()["s3"]
+            .ShouldBeNull(
+                "spec.filer.s3 and spec.s3 are both set, which the operator's validating webhook rejects "
+                + "outright."
+            );
     }
 
     [Fact]

@@ -23,8 +23,11 @@ public static class ResourceManagerSiloBuilderExtensions {
     /// <returns>The same builder, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The order of this call and the provider registrations does not matter, and it is
-    ///         worth knowing why, because the remark here used to say the opposite.</b> The registry is
+    ///         ⚠
+    ///         <b>
+    ///             The order of this call and the provider registrations does not matter, and it is
+    ///             worth knowing why, because the remark here used to say the opposite.
+    ///         </b> The registry is
     ///         a singleton with a <i>factory</i> rather than an instance, so it is built from every
     ///         <see cref="IResourceProvider" /> in the container at first resolve — after all wiring
     ///         has finished. That is what lets a provider be registered from an ABP module's
@@ -86,8 +89,11 @@ public static class ResourceManagerSiloBuilderExtensions {
     /// <returns>The same collection, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This exists because the gateway is an Orleans <i>client</i>, and the reason it is
-    ///         <i>here</i> rather than in the gateway is the enforcement seam.</b> docs/plan/08 § The
+    ///         ⚠
+    ///         <b>
+    ///             This exists because the gateway is an Orleans <i>client</i>, and the reason it is
+    ///             <i>here</i> rather than in the gateway is the enforcement seam.
+    ///         </b> docs/plan/08 § The
     ///         write path, end to end makes <see cref="IResourceManager" /> "a service held by the
     ///         gateway", and docs/plan/10 § Request pipeline dispatches to it at stage 8 — but
     ///         <see cref="AddCyberCloudResourceManager(ISiloBuilder)" /> takes a silo builder, which a
@@ -115,8 +121,7 @@ public static class ResourceManagerSiloBuilderExtensions {
 
         // Built from whatever providers the container holds at first resolve — see the remarks on
         // ordering.
-        services.TryAddSingleton<IProviderRegistry>(
-            provider => BuildRegistry(provider.GetServices<IResourceProvider>())
+        services.TryAddSingleton<IProviderRegistry>(provider => BuildRegistry(provider.GetServices<IResourceProvider>())
         );
 
         services.TryAddSingleton<IPolicyEvaluator, NotSupportedPolicyEvaluator>();
@@ -226,8 +231,11 @@ public static class ResourceManagerSiloBuilderExtensions {
     /// <returns>The same collection, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the overload a provider's <c>*.Application</c> ABP module calls, and its
-    ///         existence is what closed the "one provider, one registration" split.</b> Every
+    ///         ⚠
+    ///         <b>
+    ///             This is the overload a provider's <c>*.Application</c> ABP module calls, and its
+    ///             existence is what closed the "one provider, one registration" split.
+    ///         </b> Every
     ///         <c>*ApplicationModule</c> in the tree used to carry the same paragraph: registering a
     ///         provider is a call on <see cref="ISiloBuilder" />, which runs before the container is
     ///         built, while an ABP module's <c>ConfigureServices</c> runs after — so a host had to load
@@ -242,8 +250,11 @@ public static class ResourceManagerSiloBuilderExtensions {
     ///         added stopped mattering. Only the container does, which is what an ABP module has.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Reconcilers and handlers are registered as singletons and by their concrete
-    ///         type.</b> Singleton because clause 2 of docs/plan/08 § The reconcile loop makes one
+    ///         ⚠
+    ///         <b>
+    ///             Reconcilers and handlers are registered as singletons and by their concrete
+    ///             type.
+    ///         </b> Singleton because clause 2 of docs/plan/08 § The reconcile loop makes one
     ///         instance per process correct and a transient registration would hide a field long enough
     ///         for it to reach production. By concrete type because the registry stores
     ///         <c>ReconcilerType</c> and <c>ActionRegistration.HandlerType</c>, and
@@ -289,8 +300,11 @@ public static class ResourceManagerSiloBuilderExtensions {
     /// <exception cref="InvalidOperationException">There is no provider at all.</exception>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The check is here rather than in <c>ProviderRegistry.Build</c>, and the difference
-    ///         between the two callers is what decides it.</b> A host with no providers is a wiring
+    ///         ⚠
+    ///         <b>
+    ///             The check is here rather than in <c>ProviderRegistry.Build</c>, and the difference
+    ///             between the two callers is what decides it.
+    ///         </b> A host with no providers is a wiring
     ///         mistake: the registry is the platform's whole API surface, so every resource and action
     ///         path answers the canonical <c>404</c> — the same answer a caller gets for a type that
     ///         genuinely does not exist, with nothing in the log to tell them apart. That is what

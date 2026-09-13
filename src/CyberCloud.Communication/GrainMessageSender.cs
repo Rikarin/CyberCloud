@@ -9,8 +9,11 @@ namespace CyberCloud.Communication;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every <c>GetGrain</c> here is qualified with <c>Orleans.Multitenant</c>'s
-///         <c>ForTenant</c>, and CC1006 is what makes that non-negotiable.</b> A gateway, a host or a
+///         ⚠
+///         <b>
+///             Every <c>GetGrain</c> here is qualified with <c>Orleans.Multitenant</c>'s
+///             <c>ForTenant</c>, and CC1006 is what makes that non-negotiable.
+///         </b> A gateway, a host or a
 ///         notification worker is not a grain, so <c>Orleans.Multitenant</c>'s call filter never sees
 ///         the caller and an unqualified reference would be outside tenant separation entirely. Doing
 ///         it in one class means the three consuming modules do not each have to get it right — the

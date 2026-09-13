@@ -51,8 +51,9 @@ public abstract class AsyncPageable<T> : IAsyncEnumerable<T> {
     /// <inheritdoc />
     public async IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default) {
         await foreach (var page in AsPages().WithCancellation(cancellationToken).ConfigureAwait(false)) {
-            foreach (var value in page.Values)
+            foreach (var value in page.Values) {
                 yield return value;
+            }
         }
     }
 
@@ -64,7 +65,8 @@ public abstract class AsyncPageable<T> : IAsyncEnumerable<T> {
     /// <param name="cancellationToken">The token.</param>
     public static AsyncPageable<T> Create(
         Func<string?, int?, CancellationToken, ValueTask<Page<T>>> fetchPage,
-        CancellationToken cancellationToken = default) {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(fetchPage);
 
         return new FuncAsyncPageable<T>(fetchPage, cancellationToken);
@@ -77,7 +79,8 @@ public abstract class AsyncPageable<T> : IAsyncEnumerable<T> {
 
         return new FuncAsyncPageable<T>(
             (token, size, cancellation) => throw new InvalidOperationException("A static pageable fetches nothing."),
-            CancellationToken.None) { Static = [.. pages] };
+            CancellationToken.None
+        ) { Static = [.. pages] };
     }
 }
 
@@ -85,17 +88,24 @@ sealed class FuncAsyncPageable<T> : AsyncPageable<T> {
     readonly Func<string?, int?, CancellationToken, ValueTask<Page<T>>> fetchPage;
     readonly CancellationToken cancellationToken;
 
-    internal FuncAsyncPageable(Func<string?, int?, CancellationToken, ValueTask<Page<T>>> fetchPage, CancellationToken cancellationToken) {
+    internal FuncAsyncPageable(
+        Func<string?, int?, CancellationToken, ValueTask<Page<T>>> fetchPage,
+        CancellationToken cancellationToken
+    ) {
         this.fetchPage = fetchPage;
         this.cancellationToken = cancellationToken;
     }
 
     internal List<Page<T>>? Static { get; init; }
 
-    public override async IAsyncEnumerable<Page<T>> AsPages(string? continuationToken = null, int? pageSizeHint = null) {
+    public override async IAsyncEnumerable<Page<T>> AsPages(
+        string? continuationToken = null,
+        int? pageSizeHint = null
+    ) {
         if (Static is { } pages) {
-            foreach (var page in pages)
+            foreach (var page in pages) {
                 yield return page;
+            }
 
             yield break;
         }

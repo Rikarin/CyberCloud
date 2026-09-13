@@ -8,11 +8,15 @@ namespace CyberCloud.Communication.Grains;
 ///     <see cref="ISendLimitGrain" /> — Worker, Hot, key <c>res/{serviceId:N}</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Read <see cref="ISendLimitGrain" /> first: the caps arrive as an argument and are never
-///     stored, which is what bounds a hot-tier loss to one window.</b>
+///     ⚠
+///     <b>
+///         Read <see cref="ISendLimitGrain" /> first: the caps arrive as an argument and are never
+///         stored, which is what bounds a hot-tier loss to one window.
+///     </b>
 /// </remarks>
 public sealed class SendLimitGrain(
-    [PersistentState("send-limit", StorageTiers.Hot)] IPersistentState<SendLimitState> state,
+    [PersistentState("send-limit", StorageTiers.Hot)]
+    IPersistentState<SendLimitState> state,
     IClock clock
 )
     : Grain, ISendLimitGrain {
@@ -89,9 +93,7 @@ public sealed class SendLimitGrain(
         }
 
         var reservation = new PendingReservation {
-            ReservationId = Guid.NewGuid(),
-            Amount = estimatedCost,
-            ExpiresAt = now + ISendLimitGrain.ReservationLease
+            ReservationId = Guid.NewGuid(), Amount = estimatedCost, ExpiresAt = now + ISendLimitGrain.ReservationLease
         };
 
         window.Messages = messagesAfter;

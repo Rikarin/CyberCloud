@@ -9,8 +9,11 @@ namespace CyberCloud.Cli.Execution;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The pointer is the whole point of the seam.</b> <c>CliEmitter</c>'s note on
-///         <c>jsonPointer</c> says it is <i>"what the host builds the request body at and what an
-///         error's <c>target</c> comes back as, so a failed flag highlights itself"</i> — and
+///         <c>jsonPointer</c> says it is
+///         <i>
+///             "what the host builds the request body at and what an
+///             error's <c>target</c> comes back as, so a failed flag highlights itself"
+///         </i> — and
 ///         <see cref="FlagFor" /> is the other half: a <c>400</c> whose <c>target</c> is
 ///         <c>/properties/tier</c> is reported as <c>--tier</c>, because nobody typed a JSON pointer.
 ///     </para>
@@ -33,13 +36,15 @@ static class RequestBody {
             .Where(x => x.Flag.JsonPointer is { Length: > 0 } && x.Provided(parse))
             .ToList();
 
-        if (given.Count == 0)
+        if (given.Count == 0) {
             return null;
+        }
 
         var root = new Branch();
 
-        foreach (var binding in given)
+        foreach (var binding in given) {
             root.Add(Segments(binding.Flag.JsonPointer!), binding, parse);
+        }
 
         using var buffer = new MemoryStream();
 
@@ -58,8 +63,9 @@ static class RequestBody {
     /// <param name="target">The pointer from the error body — docs/plan/08 § Errors.</param>
     /// <returns>The flag name, or <c>null</c> when no flag maps to that pointer.</returns>
     public static string? FlagFor(IReadOnlyList<FlagBinding> bindings, string? target) {
-        if (string.IsNullOrEmpty(target))
+        if (string.IsNullOrEmpty(target)) {
             return null;
+        }
 
         ArgumentNullException.ThrowIfNull(bindings);
 
@@ -73,10 +79,11 @@ static class RequestBody {
     ///     <c>/</c> and <c>~0</c> is <c>~</c>. The order matters: unescaping <c>~0</c> first would
     ///     turn <c>~01</c> into <c>/</c>.
     /// </summary>
-    static IReadOnlyList<string> Segments(string pointer)
-        => [.. pointer
+    static IReadOnlyList<string> Segments(string pointer) => [
+        .. pointer
             .Split('/', StringSplitOptions.RemoveEmptyEntries)
-            .Select(x => x.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal))];
+            .Select(x => x.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal))
+    ];
 
     /// <summary>One node of the body under construction: either a leaf a flag writes, or a branch.</summary>
     sealed class Branch {

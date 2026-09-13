@@ -9,8 +9,11 @@ namespace CyberCloud.Metering.Sinks;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>It refuses rather than logging and returning success, and the difference matters more
-///         here than for any other default in the tree.</b> <c>LoggingResourceChangedSink</c>
+///         ⚠
+///         <b>
+///             It refuses rather than logging and returning success, and the difference matters more
+///             here than for any other default in the tree.
+///         </b> <c>LoggingResourceChangedSink</c>
 ///         (docs/plan/08 § The resource-graph projection) can afford to log and shrug because the
 ///         projection is a list view that will catch up on the next change. Usage does not catch up:
 ///         the window has passed, the resource may be gone, and docs/plan/22 § Effort is explicit
@@ -136,8 +139,11 @@ public sealed class InMemoryUsageSink : IUsageSink {
 ///     it refuses.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Refuses rather than reporting an empty subscription, for the reason
-///     <see cref="IMeteredResourceSource.ListAsync" /> gives.</b> An empty list is a claim — "this
+///     ⚠
+///     <b>
+///         Refuses rather than reporting an empty subscription, for the reason
+///         <see cref="IMeteredResourceSource.ListAsync" /> gives.
+///     </b> An empty list is a claim — "this
 ///     subscription holds nothing" — and it is indistinguishable afterwards from a window nobody
 ///     could read. <c>UsageSamplerGrain.SampleAsync</c> propagates the failure and the window is
 ///     retried on the next reminder; the alternative writes a permanent zero. The same argument as

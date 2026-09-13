@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
@@ -12,8 +13,10 @@ namespace CyberCloud.Providers.Messaging;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>The first handler in the tree whose credential comes from a cluster rather than from
-///         the vault, and the distinction is who minted it.</b>
+///         <b>
+///             The first handler in the tree whose credential comes from a cluster rather than from
+///             the vault, and the distinction is who minted it.
+///         </b>
 ///         <c>CyberCloud.Storage/accounts</c>, <c>CyberCloud.Monitor/workspaces</c> and
 ///         <c>CyberCloud.ContainerRegistry/registries</c> mint their own through
 ///         <c>ISecretWriter</c> and read them back through <c>ISecretResolver</c>, because the
@@ -22,8 +25,11 @@ namespace CyberCloud.Providers.Messaging;
 ///         platform minted would be the one the broker accepts.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT READS AND DOES NOT MINT — for a stronger reason than the vault-backed three
-///         have.</b> Their argument is that a second mint would hand out a credential only one
+///         ⚠
+///         <b>
+///             IT READS AND DOES NOT MINT — for a stronger reason than the vault-backed three
+///             have.
+///         </b> Their argument is that a second mint would hand out a credential only one
 ///         holder of which is live. Here the platform could not mint a working credential at all:
 ///         the password is already in the broker's internal database by the time this action can be
 ///         called, and writing a different one into the <c>Secret</c> would leave the two
@@ -31,8 +37,11 @@ namespace CyberCloud.Providers.Messaging;
 ///         declared — rotation is an operation against the broker, not a write to a <c>Secret</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A cluster that has not converged yet answers <c>ResourceNotFound</c> from the read,
-///         and that is the honest answer rather than a hole to paper over.</b> The operator creates
+///         ⚠
+///         <b>
+///             A cluster that has not converged yet answers <c>ResourceNotFound</c> from the read,
+///             and that is the honest answer rather than a hole to paper over.
+///         </b> The operator creates
 ///         the <c>Secret</c> as part of bringing the cluster up, so its absence means the credential
 ///         does not exist yet — not that this handler looked in the wrong place. Returning an empty
 ///         password against a schema saying the field is required would publish a credential that

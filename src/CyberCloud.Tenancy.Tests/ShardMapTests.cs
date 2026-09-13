@@ -86,7 +86,7 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
 
             (await map.AssignAsync(tenant, "eu-central")).GetValueOrThrow()
                 .DurableShard
-                .ShouldBe(shard);
+                    .ShouldBe(shard);
         }
     }
 
@@ -102,7 +102,7 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
         for (var i = 200; i < 260; i++) {
             placements.Add(
                 (await map.AssignAsync(Tenant(i), "eu-central")).GetValueOrThrow()
-                .DurableShard
+                    .DurableShard
             );
         }
 
@@ -130,7 +130,7 @@ public sealed class ShardMapTests(TenancyCluster cluster) {
             for (var i = 400; i < 440; i++) {
                 (await map.AssignAsync(Tenant(i), "eu-central")).GetValueOrThrow()
                     .DurableShard
-                    .ShouldNotBe(shard);
+                        .ShouldNotBe(shard);
             }
         } finally {
             // Put it back: the tests in this class share one map grain and xUnit does not order

@@ -16,8 +16,11 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is <c>BootstrapProviderLivenessTests</c> with the conclusion turned into a
-///         probe, and without a container.</b> That test needed a Redis because it makes a grain call;
+///         ⚠
+///         <b>
+///             This is <c>BootstrapProviderLivenessTests</c> with the conclusion turned into a
+///             probe, and without a container.
+///         </b> That test needed a Redis because it makes a grain call;
 ///         this one only needs the silo to <i>start</i>, and the same finding that makes the silo
 ///         start with a dead Postgres — <c>Orleans.Multitenant</c> overwrites the keyed
 ///         <c>IGrainStorage</c>, so neither bootstrap provider is ever constructed — makes it start

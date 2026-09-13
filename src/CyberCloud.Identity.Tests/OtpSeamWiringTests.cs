@@ -59,7 +59,9 @@ public sealed class OtpSeamWiringTests {
         // let the unwired hosts pick it up. The second is silent — a host with no communication
         // module in it would fail at the first ACTIVATION with a DI error naming IMessageSender,
         // which is a stack trace rather than the sentence UnavailableOtpDelivery hands the operator.
-        var wired = Seam(silo => silo.AddCyberCloudIdentity().AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid()));
+        var wired = Seam(silo => silo.AddCyberCloudIdentity()
+                .AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid())
+        );
         var unwired = Seam(silo => silo.AddCyberCloudIdentity());
 
         wired.ShouldBeOfType<CommunicationOtpDelivery>();
@@ -103,11 +105,12 @@ public sealed class OtpSeamWiringTests {
         // that goes red under Add.
         var services = Compose(silo => Both(silo, identityFirst));
 
-        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam)).ShouldBe(
-            1,
-            "a host that opted in should have one IOtpDeliverySeam registration, not the real one "
-            + "stacked on top of a refusing one that GetServices would still hand out"
-        );
+        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam))
+            .ShouldBe(
+                1,
+                "a host that opted in should have one IOtpDeliverySeam registration, not the real one "
+                + "stacked on top of a refusing one that GetServices would still hand out"
+            );
     }
 
     [Fact]
@@ -126,10 +129,11 @@ public sealed class OtpSeamWiringTests {
         var builder = new ServiceCollectionSiloBuilder();
         builder.AddCyberCloudIdentity();
 
-        builder.Services.Any(x => x.ServiceType == typeof(IMessageSender)).ShouldBeFalse(
-            "AddCyberCloudIdentity must not drag the sending module into a silo that did not ask "
-            + "for it — module independence, docs/plan/17"
-        );
+        builder.Services.Any(x => x.ServiceType == typeof(IMessageSender))
+            .ShouldBeFalse(
+                "AddCyberCloudIdentity must not drag the sending module into a silo that did not ask "
+                + "for it — module independence, docs/plan/17"
+            );
 
         builder.Services
             .BuildServiceProvider()

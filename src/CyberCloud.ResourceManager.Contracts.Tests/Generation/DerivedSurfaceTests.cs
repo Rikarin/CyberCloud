@@ -21,8 +21,7 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 ///     </para>
 /// </remarks>
 public sealed class DerivedSurfaceTests {
-    static JsonObject Document =>
-        OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
+    static JsonObject Document => OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
 
     static JsonObject Cli => CliEmitter.Emit(Document);
 
@@ -30,8 +29,7 @@ public sealed class DerivedSurfaceTests {
 
     static string Sdk => SdkEmitter.Emit(Document);
 
-    static JsonNode Command =>
-        Cli["groups"]!["dbforpostgresql"]!["commands"]!["servers"]!;
+    static JsonNode Command => Cli["groups"]!["dbforpostgresql"]!["commands"]!["servers"]!;
 
     static JsonArray Flags(string verb) => Command["verbs"]![verb]!["flags"]!.AsArray();
 
@@ -147,9 +145,8 @@ public sealed class DerivedSurfaceTests {
         var registry = Fixtures.PostgresWithActions([new("noop", ActionKind.Post, "write", Secret: false)]);
         var tree = CliEmitter.Emit(OpenApiEmitter.Emit(registry, ApiVersion.Parse(Fixtures.FirstVersion)));
 
-        DocumentReader.Flag(
-            tree["groups"]!["dbforpostgresql"]!["commands"]!["servers"]!["verbs"]!["noop"]!["rawBody"]
-        ).ShouldBeTrue();
+        DocumentReader.Flag(tree["groups"]!["dbforpostgresql"]!["commands"]!["servers"]!["verbs"]!["noop"]!["rawBody"])
+            .ShouldBeTrue();
     }
 
     // ── A nested type, on the two surfaces that address one ────────────────────────────────────
@@ -163,8 +160,7 @@ public sealed class DerivedSurfaceTests {
     // API cannot build, and the failure is invisible in the finished artifact — a flag list is
     // simply four long, a method signature simply has two parameters.
 
-    static JsonNode Databases =>
-        Cli["groups"]!["dbforpostgresql"]!["commands"]!["servers-databases"]!;
+    static JsonNode Databases => Cli["groups"]!["dbforpostgresql"]!["commands"]!["servers-databases"]!;
 
     static JsonArray DatabaseFlags(string verb) => Databases["verbs"]![verb]!["flags"]!.AsArray();
 
@@ -184,9 +180,8 @@ public sealed class DerivedSurfaceTests {
                 + "build the path the same verb declares"
             );
 
-            DocumentReader.Flag(flag["required"]).ShouldBeTrue(
-                "a parent's name is part of the address and there is no profile default for it"
-            );
+            DocumentReader.Flag(flag["required"])
+                .ShouldBeTrue("a parent's name is part of the address and there is no profile default for it");
 
             // ⚠ And it names the placeholder rather than leaving the host to infer it from the flag
             // name. jsonPointer answers this question for a body flag; this is its address-side twin.
@@ -212,11 +207,12 @@ public sealed class DerivedSurfaceTests {
 
                     // An action's path ends in `/{action}`, which is a literal rather than a
                     // placeholder, so the set is the same either way.
-                    filled.Order(StringComparer.Ordinal).ShouldBe(
-                        DocumentReader.PlaceholdersOf(path).Order(StringComparer.Ordinal),
-                        $"'{group.Key} {command.Key} {verb.Key}' declares path '{path}' and its flags "
-                        + "do not fill exactly its placeholders"
-                    );
+                    filled.Order(StringComparer.Ordinal)
+                        .ShouldBe(
+                            DocumentReader.PlaceholdersOf(path).Order(StringComparer.Ordinal),
+                            $"'{group.Key} {command.Key} {verb.Key}' declares path '{path}' and its flags "
+                            + "do not fill exactly its placeholders"
+                        );
                 }
             }
         }
@@ -246,11 +242,13 @@ public sealed class DerivedSurfaceTests {
                     ApiVersions = [
                         new(
                             ApiVersion.Parse(Fixtures.FirstVersion),
-                            ResourceSchema.Of([
-                                new("/properties", SchemaKind.Nested),
-                                new("/properties/servers", SchemaKind.Nested),
-                                new("/properties/servers/name", SchemaKind.Text)
-                            ])
+                            ResourceSchema.Of(
+                                [
+                                    new("/properties", SchemaKind.Nested),
+                                    new("/properties/servers", SchemaKind.Nested),
+                                    new("/properties/servers/name", SchemaKind.Text)
+                                ]
+                            )
                         )
                     ],
                     Display = new("Database", "Databases", "db", "A database.")
@@ -444,7 +442,8 @@ public sealed class DerivedSurfaceTests {
         Sdk.Split('\n')
             .Where(x => x.Contains(" class ", StringComparison.Ordinal))
             .ShouldAllBe(x => x.Contains("partial", StringComparison.Ordinal)
-                              || x.Contains("static class", StringComparison.Ordinal));
+                || x.Contains("static class", StringComparison.Ordinal)
+            );
 
     /// <summary>
     ///     ⚠ <b>A brace count, and it is no longer the strongest thing that reads this file.</b>
@@ -461,7 +460,11 @@ public sealed class DerivedSurfaceTests {
         var depth = 0;
 
         foreach (var current in Sdk) {
-            depth += current switch { '{' => 1, '}' => -1, _ => 0 };
+            depth += current switch {
+                '{' => 1,
+                '}' => -1,
+                _ => 0
+            };
             depth.ShouldBeGreaterThanOrEqualTo(0);
         }
 
@@ -507,9 +510,7 @@ public sealed class DerivedSurfaceTests {
     /// </remarks>
     [Fact]
     public void APairTheNestedNameCannotSeparateFailsRatherThanEmittingOneNameTwice() {
-        var thrown = Should.Throw<InvalidOperationException>(
-            () => SdkOf(UnseparableLeafNames())
-        );
+        var thrown = Should.Throw<InvalidOperationException>(() => SdkOf(UnseparableLeafNames()));
 
         thrown.Message.ShouldContain("/properties/persistence/mode");
         thrown.Message.ShouldContain("/properties/persistenceMode");
@@ -550,8 +551,10 @@ public sealed class DerivedSurfaceTests {
         foreach (var text in new[] { DeterministicJson.ToText(Cli), DeterministicJson.ToText(Forms), Sdk }) {
             text.ShouldNotContain(Environment.MachineName, Case.Insensitive);
             text.ShouldNotContain(
-                DateTime.UtcNow.Year.ToString(CultureInfo.InvariantCulture) + "-"
-                + DateTime.UtcNow.Month.ToString("00", CultureInfo.InvariantCulture) + "-"
+                DateTime.UtcNow.Year.ToString(CultureInfo.InvariantCulture)
+                + "-"
+                + DateTime.UtcNow.Month.ToString("00", CultureInfo.InvariantCulture)
+                + "-"
                 + DateTime.UtcNow.Day.ToString("00", CultureInfo.InvariantCulture)
             );
         }
@@ -626,8 +629,11 @@ public sealed class DerivedSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The count check in <c>DerivedSurfaces.CliProblems</c> must not fire on a healthy
-    ///     registry</b> — it runs on every <c>Generate</c>, so a miscounted check would fail every
+    ///     ⚠
+    ///     <b>
+    ///         The count check in <c>DerivedSurfaces.CliProblems</c> must not fire on a healthy
+    ///         registry
+    ///     </b> — it runs on every <c>Generate</c>, so a miscounted check would fail every
     ///     build rather than none. It is the backstop for the collision above, catching a type lost
     ///     for any future reason; the emitter's throw is the primary guard, and a hand-edited tree is
     ///     already caught by the byte comparison.
@@ -654,20 +660,26 @@ public sealed class DerivedSurfaceTests {
 
         // …including the nested one, which is the type the collision would have eaten.
         tree["groups"]!["dbforpostgresql"]!["commands"]!.AsObject()
-            .ContainsKey("servers-databases").ShouldBeTrue();
+            .ContainsKey("servers-databases")
+            .ShouldBeTrue();
 
         DerivedSurfaces.Generate(
             new Dictionary<string, JsonObject> { [Fixtures.FirstVersion] = document },
             Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()),
             write: false
-        ).Documents.SelectMany(x => x.Problems).ShouldBeEmpty();
+        )
+            .Documents.SelectMany(x => x.Problems)
+            .ShouldBeEmpty();
     }
 
     // ── The collection path ────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A collection path carries <c>x-cybercloud-resource-type</c> and does <i>not</i> read
-    ///     as a second type of that name.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A collection path carries <c>x-cybercloud-resource-type</c> and does <i>not</i> read
+    ///         as a second type of that name.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -744,9 +756,12 @@ public sealed class DerivedSurfaceTests {
         var list = Command["verbs"]!["list"]!;
 
         list["method"]!.GetValue<string>().ShouldBe("GET");
-        list["path"]!.GetValue<string>().ShouldBe(DocumentReader.TypesOf(Document)
-            .Single(x => x.ResourceType == Fixtures.Namespace + "/servers")
-            .CollectionPath);
+        list["path"]!.GetValue<string>()
+            .ShouldBe(
+                DocumentReader.TypesOf(Document)
+                    .Single(x => x.ResourceType == Fixtures.Namespace + "/servers")
+                    .CollectionPath
+            );
 
         list["paged"]!.GetValue<bool>().ShouldBeTrue();
 
@@ -780,8 +795,11 @@ public sealed class DerivedSurfaceTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The SDK's collection class carries the collection template, which is the URL its
-    ///     <c>GetAllAsync</c> has always promised and nothing served.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The SDK's collection class carries the collection template, which is the URL its
+    ///         <c>GetAllAsync</c> has always promised and nothing served.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <c>AppendCollection</c> has emitted <c>GetAllAsync</c> since the emitter was written, and
@@ -810,19 +828,21 @@ public sealed class DerivedSurfaceTests {
 
     /// <summary>The .NET SDK for a registry with one type, so a fixture body can be varied freely.</summary>
     static string SdkOf(ResourceSchema body) =>
-        SdkEmitter.Emit(OpenApiEmitter.Emit(
-            new FakeRegistry {
-                Namespaces = [Fixtures.Namespace],
-                Types = [
-                    new ResourceTypeRegistration {
-                        Type = new(Fixtures.Namespace, "servers"),
-                        ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), body)],
-                        Display = new("Server", "Servers", "server", "A server.")
-                    }
-                ]
-            },
-            ApiVersion.Parse(Fixtures.FirstVersion)
-        ));
+        SdkEmitter.Emit(
+            OpenApiEmitter.Emit(
+                new FakeRegistry {
+                    Namespaces = [Fixtures.Namespace],
+                    Types = [
+                        new ResourceTypeRegistration {
+                            Type = new(Fixtures.Namespace, "servers"),
+                            ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), body)],
+                            Display = new("Server", "Servers", "server", "A server.")
+                        }
+                    ]
+                },
+                ApiVersion.Parse(Fixtures.FirstVersion)
+            )
+        );
 
     /// <summary>The body of one top-level emitted class, between its brace and the one at column 0.</summary>
     static string Body(string source, string className) {
@@ -846,23 +866,27 @@ public sealed class DerivedSurfaceTests {
 
     /// <summary>A body with <c>mode</c> at two depths — the shape that emitted <c>Mode</c> twice.</summary>
     static ResourceSchema CollidingLeafNames() =>
-        ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Required: true),
-            new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
-            new("/properties/persistence", SchemaKind.Nested),
-            new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one.")
-        ]);
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
+                new("/properties/persistence", SchemaKind.Nested),
+                new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one.")
+            ]
+        );
 
     /// <summary>
     ///     The same pair plus the flat spelling of the nested one's fallback name, which is the case
     ///     the fallback runs out on.
     /// </summary>
     static ResourceSchema UnseparableLeafNames() =>
-        ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Required: true),
-            new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
-            new("/properties/persistence", SchemaKind.Nested),
-            new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one."),
-            new("/properties/persistenceMode", SchemaKind.Text, Description: "The one that ends it.")
-        ]);
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
+                new("/properties/persistence", SchemaKind.Nested),
+                new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one."),
+                new("/properties/persistenceMode", SchemaKind.Text, Description: "The one that ends it.")
+            ]
+        );
 }

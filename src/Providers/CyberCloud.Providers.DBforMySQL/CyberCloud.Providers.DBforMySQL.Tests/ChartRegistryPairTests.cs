@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.DBforMySQL.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Four tests, not the fourteen a row-by-row comparison would be, and the difference is
-///         ADR-012's fifth surface existing.</b> <c>build/Build.Charts.cs</c> calls
+///         ⚠
+///         <b>
+///             Four tests, not the fourteen a row-by-row comparison would be, and the difference is
+///             ADR-012's fifth surface existing.
+///         </b> <c>build/Build.Charts.cs</c> calls
 ///         <c>RunGenerator(write: true, charts: true)</c>, which drives <c>ChartSurfaces.Generate</c>
 ///         and <c>ChartAnnotationEmitter</c>: the chart's non-<c>@internal</c> <c>@param</c> block is
 ///         <i>generated</i> from <c>MariaDbServers.Schema2026</c> and byte-diffed. Comparing the two
@@ -114,9 +117,8 @@ public sealed partial class ChartRegistryPairTests {
         );
 
         foreach (var (preset, quantities) in chart) {
-            MariaDbServers.Presets.TryGetValue(preset, out var mine).ShouldBeTrue(
-                $"'{preset}' is in templates/_helpers.tpl and not in MariaDbServers.Presets"
-            );
+            MariaDbServers.Presets.TryGetValue(preset, out var mine)
+                .ShouldBeTrue($"'{preset}' is in templates/_helpers.tpl and not in MariaDbServers.Presets");
 
             mine.ShouldBe(quantities, preset);
         }

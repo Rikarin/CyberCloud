@@ -33,8 +33,10 @@ public readonly record struct NamespaceEnsured(bool Written, ApplyResult Result,
 ///     </para>
 ///     <list type="bullet">
 ///         <item>
-///             <b><c>IResourceGroupGrain.CreateAsync</c> — refused, because a resource group has no
-///             cluster.</b> A group is a control-plane lifecycle unit; a namespace is a data-plane
+///             <b>
+///                 <c>IResourceGroupGrain.CreateAsync</c> — refused, because a resource group has no
+///                 cluster.
+///             </b> A group is a control-plane lifecycle unit; a namespace is a data-plane
 ///             object <i>in one cluster</i>. Which cluster a group's objects land in is decided
 ///             per-resource — the body carries a <c>clusterId</c> and
 ///             <c>ReconcileInput.ClusterId</c> is what the driver connects to — so a group with
@@ -44,8 +46,10 @@ public readonly record struct NamespaceEnsured(bool Written, ApplyResult Result,
 ///             <c>CyberCloud.Kubernetes.Contracts</c> to guess with — see its <c>.csproj</c>.
 ///         </item>
 ///         <item>
-///             <b>A platform-level controller — refused for now, because it has nothing to
-///             enumerate.</b> The set of (group × cluster) pairs that need a namespace is not
+///             <b>
+///                 A platform-level controller — refused for now, because it has nothing to
+///                 enumerate.
+///             </b> The set of (group × cluster) pairs that need a namespace is not
 ///             knowable from the control plane's own state: it is the set of clusters the group's
 ///             resources <i>name</i>, which is a scan of every resource in every group on every
 ///             tick. That is a watch and a work queue to solve a problem the pass that needs the
@@ -78,8 +82,11 @@ public readonly record struct NamespaceEnsured(bool Written, ApplyResult Result,
 ///         ADR-013's builder injects all seven or refuses to build.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The namespace is deleted by exactly one thing — <c>ResourceGroupReclaimer</c>, on the
-///         group's own delete — and by nothing on the reconcile path.</b> <see cref="DeleteAsync" />
+///         ⚠
+///         <b>
+///             The namespace is deleted by exactly one thing — <c>ResourceGroupReclaimer</c>, on the
+///             group's own delete — and by nothing on the reconcile path.
+///         </b> <see cref="DeleteAsync" />
 ///         refuses unless <see cref="NamespaceReclaim" /> proves the namespace holds nothing but what
 ///         Kubernetes puts in every namespace, and a pass over one resource remains the wrong place
 ///         for a group-scoped act in any case: it knows one member's state and nothing about the
@@ -92,8 +99,11 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///     How long a successful ensure is trusted before the namespace is applied again.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is what keeps the promise that a driver-side create does not cost a round trip
-    ///     per apply.</b> Without the memo every pass of every resource would read and patch a
+    ///     ⚠
+    ///     <b>
+    ///         This is what keeps the promise that a driver-side create does not cost a round trip
+    ///         per apply.
+    ///     </b> Without the memo every pass of every resource would read and patch a
     ///     namespace that has existed for months. With a memo that never expired, a namespace deleted
     ///     out of band would never come back and every later apply into it would <c>404</c> until the
     ///     silo restarted. An hour is short enough that an operator who deletes a namespace by hand
@@ -136,8 +146,11 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///         what the object is.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The type itself lives in <see cref="KubeLabels" /> and not here, and the reason is
-    ///         a defect this decision caused.</b> Three components have to <i>recognise</i> a
+    ///         ⚠
+    ///         <b>
+    ///             The type itself lives in <see cref="KubeLabels" /> and not here, and the reason is
+    ///             a defect this decision caused.
+    ///         </b> Three components have to <i>recognise</i> a
     ///         group-attributed object — the drift scan, the conformance harness's labels assertion,
     ///         and any future cluster inventory — and none of them should have to reference the
     ///         component that <i>writes</i> one. Keeping the vocabulary in the label assembly is what
@@ -273,8 +286,11 @@ public sealed class NamespaceEnsurer(IClock clock) {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE ONE CALLER IS <c>ResourceGroupReclaimer</c>, AND IT REACHES HERE ONLY AFTER
-    ///         THE GROUP HAS BEEN SEALED.</b> <c>IResourceGroupGrain.BeginGroupDeleteAsync</c> refuses
+    ///         ⚠
+    ///         <b>
+    ///             THE ONE CALLER IS <c>ResourceGroupReclaimer</c>, AND IT REACHES HERE ONLY AFTER
+    ///             THE GROUP HAS BEEN SEALED.
+    ///         </b> <c>IResourceGroupGrain.BeginGroupDeleteAsync</c> refuses
     ///         while the group holds members and stops accepting new ones, which is what makes
     ///         <see cref="NamespaceReclaim.Decide" />'s member evidence mean something and what closes
     ///         the create-during-delete race this type's own remarks say it cannot close from here.
@@ -282,15 +298,21 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///         <c>ConnectionNamespaceInventory</c> reads the namespace's actual contents.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The verdict is re-checked against this cluster and this namespace, and that is not
-    ///         belt-and-braces.</b> A verdict is a value; a caller holding one about
+    ///         ⚠
+    ///         <b>
+    ///             The verdict is re-checked against this cluster and this namespace, and that is not
+    ///             belt-and-braces.
+    ///         </b> A verdict is a value; a caller holding one about
     ///         <c>{sub}-staging</c> and passing it with <c>{sub}-prod</c> is one variable name away,
     ///         and the mistake is invisible at the call site because both arguments are strings. It
     ///         also rejects <c>default(NamespaceReclaim)</c>, whose namespace is empty.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The memo entry goes with the namespace, and this is the half a delete gets wrong
-    ///         silently.</b> A deleted namespace whose memo still says "ensured 4 minutes ago" makes
+    ///         ⚠
+    ///         <b>
+    ///             The memo entry goes with the namespace, and this is the half a delete gets wrong
+    ///             silently.
+    ///         </b> A deleted namespace whose memo still says "ensured 4 minutes ago" makes
     ///         the next apply into it answer <c>404</c>, for the rest of <see cref="RecheckAfter" />.
     ///         Removing the entry closes that <i>on this silo</i>. Every other silo keeps its own
     ///         memo, and what closes it there is <see cref="Forget(Guid, string)" />: a silo that
@@ -350,8 +372,8 @@ public sealed class NamespaceEnsurer(IClock clock) {
             // reconciler choose Background — a bounded pass budget running out while the collector
             // works — cannot arise. What Foreground buys is that "deleted" means gone rather than
             // marked, which is what a later read-back has to be able to rely on.
-            .DeleteAsync(CascadePolicy.Foreground, cancellationToken)
-            .ConfigureAwait(false);
+                .DeleteAsync(CascadePolicy.Foreground, cancellationToken)
+                .ConfigureAwait(false);
 
         // The memo is dropped whether or not the delete succeeded. A failed delete may still have
         // removed the object — a timeout on the response says nothing about the request — and the cost
@@ -375,8 +397,11 @@ public sealed class NamespaceEnsurer(IClock clock) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This exists because the memo is a cache of a fact about a cluster, and something
-    ///         that empties the cluster invalidates it.</b> In production the only such event is an
+    ///         ⚠
+    ///         <b>
+    ///             This exists because the memo is a cache of a fact about a cluster, and something
+    ///             that empties the cluster invalidates it.
+    ///         </b> In production the only such event is an
     ///         operator deleting a namespace by hand, which <see cref="RecheckAfter" /> covers within
     ///         the hour. In a test harness it happens between every test — <c>FakeKubeCluster.Reset</c>
     ///         wipes the world in microseconds — and no interval is short enough for that.
@@ -399,8 +424,11 @@ public sealed class NamespaceEnsurer(IClock clock) {
     /// <returns>Whether anything was being remembered.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS THE INVALIDATION CHANNEL THE MEMO DID NOT HAVE, AND ITS TRIGGER IS THE
-    ///         SYMPTOM RATHER THAN A BROADCAST.</b> The memo is per silo, so a namespace deleted by
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS THE INVALIDATION CHANNEL THE MEMO DID NOT HAVE, AND ITS TRIGGER IS THE
+    ///             SYMPTOM RATHER THAN A BROADCAST.
+    ///         </b> The memo is per silo, so a namespace deleted by
     ///         an operator or by this platform on <i>another</i> silo stays believed-in here for the
     ///         rest of <see cref="RecheckAfter" /> — and what that costs is precisely a
     ///         <c>404</c> naming the namespace on every apply routed to this silo, for an hour. A
@@ -500,6 +528,5 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///         <c>{subscriptionId:N}-{resourceGroup}</c>.
     ///     </para>
     /// </remarks>
-    static string Body(string ns) =>
-        new JsonObject { ["metadata"] = new JsonObject { ["name"] = ns } }.ToJsonString();
+    static string Body(string ns) => new JsonObject { ["metadata"] = new JsonObject { ["name"] = ns } }.ToJsonString();
 }

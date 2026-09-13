@@ -16,7 +16,11 @@ static class CycDefaults {
     public static CyberCloudClient Client(CycClientRequest request, TokenCredential credential) {
         ArgumentNullException.ThrowIfNull(request);
 
-        return new CyberCloudClient(request.Endpoint, credential, new CyberCloudClientOptions(ServiceVersionFor(request.ApiVersion)));
+        return new CyberCloudClient(
+            request.Endpoint,
+            credential,
+            new CyberCloudClientOptions(ServiceVersionFor(request.ApiVersion))
+        );
     }
 
     /// <summary>
@@ -32,13 +36,14 @@ static class CycDefaults {
     ///     api-version from configuration writes this switch. Reported as an SDK gap: the mapping
     ///     belongs next to the enum, where the generator that adds a member can add the arm.
     /// </remarks>
-    public static CyberCloudClientOptions.ServiceVersion ServiceVersionFor(string apiVersion)
-        => apiVersion switch {
+    public static CyberCloudClientOptions.ServiceVersion ServiceVersionFor(string apiVersion) =>
+        apiVersion switch {
             "2026-08-01" => CyberCloudClientOptions.ServiceVersion.V2026_08_01,
             _ => throw new CycUsageException(
                 $"This build of cyc carries a verb tree for api-version '{apiVersion}' and its SDK cannot "
                 + "speak it. The two ship together, so this is a build problem rather than something to "
-                + "work around — rebuild cyc against a matching CyberCloud.Sdk."),
+                + "work around — rebuild cyc against a matching CyberCloud.Sdk."
+            ),
         };
 
     /// <summary>
@@ -52,14 +57,17 @@ static class CycDefaults {
     ///     with <see cref="CredentialUnavailableException" /> makes the chain report what it tried and
     ///     tell the user to run <c>cyc login</c>.
     /// </remarks>
-    public static TokenCredential SignedInCredential()
-        => new DefaultCyberCloudCredential(new DefaultCyberCloudCredentialOptions {
-            ExcludeCliCredential = true,
-            IncludeInteractiveCredential = true,
-            OpenBrowser = (_, _) => throw new CredentialUnavailableException(
-                "No sign-in is cached for this authority. Run 'cyc login', or set CYC_TENANT_ID, "
-                + "CYC_CLIENT_ID and CYC_CLIENT_SECRET for a service principal."),
-        });
+    public static TokenCredential SignedInCredential() =>
+        new DefaultCyberCloudCredential(
+            new DefaultCyberCloudCredentialOptions {
+                ExcludeCliCredential = true,
+                IncludeInteractiveCredential = true,
+                OpenBrowser = (_, _) => throw new CredentialUnavailableException(
+                    "No sign-in is cached for this authority. Run 'cyc login', or set CYC_TENANT_ID, "
+                    + "CYC_CLIENT_ID and CYC_CLIENT_SECRET for a service principal."
+                )
+            }
+        );
 
     /// <summary>
     ///     Opens a URL in whatever the platform considers the user's browser.
@@ -77,11 +85,14 @@ static class CycDefaults {
         try {
             var start = new ProcessStartInfo { UseShellExecute = true, FileName = uri.ToString() };
 
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
                 start = new ProcessStartInfo("xdg-open", [uri.ToString()]) { UseShellExecute = false };
+            }
 
             using var process = Process.Start(start);
-        } catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException) {
+        } catch (Exception e) when (e is System.ComponentModel.Win32Exception
+                                        or InvalidOperationException
+                                        or PlatformNotSupportedException) {
             // Nothing to open it with. The caller has already printed the URL.
         }
 
@@ -96,8 +107,9 @@ static class CycDefaults {
     public static bool LooksHeadless(IReadOnlyDictionary<string, string> environment) {
         ArgumentNullException.ThrowIfNull(environment);
 
-        if (environment.ContainsKey("SSH_CONNECTION") || environment.ContainsKey("SSH_TTY"))
+        if (environment.ContainsKey("SSH_CONNECTION") || environment.ContainsKey("SSH_TTY")) {
             return true;
+        }
 
         return RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
             && !environment.ContainsKey("DISPLAY")
@@ -109,8 +121,9 @@ static class CycDefaults {
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables()) {
-            if (entry.Key is string key && entry.Value is string value)
+            if (entry.Key is string key && entry.Value is string value) {
                 values[key] = value;
+            }
         }
 
         return values;

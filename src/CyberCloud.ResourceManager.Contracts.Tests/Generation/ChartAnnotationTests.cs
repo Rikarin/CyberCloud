@@ -18,8 +18,11 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 ///         other four surfaces and stops here.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The <see cref="Subset" /> checker below is a checker and not a parser, and the
-///         difference matters.</b> The real reader of this format is in <c>build/Build.Charts.cs</c>,
+///         ⚠
+///         <b>
+///             The <see cref="Subset" /> checker below is a checker and not a parser, and the
+///             difference matters.
+///         </b> The real reader of this format is in <c>build/Build.Charts.cs</c>,
 ///         which is a Nuke project no test assembly can reference — <c>build/_build.csproj</c> is
 ///         deliberately outside the solution. So the round trip that matters happens in the pipeline
 ///         rather than here: <c>Build.Charts</c> writes the block and then parses the file it just
@@ -41,102 +44,100 @@ public sealed class ChartAnnotationTests {
     ///     explicit in a test where it can be asserted against.
     /// </remarks>
     static ResourceSchema Postgres() =>
-        ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Required: true, Description: "The configuration."),
-            new("/properties/version", SchemaKind.Text, Required: true, Description: "Major PostgreSQL version.") {
-                AllowedValues = ["16", "17", "18"],
-                DefaultJson = "\"17\""
-            },
-            new("/properties/replicas", SchemaKind.WholeNumber, Required: true, Description: "Instances, including the primary.") {
-                Minimum = 1,
-                Maximum = 5,
-                DefaultJson = "2"
-            },
-            new("/properties/synchronousReplication", SchemaKind.Boolean, Description: "Whether commits wait for a replica.") {
-                DefaultJson = "false"
-            },
-            new("/properties/sizing", SchemaKind.Nested, Description: "CPU and memory."),
-            new("/properties/sizing/preset", SchemaKind.Text, Description: "A sizing preset.") {
-                AllowedValues = ["s1.nano", "s1.micro", "s1.small", "s1.medium"],
-                DefaultJson = "\"s1.small\""
-            },
-            // ⚠ The quantity pattern is here in full, pipes and all, because a pattern carrying `|` is
-            // the case `@pattern` exists to survive: `@enum` splits on that character and `@pattern`
-            // must not. CyberCloud.DBforPostgreSQL/servers declares this exact shape.
-            new("/properties/sizing/cpu", SchemaKind.Text, Description: "Explicit vCPU quantity.") {
-                Pattern = @"(\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?)?",
-                DefaultJson = "\"\""
-            },
-            new("/properties/sizing/memory", SchemaKind.Text, Description: "Explicit memory quantity.") {
-                Pattern = @"(\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?)?",
-                DefaultJson = "\"\""
-            },
-            new("/properties/storage", SchemaKind.Nested, Description: "The data volume."),
-            new("/properties/storage/size", SchemaKind.Text, Required: true, Description: "Data volume size.") {
-                Pattern = @"\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?",
-                DefaultJson = "\"20Gi\"",
-                ExampleJson = "\"20Gi\""
-            },
-            new("/properties/storage/class", SchemaKind.Text, Description: "StorageClass name.") {
-                Widget = WidgetHint.StorageClass,
-                Immutable = true
-            },
-            new("/properties/storage/walSize", SchemaKind.Text, Description: "Size of the WAL volume."),
-            new("/properties/pooling", SchemaKind.Nested, Description: "PgBouncer in front of the cluster."),
-            new("/properties/pooling/enabled", SchemaKind.Boolean, Description: "Whether to run a pooler.") {
-                DefaultJson = "true"
-            },
-            new("/properties/pooling/mode", SchemaKind.Text, Description: "PgBouncer pooling mode.") {
-                AllowedValues = ["session", "transaction", "statement"],
-                DefaultJson = "\"transaction\""
-            },
-            new("/properties/pooling/instances", SchemaKind.WholeNumber, Description: "Number of pooler pods.") {
-                Minimum = 1,
-                Maximum = 8,
-                DefaultJson = "2"
-            },
-            new("/properties/extensions", SchemaKind.Array, Description: "Extensions to install.") {
-                ElementKind = SchemaKind.Text,
-                AllowedValues = ["pgvector", "postgis", "timescaledb"],
-                DefaultJson = "[]"
-            },
-            new("/properties/backup", SchemaKind.Nested, Description: "Backup to the tenant's object store."),
-            new("/properties/backup/enabled", SchemaKind.Boolean, Description: "Whether backup runs.") {
-                DefaultJson = "true"
-            },
-            new("/properties/backup/retentionDays", SchemaKind.WholeNumber, Description: "How long backups are kept.") {
-                Minimum = 1,
-                Maximum = 365,
-                DefaultJson = "14"
-            },
-            new("/properties/backup/destinationPath", SchemaKind.Text, Description: "Object-store URL for backups.") {
-                DefaultJson = "\"\"",
-                ExampleJson = "\"s3://tenant-bucket/postgres\""
-            },
-            new("/properties/clusterId", SchemaKind.Text, Description: "The cluster's namespace.") {
-                Format = SchemaFormat.Uuid,
-                Widget = WidgetHint.Cluster
-            },
-            new("/properties/bootstrap", SchemaKind.Nested, Description: "What exists on first start."),
-            new("/properties/bootstrap/database", SchemaKind.Text, Description: "The application database.") {
-                Pattern = "[a-z_][a-z0-9_]*",
-                MinLength = 1,
-                MaxLength = 63,
-                DefaultJson = "\"app\""
-            },
-            // ⚠ A one-sided length, which `@length` spells and `@range` cannot. Kept in the fixture so
-            // the open end is emitted and subset-checked on every run rather than only in the test that
-            // names it.
-            new("/properties/bootstrap/owner", SchemaKind.Text, Description: "Role that owns the database.") {
-                MinLength = 1,
-                DefaultJson = "\"app\""
-            },
-            new("/properties/bootstrap/password", SchemaKind.Text, Secret: true, Description: "Password for the owning role."),
-            new("/properties/monitoring", SchemaKind.Nested, Description: "What the platform scrapes."),
-            new("/properties/monitoring/enabled", SchemaKind.Boolean, Description: "Whether a PodMonitor is emitted.") {
-                DefaultJson = "true"
-            }
-        ]);
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested, Required: true, Description: "The configuration."),
+                new("/properties/version", SchemaKind.Text, Required: true, Description: "Major PostgreSQL version.") {
+                    AllowedValues = ["16", "17", "18"], DefaultJson = "\"17\""
+                },
+                new(
+                    "/properties/replicas",
+                    SchemaKind.WholeNumber,
+                    Required: true,
+                    Description: "Instances, including the primary."
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "2" },
+                new(
+                    "/properties/synchronousReplication",
+                    SchemaKind.Boolean,
+                    Description: "Whether commits wait for a replica."
+                ) { DefaultJson = "false" },
+                new("/properties/sizing", SchemaKind.Nested, Description: "CPU and memory."),
+                new("/properties/sizing/preset", SchemaKind.Text, Description: "A sizing preset.") {
+                    AllowedValues = ["s1.nano", "s1.micro", "s1.small", "s1.medium"], DefaultJson = "\"s1.small\""
+                },
+                // ⚠ The quantity pattern is here in full, pipes and all, because a pattern carrying `|` is
+                // the case `@pattern` exists to survive: `@enum` splits on that character and `@pattern`
+                // must not. CyberCloud.DBforPostgreSQL/servers declares this exact shape.
+                new("/properties/sizing/cpu", SchemaKind.Text, Description: "Explicit vCPU quantity.") {
+                    Pattern = @"(\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?)?", DefaultJson = "\"\""
+                },
+                new("/properties/sizing/memory", SchemaKind.Text, Description: "Explicit memory quantity.") {
+                    Pattern = @"(\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?)?", DefaultJson = "\"\""
+                },
+                new("/properties/storage", SchemaKind.Nested, Description: "The data volume."),
+                new("/properties/storage/size", SchemaKind.Text, Required: true, Description: "Data volume size.") {
+                    Pattern = @"\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?", DefaultJson = "\"20Gi\"", ExampleJson = "\"20Gi\""
+                },
+                new("/properties/storage/class", SchemaKind.Text, Description: "StorageClass name.") {
+                    Widget = WidgetHint.StorageClass, Immutable = true
+                },
+                new("/properties/storage/walSize", SchemaKind.Text, Description: "Size of the WAL volume."),
+                new("/properties/pooling", SchemaKind.Nested, Description: "PgBouncer in front of the cluster."),
+                new("/properties/pooling/enabled", SchemaKind.Boolean, Description: "Whether to run a pooler.") {
+                    DefaultJson = "true"
+                },
+                new("/properties/pooling/mode", SchemaKind.Text, Description: "PgBouncer pooling mode.") {
+                    AllowedValues = ["session", "transaction", "statement"], DefaultJson = "\"transaction\""
+                },
+                new("/properties/pooling/instances", SchemaKind.WholeNumber, Description: "Number of pooler pods.") {
+                    Minimum = 1, Maximum = 8, DefaultJson = "2"
+                },
+                new("/properties/extensions", SchemaKind.Array, Description: "Extensions to install.") {
+                    ElementKind = SchemaKind.Text,
+                    AllowedValues = ["pgvector", "postgis", "timescaledb"],
+                    DefaultJson = "[]"
+                },
+                new("/properties/backup", SchemaKind.Nested, Description: "Backup to the tenant's object store."),
+                new("/properties/backup/enabled", SchemaKind.Boolean, Description: "Whether backup runs.") {
+                    DefaultJson = "true"
+                },
+                new(
+                    "/properties/backup/retentionDays",
+                    SchemaKind.WholeNumber,
+                    Description: "How long backups are kept."
+                ) { Minimum = 1, Maximum = 365, DefaultJson = "14" },
+                new(
+                    "/properties/backup/destinationPath",
+                    SchemaKind.Text,
+                    Description: "Object-store URL for backups."
+                ) { DefaultJson = "\"\"", ExampleJson = "\"s3://tenant-bucket/postgres\"" },
+                new("/properties/clusterId", SchemaKind.Text, Description: "The cluster's namespace.") {
+                    Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster
+                },
+                new("/properties/bootstrap", SchemaKind.Nested, Description: "What exists on first start."),
+                new("/properties/bootstrap/database", SchemaKind.Text, Description: "The application database.") {
+                    Pattern = "[a-z_][a-z0-9_]*", MinLength = 1, MaxLength = 63, DefaultJson = "\"app\""
+                },
+                // ⚠ A one-sided length, which `@length` spells and `@range` cannot. Kept in the fixture so
+                // the open end is emitted and subset-checked on every run rather than only in the test that
+                // names it.
+                new("/properties/bootstrap/owner", SchemaKind.Text, Description: "Role that owns the database.") {
+                    MinLength = 1, DefaultJson = "\"app\""
+                },
+                new(
+                    "/properties/bootstrap/password",
+                    SchemaKind.Text,
+                    Secret: true,
+                    Description: "Password for the owning role."
+                ),
+                new("/properties/monitoring", SchemaKind.Nested, Description: "What the platform scrapes."),
+                new(
+                    "/properties/monitoring/enabled",
+                    SchemaKind.Boolean,
+                    Description: "Whether a PodMonitor is emitted."
+                ) { DefaultJson = "true" }
+            ]
+        );
 
     static string Block => Emitted(Postgres());
 
@@ -150,8 +151,11 @@ public sealed class ChartAnnotationTests {
     ///     A schema on its own, with no cluster placement declared.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The empty <c>clusterIdPointer</c> is the point of this helper rather than a
-    ///     convenience.</b> <see cref="ChartAnnotationEmitter.Emit" /> takes the pointer with no
+    ///     ⚠
+    ///     <b>
+    ///         The empty <c>clusterIdPointer</c> is the point of this helper rather than a
+    ///         convenience.
+    ///     </b> <see cref="ChartAnnotationEmitter.Emit" /> takes the pointer with no
     ///     default because a schema cannot say which of its properties is placement — the fixture
     ///     below declares a required uuid called <c>clusterId</c> and nothing about it is
     ///     distinguishable from a tenant-chosen one. These tests are about the schema-to-block
@@ -350,13 +354,16 @@ public sealed class ChartAnnotationTests {
         // `@range`'s pattern requires both. The obvious emission, `## @range 1..`, is a malformed
         // directive against a file this emitter had just written: the build would fail on its own
         // output, with a line number, pointing at a generated file.
-        var block = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
-                Minimum = 1,
-                DefaultJson = "2"
-            }
-        ]));
+        var block = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
+                        Minimum = 1, DefaultJson = "2"
+                    }
+                ]
+            )
+        );
 
         block.Text.ShouldBeEmpty();
         block.Problems.ShouldContain(x => x.Contains("one-sided numeric bound", StringComparison.Ordinal));
@@ -366,26 +373,31 @@ public sealed class ChartAnnotationTests {
     public void ADirectiveArgumentThatCannotBeSpelledIsRefused() {
         // `@enum` members are separated by `|` and trimmed, so a value carrying either would come back
         // as a different string — or as two.
-        var piped = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            new("/properties/mode", SchemaKind.Text, Description: "A mode.") {
-                AllowedValues = ["a|b"],
-                DefaultJson = "\"a|b\""
-            }
-        ]));
+        var piped = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/mode", SchemaKind.Text, Description: "A mode.") {
+                        AllowedValues = ["a|b"], DefaultJson = "\"a|b\""
+                    }
+                ]
+            )
+        );
 
         piped.Problems.ShouldContain(x => x.Contains("`@enum` cannot spell", StringComparison.Ordinal));
 
         // `@widget` renders one scalar field, and build/Build.Charts.cs refuses it on an array — which
         // SchemaProperty.Incoherences permits, so Fixtures' own /properties/allowedRanges is one.
-        var widget = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            new("/properties/ranges", SchemaKind.Array, Description: "CIDR ranges.") {
-                ElementKind = SchemaKind.Text,
-                Widget = WidgetHint.Cidr,
-                DefaultJson = "[]"
-            }
-        ]));
+        var widget = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/ranges", SchemaKind.Array, Description: "CIDR ranges.") {
+                        ElementKind = SchemaKind.Text, Widget = WidgetHint.Cidr, DefaultJson = "[]"
+                    }
+                ]
+            )
+        );
 
         widget.Problems.ShouldContain(x => x.Contains("renders one scalar field", StringComparison.Ordinal));
     }
@@ -408,8 +420,11 @@ public sealed class ChartAnnotationTests {
     ///         <c>Of</c> that refused it would make this test pass against the defect.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>This is #78's sentence one directive over, and the shape #78's own array
-    ///         regression test already constructs.</b> Before this refusal the emitter wrote
+    ///         ⚠
+    ///         <b>
+    ///             This is #78's sentence one directive over, and the shape #78's own array
+    ///             regression test already constructs.
+    ///         </b> Before this refusal the emitter wrote
     ///         <c>## @param x {array}</c> followed by <c>## @pattern …</c>, and
     ///         <c>build/Build.Charts.cs</c> then failed on the file the emitter had just written,
     ///         pointing at a generated <c>values.yaml</c> with a line number rather than at the
@@ -434,19 +449,20 @@ public sealed class ChartAnnotationTests {
             "/properties/allowedCidrs",
             SchemaKind.Array,
             Description: "Source ranges permitted to reach the external listener."
-        ) {
-            ElementKind = SchemaKind.Text,
-            DefaultJson = "[]"
-        };
+        ) { ElementKind = SchemaKind.Text, DefaultJson = "[]" };
 
-        var block = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            directive switch {
-                "@pattern" => refined with { Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}" },
-                "@length" => refined with { MinLength = 9, MaxLength = 18 },
-                _ => refined with { Format = SchemaFormat.Uri }
-            }
-        ]));
+        var block = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    directive switch {
+                        "@pattern" => refined with { Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}" },
+                        "@length" => refined with { MinLength = 9, MaxLength = 18 },
+                        _ => refined with { Format = SchemaFormat.Uri }
+                    }
+                ]
+            )
+        );
 
         // Nothing is written when anything was refused — a half-written block is a configuration
         // surface that silently lost a constraint.
@@ -492,23 +508,35 @@ public sealed class ChartAnnotationTests {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This exists because narrowing the guard to the reachable case left the suite
-    ///         green, so the paragraph in <c>CheckUnspellable</c> defending the wider form was
-    ///         defending a choice nothing measured.</b> The theory above pins the array of text — the
+    ///         ⚠
+    ///         <b>
+    ///             This exists because narrowing the guard to the reachable case left the suite
+    ///             green, so the paragraph in <c>CheckUnspellable</c> defending the wider form was
+    ///             defending a choice nothing measured.
+    ///         </b> The theory above pins the array of text — the
     ///         one shape <c>SchemaProperty.Incoherences</c> lets through, because it collapses an
     ///         array to its <c>ElementKind</c> before gating the three refinements on
-    ///         <c>value is not SchemaKind.Text</c>. Rewriting <c>property.Kind is not
-    ///         SchemaKind.Text</c> as <c>property.Kind is SchemaKind.Array</c> was measured on
+    ///         <c>value is not SchemaKind.Text</c>. Rewriting
+    ///         <c>
+    /// property.Kind is not
+    ///         SchemaKind.Text
+    ///         </c> as <c>property.Kind is SchemaKind.Array</c> was measured on
     ///         2026-09-06 against the commit that shipped the guard and left every test in this
     ///         project green; with the rows below it is red. The sabotage recorded on that commit —
     ///         <c>Kind is SchemaKind.Unknown</c> — disables the guard outright and so only re-proves
     ///         the array row.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The declaration here is INCOHERENT, and that is exactly why it is built by object
-    ///         initialiser.</b> <c>Incoherences</c> gates <c>Pattern</c>,
-    ///         <c>MinLength</c>/<c>MaxLength</c> and <c>Format</c> on <c>value is not
-    ///         SchemaKind.Text</c>, and <c>value</c> is the kind itself for anything that is not an
+    ///         ⚠
+    ///         <b>
+    ///             The declaration here is INCOHERENT, and that is exactly why it is built by object
+    ///             initialiser.
+    ///         </b> <c>Incoherences</c> gates <c>Pattern</c>,
+    ///         <c>MinLength</c>/<c>MaxLength</c> and <c>Format</c> on
+    ///         <c>
+    /// value is not
+    ///         SchemaKind.Text
+    ///         </c>, and <c>value</c> is the kind itself for anything that is not an
     ///         array — so <c>ResourceSchema.Of</c> refuses it, which the first assertion runs rather
     ///         than asserts from memory. The only way such a registration reaches this emitter is a
     ///         schema constructed as <c>new ResourceSchema { … }</c>, which never ran
@@ -583,10 +611,14 @@ public sealed class ChartAnnotationTests {
     public void ADescriptionThatWouldEndItsOwnBlockIsRefused() {
         // A newline in a Description would close the annotation block above the key, and the reader
         // would report "an annotation block with no key under it" against a generated file.
-        var block = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested),
-            new("/properties/a", SchemaKind.Text, Description: "One.\nTwo.")
-        ]));
+        var block = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested),
+                    new("/properties/a", SchemaKind.Text, Description: "One.\nTwo.")
+                ]
+            )
+        );
 
         block.Problems.ShouldContain(x => x.Contains("more than one line", StringComparison.Ordinal));
         block.Text.ShouldBeEmpty();
@@ -659,12 +691,14 @@ public sealed class ChartAnnotationTests {
 
     [Fact]
     public void AMemberNameThatIsNotAValuesKeyIsRefusedRatherThanMangled() {
-        var block = Emit(new ResourceSchema {
-            Properties = [
-                new("/properties", SchemaKind.Nested, Description: "The configuration."),
-                new("/properties/storage-class", SchemaKind.Text, Description: "A hyphenated name.")
-            ]
-        });
+        var block = Emit(
+            new ResourceSchema {
+                Properties = [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/storage-class", SchemaKind.Text, Description: "A hyphenated name.")
+                ]
+            }
+        );
 
         block.Problems.ShouldContain(x => x.Contains("storage-class", StringComparison.Ordinal));
     }
@@ -676,7 +710,10 @@ public sealed class ChartAnnotationTests {
         // ⚠ Ten of the 36 rows in charts/managed/postgres/values.yaml are @internal: Helm plumbing,
         // seven rows of reconciler-injected identity and an operator escape hatch. None is in any
         // ResourceSchema and none ever will be. A generator that rewrote the whole file would eat them.
-        var rewritten = ChartAnnotationEmitter.Rewrite(ValuesFile("## @param stale {string} Gone.\nstale: \"\"\n"), Block);
+        var rewritten = ChartAnnotationEmitter.Rewrite(
+            ValuesFile("## @param stale {string} Gone.\nstale: \"\"\n"),
+            Block
+        );
 
         rewritten.Problems.ShouldBeEmpty();
         rewritten.Text.ShouldEndWith(InternalTail);
@@ -832,8 +869,7 @@ public sealed class ChartAnnotationTests {
         SchemaProperty gap = directive switch {
             "nullable" => new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Nullable = true },
             _ => new("/properties/gap", SchemaKind.Array, Description: "A gap.") {
-                ElementKind = SchemaKind.WholeNumber,
-                DefaultJson = "[]"
+                ElementKind = SchemaKind.WholeNumber, DefaultJson = "[]"
             }
         };
 
@@ -868,14 +904,16 @@ public sealed class ChartAnnotationTests {
         // vocabulary that refused them could not spell the first pattern anybody wrote.
         var pattern = @"^[a-z]#(one|two):\{3\}""x""$";
 
-        var block = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            // ⚠ No DefaultJson: ResourceSchema.Of checks a default against its own anchored pattern,
-            // and the point here is the pattern's transport rather than its defaulting.
-            new("/properties/awkward", SchemaKind.Text, Description: "An awkward one.") {
-                Pattern = pattern
-            }
-        ]));
+        var block = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    // ⚠ No DefaultJson: ResourceSchema.Of checks a default against its own anchored pattern,
+                    // and the point here is the pattern's transport rather than its defaulting.
+                    new("/properties/awkward", SchemaKind.Text, Description: "An awkward one.") { Pattern = pattern }
+                ]
+            )
+        );
 
         block.Problems.ShouldBeEmpty();
         block.Text.ShouldContain("## @pattern " + pattern);
@@ -896,12 +934,14 @@ public sealed class ChartAnnotationTests {
         // strings the API does not. That is the "constraint that reached the API and not the chart"
         // failure wearing a disguise: the constraint arrives, and means something else. A newline
         // would end the annotation block above the key it describes; a tab is a subset violation.
-        var block = Emit(new ResourceSchema {
-            Properties = [
-                new("/properties", SchemaKind.Nested, Description: "The configuration."),
-                new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Pattern = pattern }
-            ]
-        });
+        var block = Emit(
+            new ResourceSchema {
+                Properties = [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Pattern = pattern }
+                ]
+            }
+        );
 
         block.Text.ShouldBeEmpty();
         block.Problems.ShouldContain(x => x.Contains(reason, StringComparison.Ordinal));
@@ -913,8 +953,11 @@ public sealed class ChartAnnotationTests {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is #76's hole, one door over, and the door is the reason the test builds its
-    ///         schema by object initialiser.</b> #76 made <c>SchemaProperty.Matcher</c>
+    ///         ⚠
+    ///         <b>
+    ///             This is #76's hole, one door over, and the door is the reason the test builds its
+    ///             schema by object initialiser.
+    ///         </b> #76 made <c>SchemaProperty.Matcher</c>
     ///         <c>RegexOptions.NonBacktracking</c> with no match timeout, so a lookaround, a
     ///         backreference or an atomic group is refused <i>by name</i> when the matcher is built;
     ///         <c>SchemaProperty.Incoherences</c> catches that refusal, and — after #76's review —
@@ -928,8 +971,11 @@ public sealed class ChartAnnotationTests {
     ///         <c>NotSupportedException</c> out of a method whose contract is to collect problems.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>DefaultJson</c> has to be a well-formed string of the property's own kind or
-    ///         this test cannot fail.</b> <c>ResourceSchema.ValueProblems</c> reports a kind mismatch
+    ///         ⚠
+    ///         <b>
+    ///             <c>DefaultJson</c> has to be a well-formed string of the property's own kind or
+    ///             this test cannot fail.
+    ///         </b> <c>ResourceSchema.ValueProblems</c> reports a kind mismatch
     ///         and stops, so a <c>42</c> would never reach the constraint checks and the matcher would
     ///         never be built a second time. <c>MinLength</c> is the independent problem, checked
     ///         <i>before</i> the pattern in <c>ConstraintProblems</c> — it is what the throw used to
@@ -948,27 +994,29 @@ public sealed class ChartAnnotationTests {
     [InlineData("(?>[a-z]+)[0-9]")]
     [InlineData(@"([a-z])\1")]
     public void APatternTheLinearEngineCannotRunIsNamedRatherThanThrownOutOfTheEmitter(string pattern) {
-        var bare = Emit(new ResourceSchema {
-            Properties = [
-                new("/properties", SchemaKind.Nested, Description: "The configuration."),
-                new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Pattern = pattern }
-            ]
-        });
+        var bare = Emit(
+            new ResourceSchema {
+                Properties = [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Pattern = pattern }
+                ]
+            }
+        );
 
         bare.Text.ShouldBeEmpty();
         bare.Problems.ShouldContain(x => x.Contains("non-backtracking", StringComparison.Ordinal));
         bare.Problems.ShouldContain(x => x.Contains("'/properties/gap'", StringComparison.Ordinal));
 
-        var withDefault = Emit(new ResourceSchema {
-            Properties = [
-                new("/properties", SchemaKind.Nested, Description: "The configuration."),
-                new("/properties/gap", SchemaKind.Text, Description: "A gap.") {
-                    Pattern = pattern,
-                    MinLength = 10,
-                    DefaultJson = "\"abc\""
-                }
-            ]
-        });
+        var withDefault = Emit(
+            new ResourceSchema {
+                Properties = [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/gap", SchemaKind.Text, Description: "A gap.") {
+                        Pattern = pattern, MinLength = 10, DefaultJson = "\"abc\""
+                    }
+                ]
+            }
+        );
 
         withDefault.Text.ShouldBeEmpty();
         withDefault.Problems.ShouldContain(x => x.Contains("non-backtracking", StringComparison.Ordinal));
@@ -992,17 +1040,19 @@ public sealed class ChartAnnotationTests {
     /// </remarks>
     [Fact]
     public void AnArrayElementInheritsTheClearedPatternRatherThanRebuildingIt() {
-        var block = Emit(new ResourceSchema {
-            Properties = [
-                new("/properties", SchemaKind.Nested, Description: "The configuration."),
-                new("/properties/gaps", SchemaKind.Array, Description: "Gaps.") {
-                    ElementKind = SchemaKind.Text,
-                    Pattern = "(?=[a-z])[a-z0-9]+",
-                    MinLength = 10,
-                    DefaultJson = "[\"abc\"]"
-                }
-            ]
-        });
+        var block = Emit(
+            new ResourceSchema {
+                Properties = [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/gaps", SchemaKind.Array, Description: "Gaps.") {
+                        ElementKind = SchemaKind.Text,
+                        Pattern = "(?=[a-z])[a-z0-9]+",
+                        MinLength = 10,
+                        DefaultJson = "[\"abc\"]"
+                    }
+                ]
+            }
+        );
 
         block.Text.ShouldBeEmpty();
         block.Problems.ShouldContain(x => x.Contains("non-backtracking", StringComparison.Ordinal));
@@ -1017,12 +1067,16 @@ public sealed class ChartAnnotationTests {
         // `@secret` already means `format: password` — the three keywords OpenApiEmitter puts on a
         // secret — so a property carrying both would emit two `format`s into one schema node and the
         // second would win without a word being said.
-        var block = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            new("/properties/token", SchemaKind.Text, Secret: true, Description: "A token.") {
-                Format = SchemaFormat.Uuid
-            }
-        ]));
+        var block = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/token", SchemaKind.Text, Secret: true, Description: "A token.") {
+                        Format = SchemaFormat.Uuid
+                    }
+                ]
+            )
+        );
 
         block.Text.ShouldBeEmpty();
         block.Problems.ShouldContain(x => x.Contains("the same keyword", StringComparison.Ordinal));
@@ -1030,12 +1084,14 @@ public sealed class ChartAnnotationTests {
 
     [Fact]
     public void ANegativeLengthIsRefusedBecauseTheDirectiveSpellsDigits() {
-        var block = Emit(new ResourceSchema {
-            Properties = [
-                new("/properties", SchemaKind.Nested, Description: "The configuration."),
-                new("/properties/gap", SchemaKind.Text, Description: "A gap.") { MaxLength = -1 }
-            ]
-        });
+        var block = Emit(
+            new ResourceSchema {
+                Properties = [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/gap", SchemaKind.Text, Description: "A gap.") { MaxLength = -1 }
+                ]
+            }
+        );
 
         block.Text.ShouldBeEmpty();
         block.Problems.ShouldContain(x => x.Contains("negative length", StringComparison.Ordinal));
@@ -1048,14 +1104,18 @@ public sealed class ChartAnnotationTests {
         // would end the annotation block above its key. Re-serialising makes it one line by
         // construction, and makes the bytes a function of the value rather than of how it was spelled
         // — which is what a byte-for-byte drift gate needs.
-        var block = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            new("/properties/extensions", SchemaKind.Array, Description: "Extensions.") {
-                ElementKind = SchemaKind.Text,
-                DefaultJson = "[]",
-                ExampleJson = "[\n  \"pgvector\",\n  \"postgis\"\n]"
-            }
-        ]));
+        var block = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/extensions", SchemaKind.Array, Description: "Extensions.") {
+                        ElementKind = SchemaKind.Text,
+                        DefaultJson = "[]",
+                        ExampleJson = "[\n  \"pgvector\",\n  \"postgis\"\n]"
+                    }
+                ]
+            )
+        );
 
         block.Problems.ShouldBeEmpty();
         block.Text.ShouldContain("## @example [\"pgvector\",\"postgis\"]");
@@ -1103,7 +1163,8 @@ public sealed class ChartAnnotationTests {
 
         Should.Throw<Exception>(() =>
             Table("static readonly string[] Directives = [\"enum\"];", "Directives")
-                .ShouldBe(Subset.Directives, ignoreOrder: false));
+                .ShouldBe(Subset.Directives, ignoreOrder: false)
+        );
     }
 
     /// <summary>
@@ -1152,13 +1213,15 @@ public sealed class ChartAnnotationTests {
         // Not a gap: a values key is by construction something the chart's caller sets, and
         // server-owned state has no home in a values file at all. The generated CLI drops
         // --provisioning-state for the same reason.
-        var block = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            new("/properties/state", SchemaKind.Text, ReadOnly: true, Description: "Server-owned."),
-            new("/properties/version", SchemaKind.Text, Description: "Tenant-owned.") {
-                DefaultJson = "\"17\""
-            }
-        ]));
+        var block = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/state", SchemaKind.Text, ReadOnly: true, Description: "Server-owned."),
+                    new("/properties/version", SchemaKind.Text, Description: "Tenant-owned.") { DefaultJson = "\"17\"" }
+                ]
+            )
+        );
 
         block.Problems.ShouldBeEmpty();
         block.Text.ShouldNotContain("state:");
@@ -1218,13 +1281,16 @@ public sealed class ChartAnnotationTests {
         // Every values key carries a value; a null is refused by the reader and by helm. There is no
         // empty spelling of a number, and an invented 0 is a value a tenant would get without anybody
         // having chosen it — and it may sit outside the property's own @range.
-        var block = Emit(ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested, Description: "The configuration."),
-            new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
-                Minimum = 1,
-                Maximum = 5
-            }
-        ]));
+        var block = Emit(
+            ResourceSchema.Of(
+                [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
+                        Minimum = 1, Maximum = 5
+                    }
+                ]
+            )
+        );
 
         block.Problems.ShouldHaveSingleItem();
         block.Problems[0].ShouldContain("DefaultJson");
@@ -1234,16 +1300,16 @@ public sealed class ChartAnnotationTests {
     public void ADefaultOutsideItsOwnConstraintsIsRefusedAgainstTheRegistryRatherThanTheChart() {
         // build/Build.Charts.cs would report this against values.yaml — which by then is a generated
         // file — and send the author to fix the wrong end.
-        var block = Emit(new ResourceSchema {
-            Properties = [
-                new("/properties", SchemaKind.Nested, Description: "The configuration."),
-                new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "9"
-                }
-            ]
-        });
+        var block = Emit(
+            new ResourceSchema {
+                Properties = [
+                    new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                    new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
+                        Minimum = 1, Maximum = 5, DefaultJson = "9"
+                    }
+                ]
+            }
+        );
 
         block.Problems.ShouldContain(x => x.Contains("its own constraints reject", StringComparison.Ordinal));
     }
@@ -1313,20 +1379,28 @@ public sealed class ChartAnnotationTests {
 
             File.WriteAllText(
                 Path.Combine(directory, "Chart.yaml"),
-                "name: " + chart.Split('/')[^1] + "\nversion: 0.1.0\nannotations:\n"
-                + "  cybercloud.io/resource-type: " + resourceType + "\n"
-                + "  cybercloud.io/api-version: \"" + apiVersion + "\"\n"
+                "name: "
+                + chart.Split('/')[^1]
+                + "\nversion: 0.1.0\nannotations:\n"
+                + "  cybercloud.io/resource-type: "
+                + resourceType
+                + "\n"
+                + "  cybercloud.io/api-version: \""
+                + apiVersion
+                + "\"\n"
             );
 
             File.WriteAllText(Path.Combine(directory, ChartAnnotationEmitter.FileName), values);
         }
 
         public string Read(string chart) =>
-            File.ReadAllText(Path.Combine(
-                Root,
-                chart.Replace('/', Path.DirectorySeparatorChar),
-                ChartAnnotationEmitter.FileName
-            ));
+            File.ReadAllText(
+                Path.Combine(
+                    Root,
+                    chart.Replace('/', Path.DirectorySeparatorChar),
+                    ChartAnnotationEmitter.FileName
+                )
+            );
 
         public void Dispose() {
             if (Directory.Exists(Root)) {
@@ -1364,7 +1438,7 @@ public sealed class ChartAnnotationTests {
             "range",
             "required",
             "secret",
-            "widget",
+            "widget"
         ];
 
         public static readonly ImmutableArray<string> Formats = [
@@ -1373,15 +1447,13 @@ public sealed class ChartAnnotationTests {
             "date-time",
             "email",
             "uri",
-            "uuid",
+            "uuid"
         ];
 
-        static readonly ImmutableArray<string> Types =
-            ["array", "boolean", "integer", "number", "object", "string"];
+        static readonly ImmutableArray<string> Types = ["array", "boolean", "integer", "number", "object", "string"];
 
-        static readonly Regex Param = new(
-            @"^(?<name>[A-Za-z_][A-Za-z0-9_]*) \{(?<type>[A-Za-z]+)\} (?<description>\S.*)$"
-        );
+        static readonly Regex Param =
+            new(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*) \{(?<type>[A-Za-z]+)\} (?<description>\S.*)$");
 
         static readonly Regex Key = new(@"^(?<key>[A-Za-z_][A-Za-z0-9_]*):[ ]*(?<value>.*)$");
 
@@ -1502,7 +1574,8 @@ public sealed class ChartAnnotationTests {
                         case "enum":
                             var members = argument.Split('|').Select(x => x.Trim()).ToList();
 
-                            if (members.Any(x => x.Length == 0) || members.Distinct(StringComparer.Ordinal).Count() != members.Count) {
+                            if (members.Any(x => x.Length == 0)
+                                || members.Distinct(StringComparer.Ordinal).Count() != members.Count) {
                                 problems.Add($"{line}: `@enum` has an empty or repeated member.");
                             }
 
@@ -1556,7 +1629,8 @@ public sealed class ChartAnnotationTests {
                     problems.Add($"{line}: a null value.");
                 }
 
-                if (value.Length > 0 && value[0] is not ('"' or '\'')
+                if (value.Length > 0
+                    && value[0] is not ('"' or '\'')
                     && value.Contains(" #", StringComparison.Ordinal)) {
                     problems.Add($"{line}: an inline comment after a value.");
                 }

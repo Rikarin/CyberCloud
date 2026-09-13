@@ -1,21 +1,30 @@
 namespace CyberCloud.Cli;
 
 /// <summary>
-///     The process exit codes, from docs/plan/21 § Decisions: <i>"<c>0</c> ok · <c>1</c> client error
-///     · <c>2</c> usage · <c>3</c> auth · <c>4</c> server · <c>5</c> timeout. Documented, stable, so
-///     CI can branch on them."</i>
+///     The process exit codes, from docs/plan/21 § Decisions:
+///     <i>
+///         "<c>0</c> ok · <c>1</c> client error
+///         · <c>2</c> usage · <c>3</c> auth · <c>4</c> server · <c>5</c> timeout. Documented, stable, so
+///         CI can branch on them."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>These numbers are a published contract and are asserted against the generated verb
-///         tree.</b> <c>generated/cli/{version}.json</c> carries an <c>exitCodes</c> object emitted by
+///         ⚠
+///         <b>
+///             These numbers are a published contract and are asserted against the generated verb
+///             tree.
+///         </b> <c>generated/cli/{version}.json</c> carries an <c>exitCodes</c> object emitted by
 ///         <c>CliEmitter</c>, and <c>ExitCodeTests</c> compares it member for member with this enum —
 ///         so a change on either side fails a test rather than silently retiring a branch in
 ///         somebody's pipeline.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The split between <see cref="ClientError" /> and <see cref="ServerError" /> follows
-///         the HTTP status, and <see cref="Auth" /> is carved out of the <c>4xx</c> range.</b> A
+///         ⚠
+///         <b>
+///             The split between <see cref="ClientError" /> and <see cref="ServerError" /> follows
+///             the HTTP status, and <see cref="Auth" /> is carved out of the <c>4xx</c> range.
+///         </b> A
 ///         script that retries on <c>4</c> and stops on <c>1</c> is doing the right thing; one that
 ///         retried a <c>403</c> would not be, which is why <c>401</c> and <c>403</c> answer
 ///         <c>3</c> rather than <c>1</c>.
@@ -42,5 +51,5 @@ enum ExitCode {
     ServerError = 4,
 
     /// <summary>The deadline passed: <c>--timeout</c> elapsed, or a long-running operation outlived it.</summary>
-    Timeout = 5,
+    Timeout = 5
 }

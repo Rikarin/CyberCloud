@@ -25,9 +25,10 @@ public sealed record GeneratedGraph(
         + string.Join(
             Environment.NewLine,
             Schema.TypeNames.SelectMany(type =>
-                Schema.Type(type)!.Members.Select(m =>
-                    $"  {type}#{m.Name} {(m.IsPermission ? "(permission)" : "(relation)")} = {m.Expression}"
-                )
+                Schema.Type(type)!
+                    .Members.Select(m =>
+                        $"  {type}#{m.Name} {(m.IsPermission ? "(permission)" : "(relation)")} = {m.Expression}"
+                    )
             )
         )
         + Environment.NewLine

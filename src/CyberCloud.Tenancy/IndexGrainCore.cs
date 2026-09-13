@@ -224,8 +224,11 @@ static class IndexClaimMachine {
     /// <summary>Brings a soft-deleted binding back, so the resource is addressable again.</summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Refused once the window has passed, and the window is read from the entry rather
-    ///         than recomputed.</b> docs/plan/08 § Soft delete makes retention immutable after
+    ///         ⚠
+    ///         <b>
+    ///             Refused once the window has passed, and the window is read from the entry rather
+    ///             than recomputed.
+    ///         </b> docs/plan/08 § Soft delete makes retention immutable after
     ///         creation; a restore that recomputed the deadline from the type's current declaration
     ///         would let a provider lengthen — or shorten — a window that was already promised.
     ///     </para>
@@ -287,8 +290,11 @@ static class IndexClaimMachine {
     ///     the end of a soft one.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Reached from <see cref="IndexEntryState.Confirmed" /> and from
-    ///     <see cref="IndexEntryState.SoftDeleted" />, and it is the same transition either way.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Reached from <see cref="IndexEntryState.Confirmed" /> and from
+    ///         <see cref="IndexEntryState.SoftDeleted" />, and it is the same transition either way.
+    ///     </b>
     ///     docs/plan/08 § Soft delete separates the two rights — a role may hold "may delete" without
     ///     "may destroy permanently" — but that separation belongs to the permission the manager
     ///     checks, not to the state machine: from the index's point of view a purge is a release that

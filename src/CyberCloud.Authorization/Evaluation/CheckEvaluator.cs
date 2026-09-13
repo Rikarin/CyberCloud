@@ -272,14 +272,14 @@ public sealed class CheckEvaluator {
                 var flags = NodeResult.False;
                 foreach (var operand in union.Operands) {
                     var operandResult = await EvaluateExpressionAsync(
-                            @object,
-                            relation,
-                            operand,
-                            subject,
-                            depth,
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false);
+                        @object,
+                        relation,
+                        operand,
+                        subject,
+                        depth,
+                        cancellationToken
+                    )
+                            .ConfigureAwait(false);
 
                     flags = flags.Merge(operandResult);
                     if (operandResult.Value) {
@@ -295,14 +295,14 @@ public sealed class CheckEvaluator {
                 var flags = NodeResult.False;
                 foreach (var operand in intersection.Operands) {
                     var operandResult = await EvaluateExpressionAsync(
-                            @object,
-                            relation,
-                            operand,
-                            subject,
-                            depth,
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false);
+                        @object,
+                        relation,
+                        operand,
+                        subject,
+                        depth,
+                        cancellationToken
+                    )
+                            .ConfigureAwait(false);
 
                     flags = flags.Merge(operandResult);
                     if (!operandResult.Value) {
@@ -315,14 +315,14 @@ public sealed class CheckEvaluator {
 
             case ExclusionExpression exclusion: {
                 var operandResult = await EvaluateExpressionAsync(
-                        @object,
-                        relation,
-                        exclusion.Operand,
-                        subject,
-                        depth,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
+                    @object,
+                    relation,
+                    exclusion.Operand,
+                    subject,
+                    depth,
+                    cancellationToken
+                )
+                        .ConfigureAwait(false);
 
                 // ⚠ FAIL-CLOSED THROUGH A NEGATION, which is the one place a cap could
                 // otherwise GRANT access. A truncated operand evaluates to false, and `!false`
@@ -399,13 +399,13 @@ public sealed class CheckEvaluator {
             }
 
             var nested = await EvaluateNameAsync(
-                    candidate.Object,
-                    candidate.Relation,
-                    subject,
-                    depth + 1,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+                candidate.Object,
+                candidate.Relation,
+                subject,
+                depth + 1,
+                cancellationToken
+            )
+                    .ConfigureAwait(false);
 
             flags = flags.Merge(nested);
             if (nested.Value) {
@@ -449,13 +449,13 @@ public sealed class CheckEvaluator {
             // is the reading that keeps `From("parent", …)` meaningful when somebody writes
             // `subscription:S#parent@tenant:T#owner` by mistake.
             var nested = await EvaluateNameAsync(
-                    target.Object,
-                    tupleset.Computed,
-                    subject,
-                    depth + 1,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+                target.Object,
+                tupleset.Computed,
+                subject,
+                depth + 1,
+                cancellationToken
+            )
+                    .ConfigureAwait(false);
 
             flags = flags.Merge(nested);
             if (nested.Value) {

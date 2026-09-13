@@ -17,8 +17,11 @@ namespace CyberCloud.Vault.Tests;
 ///         <c>parseAndValidateJWT</c> returns, and configuring <c>pem_keys</c> changes only whether
 ///         the JWT's signature is checked against a static key set instead of being skipped. That was
 ///         established by reading OpenBao's source after a login against a real container with
-///         <c>pem_keys</c> configured came back <c>403</c>. So <b>no test here logs in
-///         successfully</b>: the success path is driven against a stubbed handler that answers the
+///         <c>pem_keys</c> configured came back <c>403</c>. So
+///         <b>
+///             no test here logs in
+///             successfully
+///         </b>: the success path is driven against a stubbed handler that answers the
 ///         documented envelope, and the refusal path against a real OpenBao whose <c>kubernetes</c>
 ///         mount has no cluster behind it.
 ///     </para>
@@ -30,8 +33,11 @@ namespace CyberCloud.Vault.Tests;
 ///         <c>build/README.md § failed to bind host port</c> is about.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Kubernetes auth rather than a token in configuration, and the argument is that a
-///         credential in configuration is the problem a vault exists to solve.</b> The pod already
+///         ⚠
+///         <b>
+///             Kubernetes auth rather than a token in configuration, and the argument is that a
+///             credential in configuration is the problem a vault exists to solve.
+///         </b> The pod already
 ///         holds one it did not have to be given. <see cref="VaultOptions" /> has no token member so
 ///         that the shortcut cannot be taken by editing a values file —
 ///         <see cref="NoOptionCanCarryACredential" /> is the assertion.
@@ -58,11 +64,13 @@ public sealed class KubernetesLoginTests {
 
         body.RootElement.GetProperty("role").GetString().ShouldBe("cc-silo");
         body.RootElement.GetProperty("jwt").GetString().ShouldBe("a-projected-service-account-token");
-        body.RootElement.EnumerateObject().Count().ShouldBe(
-            2,
-            "the login payload is a role and an assertion; anything else is something this client "
-            + "invented"
-        );
+        body.RootElement.EnumerateObject()
+            .Count()
+            .ShouldBe(
+                2,
+                "the login payload is a role and an assertion; anything else is something this client "
+                + "invented"
+            );
     }
 
     [Fact]
@@ -142,7 +150,11 @@ public sealed class KubernetesLoginTests {
     public async Task NoTokenFileIsAWiringFaultAndSaysWhichFile() {
         var options = Options("/no/such/projected/token");
 
-        var source = new KubernetesVaultTokenSource(new(new StubHandler(Envelope(3600))), options, new MovableClock(Now));
+        var source = new KubernetesVaultTokenSource(
+            new(new StubHandler(Envelope(3600))),
+            options,
+            new MovableClock(Now)
+        );
 
         var token = await source.GetAsync(TestContext.Current.CancellationToken);
 
@@ -237,12 +249,16 @@ public sealed class KubernetesLoginTests {
             Address = "https://openbao.test",
             Role = "cc-silo",
             TokenFilePath = tokenFilePath,
-            TokenExpirySkew = TimeSpan.FromSeconds(60),
+            TokenExpirySkew = TimeSpan.FromSeconds(60)
         };
 
     static string Envelope(int leaseSeconds) =>
         """{"auth":{"client_token":"s.leased-token","accessor":"acc","lease_duration":LEASE,"renewable":true}}"""
-            .Replace("LEASE", leaseSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+            .Replace(
+                "LEASE",
+                leaseSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                StringComparison.Ordinal
+            );
 
     /// <summary>Writes a token file the way a kubelet would, into the test's own temporary directory.</summary>
     /// <param name="contents">What the file holds.</param>

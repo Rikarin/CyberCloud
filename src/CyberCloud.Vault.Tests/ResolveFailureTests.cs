@@ -7,10 +7,15 @@ namespace CyberCloud.Vault.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE WHOLE SUITE IS ONE ASSERTION SAID FIVE WAYS: A FAILED RESOLVE IS NEVER AN EMPTY
-///         SECRET.</b> <c>UnavailableSecretResolver</c> makes that argument for the unwired default —
-///         <i>"an empty password reaching a rendered manifest is a database with no password, applied
-///         to a real cluster, reported as a successful provision"</i> — and it applies with more
+///         ⚠
+///         <b>
+///             THE WHOLE SUITE IS ONE ASSERTION SAID FIVE WAYS: A FAILED RESOLVE IS NEVER AN EMPTY
+///             SECRET.
+///         </b> <c>UnavailableSecretResolver</c> makes that argument for the unwired default —
+///         <i>
+///             "an empty password reaching a rendered manifest is a database with no password, applied
+///             to a real cluster, reported as a successful provision"
+///         </i> — and it applies with more
 ///         force to the wired one, which has four ways to end up with nothing where the unwired one
 ///         has a single refusal.
 ///     </para>
@@ -33,10 +38,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         await Seed();
 
         var token = await Reader();
-        var resolved = await vault.Resolver(token).ResolveAsync(
-            new() { Path = Path, Field = "adminPassword" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver(token)
+            .ResolveAsync(
+                new() { Path = Path, Field = "adminPassword" },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsSuccess.ShouldBeTrue(resolved.Error?.Message);
         resolved.GetValueOrThrow().ShouldBe(Password);
@@ -46,10 +52,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
     public async Task APathThatIsNotThereIsNotAnEmptySecret() {
         await Seed();
 
-        var resolved = await vault.Resolver(await Reader()).ResolveAsync(
-            new() { Path = "tenants/9f2b/postgres/never-written", Field = "adminPassword" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver(await Reader())
+            .ResolveAsync(
+                new() { Path = "tenants/9f2b/postgres/never-written", Field = "adminPassword" },
+                TestContext.Current.CancellationToken
+            );
 
         // ⚠ ResourceNotFound and not InternalError: the vault is healthy and the platform is
         // permitted; the secret is simply not there, and an operator's fix is to write it.
@@ -66,10 +73,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         // error list, exactly like a path that was never written. So the client cannot tell "the
         // secret is gone" from "the version this resource pinned was destroyed by a rotation", and
         // VaultFailures.NotFound says so in the operator detail instead of guessing.
-        var resolved = await vault.Resolver(await Reader()).ResolveAsync(
-            new() { Path = Path, Field = "adminPassword", Version = "99" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver(await Reader())
+            .ResolveAsync(
+                new() { Path = Path, Field = "adminPassword", Version = "99" },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsFailure.ShouldBeTrue();
         resolved.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
@@ -83,10 +91,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         // OpenBao, not by anything here.
         var (token, _) = await vault.IssueTokenAsync(["elsewhere"]);
 
-        var resolved = await vault.Resolver(token).ResolveAsync(
-            new() { Path = Path, Field = "adminPassword" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver(token)
+            .ResolveAsync(
+                new() { Path = Path, Field = "adminPassword" },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsFailure.ShouldBeTrue();
         resolved.Error!.Code.ShouldBe(
@@ -115,10 +124,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         // "nothing was ever written there". A prefix-scoped policy per namespace keeps both.
         var (scoped, _) = await vault.IssueTokenAsync(["elsewhere"]);
 
-        var resolved = await vault.Resolver(scoped).ResolveAsync(
-            new() { Path = "tenants/9f2b/postgres/never-written", Field = "adminPassword" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver(scoped)
+            .ResolveAsync(
+                new() { Path = "tenants/9f2b/postgres/never-written", Field = "adminPassword" },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsFailure.ShouldBeTrue();
         resolved.Error!.Code.ShouldBe(
@@ -136,10 +146,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         options.Address = "http://127.0.0.1:1";
         options.RequestTimeout = TimeSpan.FromSeconds(5);
 
-        var resolved = await vault.Resolver("irrelevant", options).ResolveAsync(
-            new() { Path = Path, Field = "adminPassword" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver("irrelevant", options)
+            .ResolveAsync(
+                new() { Path = Path, Field = "adminPassword" },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsFailure.ShouldBeTrue();
         resolved.Error!.Code.ShouldBe(ErrorCode.InternalError);
@@ -154,10 +165,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         // data.data object; the field is simply absent from it. The obvious implementation reads a
         // missing key into a null string, coalesces it to "", and hands back a SUCCESSFUL result
         // holding an empty password — which is precisely the outcome every other row here is about.
-        var resolved = await vault.Resolver(await Reader()).ResolveAsync(
-            new() { Path = Path, Field = "admin_password" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver(await Reader())
+            .ResolveAsync(
+                new() { Path = Path, Field = "admin_password" },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsFailure.ShouldBeTrue(
             "a kv-v2 read of an existing path with a missing key is a 200, and treating that as a "
@@ -174,10 +186,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         // ⚠ The last gate, and the only one where OpenBao is behaving perfectly. Somebody wrote ""
         // to that field — a provisioning job that failed halfway, a template that rendered nothing —
         // and every layer between here and the manifest would carry it faithfully.
-        var resolved = await vault.Resolver(await Reader()).ResolveAsync(
-            new() { Path = Path, Field = "emptyOnPurpose" },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver(await Reader())
+            .ResolveAsync(
+                new() { Path = Path, Field = "emptyOnPurpose" },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsFailure.ShouldBeTrue();
     }
@@ -188,10 +201,11 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         // as a permission denial rather than as the handle fault it is. SecretRef.IsEmpty's own
         // remarks make the argument — "an address that resolves to nothing, and a caller that passed
         // one meant to pass a real one".
-        var resolved = await vault.Resolver("not-a-token").ResolveAsync(
-            new() { Path = Path },
-            TestContext.Current.CancellationToken
-        );
+        var resolved = await vault.Resolver("not-a-token")
+            .ResolveAsync(
+                new() { Path = Path },
+                TestContext.Current.CancellationToken
+            );
 
         resolved.IsFailure.ShouldBeTrue();
         resolved.Error!.Code.ShouldBe(ErrorCode.InternalError);
@@ -245,9 +259,7 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
         await vault.WriteSecretAsync(
             Path,
             new Dictionary<string, string> {
-                ["adminPassword"] = Password,
-                ["username"] = "cc_admin",
-                ["emptyOnPurpose"] = string.Empty,
+                ["adminPassword"] = Password, ["username"] = "cc_admin", ["emptyOnPurpose"] = string.Empty
             }
         );
 

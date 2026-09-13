@@ -8,13 +8,19 @@ namespace CyberCloud.Providers.ContainerRegistry.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE USUAL ARGUMENT IS NOT MERELY FALSE HERE, IT IS UNAVAILABLE — AND THAT IS THE
-///         DISTINCTION WORTH KEEPING.</b> Five families argue containment from a CRD's
+///         ⚠
+///         <b>
+///             THE USUAL ARGUMENT IS NOT MERELY FALSE HERE, IT IS UNAVAILABLE — AND THAT IS THE
+///             DISTINCTION WORTH KEEPING.
+///         </b> Five families argue containment from a CRD's
 ///         <c>+kubebuilder:default</c> markers or from an operator's mutating webhook;
 ///         <c>KafkaClusters</c> and <c>ClickHouseClusters</c> found CRDs that declared none and could
 ///         at least look. <c>goharbor/harbor-operator</c> is archived and its CRDs are not installed,
-///         so there is nothing to look at. What forces containment is that <b>five of the six kinds
-///         this row renders are built-in</b>, and a built-in kind is the most heavily defaulted object
+///         so there is nothing to look at. What forces containment is that
+///         <b>
+///             five of the six kinds
+///             this row renders are built-in
+///         </b>, and a built-in kind is the most heavily defaulted object
 ///         in Kubernetes.
 ///     </para>
 ///     <para>
@@ -38,15 +44,15 @@ public sealed class ContainerRegistryMatchesTests {
 
         var rendered = ContainerRegistries.CoreDeploymentJson("images", body.RootElement);
 
-        ContainerRegistries.Matches(rendered, body.RootElement).ShouldBeTrue(
-            "the rendered document does not match the body it was rendered from"
-        );
+        ContainerRegistries.Matches(rendered, body.RootElement)
+            .ShouldBeTrue("the rendered document does not match the body it was rendered from");
 
-        ContainerRegistries.Matches(WithApiServerDefaults(rendered), body.RootElement).ShouldBeTrue(
-            "a Deployment read back from a real API server does not match. `Matches` is a CONTAINMENT "
-            + "test: the fields this provider owns hold the desired values, and everything Kubernetes "
-            + "added is ignored."
-        );
+        ContainerRegistries.Matches(WithApiServerDefaults(rendered), body.RootElement)
+            .ShouldBeTrue(
+                "a Deployment read back from a real API server does not match. `Matches` is a CONTAINMENT "
+                + "test: the fields this provider owns hold the desired values, and everything Kubernetes "
+                + "added is ignored."
+            );
     }
 
     [Fact]
@@ -85,16 +91,15 @@ public sealed class ContainerRegistryMatchesTests {
         drifted["kind"] = "Deployment";
         drifted["spec"]!["replicas"] = 7;
 
-        ContainerRegistries.Matches(drifted.ToJsonString(), body.RootElement).ShouldBeFalse(
-            "a Deployment scaled by hand reports as converged"
-        );
+        ContainerRegistries.Matches(drifted.ToJsonString(), body.RootElement)
+            .ShouldBeFalse("a Deployment scaled by hand reports as converged");
 
         using var upgraded = JsonDocument.Parse(ContainerRegistries.Body(ClusterId, version: "2.14"));
 
         ContainerRegistries.Matches(
-                ContainerRegistries.CoreDeploymentJson("images", body.RootElement),
-                upgraded.RootElement
-            )
+            ContainerRegistries.CoreDeploymentJson("images", body.RootElement),
+            upgraded.RootElement
+        )
             .ShouldBeFalse(
                 "a workload still running the old image tag reports as converged, so a version change "
                 + "would never be applied"
@@ -124,10 +129,11 @@ public sealed class ContainerRegistryMatchesTests {
                      ContainerRegistries.RegistrySetJson("images", body.RootElement)
                  }) {
             JsonNode.Parse(owner)!["spec"]!["replicas"]!.GetValue<int>().ShouldBe(1);
-            ContainerRegistries.Matches(owner, body.RootElement).ShouldBeTrue(
-                "a volume-owning component is compared against the tenant's replica count, so it "
-                + "reports permanent drift on any body asking for more than one"
-            );
+            ContainerRegistries.Matches(owner, body.RootElement)
+                .ShouldBeTrue(
+                    "a volume-owning component is compared against the tenant's replica count, so it "
+                    + "reports permanent drift on any body asking for more than one"
+                );
         }
     }
 
@@ -158,10 +164,11 @@ public sealed class ContainerRegistryMatchesTests {
 
         partial["kind"] = "Secret";
 
-        ContainerRegistries.Matches(partial.ToJsonString(), body.RootElement).ShouldBeFalse(
-            "a credentials Secret with an empty field reports as converged, so the next pass would not "
-            + "re-render it from the vault and Harbor's core would stay in CreateContainerConfigError"
-        );
+        ContainerRegistries.Matches(partial.ToJsonString(), body.RootElement)
+            .ShouldBeFalse(
+                "a credentials Secret with an empty field reports as converged, so the next pass would not "
+                + "re-render it from the vault and Harbor's core would stay in CreateContainerConfigError"
+            );
     }
 
     static readonly Guid ClusterId = Guid.Parse("eeeeeeee-0000-4000-8000-00000000000c");

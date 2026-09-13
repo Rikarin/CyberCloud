@@ -10,7 +10,12 @@ namespace CyberCloud.Sdk;
 ///     caller's, through <see cref="DeviceCodePromptCallback" />.
 /// </remarks>
 public sealed class DeviceCodeInfo {
-    internal DeviceCodeInfo(string userCode, Uri verificationUri, Uri? verificationUriComplete, DateTimeOffset expiresOn) {
+    internal DeviceCodeInfo(
+        string userCode,
+        Uri verificationUri,
+        Uri? verificationUriComplete,
+        DateTimeOffset expiresOn
+    ) {
         UserCode = userCode;
         VerificationUri = verificationUri;
         VerificationUriComplete = verificationUriComplete;
@@ -63,7 +68,11 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
     ///     request.
     /// </param>
     /// <param name="options">The options.</param>
-    public DeviceCodeCredential(string clientId, DeviceCodePromptCallback prompt, CyberCloudCredentialOptions? options = null)
+    public DeviceCodeCredential(
+        string clientId,
+        DeviceCodePromptCallback prompt,
+        CyberCloudCredentialOptions? options = null
+    )
         : base(options) {
         ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
         ArgumentNullException.ThrowIfNull(prompt);
@@ -74,7 +83,10 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
     }
 
     /// <inheritdoc />
-    public override async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken = default) {
+    public override async ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken = default
+    ) {
         var cached = await Options.TokenCache.GetAsync(cacheKey, cancellationToken).ConfigureAwait(false);
 
         if (cached is { Poisoned: false, RefreshToken.Length: > 0 }) {
@@ -97,7 +109,8 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
             authorization.UserCode,
             new Uri(authorization.VerificationUri),
             Uri.TryCreate(authorization.VerificationUriComplete, UriKind.Absolute, out var complete) ? complete : null,
-            DateTimeOffset.UtcNow.AddSeconds(authorization.ExpiresIn));
+            DateTimeOffset.UtcNow.AddSeconds(authorization.ExpiresIn)
+        );
 
         await prompt(info, cancellationToken).ConfigureAwait(false);
 
@@ -110,7 +123,11 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
     /// </summary>
     internal Func<TimeSpan, CancellationToken, Task> Delay { get; set; } = Task.Delay;
 
-    async ValueTask<AccessToken> PollAsync(DeviceAuthorizationPayload authorization, TokenRequestContext context, CancellationToken cancellationToken) {
+    async ValueTask<AccessToken> PollAsync(
+        DeviceAuthorizationPayload authorization,
+        TokenRequestContext context,
+        CancellationToken cancellationToken
+    ) {
         // RFC 8628 § 3.5: start at the server's interval, and add five seconds every time it says
         // slow_down. A client that ignores that is a client the server starts refusing.
         var interval = TimeSpan.FromSeconds(Math.Max(authorization.Interval, 1));
@@ -119,7 +136,7 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
         var form = new List<KeyValuePair<string, string>> {
             new("grant_type", OAuthGrants.DeviceCode),
             new("device_code", authorization.DeviceCode),
-            new("client_id", clientId),
+            new("client_id", clientId)
         };
 
         AddScopes(form, context);
@@ -131,9 +148,17 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
 
             try {
                 payload = await Identity.RequestTokenAsync(form, cancellationToken).ConfigureAwait(false);
-            } catch (AuthenticationFailedException e) when (string.Equals(e.ErrorCode, "authorization_pending", StringComparison.Ordinal)) {
+            } catch (AuthenticationFailedException e) when (string.Equals(
+                                                                e.ErrorCode,
+                                                                "authorization_pending",
+                                                                StringComparison.Ordinal
+                                                            )) {
                 continue;
-            } catch (AuthenticationFailedException e) when (string.Equals(e.ErrorCode, "slow_down", StringComparison.Ordinal)) {
+            } catch (AuthenticationFailedException e) when (string.Equals(
+                                                                e.ErrorCode,
+                                                                "slow_down",
+                                                                StringComparison.Ordinal
+                                                            )) {
                 interval += TimeSpan.FromSeconds(5);
 
                 continue;
@@ -148,8 +173,9 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
     }
 
     async ValueTask StoreAsync(TokenPayload payload, CancellationToken cancellationToken) {
-        if (payload.RefreshToken is null)
+        if (payload.RefreshToken is null) {
             return;
+        }
 
         await Options.TokenCache
             .SetAsync(
@@ -159,16 +185,20 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
                     AccessToken = payload.AccessToken,
                     ExpiresOn = DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn),
                     Authority = Options.AuthorityHost.ToString(),
-                    ClientId = clientId,
+                    ClientId = clientId
                 },
-                cancellationToken)
+                cancellationToken
+            )
             .ConfigureAwait(false);
     }
 }
 
 /// <summary>
-///     Authorization Code + PKCE against a loopback redirect — docs/plan/11 § Protocol's <i>"the only
-///     interactive flow. No implicit, no hybrid"</i>.
+///     Authorization Code + PKCE against a loopback redirect — docs/plan/11 § Protocol's
+///     <i>
+///         "the only
+///         interactive flow. No implicit, no hybrid"
+///     </i>.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -200,7 +230,11 @@ public sealed class InteractiveBrowserCredential : TokenEndpointCredential {
     ///     appropriate on the machine it happens to be running on.
     /// </param>
     /// <param name="options">The options.</param>
-    public InteractiveBrowserCredential(string clientId, OpenBrowserCallback openBrowser, CyberCloudCredentialOptions? options = null)
+    public InteractiveBrowserCredential(
+        string clientId,
+        OpenBrowserCallback openBrowser,
+        CyberCloudCredentialOptions? options = null
+    )
         : base(options) {
         ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
         ArgumentNullException.ThrowIfNull(openBrowser);
@@ -217,7 +251,10 @@ public sealed class InteractiveBrowserCredential : TokenEndpointCredential {
     internal IAuthorizationCodeListener Listener { get; set; } = new LoopbackListener();
 
     /// <inheritdoc />
-    public override async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken = default) {
+    public override async ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken = default
+    ) {
         var cached = await Options.TokenCache.GetAsync(cacheKey, cancellationToken).ConfigureAwait(false);
 
         if (cached is { Poisoned: false, RefreshToken.Length: > 0 }) {
@@ -232,16 +269,24 @@ public sealed class InteractiveBrowserCredential : TokenEndpointCredential {
 
         var document = await Identity.GetConfigurationAsync(cancellationToken).ConfigureAwait(false);
 
-        if (string.IsNullOrEmpty(document.AuthorizationEndpoint))
+        if (string.IsNullOrEmpty(document.AuthorizationEndpoint)) {
             throw new CredentialUnavailableException(
-                $"{Options.AuthorityHost} advertises no authorization_endpoint, so the interactive flow is not available here.");
+                $"{Options.AuthorityHost} advertises no authorization_endpoint, so the interactive flow is not available here."
+            );
+        }
 
         var pkce = Pkce.Create();
         var state = Base64Url.Encode(RandomNumberGenerator.GetBytes(16));
 
         await using var listener = await Listener.StartAsync(cancellationToken).ConfigureAwait(false);
 
-        var authorizationUri = BuildAuthorizationUri(document.AuthorizationEndpoint, listener.RedirectUri, pkce, state, context);
+        var authorizationUri = BuildAuthorizationUri(
+            document.AuthorizationEndpoint,
+            listener.RedirectUri,
+            pkce,
+            state,
+            context
+        );
 
         await openBrowser(authorizationUri, cancellationToken).ConfigureAwait(false);
 
@@ -252,7 +297,7 @@ public sealed class InteractiveBrowserCredential : TokenEndpointCredential {
             new("code", code),
             new("client_id", clientId),
             new("redirect_uri", listener.RedirectUri.ToString()),
-            new("code_verifier", pkce.Verifier),
+            new("code_verifier", pkce.Verifier)
         };
 
         var payload = await Identity.RequestTokenAsync(form, cancellationToken).ConfigureAwait(false);
@@ -266,9 +311,10 @@ public sealed class InteractiveBrowserCredential : TokenEndpointCredential {
                         AccessToken = payload.AccessToken,
                         ExpiresOn = DateTimeOffset.UtcNow.AddSeconds(payload.ExpiresIn),
                         Authority = Options.AuthorityHost.ToString(),
-                        ClientId = clientId,
+                        ClientId = clientId
                     },
-                    cancellationToken)
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
         }
 
@@ -286,16 +332,18 @@ public sealed class InteractiveBrowserCredential : TokenEndpointCredential {
         Append(query, "code_challenge_method", Pkce.Method);
         Append(query, "state", state);
 
-        if (context.Scopes is { Length: > 0 })
+        if (context.Scopes is { Length: > 0 }) {
             Append(query, "scope", string.Join(' ', context.Scopes));
+        }
 
-        if ((context.TenantId ?? Options.TenantId) is { } tenant)
+        if ((context.TenantId ?? Options.TenantId) is { } tenant) {
             Append(query, "tenant_id", tenant);
+        }
 
         return new Uri(query.ToString().TrimEnd('&'));
 
-        static void Append(StringBuilder builder, string name, string value)
-            => builder.Append(name).Append('=').Append(Uri.EscapeDataString(value)).Append('&');
+        static void Append(StringBuilder builder, string name, string value) =>
+            builder.Append(name).Append('=').Append(Uri.EscapeDataString(value)).Append('&');
     }
 }
 
@@ -314,16 +362,18 @@ static class QueryString {
     public static Dictionary<string, string> Parse(string? query) {
         var pairs = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (string.IsNullOrEmpty(query))
+        if (string.IsNullOrEmpty(query)) {
             return pairs;
+        }
 
         foreach (var part in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)) {
             var separator = part.IndexOf('=', StringComparison.Ordinal);
 
-            if (separator < 0)
+            if (separator < 0) {
                 pairs[Uri.UnescapeDataString(part)] = string.Empty;
-            else
+            } else {
                 pairs[Uri.UnescapeDataString(part[..separator])] = Uri.UnescapeDataString(part[(separator + 1)..]);
+            }
         }
 
         return pairs;
@@ -357,7 +407,9 @@ sealed class LoopbackListener : IAuthorizationCodeListener {
         listener.Prefixes.Add($"http://127.0.0.1:{port}/");
         listener.Start();
 
-        return ValueTask.FromResult<IAuthorizationCodeSession>(new Session(listener, new Uri($"http://127.0.0.1:{port}/")));
+        return ValueTask.FromResult<IAuthorizationCodeSession>(
+            new Session(listener, new Uri($"http://127.0.0.1:{port}/"))
+        );
     }
 
     static int FreePort() {
@@ -397,14 +449,17 @@ sealed class LoopbackListener : IAuthorizationCodeListener {
 
             await RespondAsync(context, "You can close this window and return to your terminal.").ConfigureAwait(false);
 
-            if (query.GetValueOrDefault("error") is { Length: > 0 } error)
+            if (query.GetValueOrDefault("error") is { Length: > 0 } error) {
                 throw new AuthenticationFailedException($"The sign-in was refused: {error}.") { ErrorCode = error };
+            }
 
             // ⚠ State first. A redirect with the wrong state does not get its code read at all.
-            if (!string.Equals(query.GetValueOrDefault("state"), expectedState, StringComparison.Ordinal))
+            if (!string.Equals(query.GetValueOrDefault("state"), expectedState, StringComparison.Ordinal)) {
                 throw new AuthenticationFailedException(
                     "The sign-in redirect carried the wrong 'state' and was discarded. This is what a cross-site "
-                    + "request forgery against the sign-in would look like.");
+                    + "request forgery against the sign-in would look like."
+                );
+            }
 
             return query.GetValueOrDefault("code") is { Length: > 0 } code
                 ? code

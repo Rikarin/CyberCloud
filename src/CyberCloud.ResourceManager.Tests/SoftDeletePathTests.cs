@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every case here runs against <c>CyberCloud.Testing/vaults</c> and every case in
-///         <see cref="DeletePathTests" /> runs against <c>widgets</c>, and the pair is the design.</b>
+///         ⚠
+///         <b>
+///             Every case here runs against <c>CyberCloud.Testing/vaults</c> and every case in
+///             <see cref="DeletePathTests" /> runs against <c>widgets</c>, and the pair is the design.
+///         </b>
 ///         The two types declare the same meters, the same reconciler behaviour and the same body
 ///         shape; they differ in one registry fact. So "a delete tears the resource down" and "a delete
 ///         parks it" are the same test over the same arithmetic with one declaration changed, which is
@@ -16,8 +19,11 @@ namespace CyberCloud.ResourceManager.Tests;
 ///         assumed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The sharpest failure this feature has is a soft-deleted resource that is still readable
-///         at its old address</b>, and docs/plan/08 chose to move the resource out of the tree rather
+///         ⚠
+///         <b>
+///             The sharpest failure this feature has is a soft-deleted resource that is still readable
+///             at its old address
+///         </b>, and docs/plan/08 chose to move the resource out of the tree rather
 ///         than flag it in place precisely to make that unreachable by construction.
 ///         <see cref="TheOldAddressAnswersTheCanonical404OnReadOnDeleteAndOnTheIndexClaim" /> is the
 ///         assertion, and it checks all three doors.
@@ -27,8 +33,11 @@ namespace CyberCloud.ResourceManager.Tests;
 public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     /// <summary>This suite's own subscription.</summary>
     /// <remarks>
-    ///     ⚠ <b><see cref="ResourceManagerCluster.IsolatedSubscription" />, and this suite has a
-    ///     stronger claim on it than the two that already address it.</b> Its remarks describe the
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="ResourceManagerCluster.IsolatedSubscription" />, and this suite has a
+    ///         stronger claim on it than the two that already address it.
+    ///     </b> Its remarks describe the
     ///     shared subscription's <c>Vcpu</c> budget as a hidden coupling in which a class that adds a
     ///     couple of creates pushes an unrelated class into <c>QuotaExceeded</c>. That is not
     ///     hypothetical here: this file and <c>ActionDispatchTests</c> were written on two branches at
@@ -58,20 +67,28 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // ── (a) and (b): the resource leaves, and the 404 is the canonical one ──────────────────────
 
     /// <summary>
-    ///     ⚠ <b>The old address is gone on every door, and the <c>404</c> is byte for byte the one a
-    ///     name that was never taken gets.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The old address is gone on every door, and the <c>404</c> is byte for byte the one a
+    ///         name that was never taken gets.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
     ///         docs/plan/08 § Soft delete rejects the "stay in place with a flag" design because it
-    ///         <i>"puts an 'unless deleted' clause on every read path, every list, every ReBAC check
-    ///         and the index claim, and the feature is then only as good as the least-remembered of
-    ///         them"</i>. The three doors below are that list: a read, a second delete, and the index
+    ///         <i>
+    ///             "puts an 'unless deleted' clause on every read path, every list, every ReBAC check
+    ///             and the index claim, and the feature is then only as good as the least-remembered of
+    ///             them"
+    ///         </i>. The three doors below are that list: a read, a second delete, and the index
     ///         claim a create goes through.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The byte-for-byte comparison is the second half and it is the one worth
-    ///         defending.</b> A <c>404</c> that differed in shape, body or wording from a genuine
+    ///         ⚠
+    ///         <b>
+    ///             The byte-for-byte comparison is the second half and it is the one worth
+    ///             defending.
+    ///         </b> A <c>404</c> that differed in shape, body or wording from a genuine
     ///         absence is an oracle just as surely as the <c>410 Gone</c> the document forbids — it
     ///         would let a caller who may not read the resource tell "this name is held by something I
     ///         cannot see" from "this name is free". So the message is compared against a real absence
@@ -131,15 +148,24 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // ── (e): the name is held, and the entry is not Free ────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>The name is held for the whole window, and a restore has somewhere to go because of
-    ///     it.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The name is held for the whole window, and a restore has somewhere to go because of
+    ///         it.
+    ///     </b>
     /// </summary>
     /// <remarks>
-    ///     docs/plan/08 § Soft delete: Azure holds it — <i>"You can't reuse the name of a key vault
-    ///     that was soft-deleted, until the retention period expires"</i> — and <i>"releasing it is the
-    ///     cheaper-sounding option and it breaks restore: a name taken by somebody else leaves a
-    ///     restore with nowhere to go, so it would have to fail or overwrite, and both are worse than
-    ///     making the tenant wait"</i>. This is the exact inverse of
+    ///     docs/plan/08 § Soft delete: Azure holds it —
+    ///     <i>
+    ///         "You can't reuse the name of a key vault
+    ///         that was soft-deleted, until the retention period expires"
+    ///     </i> — and
+    ///     <i>
+    ///         "releasing it is the
+    ///         cheaper-sounding option and it breaks restore: a name taken by somebody else leaves a
+    ///         restore with nowhere to go, so it would have to fail or overwrite, and both are worse than
+    ///         making the tenant wait"
+    ///     </i>. This is the exact inverse of
     ///     <c>DeletePathTests.TheIndexIsReleasedFirstSoTheNameIsImmediatelyReusable</c>, which is
     ///     correct for the type that declares no window.
     /// </remarks>
@@ -178,18 +204,27 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // ── (c): the quota moves to the purge, and is returned exactly once ─────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A delete of a soft-deletable type returns nothing; the purge returns exactly what the
-    ///     create committed, on every meter.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A delete of a soft-deletable type returns nothing; the purge returns exactly what the
+    ///         create committed, on every meter.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/08 § Soft delete's third decision, and the document calls it <i>"the decision
-    ///         most easily got wrong from Azure by analogy"</i>. A soft-deleted Key Vault is free only
+    ///         docs/plan/08 § Soft delete's third decision, and the document calls it
+    ///         <i>
+    ///             "the decision
+    ///             most easily got wrong from Azure by analogy"
+    ///         </i>. A soft-deleted Key Vault is free only
     ///         because a vault reserves no capacity; where the deleted thing does hold capacity Azure
     ///         holds both — Managed HSM bills <i>"at their full hourly rate until they're purged"</i>.
-    ///         A CyberCloud resource in its window consumes plenty, <i>"because handing the data back
-    ///         is the entire feature: the volumes, the PVCs and the memory are all still
-    ///         allocated"</i>.
+    ///         A CyberCloud resource in its window consumes plenty,
+    ///         <i>
+    ///             "because handing the data back
+    ///             is the entire feature: the volumes, the PVCs and the memory are all still
+    ///             allocated"
+    ///         </i>.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Both meters, and <c>QuotaMeter.Resources</c> is the one that matters.</b> The
@@ -313,17 +348,26 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // ── The data plane comes down, and the restore puts it back ────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A soft delete tears the data plane down, and a restore applies it again from the body
-    ///     the delete did not throw away.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A soft delete tears the data plane down, and a restore applies it again from the body
+    ///         the delete did not throw away.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS CASE ASSERTED THE OPPOSITE UNTIL 2026-08-18, AND IT IS THE DEFECT TWO
-    ///         PROVIDERS WITHDREW THEIR RECOVERY WINDOWS OVER.</b> It read
+    ///         ⚠
+    ///         <b>
+    ///             THIS CASE ASSERTED THE OPPOSITE UNTIL 2026-08-18, AND IT IS THE DEFECT TWO
+    ///             PROVIDERS WITHDREW THEIR RECOVERY WINDOWS OVER.
+    ///         </b> It read
     ///         <c>ASoftDeleteLeavesTheDataPlaneUpAndOnlyThePurgeTakesItDown</c> and pinned
     ///         <c>OperationGrain.DriveAsync</c> returning before it ran a pass, on the argument that a
-    ///         resource in its window <i>"consumes plenty, because handing the data back is the entire
-    ///         feature: the volumes, the PVCs and the memory are all still allocated"</i>. The premise
+    ///         resource in its window
+    ///         <i>
+    ///             "consumes plenty, because handing the data back is the entire
+    ///             feature: the volumes, the PVCs and the memory are all still allocated"
+    ///         </i>. The premise
     ///         is true and the conclusion did not follow: what a restore has to hand back is the DATA,
     ///         and a Kubernetes teardown does not remove data — deleting a <c>StatefulSet</c> leaves
     ///         the claims its <c>volumeClaimTemplate</c> made. What the teardown removes is the running
@@ -331,8 +375,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     ///         and its meter still ticks", which docs/plan/06 § Two-phase create forbids by name.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The quota decision survives the inversion, and it is worth saying why, because the
-    ///         old case claimed the two were one fact.</b> docs/plan/08 § Soft delete's rule is that
+    ///         ⚠
+    ///         <b>
+    ///             The quota decision survives the inversion, and it is worth saying why, because the
+    ///             old case claimed the two were one fact.
+    ///         </b> docs/plan/08 § Soft delete's rule is that
     ///         soft delete is free exactly when the deleted thing consumes no reserved capacity — and a
     ///         parked resource still does: its volumes are allocated and its name is held. The second
     ///         reason is the one that never depended on the data plane at all: quota held is what makes
@@ -407,22 +454,34 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // ── (d): the resource is never invisible ───────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>The parent edge moves to the subscription while deleted and back to the resource group
-    ///     on restore, and there is no moment with no edge at all.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The parent edge moves to the subscription while deleted and back to the resource group
+    ///         on restore, and there is no moment with no edge at all.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/08 § Soft delete: the group tuple <i>"asserts a containment that is no longer
-    ///         true. Preserving it is not the conservative choice, it is the wrong one."</i> And the
-    ///         reason re-parenting beats dropping: <i>"The resource is never parentless, so the failure
-    ///         that made the parent tuple necessary in the first place — a resource nobody can see, and
-    ///         a silo lost in that window leaving it that way — cannot happen during the recovery
-    ///         window either."</i>
+    ///         docs/plan/08 § Soft delete: the group tuple
+    ///         <i>
+    ///             "asserts a containment that is no longer
+    ///             true. Preserving it is not the conservative choice, it is the wrong one."
+    ///         </i> And the
+    ///         reason re-parenting beats dropping:
+    ///         <i>
+    ///             "The resource is never parentless, so the failure
+    ///             that made the parent tuple necessary in the first place — a resource nobody can see, and
+    ///             a silo lost in that window leaving it that way — cannot happen during the recovery
+    ///             window either."
+    ///         </i>
     ///     </para>
     ///     <para>
     ///         ⚠ <b>This bug already happened once, on create, before the parent tuple was written</b>
-    ///         — see the write path's step 8. Asserting the edge is <i>present and pointing at the
-    ///         subscription</i> rather than merely "still present" is what tells a re-parent from a
+    ///         — see the write path's step 8. Asserting the edge is
+    ///         <i>
+    ///             present and pointing at the
+    ///             subscription
+    ///         </i> rather than merely "still present" is what tells a re-parent from a
     ///         no-op.
     ///     </para>
     /// </remarks>
@@ -493,10 +552,12 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     /// </summary>
     /// <remarks>
     ///     docs/plan/08 § Soft delete, and it is a security answer rather than a modelling one:
-    ///     <i>"The recovery window is used after a compromise or after a decommission somebody wants to
-    ///     undo, and those are the cases that decide it. Silently restoring a grant an administrator
-    ///     deliberately removed is an error nobody observes. Making somebody re-grant after a restore is
-    ///     an error everybody observes and can fix in a minute. Take the visible failure."</i> Both this
+    ///     <i>
+    ///         "The recovery window is used after a compromise or after a decommission somebody wants to
+    ///         undo, and those are the cases that decide it. Silently restoring a grant an administrator
+    ///         deliberately removed is an error nobody observes. Making somebody re-grant after a restore is
+    ///         an error everybody observes and can fix in a minute. Take the visible failure."
+    ///     </i> Both this
     ///     and the edge above are data rather than schema and so are cheap to reverse — but only if a
     ///     test pins the intent now, which is why the document asks for these two by description.
     /// </remarks>
@@ -563,15 +624,17 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         restored.GetValueOrThrow().Resource.ProvisioningState.ShouldBe(ProvisioningState.Updating);
 
         var read = await Read(address);
-        read.GetValueOrThrow().ProvisioningState.ShouldBe(
-            ProvisioningState.Succeeded,
-            "the restore's reconcile pass converged"
-        );
+        read.GetValueOrThrow()
+            .ProvisioningState.ShouldBe(
+                ProvisioningState.Succeeded,
+                "the restore's reconcile pass converged"
+            );
         read.IsSuccess.ShouldBeTrue("the old address answers again");
-        read.GetValueOrThrow().Id.ShouldBe(
-            created.GetValueOrThrow().Resource.Id,
-            "the same resource came back, not a new one — the GUID is the identity"
-        );
+        read.GetValueOrThrow()
+            .Id.ShouldBe(
+                created.GetValueOrThrow().Resource.Id,
+                "the same resource came back, not a new one — the GUID is the identity"
+            );
 
         read.GetValueOrThrow().Properties.ShouldContain("\"size\":4");
 
@@ -580,8 +643,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>Past the window, a restore is refused — and refused with the same <c>404</c> a name
-    ///     that holds nothing gets.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Past the window, a restore is refused — and refused with the same <c>404</c> a name
+    ///         that holds nothing gets.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>A window that can be exceeded and then honoured anyway is not a window.</b> The
@@ -623,8 +689,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>Restoring something that was never soft-deleted is the same <c>404</c> as everything
-    ///     else.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Restoring something that was never soft-deleted is the same <c>404</c> as everything
+    ///         else.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     A live resource, a name nobody ever claimed and a type with no recovery window all answer
@@ -685,8 +754,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/08 § Soft delete: <i>"retention is set at creation and immutable afterwards —
-    ///         a window a caller can shorten under their own resource is not a recovery window"</i>.
+    ///         docs/plan/08 § Soft delete:
+    ///         <i>
+    ///             "retention is set at creation and immutable afterwards —
+    ///             a window a caller can shorten under their own resource is not a recovery window"
+    ///         </i>.
     ///         The platform satisfies that more strongly than the document asks: retention is declared
     ///         on the <i>type</i>, so there is no per-resource property to set at creation and none to
     ///         shorten later, and the delete path stamps the deadline from the registration and never
@@ -728,12 +800,18 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>Purge protection cannot be turned off, by <c>PUT</c> or by <c>PATCH</c>, and a
-    ///     protected resource cannot be purged.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Purge protection cannot be turned off, by <c>PUT</c> or by <c>PATCH</c>, and a
+    ///         protected resource cannot be purged.
+    ///     </b>
     /// </summary>
     /// <remarks>
-    ///     docs/plan/08 § Soft delete: <i>"Purge protection is a further opt-in flag that cannot be
-    ///     turned off once on, which is the only version of it that is worth anything."</i> Both halves
+    ///     docs/plan/08 § Soft delete:
+    ///     <i>
+    ///         "Purge protection is a further opt-in flag that cannot be
+    ///         turned off once on, which is the only version of it that is worth anything."
+    ///     </i> Both halves
     ///     are asserted here because either alone is worthless: a purge refusal one <c>PATCH</c> away
     ///     from being bypassed protects against nobody who can write, and a caller who can write is a
     ///     caller who can delete.
@@ -793,12 +871,18 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A resource with purge protection off is purgeable, so the refusal above is the flag and
-    ///     not the verb.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A resource with purge protection off is purgeable, so the refusal above is the flag and
+    ///         not the verb.
+    ///     </b>
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is the calibration for the test above, and without it that test passes for a
-    ///     platform where nothing can ever be purged.</b> Omitting the flag entirely is the case that
+    ///     ⚠
+    ///     <b>
+    ///         This is the calibration for the test above, and without it that test passes for a
+    ///         platform where nothing can ever be purged.
+    ///     </b> Omitting the flag entirely is the case that
     ///     matters: <c>IsPurgeProtected</c> reads an absent pointer as off, which is the fail-open
     ///     direction, and the only thing making that safe is that the builder refuses a type whose
     ///     schema does not declare the property.
@@ -824,20 +908,29 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // ── The purge permission is separable from the delete permission ────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A caller who may delete but may not purge gets a <c>404</c> from the purge and can
-    ///     still delete.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A caller who may delete but may not purge gets a <c>404</c> from the purge and can
+    ///         still delete.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     docs/plan/08 § Soft delete: Azure puts
     ///     <c>Microsoft.KeyVault/locations/deletedVaults/purge/action</c> in Key Vault Contributor's
-    ///     <c>notActions</c>, <i>"so 'may delete' and 'may destroy permanently' are genuinely separable
-    ///     rights and a role can hold the first without the second"</i>. If the purge checked the delete
+    ///     <c>notActions</c>,
+    ///     <i>
+    ///         "so 'may delete' and 'may destroy permanently' are genuinely separable
+    ///         rights and a role can hold the first without the second"
+    ///     </i>. If the purge checked the delete
     ///     permission the window would protect against nobody who could already delete — which is
     ///     everybody it exists to protect against, since they are the one whose delete put the resource
     ///     there.
     ///     <para>
-    ///         ⚠ <b>The refusal is a <c>404</c> and not a <c>403</c>, because the caller is refused the
-    ///         READ permission's question too</b> — <c>SwitchableAuthorizer</c> denies the named
+    ///         ⚠
+    ///         <b>
+    ///             The refusal is a <c>404</c> and not a <c>403</c>, because the caller is refused the
+    ///             READ permission's question too
+    ///         </b> — <c>SwitchableAuthorizer</c> denies the named
     ///         permission and docs/plan/07 § The enforcement seam answers absence when the read is what
     ///         failed. What matters here is that the purge asked a different question from the delete.
     ///     </para>
@@ -883,20 +976,29 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // ── The way in, which is the half docs/plan/08 recorded as owed ────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>The two verbs reached through <c>ActionAsync</c> — the method the gateway calls —
-    ///     rather than through <c>RestoreAsync</c> and <c>PurgeAsync</c> directly.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The two verbs reached through <c>ActionAsync</c> — the method the gateway calls —
+    ///         rather than through <c>RestoreAsync</c> and <c>PurgeAsync</c> directly.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/08 § Soft delete: <i>"<c>RestoreAsync</c> and <c>PurgeAsync</c> exist, are
-    ///         implemented on <c>ResourceManagerService</c>, and are covered by
-    ///         <c>SoftDeletePathTests</c> — and neither has an HTTP route."</i> Every other case in this
+    ///         docs/plan/08 § Soft delete:
+    ///         <i>
+    ///             "<c>RestoreAsync</c> and <c>PurgeAsync</c> exist, are
+    ///             implemented on <c>ResourceManagerService</c>, and are covered by
+    ///             <c>SoftDeletePathTests</c> — and neither has an HTTP route."
+    ///         </i> Every other case in this
     ///         file calls the two methods directly, which is exactly why that stayed true while the file
     ///         stayed green: a suite that only calls the method cannot notice that nothing else does.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>This is the join, and it is the one assertion here that a gateway test cannot
-    ///         make.</b> <c>ActionRoutingTests.SoftDeletesTwoVerbsAreReachableOnPost</c> proves the
+    ///         ⚠
+    ///         <b>
+    ///             This is the join, and it is the one assertion here that a gateway test cannot
+    ///             make.
+    ///         </b> <c>ActionRoutingTests.SoftDeletesTwoVerbsAreReachableOnPost</c> proves the
     ///         gateway dispatches <c>POST …/restore</c> to <c>IResourceManager.ActionAsync</c> against a
     ///         <i>substituted</i> manager; this proves the real one answers that call by restoring.
     ///         Neither half is worth anything alone — a route to a method that refuses, or a method
@@ -935,10 +1037,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         var read = await Read(address);
         read.IsSuccess.ShouldBeTrue("the restore put the resource back at its old address");
-        read.GetValueOrThrow().Id.ShouldBe(
-            created.GetValueOrThrow().Resource.Id,
-            "the same resource came back — the GUID is the identity"
-        );
+        read.GetValueOrThrow()
+            .Id.ShouldBe(
+                created.GetValueOrThrow().Resource.Id,
+                "the same resource came back — the GUID is the identity"
+            );
 
         // ⚠ The size the CREATE wrote, not one the action supplied — the restore re-applies the stored
         // body, so the POST carried no desired state of its own and could not have.
@@ -1019,13 +1122,19 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         );
 
     /// <summary>
-    ///     ⚠ <b>A purge that cannot remove the volumes its teardown kept does not converge, and does
-    ///     not hand the quota back.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A purge that cannot remove the volumes its teardown kept does not converge, and does
+    ///         not hand the quota back.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/08 § Soft delete's owed item — <i>"a purge still leaves the volumes … so a
-    ///         purged resource returns its quota and leaves its disks"</i> — is two failures in one
+    ///         docs/plan/08 § Soft delete's owed item —
+    ///         <i>
+    ///             "a purge still leaves the volumes … so a
+    ///             purged resource returns its quota and leaves its disks"
+    ///         </i> — is two failures in one
     ///         sentence, and this pins the second. The disks are the harder half and are proved
     ///         against a real API server; the ORDERING is provable here, and it is the half that
     ///         decides what an operator is left with when the removal fails. A purge that returned the
@@ -1033,8 +1142,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     ///         own storage is still occupying.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The failure is produced by the harness having no cluster to reach rather than by a
-    ///         stub outcome</b>, which is the state <c>NoClusterConnectionFactory</c> puts every
+    ///         ⚠
+    ///         <b>
+    ///             The failure is produced by the harness having no cluster to reach rather than by a
+    ///             stub outcome
+    ///         </b>, which is the state <c>NoClusterConnectionFactory</c> puts every
     ///         resource here in. <c>VolumeReclaimer</c> refuses to converge on it precisely because
     ///         converging would report disks destroyed that were never reached — so what this asserts
     ///         is the refusal itself, not a mock's opinion of one.
@@ -1109,20 +1221,29 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // ── The clock-driven half of purge — docs/plan/07 § Azure RBAC ──────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>An expired window is ended by a mechanism that asks the authorizer nothing, and the
-    ///     same call one day earlier is refused.</b>
+    ///     ⚠
+    ///     <b>
+    ///         An expired window is ended by a mechanism that asks the authorizer nothing, and the
+    ///         same call one day earlier is refused.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/08 § Soft delete: <i>"an expiry is not a request, so there is nobody to
-    ///         authorize it"</i>. This is the shape docs/plan/07 § Azure RBAC chose over a system
+    ///         docs/plan/08 § Soft delete:
+    ///         <i>
+    ///             "an expiry is not a request, so there is nobody to
+    ///             authorize it"
+    ///         </i>. This is the shape docs/plan/07 § Azure RBAC chose over a system
     ///         principal, and the assertion that makes it mean something is <b>negative</b>: the
     ///         authorizer is set to deny every permission and is asked nothing at all.
     ///         <c>SwitchableAuthorizer.Asked</c> is empty afterwards.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The refusal before the deadline is the half that makes this a deadline rather
-    ///         than a door.</b> Without it the test would pass for a mechanism that purged any parked
+    ///         ⚠
+    ///         <b>
+    ///             The refusal before the deadline is the half that makes this a deadline rather
+    ///             than a door.
+    ///         </b> Without it the test would pass for a mechanism that purged any parked
     ///         resource on request — which is a purge with the permission removed and nothing put in
     ///         its place, and it would look identical from the outside on the day the window ends.
     ///     </para>
@@ -1175,21 +1296,31 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         (await cluster.Index(address).GetAsync()).GetValueOrThrow()
             .State.ShouldBe(IndexEntryState.Free, "ending the window is what finally releases the name");
 
-        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(
-            vcpuBefore,
-            "the committed quota a soft delete kept is returned by the purge, whoever drove it"
-        );
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Committed.ShouldBe(
+                vcpuBefore,
+                "the committed quota a soft delete kept is returned by the purge, whoever drove it"
+            );
     }
 
     /// <summary>
-    ///     ⚠ <b>Purge protection ends when the window ends, which is what both of its own messages
-    ///     always said and what the code did not do.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Purge protection ends when the window ends, which is what both of its own messages
+    ///         always said and what the code did not do.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         <c>PurgeAsync</c>'s refusal says the resource <i>"cannot be purged <b>before</b> its
-    ///         recovery window ends"</i> and <c>PurgeProtectionRefusalAsync</c>'s says <i>"wait for
-    ///         the recovery window to end"</i>, while the condition was the flag alone. So a
+    ///         <c>PurgeAsync</c>'s refusal says the resource
+    ///         <i>
+    ///             "cannot be purged <b>before</b> its
+    ///             recovery window ends"
+    ///         </i> and <c>PurgeProtectionRefusalAsync</c>'s says
+    ///         <i>
+    ///             "wait for
+    ///             the recovery window to end"
+    ///         </i>, while the condition was the flag alone. So a
     ///         protected resource became <b>permanently undestroyable</b> the moment its window
     ///         closed: unrestorable past the deadline, unpurgeable by anybody, holding its name and
     ///         its committed quota, with — as the message itself said — no request that changes the
@@ -1233,8 +1364,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>The mechanism answers a live resource, an unknown name and a type with no window the
-    ///     same way it answers an unexpired one.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The mechanism answers a live resource, an unknown name and a type with no window the
+    ///         same way it answers an unexpired one.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The same identity <c>RestoringALiveResourceAnUnknownNameAndAHardDeleteTypeAllAnswerTheSame404</c>
@@ -1257,15 +1391,15 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         var hard = ResourceManagerCluster.Address("no-window");
         await Converge(
             (await cluster.Manager.WriteAsync(
-                new() {
-                    Path = hard.Path,
-                    ApiVersion = TestingProvider.V2026,
-                    Verb = WriteVerb.Put,
-                    Body = TestingProvider.Body(),
-                    Caller = ResourceManagerCluster.Caller()
-                },
-                TestContext.Current.CancellationToken
-            )).GetValueOrThrow()
+                    new() {
+                        Path = hard.Path,
+                        ApiVersion = TestingProvider.V2026,
+                        Verb = WriteVerb.Put,
+                        Body = TestingProvider.Body(),
+                        Caller = ResourceManagerCluster.Caller()
+                    },
+                    TestContext.Current.CancellationToken
+                )).GetValueOrThrow()
         );
 
         var onHard = await PurgeExpired(hard);
@@ -1279,8 +1413,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A parked resource is in no listing and in no membership, so there is nothing for a
-    ///     "what is recoverable" filter to filter.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A parked resource is in no listing and in no membership, so there is nothing for a
+    ///         "what is recoverable" filter to filter.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -1297,8 +1434,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     ///         enumeration source rather than a predicate over one that does exist.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE ENUMERATION SOURCE NOW EXISTS AND THIS CASE IS UNCHANGED, WHICH IS THE POINT
-    ///         OF SAYING SO.</b> Issue #71 built <c>IParkedResourceRegistryGrain</c> — a second
+    ///         ⚠
+    ///         <b>
+    ///             THE ENUMERATION SOURCE NOW EXISTS AND THIS CASE IS UNCHANGED, WHICH IS THE POINT
+    ///             OF SAYING SO.
+    ///         </b> Issue #71 built <c>IParkedResourceRegistryGrain</c> — a second
     ///         collection, keyed <c>parked/{subscriptionId:N}/rg/{name}</c>, written where
     ///         <c>OperationGrain.ParkAsync</c> unlists the member. What it did <b>not</b> do is put
     ///         the member back, because that is the decision docs/plan/08 § Soft delete calls right
@@ -1359,18 +1499,20 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         // ⚠ The calibration, and without it the assertion below passes for an empty membership — a
         // group grain that answered nothing at all would look exactly like the finding.
-        members.Select(x => x.CanonicalPath).ShouldContain(
-            live.CanonicalPath,
-            "the group's membership does not hold the LIVE resource either, so the assertion below "
-            + "would be measuring an empty list rather than the park"
-        );
+        members.Select(x => x.CanonicalPath)
+            .ShouldContain(
+                live.CanonicalPath,
+                "the group's membership does not hold the LIVE resource either, so the assertion below "
+                + "would be measuring an empty list rather than the park"
+            );
 
-        members.Select(x => x.CanonicalPath).ShouldNotContain(
-            parked.CanonicalPath,
-            "the parked resource is still a member of its group, so ListAsync's page was short for "
-            + "the FILTER's reason rather than the membership's — which would make 'list what is "
-            + "recoverable' a predicate over an input that exists"
-        );
+        members.Select(x => x.CanonicalPath)
+            .ShouldNotContain(
+                parked.CanonicalPath,
+                "the parked resource is still a member of its group, so ListAsync's page was short for "
+                + "the FILTER's reason rather than the membership's — which would make 'list what is "
+                + "recoverable' a predicate over an input that exists"
+            );
 
         // And it is still recoverable, so the absence above is a listing gap and not a lost resource.
         (await cluster.Index(parked).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.SoftDeleted);
@@ -1387,8 +1529,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     // each case drives the real verb end to end and reads the registry afterwards.
 
     /// <summary>
-    ///     ⚠ <b>A parked resource is in the group's registry of what is recoverable, which is where
-    ///     it went when it left the membership.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A parked resource is in the group's registry of what is recoverable, which is where
+    ///         it went when it left the membership.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -1446,18 +1591,19 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
             .GetValueOrThrow();
 
         var ofWidgets = (await cluster.Parked(parked)
-                .ListOfTypeAsync(
-                    new(parked.TenantId, parked.SubscriptionId, group, ConformingReconciler.TypeName)
-                ))
-            .GetValueOrThrow();
+                .ListOfTypeAsync(new(parked.TenantId, parked.SubscriptionId, group, ConformingReconciler.TypeName)))
+                .GetValueOrThrow();
 
         ofVaults.Select(x => x.AddressOf().Name).ShouldBe(["goes-away"]);
         ofWidgets.ShouldBeEmpty("widgets declare no recovery window, so nothing can be parked in one");
     }
 
     /// <summary>
-    ///     ⚠ <b>A restore takes the resource out of the registry and puts it back into the
-    ///     membership, so it is in exactly one collection at every ending.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A restore takes the resource out of the registry and puts it back into the
+    ///         membership, so it is in exactly one collection at every ending.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>The registry entry going is the half that would be silently missed.</b> A restore
@@ -1498,8 +1644,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A purge takes the resource out of the registry, and it is in no collection at all
-    ///     afterwards — which is what "there is nothing to recover" means.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A purge takes the resource out of the registry, and it is in no collection at all
+    ///         afterwards — which is what "there is nothing to recover" means.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>An entry left behind by a purge cannot be cleared by anything.</b> Once the name is
@@ -1542,13 +1691,19 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A restore that is refused because the window has passed leaves the registry entry
-    ///     exactly where it was — the case the ordering bug destroyed.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A restore that is refused because the window has passed leaves the registry entry
+    ///         exactly where it was — the case the ordering bug destroyed.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the #71 review's blocker (2026-09-05), and it was a real data-loss
-    ///         path.</b> <c>RestoreAsync</c> cleared the registry entry and only then met the window
+    ///         ⚠
+    ///         <b>
+    ///             This is the #71 review's blocker (2026-09-05), and it was a real data-loss
+    ///             path.
+    ///         </b> <c>RestoreAsync</c> cleared the registry entry and only then met the window
     ///         check inside <c>IndexClaimMachine.Restore</c>. Nothing upstream filtered an expired
     ///         entry — <c>ResolveSoftDeletedAsync</c> answers for any binding the index calls
     ///         <c>SoftDeleted</c> and never reads <c>RecoverableUntil</c> — so the caller got a
@@ -1559,21 +1714,30 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     ///         issue #71 exists to end.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Expired-but-unpurged is not a corner, which is why this case matters more than
-    ///         its rarity suggests.</b> When this was written it was the ordinary long-term state,
+    ///         ⚠
+    ///         <b>
+    ///             Expired-but-unpurged is not a corner, which is why this case matters more than
+    ///             its rarity suggests.
+    ///         </b> When this was written it was the ordinary long-term state,
     ///         because nothing ended a window on the clock's account and every parked resource that
-    ///         nobody restored or purged arrived here and stayed. ⚠ <b>Issue #12's sweeper
-    ///         (<see cref="ExpirySweeperTests" />) changed which of those two things is true and did
-    ///         not weaken this case: it is no longer a state a resource <i>sits</i> in, it is a state
-    ///         a tenant's restore <i>races a sweep for</i>, which is the same line reached by a
-    ///         narrower window and more often.</b> The other three
+    ///         nobody restored or purged arrived here and stayed. ⚠
+    ///         <b>
+    ///             Issue #12's sweeper
+    ///             (<see cref="ExpirySweeperTests" />) changed which of those two things is true and did
+    ///             not weaken this case: it is no longer a state a resource <i>sits</i> in, it is a state
+    ///             a tenant's restore <i>races a sweep for</i>, which is the same line reached by a
+    ///             narrower window and more often.
+    ///         </b> The other three
     ///         registry cases in this section all use unexpired windows, so none of them would have
     ///         gone red — <see cref="ARestoreAfterTheWindowHasPassedIsRefused" /> drives this exact
     ///         sequence and passes because it never reads the registry.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>ParkedAt</c> is asserted unchanged, and that is the assertion that separates
-    ///         the fix from a plausible wrong one.</b> A repair that cleared the entry and wrote a
+    ///         ⚠
+    ///         <b>
+    ///             <c>ParkedAt</c> is asserted unchanged, and that is the assertion that separates
+    ///             the fix from a plausible wrong one.
+    ///         </b> A repair that cleared the entry and wrote a
     ///         fresh one would satisfy every other assertion here while restamping the answer to
     ///         "when was this deleted" with the time of the failed restore — a listing of what is
     ///         recoverable would then say a resource seven days past its window had been parked a
@@ -1618,12 +1782,13 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         var after = (await cluster.Parked(address).ListAsync()).GetValueOrThrow();
 
-        after.Select(x => x.AddressOf().Name).ShouldBe(
-            ["too-late-to-restore"],
-            "a refused restore must not unlist the resource: nothing re-parks it, so the entry would "
-            + "be gone for good and the resource would hold its name and its committed quota in no "
-            + "collection at all"
-        );
+        after.Select(x => x.AddressOf().Name)
+            .ShouldBe(
+                ["too-late-to-restore"],
+                "a refused restore must not unlist the resource: nothing re-parks it, so the entry would "
+                + "be gone for good and the resource would hold its name and its committed quota in no "
+                + "collection at all"
+            );
 
         after[0].ParkedAt.ShouldBe(
             before[0].ParkedAt,
@@ -1650,9 +1815,8 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         // file can only park.
         await Converge((await Purge(address)).GetValueOrThrow());
 
-        (await cluster.Parked(address).ListAsync()).GetValueOrThrow().ShouldBeEmpty(
-            "the purge is the ending an expired resource has, and it clears the entry"
-        );
+        (await cluster.Parked(address).ListAsync()).GetValueOrThrow()
+            .ShouldBeEmpty("the purge is the ending an expired resource has, and it clears the entry");
     }
 
     Task<Result<WriteAccepted>> PurgeExpired(ResourceId address) =>

@@ -16,8 +16,11 @@ namespace CyberCloud.Providers.DocumentDB.Tests;
 ///         only in a log line.
 ///     </para>
 ///     <para>
-///         ⚠ <b>EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
-///         STAYED GREEN BECAUSE IT WAS NOT.</b> That version built the expected path from the same two
+///         ⚠
+///         <b>
+///             EVERY EXPECTATION BELOW IS A LITERAL, AND A PREVIOUS PROVIDER'S CASING SABOTAGE
+///             STAYED GREEN BECAUSE IT WAS NOT.
+///         </b> That version built the expected path from the same two
 ///         constants the emitter reads, so re-casing the constant left the whole suite green — two
 ///         things derived from one constant agree however that constant is spelled. The strings here
 ///         are typed out by hand, and they are the fourth independent copy after
@@ -25,8 +28,11 @@ namespace CyberCloud.Providers.DocumentDB.Tests;
 ///         <c>cybercloud.io/resource-type</c> and <c>charts/managed/ferretdb/conformance.yaml</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This type's casing risk is concentrated where the API's vocabulary and the two
-///         upstreams' vocabularies overlap.</b> <c>instances</c> is the API's word for what
+///         ⚠
+///         <b>
+///             This type's casing risk is concentrated where the API's vocabulary and the two
+///             upstreams' vocabularies overlap.
+///         </b> <c>instances</c> is the API's word for what
 ///         CloudNativePG also calls <c>instances</c> — safe — but <c>replicas</c> is this API's word
 ///         for the <i>gateway</i> and CloudNativePG's word for nothing here, while
 ///         <c>shared_preload_libraries</c> and <c>enableSuperuserAccess</c> are the operator's
@@ -91,11 +97,7 @@ public sealed class DocumentDbOpenApiCasingTests {
         names.ShouldContain("instances");
 
         foreach (var foreign in new[] {
-                     "shared_preload_libraries",
-                     "enableSuperuserAccess",
-                     "postgresUID",
-                     "imageName",
-                     "postInitSQL",
+                     "shared_preload_libraries", "enableSuperuserAccess", "postgresUID", "imageName", "postInitSQL",
                      "FERRETDB_POSTGRESQL_URL"
                  }) {
             names.ShouldNotContain(
@@ -113,11 +115,12 @@ public sealed class DocumentDbOpenApiCasingTests {
         // path through ResourceTypeName — which is case-INSENSITIVE. So a mis-cased document would
         // still route, and this test is not about routing: it is about what a generated client, a
         // portal breadcrumb and docs/plan/12's prose all copy.
-        DocumentDbAccounts.Type.ToString().ShouldBe(
-            QualifiedType,
-            "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
-            + "charts/managed/ferretdb/Chart.yaml's cybercloud.io/resource-type annotation."
-        );
+        DocumentDbAccounts.Type.ToString()
+            .ShouldBe(
+                QualifiedType,
+                "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
+                + "charts/managed/ferretdb/Chart.yaml's cybercloud.io/resource-type annotation."
+            );
 
         var paths = Paths();
 
@@ -126,12 +129,9 @@ public sealed class DocumentDbOpenApiCasingTests {
             "no path carries the provider namespace and type as docs/plan/12 spells them"
         );
 
-        foreach (var path in paths.Where(
-                     x => x.Contains("documentdb/accounts", StringComparison.OrdinalIgnoreCase)
-                 )) {
-            path.Contains(QualifiedType, StringComparison.Ordinal).ShouldBeTrue(
-                $"'{path}' spells the type in a casing other than '{QualifiedType}'."
-            );
+        foreach (var path in paths.Where(x => x.Contains("documentdb/accounts", StringComparison.OrdinalIgnoreCase))) {
+            path.Contains(QualifiedType, StringComparison.Ordinal)
+                .ShouldBeTrue($"'{path}' spells the type in a casing other than '{QualifiedType}'.");
         }
     }
 
@@ -157,10 +157,11 @@ public sealed class DocumentDbOpenApiCasingTests {
         var value = KubeLabels.ResourceTypeValue(DocumentDbAccounts.Type);
 
         value.ShouldBe("cybercloud.documentdb_accounts");
-        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType).IsSuccess.ShouldBeTrue(
-            "the resource-type label value is not legal Kubernetes label syntax, so every object this "
-            + "provider applies would be refused at admission rather than at build time."
-        );
+        LabelSyntax.ValidateValue(value, KubeLabels.ResourceType)
+            .IsSuccess.ShouldBeTrue(
+                "the resource-type label value is not legal Kubernetes label syntax, so every object this "
+                + "provider applies would be refused at admission rather than at build time."
+            );
     }
 
     /// <summary>The document the generator would write for this provider alone.</summary>

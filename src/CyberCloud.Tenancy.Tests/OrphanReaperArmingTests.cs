@@ -25,8 +25,11 @@ namespace CyberCloud.Tenancy.Tests;
 ///         fixing that one for #12 and filed separately because the consequence differs.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE REMINDER ROW IS READ DIRECTLY, AND THAT IS A STRONGER WITNESS THAN #12 COULD
-///         GET.</b> <c>ExpirySweeperTests.ASecondArmDoesNotRewriteTheRowThatIsAlreadyThere</c>
+///         ⚠
+///         <b>
+///             THE REMINDER ROW IS READ DIRECTLY, AND THAT IS A STRONGER WITNESS THAN #12 COULD
+///             GET.
+///         </b> <c>ExpirySweeperTests.ASecondArmDoesNotRewriteTheRowThatIsAlreadyThere</c>
 ///         asserts a <see langword="bool" /> the grain returns — "I did not register" — because that
 ///         file's own remarks record "the reminder itself is not observable from a test". That is not
 ///         true of a silo whose reminder service this suite wires up itself
@@ -49,8 +52,11 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     IReminderTable Reminders => cluster.Services.GetRequiredService<IReminderTable>();
 
     /// <summary>
-    ///     ⚠ <b>A second create does not rewrite the reaper row, because rewriting it would push the
-    ///     next tick a whole <c>OrphanSweepPeriod</c> out.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A second create does not rewrite the reaper row, because rewriting it would push the
+    ///         next tick a whole <c>OrphanSweepPeriod</c> out.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -85,9 +91,7 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
         var second = first with { Name = "web-02", Id = Guid.NewGuid() };
         var group = Group(first);
 
-        (await Row(group)).ShouldBeNull(
-            "nothing in this group is Creating, so nothing has armed the reaper"
-        );
+        (await Row(group)).ShouldBeNull("nothing in this group is Creating, so nothing has armed the reaper");
 
         (await group.BeginCreateAsync(first)).IsSuccess.ShouldBeTrue();
 
@@ -101,9 +105,7 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
 
         var afterSecondCreate = await Row(group);
 
-        afterSecondCreate.ShouldNotBeNull(
-            "answering 'I did not register' must not mean 'and there is no row'"
-        );
+        afterSecondCreate.ShouldNotBeNull("answering 'I did not register' must not mean 'and there is no row'");
 
         afterSecondCreate!.ETag.ShouldBe(
             armed.ETag,
@@ -140,8 +142,11 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A reaper row that is gone from the table is put back, so the guard did not turn the
-    ///     arm into a no-op.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A reaper row that is gone from the table is put back, so the guard did not turn the
+    ///         arm into a no-op.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -152,8 +157,11 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     ///         faithful reproduction of both.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What puts it back <i>here</i> is <c>OnActivateAsync</c>, and that is why this
-    ///         grain owes no equivalent of <c>ExpirySweeperBackfill</c>.</b> That backfill exists
+    ///         ⚠
+    ///         <b>
+    ///             What puts it back <i>here</i> is <c>OnActivateAsync</c>, and that is why this
+    ///             grain owes no equivalent of <c>ExpirySweeperBackfill</c>.
+    ///         </b> That backfill exists
     ///         because <c>ExpirySweeperGrain</c> holds nothing — its evidence is a separate registry
     ///         grain, so an activation is not evidence and it deliberately arms nothing on one. This
     ///         grain's evidence is its own durable state, loaded by the activation itself, so the
@@ -164,8 +172,11 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     ///         on the way past.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The activation is not the only thing that would put the row back, and the case
-    ///         is narrower than the guard on purpose (2026-09-06, review of #83).</b> The guard in
+    ///         ⚠
+    ///         <b>
+    ///             The activation is not the only thing that would put the row back, and the case
+    ///             is narrower than the guard on purpose (2026-09-06, review of #83).
+    ///         </b> The guard in
     ///         <c>ArmOrDisarmAsync</c> is "there is no row", not "no create is already in flight" —
     ///         so a second <c>BeginCreateAsync</c>, a <c>CompleteCreateAsync</c> that leaves another
     ///         member behind, a <c>BeginDeleteAsync</c> and <c>ReapOrphansAsync</c> all re-assert a
@@ -251,8 +262,11 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A BOUNDED RETRY AND NOT THE FLAT 250 ms THE REST OF THE SUITE USES, BECAUSE HERE
-    ///         THE PAUSE WOULD BE LOAD-BEARING (2026-09-06, review of #83).</b>
+    ///         ⚠
+    ///         <b>
+    ///             A BOUNDED RETRY AND NOT THE FLAT 250 ms THE REST OF THE SUITE USES, BECAUSE HERE
+    ///             THE PAUSE WOULD BE LOAD-BEARING (2026-09-06, review of #83).
+    ///         </b>
     ///         <c>DeactivateOnIdle</c> only <i>schedules</i> the deactivation, so a call made too
     ///         soon reaches the same activation: <c>OnActivateAsync</c> never re-runs, nothing
     ///         re-arms, and the row is still missing.
@@ -267,8 +281,11 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
     ///         still fails, just later.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It drives with <c>ListAsync</c> on purpose, and polling the table alone would
-    ///         hang for the whole budget.</b> Nothing re-arms until something calls the grain, and
+    ///         ⚠
+    ///         <b>
+    ///             It drives with <c>ListAsync</c> on purpose, and polling the table alone would
+    ///             hang for the whole budget.
+    ///         </b> Nothing re-arms until something calls the grain, and
     ///         <c>ListAsync</c> is one of the eleven members that do <i>not</i> come through
     ///         <c>ArmOrDisarmAsync</c> — so a row that appears after one can only have been written
     ///         by the activation that the call forced, which is the <c>OnActivateAsync</c> line
@@ -302,7 +319,7 @@ public sealed class OrphanReaperArmingTests(TenancyCluster cluster) {
         (await cluster.SubscriptionGrain(tenant, subscription).CreateAsync("prod")).IsSuccess.ShouldBeTrue();
 
         (await cluster.SubscriptionGrain(tenant, subscription)
-            .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
+                .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
 
         return new(
             tenant,

@@ -9,9 +9,12 @@ namespace CyberCloud.Core.Security;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/18 § Platform security, row Secrets: <i>"Never in grain state, never in env vars
-///         in a manifest, never in a log — analyzer + admission policy + a log-scanning canary that
-///         alerts on a key-shaped string in the log pipeline."</i> CC1005 is the analyzer and it
+///         docs/plan/18 § Platform security, row Secrets:
+///         <i>
+///             "Never in grain state, never in env vars
+///             in a manifest, never in a log — analyzer + admission policy + a log-scanning canary that
+///             alerts on a key-shaped string in the log pipeline."
+///         </i> CC1005 is the analyzer and it
 ///         covers the first clause only: it is a name rule over <c>[Id(n)]</c> members, so it sees a
 ///         field called <c>AdminPassword</c> and cannot see
 ///         <c>logger.LogInformation("upstream said {Body}", body)</c>. This type is what the third
@@ -19,8 +22,11 @@ namespace CyberCloud.Core.Security;
 ///         it attaches.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every rule below matches a shape whose issuer is known, or a structure whose grammar
-///         puts a credential in a named position. There is deliberately no entropy rule.</b> The
+///         ⚠
+///         <b>
+///             Every rule below matches a shape whose issuer is known, or a structure whose grammar
+///             puts a credential in a named position. There is deliberately no entropy rule.
+///         </b> The
 ///         obvious extra — "a long high-entropy run is a secret" — fires on trace ids, image digests,
 ///         resource ids, base64 payloads and Orleans grain keys, all of which this platform logs on
 ///         purpose. A redactor with false positives destroys the logs it exists to protect, and the
@@ -30,8 +36,11 @@ namespace CyberCloud.Core.Security;
 ///         the tenant-facing key format, not a wider regex.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every pattern is <see cref="RegexOptions.NonBacktracking" />, and on this code path
-///         that is a correctness property rather than a performance one.</b> These expressions run
+///         ⚠
+///         <b>
+///             Every pattern is <see cref="RegexOptions.NonBacktracking" />, and on this code path
+///             that is a correctness property rather than a performance one.
+///         </b> These expressions run
 ///         over attacker-influenced text — a request body quoted into an operator detail, a header,
 ///         an exception message — inside the logging pipeline of every process in the platform. A
 ///         catastrophic backtrack there stalls the thread that was trying to write a log line, which
@@ -66,8 +75,7 @@ public static class SecretShapedText {
     // credential rather than the header it arrived in. Each rule sees the output of the ones before
     // it, so a later rule cannot re-match text that is already a marker — the marker contains no
     // '=', no '://' and no run long enough to look like a token.
-    static readonly Rule[] Rules =
-    [
+    static readonly Rule[] Rules = [
         // -----BEGIN OPENSSH PRIVATE KEY-----, RSA, EC, PGP … . Greedy to the end of the string on
         // purpose: a PEM body split across lines has no reliable terminator inside one log event,
         // and half a private key in a log is still a private key in a log.
@@ -84,7 +92,10 @@ public static class SecretShapedText {
         new("VaultToken", Pattern("\\bhv[sb]\\.[A-Za-z0-9_-]{20,}")),
         new("VaultLegacyToken", Pattern("\\bs\\.[A-Za-z0-9]{24}\\b")),
 
-        new("AwsAccessKey", Pattern("\\b(?:AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|APKA|AROA|ASCA)[0-9A-Z]{16}\\b")),
+        new(
+            "AwsAccessKey",
+            Pattern("\\b(?:AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|APKA|AROA|ASCA)[0-9A-Z]{16}\\b")
+        ),
         new("GitHubToken", Pattern("\\bgh[pousr]_[A-Za-z0-9]{36,}\\b")),
         new("GitHubPersonalAccessToken", Pattern("\\bgithub_pat_[A-Za-z0-9_]{22,}\\b")),
         new("SlackToken", Pattern("\\bxox[abeprs]-[A-Za-z0-9-]{10,}")),
@@ -94,7 +105,10 @@ public static class SecretShapedText {
         // (docs/plan/05 § Storage provider wiring), and a connection string is the thing a storage
         // diagnostic reaches for first. The key is kept and only the value is replaced, because
         // "which setting was it" is the whole diagnostic value of the line.
-        new("ConnectionStringPassword", Pattern("(?:password|pwd)\\s*=\\s*(?<secret>[^;,\\s\"']{3,})", ignoreCase: true)),
+        new(
+            "ConnectionStringPassword",
+            Pattern("(?:password|pwd)\\s*=\\s*(?<secret>[^;,\\s\"']{3,})", ignoreCase: true)
+        ),
 
         // scheme://user:password@host — how a Redis, Postgres or AMQP endpoint is usually written
         // down, and how one usually reaches a log.
@@ -105,8 +119,8 @@ public static class SecretShapedText {
         new("BearerToken", Pattern("\\bbearer\\s+(?<secret>[A-Za-z0-9._~+/=-]{16,})", ignoreCase: true))
     ];
 
-    static Regex Pattern(string pattern, bool ignoreCase = false)
-        => new(
+    static Regex Pattern(string pattern, bool ignoreCase = false) =>
+        new(
             pattern,
             RegexOptions.NonBacktracking | (ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None)
         );
@@ -200,8 +214,11 @@ public static class SecretShapedText {
     ///     rule declared one.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The fallback when the group did not capture is to redact the whole match, and it is a
-    ///     fallback rather than an assertion on purpose.</b> A regex engine that declined to hand
+    ///     ⚠
+    ///     <b>
+    ///         The fallback when the group did not capture is to redact the whole match, and it is a
+    ///         fallback rather than an assertion on purpose.
+    ///     </b> A regex engine that declined to hand
     ///     back a group must not be able to turn this method into a pass-through: the safe answer to
     ///     "I cannot tell which part was the secret" is "all of it".
     /// </remarks>

@@ -60,50 +60,57 @@ sealed class ValidateStage(GatewayOptions options) : IGatewayStage {
         // its cap, so a 2 GB body would otherwise arrive here looking like a 1 MB one and be
         // accepted with its tail silently missing.
         if (request.ContentLength > options.MaxBodyBytes) {
-            return Stop(Bad(
-                ErrorCode.InvalidRequestBody,
-                $"The request body is {request.ContentLength} bytes and the limit is "
-                + $"{options.MaxBodyBytes}. A resource's desired state is a description, not a "
-                + "payload — a body this size is a client bug."
-            ));
+            return Stop(
+                Bad(
+                    ErrorCode.InvalidRequestBody,
+                    $"The request body is {request.ContentLength} bytes and the limit is "
+                    + $"{options.MaxBodyBytes}. A resource's desired state is a description, not a "
+                    + "payload — a body this size is a client bug."
+                )
+            );
         }
 
         if (context.Body.Length == 0) {
             return HttpMethods.IsPost(request.Method)
                 // An action with no arguments is normal — POST /restart has nothing to say.
                 ? Stop(null)
-                : Stop(Bad(
-                    ErrorCode.InvalidRequestBody,
-                    $"A {request.Method} needs a body. docs/plan/08 § The write path, end to end: PUT "
-                    + "is a full replacement and PATCH is a JSON Merge Patch, and neither means "
-                    + "anything without one."
-                ));
+                : Stop(
+                    Bad(
+                        ErrorCode.InvalidRequestBody,
+                        $"A {request.Method} needs a body. docs/plan/08 § The write path, end to end: PUT "
+                        + "is a full replacement and PATCH is a JSON Merge Patch, and neither means "
+                        + "anything without one."
+                    )
+                );
         }
 
         var contentType = request.ContentType ?? "";
         if (contentType.Length > 0 && !contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase)) {
-            return Stop(new GatewayOutcome {
-                StatusCode = StatusCodes.Status415UnsupportedMediaType,
-                Error = new(
-                    ErrorCode.InvalidRequestBody,
-                    $"Content-Type '{contentType}' is not supported. Every body this API accepts is "
-                    + "'application/json'."
-                )
-            });
+            return Stop(
+                new GatewayOutcome {
+                    StatusCode = StatusCodes.Status415UnsupportedMediaType,
+                    Error = new(
+                        ErrorCode.InvalidRequestBody,
+                        $"Content-Type '{contentType}' is not supported. Every body this API accepts is "
+                        + "'application/json'."
+                    )
+                }
+            );
         }
 
         try {
             using var document = JsonDocument.Parse(context.Body);
 
             if (document.RootElement.ValueKind != JsonValueKind.Object) {
-                return Stop(Bad(
-                    ErrorCode.InvalidRequestBody,
-                    $"The request body is a JSON {document.RootElement.ValueKind.ToString().ToLowerInvariant()}. "
-                    + "A resource body is a JSON object."
-                ));
+                return Stop(
+                    Bad(
+                        ErrorCode.InvalidRequestBody,
+                        $"The request body is a JSON {document.RootElement.ValueKind.ToString().ToLowerInvariant()}. "
+                        + "A resource body is a JSON object."
+                    )
+                );
             }
-        }
-        catch (JsonException exception) {
+        } catch (JsonException exception) {
             // ⚠ The parser's message describes the CALLER'S OWN INPUT — a position and a character —
             // and is not a stack trace. docs/plan/08 § Errors bans exception detail, and this is not
             // any: nothing here names a type, a method or a file of ours.

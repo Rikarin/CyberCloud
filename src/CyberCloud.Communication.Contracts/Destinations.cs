@@ -7,8 +7,11 @@ namespace CyberCloud.Communication.Contracts;
 ///     The canonical form of a destination, for the suppression list and for the wire.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A suppression list that does not normalize is a suppression list that can be walked
-///     around.</b> docs/plan/17 § The parts that are actually the work makes suppression
+///     ⚠
+///     <b>
+///         A suppression list that does not normalize is a suppression list that can be walked
+///         around.
+///     </b> docs/plan/17 § The parts that are actually the work makes suppression
 ///     <i>"honoured before dispatch"</i>, and a recipient who sent <c>STOP</c> from
 ///     <c>+420 777 123 456</c> has not consented to <c>+420777123456</c>. The same argument
 ///     <see cref="GrainKeys.NormalizeEmail" /> makes about two spellings of one account, with the
@@ -80,8 +83,11 @@ public static class Destinations {
     ///     <para>
     ///         ⚠ <b>A shape check, not a routing check.</b> Whether <c>+420777123456</c> is a live
     ///         handset is the carrier's answer and arrives as a delivery receipt. What this has to
-    ///         guarantee is the property the suppression list rests on: <b>two spellings of one
-    ///         number produce one string</b>. Spaces, hyphens, dots, and round brackets are the
+    ///         guarantee is the property the suppression list rests on:
+    ///         <b>
+    ///             two spellings of one
+    ///             number produce one string
+    ///         </b>. Spaces, hyphens, dots, and round brackets are the
     ///         separators every keypad and every pasted contact card produces, and stripping exactly
     ///         those merges the spellings and nothing else.
     ///     </para>

@@ -6,8 +6,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This enum exists so that step order is a testable property rather than a review
-///         convention.</b> docs/plan/08 § The write path, end to end:
+///         ⚠
+///         <b>
+///             This enum exists so that step order is a testable property rather than a review
+///             convention.
+///         </b> docs/plan/08 § The write path, end to end:
 ///         <i>
 ///             "Steps 3-7 are the entire reason this is one component rather than a shared library
 ///             each provider calls. A provider that could skip step 3 is a provider that eventually
@@ -37,8 +40,11 @@ public enum WriteStep {
     ValidateBody = 2,
 
     /// <summary>
-    ///     ReBAC <c>Check</c>. ⚠ <b>Before quota, before the index, before the provider is ever
-    ///     called.</b> docs/plan/07 § The enforcement seam.
+    ///     ReBAC <c>Check</c>. ⚠
+    ///     <b>
+    ///         Before quota, before the index, before the provider is ever
+    ///         called.
+    ///     </b> docs/plan/07 § The enforcement seam.
     /// </summary>
     AuthorizationCheck = 3,
 
@@ -166,8 +172,11 @@ public enum OperationKind {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A separate kind and not a <see cref="Delete" /> with a flag, because it is the
-    ///         half of a delete that a soft-deletable type did not do.</b> docs/plan/08 § Soft delete
+    ///         ⚠
+    ///         <b>
+    ///             A separate kind and not a <see cref="Delete" /> with a flag, because it is the
+    ///             half of a delete that a soft-deletable type did not do.
+    ///         </b> docs/plan/08 § Soft delete
     ///         defers the index release and the committed-quota return to here; a <see cref="Delete" />
     ///         on such a type parks the resource and does neither. Two kinds means the operation record
     ///         says which of the two happened, and a caller reading an operation history can tell "it
@@ -188,8 +197,11 @@ public enum OperationKind {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This kind exists because a restore has work to do, and until it did the recovery
-    ///         window was not one.</b> A soft delete tears the data plane down — that is what makes a
+    ///         ⚠
+    ///         <b>
+    ///             This kind exists because a restore has work to do, and until it did the recovery
+    ///             window was not one.
+    ///         </b> A soft delete tears the data plane down — that is what makes a
     ///         delete a delete, and what stops the pods, the write paths and the meters that a tenant
     ///         believes they stopped. What the window preserves is everything a teardown does not
     ///         remove: the name, the committed quota, the resource's stored desired state, and the
@@ -198,8 +210,11 @@ public enum OperationKind {
     ///         operation like any other.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Not an <see cref="Update" />, for the reason <see cref="Purge" /> is not a
-    ///         <see cref="Delete" />.</b> Nothing about the desired body changed — the caller supplied
+    ///         ⚠
+    ///         <b>
+    ///             Not an <see cref="Update" />, for the reason <see cref="Purge" /> is not a
+    ///             <see cref="Delete" />.
+    ///         </b> Nothing about the desired body changed — the caller supplied
     ///         none — so an operation history reading <c>Update</c> would describe a write nobody made.
     ///         It also reserves no quota: the amounts stayed committed through the whole window
     ///         precisely so that a restore cannot fail against an allowance the tenant has spent since,
@@ -376,10 +391,16 @@ public enum SchemaFormat {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>ADR-012 promised this and <see cref="Registry.SchemaProperty" /> had no slot for it, which is
-///         the plan and the code contradicting each other.</b> docs/plan/02 § ADR-012's portal row
-///         reads <i>"Angular reactive forms + xUI controls from the schema, with <c>x-cybercloud-*</c>
-///         hints for widgets (a <c>storageclass</c> picker, a region picker)"</i>. With nowhere to
+///         ⚠
+///         <b>
+///             ADR-012 promised this and <see cref="Registry.SchemaProperty" /> had no slot for it, which is
+///             the plan and the code contradicting each other.
+///         </b> docs/plan/02 § ADR-012's portal row
+///         reads
+///         <i>
+///             "Angular reactive forms + xUI controls from the schema, with <c>x-cybercloud-*</c>
+///             hints for widgets (a <c>storageclass</c> picker, a region picker)"
+///         </i>. With nowhere to
 ///         declare one, the portal emitter would have had to infer a widget from a property's
 ///         <i>name</i> — and a renderer that keys on "the property is called region" is a second
 ///         interpretation of the schema, which is the drift ADR-012 exists to remove.

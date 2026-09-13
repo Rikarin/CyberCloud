@@ -37,7 +37,8 @@ namespace CyberCloud.Tenancy;
 ///     </para>
 /// </remarks>
 public sealed class ShardMapGrain(
-    [PersistentState("shardMap", StorageTiers.Durable)] IPersistentState<ShardMapState> state,
+    [PersistentState("shardMap", StorageTiers.Durable)]
+    IPersistentState<ShardMapState> state,
     IClock clock
 )
     : Grain, IShardMapGrain {

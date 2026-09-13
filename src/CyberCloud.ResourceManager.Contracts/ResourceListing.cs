@@ -57,31 +57,38 @@ public sealed record ListRequest {
     ///     or empty for the first page.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Named <c>Continuation</c> and not <c>ContinuationToken</c>, and that is
-    ///     <c>CC1005</c> rather than taste.</b> The analyzer refuses an <c>[Id]</c>-annotated member
+    ///     ⚠
+    ///     <b>
+    ///         Named <c>Continuation</c> and not <c>ContinuationToken</c>, and that is
+    ///         <c>CC1005</c> rather than taste.
+    ///     </b> The analyzer refuses an <c>[Id]</c>-annotated member
     ///     whose name ends in <c>Token</c>, because such a member serialises into grain state and
     ///     docs/plan/00 § Non-negotiables makes every secret a <c>SecretRef</c> handle. This value is
     ///     a resource path and not a credential, so the rule is a false positive here — but a
     ///     suppression would be a hole in a rule whose whole worth is that it has none, and the name
     ///     costs nothing.
     ///     <para>
-    ///     ⚠ <b>The token is the last canonical path of the previous page and is therefore not a
-    ///     snapshot.</b> Paging resumes at "the next member whose canonical path sorts after this
-    ///     one", so a resource created or deleted between pages changes what the caller sees and
-    ///     cannot make the walk skip or repeat an unrelated member. The alternative — a cursor into a
-    ///     materialised list — needs the list to survive between requests, which for a group whose
-    ///     membership is a durable grain means either holding it or being wrong about it.
+    ///         ⚠
+    ///         <b>
+    ///             The token is the last canonical path of the previous page and is therefore not a
+    ///             snapshot.
+    ///         </b> Paging resumes at "the next member whose canonical path sorts after this
+    ///         one", so a resource created or deleted between pages changes what the caller sees and
+    ///         cannot make the walk skip or repeat an unrelated member. The alternative — a cursor into a
+    ///         materialised list — needs the list to survive between requests, which for a group whose
+    ///         membership is a durable grain means either holding it or being wrong about it.
     ///     </para>
     /// </remarks>
     [Id(4)]
     public string Continuation { get; init; } = string.Empty;
 
     /// <summary>The page size this request actually gets.</summary>
-    public int PageSize => Top switch {
-        <= 0 => DefaultPageSize,
-        > MaxPageSize => MaxPageSize,
-        _ => Top
-    };
+    public int PageSize =>
+        Top switch {
+            <= 0 => DefaultPageSize,
+            > MaxPageSize => MaxPageSize,
+            _ => Top
+        };
 }
 
 /// <summary>
@@ -89,8 +96,11 @@ public sealed record ListRequest {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A page holds only what the caller may read, and a filtered-out member leaves no
-///         trace.</b> There is no count of what was hidden, no gap in the ordering and no marker: all
+///         ⚠
+///         <b>
+///             A page holds only what the caller may read, and a filtered-out member leaves no
+///             trace.
+///         </b> There is no count of what was hidden, no gap in the ordering and no marker: all
 ///         three would be the enumeration oracle docs/plan/07 § The enforcement seam closes by
 ///         answering <c>404</c> rather than <c>403</c>. "You may not see six of these" tells the
 ///         caller six resources exist.

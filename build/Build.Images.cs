@@ -29,20 +29,19 @@
 // The one place a runtime would come back is `ContainerRegistry` left unset, which makes the SDK
 // push into the local daemon. That mode is deliberately not offered — see RequiredRegistry below.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Tools.Git;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
-partial class Build
-{
+partial class Build {
     /// <summary>
     ///     The registry and repository prefix images are pushed to — <c>registry.example.com/cybercloud</c>.
     /// </summary>
@@ -74,7 +73,9 @@ partial class Build
     ///     A cosign private key reference (<c>--key</c>). Absent means keyless, which needs an OIDC
     ///     identity — a CI workload identity, or `cosign login` on a workstation.
     /// </summary>
-    [Parameter("cosign key reference (file:, k8s://, azurekms://…). Absent means keyless signing, which needs an OIDC identity.")]
+    [Parameter(
+        "cosign key reference (file:, k8s://, azurekms://…). Absent means keyless signing, which needs an OIDC identity."
+    )]
     readonly string? CosignKey;
 
     /// <summary>Where SBOMs are written, one per image.</summary>
@@ -102,14 +103,13 @@ partial class Build
     ///     manifests, so an <c>IsAspireHost</c> project is a development entry point that must never
     ///     acquire a published image — an image is exactly the thing somebody would then deploy.
     /// </remarks>
-    IReadOnlyList<AbsolutePath> ImageHostProjects
-    {
-        get
-        {
+    IReadOnlyList<AbsolutePath> ImageHostProjects {
+        get {
             var hosts = RootDirectory / "src" / "Hosts";
 
-            if (!hosts.DirectoryExists())
+            if (!hosts.DirectoryExists()) {
                 return [];
+            }
 
             return hosts
                 .GlobFiles("**/*.csproj")
@@ -120,21 +120,20 @@ partial class Build
         }
     }
 
-    static bool IsAspireHost(AbsolutePath project)
-        => project.ReadAllText().Contains("<IsAspireHost>true</IsAspireHost>", StringComparison.Ordinal);
+    static bool IsAspireHost(AbsolutePath project) =>
+        project.ReadAllText().Contains("<IsAspireHost>true</IsAspireHost>", StringComparison.Ordinal);
 
-    void BuildImages()
-    {
+    void BuildImages() {
         var hosts = ImageHostProjects;
 
-        if (hosts.Count == 0)
-        {
+        if (hosts.Count == 0) {
             // ○, not ✔ — the same distinction Build.Architecture.cs § GateStatus draws and
             // Build.Charts.cs prints over an empty charts/ directory.
             Log.Warning(
                 "Images: inspected 0 host project(s). src/Hosts contains nothing publishable, so no "
                 + "image was built, no SBOM was generated and nothing was signed. That is a pass and "
-                + "it is worth nobody's trust — docs/plan/03 § Hosts lists four hosts. ○, not ✔.");
+                + "it is worth nobody's trust — docs/plan/03 § Hosts lists four hosts. ○, not ✔."
+            );
 
             return;
         }
@@ -142,7 +141,8 @@ partial class Build
         Log.Information(
             "Images: {Count} host(s) — {Hosts}",
             hosts.Count,
-            string.Join(", ", hosts.Select(x => x.NameWithoutExtension)));
+            string.Join(", ", hosts.Select(x => x.NameWithoutExtension))
+        );
 
         var preconditions = new TargetPreconditions(nameof(Images));
 
@@ -151,32 +151,35 @@ partial class Build
             "no container registry is configured",
             "pass --container-registry registry.example.com/cybercloud. Without one the SDK pushes "
             + "into a local daemon, which yields an image id and not the repository digest "
-            + "docs/plan/18 § Platform security requires");
+            + "docs/plan/18 § Platform security requires"
+        );
 
         var syft = preconditions.Tool(
             "syft",
             "install Syft — `brew install syft`, or the release binary from anchore/syft on CI. "
             + "docs/plan/23 § Build, row Images names it specifically, and docs/plan/18 § Platform "
-            + "security makes the SBOM part of the artefact rather than a report about it");
+            + "security makes the SBOM part of the artefact rather than a report about it"
+        );
 
         var cosign = preconditions.Tool(
             "cosign",
             "install cosign — `brew install cosign`, or the release binary from sigstore/cosign on "
             + "CI. docs/plan/18 § Platform security: signatures are verified at admission, so an "
-            + "unsigned image is one the cluster will refuse");
+            + "unsigned image is one the cluster will refuse"
+        );
 
         preconditions.AssertSatisfied(
             "docs/plan/18 § Platform security, row Supply chain: \"Every image built in CI, SBOM "
             + "generated, signed with cosign, verified at admission. A pinned digest, never a tag.\" "
             + "Every clause of that is one of the checks above, and an image missing any of them is "
-            + "an image that cannot be admitted.");
+            + "an image that cannot be admitted."
+        );
 
         SbomDirectory.CreateOrCleanDirectory();
 
         var pushed = new List<(string Host, string Reference, string Digest)>();
 
-        foreach (var host in hosts)
-        {
+        foreach (var host in hosts) {
             var name = host.NameWithoutExtension;
             var repository = ImageRepository(name);
             var digest = PublishContainer(host, repository);
@@ -198,8 +201,7 @@ partial class Build
     ///     restricts repository names to lowercase, and a registry rejects the mixed-case form with a
     ///     404 that reads like a missing repository rather than a naming rule.
     /// </summary>
-    static string ImageRepository(string assemblyName)
-        => assemblyName.Replace('.', '-').ToLowerInvariant();
+    static string ImageRepository(string assemblyName) => assemblyName.Replace('.', '-').ToLowerInvariant();
 
     /// <summary>
     ///     Builds and pushes one image, returning its digest.
@@ -227,8 +229,7 @@ partial class Build
     ///         images that pass every check here and fail to schedule.
     ///     </para>
     /// </remarks>
-    string PublishContainer(AbsolutePath project, string repository)
-    {
+    string PublishContainer(AbsolutePath project, string repository) {
         var tag = ContainerImageTag ?? ShortCommitSha;
 
         // ⚠ Interpolation holes, not a pre-joined string: Nuke's ArgumentStringHandler quotes each
@@ -240,7 +241,8 @@ partial class Build
             + $"-p:ContainerRepository={repository} -p:ContainerImageTag={tag} "
             + "-t:PublishContainer -getProperty:GeneratedContainerDigest",
             workingDirectory: RootDirectory,
-            logOutput: false);
+            logOutput: false
+        );
 
         var text = string.Join('\n', output.Where(x => x.Type == OutputType.Std).Select(x => x.Text));
         var digest = DigestPattern.Match(text);
@@ -249,7 +251,8 @@ partial class Build
             digest.Success,
             $"`dotnet publish -t:PublishContainer` for {project.NameWithoutExtension} reported no "
             + $"sha256 digest. MSBuild said:\n{text}\nWithout a digest there is nothing to sign and "
-            + "nothing to pin, and docs/plan/18 § Platform security allows neither to be skipped.");
+            + "nothing to pin, and docs/plan/18 § Platform security allows neither to be skipped."
+        );
 
         return digest.Value;
     }
@@ -275,26 +278,30 @@ partial class Build
     ///     The SBOM, generated from the pushed image rather than from the project.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Syft is pointed at the registry reference, not at the publish directory, and the two
-    ///     are different documents.</b> The publish directory holds the application's own assemblies;
+    ///     ⚠
+    ///     <b>
+    ///         Syft is pointed at the registry reference, not at the publish directory, and the two
+    ///         are different documents.
+    ///     </b> The publish directory holds the application's own assemblies;
     ///     the image also holds the base image's Debian packages, its OpenSSL, its ICU. docs/plan/18
     ///     § Platform security pairs the SBOM with admission verification and with "an SBOM diff per
     ///     release", and a diff that cannot see a base-image CVE is a diff that misses the class of
     ///     finding SBOMs exist for.
     /// </remarks>
-    void Sbom(Tool syft, string host, string reference)
-    {
+    void Sbom(Tool syft, string host, string reference) {
         var sbom = SbomDirectory / $"{host}.spdx.json";
 
         syft(
             $"scan registry:{reference} --output spdx-json={sbom}",
-            workingDirectory: RootDirectory);
+            workingDirectory: RootDirectory
+        );
 
         Assert.FileExists(
             sbom,
             $"syft reported success for {host} and wrote no SBOM to {sbom}. docs/plan/18 § Platform "
             + "security makes the SBOM an artefact of the build, so a missing one is a failed build "
-            + "and not a missing report.");
+            + "and not a missing report."
+        );
     }
 
     /// <summary>
@@ -313,34 +320,32 @@ partial class Build
     ///         at when the verifier looks, which is the substitution attack the signature is for.
     ///     </para>
     /// </remarks>
-    void Sign(Tool cosign, string host, string reference)
-    {
+    void Sign(Tool cosign, string host, string reference) {
         var key = CosignKey is null ? string.Empty : $"--key {CosignKey} ";
 
         cosign($"sign --yes {key}{reference}", workingDirectory: RootDirectory);
 
         cosign(
             $"attest --yes {key}--type spdxjson --predicate {SbomDirectory / $"{host}.spdx.json"} {reference}",
-            workingDirectory: RootDirectory);
+            workingDirectory: RootDirectory
+        );
     }
 
     /// <summary>
     ///     Writes <see cref="ImageManifestFile" /> and logs the <c>bootstrap.sh</c> line that consumes
     ///     it — the handoff docs/plan/09 § The platform's own cluster describes as phase 0.
     /// </summary>
-    void WriteImageManifest(List<(string Host, string Reference, string Digest)> pushed)
-    {
-        var manifest = new JsonObject
-        {
+    void WriteImageManifest(List<(string Host, string Reference, string Digest)> pushed) {
+        var manifest = new JsonObject {
             ["commit"] = ShortCommitSha,
-            ["images"] = new JsonArray(pushed
-                .Select(x => (JsonNode)new JsonObject
-                {
-                    ["host"] = x.Host,
-                    ["reference"] = x.Reference,
-                    ["digest"] = x.Digest,
-                })
-                .ToArray()),
+            ["images"] = new JsonArray(
+                pushed
+                    .Select(x => (JsonNode)new JsonObject {
+                            ["host"] = x.Host, ["reference"] = x.Reference, ["digest"] = x.Digest
+                        }
+                    )
+                    .ToArray()
+            )
         };
 
         ImageManifestFile.WriteAllText(manifest.ToString());
@@ -348,15 +353,16 @@ partial class Build
         Log.Information(
             "Images: {Count} image(s) pushed by digest, SBOM'd and signed. Manifest: {Manifest}",
             pushed.Count,
-            RootDirectory.GetRelativePathTo(ImageManifestFile));
+            RootDirectory.GetRelativePathTo(ImageManifestFile)
+        );
 
         var silo = pushed.FirstOrDefault(x => string.Equals(x.Host, "CyberCloud.Silo.Host", StringComparison.Ordinal));
 
-        if (silo.Reference is not null)
-        {
+        if (silo.Reference is not null) {
             Log.Information(
                 "Images: the bootstrap this unblocks — ./deploy/bootstrap/bootstrap.sh --image {Reference} --shards <file>",
-                silo.Reference);
+                silo.Reference
+            );
         }
     }
 }

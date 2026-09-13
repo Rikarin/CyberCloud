@@ -85,8 +85,7 @@ sealed class GatewayPipeline {
 
             try {
                 outcome = await stage.RunAsync(context, cancellationToken);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException) {
+            } catch (Exception exception) when (exception is not OperationCanceledException) {
                 // ⚠ The exception goes to the log and the correlation id goes to the caller.
                 // docs/plan/08 § Errors: "A stack trace in an error body is an information leak and
                 // a support-cost multiplier. The correlation id goes in the response header; the
@@ -124,7 +123,8 @@ sealed class GatewayPipeline {
 
         await ResponseWriter.WriteAsync(
             context,
-            outcome ?? GatewayOutcome.Failure(
+            outcome
+            ?? GatewayOutcome.Failure(
                 StatusCodes.Status404NotFound,
                 GatewayErrors.NotFound(http.Request.Path.Value ?? "")
             ),

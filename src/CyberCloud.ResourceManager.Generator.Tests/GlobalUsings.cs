@@ -1,10 +1,10 @@
-global using Shouldly;
-global using System.Text.Json.Nodes;
-
 // The program under test. Aliased rather than named inline because `Program` is also what a
 // Microsoft.Testing.Platform host generates for this assembly, and two of them in scope is a
 // resolution question no reader should have to answer.
+
 global using GeneratorProgram = CyberCloud.ResourceManager.Generator.Program;
+global using Shouldly;
+global using System.Text.Json.Nodes;
 
 // ⚠ Every test in this assembly drives Program.Main in-process, and Main writes to Console.Out and
 // Console.Error. Console is process-global: two tests redirecting it at once would each capture a

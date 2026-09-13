@@ -109,8 +109,9 @@ sealed class ExtensionStore {
         var directory = DirectoryFor(host);
         var path = Path.Combine(directory, IndexFileName);
 
-        if (!File.Exists(path))
+        if (!File.Exists(path)) {
             return new ExtensionStore(directory, []);
+        }
 
         string text;
 
@@ -128,23 +129,27 @@ sealed class ExtensionStore {
             throw new CycClientException(
                 $"'{path}' is not readable JSON, so cyc cannot tell which extensions are installed: {e.Message} "
                 + "Fix or delete the file, then reinstall with 'cyc extension add'.",
-                e);
+                e
+            );
         }
 
-        if (index is null)
+        if (index is null) {
             throw new CycClientException($"'{path}' is empty. Delete it, then reinstall with 'cyc extension add'.");
+        }
 
-        if (!string.Equals(index.Format, SupportedFormat, StringComparison.Ordinal))
+        if (!string.Equals(index.Format, SupportedFormat, StringComparison.Ordinal)) {
             throw new CycClientException(
-                $"'{path}' is format '{index.Format}' and this build of cyc reads format '{SupportedFormat}'. Upgrade cyc.");
+                $"'{path}' is format '{index.Format}' and this build of cyc reads format '{SupportedFormat}'. Upgrade cyc."
+            );
+        }
 
         return new ExtensionStore(directory, [.. index.Extensions]);
     }
 
     /// <summary>One installed extension, or <c>null</c>.</summary>
     /// <param name="name">The verb, without the <see cref="FilePrefix" />.</param>
-    public ExtensionRecord? Find(string name)
-        => records.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+    public ExtensionRecord? Find(string name) =>
+        records.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Where an extension's executable is, installed or not.</summary>
     /// <param name="name">The verb.</param>
@@ -160,8 +165,9 @@ sealed class ExtensionStore {
     ///     <c>PATH</c> for a mechanism this CLI does not have.
     /// </remarks>
     public IReadOnlyList<string> Unregistered() {
-        if (!System.IO.Directory.Exists(Directory))
+        if (!System.IO.Directory.Exists(Directory)) {
             return [];
+        }
 
         var claimed = records.Select(x => FilePrefix + x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -171,7 +177,7 @@ sealed class ExtensionStore {
                 .Select(Path.GetFileName)
                 .Where(x => x is not null && x.Length > FilePrefix.Length && !claimed.Contains(x))
                 .Select(x => x![FilePrefix.Length..])
-                .Order(StringComparer.Ordinal),
+                .Order(StringComparer.Ordinal)
         ];
     }
 
@@ -201,8 +207,9 @@ sealed class ExtensionStore {
     public static IReadOnlyList<string> UnsafeDirectories(CycHost host) {
         ArgumentNullException.ThrowIfNull(host);
 
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows()) {
             return [];
+        }
 
         return [.. new[] { host.StateDirectory, DirectoryFor(host) }.Where(IsSharedWritable)];
     }
@@ -210,8 +217,9 @@ sealed class ExtensionStore {
     static bool IsSharedWritable(string directory) {
         var info = new DirectoryInfo(directory);
 
-        if (!info.Exists)
+        if (!info.Exists) {
             return false;
+        }
 
         return (info.UnixFileMode & (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) != 0;
     }
@@ -236,15 +244,19 @@ sealed class ExtensionStore {
 
         File.Copy(source, destination, overwrite: true);
 
-        if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(destination, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        if (!OperatingSystem.IsWindows()) {
+            File.SetUnixFileMode(
+                destination,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+            );
+        }
 
         var record = new ExtensionRecord {
             Name = name,
             Sha256 = HashOf(destination),
             Size = new FileInfo(destination).Length,
             Source = Path.GetFullPath(source),
-            Installed = DateTimeOffset.UtcNow,
+            Installed = DateTimeOffset.UtcNow
         };
 
         var kept = records.Where(x => !string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -262,13 +274,15 @@ sealed class ExtensionStore {
     /// <param name="name">The verb.</param>
     /// <returns><c>true</c> if the index named it and it is now gone.</returns>
     public bool Remove(string name) {
-        if (Find(name) is not { } record)
+        if (Find(name) is not { } record) {
             return false;
+        }
 
         var path = PathFor(record.Name);
 
-        if (File.Exists(path))
+        if (File.Exists(path)) {
             File.Delete(path);
+        }
 
         records.RemoveAll(x => string.Equals(x.Name, record.Name, StringComparison.OrdinalIgnoreCase));
 
@@ -306,18 +320,22 @@ sealed class ExtensionStore {
     /// <param name="name">The candidate.</param>
     /// <returns><c>true</c> when the name is safe to use as both a verb and a file name.</returns>
     public static bool IsLegalName(string? name) {
-        if (name is not { Length: > 0 and <= 64 })
+        if (name is not { Length: > 0 and <= 64 }) {
             return false;
+        }
 
-        if (name[0] is not (>= 'a' and <= 'z'))
+        if (name[0] is not (>= 'a' and <= 'z')) {
             return false;
+        }
 
-        if (name[^1] == '-')
+        if (name[^1] == '-') {
             return false;
+        }
 
         foreach (var character in name) {
-            if (character is not ((>= 'a' and <= 'z') or (>= '0' and <= '9') or '-'))
+            if (character is not ((>= 'a' and <= 'z') or (>= '0' and <= '9') or '-')) {
                 return false;
+            }
         }
 
         return true;

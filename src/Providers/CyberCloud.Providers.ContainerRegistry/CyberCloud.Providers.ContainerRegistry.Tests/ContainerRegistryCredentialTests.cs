@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.ContainerRegistry.Tests;
 ///     constant that must never appear.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This file exists because of failure class (c), and this row's instance of it is not an
-///     absence — it is a published constant.</b> The three earlier sightings are things that are
+///     ⚠
+///     <b>
+///         This file exists because of failure class (c), and this row's instance of it is not an
+///         absence — it is a published constant.
+///     </b> The three earlier sightings are things that are
 ///     <i>unset</i>: SeaweedFS with no identities file serves anonymous admin, Qdrant's chart leaves
 ///     <c>service.api_key</c> unset, MariaDB's operator generates a root password.
 ///     <c>goharbor/harbor-helm</c>'s <c>values.yaml</c> ships <c>harborAdminPassword: "Harbor12345"</c>
@@ -143,11 +146,12 @@ public sealed class ContainerRegistryCredentialTests {
 
             encoded.ShouldNotBeNullOrEmpty(field);
 
-            Encoding.UTF8.GetString(Convert.FromBase64String(encoded!)).ShouldBe(
-                vault.Peek(path, field),
-                $"the rendered Secret's '{field}' is not the value the vault holds, so the component "
-                + "that reads it authenticates against something the platform cannot hand out"
-            );
+            Encoding.UTF8.GetString(Convert.FromBase64String(encoded!))
+                .ShouldBe(
+                    vault.Peek(path, field),
+                    $"the rendered Secret's '{field}' is not the value the vault holds, so the component "
+                    + "that reads it authenticates against something the platform cannot hand out"
+                );
         }
     }
 
@@ -162,7 +166,8 @@ public sealed class ContainerRegistryCredentialTests {
 
         foreach (var field in ContainerRegistries.CredentialFields) {
             generated.ShouldContainKey(field);
-            generated[field].ShouldAllBe(x => ContainerRegistries.PasswordAlphabet.Contains(x, StringComparison.Ordinal));
+            generated[field].ShouldAllBe(x => ContainerRegistries.PasswordAlphabet.Contains(x, StringComparison.Ordinal)
+            );
         }
     }
 

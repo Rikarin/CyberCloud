@@ -19,7 +19,14 @@ namespace CyberCloud.Cli.Tests;
 sealed class TestHost : IDisposable {
     readonly string stateDirectory;
 
-    TestHost(CycHost host, StringWriter output, StringWriter error, string stateDirectory, List<Uri> browsed, List<ExtensionLaunch> launches) {
+    TestHost(
+        CycHost host,
+        StringWriter output,
+        StringWriter error,
+        string stateDirectory,
+        List<Uri> browsed,
+        List<ExtensionLaunch> launches
+    ) {
         Host = host;
         Output = output;
         Error = error;
@@ -91,7 +98,8 @@ sealed class TestHost : IDisposable {
         TimeProvider? time = null,
         Func<CyberCloudCredentialOptions>? credentialOptions = null,
         Func<ExtensionLaunch, CancellationToken, Task<int>>? launchExtension = null,
-        string? executablePath = null) {
+        string? executablePath = null
+    ) {
         var output = new StringWriter();
         var error = new StringWriter();
         var state = Path.Combine(Path.GetTempPath(), "cyc-tests", Guid.NewGuid().ToString("N"));
@@ -99,8 +107,9 @@ sealed class TestHost : IDisposable {
 
         Directory.CreateDirectory(state);
 
-        if (config is not null)
+        if (config is not null) {
             File.WriteAllText(Path.Combine(state, "config"), config);
+        }
 
         var browsed = new List<Uri>();
         var token = credential ?? new StaticCredential(FixedToken);
@@ -117,24 +126,28 @@ sealed class TestHost : IDisposable {
                     Transport = transport ?? new RefusingTransport(),
                     // ⚠ Zero, so a three-poll operation costs three round trips and no wall-clock
                     // time. The SDK's own suite uses the same setting for the same reason.
-                    PollingInterval = TimeSpan.Zero,
-                }),
+                    PollingInterval = TimeSpan.Zero
+                }
+            ),
             (uri, _) => {
                 browsed.Add(uri);
 
                 return Task.CompletedTask;
-            }) {
-            CreateCredential = () => token,
-            CreateCredentialOptions = credentialOptions ?? (() => new CyberCloudCredentialOptions { TokenCache = TokenCache.CreateInMemory() }),
-            StateDirectory = state,
-            Time = time ?? TimeProvider.System,
-            ExecutablePath = executablePath ?? FixedExecutablePath,
-            LaunchExtension = launchExtension ?? ((launch, _) => {
-                launches.Add(launch);
+            }
+        ) {
+                CreateCredential = () => token,
+                CreateCredentialOptions = credentialOptions
+                    ?? (() => new CyberCloudCredentialOptions { TokenCache = TokenCache.CreateInMemory() }),
+                StateDirectory = state,
+                Time = time ?? TimeProvider.System,
+                ExecutablePath = executablePath ?? FixedExecutablePath,
+                LaunchExtension = launchExtension
+                    ?? ((launch, _) => {
+                            launches.Add(launch);
 
-                return Task.FromResult(0);
-            }),
-        };
+                            return Task.FromResult(0);
+                        })
+            };
 
         var built = new TestHost(host, output, error, state, browsed, launches);
 
@@ -154,8 +167,8 @@ sealed class TestHost : IDisposable {
     /// <summary>Runs a command line with a cancellation token — how a timeout is provoked.</summary>
     /// <param name="cancellationToken">The token.</param>
     /// <param name="arguments">The arguments.</param>
-    public Task<int> RunAsync(CancellationToken cancellationToken, params string[] arguments)
-        => CycApplication.RunAsync(Host, arguments, cancellationToken);
+    public Task<int> RunAsync(CancellationToken cancellationToken, params string[] arguments) =>
+        CycApplication.RunAsync(Host, arguments, cancellationToken);
 
     /// <summary>Parses stdout as JSON, failing the test when it is not a document.</summary>
     public JsonDocument StdoutAsJson() {
@@ -204,20 +217,31 @@ sealed class TestClock(DateTimeOffset now) : TimeProvider {
 /// <summary>A credential that hands out one token and never talks to anything.</summary>
 sealed class StaticCredential(string token) : TokenCredential {
     /// <inheritdoc />
-    public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken = default)
-        => ValueTask.FromResult(new AccessToken(token, DateTimeOffset.UtcNow.AddMinutes(10)));
+    public override ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        ValueTask.FromResult(new AccessToken(token, DateTimeOffset.UtcNow.AddMinutes(10)));
 }
 
 /// <summary>A credential that is never usable — what a machine with no sign-in has.</summary>
 sealed class UnavailableCredential(string message) : TokenCredential {
     /// <inheritdoc />
-    public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken = default)
-        => throw new CredentialUnavailableException(message);
+    public override ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        throw new CredentialUnavailableException(message);
 }
 
 /// <summary>A transport that fails the test if anything reaches it.</summary>
 sealed class RefusingTransport : HttpMessageHandler {
     /// <inheritdoc />
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        => throw new ShouldAssertException($"This test scripted no transport, and {request.Method} {request.RequestUri} was sent.");
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    ) =>
+        throw new ShouldAssertException(
+            $"This test scripted no transport, and {request.Method} {request.RequestUri} was sent."
+        );
 }

@@ -105,10 +105,11 @@ public sealed class DeletePathTests(ResourceManagerCluster cluster) {
             .GetAsync(TestingProvider.V2026, TestingProvider.Pointers2026);
 
         snapshot.IsSuccess.ShouldBeTrue();
-        snapshot.GetValueOrThrow().ProvisioningState.ShouldBe(
-            ProvisioningState.Deleting,
-            "a failed teardown leaves the resource Deleting, not Failed"
-        );
+        snapshot.GetValueOrThrow()
+            .ProvisioningState.ShouldBe(
+                ProvisioningState.Deleting,
+                "a failed teardown leaves the resource Deleting, not Failed"
+            );
     }
 
     [Fact]
@@ -182,8 +183,9 @@ public sealed class DeletePathTests(ResourceManagerCluster cluster) {
         deleted.Error!.Code.ShouldBe(ErrorCode.ScopeLocked);
 
         SwitchableLockResolver.Reset();
-        (await cluster.Index(address).GetAsync()).GetValueOrThrow().State
-            .ShouldBe(IndexEntryState.Confirmed, "a refused delete must not have released the name");
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State
+                .ShouldBe(IndexEntryState.Confirmed, "a refused delete must not have released the name");
     }
 
     [Fact]
@@ -235,8 +237,11 @@ public sealed class DeletePathTests(ResourceManagerCluster cluster) {
     // ── Committed quota comes back. docs/plan/06 § Quota ────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A delete returns exactly what the create committed — not an approximation, and not
-    ///     twice.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A delete returns exactly what the create committed — not an approximation, and not
+    ///         twice.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>

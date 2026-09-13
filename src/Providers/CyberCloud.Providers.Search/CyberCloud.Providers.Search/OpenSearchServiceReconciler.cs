@@ -45,8 +45,11 @@ namespace CyberCloud.Providers.Search;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>UNLIKE <c>CyberCloud.Storage/accounts</c>, THIS SERVICE DOES FINISH WITHOUT PIECE 5,
-///         AND THAT IS A FACT ABOUT THE OPERATOR RATHER THAN ABOUT THIS FILE.</b> The OpenSearch
+///         ⚠
+///         <b>
+///             UNLIKE <c>CyberCloud.Storage/accounts</c>, THIS SERVICE DOES FINISH WITHOUT PIECE 5,
+///             AND THAT IS A FACT ABOUT THE OPERATOR RATHER THAN ABOUT THIS FILE.
+///         </b> The OpenSearch
 ///         operator generates its own admin credential when none is referenced —
 ///         <c>helpers.EnsureAdminCredentialsSecret</c>, quoted at
 ///         <see cref="OpenSearchServices" /> — so the cluster comes up authenticated with a password
@@ -55,8 +58,11 @@ namespace CyberCloud.Providers.Search;
 ///         visibly never converges.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The <c>OpenSearchCluster</c> kind is one a cluster may not serve, and the failure now
-///         names itself.</b> <c>opensearch.opster.io/v1</c> is installed by the platform bundle rather
+///         ⚠
+///         <b>
+///             The <c>OpenSearchCluster</c> kind is one a cluster may not serve, and the failure now
+///             names itself.
+///         </b> <c>opensearch.opster.io/v1</c> is installed by the platform bundle rather
 ///         than by Kubernetes, and a cluster without it answers the apply with a <c>404</c>. Until
 ///         2026-08-12 an unmapped 4xx escaped as <c>k8s.Autorest.HttpOperationException</c> with no
 ///         status code and Orleans reported <c>CodecNotFoundException</c>; it comes back naming the
@@ -64,8 +70,11 @@ namespace CyberCloud.Providers.Search;
 ///         what is missing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
 ///         would let the platform silently overwrite the operator, which writes <c>.status</c> on this
 ///         object — and, the case that matters here, owns <c>spec.confMgmt.smartScaler</c>, which the
 ///         CRD defaults and requires. Forcing that field back would fight the API server itself on
@@ -202,7 +211,7 @@ public sealed class OpenSearchServiceReconciler(IClock clock) : IResourceReconci
             // out of passes waiting for a controller it does not drive. The read-back below is what
             // makes Background safe: this returns Converged when the object is GONE, not when the
             // delete was issued.
-            .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(deleteError);
@@ -238,11 +247,7 @@ public sealed class OpenSearchServiceReconciler(IClock clock) : IResourceReconci
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false,
-                ObservedAt = clock.UtcNow,
-                Summary = "the OpenSearch cluster is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the OpenSearch cluster is absent" };
         }
 
         var found = read.GetValueOrThrow();

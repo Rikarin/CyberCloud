@@ -24,8 +24,11 @@ namespace CyberCloud.ResourceManager.Contracts.Tests;
 public sealed class QuantityParserTests {
     /// <summary>The suffix table is the thing you cannot write a quantity parser without.</summary>
     /// <remarks>
-    ///     ⚠ <b>It matches on <c>Ki</c> rather than on a method name, because a second parser will not
-    ///     be called <c>TryParse</c>.</b> The one that existed was called <c>QuantityBytes</c> and
+    ///     ⚠
+    ///     <b>
+    ///         It matches on <c>Ki</c> rather than on a method name, because a second parser will not
+    ///         be called <c>TryParse</c>.
+    ///     </b> The one that existed was called <c>QuantityBytes</c> and
     ///     returned <see langword="long" />?. What it could not avoid was mapping the fourteen suffixes
     ///     onto their multipliers, and <c>Ki</c> is the one that pins the intent: it is 1024 where
     ///     <c>k</c> is 1000, so a file spelling out that distinction is converting quantities whatever
@@ -44,8 +47,16 @@ public sealed class QuantityParserTests {
 
         var offenders = Directory
             .EnumerateFiles(Path.Combine(RepositoryRoot(), "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(x => !x.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(x => !x.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(x => !x.Contains(
+                    $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                    StringComparison.Ordinal
+                )
+            )
+            .Where(x => !x.Contains(
+                    $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                    StringComparison.Ordinal
+                )
+            )
             .Where(x => Path.GetFileName(x) is not ("KubeQuantity.cs" or "QuantityParserTests.cs"))
             .Where(x => table.IsMatch(File.ReadAllText(x)))
             .Select(x => Path.GetRelativePath(RepositoryRoot(), x))
@@ -98,8 +109,16 @@ public sealed class QuantityParserTests {
 
         var copies = Directory
             .EnumerateFiles(Path.Combine(RepositoryRoot(), "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(x => !x.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(x => !x.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(x => !x.Contains(
+                    $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                    StringComparison.Ordinal
+                )
+            )
+            .Where(x => !x.Contains(
+                    $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                    StringComparison.Ordinal
+                )
+            )
             // ⚠ ChartAnnotationTests is the one allowed copy and it is allowed because it is not a
             // copy: its `(m|k|M|G|Ki|Mi|Gi)?` is a deliberately abbreviated fixture for the
             // `@pattern` emitter, which exists to prove a pattern carrying `|` survives a block that
@@ -107,8 +126,7 @@ public sealed class QuantityParserTests {
             // byte-for-byte on the emitted side, so widening it to the real grammar would be churn in
             // a test about something else.
             .Where(x => Path.GetFileName(x) is not ("QuantityParserTests.cs" or "ChartAnnotationTests.cs"))
-            .SelectMany(
-                x => alternation.Matches(File.ReadAllText(x))
+            .SelectMany(x => alternation.Matches(File.ReadAllText(x))
                     .Select(match => (File: Path.GetRelativePath(RepositoryRoot(), x), match.Value))
             )
             .ToArray();

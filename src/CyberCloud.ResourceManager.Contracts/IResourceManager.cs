@@ -103,8 +103,11 @@ public interface IResourceManager {
     ///         ticks.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It does not run the twelve steps and does not carry a <see cref="WriteTrace" />,
-    ///         which is the same shape <see cref="ReadAsync" /> has.</b> Steps 4 to 11 write, and a
+    ///         ⚠
+    ///         <b>
+    ///             It does not run the twelve steps and does not carry a <see cref="WriteTrace" />,
+    ///             which is the same shape <see cref="ReadAsync" /> has.
+    ///         </b> Steps 4 to 11 write, and a
     ///         listing writes nothing: there is no body to validate, no lock to resolve (a
     ///         <c>ReadOnly</c> lock does not hide a resource), no policy to evaluate, no quota, no
     ///         index claim and no operation. What it does keep is the part of step 1 that is a
@@ -153,8 +156,11 @@ public interface IResourceManager {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A long-running operation, and it used to answer synchronously because it did
-    ///         nothing.</b> The old contract said a restore "does no data-plane work at all: the
+    ///         ⚠
+    ///         <b>
+    ///             A long-running operation, and it used to answer synchronously because it did
+    ///             nothing.
+    ///         </b> The old contract said a restore "does no data-plane work at all: the
     ///         volumes, the PVCs and the memory were never released" — which was true, and was true
     ///         because a soft delete ran no teardown and left the tenant's pods running behind a name
     ///         that answered <c>404</c>. A soft delete now tears the data plane down like any other
@@ -186,8 +192,11 @@ public interface IResourceManager {
     /// <returns>The accepted operation, or the refusal.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>It checks <c>ResourceTypeRegistration.PurgePermission</c> and not the delete
-    ///         permission.</b> docs/plan/08 § Soft delete: Azure puts
+    ///         ⚠
+    ///         <b>
+    ///             It checks <c>ResourceTypeRegistration.PurgePermission</c> and not the delete
+    ///             permission.
+    ///         </b> docs/plan/08 § Soft delete: Azure puts
     ///         <c>deletedVaults/purge/action</c> in Key Vault Contributor's <c>notActions</c>, so "may
     ///         delete" and "may destroy permanently" are separable rights. Checking the delete
     ///         permission here would mean the window protected against nobody who could already delete
@@ -214,12 +223,18 @@ public interface IResourceManager {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS IS THE DECISION docs/plan/08 § Soft delete DEFERRED TO
-    ///         docs/plan/07 § Azure RBAC, AND IT IS THE SECOND OF THE TWO SHAPES THAT SECTION
-    ///         OFFERED.</b> <i>"An expiry is not a request, so there is nobody to authorize it, and
-    ///         <see cref="PurgeAsync" /> checks <c>PurgePermission</c> against a caller. Either the
-    ///         platform gains a system principal, or the purge splits into an authorized front and a
-    ///         mechanism the clock may drive."</i> This is the mechanism. There is no system
+    ///         ⚠
+    ///         <b>
+    ///             THIS IS THE DECISION docs/plan/08 § Soft delete DEFERRED TO
+    ///             docs/plan/07 § Azure RBAC, AND IT IS THE SECOND OF THE TWO SHAPES THAT SECTION
+    ///             OFFERED.
+    ///         </b>
+    ///         <i>
+    ///             "An expiry is not a request, so there is nobody to authorize it, and
+    ///             <see cref="PurgeAsync" /> checks <c>PurgePermission</c> against a caller. Either the
+    ///             platform gains a system principal, or the purge splits into an authorized front and a
+    ///             mechanism the clock may drive."
+    ///         </i> This is the mechanism. There is no system
     ///         principal, and the reason is on <see cref="ExpiredPurgeRequest" />.
     ///     </para>
     ///     <para>
@@ -263,13 +278,19 @@ public interface IResourceManager {
     /// <returns>
     ///     The status, or <see cref="ErrorCode.ResourceNotFound" /> — for an operation that does not
     ///     exist, one belonging to another tenant, and one whose resource the caller may not read,
-    ///     which are the same answer on purpose. docs/plan/07 § The enforcement seam: <b>404, never
-    ///     403</b>.
+    ///     which are the same answer on purpose. docs/plan/07 § The enforcement seam:
+    ///     <b>
+    ///         404, never
+    ///         403
+    ///     </b>.
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This exists because polling is the hot path and the alternative cost a full
-    ///         resource read per poll.</b> docs/plan/10 § Long-running operations gives the endpoint;
+    ///         ⚠
+    ///         <b>
+    ///             This exists because polling is the hot path and the alternative cost a full
+    ///             resource read per poll.
+    ///         </b> docs/plan/10 § Long-running operations gives the endpoint;
     ///         this interface had no method for it, so the gateway built its own reader — correctly
     ///         refusing to decide authorization itself, and therefore asking the only question it
     ///         could: <see cref="ReadAsync" /> on the operation's resource. That is an index-grain
@@ -277,8 +298,11 @@ public interface IResourceManager {
     ///         a nine-minute cluster create that <c>cyc --wait</c> polls continuously.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The gateway still decides nothing, and that property is the constraint this method
-    ///         was written under.</b> The check happens here, in the one seam docs/plan/07 § The
+    ///         ⚠
+    ///         <b>
+    ///             The gateway still decides nothing, and that property is the constraint this method
+    ///             was written under.
+    ///         </b> The check happens here, in the one seam docs/plan/07 § The
     ///         enforcement seam names, against the same <see cref="IResourceAuthorizer" /> and the same
     ///         read permission a <c>GET</c> of the resource would use. What the gateway gains is one
     ///         call instead of two; what it does not gain is a decision.
@@ -399,8 +423,11 @@ public interface IResourceChangedSink {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>An interface here rather than a direct <c>ICheckGrain</c> call, and the reason is the
-///         assembly graph.</b> <c>CyberCloud.ResourceManager.Contracts</c> deliberately does not
+///         ⚠
+///         <b>
+///             An interface here rather than a direct <c>ICheckGrain</c> call, and the reason is the
+///             assembly graph.
+///         </b> <c>CyberCloud.ResourceManager.Contracts</c> deliberately does not
 ///         reference <c>CyberCloud.Authorization.Contracts</c>, so that a provider referencing this
 ///         assembly cannot name <c>ICheckGrain</c> — docs/plan/07 § The enforcement seam,
 ///         <i>"Providers never call the engine."</i> The implementation lives in
@@ -426,8 +453,10 @@ public interface IResourceAuthorizer {
     /// <param name="caller">Who is asking.</param>
     /// <param name="fullyConsistent">
     ///     Whether to bypass every cache. docs/plan/07 § Consistency: <c>true</c> for
-    ///     <i>"deletion, key export, billing changes, anything where a stale allow is a real
-    ///     incident"</i>.
+    ///     <i>
+    ///         "deletion, key export, billing changes, anything where a stale allow is a real
+    ///         incident"
+    ///     </i>.
     /// </param>
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <returns>
@@ -450,8 +479,11 @@ public interface IResourceAuthorizer {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This exists because the write path used to have no step that wrote a tuple, and a
-///         create therefore produced a resource its own creator could not read.</b>
+///         ⚠
+///         <b>
+///             This exists because the write path used to have no step that wrote a tuple, and a
+///             create therefore produced a resource its own creator could not read.
+///         </b>
 ///         <c>CyberCloudSchema</c> gives a resource
 ///         <c>Role(owner, This | From(parent, owner))</c>, so the only thing that makes a resource
 ///         reachable from the role assignments on its group is a
@@ -460,28 +492,43 @@ public interface IResourceAuthorizer {
 ///         end to end now has the step, and this is the seam it calls.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An interface here rather than an <c>ITupleStoreGrain</c> call, for the same reason
-///         <see cref="IResourceAuthorizer" /> is an interface.</b>
+///         ⚠
+///         <b>
+///             An interface here rather than an <c>ITupleStoreGrain</c> call, for the same reason
+///             <see cref="IResourceAuthorizer" /> is an interface.
+///         </b>
 ///         <c>CyberCloud.ResourceManager.Contracts</c> deliberately does not reference
 ///         <c>CyberCloud.Authorization.Contracts</c>, so a provider referencing this assembly cannot
-///         name a tuple type — docs/plan/07 § The enforcement seam, <i>"Providers never call the
-///         engine."</i> A provider that could <i>write</i> tuples would be worse than one that could
+///         name a tuple type — docs/plan/07 § The enforcement seam,
+///         <i>
+///             "Providers never call the
+///             engine."
+///         </i> A provider that could <i>write</i> tuples would be worse than one that could
 ///         read them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>For a LIVE resource the parent is the resource GROUP and not the subscription, and
-///         <c>CyberCloudSchema</c> is what decides that.</b> Its rewrite chain is
+///         ⚠
+///         <b>
+///             For a LIVE resource the parent is the resource GROUP and not the subscription, and
+///             <c>CyberCloudSchema</c> is what decides that.
+///         </b> Its rewrite chain is
 ///         resource → resourceGroup → subscription → tenant: pointing a live resource's <c>parent</c>
 ///         at the subscription would skip the group, and every <c>resourceGroup:…#contributor</c>
 ///         assignment — the second row of docs/plan/07 § Azure RBAC, expressed in it — would grant
 ///         nothing on the resources inside it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A SOFT-DELETED resource is the one exception, and it is an exception because it is no
-///         longer in the group.</b> docs/plan/08 § Soft delete: a soft-deleted resource leaves its
-///         resource group, so <i>"a tuple naming the resource group as its parent asserts a containment
-///         that is no longer true. Preserving it is not the conservative choice, it is the wrong
-///         one."</i> The edge moves to <c>#parent@subscription:{sub}</c> and back on restore — see
+///         ⚠
+///         <b>
+///             A SOFT-DELETED resource is the one exception, and it is an exception because it is no
+///             longer in the group.
+///         </b> docs/plan/08 § Soft delete: a soft-deleted resource leaves its
+///         resource group, so
+///         <i>
+///             "a tuple naming the resource group as its parent asserts a containment
+///             that is no longer true. Preserving it is not the conservative choice, it is the wrong
+///             one."
+///         </i> The edge moves to <c>#parent@subscription:{sub}</c> and back on restore — see
 ///         <see cref="ReparentToSubscriptionAsync" />. The paragraph above is unaffected: skipping the
 ///         group is precisely the intent while the resource is not in one.
 ///     </para>
@@ -559,8 +606,11 @@ public interface IResourceRelationWriter {
     /// <returns>Success, or the failure that stopped it.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Re-parented rather than preserved and rather than dropped, and the two rejected
-    ///         options fail differently.</b> docs/plan/08 § Soft delete: preserving the group edge
+    ///         ⚠
+    ///         <b>
+    ///             Re-parented rather than preserved and rather than dropped, and the two rejected
+    ///             options fail differently.
+    ///         </b> docs/plan/08 § Soft delete: preserving the group edge
     ///         asserts a containment that is no longer true; dropping it leaves the resource
     ///         <i>parentless</i>, which is the failure that made this seam necessary in the first place
     ///         — a resource nobody can see, and a silo lost in that window leaving it that way. Moving
@@ -568,16 +618,22 @@ public interface IResourceRelationWriter {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Who can see a deleted resource becomes who holds subscription-scoped rights</b>,
-    ///         which is deliberate rather than incidental: <i>"exactly who Azure gives
-    ///         <c>deletedVaults/read</c> and <c>purge/action</c> to. A restore is a subscription-scoped
-    ///         operation; the visibility should match."</i>
+    ///         which is deliberate rather than incidental:
+    ///         <i>
+    ///             "exactly who Azure gives
+    ///             <c>deletedVaults/read</c> and <c>purge/action</c> to. A restore is a subscription-scoped
+    ///             operation; the visibility should match."
+    ///         </i>
     ///     </para>
     ///     <para>
     ///         ⚠ <b>This does not drop direct role assignments</b> — that is
     ///         <see cref="DropDirectRoleAssignmentsAsync" />, and the two are separate calls because
     ///         docs/plan/08 makes them separate decisions with different reasons: this one is a
-    ///         modelling answer, that one is a security answer, and <i>"running them together is how
-    ///         this gets decided wrongly"</i>.
+    ///         modelling answer, that one is a security answer, and
+    ///         <i>
+    ///             "running them together is how
+    ///             this gets decided wrongly"
+    ///         </i>.
     ///     </para>
     /// </remarks>
     Task<Result> ReparentToSubscriptionAsync(
@@ -612,13 +668,19 @@ public interface IResourceRelationWriter {
     /// <returns>How many assignments were dropped, or the failure that stopped it.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A security answer and not a modelling one, and Azure's behaviour is the right one
-    ///         to copy: assignments go with the resource and <i>"must be recreated"</i> on
-    ///         recovery.</b> docs/plan/08 § Soft delete: <i>"The recovery window is used after a
-    ///         compromise or after a decommission somebody wants to undo, and those are the cases that
-    ///         decide it. Silently restoring a grant an administrator deliberately removed is an error
-    ///         nobody observes. Making somebody re-grant after a restore is an error everybody observes
-    ///         and can fix in a minute. Take the visible failure."</i>
+    ///         ⚠
+    ///         <b>
+    ///             A security answer and not a modelling one, and Azure's behaviour is the right one
+    ///             to copy: assignments go with the resource and <i>"must be recreated"</i> on
+    ///             recovery.
+    ///         </b> docs/plan/08 § Soft delete:
+    ///         <i>
+    ///             "The recovery window is used after a
+    ///             compromise or after a decommission somebody wants to undo, and those are the cases that
+    ///             decide it. Silently restoring a grant an administrator deliberately removed is an error
+    ///             nobody observes. Making somebody re-grant after a restore is an error everybody observes
+    ///             and can fix in a minute. Take the visible failure."
+    ///         </i>
     ///     </para>
     ///     <para>
     ///         ⚠ <b>There is no inverse, and there deliberately is not one.</b> A restore does not put
@@ -639,8 +701,11 @@ public interface IResourceRelationWriter {
     /// <param name="id">The resource, with <see cref="ResourceId.Id" /> set.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <remarks>
-    ///     ⚠ <b>A separate method because a purge must delete the edge the resource ACTUALLY holds, and
-    ///     by then that is the subscription one.</b> Calling <see cref="UnlinkFromParentAsync" /> would
+    ///     ⚠
+    ///     <b>
+    ///         A separate method because a purge must delete the edge the resource ACTUALLY holds, and
+    ///         by then that is the subscription one.
+    ///     </b> Calling <see cref="UnlinkFromParentAsync" /> would
     ///     build the ordinary subject — the resource group, or the parent resource — delete a tuple that
     ///     is not there, report success, and leave the real edge behind: one row per purged resource,
     ///     forever, pointing at a GUID that names nothing. The failure is silent in both directions,
@@ -655,8 +720,11 @@ public interface IResourceRelationWriter {
 /// <remarks>
 ///     ⚠ <b>This is the seam the drift scan needs and cannot have yet.</b>
 ///     docs/plan/08 § The reconcile loop makes drift detection per-cluster and sources it from the
-///     connection grain's live informer bridge — <i>"an hourly per-cluster reminder diffs labelled
-///     objects against the resource grains that own them"</i>. The <i>diff</i> is pure and is
+///     connection grain's live informer bridge —
+///     <i>
+///         "an hourly per-cluster reminder diffs labelled
+///         objects against the resource grains that own them"
+///     </i>. The <i>diff</i> is pure and is
 ///     implemented and tested; the <i>inventory</i> needs a live informer against a real API server,
 ///     which no in-process test has. So the inventory is this interface, the shipped implementation
 ///     is one that reports nothing and says so, and a cluster-backed one is owed.

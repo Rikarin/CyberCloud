@@ -146,8 +146,7 @@ public sealed record DocumentScope(
     ///     is the same rule <c>DocumentReader.PlaceholdersOf</c> already applies to a resource, and
     ///     it cannot disagree with the URL it fills.
     /// </remarks>
-    public string NamePlaceholder =>
-        DocumentReader.PlaceholdersOf(Path) is [.., var last] ? last : string.Empty;
+    public string NamePlaceholder => DocumentReader.PlaceholdersOf(Path) is [.., var last] ? last : string.Empty;
 
     /// <summary>
     ///     The placeholders that address this scope's ancestors, in template order.
@@ -193,16 +192,22 @@ public sealed record DocumentAction(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The derived surfaces read the <i>document</i>, not the registry, and that is
-///         docs/plan/21 § Generation's rule rather than a convenience.</b> That document says
+///         ⚠
+///         <b>
+///             The derived surfaces read the <i>document</i>, not the registry, and that is
+///             docs/plan/21 § Generation's rule rather than a convenience.
+///         </b> That document says
 ///         <c>Build.Generate</c> walks "the provider registry → OpenAPI 3.1 → the SDK's models,
 ///         clients and pollers" — one hop, so the compatibility gate that protects the published
 ///         OpenAPI protects those four surfaces at once. A CLI generated straight from the registry
 ///         could describe a flag the published contract does not have, and no gate would notice.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ADR-012's fifth surface does not come through here, and that is stated on it rather
-///         than left to be discovered.</b> <see cref="ChartAnnotationEmitter" /> reads the registry,
+///         ⚠
+///         <b>
+///             ADR-012's fifth surface does not come through here, and that is stated on it rather
+///             than left to be discovered.
+///         </b> <see cref="ChartAnnotationEmitter" /> reads the registry,
 ///         because the chart a type renders is <c>ResourceTypeRegistration.Chart</c> and no emitted
 ///         document carries it — there is nothing here to read a pairing back from. It also keeps
 ///         declaration order, which every document deliberately destroys by sorting
@@ -249,23 +254,25 @@ public static class DocumentReader {
             var component = ComponentOf(item);
             var collection = CollectionOf(paths, document, resourceType);
 
-            found.Add(new(
-                resourceType,
-                path.Key,
-                component,
-                (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? [],
-                item["x-cybercloud-display"] as JsonObject ?? [],
-                Flag(item["x-cybercloud-supports-tags"]),
-                Flag(item["x-cybercloud-requires-cluster"]),
-                Text(item["x-cybercloud-cluster-id-pointer"]),
-                Number(item["x-cybercloud-soft-delete-days"]),
-                Text(item["x-cybercloud-purge-permission"]),
-                Text(item["x-cybercloud-purge-protection-pointer"]),
-                ActionsOf(paths, schemas, path.Key, resourceType),
-                Flag(item["get"]?["deprecated"]),
-                collection.Path,
-                collection.Query
-            ));
+            found.Add(
+                new(
+                    resourceType,
+                    path.Key,
+                    component,
+                    (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? [],
+                    item["x-cybercloud-display"] as JsonObject ?? [],
+                    Flag(item["x-cybercloud-supports-tags"]),
+                    Flag(item["x-cybercloud-requires-cluster"]),
+                    Text(item["x-cybercloud-cluster-id-pointer"]),
+                    Number(item["x-cybercloud-soft-delete-days"]),
+                    Text(item["x-cybercloud-purge-permission"]),
+                    Text(item["x-cybercloud-purge-protection-pointer"]),
+                    ActionsOf(paths, schemas, path.Key, resourceType),
+                    Flag(item["get"]?["deprecated"]),
+                    collection.Path,
+                    collection.Query
+                )
+            );
         }
 
         return [.. found.OrderBy(x => x.ResourceType, StringComparer.Ordinal)];
@@ -303,18 +310,20 @@ public static class DocumentReader {
                 item["put"]?["requestBody"]?["content"]?["application/json"]?["schema"]?["$ref"]
             );
 
-            found.Add(new(
-                kind,
-                path.Key,
-                Text(item["x-cybercloud-scope-type"]),
-                item["x-cybercloud-display"] as JsonObject ?? [],
-                // ⚠ The presence of the operation, not the absence of the read-only marker. A
-                // surface asks "may I create one" and the honest answer is whether the document
-                // declares the write.
-                item["put"] is JsonObject,
-                component,
-                (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? []
-            ));
+            found.Add(
+                new(
+                    kind,
+                    path.Key,
+                    Text(item["x-cybercloud-scope-type"]),
+                    item["x-cybercloud-display"] as JsonObject ?? [],
+                    // ⚠ The presence of the operation, not the absence of the read-only marker. A
+                    // surface asks "may I create one" and the honest answer is whether the document
+                    // declares the write.
+                    item["put"] is JsonObject,
+                    component,
+                    (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? []
+                )
+            );
         }
 
         return [.. found.OrderBy(x => x.Path, StringComparer.Ordinal)];
@@ -399,12 +408,14 @@ public static class DocumentReader {
                 continue;
             }
 
-            found.Add(new(
-                name,
-                declared["schema"] is JsonObject schema ? TypeOf(schema) : string.Empty,
-                Text(declared["description"]),
-                Flag(declared["required"])
-            ));
+            found.Add(
+                new(
+                    name,
+                    declared["schema"] is JsonObject schema ? TypeOf(schema) : string.Empty,
+                    Text(declared["description"]),
+                    Flag(declared["required"])
+                )
+            );
         }
 
         return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
@@ -427,14 +438,16 @@ public static class DocumentReader {
                 continue;
             }
 
-            found.Add(new(
-                name,
-                Text(post["x-cybercloud-permission"]),
-                Flag(post["x-cybercloud-secret"]),
-                Flag(post["x-cybercloud-long-running"]),
-                Resolve(schemas, post["requestBody"]?["content"]?["application/json"]?["schema"]),
-                Resolve(schemas, post["responses"]?["200"]?["content"]?["application/json"]?["schema"])
-            ));
+            found.Add(
+                new(
+                    name,
+                    Text(post["x-cybercloud-permission"]),
+                    Flag(post["x-cybercloud-secret"]),
+                    Flag(post["x-cybercloud-long-running"]),
+                    Resolve(schemas, post["requestBody"]?["content"]?["application/json"]?["schema"]),
+                    Resolve(schemas, post["responses"]?["200"]?["content"]?["application/json"]?["schema"])
+                )
+            );
         }
 
         return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
@@ -477,8 +490,7 @@ public static class DocumentReader {
         node is JsonValue value && value.TryGetValue<string>(out var text) ? text : string.Empty;
 
     /// <summary>A node's boolean value, or <see langword="false" />.</summary>
-    public static bool Flag(JsonNode? node) =>
-        node is JsonValue value && value.TryGetValue<bool>(out var flag) && flag;
+    public static bool Flag(JsonNode? node) => node is JsonValue value && value.TryGetValue<bool>(out var flag) && flag;
 
     /// <summary>A node's integer value, or 0.</summary>
     public static int Number(JsonNode? node) =>
@@ -501,8 +513,11 @@ public static class DocumentReader {
     /// </summary>
     /// <param name="path">A path template, as <see cref="DocumentType.Path" /> spells one.</param>
     /// <remarks>
-    ///     ⚠ <b>Read off the template rather than derived a second time from the type path, and that
-    ///     is the point of putting it here.</b> <c>OpenApiEmitter.PathOf</c> is the one place the
+    ///     ⚠
+    ///     <b>
+    ///         Read off the template rather than derived a second time from the type path, and that
+    ///         is the point of putting it here.
+    ///     </b> <c>OpenApiEmitter.PathOf</c> is the one place the
     ///     interleaved grammar of docs/plan/12 § Child resources is turned into a URL — a nested type
     ///     is <c>…/servers/{serversName}/databases/{resourceName}</c>, alternating — and every other
     ///     surface is generated from the <i>document</i> rather than from the registry precisely so a
@@ -540,20 +555,25 @@ public static class DocumentReader {
     /// </summary>
     /// <param name="path">A path template.</param>
     /// <remarks>
-    ///     ⚠ <b>These are the parameters a child's caller has to be able to supply, and until
-    ///     2026-08-12 no derived surface had them.</b> <c>cyc</c> offered four address flags read
+    ///     ⚠
+    ///     <b>
+    ///         These are the parameters a child's caller has to be able to supply, and until
+    ///         2026-08-12 no derived surface had them.
+    ///     </b> <c>cyc</c> offered four address flags read
     ///     from a hard-coded list, so a command for <c>servers/databases</c> could say a database's
     ///     name and never which server; the SDK's collection took <c>(name, data)</c>, so a caller
     ///     could not address one either. Both lost the information without saying so — the flag list
     ///     was simply four long and the method signature simply had two parameters.
     /// </remarks>
-    public static ImmutableArray<string> AncestorPlaceholdersOf(string path) =>
-        [
-            .. PlaceholdersOf(path)
-                .Where(x =>
-                    x is not (TenantPlaceholder or SubscriptionPlaceholder or ResourceGroupPlaceholder
-                        or ResourceNamePlaceholder))
-        ];
+    public static ImmutableArray<string> AncestorPlaceholdersOf(string path) => [
+        .. PlaceholdersOf(path)
+            .Where(x =>
+                x is not (TenantPlaceholder
+                    or SubscriptionPlaceholder
+                    or ResourceGroupPlaceholder
+                    or ResourceNamePlaceholder)
+            )
+    ];
 
     /// <summary>
     ///     Every leaf of a body schema, flattened to <c>(pointer, schema, required)</c> in
@@ -613,7 +633,7 @@ public static class DocumentReader {
 
         return schema["type"] switch {
             JsonArray union => union.Select(Text).FirstOrDefault(x => x is { Length: > 0 } and not "null")
-                               ?? string.Empty,
+                ?? string.Empty,
             var single => Text(single)
         };
     }
@@ -624,7 +644,7 @@ public static class DocumentReader {
         ArgumentNullException.ThrowIfNull(schema);
 
         return schema["type"] is JsonArray union
-               && union.Any(x => string.Equals(Text(x), "null", StringComparison.Ordinal));
+            && union.Any(x => string.Equals(Text(x), "null", StringComparison.Ordinal));
     }
 
     /// <summary>A schema's <c>enum</c> values, in document order.</summary>

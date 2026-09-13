@@ -226,7 +226,7 @@ public sealed class CrossTenantReachabilityTests(TenancyCluster cluster) {
         await Seed(a, "route13");
         await cluster.SubscriptionGrain(a, subscription).CreateAsync("prod");
         (await cluster.SubscriptionGrain(a, subscription)
-            .CreateResourceGroupAsync("secret-rg", "eu-central")).IsSuccess.ShouldBeTrue();
+                .CreateResourceGroupAsync("secret-rg", "eu-central")).IsSuccess.ShouldBeTrue();
 
         var rawKey = cluster.ResourceGroupGrain(a, subscription, "secret-rg")
             .GetGrainId()
@@ -243,7 +243,7 @@ public sealed class CrossTenantReachabilityTests(TenancyCluster cluster) {
         var user = Guid.NewGuid();
 
         (await cluster.EmailIndexGrain(a, "alice@example.com")
-            .TryClaimAsync("alice@example.com", user)).IsSuccess.ShouldBeTrue();
+                .TryClaimAsync("alice@example.com", user)).IsSuccess.ShouldBeTrue();
 
         var rawKey = cluster.EmailIndexGrain(a, "alice@example.com").GetGrainId().Key.ToString()!;
         var attacker = cluster.For(b).GetGrain<IReacherGrain>("res/route14");
@@ -261,10 +261,10 @@ public sealed class CrossTenantReachabilityTests(TenancyCluster cluster) {
         var inB = Guid.NewGuid();
 
         (await cluster.EmailIndexGrain(a, "shared@example.com")
-            .TryClaimAsync("shared@example.com", inA)).IsSuccess.ShouldBeTrue();
+                .TryClaimAsync("shared@example.com", inA)).IsSuccess.ShouldBeTrue();
 
         (await cluster.EmailIndexGrain(b, "shared@example.com")
-            .TryClaimAsync("shared@example.com", inB)).IsSuccess.ShouldBeTrue();
+                .TryClaimAsync("shared@example.com", inB)).IsSuccess.ShouldBeTrue();
 
         (await cluster.EmailIndexGrain(a, "shared@example.com").GetAsync())
             .GetValueOrThrow()

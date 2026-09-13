@@ -9,8 +9,11 @@ namespace CyberCloud.Providers.Search.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE THREE DEFAULTS BELOW WERE READ OFF <c>api/v1/opensearch_types.go</c>'s kubebuilder
-///         markers, and one of them makes equality fail on the FIRST create rather than eventually.</b>
+///         ⚠
+///         <b>
+///             THE THREE DEFAULTS BELOW WERE READ OFF <c>api/v1/opensearch_types.go</c>'s kubebuilder
+///             markers, and one of them makes equality fail on the FIRST create rather than eventually.
+///         </b>
 ///         <c>+kubebuilder:default=9200</c> on <c>GeneralConfig.HttpPort</c> and
 ///         <c>+kubebuilder:default=true</c> on <c>GeneralConfig.SetVMMaxMapCount</c> are ordinary
 ///         structural defaults. <c>ConfMgmt.SmartScaler</c> carries
@@ -20,8 +23,11 @@ namespace CyberCloud.Providers.Search.Tests;
 ///         object on <b>every</b> apply, whatever the body said.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The cluster-backed conformance suite cannot see this, which is why it is asserted
-///         here.</b> <c>ClusterConformanceHarness</c> derives a CRD stub with an <i>open</i> schema
+///         ⚠
+///         <b>
+///             The cluster-backed conformance suite cannot see this, which is why it is asserted
+///             here.
+///         </b> <c>ClusterConformanceHarness</c> derives a CRD stub with an <i>open</i> schema
 ///         from the case's own <c>Objects</c>; a stub has no defaults, so a read-back against it
 ///         returns exactly what was applied and an equality comparison would pass. The failure only
 ///         appears against a cluster with the operator's real definition installed — which is every
@@ -55,11 +61,12 @@ public sealed class OpenSearchMatchesTests {
         // And the status subresource, which the operator owns entirely.
         readBack["status"] = new JsonObject { ["phase"] = "RUNNING", ["availableNodes"] = 6 };
 
-        OpenSearchServices.Matches(readBack.ToJsonString(), body.RootElement).ShouldBeTrue(
-            "an object carrying only the fields the operator's own CRD defaults was reported as "
-            + "drifted. Matches is an equality comparison, and every service would sit in InProgress "
-            + "forever while its cluster was perfectly correct."
-        );
+        OpenSearchServices.Matches(readBack.ToJsonString(), body.RootElement)
+            .ShouldBeTrue(
+                "an object carrying only the fields the operator's own CRD defaults was reported as "
+                + "drifted. Matches is an equality comparison, and every service would sit in InProgress "
+                + "forever while its cluster was perfectly correct."
+            );
     }
 
     [Fact]
@@ -93,13 +100,14 @@ public sealed class OpenSearchMatchesTests {
         var reversed = new JsonArray([.. pools.Reverse().Select(x => x!.DeepClone())]);
         readBack["spec"]!.AsObject()["nodePools"] = reversed;
 
-        OpenSearchServices.Matches(readBack.ToJsonString(), body.RootElement).ShouldBeTrue(
-            "the node pools are compared positionally, so a reordered array reads as drift and the "
-            // ⚠ And the failure would be silent in the worst way: the counts would be compared
-            // across pools, so a three-master five-data cluster could report converged while a
-            // five-master three-data one did not.
-            + "comparison is between two different pools."
-        );
+        OpenSearchServices.Matches(readBack.ToJsonString(), body.RootElement)
+            .ShouldBeTrue(
+                "the node pools are compared positionally, so a reordered array reads as drift and the "
+                // ⚠ And the failure would be silent in the worst way: the counts would be compared
+                // across pools, so a three-master five-data cluster could report converged while a
+                // five-master three-data one did not.
+                + "comparison is between two different pools."
+            );
     }
 
     [Fact]
@@ -115,10 +123,11 @@ public sealed class OpenSearchMatchesTests {
 
         readBack["spec"]!.AsObject().Remove("security");
 
-        OpenSearchServices.Matches(readBack.ToJsonString(), body.RootElement).ShouldBeFalse(
-            "an OpenSearchCluster with no spec.security.tls was reported as converged. The operator "
-            + "generates no certificates for it and the nodes never discover each other."
-        );
+        OpenSearchServices.Matches(readBack.ToJsonString(), body.RootElement)
+            .ShouldBeFalse(
+                "an OpenSearchCluster with no spec.security.tls was reported as converged. The operator "
+                + "generates no certificates for it and the nodes never discover each other."
+            );
     }
 
     [Fact]
@@ -140,20 +149,17 @@ public sealed class OpenSearchMatchesTests {
         // from the desired array; a loop that only checked "every desired pool is present and
         // correct" would report Converged while a coordinating StatefulSet was still running, still
         // holding pods, and still being billed for by the meters that no longer count it.
-        using var wanted = JsonDocument.Parse(
-            OpenSearchServices.Body(ClusterId, coordinatingNodes: 0)
-        );
+        using var wanted = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, coordinatingNodes: 0));
 
-        using var previous = JsonDocument.Parse(
-            OpenSearchServices.Body(ClusterId, coordinatingNodes: 2)
-        );
+        using var previous = JsonDocument.Parse(OpenSearchServices.Body(ClusterId, coordinatingNodes: 2));
 
         var stale = OpenSearchServices.ClusterJson("logs", previous.RootElement);
 
-        OpenSearchServices.Matches(stale, wanted.RootElement).ShouldBeFalse(
-            "an object still carrying a coordinating pool the desired body no longer asks for was "
-            + "reported as converged."
-        );
+        OpenSearchServices.Matches(stale, wanted.RootElement)
+            .ShouldBeFalse(
+                "an object still carrying a coordinating pool the desired body no longer asks for was "
+                + "reported as converged."
+            );
     }
 
     [Fact]

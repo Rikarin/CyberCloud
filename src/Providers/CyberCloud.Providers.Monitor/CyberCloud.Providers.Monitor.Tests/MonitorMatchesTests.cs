@@ -11,15 +11,24 @@ namespace CyberCloud.Providers.Monitor.Tests;
 ///     <para>
 ///         ⚠ <b>Failure class (b), and the CRD is not where the answer is on this type.</b> Three
 ///         families argue containment from CRD defaulting, one from a mutating webhook, one from a
-///         controller writing back into <c>.spec</c>. Two of this type's three objects are <b>core
-///         kinds</b> — there is no CRD and no operator — so what forces containment is the <b>API
-///         server itself</b>: <c>metadata.creationTimestamp</c>, <c>uid</c>, <c>resourceVersion</c>,
+///         controller writing back into <c>.spec</c>. Two of this type's three objects are
+///         <b>
+///             core
+///             kinds
+///         </b> — there is no CRD and no operator — so what forces containment is the
+///         <b>
+///             API
+///             server itself
+///         </b>: <c>metadata.creationTimestamp</c>, <c>uid</c>, <c>resourceVersion</c>,
 ///         <c>managedFields</c> and the seven labels <c>KubeCommandBuilder</c> injects all come back
 ///         on a read that the render never wrote.
 ///     </para>
 ///     <para>
-///         ⚠ <b>And unlike every earlier sighting, the conformance harness is NOT blind to this
-///         one.</b> The equality mistake was measured against both halves rather than argued: the
+///         ⚠
+///         <b>
+///             And unlike every earlier sighting, the conformance harness is NOT blind to this
+///             one.
+///         </b> The equality mistake was measured against both halves rather than argued: the
 ///         cluster-backed suite fails on it because a real API server adds all five metadata fields,
 ///         and the Docker-free suite fails on it too because <c>KubeCommandBuilder</c> has already
 ///         added the seven labels by the time <c>FakeKubeCluster</c> echoes the apply back. Every
@@ -47,7 +56,8 @@ public sealed class MonitorMatchesTests {
             MonitorWorkspaces.RowJson(Address, body.RootElement),
             Address,
             body.RootElement
-        ).ShouldBeTrue();
+        )
+            .ShouldBeTrue();
     }
 
     [Fact]
@@ -66,19 +76,19 @@ public sealed class MonitorMatchesTests {
         metadata["resourceVersion"] = "44821";
         metadata["creationTimestamp"] = "2026-08-18T12:00:00Z";
         metadata["namespace"] = "22222222222242228222222222222222-prod";
-        metadata["managedFields"] = new JsonArray {
-            new JsonObject { ["manager"] = "cybercloud", ["operation"] = "Apply" }
-        };
+        metadata["managedFields"] =
+            new JsonArray { new JsonObject { ["manager"] = "cybercloud", ["operation"] = "Apply" } };
 
         var labels = metadata["labels"]!.AsObject();
         labels["cybercloud.io/tenant-id"] = Address.TenantId.ToString("N");
         labels["cybercloud.io/managed-by"] = "cybercloud";
 
-        MonitorWorkspaces.Matches(document.ToJsonString(), Address, body.RootElement).ShouldBeTrue(
-            "an object carrying only what an API server and the command builder add no longer "
-            + "matches. Matches is CONTAINMENT: an equality comparison here never matches on the "
-            + "first read-back, and the workspace never converges."
-        );
+        MonitorWorkspaces.Matches(document.ToJsonString(), Address, body.RootElement)
+            .ShouldBeTrue(
+                "an object carrying only what an API server and the command builder add no longer "
+                + "matches. Matches is CONTAINMENT: an equality comparison here never matches on the "
+                + "first read-back, and the workspace never converges."
+            );
     }
 
     [Fact]
@@ -140,7 +150,8 @@ public sealed class MonitorMatchesTests {
             MonitorWorkspaces.KeySecretJson("prod", "AbCdEf123456"),
             Address,
             body.RootElement
-        ).ShouldBeTrue();
+        )
+            .ShouldBeTrue();
 
         var empty = JsonNode.Parse(MonitorWorkspaces.KeySecretJson("prod", "AbCdEf123456"))!.AsObject();
         empty["data"]!.AsObject().Remove("ingestKey");
@@ -159,7 +170,8 @@ public sealed class MonitorMatchesTests {
             new JsonObject { ["kind"] = "Deployment", ["spec"] = new JsonObject() }.ToJsonString(),
             Address,
             body.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
 
         // Including a document with no kind at all: all three renders write their own, so a body
         // without one has been neither rendered here nor returned by an API server.
@@ -167,7 +179,8 @@ public sealed class MonitorMatchesTests {
             new JsonObject { ["data"] = new JsonObject() }.ToJsonString(),
             Address,
             body.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
     }
 
     [Fact]

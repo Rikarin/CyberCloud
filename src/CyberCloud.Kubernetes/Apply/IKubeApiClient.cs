@@ -110,8 +110,11 @@ public interface IKubeApiClient : IDisposable {
     ///         of it, so the ambiguity is removed here rather than left to each caller.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Subresources and kinds that cannot be listed are excluded, and both exclusions
-    ///         are on evidence the API server gives rather than on a name.</b> A subresource is
+    ///         ⚠
+    ///         <b>
+    ///             Subresources and kinds that cannot be listed are excluded, and both exclusions
+    ///             are on evidence the API server gives rather than on a name.
+    ///         </b> A subresource is
     ///         discovered as <c>pods/log</c> — a name with a slash — and addressing it as a
     ///         collection is a <c>404</c>. A resource whose <c>verbs</c> omit <c>list</c>
     ///         (<c>bindings</c>, the <c>*accessreviews</c>) is create-only and answers <c>405</c>.
@@ -119,8 +122,11 @@ public interface IKubeApiClient : IDisposable {
     ///         absence could be mistaken for emptiness.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Two kinds ARE listed twice on every cluster and that is not this method's to
-    ///         fix</b>: <c>v1 Event</c> and <c>events.k8s.io/v1 Event</c> are different groups over
+    ///         ⚠
+    ///         <b>
+    ///             Two kinds ARE listed twice on every cluster and that is not this method's to
+    ///             fix
+    ///         </b>: <c>v1 Event</c> and <c>events.k8s.io/v1 Event</c> are different groups over
     ///         the same storage. They are different <see cref="GroupVersionKind" />s by every rule
     ///         available here, and the caller that cares is the one that knows an Event is not
     ///         evidence of occupancy.

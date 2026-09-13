@@ -41,8 +41,8 @@ sealed class CycInvocation {
 
     /// <summary>Builds the SDK client for this invocation.</summary>
     /// <param name="tenantId">The tenant to authenticate against, or <c>null</c> for the credential's own.</param>
-    public CyberCloudClient CreateClient(string? tenantId)
-        => Host.CreateClient(new CycClientRequest(Settings.Endpoint, ApiVersion, tenantId));
+    public CyberCloudClient CreateClient(string? tenantId) =>
+        Host.CreateClient(new CycClientRequest(Settings.Endpoint, ApiVersion, tenantId));
 
     /// <summary>
     ///     Applies <c>--query</c> and writes the answer to stdout.
@@ -60,7 +60,8 @@ sealed class CycInvocation {
     /// </summary>
     /// <param name="line">The line. ⚠ Never build one out of a header value — use <see cref="Redaction" />.</param>
     public void Trace(string line) {
-        if (Globals.Verbose)
+        if (Globals.Verbose) {
             Console.Note("cyc: " + line);
+        }
     }
 }

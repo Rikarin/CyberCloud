@@ -22,8 +22,11 @@ namespace CyberCloud.Communication;
 ///         unparseable one means our own code did.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every grain here is a <see cref="GrainKeyKind.Resource" /> key, including the two
-///         that are not resources.</b> <see cref="CommunicationGrainKeys" /> says why and what it
+///         ⚠
+///         <b>
+///             Every grain here is a <see cref="GrainKeyKind.Resource" /> key, including the two
+///             that are not resources.
+///         </b> <see cref="CommunicationGrainKeys" /> says why and what it
 ///         costs. The consequence for this type is that <see cref="ResourceOf" /> cannot tell a message
 ///         grain's key from a service grain's — so it checks the shape and nothing more, and each
 ///         grain learns what it is from its own state rather than from its key. The one thing the

@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Tests;
 ///     The three flags that had no schema consequence, and now have one.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><c>SupportsTags</c>, <c>RequiresCluster</c> and <c>SupportsSoftDelete</c> were booleans
-///     the registry recorded and nothing checked</b>, which is the shape of every "the code and the
+///     ⚠
+///     <b>
+///         <c>SupportsTags</c>, <c>RequiresCluster</c> and <c>SupportsSoftDelete</c> were booleans
+///         the registry recorded and nothing checked
+///     </b>, which is the shape of every "the code and the
 ///     document disagree" bug. Two of them now fail loudly; the third is documented as undelivered
 ///     rather than implied. Each case below is the failure that used to be silent.
 /// </remarks>
@@ -23,10 +26,12 @@ public sealed class RegistryDeclarationTests {
         ProviderRegistry.Build([new Provider(describe)]);
 
     static ResourceSchema WithCluster() =>
-        ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested),
-            new("/properties/clusterId", SchemaKind.Text, Required: true) { Format = SchemaFormat.Uuid }
-        ]);
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested),
+                new("/properties/clusterId", SchemaKind.Text, Required: true) { Format = SchemaFormat.Uuid }
+            ]
+        );
 
     // ── RequiresCluster ────────────────────────────────────────────────────────────────────────
 
@@ -36,11 +41,11 @@ public sealed class RegistryDeclarationTests {
         // type started cleanly, accepted every PUT, answered 202, and then failed at reconcile time
         // for each resource in turn — the worst place to find out, because the caller has already
         // been told the write was accepted.
-        var thrown = Should.Throw<InvalidOperationException>(
-            () => Build(b => b
-                .ResourceType("orphans")
-                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
-                .RequiresCluster())
+        var thrown = Should.Throw<InvalidOperationException>(() => Build(b => b
+                    .ResourceType("orphans")
+                    .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+                    .RequiresCluster()
+            )
         );
 
         thrown.Message.ShouldContain("/properties/clusterId");
@@ -49,14 +54,18 @@ public sealed class RegistryDeclarationTests {
 
     [Fact]
     public void AnOptionalClusterIdIsRefusedBecauseItIsTheSameFailureOneStepLater() {
-        var optional = ResourceSchema.Of([
-            new("/properties", SchemaKind.Nested),
-            new("/properties/clusterId", SchemaKind.Text)
-        ]);
+        var optional = ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested),
+                new("/properties/clusterId", SchemaKind.Text)
+            ]
+        );
 
-        Should.Throw<InvalidOperationException>(
-                () => Build(b => b.ResourceType("loose").ApiVersion("2026-08-01", optional).RequiresCluster())
+        Should.Throw<InvalidOperationException>(() => Build(b => b.ResourceType("loose")
+                    .ApiVersion("2026-08-01", optional)
+                    .RequiresCluster()
             )
+        )
             .Message.ShouldContain("required string");
     }
 
@@ -64,22 +73,23 @@ public sealed class RegistryDeclarationTests {
     public void EveryApiVersionIsChecked() {
         // An api-version is served forever, so a type that dropped the property in a later version
         // would still be reachable at the earlier one — and the manager reads one pointer for both.
-        Should.Throw<InvalidOperationException>(
-                () => Build(b => b
+        Should.Throw<InvalidOperationException>(() => Build(b => b
                     .ResourceType("drifting")
                     .ApiVersion("2026-08-01", WithCluster())
                     .ApiVersion("2027-01-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
-                    .RequiresCluster())
+                    .RequiresCluster()
             )
+        )
             .Message.ShouldContain("2027-01-01");
     }
 
     [Fact]
     public void ADeclaredPointerIsCarriedOntoTheRegistrationSoTheManagerReadsItRatherThanAConstant() {
         var registry = Build(b => b
-            .ResourceType("placed")
-            .ApiVersion("2026-08-01", WithCluster())
-            .RequiresCluster());
+                .ResourceType("placed")
+                .ApiVersion("2026-08-01", WithCluster())
+                .RequiresCluster()
+        );
 
         registry.TryGetType(new("CyberCloud.Declaring", "placed"), out var registration).ShouldBeTrue();
         registration.RequiresCluster.ShouldBeTrue();
@@ -89,8 +99,9 @@ public sealed class RegistryDeclarationTests {
     [Fact]
     public void ATypeWithNoClusterCarriesNoPointerAtAll() {
         var registry = Build(b => b
-            .ResourceType("clusterless")
-            .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)])));
+                .ResourceType("clusterless")
+                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+        );
 
         registry.TryGetType(new("CyberCloud.Declaring", "clusterless"), out var registration).ShouldBeTrue();
         // A DNS zone, a mail domain, a role assignment: empty rather than the default, so that
@@ -103,9 +114,10 @@ public sealed class RegistryDeclarationTests {
         var elsewhere = ResourceSchema.Of([new("/clusterRef", SchemaKind.Text, Required: true)]);
 
         var registry = Build(b => b
-            .ResourceType("elsewhere")
-            .ApiVersion("2026-08-01", elsewhere)
-            .RequiresCluster("/clusterRef"));
+                .ResourceType("elsewhere")
+                .ApiVersion("2026-08-01", elsewhere)
+                .RequiresCluster("/clusterRef")
+        );
 
         registry.TryGetType(new("CyberCloud.Declaring", "elsewhere"), out var registration).ShouldBeTrue();
         registration.ClusterIdPointer.ShouldBe("/clusterRef");
@@ -117,10 +129,10 @@ public sealed class RegistryDeclarationTests {
         // others, and an empty pointer list means "project the whole superset" downstream — the escape
         // hatch the delete path needs. A body with nothing readable would therefore return everything
         // it meant to withhold, and silently. Silo start is the cheap place to find that.
-        var thrown = Should.Throw<ArgumentException>(
-            () => Build(b => b
-                .ResourceType("allSecret")
-                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/adminPassword", SchemaKind.Text, Secret: true)])))
+        var thrown = Should.Throw<ArgumentException>(() => Build(b => b
+                    .ResourceType("allSecret")
+                    .ApiVersion("2026-08-01", ResourceSchema.Of([new("/adminPassword", SchemaKind.Text, Secret: true)]))
+            )
         );
 
         thrown!.Message.ShouldContain("Every property of");
@@ -134,18 +146,21 @@ public sealed class RegistryDeclarationTests {
         // secret material by definition. An action response is returned by its handler and never goes
         // through the read projection, so the rule that governs a body does not reach it.
         var registry = Build(b => b
-            .ResourceType("keyed")
-            .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
-            .Action(
-                "listKeys",
-                ActionKind.Post,
-                "listKeys",
-                secret: true,
-                response: ResourceSchema.Of([
-                    new("/primary", SchemaKind.Text, Required: true, Secret: true),
-                    new("/secondary", SchemaKind.Text, Required: true, Secret: true)
-                ])
-            ));
+                .ResourceType("keyed")
+                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+                .Action(
+                    "listKeys",
+                    ActionKind.Post,
+                    "listKeys",
+                    secret: true,
+                    response: ResourceSchema.Of(
+                        [
+                            new("/primary", SchemaKind.Text, Required: true, Secret: true),
+                            new("/secondary", SchemaKind.Text, Required: true, Secret: true)
+                        ]
+                    )
+                )
+        );
 
         registry.TryGetType(new("CyberCloud.Declaring", "keyed"), out var registration).ShouldBeTrue();
         registration.Actions.Single(x => x.Name == "listKeys").Response!.Properties.Length.ShouldBe(2);
@@ -169,8 +184,9 @@ public sealed class RegistryDeclarationTests {
         // ⚠ `default(DisplayMetadata)` skips the constructor's defaults, so every string would be
         // null and IsEmpty — the first thing anything asks — would throw. It is normalised on read.
         var registry = Build(b => b
-            .ResourceType("anonymous")
-            .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)])));
+                .ResourceType("anonymous")
+                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+        );
 
         registry.TryGetType(new("CyberCloud.Declaring", "anonymous"), out var registration).ShouldBeTrue();
         registration.Display.IsEmpty.ShouldBeTrue();
@@ -179,13 +195,13 @@ public sealed class RegistryDeclarationTests {
 
     [Fact]
     public void ATypeMayNotBeNamedTwice() =>
-        Should.Throw<InvalidOperationException>(
-                () => Build(b => b
+        Should.Throw<InvalidOperationException>(() => Build(b => b
                     .ResourceType("twice")
                     .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
                     .Display("One", "Ones")
-                    .Display("Two", "Twos"))
+                    .Display("Two", "Twos")
             )
+        )
             .Message.ShouldContain("named twice");
 
     // ── Action schemas ─────────────────────────────────────────────────────────────────────────
@@ -229,17 +245,20 @@ public sealed class RegistryDeclarationTests {
     [InlineData("purge")]
     [InlineData("Restore")]
     public void AProviderMayNotDeclareEitherOfTheTwoActionsThePlatformOwns(string reserved) =>
-        Should.Throw<ArgumentException>(
-                () => Build(b => b
+        Should.Throw<ArgumentException>(() => Build(b => b
                     .ResourceType("reserving")
                     .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
-                    .Action(reserved, ActionKind.Post, "write"))
+                    .Action(reserved, ActionKind.Post, "write")
             )
+        )
             .Message.ShouldContain("is reserved");
 
     /// <summary>
-    ///     ⚠ <b>Declaring a window is what gives the type its two actions — and therefore its two
-    ///     HTTP routes.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Declaring a window is what gives the type its two actions — and therefore its two
+    ///         HTTP routes.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -259,11 +278,12 @@ public sealed class RegistryDeclarationTests {
     [Fact]
     public void ATypeWithAWindowGetsRestoreAndPurgeAndATypeWithoutOneGetsNeither() {
         var withWindow = Build(b => b
-            .ResourceType("parkable")
-            .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
-            .Permissions("look", "change", "remove")
-            .Action("restart", ActionKind.Post, "change")
-            .SupportsSoftDelete(7, "destroy"));
+                .ResourceType("parkable")
+                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+                .Permissions("look", "change", "remove")
+                .Action("restart", ActionKind.Post, "change")
+                .SupportsSoftDelete(7, "destroy")
+        );
 
         withWindow.TryGetType(new("CyberCloud.Declaring", "parkable"), out var parkable).ShouldBeTrue();
 
@@ -282,9 +302,10 @@ public sealed class RegistryDeclarationTests {
         purge.LongRunning.ShouldBeTrue();
 
         var without = Build(b => b
-            .ResourceType("goesForGood")
-            .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
-            .Action("restart", ActionKind.Post, "write"));
+                .ResourceType("goesForGood")
+                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+                .Action("restart", ActionKind.Post, "write")
+        );
 
         without.TryGetType(new("CyberCloud.Declaring", "goesForGood"), out var gone).ShouldBeTrue();
         gone.Actions.Select(x => x.Name).ShouldBe(["restart"]);

@@ -14,20 +14,28 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///         docs/plan/21 § The .NET SDK fixes the shape — <c>{Type}Resource</c> /
 ///         <c>{Type}Collection</c> / <c>{Type}Data</c> from <c>Azure.ResourceManager</c>,
 ///         <c>Operation&lt;T&gt;</c> + <c>WaitUntil</c> from <c>Azure.Core</c>, and
-///         <c>GetProgressAsync()</c>, which is ours because <i>"Azure's LROs expose no progress; ours
-///         do and the SDK should not hide it"</i>.
+///         <c>GetProgressAsync()</c>, which is ours because
+///         <i>
+///             "Azure's LROs expose no progress; ours
+///             do and the SDK should not hide it"
+///         </i>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Half of the SDK is hand-written and none of it is here.</b> docs/plan/21 § Generation:
-///         <i>"Hand-written on top: the credential types, the pipeline policies, the convenience
-///         methods … and the tests. Everything else is regenerated per release and never edited."</i>
+///         <i>
+///             "Hand-written on top: the credential types, the pipeline policies, the convenience
+///             methods … and the tests. Everything else is regenerated per release and never edited."
+///         </i>
 ///         This emitter produces the "everything else" and produces <c>partial</c> types throughout,
 ///         so the hand-written half extends the generated one in the same type rather than wrapping
 ///         it — a wrapper is a second surface with a second set of names.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The output is checked in, is in no <c>.csproj</c>, and IS NOW COMPILED ANYWAY —
-///         issue #73.</b> Until 2026-09-05 this paragraph said the file's absence from a project was
+///         ⚠
+///         <b>
+///             The output is checked in, is in no <c>.csproj</c>, and IS NOW COMPILED ANYWAY —
+///             issue #73.
+///         </b> Until 2026-09-05 this paragraph said the file's absence from a project was
 ///         "a stated limitation rather than an oversight", and the limitation it stated was real: the
 ///         clients name <c>Response&lt;T&gt;</c>, <c>Operation&lt;T&gt;</c>, <c>WaitUntil</c> and
 ///         <c>AsyncPageable&lt;T&gt;</c>, which are <c>CyberCloud.Sdk</c>'s (the 2026-08-11 decision to
@@ -99,7 +107,9 @@ public static class SdkEmitter {
 
         built.Append("\n/// <summary>The api-version every client in this file sends.</summary>\n")
             .Append("public static class GeneratedApiVersion {\n")
-            .Append("    /// <summary>⚠ A date, immutable, and there is no 'latest' — docs/plan/10 § API versioning.</summary>\n")
+            .Append(
+                "    /// <summary>⚠ A date, immutable, and there is no 'latest' — docs/plan/10 § API versioning.</summary>\n"
+            )
             .Append("    public const string Value = ")
             .Append(Quote(version))
             .Append(";\n}\n");
@@ -132,14 +142,20 @@ public static class SdkEmitter {
     ///         <c>DatabasesResource</c> is ugly on purpose: it is visible pressure to declare one.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Collisions are resolved by prefixing the provider, and only for the colliding
-    ///         types.</b> docs/plan/03 § Providers plans a <c>DBforPostgreSQL/servers</c> and a
+    ///         ⚠
+    ///         <b>
+    ///             Collisions are resolved by prefixing the provider, and only for the colliding
+    ///             types.
+    ///         </b> docs/plan/03 § Providers plans a <c>DBforPostgreSQL/servers</c> and a
     ///         <c>DBforMySQL/servers</c>; prefixing every type would give the other eighteen providers
     ///         names nobody wants to type, and prefixing none would give two types one class.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The provider prefix cannot separate two colliding types in the <i>same</i>
-    ///         namespace, so the result is checked rather than assumed.</b> A
+    ///         ⚠
+    ///         <b>
+    ///             The provider prefix cannot separate two colliding types in the <i>same</i>
+    ///             namespace, so the result is checked rather than assumed.
+    ///         </b> A
     ///         <c>Streaming/kafkaClusters/topics</c> and a <c>Streaming/kafkaTopics</c> that both
     ///         declare the display name <c>Topic</c> both resolve to <c>StreamingTopic</c> — the
     ///         prefix is the same because the namespace is. That produced two C# classes with one
@@ -229,24 +245,33 @@ public static class SdkEmitter {
                 continue;
             }
 
-            built.Append('\n').Append(indent).Append("/// <summary>The values ")
+            built.Append('\n')
+                .Append(indent)
+                .Append("/// <summary>The values ")
                 .Append(Escape(leaf.JsonPointer))
                 .Append(" accepts. ⚠ Closed: the write path refuses anything else.</summary>\n")
-                .Append(indent).Append("public enum ")
+                .Append(indent)
+                .Append("public enum ")
                 .Append(naming.NameOf(leaf))
                 .Append(" {\n")
-                .Append(indent).Append("    /// <summary>Never assigned. Not a value the API accepts.</summary>\n")
-                .Append(indent).Append("    Unknown = 0")
+                .Append(indent)
+                .Append("    /// <summary>Never assigned. Not a value the API accepts.</summary>\n")
+                .Append(indent)
+                .Append("    Unknown = 0")
                 .Append(values.IsEmpty ? "\n" : ",\n");
 
             for (var i = 0; i < values.Length; i++) {
-                built.Append('\n').Append(indent).Append("    /// <summary>")
+                built.Append('\n')
+                    .Append(indent)
+                    .Append("    /// <summary>")
                     .Append(Escape(values[i]))
                     .Append("</summary>\n")
-                    .Append(indent).Append("    [JsonStringEnumMemberName(")
+                    .Append(indent)
+                    .Append("    [JsonStringEnumMemberName(")
                     .Append(Quote(values[i]))
                     .Append(")]\n")
-                    .Append(indent).Append("    ")
+                    .Append(indent)
+                    .Append("    ")
                     .Append(Pascal(values[i]))
                     .Append(" = ")
                     .Append((i + 1).ToString(CultureInfo.InvariantCulture))
@@ -269,11 +294,17 @@ public static class SdkEmitter {
     ///     "disambiguate only what collides" rule <c>CliEmitter.FlagsOf</c> applies to flag names.
     /// </param>
     /// <remarks>
-    ///     ⚠ <b>THIS EXISTS BECAUSE THE NAME WAS <c>model + Pascal(leaf.Name)</c> AND THAT PRODUCED A
-    ///     FILE THAT DOES NOT COMPILE.</b> <c>CyberCloud.Cache/redis</c> declares <c>mode</c> at
+    ///     ⚠
+    ///     <b>
+    ///         THIS EXISTS BECAUSE THE NAME WAS <c>model + Pascal(leaf.Name)</c> AND THAT PRODUCED A
+    ///         FILE THAT DOES NOT COMPILE.
+    ///     </b> <c>CyberCloud.Cache/redis</c> declares <c>mode</c> at
     ///     <c>/properties/mode</c> and again at <c>/properties/persistence/mode</c>, and both are
-    ///     closed sets — so <c>generated/sdk/2026-08-01.cs</c> declared <c>public enum
-    ///     ValkeyCacheMode</c> twice and two properties referred to it. That is <c>CS0101</c> in
+    ///     closed sets — so <c>generated/sdk/2026-08-01.cs</c> declared
+    ///     <c>
+    /// public enum
+    ///     ValkeyCacheMode
+    ///     </c> twice and two properties referred to it. That is <c>CS0101</c> in
     ///     whatever consumes the SDK, it was checked in, and every gate in this repository was green
     ///     over it: nothing here compiled the generated file. Found by running <c>tsc</c> over the
     ///     TypeScript client, which has the same shape and a compiler that was actually run — and
@@ -314,16 +345,22 @@ public static class SdkEmitter {
     /// </param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS EXISTS BECAUSE THE NAME WAS <c>Pascal(leaf.Name)</c> AND THAT PRODUCED A
-    ///         FILE THAT DOES NOT COMPILE — issue #73, found on 2026-09-05 by the gate that issue
-    ///         asked for, on its first run.</b> The body of a resource is FLATTENED onto one class
+    ///         ⚠
+    ///         <b>
+    ///             THIS EXISTS BECAUSE THE NAME WAS <c>Pascal(leaf.Name)</c> AND THAT PRODUCED A
+    ///             FILE THAT DOES NOT COMPILE — issue #73, found on 2026-09-05 by the gate that issue
+    ///             asked for, on its first run.
+    ///         </b> The body of a resource is FLATTENED onto one class
     ///         (see the ⚠ on <see cref="AppendMember" />), so <c>/properties/mode</c> and
     ///         <c>/properties/persistence/mode</c> both became <c>public … Mode { get; set; }</c> on
     ///         <c>ValkeyCacheData</c>. That is <c>CS0102</c>, and fourteen duplicated names were
     ///         checked in over eight declaring types — <c>ValkeyCacheData.Mode</c>,
     ///         <c>SecurityGroupData.TcpPorts</c>, <c>KafkaClusterData.Size</c>,
-    ///         <c>SubnetResource.ListAddressUsageResult.Total</c> and ten more. ⚠ <b>Fourteen names,
-    ///         SEVENTEEN diagnostics</b>: <c>Enabled</c> was declared three times on each of
+    ///         <c>SubnetResource.ListAddressUsageResult.Total</c> and ten more. ⚠
+    ///         <b>
+    ///             Fourteen names,
+    ///             SEVENTEEN diagnostics
+    ///         </b>: <c>Enabled</c> was declared three times on each of
     ///         <c>KafkaClusterData</c>, <c>NATSClusterData</c> and <c>PostgreSQLServerData</c>, and
     ///         the compiler reports one <c>CS0102</c> per redeclaration rather than one per name.
     ///     </para>
@@ -344,8 +381,11 @@ public static class SdkEmitter {
     ///         published SDK's surface to disambiguate the few percent that need it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Counted on <c>Pascal(leaf.Name)</c> rather than on <c>leaf.Name</c>, unlike
-    ///         <see cref="EnumNaming" />.</b> Two leaves named <c>max_memory</c> and
+    ///         ⚠
+    ///         <b>
+    ///             Counted on <c>Pascal(leaf.Name)</c> rather than on <c>leaf.Name</c>, unlike
+    ///             <see cref="EnumNaming" />.
+    ///         </b> Two leaves named <c>max_memory</c> and
     ///         <c>maxMemory</c> are distinct in the document and are one identifier in C#; the
     ///         collision this guards is a C# one, so it is counted in C#. <see cref="EnumNaming" />
     ///         has the same hole and is left alone here — the gate that found this one would find
@@ -464,8 +504,11 @@ public static class SdkEmitter {
     /// <param name="members">How this class's properties are named — <see cref="MemberNaming" />.</param>
     /// <param name="leaf">The leaf. Never an object: a container declares no member.</param>
     /// <remarks>
-    ///     ⚠ <b>THE <c>[JsonPropertyName]</c> BELOW IS THE LEAF'S OWN NAME AND FOR A NESTED LEAF
-    ///     THAT IS THE WRONG WIRE NAME. Known, unfixed here, and NOT what issue #73 was about.</b>
+    ///     ⚠
+    ///     <b>
+    ///         THE <c>[JsonPropertyName]</c> BELOW IS THE LEAF'S OWN NAME AND FOR A NESTED LEAF
+    ///         THAT IS THE WRONG WIRE NAME. Known, unfixed here, and NOT what issue #73 was about.
+    ///     </b>
     ///     The body is nested on the wire — <c>CyberCloud.Cache/redis</c> sends
     ///     <c>{"properties":{"persistence":{"mode":"AOF"}}}</c> — and this class is flat, so
     ///     <c>PersistenceMode</c> carries <c>[JsonPropertyName("mode")]</c>: a name that collides with
@@ -528,13 +571,13 @@ public static class SdkEmitter {
             // set is a body the API refuses, and C#'s own `required` makes that a compile error at the
             // object initialiser rather than a 400 at run time — which is the whole reason the SDK is
             // generated from the same schema the validator reads.
-            .Append(Required(leaf) ? "required " : string.Empty)
-            .Append(ClrType(naming, leaf))
-            .Append(' ')
-            .Append(members.NameOf(leaf))
-            .Append(" { get; set; }")
-            .Append(Initialiser(naming, leaf))
-            .Append('\n');
+                .Append(Required(leaf) ? "required " : string.Empty)
+                .Append(ClrType(naming, leaf))
+                .Append(' ')
+                .Append(members.NameOf(leaf))
+                .Append(" { get; set; }")
+                .Append(Initialiser(naming, leaf))
+                .Append('\n');
     }
 
     /// <summary>
@@ -649,34 +692,36 @@ public static class SdkEmitter {
             // [SetsRequiredMembers] — see CyberCloud.Sdk/EmitterContract.cs § 1, where the
             // {Type}Resource row now says so. The stand-in in CyberCloud.Sdk.Tests/StandIn/ is the
             // one instance of that contract and is where it is checked.
-            .Append("\n    /// <summary>The body, projected at this api-version.</summary>\n")
-            .Append("    public required ")
-            .Append(model)
-            .Append("Data Data { get; init; }\n")
-            .Append("\n    /// <summary>Re-reads the resource.</summary>\n")
-            .Append("    public partial Task<Response<")
-            .Append(model)
-            .Append("Resource>> GetAsync(CancellationToken cancellationToken = default);\n")
-            .Append("\n    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>\n")
-            .Append("    public partial Task<Operation<")
-            .Append(model)
-            .Append("Resource>> UpdateAsync(\n        WaitUntil waitUntil,\n        ")
-            .Append(model)
-            .Append("Data data,\n        CancellationToken cancellationToken = default);\n")
-            .Append("\n    /// <summary>Deletes the resource.")
-            .Append(
-                type.SoftDeleteDays > 0
-                    ? " ⚠ Recoverable for "
-                      + DocumentReader.Count(type.SoftDeleteDays)
-                      + " day(s): the resource keeps its quota and its data, and its name is held. "
-                      + "Purge to end that window early — a separate permission, '"
-                      + type.PurgePermission
-                      + "'."
-                    : " ⚠ Permanent: this type declares no soft-delete window."
-            )
-            .Append("</summary>\n")
-            .Append("    public partial Task<Operation> DeleteAsync(\n        WaitUntil waitUntil,\n")
-            .Append("        CancellationToken cancellationToken = default);\n");
+                .Append("\n    /// <summary>The body, projected at this api-version.</summary>\n")
+                .Append("    public required ")
+                .Append(model)
+                .Append("Data Data { get; init; }\n")
+                .Append("\n    /// <summary>Re-reads the resource.</summary>\n")
+                .Append("    public partial Task<Response<")
+                .Append(model)
+                .Append("Resource>> GetAsync(CancellationToken cancellationToken = default);\n")
+                .Append(
+                    "\n    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>\n"
+                )
+                .Append("    public partial Task<Operation<")
+                .Append(model)
+                .Append("Resource>> UpdateAsync(\n        WaitUntil waitUntil,\n        ")
+                .Append(model)
+                .Append("Data data,\n        CancellationToken cancellationToken = default);\n")
+                .Append("\n    /// <summary>Deletes the resource.")
+                .Append(
+                    type.SoftDeleteDays > 0
+                        ? " ⚠ Recoverable for "
+                        + DocumentReader.Count(type.SoftDeleteDays)
+                        + " day(s): the resource keeps its quota and its data, and its name is held. "
+                        + "Purge to end that window early — a separate permission, '"
+                        + type.PurgePermission
+                        + "'."
+                        : " ⚠ Permanent: this type declares no soft-delete window."
+                )
+                .Append("</summary>\n")
+                .Append("    public partial Task<Operation> DeleteAsync(\n        WaitUntil waitUntil,\n")
+                .Append("        CancellationToken cancellationToken = default);\n");
 
         foreach (var action in type.Actions) {
             AppendAction(built, model, action);
@@ -705,7 +750,9 @@ public static class SdkEmitter {
                 built,
                 result,
                 responseSchema,
-                "What " + action.Name + " returns."
+                "What "
+                + action.Name
+                + " returns."
                 + (action.Secret ? " ⚠ Secret material: never log or cache this." : string.Empty)
             );
         }
@@ -759,7 +806,9 @@ public static class SdkEmitter {
         // own indent because the payload class is nested inside the resource.
         AppendEnums(built, naming, leaves, "    ");
 
-        built.Append("\n    /// <summary>").Append(Escape(summary)).Append("</summary>\n")
+        built.Append("\n    /// <summary>")
+            .Append(Escape(summary))
+            .Append("</summary>\n")
             .Append("    public sealed partial class ")
             .Append(name)
             .Append(" {\n");
@@ -770,9 +819,13 @@ public static class SdkEmitter {
             }
 
             built.Append("\n        /// <summary>")
-                .Append(Escape(DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
-                    ? text
-                    : leaf.Name))
+                .Append(
+                    Escape(
+                        DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
+                            ? text
+                            : leaf.Name
+                    )
+                )
                 .Append("</summary>\n")
                 .Append("        [JsonPropertyName(")
                 .Append(Quote(leaf.Name))
@@ -796,8 +849,11 @@ public static class SdkEmitter {
     /// <param name="type">The resource type.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Until 2026-08-12 this was nothing, and the loss was silent in exactly the way the
-    ///         CLI's was.</b> A collection for <c>servers/databases</c> emitted
+    ///         ⚠
+    ///         <b>
+    ///             Until 2026-08-12 this was nothing, and the loss was silent in exactly the way the
+    ///             CLI's was.
+    ///         </b> A collection for <c>servers/databases</c> emitted
     ///         <c>CreateOrUpdateAsync(WaitUntil, string name, Data, CancellationToken)</c> — a
     ///         signature that compiles, reads perfectly, and cannot build the URL its own
     ///         <c>PathTemplate</c> declares, because <c>{serversName}</c> has no argument. Nothing
@@ -883,51 +939,51 @@ public static class SdkEmitter {
             // gateway route, so the only honest thing the hand-written half could do was not exist.
             // The template is now read off the document rather than reassembled by the SDK, which is
             // what stops the two from being "two constants in assemblies that cannot see each other".
-            .Append("\n    /// <summary>The collection URL template GetAllAsync pages.</summary>\n")
-            .Append("    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a\n")
-            .Append("    /// collection address and not a resource one — the two grammars are disjoint, see\n")
-            .Append("    /// ResourceCollectionId. Empty when this api-version's document declares no such\n")
-            .Append("    /// path, in which case GetAllAsync has nothing to page.</remarks>\n")
-            .Append("    public const string CollectionPathTemplate = ")
-            .Append(Quote(type.CollectionPath))
-            .Append(";\n")
-            .Append("\n    /// <inheritdoc cref=\"GeneratedApiVersion.Value\" />\n")
-            .Append("    public const string ApiVersion = ")
-            .Append(Quote(version))
-            .Append(";\n")
-            .Append("\n    /// <summary>Creates or replaces one ")
-            .Append(Escape(type.DisplayName))
-            .Append(".</summary>\n")
-            .Append("    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():\n")
-            .Append("    /// docs/plan/21 § The .NET SDK — \"Azure's LROs expose no progress; ours do and the\n")
-            .Append("    /// SDK should not hide it\".</remarks>\n")
-            .Append("    public partial Task<Operation<")
-            .Append(model)
-            .Append("Resource>> CreateOrUpdateAsync(\n        WaitUntil waitUntil,\n        ")
-            .Append(leading)
-            .Append("string name,\n        ")
-            .Append(model)
-            .Append("Data data,\n        CancellationToken cancellationToken = default);\n")
-            .Append("\n    /// <summary>Reads one ")
-            .Append(Escape(type.DisplayName))
-            .Append(" by name.</summary>\n")
-            .Append("    public partial Task<Response<")
-            .Append(model)
-            .Append("Resource>> GetAsync(")
-            .Append(leading)
-            .Append("string name, CancellationToken cancellationToken = default);\n")
-            .Append("\n    /// <summary>The ")
-            .Append(Escape(type.DisplayPlural))
-            .Append(ancestors.IsEmpty ? " in this group, paged.</summary>\n" : " in one parent, paged.</summary>\n")
-            .Append("    public partial AsyncPageable<")
-            .Append(model)
-            .Append("Resource> GetAllAsync(")
-            // ⚠ The listing takes the ancestors too. A child collection with no ancestor parameter
-            // could only list "every database in the group", which is not a scope the API serves —
-            // the URL it would GET is the interleaved one with a placeholder left in it.
-            .Append(ancestors.IsEmpty ? string.Empty : string.Join(", ", ancestors) + ", ")
-            .Append("CancellationToken cancellationToken = default);\n")
-            .Append("}\n");
+                .Append("\n    /// <summary>The collection URL template GetAllAsync pages.</summary>\n")
+                .Append("    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a\n")
+                .Append("    /// collection address and not a resource one — the two grammars are disjoint, see\n")
+                .Append("    /// ResourceCollectionId. Empty when this api-version's document declares no such\n")
+                .Append("    /// path, in which case GetAllAsync has nothing to page.</remarks>\n")
+                .Append("    public const string CollectionPathTemplate = ")
+                .Append(Quote(type.CollectionPath))
+                .Append(";\n")
+                .Append("\n    /// <inheritdoc cref=\"GeneratedApiVersion.Value\" />\n")
+                .Append("    public const string ApiVersion = ")
+                .Append(Quote(version))
+                .Append(";\n")
+                .Append("\n    /// <summary>Creates or replaces one ")
+                .Append(Escape(type.DisplayName))
+                .Append(".</summary>\n")
+                .Append("    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():\n")
+                .Append("    /// docs/plan/21 § The .NET SDK — \"Azure's LROs expose no progress; ours do and the\n")
+                .Append("    /// SDK should not hide it\".</remarks>\n")
+                .Append("    public partial Task<Operation<")
+                .Append(model)
+                .Append("Resource>> CreateOrUpdateAsync(\n        WaitUntil waitUntil,\n        ")
+                .Append(leading)
+                .Append("string name,\n        ")
+                .Append(model)
+                .Append("Data data,\n        CancellationToken cancellationToken = default);\n")
+                .Append("\n    /// <summary>Reads one ")
+                .Append(Escape(type.DisplayName))
+                .Append(" by name.</summary>\n")
+                .Append("    public partial Task<Response<")
+                .Append(model)
+                .Append("Resource>> GetAsync(")
+                .Append(leading)
+                .Append("string name, CancellationToken cancellationToken = default);\n")
+                .Append("\n    /// <summary>The ")
+                .Append(Escape(type.DisplayPlural))
+                .Append(ancestors.IsEmpty ? " in this group, paged.</summary>\n" : " in one parent, paged.</summary>\n")
+                .Append("    public partial AsyncPageable<")
+                .Append(model)
+                .Append("Resource> GetAllAsync(")
+                // ⚠ The listing takes the ancestors too. A child collection with no ancestor parameter
+                // could only list "every database in the group", which is not a scope the API serves —
+                // the URL it would GET is the interleaved one with a placeholder left in it.
+                .Append(ancestors.IsEmpty ? string.Empty : string.Join(", ", ancestors) + ", ")
+                .Append("CancellationToken cancellationToken = default);\n")
+                .Append("}\n");
     }
 
     // ── The scope API, which comes from no provider — issue #63 ────────────────────────────────
@@ -940,14 +996,20 @@ public static class SdkEmitter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>One <c>ScopeResource</c> for all three, because the document declares one
-    ///         response schema for all three.</b> A class per kind would be three identical classes
+    ///         ⚠
+    ///         <b>
+    ///             One <c>ScopeResource</c> for all three, because the document declares one
+    ///             response schema for all three.
+    ///         </b> A class per kind would be three identical classes
     ///         whose only difference is the value of <c>Type</c>, and a caller holding a
     ///         <c>SubscriptionResource</c> could not be handed the result of reading a group.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>Task&lt;Response&lt;T&gt;&gt;</c> and never <c>Operation&lt;T&gt;</c>, which
-    ///         is the one place a scope differs from every resource in this file.</b> Every resource
+    ///         ⚠
+    ///         <b>
+    ///             <c>Task&lt;Response&lt;T&gt;&gt;</c> and never <c>Operation&lt;T&gt;</c>, which
+    ///             is the one place a scope differs from every resource in this file.
+    ///         </b> Every resource
     ///         write ends in a <c>202</c> and therefore in a poller; a scope converges before the
     ///         call returns, so there is no <c>WaitUntil</c> parameter to take and no operation URL
     ///         to poll. An SDK that offered one would hand every caller a poller for an operation
@@ -995,9 +1057,13 @@ public static class SdkEmitter {
             }
 
             built.Append("\n    /// <summary>")
-                .Append(Escape(DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
-                    ? text
-                    : leaf.Name))
+                .Append(
+                    Escape(
+                        DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
+                            ? text
+                            : leaf.Name
+                    )
+                )
                 .Append("</summary>\n")
                 .Append("    [JsonPropertyName(")
                 .Append(Quote(leaf.Name))
@@ -1011,13 +1077,13 @@ public static class SdkEmitter {
                 // project's business — GeneratedSdkSurface says so), and CS8618 is a warning. So the
                 // first person to find out would still be the first person to use the SDK, and this
                 // line is what stops there being anything to find.
-                .Append(Required(leaf) ? "required " : string.Empty)
-                .Append(ClrType(EnumNaming.For("ScopeResource", leaves), leaf))
-                .Append(' ')
-                .Append(scopeMembers.NameOf(leaf))
-                .Append(" { get; set; }")
-                .Append(Initialiser(EnumNaming.For("ScopeResource", leaves), leaf))
-                .Append('\n');
+                    .Append(Required(leaf) ? "required " : string.Empty)
+                    .Append(ClrType(EnumNaming.For("ScopeResource", leaves), leaf))
+                    .Append(' ')
+                    .Append(scopeMembers.NameOf(leaf))
+                    .Append(" { get; set; }")
+                    .Append(Initialiser(EnumNaming.For("ScopeResource", leaves), leaf))
+                    .Append('\n');
         }
 
         built.Append("}\n");
@@ -1128,9 +1194,13 @@ public static class SdkEmitter {
             }
 
             built.Append("\n    /// <summary>")
-                .Append(Escape(DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
-                    ? text
-                    : leaf.Name))
+                .Append(
+                    Escape(
+                        DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
+                            ? text
+                            : leaf.Name
+                    )
+                )
                 .Append("</summary>\n")
                 .Append("    [JsonPropertyName(")
                 .Append(Quote(leaf.Name))
@@ -1192,8 +1262,10 @@ public static class SdkEmitter {
 
     /// <summary>A C# string literal. ⚠ Verbatim-free, so a backslash cannot end the literal early.</summary>
     static string Quote(string value) =>
-        "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+        "\""
+        + value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal)
+        + "\"";
 
     /// <summary>
     ///     Text that is safe inside an XML doc comment, on one line.

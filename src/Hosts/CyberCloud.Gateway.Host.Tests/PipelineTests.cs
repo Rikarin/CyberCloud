@@ -11,17 +11,19 @@ namespace CyberCloud.Gateway.Host.Tests;
 public sealed class PipelineTests {
     [Fact]
     public void TheCanonicalOrderIsTheDocumentsOrder() {
-        GatewayTrace.Canonical.ShouldBe([
-            GatewayStage.Correlation,
-            GatewayStage.Authenticate,
-            GatewayStage.ResolveTenant,
-            GatewayStage.RegionRouting,
-            GatewayStage.RateLimit,
-            GatewayStage.Route,
-            GatewayStage.Validate,
-            GatewayStage.Dispatch,
-            GatewayStage.ShapeResponse
-        ]);
+        GatewayTrace.Canonical.ShouldBe(
+            [
+                GatewayStage.Correlation,
+                GatewayStage.Authenticate,
+                GatewayStage.ResolveTenant,
+                GatewayStage.RegionRouting,
+                GatewayStage.RateLimit,
+                GatewayStage.Route,
+                GatewayStage.Validate,
+                GatewayStage.Dispatch,
+                GatewayStage.ShapeResponse
+            ]
+        );
     }
 
     [Fact]
@@ -35,17 +37,19 @@ public sealed class PipelineTests {
         );
 
         response.Status.ShouldBe(StatusCodes.Status200OK);
-        response.Trace.ShouldBe([
-            "Correlation",
-            "Authenticate",
-            "ResolveTenant",
-            "RegionRouting",
-            "RateLimit",
-            "Route",
-            "Validate",
-            "Dispatch",
-            "ShapeResponse"
-        ]);
+        response.Trace.ShouldBe(
+            [
+                "Correlation",
+                "Authenticate",
+                "ResolveTenant",
+                "RegionRouting",
+                "RateLimit",
+                "Route",
+                "Validate",
+                "Dispatch",
+                "ShapeResponse"
+            ]
+        );
     }
 
     /// <summary>
@@ -95,8 +99,8 @@ public sealed class PipelineTests {
     [Fact]
     public void APipelineMissingAStageRefusesToBeComposed() {
         Should.Throw<InvalidOperationException>(() =>
-                new GatewayPipeline([new Pipeline.Stages.CorrelationStage()], NullLogger<GatewayPipeline>.Instance)
-            )
+            new GatewayPipeline([new Pipeline.Stages.CorrelationStage()], NullLogger<GatewayPipeline>.Instance)
+        )
             .Message.ShouldContain("cross-tenant hole");
     }
 
@@ -153,8 +157,11 @@ public sealed class PipelineTests {
     // ── No stack traces, ever ──────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     docs/plan/08 § Errors: <i>"No exception details, ever. A stack trace in an error body is
-    ///     an information leak and a support-cost multiplier."</i>
+    ///     docs/plan/08 § Errors:
+    ///     <i>
+    ///         "No exception details, ever. A stack trace in an error body is
+    ///         an information leak and a support-cost multiplier."
+    ///     </i>
     /// </summary>
     [Fact]
     public async Task AFaultingStageProducesA500WithNoDetailInTheBody() {
@@ -185,9 +192,11 @@ public sealed class PipelineTests {
 
     [Fact]
     public void TheErrorBodyIsAzuresShapeAndHasNoRoomForATrace() {
-        var body = System.Text.Encoding.UTF8.GetString(ErrorBody.Render(
-            new(ErrorCode.QuotaExceeded, "vcpu would be exceeded (requested 8, available 2).", "/properties/sku")
-        ));
+        var body = System.Text.Encoding.UTF8.GetString(
+            ErrorBody.Render(
+                new(ErrorCode.QuotaExceeded, "vcpu would be exceeded (requested 8, available 2).", "/properties/sku")
+            )
+        );
 
         body.ShouldBe(
             "{\"error\":{\"code\":\"QuotaExceeded\","

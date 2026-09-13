@@ -120,8 +120,20 @@ public sealed class MonitorReconcilerTests {
 
         using var body = JsonDocument.Parse(MonitorWorkspaces.Body(ClusterId));
 
-        await Pass(reconciler, connection, vault, Address("prod", TenantA, SubscriptionA, WorkspaceA), body.RootElement);
-        await Pass(reconciler, connection, vault, Address("prod", TenantB, SubscriptionB, WorkspaceB), body.RootElement);
+        await Pass(
+            reconciler,
+            connection,
+            vault,
+            Address("prod", TenantA, SubscriptionA, WorkspaceA),
+            body.RootElement
+        );
+        await Pass(
+            reconciler,
+            connection,
+            vault,
+            Address("prod", TenantB, SubscriptionB, WorkspaceB),
+            body.RootElement
+        );
 
         var accounts = connection.Applied.Where(x => x.Target.Kind.Kind == "ConfigMap")
             .Select(x => Data(x.Body)["accountId"]!.GetValue<string>())
@@ -205,7 +217,8 @@ public sealed class MonitorReconcilerTests {
                 body.RootElement
             );
 
-            JsonNode.Parse(rendered)!["spec"]!["targetRefs"]!.AsArray()
+            JsonNode.Parse(rendered)!["spec"]!["targetRefs"]!
+                .AsArray()
                 .Select(x => x!["crd"]!["name"]!.GetValue<string>())
                 .ShouldAllBe(x => x == "telemetry-" + tier);
         }
@@ -251,10 +264,13 @@ public sealed class MonitorReconcilerTests {
         );
 
         // And the old window is still what the cluster carries.
-        Data(connection.Objects[RecordingConnection.Key(MonitorWorkspaces.RowRef(
-                ReconcileDriver.NamespaceFor(address), address.Name))])["retentionLogsDays"]!
-            .GetValue<string>()
-            .ShouldBe("90");
+        Data(
+            connection.Objects[RecordingConnection.Key(
+                MonitorWorkspaces.RowRef(ReconcileDriver.NamespaceFor(address), address.Name)
+            )]
+        )["retentionLogsDays"]!
+                .GetValue<string>()
+                .ShouldBe("90");
     }
 
     [Fact]
@@ -426,11 +442,12 @@ public sealed class MonitorReconcilerTests {
 
         deleted.ShouldBe(ReconcileOutcome.Converged);
 
-        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(
-            ["ConfigMap", "VMUser", "Secret"],
-            "the row is withdrawn first, so the ingest host stops believing in the workspace before "
-            + "its key and routing disappear underneath it"
-        );
+        connection.Deleted.Select(x => x.Kind.Kind)
+            .ShouldBe(
+                ["ConfigMap", "VMUser", "Secret"],
+                "the row is withdrawn first, so the ingest host stops believing in the workspace before "
+                + "its key and routing disappear underneath it"
+            );
     }
 
     // ── Failure class (f), at the object: no credential is ever rendered where it should not be ──
@@ -499,9 +516,7 @@ public sealed class MonitorReconcilerTests {
                 connection,
                 vault,
                 new NullLog()
-            ) {
-                SecretWriter = vault
-            },
+            ) { SecretWriter = vault },
             TestContext.Current.CancellationToken
         );
 
@@ -531,20 +546,18 @@ public sealed class MonitorReconcilerTests {
             connection,
             store,
             new NullLog()
-        ) {
-            SecretWriter = store
-        };
+        ) { SecretWriter = store };
     }
 
     /// <summary>An address in a named tenant, its own subscription and its own GUID.</summary>
     static ResourceId Address(string name, Guid tenant, Guid subscription, Guid id) =>
         new(tenant, subscription, "prod", MonitorWorkspaces.Type, name, id);
 
-    static JsonObject Data(string objectJson) =>
-        JsonNode.Parse(objectJson)!["data"]!.AsObject();
+    static JsonObject Data(string objectJson) => JsonNode.Parse(objectJson)!["data"]!.AsObject();
 
     static string Suffix(string objectJson, int index) =>
-        JsonNode.Parse(objectJson)!["spec"]!["targetRefs"]!.AsArray()[index]!["target_path_suffix"]!
+        JsonNode.Parse(objectJson)!["spec"]!["targetRefs"]!
+            .AsArray()[index]!["target_path_suffix"]!
             .GetValue<string>();
 }
 
@@ -574,12 +587,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
@@ -686,8 +701,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     applies a <c>ConfigMap</c> and a <c>VMUser</c> that share a name — a key without it would
     ///     make the second apply overwrite the first and every read-back return the wrong document.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

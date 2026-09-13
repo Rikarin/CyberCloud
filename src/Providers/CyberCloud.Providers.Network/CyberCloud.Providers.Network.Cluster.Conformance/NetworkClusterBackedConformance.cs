@@ -9,16 +9,25 @@ namespace CyberCloud.Providers.Network.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Ten class declarations over the five cases
-///         <c>CyberCloud.Providers.Network.Conformance</c> declares.</b> One provider, one
-///         <c>ProviderConformanceCase</c> per type, two suites per case. ⚠ <b>This sentence read "four
-///         over two" while the family had four types</b>, which is how the public address's pair went
+///         ⚠
+///         <b>
+///             Ten class declarations over the five cases
+///             <c>CyberCloud.Providers.Network.Conformance</c> declares.
+///         </b> One provider, one
+///         <c>ProviderConformanceCase</c> per type, two suites per case. ⚠
+///         <b>
+///             This sentence read "four
+///             over two" while the family had four types
+///         </b>, which is how the public address's pair went
 ///         missing: nothing counts the classes in this file against the cases in that one, so a row
 ///         with no class here is simply a row the docs/plan/24 exit criterion never reaches.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE FIRST CLUSTER-BACKED SUITE IN THE TREE FOR A CLUSTER-SCOPED OBJECT, AND IT IS THE
-///         REASON <c>ClusterConformanceHarness</c> CHANGED.</b> That harness derived a CRD stub per
+///         ⚠
+///         <b>
+///             THE FIRST CLUSTER-BACKED SUITE IN THE TREE FOR A CLUSTER-SCOPED OBJECT, AND IT IS THE
+///             REASON <c>ClusterConformanceHarness</c> CHANGED.
+///         </b> That harness derived a CRD stub per
 ///         custom kind and hard-coded <c>Scope = "Namespaced"</c>. A Kube-OVN <c>Vpc</c> is
 ///         <c>+kubebuilder:resource:scope="Cluster"</c>, and <c>KubeApiClient</c> sends a
 ///         cluster-scoped apply to <c>/apis/{group}/{version}/{plural}/{name}</c> — which a
@@ -27,9 +36,15 @@ namespace CyberCloud.Providers.Network.ClusterConformance;
 ///         derived, and nothing changed for the nine families whose objects carry a namespace.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT THIS SUITE PROVES FOR THIS FAMILY, STATED EXPLICITLY BECAUSE THE GAP IS WIDER
-///         HERE THAN ANYWHERE ELSE IN THE TREE.</b> The k3s it starts has <b>no Kube-OVN and no CRDs
-///         for it</b>. So what is established is: the apply path reaches a cluster-scoped REST path,
+///         ⚠
+///         <b>
+///             WHAT THIS SUITE PROVES FOR THIS FAMILY, STATED EXPLICITLY BECAUSE THE GAP IS WIDER
+///             HERE THAN ANYWHERE ELSE IN THE TREE.
+///         </b> The k3s it starts has
+///         <b>
+///             no Kube-OVN and no CRDs
+///             for it
+///         </b>. So what is established is: the apply path reaches a cluster-scoped REST path,
 ///         ADR-013's seven labels and two annotations survive real admission on an object with no
 ///         namespace, server-side apply works under this platform's field manager, and a conflict
 ///         parses. What is <b>not</b> established: that these manifests satisfy Kube-OVN's schema —
@@ -75,13 +90,19 @@ public sealed class NetworkSubnetSiloKillConformance : SiloKillConformanceTests<
 ///     <c>CyberCloud.Network/virtualNetworks/securityGroups</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>THE ONE THING THIS HALF PROVES THAT NOTHING ELSE IN THE TREE DOES FOR THIS TYPE: THE
-///     HYPHENATED PLURAL.</b> <c>SecurityGroup</c>'s path is <c>security-groups</c>, not
+///     ⚠
+///     <b>
+///         THE ONE THING THIS HALF PROVES THAT NOTHING ELSE IN THE TREE DOES FOR THIS TYPE: THE
+///         HYPHENATED PLURAL.
+///     </b> <c>SecurityGroup</c>'s path is <c>security-groups</c>, not
 ///     <c>securitygroups</c>, and <c>ClusterConformanceHarness</c> derives its CRD stub's path from
 ///     <see cref="GroupVersionKind.Plural" /> — so a guessed plural installs a definition at a path
 ///     the apply never reaches and every assertion here would fail with a discovery error naming a
-///     missing operator. ⚠ It still runs no Kube-OVN controller, so <b>no ACL in this suite has ever
-///     been programmed</b> and nothing here has checked that <c>ipVersion: ipv4</c> is spelled the way
+///     missing operator. ⚠ It still runs no Kube-OVN controller, so
+///     <b>
+///         no ACL in this suite has ever
+///         been programmed
+///     </b> and nothing here has checked that <c>ipVersion: ipv4</c> is spelled the way
 ///     <c>validateSgRule</c> wants.
 /// </remarks>
 /// <param name="fixture">The harness.</param>

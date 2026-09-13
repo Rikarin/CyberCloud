@@ -16,10 +16,16 @@ namespace CyberCloud.Isolation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>docs/plan/08 § Soft delete asks for two tests by description and this is where the
-///         load-bearing half of one of them can actually be made.</b> The document wants <i>"a restored
-///         resource is visible to a subscription role holder and to its resource-group role
-///         holder"</i>. <c>SoftDeletePathTests</c> asserts the <c>parent</c> edge <b>moves</b>, which is
+///         ⚠
+///         <b>
+///             docs/plan/08 § Soft delete asks for two tests by description and this is where the
+///             load-bearing half of one of them can actually be made.
+///         </b> The document wants
+///         <i>
+///             "a restored
+///             resource is visible to a subscription role holder and to its resource-group role
+///             holder"
+///         </i>. <c>SoftDeletePathTests</c> asserts the <c>parent</c> edge <b>moves</b>, which is
 ///         a claim about the delete path and is checked against a recording double. Whether an edge
 ///         naming <c>subscription:{sub}</c> actually grants anything is a claim about
 ///         <c>CyberCloudSchema</c>, and no double can answer it: a double writes whatever tuple its
@@ -104,7 +110,11 @@ public sealed class SoftDeleteEdgeTests(IsolationCluster cluster) {
             NullLogger<ReBacResourceRelationWriter>.Instance
         );
 
-        var parked = await writer.ReparentToSubscriptionAsync(address, Guid.Empty, TestContext.Current.CancellationToken);
+        var parked = await writer.ReparentToSubscriptionAsync(
+            address,
+            Guid.Empty,
+            TestContext.Current.CancellationToken
+        );
         parked.IsSuccess.ShouldBeTrue(parked.Error?.Message);
 
         // ⚠ THE MEASUREMENT. `resource:{id}#parent@subscription:{sub}` composes through
@@ -128,7 +138,11 @@ public sealed class SoftDeleteEdgeTests(IsolationCluster cluster) {
         );
 
         // ── And the restore puts it back ────────────────────────────────────────────────────────
-        var restored = await writer.ReparentFromSubscriptionAsync(address, Guid.Empty, TestContext.Current.CancellationToken);
+        var restored = await writer.ReparentFromSubscriptionAsync(
+            address,
+            Guid.Empty,
+            TestContext.Current.CancellationToken
+        );
         restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
 
         (await ReadAsync(address, target, IsolationCluster.VictimUser)).IsSuccess.ShouldBeTrue(
@@ -211,12 +225,18 @@ public sealed class SoftDeleteEdgeTests(IsolationCluster cluster) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>NOT through <c>IResourceManager.ReadAsync</c>, and the first version of this file
-    ///         was and failed for a reason worth keeping.</b> A <c>GET</c> authorizes with
+    ///         ⚠
+    ///         <b>
+    ///             NOT through <c>IResourceManager.ReadAsync</c>, and the first version of this file
+    ///             was and failed for a reason worth keeping.
+    ///         </b> A <c>GET</c> authorizes with
     ///         <c>fullyConsistent: false</c> — docs/plan/07 § Consistency makes an ordinary read cached
     ///         and eventually consistent on purpose — so a check taken before a tuple moved is still
-    ///         answerable from cache after it. Both tests here move a tuple <i>under a resource they
-    ///         have already read</i>, which is precisely the shape that reads stale: the control read
+    ///         answerable from cache after it. Both tests here move a tuple
+    ///         <i>
+    ///             under a resource they
+    ///             have already read
+    ///         </i>, which is precisely the shape that reads stale: the control read
     ///         cached a negative, the re-parent changed the answer, and the second read returned the
     ///         negative it had.
     ///     </para>
@@ -229,8 +249,11 @@ public sealed class SoftDeleteEdgeTests(IsolationCluster cluster) {
     ///     </para>
     /// </remarks>
     /// <summary>
-    ///     ⚠ <b>Every purge permission the registry names is one <c>CyberCloudSchema</c> actually
-    ///     defines — the check that would have caught a purge nobody could perform.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Every purge permission the registry names is one <c>CyberCloudSchema</c> actually
+    ///         defines — the check that would have caught a purge nobody could perform.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -246,14 +269,20 @@ public sealed class SoftDeleteEdgeTests(IsolationCluster cluster) {
     ///         reference each other, so nothing in the compiler could say they had drifted.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It survived because every purge in the repository ran against a doubled
-    ///         authorizer.</b> <c>SwitchableAuthorizer</c> and <c>PermissiveAuthorizer</c> answer
+    ///         ⚠
+    ///         <b>
+    ///             It survived because every purge in the repository ran against a doubled
+    ///             authorizer.
+    ///         </b> <c>SwitchableAuthorizer</c> and <c>PermissiveAuthorizer</c> answer
     ///         whatever their author believed about a permission name, which is the same argument
     ///         <see cref="ParentEdgeTests" /> opens with — and this is the second defect it has caught.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A registry sweep rather than one assertion about one constant, because
-    ///         <c>SupportsSoftDelete(days, purgePermission)</c> lets a provider name its own.</b> A type
+    ///         ⚠
+    ///         <b>
+    ///             A registry sweep rather than one assertion about one constant, because
+    ///             <c>SupportsSoftDelete(days, purgePermission)</c> lets a provider name its own.
+    ///         </b> A type
     ///         declaring <c>purgePermission: "destroy"</c> would reintroduce exactly this, silently, and
     ///         a test pinned to <c>"purge"</c> would stay green through it. ⚠ It sweeps
     ///         <b>this cluster's</b> registry, which holds three providers — so it is a gate on the

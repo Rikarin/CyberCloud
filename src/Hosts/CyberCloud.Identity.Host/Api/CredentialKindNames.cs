@@ -7,8 +7,11 @@ namespace CyberCloud.Identity.Host.Api;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A written-out table rather than a naming policy, and the difference is the whole
-///         point of the file.</b> <c>JsonNamingPolicy.CamelCase</c> over a
+///         ⚠
+///         <b>
+///             A written-out table rather than a naming policy, and the difference is the whole
+///             point of the file.
+///         </b> <c>JsonNamingPolicy.CamelCase</c> over a
 ///         <c>JsonStringEnumConverter</c> happens to produce these eight strings today. That is a
 ///         coincidence of one library's rule for where a word boundary is, applied to member names
 ///         somebody is free to rename — and the failure it produces is silent.
@@ -20,8 +23,11 @@ namespace CyberCloud.Identity.Host.Api;
 ///         <c>resourcegroup</c> against <c>resourceGroup</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Of(CredentialKind)" /> throws on an unmapped kind rather than falling
-///         back.</b> A
+///         ⚠
+///         <b>
+///             <see cref="Of(CredentialKind)" /> throws on an unmapped kind rather than falling
+///             back.
+///         </b> A
 ///         <c>ToString()</c> fallback would emit <c>"Passkey"</c> for a member somebody added and
 ///         forgot to list here — a value that serializes, deserializes, and matches nothing. The
 ///         throw is unreachable while <c>CredentialKindNamesTests</c> holds, which asserts the table

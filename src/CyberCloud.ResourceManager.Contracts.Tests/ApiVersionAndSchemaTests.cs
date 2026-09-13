@@ -171,8 +171,9 @@ public sealed class ResourceSchemaTests {
 
     [Fact]
     public void ADuplicatePointerIsABuildFailure() {
-        Should.Throw<ArgumentException>(
-            () => ResourceSchema.Of([new("/a", SchemaKind.Text), new("/a", SchemaKind.Number)])
+        Should.Throw<ArgumentException>(() => ResourceSchema.Of(
+                [new("/a", SchemaKind.Text), new("/a", SchemaKind.Number)]
+            )
         );
     }
 
@@ -351,8 +352,7 @@ public sealed class ReconcileOutcomeTests {
 
     [Fact]
     public void ANegativeRetryAfterIsRefusedRatherThanClamped() {
-        Should.Throw<ArgumentOutOfRangeException>(
-            () => ReconcileOutcome.InProgress("waiting", TimeSpan.FromSeconds(-1))
+        Should.Throw<ArgumentOutOfRangeException>(() => ReconcileOutcome.InProgress("waiting", TimeSpan.FromSeconds(-1))
         );
     }
 
@@ -419,7 +419,11 @@ public sealed class ErrorShapeTests {
     [Fact]
     public void TheShapeIsCodeMessageTargetDetails() {
         // { "error": { "code": …, "message": …, "target": …, "details": [ … ] } }
-        var detail = new Error(ErrorCode.InvalidRequestBody, "'/properties/sku' is required and is missing.", "/properties/sku");
+        var detail = new Error(
+            ErrorCode.InvalidRequestBody,
+            "'/properties/sku' is required and is missing.",
+            "/properties/sku"
+        );
         var error = new Error(
             ErrorCode.QuotaExceeded,
             "Subscription quota for 'vcpu' in region 'eu-central' would be exceeded (requested 8, available 2).",

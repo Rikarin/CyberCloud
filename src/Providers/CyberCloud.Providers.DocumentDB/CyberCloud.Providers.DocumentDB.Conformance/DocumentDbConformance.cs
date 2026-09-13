@@ -12,15 +12,21 @@ namespace CyberCloud.Providers.DocumentDB.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>One case object and two class declarations, which is the sixth time that number has
-///         held.</b> What this one adds is the shape none of the five before it had: four objects
+///         ⚠
+///         <b>
+///             One case object and two class declarations, which is the sixth time that number has
+///             held.
+///         </b> What this one adds is the shape none of the five before it had: four objects
 ///         across four API groups, one of them expanded by an operator and three of them not. The
 ///         suite needed no change for it, which is the claim that shape has been making since the
 ///         second provider.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.Objects" /> lists all four, and the operator's
-///         expansion of one of them is deliberately absent.</b> The <c>Cluster</c> becomes instance
+///         ⚠
+///         <b>
+///             <see cref="ProviderConformanceCase.Objects" /> lists all four, and the operator's
+///             expansion of one of them is deliberately absent.
+///         </b> The <c>Cluster</c> becomes instance
 ///         pods, PVCs, three Services and CloudNativePG's own PodMonitor; listing those would make the
 ///         suite fail against every cluster with no CloudNativePG installed, which is every cluster
 ///         the Docker-free half runs against. The other three have no controller above them at all,
@@ -56,13 +62,12 @@ public sealed class DocumentDbCase : IProviderCaseSource {
             InvalidBody = cluster => WithoutStorageSize(DocumentDbAccounts.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = DocumentDbAccounts.ListKeysAction,
-            Objects = (id, ns) =>
-                [
-                    DocumentDbAccounts.ClusterRef(ns, id.Name),
-                    DocumentDbAccounts.DeploymentRef(ns, id.Name),
-                    DocumentDbAccounts.ServiceRef(ns, id.Name),
-                    DocumentDbAccounts.PodMonitorRef(ns, id.Name)
-                ],
+            Objects = (id, ns) => [
+                DocumentDbAccounts.ClusterRef(ns, id.Name),
+                DocumentDbAccounts.DeploymentRef(ns, id.Name),
+                DocumentDbAccounts.ServiceRef(ns, id.Name),
+                DocumentDbAccounts.PodMonitorRef(ns, id.Name)
+            ],
             // ⚠ CloudNativePG's superuser Secret, which `EnableSuperuserAccess` asks for and this
             // reconciler never writes. The `uri` key the real object also carries is left out on
             // purpose: its dbname is "*", nothing may return it, and a fixture that offered it would

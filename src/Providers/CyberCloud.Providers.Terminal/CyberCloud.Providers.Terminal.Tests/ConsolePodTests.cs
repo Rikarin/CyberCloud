@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.Terminal.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>EVERY ASSERTION HERE IS ABOUT RENDERED YAML AND NOT ABOUT BEHAVIOUR, AND THAT IS THE
-///         HONEST LIMIT OF WHAT THIS PROJECT CAN CLAIM.</b> Failure class (c) — an unsafe default when
+///         ⚠
+///         <b>
+///             EVERY ASSERTION HERE IS ABOUT RENDERED YAML AND NOT ABOUT BEHAVIOUR, AND THAT IS THE
+///             HONEST LIMIT OF WHAT THIS PROJECT CAN CLAIM.
+///         </b> Failure class (c) — an unsafe default when
 ///         the tenant asks for nothing — has three sightings in this tree (SeaweedFS' anonymous admin,
 ///         Qdrant's unset api_key, MariaDB's root password), and every one of them was a field that
 ///         was absent rather than wrong. So the test that catches the fourth has to read what is
@@ -116,7 +119,8 @@ public sealed class ConsolePodTests {
         // not pod-network traffic and is unaffected.
         var policy = Policy();
 
-        policy["spec"]!["policyTypes"]!.AsArray().Select(x => x!.GetValue<string>())
+        policy["spec"]!["policyTypes"]!.AsArray()
+            .Select(x => x!.GetValue<string>())
             .ShouldBe(["Ingress", "Egress"]);
 
         policy["spec"]!["ingress"]!.AsArray().Count.ShouldBe(0);
@@ -145,7 +149,8 @@ public sealed class ConsolePodTests {
 
         // ⚠ BOTH PROTOCOLS. A UDP-only rule works until a response exceeds 512 bytes and the resolver
         // retries over TCP, which presents as "curl works and dig doesn't, sometimes".
-        egress[2]!["ports"]!.AsArray().Select(x => x!["protocol"]!.GetValue<string>())
+        egress[2]!["ports"]!.AsArray()
+            .Select(x => x!["protocol"]!.GetValue<string>())
             .ShouldBe(["UDP", "TCP"]);
 
         var except = egress[3]!["to"]![0]!["ipBlock"]!["except"]!.AsArray()
@@ -183,18 +188,16 @@ public sealed class ConsolePodTests {
         served["kind"] = "NetworkPolicy";
         served["spec"]!.AsObject().Remove("ingress").ShouldBeTrue();
 
-        CloudConsoles.Matches(served.ToJsonString(), Desired).ShouldBeTrue(
-            "an ingress list the API server omitted read as a policy that had lost its ingress rules"
-        );
+        CloudConsoles.Matches(served.ToJsonString(), Desired)
+            .ShouldBeTrue("an ingress list the API server omitted read as a policy that had lost its ingress rules");
 
         // And a policy that grew an actual ingress rule IS drift, which is the half that keeps the
         // relaxation from being a hole: somebody opening a shell to inbound traffic must not read as
         // converged.
         served["spec"]!["ingress"] = new JsonArray { new JsonObject() };
 
-        CloudConsoles.Matches(served.ToJsonString(), Desired).ShouldBeFalse(
-            "a shell that something may now connect to reported no drift"
-        );
+        CloudConsoles.Matches(served.ToJsonString(), Desired)
+            .ShouldBeFalse("a shell that something may now connect to reported no drift");
     }
 
     [Fact]
@@ -205,7 +208,8 @@ public sealed class ConsolePodTests {
 
         var egress = JsonNode.Parse(
             CloudConsoles.NetworkPolicyJson("plain", Tenant, "plain-ns", tenantOnly.RootElement)
-        )!["spec"]!["egress"]!.AsArray();
+        )!["spec"]!["egress"]!
+            .AsArray();
 
         egress.Count.ShouldBe(3);
         egress.ShouldAllBe(x => x!["to"]![0]!.AsObject().ContainsKey("ipBlock") == false);
@@ -331,7 +335,8 @@ public sealed class ConsolePodTests {
         using var recorded = JsonDocument.Parse(CloudConsoles.Body(Cluster, recording: true));
 
         JsonNode.Parse(CloudConsoles.PodJson("plain", recorded.RootElement))!
-            ["metadata"]!["annotations"]![CloudConsoles.RecordingAnnotation]!.GetValue<string>()
+            ["metadata"]!["annotations"]![CloudConsoles.RecordingAnnotation]!
+            .GetValue<string>()
             .ShouldBe("true");
     }
 
@@ -362,7 +367,8 @@ public sealed class ConsolePodTests {
         // nothing else can tell whose shell a pod is without resolving a resource id through an API
         // they may not have.
         JsonNode.Parse(CloudConsoles.ServiceAccountJson("plain", Desired))!
-            ["metadata"]!["annotations"]![CloudConsoles.PrincipalAnnotation]!.GetValue<string>()
+            ["metadata"]!["annotations"]![CloudConsoles.PrincipalAnnotation]!
+            .GetValue<string>()
             .ShouldBe(Principal.ToString("D"));
     }
 
@@ -375,7 +381,8 @@ public sealed class ConsolePodTests {
         // limit exists to stop. Both halves, or neither works.
         var pod = Pod();
 
-        var mounts = pod["spec"]!["containers"]!.AsArray()[0]!["volumeMounts"]!.AsArray()
+        var mounts = pod["spec"]!["containers"]!.AsArray()[0]!["volumeMounts"]!
+            .AsArray()
             .Select(x => x!["mountPath"]!.GetValue<string>())
             .ToList();
 
@@ -384,7 +391,8 @@ public sealed class ConsolePodTests {
         var limits = pod["spec"]!["containers"]!.AsArray()[0]!["resources"]!["limits"]!;
         limits["ephemeral-storage"]!.GetValue<string>().ShouldBe(CloudConsoles.EphemeralStorageLimit);
 
-        pod["spec"]!["volumes"]!.AsArray()[0]!["persistentVolumeClaim"]!["claimName"]!.GetValue<string>()
+        pod["spec"]!["volumes"]!.AsArray()[0]!["persistentVolumeClaim"]!["claimName"]!
+            .GetValue<string>()
             .ShouldBe(CloudConsoles.HomeClaimName("plain"));
     }
 
@@ -410,7 +418,8 @@ public sealed class ConsolePodTests {
         CloudConsoles.Schema2026.Declares("/properties/image/repository").ShouldBeFalse();
         CloudConsoles.Schema2026.Declares("/properties/image/digest").ShouldBeFalse();
 
-        Pod()["spec"]!["containers"]!.AsArray()[0]!["command"]!.AsArray()
+        Pod()["spec"]!["containers"]!.AsArray()[0]!["command"]!
+            .AsArray()
             .Select(x => x!.GetValue<string>())
             .ShouldBe(["/bin/bash", "-l"]);
     }

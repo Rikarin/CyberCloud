@@ -2,8 +2,11 @@ namespace CyberCloud.Communication.Tests;
 
 /// <summary>
 ///     Inbound and delivery receipts — docs/plan/17 § The parts that are actually the work:
-///     <i><c>STOP</c> handling is legally required in most jurisdictions</i>, and <i>"without them
-///     'did it arrive' is unanswerable"</i>.
+///     <i><c>STOP</c> handling is legally required in most jurisdictions</i>, and
+///     <i>
+///         "without them
+///         'did it arrive' is unanswerable"
+///     </i>.
 /// </summary>
 [Collection(CommunicationClusterFixture.Name)]
 public sealed class InboundAndReceiptTests(CommunicationCluster cluster) {
@@ -147,17 +150,18 @@ public sealed class InboundAndReceiptTests(CommunicationCluster cluster) {
         var providerId = sent.GetValueOrThrow().ProviderMessageId;
 
         (await cluster.ReceiptAsync(
-            CommunicationCluster.Tenant,
-            service,
-            new() {
-                ProviderMessageId = providerId,
-                Status = MessageStatus.Delivered,
-                ProviderStatus = "delivered",
-                Cost = 0.07m,
-                Currency = "EUR",
-                OccurredAt = TestClock.Instance.UtcNow
-            }
-        )).GetValueOrThrow().ShouldBeTrue();
+                CommunicationCluster.Tenant,
+                service,
+                new() {
+                    ProviderMessageId = providerId,
+                    Status = MessageStatus.Delivered,
+                    ProviderStatus = "delivered",
+                    Cost = 0.07m,
+                    Currency = "EUR",
+                    OccurredAt = TestClock.Instance.UtcNow
+                }
+            )).GetValueOrThrow()
+            .ShouldBeTrue();
 
         var status = (await cluster.StatusAsync(CommunicationCluster.Tenant, service, "otp-1"))
             .GetValueOrThrow();
@@ -226,7 +230,10 @@ public sealed class InboundAndReceiptTests(CommunicationCluster cluster) {
             .GetValueOrThrow();
 
         status.Status.ShouldBe(MessageStatus.Delivered);
-        status.Receipts.Length.ShouldBe(2, "the receipt list is a log, so both are kept even though only one moved the status");
+        status.Receipts.Length.ShouldBe(
+            2,
+            "the receipt list is a log, so both are kept even though only one moved the status"
+        );
     }
 
     [Fact]

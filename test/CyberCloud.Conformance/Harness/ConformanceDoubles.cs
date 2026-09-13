@@ -206,8 +206,11 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A double that always recorded the group would agree with a writer that always wrote
-    ///         the group, which is the bug this pair exists to surface</b> — so the branch is mirrored
+    ///         ⚠
+    ///         <b>
+    ///             A double that always recorded the group would agree with a writer that always wrote
+    ///             the group, which is the bug this pair exists to surface
+    ///         </b> — so the branch is mirrored
     ///         here even though this class writes no tuples.
     ///     </para>
     ///     <para>

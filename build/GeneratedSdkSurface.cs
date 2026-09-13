@@ -7,13 +7,13 @@
 // compiler the rest of the tree is built by rather than with a regular expression — which is the
 // entire point of the issue and is worth not undoing.
 
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Nuke.Common.IO;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Nuke.Common.IO;
 
 /// <summary>
 ///     What one file of <c>generated/sdk/</c> looks like to a C# compiler.
@@ -40,8 +40,11 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Issue #73 in one sentence: the <c>Generated surfaces</c> row compares BYTES, and
-///         byte-identical is not valid.</b> <b>Four</b> defect families shipped in
+///         ⚠
+///         <b>
+///             Issue #73 in one sentence: the <c>Generated surfaces</c> row compares BYTES, and
+///             byte-identical is not valid.
+///         </b> <b>Four</b> defect families shipped in
 ///         <c>generated/sdk/2026-08-01.cs</c> — <c>CS0101</c> from a duplicated enum name,
 ///         <c>CS0246</c> from an action's enum that was referenced and never declared, seventeen
 ///         <c>CS0102</c>s from fourteen duplicated property names across eight declaring types, and
@@ -60,9 +63,12 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         were the ones that disagreed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>HOW THE FOUR NUMBERS WERE COUNTED, because a count in a comment is the kind of claim
-///         this gate exists to stop being taken on trust, and because reviewers had answered 110,
-///         111 and 222 to the last of them.</b> Re-derived on 2026-09-05, not copied:
+///         ⚠
+///         <b>
+///             HOW THE FOUR NUMBERS WERE COUNTED, because a count in a comment is the kind of claim
+///             this gate exists to stop being taken on trust, and because reviewers had answered 110,
+///             111 and 222 to the last of them.
+///         </b> Re-derived on 2026-09-05, not copied:
 ///         <c>git show 16fd0ca:generated/sdk/2026-08-01.cs</c> — the last blob of that file in which
 ///         all four families are present at once — handed to a probe that replicates
 ///         <see cref="Compile" /> exactly: the same <c>LanguageVersion.Latest</c> parse options, the
@@ -94,8 +100,11 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         wrong.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHY <c>16fd0ca</c> IS THAT BLOB, IN TWO COMMANDS, BECAUSE THE FIRST ANSWER GIVEN HERE
-///         WAS WRONG AND THIS IS THE PARAGRAPH WRITTEN SO THAT NOTHING IS TAKEN ON TRUST.</b> The
+///         ⚠
+///         <b>
+///             WHY <c>16fd0ca</c> IS THAT BLOB, IN TWO COMMANDS, BECAUSE THE FIRST ANSWER GIVEN HERE
+///             WAS WRONG AND THIS IS THE PARAGRAPH WRITTEN SO THAT NOTHING IS TAKEN ON TRUST.
+///         </b> The
 ///         sentence above read "since <c>d40d962</c> fixed <c>CS0101</c> and <c>CS0246</c> by hand ONE
 ///         COMMIT BEFORE <c>e2005ed</c> added this gate" until the review of this branch. The two
 ///         commits are not adjacent and the claim was never load-bearing:
@@ -154,8 +163,11 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b><c>CS8795</c> is the only diagnostic accepted, and accepting it is a claim about
-///         this surface rather than a suppression.</b> The claim is "half of every partial member is
+///         ⚠
+///         <b>
+///             <c>CS8795</c> is the only diagnostic accepted, and accepting it is a claim about
+///             this surface rather than a suppression.
+///         </b> The claim is "half of every partial member is
 ///         hand-written and is not here", which is exactly what docs/plan/21 § Generation says and
 ///         exactly what makes the file a DECLARATION surface — the same thing <c>tsc</c> checks over
 ///         the TypeScript client, which has no bodies to check either. Nothing else is accepted:
@@ -167,20 +179,28 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         that no longer needs it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Errors only, not warnings, and the repository's "warnings are errors" rule does not
-///         reach here.</b> That rule is about code this tree owns; the question this gate answers is
+///         ⚠
+///         <b>
+///             Errors only, not warnings, and the repository's "warnings are errors" rule does not
+///             reach here.
+///         </b> That rule is about code this tree owns; the question this gate answers is
 ///         the one nothing answered — "would a consumer's compiler accept this file". Which analysers
 ///         a consuming project runs, and at what severity, is that project's business, and a gate
 ///         that failed on a style rule would be a gate the next person turns off.
 ///     </para>
 ///     <para>
-///         ✔ <b>Verified by breaking it, on 2026-09-05, SDK 10.0.400 with Roslyn 5.6.0 — the pinned
-///         <c>Microsoft.CodeAnalysis.CSharp</c> this class compiles with, which is NOT that SDK's own
-///         <c>csc</c> (10.0.400 ships 5.9.0-1.26379.115; issue #80).</b> Two probes
+///         ✔
+///         <b>
+///             Verified by breaking it, on 2026-09-05, SDK 10.0.400 with Roslyn 5.6.0 — the pinned
+///             <c>Microsoft.CodeAnalysis.CSharp</c> this class compiles with, which is NOT that SDK's own
+///             <c>csc</c> (10.0.400 ships 5.9.0-1.26379.115; issue #80).
+///         </b> Two probes
 ///         appended to <c>generated/sdk/2026-08-01.cs</c> and reverted: a second
 ///         <c>public enum ValkeyCacheMode</c> gave
-///         <c>✘ Generated SDK compiles Failed … line 4598: CS0101 The namespace
-///         'CyberCloud.Sdk.Generated' already contains a definition for 'ValkeyCacheMode'</c>, and a
+///         <c>
+/// ✘ Generated SDK compiles Failed … line 4598: CS0101 The namespace
+///         'CyberCloud.Sdk.Generated' already contains a definition for 'ValkeyCacheMode'
+///         </c>, and a
 ///         property typed <c>ListKeysResultSecurityProtocol</c> gave the matching <c>CS0246</c> —
 ///         the two defects issue #73 was filed about, both now red. A clean tree is
 ///         <c>✔ … 1 api-version file(s) declaring 140 type(s) … 170 partial member(s) accepted</c>.
@@ -190,8 +210,11 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         point the <c>CS8795</c> exemption below is stale and should be deleted.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Reads <c>CyberCloud.Sdk.dll</c> as a metadata reference and never as a project
-///         reference, and the distinction is a rule-7 one.</b> A <c>ProjectReference</c> from
+///         ⚠
+///         <b>
+///             Reads <c>CyberCloud.Sdk.dll</c> as a metadata reference and never as a project
+///             reference, and the distinction is a rule-7 one.
+///         </b> A <c>ProjectReference</c> from
 ///         anything under <c>src/</c> to <c>CyberCloud.Sdk</c> would be an edge from the module that
 ///         SERVES the API to the module that CALLS it, needing a line in <c>module-layering.txt</c>
 ///         that a reviewer should refuse. <c>build/_build.csproj</c> is deliberately outside
@@ -200,8 +223,7 @@ sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyLi
 ///         loading them.
 ///     </para>
 /// </remarks>
-static class GeneratedSdkSurface
-{
+static class GeneratedSdkSurface {
     /// <summary>
     ///     A partial member declared without its implementing half — the one accepted diagnostic.
     /// </summary>
@@ -217,8 +239,7 @@ static class GeneratedSdkSurface
     ///     shared framework is added here rather than by the caller, because the caller getting it
     ///     wrong would look like a defect in the generated file.
     /// </param>
-    public static GeneratedSdkFile Compile(AbsolutePath file, IEnumerable<AbsolutePath> references)
-    {
+    public static GeneratedSdkFile Compile(AbsolutePath file, IEnumerable<AbsolutePath> references) {
         // ⚠ LanguageVersion.Latest, matching Directory.Build.props § "Target framework and
         // language". Roslyn's default here is not the SDK's default, and a gate that compiled the
         // generated file under an older language than the tree builds with would fail on a feature
@@ -226,7 +247,8 @@ static class GeneratedSdkSurface
         var tree = CSharpSyntaxTree.ParseText(
             file.ReadAllText(),
             new CSharpParseOptions(LanguageVersion.Latest),
-            path: file);
+            path: file
+        );
 
         var metadata = ReferenceAssemblies()
             .Concat(references.Where(x => x.FileExists()).Select(x => x.ToString()))
@@ -240,7 +262,8 @@ static class GeneratedSdkSurface
             metadata,
             // DynamicallyLinkedLibrary: there is no entry point in a generated SDK and asking for
             // one would be a CS5001 that says nothing about the file.
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
 
         var diagnostics = compilation.GetDiagnostics();
 
@@ -255,7 +278,8 @@ static class GeneratedSdkSurface
             file.Name,
             tree.GetRoot().DescendantNodes().Count(IsTypeDeclaration),
             diagnostics.Count(x => string.Equals(x.Id, PartialWithoutImplementation, StringComparison.Ordinal)),
-            errors);
+            errors
+        );
     }
 
     /// <summary>
@@ -266,23 +290,25 @@ static class GeneratedSdkSurface
     ///     read-only (its README says so), so the reader's next move is to find the emitter branch
     ///     that wrote that line — and "somewhere in a 250 KB generated file" is not a starting point.
     /// </remarks>
-    static string Describe(Diagnostic diagnostic)
-    {
+    static string Describe(Diagnostic diagnostic) {
         var line = diagnostic.Location.GetLineSpan().StartLinePosition.Line + 1;
 
         return $"line {line}: {diagnostic.Id} {diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture)}";
     }
 
-    static bool IsTypeDeclaration(SyntaxNode node)
-        => node is Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax;
+    static bool IsTypeDeclaration(SyntaxNode node) =>
+        node is Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax;
 
     /// <summary>
     ///     The shared framework, taken from the list this process was started with.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><c>TRUSTED_PLATFORM_ASSEMBLIES</c>, not <c>AppDomain.CurrentDomain.GetAssemblies()</c>,
-    ///     and <c>CyberCloud.Kubernetes.Contracts.Tests/CompileFailureTests</c> paid for that
-    ///     lesson.</b> The second is whatever the runtime happens to have loaded by the time it is
+    ///     ⚠
+    ///     <b>
+    ///         <c>TRUSTED_PLATFORM_ASSEMBLIES</c>, not <c>AppDomain.CurrentDomain.GetAssemblies()</c>,
+    ///         and <c>CyberCloud.Kubernetes.Contracts.Tests/CompileFailureTests</c> paid for that
+    ///         lesson.
+    ///     </b> The second is whatever the runtime happens to have loaded by the time it is
     ///     called, which depends on what ran before — and a missing framework assembly does not fail
     ///     loudly here, it turns every type in the generated file into <c>CS0246</c> and the gate
     ///     into a wall of noise about the wrong thing. The trusted-platform list is fixed at process
@@ -293,8 +319,11 @@ static class GeneratedSdkSurface
     ///         one the generated file should be checked against.
     ///     </para>
     /// </remarks>
-    static ImmutableArray<string> ReferenceAssemblies()
-        => AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trusted
-            ? [.. trusted.Split(System.IO.Path.PathSeparator).Where(x => x.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))]
+    static ImmutableArray<string> ReferenceAssemblies() =>
+        AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trusted
+            ? [
+                .. trusted.Split(System.IO.Path.PathSeparator)
+                    .Where(x => x.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            ]
             : [];
 }

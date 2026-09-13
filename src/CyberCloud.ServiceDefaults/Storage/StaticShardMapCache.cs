@@ -145,8 +145,8 @@ public sealed class StaticShardMapCache : IShardMapCache {
         // halves of one tenant's session state — which is a bug with no error message.
         return HotTagPrefix
             + (Guid.TryParse(tenantId, out var id)
-                ? id.ToString("N", CultureInfo.InvariantCulture)
-                : tenantId);
+                    ? id.ToString("N", CultureInfo.InvariantCulture)
+                    : tenantId);
     }
 
     /// <summary>

@@ -7,9 +7,15 @@ namespace CyberCloud.Providers.Network;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>IT APPLIES LESS THAN ANY OTHER RECONCILER IN THE FAMILY, AND THAT IS THE DESIGN
-///         RATHER THAN AN UNFINISHED TYPE.</b> The rendered <c>spec</c> is one constant — <c>type:
-///         nat</c> — plus a requested address when the body named one. Everything else about an
+///         ⚠
+///         <b>
+///             IT APPLIES LESS THAN ANY OTHER RECONCILER IN THE FAMILY, AND THAT IS THE DESIGN
+///             RATHER THAN AN UNFINISHED TYPE.
+///         </b> The rendered <c>spec</c> is one constant —
+///         <c>
+/// type:
+///         nat
+///         </c> — plus a requested address when the body named one. Everything else about an
 ///         <c>OvnEip</c> is the fabric's: the pool comes from the operator's
 ///         <c>--external-gateway-switch</c>, the address and the MAC come from IPAM, and all three are
 ///         written back to <c>.spec</c> by the controller. A reconciler that sent them would be
@@ -17,8 +23,11 @@ namespace CyberCloud.Providers.Network;
 ///         permanent <c>ApplyResult.Conflict</c> — see <see cref="PublicIpAddresses.OvnEipJson" />.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT REFUSES A BODY THE API ALREADY ACCEPTED, AS ITS TWO SIBLINGS DO, AND THE REMAINDER
-///         IS MUCH SMALLER HERE.</b> <see cref="PublicIpAddresses.AddressProblem" /> is two facts
+///         ⚠
+///         <b>
+///             IT REFUSES A BODY THE API ALREADY ACCEPTED, AS ITS TWO SIBLINGS DO, AND THE REMAINDER
+///             IS MUCH SMALLER HERE.
+///         </b> <see cref="PublicIpAddresses.AddressProblem" /> is two facts
 ///         about one string — the family, and the fabric's refusal of an upper-case IPv6 address —
 ///         because <c>IpAddresses.OptionalV4Pattern</c> already refused everything else at the API,
 ///         with a pointer, before the write path answered. The refusal is terminal
@@ -83,12 +92,10 @@ public sealed class PublicIpAddressReconciler(IClock clock) : IResourceReconcile
             .WithTenantId(context.Id.TenantId)
             .WithResourceId(context.Id)
             // ⚠ Cluster-scoped: no `InNamespace`. The namespace is inside `name`.
-            .WithKind(PublicIpAddresses.OvnEipKind)
-            .WithApiVersion(context.ApiVersion)
-            .ObjectJson(
-                PublicIpAddresses.OvnEipJson(context.Namespace, context.Id.Name, context.Desired)
-            )
-            .ApplyAsync(cancellationToken);
+                .WithKind(PublicIpAddresses.OvnEipKind)
+                .WithApiVersion(context.ApiVersion)
+                .ObjectJson(PublicIpAddresses.OvnEipJson(context.Namespace, context.Id.Name, context.Desired))
+                .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
             return ReconcileOutcome.FromFailure(applyError);
@@ -152,10 +159,16 @@ public sealed class PublicIpAddressReconciler(IClock clock) : IResourceReconcile
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>A DELETE CAN LEGITIMATELY NOT FINISH, AND ON THIS TYPE THAT IS THE FABRIC PROTECTING
-    ///     A TENANT RATHER THAN A FAULT.</b> <c>handleUpdateOvnEip</c>'s deletion path refuses to drop
-    ///     the finalizer while a NAT rule still uses the address — <i>"is still being used by NAT
-    ///     rules … waiting for them to be deleted"</i> — so the object sits in <c>Terminating</c> and
+    ///     ⚠
+    ///     <b>
+    ///         A DELETE CAN LEGITIMATELY NOT FINISH, AND ON THIS TYPE THAT IS THE FABRIC PROTECTING
+    ///         A TENANT RATHER THAN A FAULT.
+    ///     </b> <c>handleUpdateOvnEip</c>'s deletion path refuses to drop
+    ///     the finalizer while a NAT rule still uses the address —
+    ///     <i>
+    ///         "is still being used by NAT
+    ///         rules … waiting for them to be deleted"
+    ///     </i> — so the object sits in <c>Terminating</c> and
     ///     this method keeps answering <c>InProgress</c> with the object still readable. That is the
     ///     right answer: releasing the address underneath a live rule would hand it to another tenant
     ///     while traffic was still arriving. ⚠ It cannot happen in this api-version, because nothing
@@ -178,9 +191,7 @@ public sealed class PublicIpAddressReconciler(IClock clock) : IResourceReconcile
             .WithResourceId(context.Id)
             .WithKind(PublicIpAddresses.OvnEipKind)
             .WithApiVersion(context.ApiVersion)
-            .ObjectJson(
-                PublicIpAddresses.OvnEipJson(context.Namespace, context.Id.Name, context.Desired)
-            )
+            .ObjectJson(PublicIpAddresses.OvnEipJson(context.Namespace, context.Id.Name, context.Desired))
             .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -220,9 +231,7 @@ public sealed class PublicIpAddressReconciler(IClock clock) : IResourceReconcile
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the address is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the address is absent" };
         }
 
         var found = read.GetValueOrThrow();

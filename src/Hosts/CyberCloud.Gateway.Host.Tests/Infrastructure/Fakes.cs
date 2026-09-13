@@ -112,22 +112,33 @@ sealed class RecordingResourceManager : IResourceManager {
 
     /// <summary>What the three write paths answer. Default: a <c>202</c>.</summary>
     public Func<WriteRequest, Result<WriteAccepted>> OnWrite { get; set; } =
-        request => Result<WriteAccepted>.Success(new() {
-            OperationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-            RetryAfterSeconds = 10,
-            Resource = new() { Path = request.Path, Name = "main" }
-        });
+        request => Result<WriteAccepted>.Success(
+            new() {
+                OperationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                RetryAfterSeconds = 10,
+                Resource = new() { Path = request.Path, Name = "main" }
+            }
+        );
 
     /// <inheritdoc />
-    public Task<Result<WriteAccepted>> WriteAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
+    public Task<Result<WriteAccepted>> WriteAsync(
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
         Record(request, OnWrite);
 
     /// <inheritdoc />
-    public Task<Result<ResourceSnapshot>> ReadAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
+    public Task<Result<ResourceSnapshot>> ReadAsync(
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
         Record(request, OnRead);
 
     /// <inheritdoc />
-    public Task<Result<WriteAccepted>> DeleteAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
+    public Task<Result<WriteAccepted>> DeleteAsync(
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
         Record(request, OnWrite);
 
     /// <summary>Every collection path this manager was asked to list, in order.</summary>
@@ -141,9 +152,9 @@ sealed class RecordingResourceManager : IResourceManager {
 
     /// <summary>What <see cref="ListAsync" /> answers. Default: one resource.</summary>
     public Func<ListRequest, Result<ResourceListPage>> OnList { get; set; } =
-        request => Result<ResourceListPage>.Success(new() {
-            Resources = [new() { Path = request.Path + "/main", Name = "main" }]
-        });
+        request => Result<ResourceListPage>.Success(
+            new() { Resources = [new() { Path = request.Path + "/main", Name = "main" }] }
+        );
 
     /// <inheritdoc />
     /// <remarks>
@@ -153,7 +164,10 @@ sealed class RecordingResourceManager : IResourceManager {
     ///     <c>ReconcileThroughTheRealHostTests</c>, which is the suite that meets this one at
     ///     <see cref="IResourceManager" />.
     /// </remarks>
-    public Task<Result<ResourceListPage>> ListAsync(ListRequest request, CancellationToken cancellationToken = default) {
+    public Task<Result<ResourceListPage>> ListAsync(
+        ListRequest request,
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(request);
         Collections.Enqueue(request.Path);
         callers.Enqueue(request.Caller);
@@ -183,7 +197,10 @@ sealed class RecordingResourceManager : IResourceManager {
         Record(request, OnWrite);
 
     /// <inheritdoc />
-    public Task<Result<WriteAccepted>> PurgeAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
+    public Task<Result<WriteAccepted>> PurgeAsync(
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
         Record(request, OnWrite);
 
     /// <inheritdoc />
@@ -214,7 +231,10 @@ sealed class RecordingResourceManager : IResourceManager {
     ///     the assertion held for a reason unrelated to what it claimed. <see cref="Actions" /> is what
     ///     lets a test ask the only question that matters: whether dispatch was reached at all.
     /// </remarks>
-    public Task<Result<WriteAccepted>> ActionAsync(WriteRequest request, CancellationToken cancellationToken = default) {
+    public Task<Result<WriteAccepted>> ActionAsync(
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) {
         actions.Enqueue(request.Action);
 
         return Record(request, OnWrite);
@@ -225,12 +245,14 @@ sealed class RecordingResourceManager : IResourceManager {
 
     /// <summary>What <see cref="GetOperationAsync" /> answers. Default: a running operation.</summary>
     public Func<Guid, Result<OperationStatus>> OnGetOperation { get; set; } =
-        operationId => Result<OperationStatus>.Success(new() {
-            OperationId = operationId,
-            State = OperationState.Running,
-            ResourcePath = "/tenants/x/subscriptions/y/resourceGroups/prod/providers/N/t/main",
-            ResourceId = Guid.Parse("22222222-2222-2222-2222-222222222222")
-        });
+        operationId => Result<OperationStatus>.Success(
+            new() {
+                OperationId = operationId,
+                State = OperationState.Running,
+                ResourcePath = "/tenants/x/subscriptions/y/resourceGroups/prod/providers/N/t/main",
+                ResourceId = Guid.Parse("22222222-2222-2222-2222-222222222222")
+            }
+        );
 
     /// <inheritdoc />
     public Task<Result<OperationStatus>> GetOperationAsync(
@@ -293,8 +315,11 @@ sealed class ScriptedOperationReader : IOperationReader {
 ///     A scope manager that records every scope path it was asked about and answers from a script.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The same substitution <see cref="RecordingResourceManager" /> is, and the same warning
-///     applies to it.</b> A scope route proven only against this fake proves that stage 6 admits the
+///     ⚠
+///     <b>
+///         The same substitution <see cref="RecordingResourceManager" /> is, and the same warning
+///         applies to it.
+///     </b> A scope route proven only against this fake proves that stage 6 admits the
 ///     path and that stage 8 hands it to the right manager. It proves nothing about whether the real
 ///     <c>ScopeManagerService</c> checks a permission, writes a parent edge, or creates anything —
 ///     the two meet at <c>IScopeManager</c> and neither this suite nor the manager's own covers the
@@ -352,8 +377,11 @@ sealed class RecordingScopeManager : IScopeManager {
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>Throws, because nothing in the gateway may reach it and this is how that is
-    ///     asserted.</b> <c>IScopeManager.CreateTenantAsync</c> is the platform-operator bootstrap
+    ///     ⚠
+    ///     <b>
+    ///         Throws, because nothing in the gateway may reach it and this is how that is
+    ///         asserted.
+    ///     </b> <c>IScopeManager.CreateTenantAsync</c> is the platform-operator bootstrap
     ///     path and there is no route to it — a fake that answered politely would let a future
     ///     dispatch line reach it and every test would still pass.
     /// </remarks>

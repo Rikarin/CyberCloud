@@ -7,8 +7,11 @@ namespace CyberCloud.Cluster.Conformance.Reference;
 ///     The cluster-backed suite, run against the reference provider.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This file is the entire cost of putting a provider under the cluster-backed suite, and it
-///     is the same shape as the Docker-free one.</b> The case is <c>ReferenceCase</c> — the very same
+///     ⚠
+///     <b>
+///         This file is the entire cost of putting a provider under the cluster-backed suite, and it
+///         is the same shape as the Docker-free one.
+///     </b> The case is <c>ReferenceCase</c> — the very same
 ///     object <c>CyberCloud.Conformance</c> already runs against, reused rather than restated, so the
 ///     two halves cannot drift onto different descriptions of one provider.
 ///     <para>
@@ -19,7 +22,7 @@ namespace CyberCloud.Cluster.Conformance.Reference;
 /// </remarks>
 public sealed class ReferenceProviderClusterConformance(ClusterConformanceFixture<ReferenceCase> fixture)
     : ClusterConformanceTests<ReferenceCase>(fixture),
-        IClassFixture<ClusterConformanceFixture<ReferenceCase>>;
+    IClassFixture<ClusterConformanceFixture<ReferenceCase>>;
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the reference provider.</summary>
 public sealed class ReferenceProviderSiloKillConformance : SiloKillConformanceTests<ReferenceCase>;
@@ -28,8 +31,11 @@ public sealed class ReferenceProviderSiloKillConformance : SiloKillConformanceTe
 ///     The <b>same</b> four criteria, against the reference provider's <b>child</b> type.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Two more class declarations and nothing else, which is the claim this file exists to
-///     make true for a nested type as well.</b> The child's parent is created by the harness against
+///     ⚠
+///     <b>
+///         Two more class declarations and nothing else, which is the claim this file exists to
+///         make true for a nested type as well.
+///     </b> The child's parent is created by the harness against
 ///     the same real API server before the first assertion runs, so what these four exercise for a
 ///     child is what they exercise for its parent: the rendered manifest is one the API server
 ///     accepts, server-side apply works under our field manager, the seven labels survive admission,
@@ -46,4 +52,4 @@ public sealed class ReferenceProviderSiloKillConformance : SiloKillConformanceTe
 /// <param name="fixture">The harness.</param>
 public sealed class ReferenceChildClusterConformance(ClusterConformanceFixture<ReferenceChildCase> fixture)
     : ClusterConformanceTests<ReferenceChildCase>(fixture),
-        IClassFixture<ClusterConformanceFixture<ReferenceChildCase>>;
+    IClassFixture<ClusterConformanceFixture<ReferenceChildCase>>;

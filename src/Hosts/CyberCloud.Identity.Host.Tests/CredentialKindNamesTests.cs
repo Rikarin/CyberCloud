@@ -41,12 +41,13 @@ public sealed class CredentialKindNamesTests {
     [Theory]
     [MemberData(nameof(Spellings))]
     public void EachKindHasTheSpellingTheFrontendCompares(CredentialKind kind, string expected) =>
-        CredentialKindNames.Of(kind).ShouldBe(
-            expected,
-            $"portal/apps/identity/src/app/identity-api.ts declares '{expected}' and compares it "
-            + "ordinally. A different spelling here matches no branch in the page, and the symptom is "
-            + "a missing button rather than an error."
-        );
+        CredentialKindNames.Of(kind)
+            .ShouldBe(
+                expected,
+                $"portal/apps/identity/src/app/identity-api.ts declares '{expected}' and compares it "
+                + "ordinally. A different spelling here matches no branch in the page, and the symptom is "
+                + "a missing button rather than an error."
+            );
 
     [Fact]
     public void TheTableCoversEveryMemberOfTheEnum() {

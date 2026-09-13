@@ -169,14 +169,14 @@ public sealed class SharedInformerTests {
         var waited = new List<TimeSpan>();
 
         var outcome = (await informer.EstablishAsync(
-            (d, _) => {
-                // The delay must be taken BEFORE the list, or it staggers nothing.
-                api.Lists.ShouldBeEmpty();
-                waited.Add(d);
-                return Task.CompletedTask;
-            },
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow();
+                (d, _) => {
+                    // The delay must be taken BEFORE the list, or it staggers nothing.
+                    api.Lists.ShouldBeEmpty();
+                    waited.Add(d);
+                    return Task.CompletedTask;
+                },
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow();
 
         waited.ShouldHaveSingleItem();
         waited[0].ShouldBe(InformerStagger.DelayFor(ClusterId, window));
@@ -261,12 +261,12 @@ public sealed class SharedInformerTests {
         var seen = new List<KubeWatchEventKind>();
 
         (await informer.PumpAsync(
-            e => {
-                seen.Add(e.Kind);
-                return Task.CompletedTask;
-            },
-            TestContext.Current.CancellationToken
-        )).IsSuccess.ShouldBeTrue();
+                e => {
+                    seen.Add(e.Kind);
+                    return Task.CompletedTask;
+                },
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
 
         // ⚠ A bookmark advances the cursor and is NOT delivered — that is what it is for. Without
         // bookmarks a quiet kind holds an ever-older cursor and is the most likely to be compacted

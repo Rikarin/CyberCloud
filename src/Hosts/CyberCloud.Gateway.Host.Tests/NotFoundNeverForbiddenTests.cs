@@ -20,16 +20,18 @@ public sealed class NotFoundNeverForbiddenTests {
     [Fact]
     public async Task TheAbsentAndTheUnauthorized404sAreByteIdentical() {
         var absent = await Answer(request => Result<ResourceSnapshot>.Failure(
-            ErrorCode.ResourceNotFound,
-            $"'{request.Path}' does not exist."
-        ));
+                ErrorCode.ResourceNotFound,
+                $"'{request.Path}' does not exist."
+            )
+        );
 
         // What a seam that had NOT been forced through one renderer would plausibly write. It is a
         // different sentence, it names the caller, and it is a complete oracle on its own.
         var unauthorized = await Answer(request => Result<ResourceSnapshot>.Failure(
-            ErrorCode.ResourceNotFound,
-            $"The caller is not permitted to read '{request.Path}' and the resource exists."
-        ));
+                ErrorCode.ResourceNotFound,
+                $"The caller is not permitted to read '{request.Path}' and the resource exists."
+            )
+        );
 
         absent.Status.ShouldBe(StatusCodes.Status404NotFound);
         unauthorized.Status.ShouldBe(StatusCodes.Status404NotFound);
@@ -42,16 +44,18 @@ public sealed class NotFoundNeverForbiddenTests {
     [Fact]
     public async Task ASubscriptionThatDoesNotExistGetsTheSameBodyAsAResourceThatDoesNot() {
         var resource = await Answer(request => Result<ResourceSnapshot>.Failure(
-            ErrorCode.ResourceNotFound,
-            $"'{request.Path}' does not exist."
-        ));
+                ErrorCode.ResourceNotFound,
+                $"'{request.Path}' does not exist."
+            )
+        );
 
         // ⚠ A distinct "no such subscription" body would let a prober enumerate subscription ids
         // inside a tenant, which is a smaller leak than cross-tenant and still a real one.
         var subscription = await Answer(_ => Result<ResourceSnapshot>.Failure(
-            ErrorCode.SubscriptionNotFound,
-            "That subscription does not exist in this tenant."
-        ));
+                ErrorCode.SubscriptionNotFound,
+                "That subscription does not exist in this tenant."
+            )
+        );
 
         subscription.Status.ShouldBe(StatusCodes.Status404NotFound);
         subscription.Body.ShouldBe(resource.Body);

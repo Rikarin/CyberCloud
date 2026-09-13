@@ -62,8 +62,11 @@ public static class SiloIdentityComposition {
     /// <returns>The same builder, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE PEPPER IS EMPTY AND THAT IS A REAL COST RATHER THAN A DEVELOPMENT
-    ///         CONVENIENCE.</b> <c>AddCyberCloudIdentity</c> takes the Argon2id secret input and the
+    ///         ⚠
+    ///         <b>
+    ///             THE PEPPER IS EMPTY AND THAT IS A REAL COST RATHER THAN A DEVELOPMENT
+    ///             CONVENIENCE.
+    ///         </b> <c>AddCyberCloudIdentity</c> takes the Argon2id secret input and the
     ///         HMAC key <c>OtpCodeProtector</c> derives a stored code digest under, and docs/plan/11
     ///         § Credentials asks for both to come "from Vault". Nothing in this repository
     ///         provisions a vault (docs/plan/18), so there is nothing to read one from and the
@@ -74,8 +77,11 @@ public static class SiloIdentityComposition {
     ///         it is live. Wiring a vault is a change to this one call.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An unconfigured <c>CyberCloud:Identity:OtpDelivery</c> leaves
-    ///         <c>UnavailableOtpDelivery</c> in place, which is the point rather than an oversight.</b>
+    ///         ⚠
+    ///         <b>
+    ///             An unconfigured <c>CyberCloud:Identity:OtpDelivery</c> leaves
+    ///             <c>UnavailableOtpDelivery</c> in place, which is the point rather than an oversight.
+    ///         </b>
     ///         That type's message names the missing call and the section, and it is the sentence an
     ///         operator meets on the first code this silo is asked to send. Defaulting to a route
     ///         nobody chose would send a tenant's authentication traffic through whatever service id

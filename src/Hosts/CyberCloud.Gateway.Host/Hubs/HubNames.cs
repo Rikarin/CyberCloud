@@ -28,6 +28,5 @@ public static class HubNames {
 
     /// <summary>Whether a path segment names one of the four.</summary>
     /// <param name="name">The segment after <c>/hubs/</c>.</param>
-    public static bool IsKnown(string? name) =>
-        name is Resources or Operations or Terminal or Metrics;
+    public static bool IsKnown(string? name) => name is Resources or Operations or Terminal or Metrics;
 }

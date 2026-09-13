@@ -48,11 +48,14 @@ public sealed class ProviderDiscoveryTests {
         TemporaryTree.FilesUnder(tree.OpenApiDirectory).ShouldBe([DocumentFile, IndexFile]);
 
         // ADR-012's other three, from the document rather than from the registry.
-        TemporaryTree.FilesUnder(tree.DerivedDirectory).ShouldBe([
-            "cli/" + SampleWidgets.V2026 + ".json",
-            "forms/" + SampleWidgets.V2026 + ".json",
-            "sdk/" + SampleWidgets.V2026 + ".cs"
-        ]);
+        TemporaryTree.FilesUnder(tree.DerivedDirectory)
+            .ShouldBe(
+                [
+                    "cli/" + SampleWidgets.V2026 + ".json",
+                    "forms/" + SampleWidgets.V2026 + ".json",
+                    "sdk/" + SampleWidgets.V2026 + ".cs"
+                ]
+            );
     }
 
     [Fact]
@@ -97,7 +100,8 @@ public sealed class ProviderDiscoveryTests {
 
         Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
-        tree.Report()["documents"]!.AsArray()
+        tree.Report()["documents"]!
+            .AsArray()
             .Select(x => x!["apiVersion"]!.GetValue<string>())
             .ShouldContain(SampleWidgets.V2026);
 
@@ -130,11 +134,12 @@ public sealed class ProviderDiscoveryTests {
             files.ShouldNotBeEmpty();
 
             foreach (var file in files) {
-                File.ReadAllBytes(Path.Combine(right, file)).ShouldBe(
-                    File.ReadAllBytes(Path.Combine(left, file)),
-                    $"{directory}/{file} did not regenerate byte-identically, so the Generated "
-                    + "surfaces gate would pass or fail depending on which run CI happened to make"
-                );
+                File.ReadAllBytes(Path.Combine(right, file))
+                    .ShouldBe(
+                        File.ReadAllBytes(Path.Combine(left, file)),
+                        $"{directory}/{file} did not regenerate byte-identically, so the Generated "
+                        + "surfaces gate would pass or fail depending on which run CI happened to make"
+                    );
             }
         }
     }
@@ -198,10 +203,12 @@ public sealed class ProviderDiscoveryTests {
 
         Generator.Run(tree, check: true, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
-        tree.Report()["documents"]!.AsArray()
+        tree.Report()["documents"]!
+            .AsArray()
             .ShouldContain(x => x!["file"]!.GetValue<string>() == DocumentFile
                 && x["drifted"]!.GetValue<bool>()
-                && x["published"]!.GetValue<bool>());
+                && x["published"]!.GetValue<bool>()
+            );
 
         // Untouched by the run that reported it.
         File.ReadAllBytes(edited).ShouldNotBe(original);
@@ -225,7 +232,8 @@ public sealed class ProviderDiscoveryTests {
         Generator.Run(tree, check: false, Generator.SampleProviderAssembly).ExitCode.ShouldBe(Ok);
 
         File.ReadAllBytes(document).ShouldBe(generated);
-        tree.Report()["documents"]!.AsArray()
+        tree.Report()["documents"]!
+            .AsArray()
             .ShouldContain(x => x!["file"]!.GetValue<string>() == DocumentFile && x["drifted"]!.GetValue<bool>());
     }
 
@@ -238,9 +246,12 @@ public sealed class ProviderDiscoveryTests {
         using var tree = new TemporaryTree();
 
         var run = Generator.Invoke(
-            "--output", tree.OpenApiDirectory,
-            "--report", tree.ReportFile,
-            "--provider-assembly", Generator.SampleProviderAssembly
+            "--output",
+            tree.OpenApiDirectory,
+            "--report",
+            tree.ReportFile,
+            "--provider-assembly",
+            Generator.SampleProviderAssembly
         );
 
         run.ExitCode.ShouldBe(Ok);

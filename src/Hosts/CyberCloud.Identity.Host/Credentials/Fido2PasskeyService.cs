@@ -53,14 +53,14 @@ public sealed class Fido2PasskeyService(IFido2 fido2, IClock clock) : IPasskeySe
                     // changed afterwards — putting an address there would mean an email change
                     // orphaned every enrolled passkey, and would print the address on the
                     // authenticator's own screens.
-                    Id = request.UserId.ToByteArray(),
-                    Name = request.Email,
-                    DisplayName = request.DisplayName
+                    Id = request.UserId.ToByteArray(), Name = request.Email, DisplayName = request.DisplayName
                 },
                 // Enrolled credentials are excluded so the authenticator declines to register a
                 // second credential for an account it already holds one for, rather than producing a
                 // duplicate the user then has to tell apart in a list.
-                ExcludeCredentials = [.. request.Existing.Select(x => new PublicKeyCredentialDescriptor(Decode(x.CredentialId)))],
+                ExcludeCredentials = [
+                    .. request.Existing.Select(x => new PublicKeyCredentialDescriptor(Decode(x.CredentialId)))
+                ],
                 AuthenticatorSelection = new() {
                     // ⚠ Required, not preferred. A resident (discoverable) credential with user
                     // verification is what makes a passkey a single-step, two-factor sign-in —
@@ -153,7 +153,9 @@ public sealed class Fido2PasskeyService(IFido2 fido2, IClock clock) : IPasskeySe
         // sign-in looks like anyway.
         var options = fido2.GetAssertionOptions(
             new() {
-                AllowedCredentials = [.. credentials.Select(x => new PublicKeyCredentialDescriptor(Decode(x.CredentialId)))],
+                AllowedCredentials = [
+                    .. credentials.Select(x => new PublicKeyCredentialDescriptor(Decode(x.CredentialId)))
+                ],
                 UserVerification = UserVerificationRequirement.Required
             }
         );

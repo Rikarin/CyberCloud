@@ -10,8 +10,11 @@ namespace CyberCloud.Sdk;
 /// <typeparam name="T">The value — a generated <c>{Type}Resource</c>.</typeparam>
 /// <remarks>
 ///     ⚠ <b>The final response is a <c>GET</c> of the resource, not the last poll.</b> docs/plan/10
-///     § Long-running operations, over HTTP: <c>200 { "status": "Succeeded" }</c> <i>"→ then GET the
-///     resource"</i>. The operation body says whether it worked; it does not contain the resource.
+///     § Long-running operations, over HTTP: <c>200 { "status": "Succeeded" }</c>
+///     <i>
+///         "→ then GET the
+///         resource"
+///     </i>. The operation body says whether it worked; it does not contain the resource.
 ///     <see cref="Operation{T}" /> issues that <c>GET</c> against the URL of the request that started
 ///     the operation and hands the response here.
 /// </remarks>
@@ -40,11 +43,19 @@ public class Operation {
     /// <param name="initialResponse">The <c>202</c>, carrying <c>Azure-AsyncOperation</c> and <c>Retry-After</c>.</param>
     /// <param name="operationName"><c>{Type}.{Verb}</c> — <c>Widgets.Delete</c>.</param>
     public Operation(CyberCloudClientContext context, Uri requestUri, Response initialResponse, string operationName) {
-        poller = new OperationPoller(context, requestUri, initialResponse, operationName, fetchResourceOnSuccess: false);
+        poller = new OperationPoller(
+            context,
+            requestUri,
+            initialResponse,
+            operationName,
+            fetchResourceOnSuccess: false
+        );
     }
 
     /// <summary>Constructor for mocking.</summary>
-    protected Operation() => poller = null!;
+    protected Operation() {
+        poller = null!;
+    }
 
     /// <summary>The operation id — the last segment of the poll URL.</summary>
     public virtual string Id => poller.Id;
@@ -62,8 +73,10 @@ public class Operation {
     public virtual Response GetRawResponse() => poller.RawResponse;
 
     /// <inheritdoc cref="Operation{T}.GetProgressAsync" />
-    public virtual IAsyncEnumerable<OperationProgress> GetProgressAsync(CancellationToken cancellationToken = default)
-        => OperationProgressEnumerator.Enumerate(poller, cancellationToken);
+    public virtual IAsyncEnumerable<OperationProgress> GetProgressAsync(
+        CancellationToken cancellationToken = default
+    ) =>
+        OperationProgressEnumerator.Enumerate(poller, cancellationToken);
 
     /// <summary>Polls once.</summary>
     /// <param name="cancellationToken">The token.</param>
@@ -76,9 +89,12 @@ public class Operation {
 
     /// <summary>Polls until the operation reaches a terminal state.</summary>
     /// <param name="cancellationToken">The token.</param>
-    public virtual async ValueTask<Response> WaitForCompletionResponseAsync(CancellationToken cancellationToken = default) {
-        while (!poller.HasCompleted)
+    public virtual async ValueTask<Response> WaitForCompletionResponseAsync(
+        CancellationToken cancellationToken = default
+    ) {
+        while (!poller.HasCompleted) {
             await poller.PollAfterDelayAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         poller.ThrowIfFailed();
 
@@ -124,8 +140,11 @@ public class Operation<T> : Operation {
     /// <param name="context">The client context.</param>
     /// <param name="requestUri">
     ///     The URL of the request that started the operation. ⚠ It is where the resource is read from
-    ///     when the operation succeeds — docs/plan/10 § Long-running operations, over HTTP: <i>"then
-    ///     GET the resource"</i>.
+    ///     when the operation succeeds — docs/plan/10 § Long-running operations, over HTTP:
+    ///     <i>
+    ///         "then
+    ///         GET the resource"
+    ///     </i>.
     /// </param>
     /// <param name="initialResponse">The <c>202</c>, carrying <c>Azure-AsyncOperation</c> and <c>Retry-After</c>.</param>
     /// <param name="operationName"><c>{Type}.{Verb}</c> — <c>Widgets.CreateOrUpdate</c>.</param>
@@ -134,7 +153,8 @@ public class Operation<T> : Operation {
         CyberCloudClientContext context,
         Uri requestUri,
         Response initialResponse,
-        string operationName) {
+        string operationName
+    ) {
         ArgumentNullException.ThrowIfNull(source);
 
         this.source = source;
@@ -164,17 +184,22 @@ public class Operation<T> : Operation {
 
     /// <summary>The value.</summary>
     /// <exception cref="InvalidOperationException"><see cref="HasValue" /> is <see langword="false" />.</exception>
-    public virtual T Value => HasValue
-        ? value!
-        : throw new InvalidOperationException(
-            "The operation has not produced a value yet. Await WaitForCompletionAsync() first, or check HasValue.");
+    public virtual T Value =>
+        HasValue
+            ? value!
+            : throw new InvalidOperationException(
+                "The operation has not produced a value yet. Await WaitForCompletionAsync() first, or check HasValue."
+            );
 
     /// <inheritdoc />
     public override Response GetRawResponse() => poller.RawResponse;
 
     /// <summary>
-    ///     The operation's progress entries, streamed as each poll returns them. <b>Ours; Azure's SDK
-    ///     has no equivalent</b> — docs/plan/21 § The .NET SDK.
+    ///     The operation's progress entries, streamed as each poll returns them.
+    ///     <b>
+    ///         Ours; Azure's SDK
+    ///         has no equivalent
+    ///     </b> — docs/plan/21 § The .NET SDK.
     /// </summary>
     /// <param name="cancellationToken">
     ///     Stops the enumeration and the polling it drives. Cancelling leaves no timer and no
@@ -188,8 +213,11 @@ public class Operation<T> : Operation {
     ///         counting round trips between yields.
     ///     </para>
     ///     <para>
-    ///         The enumeration ends when the operation reaches a terminal state, <b>including a
-    ///         failure</b>. ⚠ It does not throw: a progress stream is a narration, and a caller who
+    ///         The enumeration ends when the operation reaches a terminal state,
+    ///         <b>
+    ///             including a
+    ///             failure
+    ///         </b>. ⚠ It does not throw: a progress stream is a narration, and a caller who
     ///         wrote the loop in docs/plan/21's example expects the failure from
     ///         <see cref="WaitForCompletionAsync" /> on the next line, not from the
     ///         <c>await foreach</c>. Check <see cref="Operation.Status" /> or await the completion.
@@ -199,8 +227,10 @@ public class Operation<T> : Operation {
     ///         history — the feed remembers what it published.
     ///     </para>
     /// </remarks>
-    public override IAsyncEnumerable<OperationProgress> GetProgressAsync(CancellationToken cancellationToken = default)
-        => OperationProgressEnumerator.Enumerate(poller, cancellationToken);
+    public override IAsyncEnumerable<OperationProgress> GetProgressAsync(
+        CancellationToken cancellationToken = default
+    ) =>
+        OperationProgressEnumerator.Enumerate(poller, cancellationToken);
 
     /// <inheritdoc />
     public override async ValueTask<Response> UpdateStatusAsync(CancellationToken cancellationToken = default) {
@@ -215,8 +245,9 @@ public class Operation<T> : Operation {
     /// <param name="cancellationToken">The token. Cancelling stops the polling promptly.</param>
     /// <exception cref="CyberCloudRequestFailedException">The operation failed or was cancelled.</exception>
     public virtual async ValueTask<Response<T>> WaitForCompletionAsync(CancellationToken cancellationToken = default) {
-        while (!poller.HasCompleted)
+        while (!poller.HasCompleted) {
             await poller.PollAfterDelayAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         poller.ThrowIfFailed();
         await EnsureValueAsync(cancellationToken).ConfigureAwait(false);
@@ -225,8 +256,9 @@ public class Operation<T> : Operation {
     }
 
     async ValueTask EnsureValueAsync(CancellationToken cancellationToken) {
-        if (HasValue || poller.ResourceResponse is null)
+        if (HasValue || poller.ResourceResponse is null) {
             return;
+        }
 
         value = await source.CreateResultAsync(poller.ResourceResponse, cancellationToken).ConfigureAwait(false);
         HasValue = true;
@@ -240,7 +272,8 @@ public class Operation<T> : Operation {
 static class OperationProgressEnumerator {
     public static async IAsyncEnumerable<OperationProgress> Enumerate(
         OperationPoller poller,
-        [EnumeratorCancellation] CancellationToken cancellationToken) {
+        [EnumeratorCancellation] CancellationToken cancellationToken
+    ) {
         Channel<OperationProgress> subscription = poller.Subscribe();
 
         try {
@@ -249,11 +282,13 @@ static class OperationProgressEnumerator {
                 // decides whether to poll again — and so a terminal poll's entries are delivered
                 // before the loop notices the operation has finished. Getting this order wrong loses
                 // the last progress line of every operation, which is the one saying what it finished.
-                while (subscription.Reader.TryRead(out var entry))
+                while (subscription.Reader.TryRead(out var entry)) {
                     yield return entry;
+                }
 
-                if (poller.HasCompleted)
+                if (poller.HasCompleted) {
                     yield break;
+                }
 
                 await poller.PollAfterDelayAsync(cancellationToken).ConfigureAwait(false);
             }

@@ -604,8 +604,7 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
         );
 
     static Result<T> Refused<T>(Result refusal)
-        where T : notnull =>
-        Result<T>.Failure(refusal.Error!);
+        where T : notnull => Result<T>.Failure(refusal.Error!);
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
@@ -614,8 +613,11 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
     /// </summary>
     /// <param name="error">The failure, or <see langword="null" /> when the call succeeded.</param>
     /// <remarks>
-    ///     ⚠ <b>A refusal is the cluster answering, and folding one into the health window is how a
-    ///     rejected write becomes an infinite loop.</b> Health drives
+    ///     ⚠
+    ///     <b>
+    ///         A refusal is the cluster answering, and folding one into the health window is how a
+    ///         rejected write becomes an infinite loop.
+    ///     </b> Health drives
     ///     <see cref="ClusterHealthState.Degraded" />, a <c>Degraded</c> cluster's applies come back
     ///     <see cref="ApplyResult.Suspended" /> rather than failed (docs/plan/09 § Cluster
     ///     connections), and a suspended reconcile is rescheduled forever. So a cluster whose
@@ -630,8 +632,7 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
     ///         <see cref="KubeFailures.MeansTheClusterAnswered" /> is the general rule.
     ///     </para>
     /// </remarks>
-    static bool Answered(Error? error) =>
-        error is null || KubeFailures.MeansTheClusterAnswered(error.Code);
+    static bool Answered(Error? error) => error is null || KubeFailures.MeansTheClusterAnswered(error.Code);
 
     static string InformerKey(GroupVersionKind kind) =>
         string.Create(CultureInfo.InvariantCulture, $"{kind.Group}/{kind.Version}/{kind.Plural}");

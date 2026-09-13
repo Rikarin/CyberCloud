@@ -17,23 +17,24 @@ public sealed class NetworkDeclarationTests {
 
         registry.Types.Length.ShouldBe(5);
 
-        registry.Types.Select(x => x.Type.ToString()).ShouldBe(
-            [
-                "CyberCloud.Network/virtualNetworks",
-                "CyberCloud.Network/virtualNetworks/subnets",
-                "CyberCloud.Network/virtualNetworks/securityGroups",
-                // ⚠ ONE SEGMENT, NOT TWO. The other three types in this family are a network and two
-                // things inside one; an OvnEip names no VPC, so this is a top-level type at Depth 1.
-                "CyberCloud.Network/publicIpAddresses",
-                // ⚠ TWO SEGMENTS, WHICH IS NOT HOW docs/plan/14 SPELLS IT. That document writes
-                // `CyberCloud.Network/loadBalancers`, and the substrate disagrees: every object this
-                // type renders is annotated onto one subnet of one VPC, so the network comes from the
-                // ADDRESS and cannot be wrong. The alternative is a network-name property nothing
-                // validates. See NetworkProvider's remarks.
-                "CyberCloud.Network/virtualNetworks/loadBalancers"
-            ],
-            ignoreOrder: true
-        );
+        registry.Types.Select(x => x.Type.ToString())
+            .ShouldBe(
+                [
+                    "CyberCloud.Network/virtualNetworks",
+                    "CyberCloud.Network/virtualNetworks/subnets",
+                    "CyberCloud.Network/virtualNetworks/securityGroups",
+                    // ⚠ ONE SEGMENT, NOT TWO. The other three types in this family are a network and two
+                    // things inside one; an OvnEip names no VPC, so this is a top-level type at Depth 1.
+                    "CyberCloud.Network/publicIpAddresses",
+                    // ⚠ TWO SEGMENTS, WHICH IS NOT HOW docs/plan/14 SPELLS IT. That document writes
+                    // `CyberCloud.Network/loadBalancers`, and the substrate disagrees: every object this
+                    // type renders is annotated onto one subnet of one VPC, so the network comes from the
+                    // ADDRESS and cannot be wrong. The alternative is a network-name property nothing
+                    // validates. See NetworkProvider's remarks.
+                    "CyberCloud.Network/virtualNetworks/loadBalancers"
+                ],
+                ignoreOrder: true
+            );
     }
 
     [Fact]
@@ -113,10 +114,11 @@ public sealed class NetworkDeclarationTests {
         // one ConfigMap and HAProxy in TCP mode buffers in memory — a storage meter would reserve
         // disk nothing allocates.
         foreach (var type in Build().Types) {
-            type.Meters.Select(x => x.Meter).ShouldNotContain(
-                QuotaMeter.StorageGb,
-                type.Type.ToString()
-            );
+            type.Meters.Select(x => x.Meter)
+                .ShouldNotContain(
+                    QuotaMeter.StorageGb,
+                    type.Type.ToString()
+                );
         }
     }
 

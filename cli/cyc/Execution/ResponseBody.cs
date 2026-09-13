@@ -36,8 +36,9 @@ sealed class ResponseBody : IDisposable {
     public static ResponseBody Parse(Response response) {
         ArgumentNullException.ThrowIfNull(response);
 
-        if (response.Content.Length == 0)
+        if (response.Content.Length == 0) {
             return Empty;
+        }
 
         try {
             var parsed = JsonDocument.Parse(response.Content);
@@ -47,7 +48,8 @@ sealed class ResponseBody : IDisposable {
             throw new CycClientException(
                 $"The response to this request was not JSON (status {response.Status}, "
                 + $"{response.Content.Length} byte(s)). Request id: {response.ServiceRequestId ?? "none"}.",
-                e);
+                e
+            );
         }
     }
 
@@ -66,6 +68,6 @@ sealed class ResponseBody : IDisposable {
 /// </remarks>
 sealed class ResponseBodyOperationSource : IOperationSource<ResponseBody> {
     /// <inheritdoc />
-    public ValueTask<ResponseBody> CreateResultAsync(Response response, CancellationToken cancellationToken)
-        => ValueTask.FromResult(ResponseBody.Parse(response));
+    public ValueTask<ResponseBody> CreateResultAsync(Response response, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(ResponseBody.Parse(response));
 }

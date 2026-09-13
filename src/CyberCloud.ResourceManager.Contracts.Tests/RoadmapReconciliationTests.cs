@@ -24,15 +24,21 @@ namespace CyberCloud.ResourceManager.Contracts.Tests;
 ///         <c>QuantityParserTests</c> already established in this project.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The published document is the right side of the comparison, not the provider
-///         registry.</b> The registry and the document are already tied together byte-for-byte by the
+///         ⚠
+///         <b>
+///             The published document is the right side of the comparison, not the provider
+///             registry.
+///         </b> The registry and the document are already tied together byte-for-byte by the
 ///         <b>Generated surfaces</b> gate, so reading <c>openapi/</c> inherits that guarantee and
 ///         costs this project no reference to any provider assembly — which it could not take
 ///         anyway, being on the contracts side of docs/plan/03 § The .Contracts split.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The repository root is resolved inside the test bodies and never from a static
-///         initialiser</b>, which is #82 exactly: a static property that walks for
+///         ⚠
+///         <b>
+///             The repository root is resolved inside the test bodies and never from a static
+///             initialiser
+///         </b>, which is #82 exactly: a static property that walks for
 ///         <c>CyberCloud.slnx</c> turns a missing source tree into a
 ///         <c>TypeInitializationException</c> that fails every test in the class rather than the ones
 ///         that needed the tree.
@@ -58,8 +64,11 @@ public sealed class RoadmapReconciliationTests {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Set equality, in both directions, and each direction catches a different
-    ///         mistake.</b> A type in the document and not the table is the failure this issue was
+    ///         ⚠
+    ///         <b>
+    ///             Set equality, in both directions, and each direction catches a different
+    ///             mistake.
+    ///         </b> A type in the document and not the table is the failure this issue was
     ///         filed about — a provider ships and the roadmap keeps costing it as future work. A type
     ///         in the table and not the document is the opposite and is worse to read: a row marked
     ///         ✅ <i>shipped ahead of phase</i> for something that was deleted, renamed, or never
@@ -87,7 +96,9 @@ public sealed class RoadmapReconciliationTests {
             .GroupBy(x => x, StringComparer.Ordinal)
             .Where(x => x.Count() > 1)
             .Select(x => x.Key)
-            .ShouldBeEmpty("a resource type is listed twice in docs/plan/24 § What has landed, so its per-phase counts cannot both be right");
+            .ShouldBeEmpty(
+                "a resource type is listed twice in docs/plan/24 § What has landed, so its per-phase counts cannot both be right"
+            );
 
         listed
             .Order(StringComparer.Ordinal)
@@ -108,14 +119,20 @@ public sealed class RoadmapReconciliationTests {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>"The per-phase counts" means each row against its own names, not merely their
-    ///         sum</b> — #45's review, which is the second time on this branch that a guard was
+    ///         ⚠
+    ///         <b>
+    ///             "The per-phase counts" means each row against its own names, not merely their
+    ///             sum
+    ///         </b> — #45's review, which is the second time on this branch that a guard was
     ///         described in prose as one assertion wider than it was written. A sum that holds while
     ///         two rows are wrong in opposite directions is exactly the failure a total hides.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The pinned command output is the half most likely to rot and the half nobody
-    ///         re-runs.</b> This tree has shipped pinned counts that did not reproduce more than
+    ///         ⚠
+    ///         <b>
+    ///             The pinned command output is the half most likely to rot and the half nobody
+    ///             re-runs.
+    ///         </b> This tree has shipped pinned counts that did not reproduce more than
     ///         once — #81 was four of them, three sitting in the machinery that gates citation
     ///         honesty, and #78's review found a <c>grep</c> that was counting its own paragraph. A
     ///         number inside a fenced block looks like evidence, which is precisely why a stale one
@@ -153,11 +170,12 @@ public sealed class RoadmapReconciliationTests {
         total.Length.ShouldBe(1, $"docs/plan/24's '{LandedTableHeader}' table has no single **Total** row to check");
         phases.ShouldNotBeEmpty("docs/plan/24's § What has landed table lists no phases");
 
-        phases.Sum(CountCell).ShouldBe(
-            published.Length,
-            "docs/plan/24 § What has landed's per-phase counts no longer add up to the number of "
-            + $"resource types openapi/{ApiVersionDocument} publishes"
-        );
+        phases.Sum(CountCell)
+            .ShouldBe(
+                published.Length,
+                "docs/plan/24 § What has landed's per-phase counts no longer add up to the number of "
+                + $"resource types openapi/{ApiVersionDocument} publishes"
+            );
 
         CountCell(total[0]).ShouldBe(
             published.Length,
@@ -205,25 +223,28 @@ public sealed class RoadmapReconciliationTests {
             "docs/plan/24's ```console block is no longer the resource-type recount"
         );
 
-        string.Join(' ', block).ShouldContain(
-            ApiVersionDocument,
-            Case.Sensitive,
-            $"docs/plan/24's recount command no longer names openapi/{ApiVersionDocument}"
-        );
+        string.Join(' ', block)
+            .ShouldContain(
+                ApiVersionDocument,
+                Case.Sensitive,
+                $"docs/plan/24's recount command no longer names openapi/{ApiVersionDocument}"
+            );
 
-        int.Parse(block[^1].Trim(), CultureInfo.InvariantCulture).ShouldBe(
-            published.Length,
-            "the output pinned under docs/plan/24's recount command is not what the command produces "
-            + "today. Re-run it against this tree and paste what it printed — a fenced number that "
-            + "nobody re-ran is the failure #81 and #78 were both filed about."
-        );
+        int.Parse(block[^1].Trim(), CultureInfo.InvariantCulture)
+            .ShouldBe(
+                published.Length,
+                "the output pinned under docs/plan/24's recount command is not what the command produces "
+                + "today. Re-run it against this tree and paste what it printed — a fenced number that "
+                + "nobody re-ran is the failure #81 and #78 were both filed about."
+            );
     }
 
     /// <summary>Every distinct <c>x-cybercloud-resource-type</c> in the published document.</summary>
     static string[] PublishedResourceTypes(string root) {
         var document = Path.Combine(root, "openapi", ApiVersionDocument);
 
-        File.Exists(document).ShouldBeTrue($"openapi/{ApiVersionDocument} is the document docs/plan/24 counts, and it is not there");
+        File.Exists(document)
+            .ShouldBeTrue($"openapi/{ApiVersionDocument} is the document docs/plan/24 counts, and it is not there");
 
         var types = PublishedType
             .Matches(File.ReadAllText(document))
@@ -262,8 +283,7 @@ public sealed class RoadmapReconciliationTests {
             .ToArray();
     }
 
-    static string[] RoadmapLines(string root)
-        => File.ReadAllLines(Path.Combine(root, "docs", "plan", "24-roadmap.md"));
+    static string[] RoadmapLines(string root) => File.ReadAllLines(Path.Combine(root, "docs", "plan", "24-roadmap.md"));
 
     /// <summary>The last cell of a Markdown row, as an integer, with any bold markers removed.</summary>
     static int CountCell(string row) {

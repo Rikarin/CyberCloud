@@ -8,24 +8,33 @@ namespace CyberCloud.Kubernetes.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>A comparison against a read-back object is never an equality test, and both
-///         directions of that have cost a measured bug.</b> The API server <i>adds</i> — a CRD's
+///         ⚠
+///         <b>
+///             A comparison against a read-back object is never an equality test, and both
+///             directions of that have cost a measured bug.
+///         </b> The API server <i>adds</i> — a CRD's
 ///         <c>+kubebuilder:default</c>, a <c>status</c> subresource, <c>managedFields</c>,
 ///         <c>creationTimestamp</c>, a defaulted <c>protocol</c> on every port — and it also
 ///         <i>removes</i>, because a field tagged <c>omitempty</c> on the Go type it deserialises into
 ///         is dropped when it is empty.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The removal direction generalises past the one provider that hit it — across
-///         built-in objects.</b> <c>NetworkPolicySpec.Ingress</c> carries <c>omitempty</c>, so the
+///         ⚠
+///         <b>
+///             The removal direction generalises past the one provider that hit it — across
+///             built-in objects.
+///         </b> <c>NetworkPolicySpec.Ingress</c> carries <c>omitempty</c>, so the
 ///         empty list that spells "deny all ingress" comes back with <b>no key at all</b> —
 ///         <c>CyberCloud.Terminal/consoles</c> converged in the Docker-free harness and hung forever
 ///         against k3s. <i>Every</i> optional list and map on <i>every</i> built-in Kubernetes object
 ///         is tagged the same way, so use <see cref="IsAbsentOrEmpty" /> for all of them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A custom resource is the opposite case, and reaching for
-///         <see cref="IsAbsentOrEmpty" /> on one would discard a real distinction.</b> A CRD has no
+///         ⚠
+///         <b>
+///             A custom resource is the opposite case, and reaching for
+///             <see cref="IsAbsentOrEmpty" /> on one would discard a real distinction.
+///         </b> A CRD has no
 ///         <c>omitempty</c>: its stored JSON keeps what was applied, so absent and present-but-empty
 ///         are <i>different</i>, and three families rely on that — Strimzi's
 ///         <c>spec.cruiseControl = {}</c> means "run Cruise Control", and Cluster API's
@@ -62,8 +71,11 @@ public static class KubeJson {
     ///         is the drift worth catching.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Do not reach for it on a custom resource whose empty object is a presence
-    ///         flag</b> — see the remarks on the type. There the two are not the same statement, and
+    ///         ⚠
+    ///         <b>
+    ///             Do not reach for it on a custom resource whose empty object is a presence
+    ///             flag
+    ///         </b> — see the remarks on the type. There the two are not the same statement, and
     ///         this would erase the difference.
     ///     </para>
     /// </remarks>

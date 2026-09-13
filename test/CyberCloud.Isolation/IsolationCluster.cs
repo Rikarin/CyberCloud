@@ -62,12 +62,10 @@ public sealed record IsolationTarget(
 ) {
     /// <summary>The name this suite gives the ancestor at <paramref name="level" />, outermost 0.</summary>
     /// <param name="level">The nesting level.</param>
-    public static string AncestorName(int level) =>
-        "ancestor-" + level.ToString(CultureInfo.InvariantCulture);
+    public static string AncestorName(int level) => "ancestor-" + level.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>The <c>/</c>-separated ancestor names an address for this target carries.</summary>
-    public string ParentNames =>
-        string.Join('/', Ancestors.Select((_, level) => AncestorName(level)));
+    public string ParentNames => string.Join('/', Ancestors.Select((_, level) => AncestorName(level)));
 
     /// <inheritdoc />
     public override string ToString() => Name;
@@ -75,8 +73,11 @@ public sealed record IsolationTarget(
 
 /// <summary>Every provider in the platform, as this suite sees them.</summary>
 /// <remarks>
-///     ⚠ <b>"Every provider, every verb" is a claim about a list, so the list is here and the sweep
-///     reads it.</b> A provider that is not in this list is a provider nobody tried to break into, and
+///     ⚠
+///     <b>
+///         "Every provider, every verb" is a claim about a list, so the list is here and the sweep
+///         reads it.
+///     </b> A provider that is not in this list is a provider nobody tried to break into, and
 ///     that is worth being able to see at a glance rather than inferring from which files exist.
 /// </remarks>
 public static class IsolationCatalog {
@@ -95,8 +96,11 @@ public static class IsolationCatalog {
     ///     The shipping object-storage account, which the bucket in the list below nests inside.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared BEFORE <see cref="Targets" />, as <see cref="Probes" /> is, and the compiler
-    ///     is what enforces it</b> — a static initializer that read this after <c>Targets</c> would
+    ///     ⚠
+    ///     <b>
+    ///         Declared BEFORE <see cref="Targets" />, as <see cref="Probes" /> is, and the compiler
+    ///         is what enforces it
+    ///     </b> — a static initializer that read this after <c>Targets</c> would
     ///     put a <see langword="null" /> ancestor in the list, which is <c>CS8601</c> here and would
     ///     have been an ancestorless child at run time.
     ///     <para>
@@ -193,16 +197,22 @@ public static class IsolationCatalog {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The real <c>ReBacResourceAuthorizer</c> over the real <c>CyberCloudSchema</c>, and
-///         that choice is the reason this project earns its keep.</b> Every other suite in this
+///         ⚠
+///         <b>
+///             The real <c>ReBacResourceAuthorizer</c> over the real <c>CyberCloudSchema</c>, and
+///             that choice is the reason this project earns its keep.
+///         </b> Every other suite in this
 ///         repository substitutes a double for the seam, which is right for testing step ordering and
 ///         useless for testing authorization: a double reproduces the rule its author believed. Two
 ///         defects lived in that gap until this harness was written, and both are named on the tests
 ///         that found them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The harness no longer writes the resource → group <c>parent</c> tuple, and the
-///         deletion of the method that did is this suite's second finding.</b>
+///         ⚠
+///         <b>
+///             The harness no longer writes the resource → group <c>parent</c> tuple, and the
+///             deletion of the method that did is this suite's second finding.
+///         </b>
 ///         <c>CyberCloudSchema</c> gives every resource
 ///         <c>Role(owner, This | From(parent, owner))</c>, so a resource is readable by its group's
 ///         owner <i>only if</i> a <c>resource:{id}#parent@resourceGroup:{group}</c> tuple exists —
@@ -294,8 +304,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
 
     /// <summary>A tenant-qualified grain factory.</summary>
     /// <param name="tenant">The tenant.</param>
-    public TenantGrainFactory For(Guid tenant) =>
-        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>Builds an address.</summary>
     /// <param name="target">Which provider.</param>
@@ -465,7 +474,9 @@ public sealed class IsolationCluster : IAsyncLifetime {
 
         // ⚠ Nothing is linked here. The write path's step 8 did it, and OracleTests asserts that it
         // did — see this class's remarks on the helper that used to be on this line.
-        var operation = For(tenant).GetGrain<IOperationGrain>(GrainKeys.Operation(accepted.GetValueOrThrow().OperationId));
+        var operation = For(tenant).GetGrain<IOperationGrain>(
+            GrainKeys.Operation(accepted.GetValueOrThrow().OperationId)
+        );
 
         for (var i = 0; i < 6; i++) {
             var status = await operation.DriveAsync();
@@ -649,9 +660,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
 
             silo.ConfigureServices(services => {
                     services.AddSingleton<IClock>(new ConformanceClock());
-                    services.AddSingleton<IClusterConnectionFactory>(
-                        new FakeClusterConnectionFactory(Instance.World)
-                    );
+                    services.AddSingleton<IClusterConnectionFactory>(new FakeClusterConnectionFactory(Instance.World));
 
                     services.AddSingleton<IResourceProvider, SampleProvider>();
                     services.AddSingleton<IResourceProvider, Conformance.Reference.ReferenceProvider>();

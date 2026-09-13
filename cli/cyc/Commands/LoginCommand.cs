@@ -1,8 +1,8 @@
-using System.CommandLine;
-using System.Security.Cryptography.X509Certificates;
 using CyberCloud.Cli.Execution;
 using CyberCloud.Cli.Output;
 using CyberCloud.Cli.VerbTree;
+using System.CommandLine;
+using System.Security.Cryptography.X509Certificates;
 
 namespace CyberCloud.Cli.Commands;
 
@@ -42,54 +42,84 @@ static class LoginCommand {
         ArgumentNullException.ThrowIfNull(host);
 
         var deviceCode = new Option<bool>("--device-code") {
-            Description = "Sign in with a code typed into a browser on another machine. The default over SSH.",
+            Description = "Sign in with a code typed into a browser on another machine. The default over SSH."
         };
 
         var servicePrincipal = new Option<bool>("--service-principal") {
-            Description = "Sign in as an application rather than a person.",
+            Description = "Sign in as an application rather than a person."
         };
 
         var tenant = new Option<string>("--tenant") { Description = "The tenant to sign in to. Also CYC_TENANT." };
         var clientId = new Option<string>("--client-id") { Description = "The application's client id." };
 
         var certificate = new Option<string>("--certificate") {
-            Description = "A PKCS#12 file holding the service principal's certificate and private key.",
+            Description = "A PKCS#12 file holding the service principal's certificate and private key."
         };
 
         var certificatePassword = new Option<bool>("--certificate-password-from-env") {
-            Description = "Read the certificate's password from CYC_CLIENT_CERTIFICATE_PASSWORD.",
+            Description = "Read the certificate's password from CYC_CLIENT_CERTIFICATE_PASSWORD."
         };
 
         var command = new Command("login", "Sign in. docs/plan/11 § Protocol.") {
-            deviceCode, servicePrincipal, tenant, clientId, certificate, certificatePassword,
+            deviceCode,
+            servicePrincipal,
+            tenant,
+            clientId,
+            certificate,
+            certificatePassword
         };
 
         command.SetAction(async (parse, cancellationToken) => {
-            var invocation = CycRunner.Bind(host, globals, tree, parse);
-            var tenantId = parse.GetValue(tenant) ?? invocation.Settings.Get("tenant");
+                var invocation = CycRunner.Bind(host, globals, tree, parse);
+                var tenantId = parse.GetValue(tenant) ?? invocation.Settings.Get("tenant");
 
-            var credential = parse.GetValue(servicePrincipal)
-                ? ServicePrincipal(invocation, parse.GetValue(clientId), tenantId, parse.GetValue(certificate), parse.GetValue(certificatePassword))
-                : Interactive(invocation, parse.GetValue(deviceCode));
+                var credential = parse.GetValue(servicePrincipal)
+                    ? ServicePrincipal(
+                        invocation,
+                        parse.GetValue(clientId),
+                        tenantId,
+                        parse.GetValue(certificate),
+                        parse.GetValue(certificatePassword)
+                    )
+                    : Interactive(invocation, parse.GetValue(deviceCode));
 
-            try {
-                var token = await AuthenticateAsync(invocation, credential, tenantId, cancellationToken).ConfigureAwait(false);
+                try {
+                    var token = await AuthenticateAsync(
+                        invocation,
+                        credential,
+                        tenantId,
+                        cancellationToken
+                    ).ConfigureAwait(false);
 
-                invocation.Console.Note("Signed in.");
+                    invocation.Console.Note("Signed in.");
 
-                invocation.Render(Payload.Object([
-                    new KeyValuePair<string, Payload>("tenant", tenantId is null ? Payload.Null : Payload.Text(tenantId)),
-                    new KeyValuePair<string, Payload>("authority", Payload.Text(Authority(invocation).ToString())),
-                    // ⚠ The expiry, never the token. `cyc account get-access-token` is the one command
-                    // that prints token material, because CyberCloudCliCredential parses its output.
-                    new KeyValuePair<string, Payload>("expiresOn", Payload.Text(token.ExpiresOn.ToString("O", CultureInfo.InvariantCulture))),
-                ]));
+                    invocation.Render(
+                        Payload.Object(
+                            [
+                                new KeyValuePair<string, Payload>(
+                                    "tenant",
+                                    tenantId is null ? Payload.Null : Payload.Text(tenantId)
+                                ),
+                                new KeyValuePair<string, Payload>(
+                                    "authority",
+                                    Payload.Text(Authority(invocation).ToString())
+                                ),
+                                // ⚠ The expiry, never the token. `cyc account get-access-token` is the one command
+                                // that prints token material, because CyberCloudCliCredential parses its output.
+                                new KeyValuePair<string, Payload>(
+                                    "expiresOn",
+                                    Payload.Text(token.ExpiresOn.ToString("O", CultureInfo.InvariantCulture))
+                                )
+                            ]
+                        )
+                    );
 
-                return (int)ExitCode.Ok;
-            } finally {
-                (credential as IDisposable)?.Dispose();
+                    return (int)ExitCode.Ok;
+                } finally {
+                    (credential as IDisposable)?.Dispose();
+                }
             }
-        });
+        );
 
         return command;
     }
@@ -102,7 +132,12 @@ static class LoginCommand {
     ///     is reassurance at a prompt and noise in a CI log, and the log is where a stuck sign-in gets
     ///     read.
     /// </remarks>
-    static async Task<AccessToken> AuthenticateAsync(CycInvocation invocation, TokenCredential credential, string? tenantId, CancellationToken cancellationToken) {
+    static async Task<AccessToken> AuthenticateAsync(
+        CycInvocation invocation,
+        TokenCredential credential,
+        string? tenantId,
+        CancellationToken cancellationToken
+    ) {
         var context = new TokenRequestContext([CyberCloudScopes.Default], tenantId);
         using var ticker = new CancellationTokenSource();
 
@@ -116,15 +151,17 @@ static class LoginCommand {
             await ticker.CancelAsync().ConfigureAwait(false);
             await progress.ConfigureAwait(false);
 
-            if (!invocation.Console.IsErrorRedirected)
+            if (!invocation.Console.IsErrorRedirected) {
                 invocation.Console.Note(string.Empty);
+            }
         }
     }
 
     static async Task TickAsync(CycInvocation invocation, CancellationToken cancellationToken) {
         try {
             while (!cancellationToken.IsCancellationRequested) {
-                await Task.Delay(TimeSpan.FromSeconds(2), invocation.Host.Time, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(2), invocation.Host.Time, cancellationToken)
+                    .ConfigureAwait(false);
 
                 invocation.Console.Tick('.');
             }
@@ -134,16 +171,24 @@ static class LoginCommand {
     }
 
     /// <summary>
-    ///     Chooses between the two interactive grants — docs/plan/11 § Protocol's <i>"the only
-    ///     interactive flow. No implicit, no hybrid"</i> and its device-authorization row,
+    ///     Chooses between the two interactive grants — docs/plan/11 § Protocol's
+    ///     <i>
+    ///         "the only
+    ///         interactive flow. No implicit, no hybrid"
+    ///     </i> and its device-authorization row,
     ///     <i>"<c>cyc login</c> on a headless box"</i>.
     /// </summary>
     static TokenCredential Interactive(CycInvocation invocation, bool deviceCode) {
         var options = invocation.Host.CreateCredentialOptions();
         options.AuthorityHost = Authority(invocation);
 
-        if (deviceCode || CycDefaults.LooksHeadless(invocation.Host.Environment))
-            return new DeviceCodeCredential(CyberCloudCliCredential.CliClientId, (info, token) => PromptAsync(invocation, info, token), options);
+        if (deviceCode || CycDefaults.LooksHeadless(invocation.Host.Environment)) {
+            return new DeviceCodeCredential(
+                CyberCloudCliCredential.CliClientId,
+                (info, token) => PromptAsync(invocation, info, token),
+                options
+            );
+        }
 
         return new InteractiveBrowserCredential(
             CyberCloudCliCredential.CliClientId,
@@ -151,7 +196,8 @@ static class LoginCommand {
                 invocation.Console.Note($"Opening {uri.GetLeftPart(UriPartial.Path)} to sign in.");
                 await invocation.Host.OpenBrowser(uri, token).ConfigureAwait(false);
             },
-            options);
+            options
+        );
     }
 
     /// <summary>
@@ -181,13 +227,21 @@ static class LoginCommand {
     ///     Neither a certificate nor <c>CYC_CLIENT_SECRET</c> was supplied, or a required flag is
     ///     missing. ⚠ The message never repeats a secret back, not even to say it was wrong.
     /// </exception>
-    static TokenCredential ServicePrincipal(CycInvocation invocation, string? clientId, string? tenantId, string? certificatePath, bool passwordFromEnvironment) {
+    static TokenCredential ServicePrincipal(
+        CycInvocation invocation,
+        string? clientId,
+        string? tenantId,
+        string? certificatePath,
+        bool passwordFromEnvironment
+    ) {
         clientId ??= invocation.Settings.Get("client-id");
         tenantId ??= invocation.Settings.Get("tenant");
 
-        if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(tenantId))
+        if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(tenantId)) {
             throw new CycUsageException(
-                "--service-principal needs --client-id and --tenant (or CYC_CLIENT_ID and CYC_TENANT_ID).");
+                "--service-principal needs --client-id and --tenant (or CYC_CLIENT_ID and CYC_TENANT_ID)."
+            );
+        }
 
         var options = invocation.Host.CreateCredentialOptions();
         options.AuthorityHost = Authority(invocation);
@@ -213,18 +267,21 @@ static class LoginCommand {
             return new CertificateCredential(tenantId, clientId, certificate, options);
         }
 
-        if (invocation.Host.Environment.GetValueOrDefault("CYC_CLIENT_SECRET") is { Length: > 0 } secret)
+        if (invocation.Host.Environment.GetValueOrDefault("CYC_CLIENT_SECRET") is { Length: > 0 } secret) {
             return new ClientSecretCredential(tenantId, clientId, secret, options);
+        }
 
         throw new CycUsageException(
             "--service-principal needs a credential: pass --certificate <file.pfx>, or put the client "
             + "secret in CYC_CLIENT_SECRET. ⚠ cyc does not accept a secret as an argument — an argument "
-            + "is in the shell history, in ps output and in every CI log that echoes its command line.");
+            + "is in the shell history, in ps output and in every CI log that echoes its command line."
+        );
     }
 
     /// <summary>The identity host — <c>CYC_AUTHORITY_HOST</c>, the profile's <c>authority</c>, or the SDK's default.</summary>
-    static Uri Authority(CycInvocation invocation)
-        => invocation.Settings.Get("authority") is { Length: > 0 } value && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+    static Uri Authority(CycInvocation invocation) =>
+        invocation.Settings.Get("authority") is { Length: > 0 } value
+        && Uri.TryCreate(value, UriKind.Absolute, out var uri)
             ? uri
             : CyberCloudAuthorityHosts.Default;
 }

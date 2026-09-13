@@ -134,26 +134,26 @@ static class Program {
             Console.WriteLine(
                 derived is { Length: > 0 }
                     ? "Four of ADR-012's five surfaces: the OpenAPI document, the cyc verb tree, the "
-                      + ".NET SDK and the portal forms. The last three are generated from the first — "
-                      + "docs/plan/21 § Generation. ⚠ The Python and Go SDKs and the Terraform "
-                      + "provider are docs/plan/21 § Other SDKs and are not written."
+                    + ".NET SDK and the portal forms. The last three are generated from the first — "
+                    + "docs/plan/21 § Generation. ⚠ The Python and Go SDKs and the Terraform "
+                    + "provider are docs/plan/21 § Other SDKs and are not written."
                     : "OpenAPI only: no --derived-output was given, so the cyc verb tree, the .NET SDK "
-                      + "and the portal forms were not written."
+                    + "and the portal forms were not written."
             );
 
             Console.WriteLine(
                 typescript is { Length: > 0 }
                     ? "The portal's TypeScript client ran — issue #21, generated from the published "
-                      + "document rather than from the registry."
+                    + "document rather than from the registry."
                     : "No --typescript was given, so the portal's TypeScript client was not written."
             );
 
             Console.WriteLine(
                 charts is { Length: > 0 }
                     ? "The fifth surface, a managed chart's @param block, ran — ADR-010 § Which end "
-                      + "authors the schema."
+                    + "authors the schema."
                     : "No --charts was given, so no chart's @param block was compared against the "
-                      + "registry."
+                    + "registry."
             );
 
             if (report is { Length: > 0 }) {
@@ -199,42 +199,48 @@ static class Program {
         var documents = new JsonArray();
 
         foreach (var document in generated.Documents) {
-            documents.Add(new JsonObject {
-                ["apiVersion"] = document.ApiVersion,
-                ["breakingChanges"] = Lines(document.BreakingChanges.Select(x => x.ToString())),
-                ["drifted"] = document.Drifted,
-                ["file"] = document.FileName,
-                ["published"] = document.Published,
-                ["structuralProblems"] = Lines(document.StructuralProblems)
-            });
+            documents.Add(
+                new JsonObject {
+                    ["apiVersion"] = document.ApiVersion,
+                    ["breakingChanges"] = Lines(document.BreakingChanges.Select(x => x.ToString())),
+                    ["drifted"] = document.Drifted,
+                    ["file"] = document.FileName,
+                    ["published"] = document.Published,
+                    ["structuralProblems"] = Lines(document.StructuralProblems)
+                }
+            );
         }
 
         var derived = new JsonArray();
 
         foreach (var document in surfaces.Documents) {
-            derived.Add(new JsonObject {
-                ["apiVersion"] = document.ApiVersion,
-                ["drifted"] = document.Drifted,
-                ["file"] = document.FileName,
-                ["problems"] = Lines(document.Problems),
-                ["published"] = document.Published,
-                ["surface"] = document.Surface
-            });
+            derived.Add(
+                new JsonObject {
+                    ["apiVersion"] = document.ApiVersion,
+                    ["drifted"] = document.Drifted,
+                    ["file"] = document.FileName,
+                    ["problems"] = Lines(document.Problems),
+                    ["published"] = document.Published,
+                    ["surface"] = document.Surface
+                }
+            );
         }
 
         var chartAnnotations = new JsonArray();
 
         foreach (var annotation in annotations.Documents) {
-            chartAnnotations.Add(new JsonObject {
-                ["apiVersion"] = annotation.ApiVersion,
-                ["chart"] = annotation.Chart,
-                ["drifted"] = annotation.Drifted,
-                ["file"] = annotation.File,
-                ["preservedInternalLines"] = annotation.PreservedInternalLines,
-                ["problems"] = Lines(annotation.Problems),
-                ["published"] = annotation.Published,
-                ["resourceType"] = annotation.ResourceType
-            });
+            chartAnnotations.Add(
+                new JsonObject {
+                    ["apiVersion"] = annotation.ApiVersion,
+                    ["chart"] = annotation.Chart,
+                    ["drifted"] = annotation.Drifted,
+                    ["file"] = annotation.File,
+                    ["preservedInternalLines"] = annotation.PreservedInternalLines,
+                    ["problems"] = Lines(annotation.Problems),
+                    ["published"] = annotation.Published,
+                    ["resourceType"] = annotation.ResourceType
+                }
+            );
         }
 
         // ⚠ EVERY DECLARED ACTION, WHETHER OR NOT IT CAN RUN — the one thing in this report that is
@@ -263,12 +269,14 @@ static class Program {
         var typescript = new JsonArray();
 
         foreach (var file in client.Files) {
-            typescript.Add(new JsonObject {
-                ["apiVersion"] = file.ApiVersion,
-                ["drifted"] = file.Drifted,
-                ["file"] = file.File,
-                ["published"] = file.Published
-            });
+            typescript.Add(
+                new JsonObject {
+                    ["apiVersion"] = file.ApiVersion,
+                    ["drifted"] = file.Drifted,
+                    ["file"] = file.File,
+                    ["published"] = file.Published
+                }
+            );
         }
 
         return new JsonObject {

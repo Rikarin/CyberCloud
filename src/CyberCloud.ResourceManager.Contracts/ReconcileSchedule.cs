@@ -18,8 +18,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         </i>
 ///     </para>
 ///     <para>
-///         ⚠ <b>Pure and static, and the jitter is a parameter rather than a
-///         <see cref="Random" />.</b> A scheduler that drew its own randomness cannot be tested for
+///         ⚠
+///         <b>
+///             Pure and static, and the jitter is a parameter rather than a
+///             <see cref="Random" />.
+///         </b> A scheduler that drew its own randomness cannot be tested for
 ///         the property that matters — that the delay stays inside ±20 % of the step for
 ///         <i>every</i> sample, not for the ones a seeded run happened to draw. Passing the sample in
 ///         lets a test sweep the whole interval, and lets the grain draw from
@@ -96,7 +99,7 @@ public static class ReconcileSchedule {
         var basis = BaseDelayFor(attempt);
 
         // Map [0, 1) onto [-JitterFraction, +JitterFraction].
-        var factor = 1.0 + (((jitterSample * 2.0) - 1.0) * JitterFraction);
+        var factor = 1.0 + (jitterSample * 2.0 - 1.0) * JitterFraction;
         var jittered = TimeSpan.FromTicks((long)(basis.Ticks * factor));
 
         return jittered > requestedByReconciler ? jittered : requestedByReconciler;
@@ -107,8 +110,7 @@ public static class ReconcileSchedule {
     /// </summary>
     /// <param name="startedAt">When the operation was accepted.</param>
     /// <param name="now">The current time, from <c>IClock</c> rather than <c>DateTimeOffset.UtcNow</c>.</param>
-    public static bool HasTimedOut(DateTimeOffset startedAt, DateTimeOffset now) =>
-        now - startedAt >= Timeout;
+    public static bool HasTimedOut(DateTimeOffset startedAt, DateTimeOffset now) => now - startedAt >= Timeout;
 
     /// <summary>
     ///     The timeout error, naming the last progress entry.

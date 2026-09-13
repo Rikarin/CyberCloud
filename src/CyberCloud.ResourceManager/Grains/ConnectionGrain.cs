@@ -224,8 +224,7 @@ public sealed class ConnectionGrain(
     }
 
     /// <inheritdoc />
-    public Task<ImmutableArray<ConnectionInterest>> InterestsAsync() =>
-        Task.FromResult(interests.ToImmutableArray());
+    public Task<ImmutableArray<ConnectionInterest>> InterestsAsync() => Task.FromResult(interests.ToImmutableArray());
 
     /// <inheritdoc />
     public async Task<int> RecheckAsync() {

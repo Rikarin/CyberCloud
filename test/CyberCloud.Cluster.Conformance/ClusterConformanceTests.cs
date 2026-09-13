@@ -4,11 +4,11 @@ using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Drift;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ServiceDefaults.Storage;
-using k8s.Models;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using k8s.Models;
 
 namespace CyberCloud.Cluster.Conformance;
 
@@ -18,8 +18,11 @@ namespace CyberCloud.Cluster.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>These four replace four <c>Assert.Skip</c>s, and the replacement has to be worth
-///         more than the skip.</b> <c>ClusterBackedConformanceTests</c> named two dishonest options
+///         ⚠
+///         <b>
+///             These four replace four <c>Assert.Skip</c>s, and the replacement has to be worth
+///             more than the skip.
+///         </b> <c>ClusterBackedConformanceTests</c> named two dishonest options
 ///         and refused both: deleting the test leaves a suite that is green because it asked less,
 ///         and re-pointing it at the in-memory harness leaves a suite that is green because it
 ///         asserted something weaker under the same name. So each test below asserts exactly what
@@ -42,8 +45,11 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///     How many times an operation may be driven before it is stuck rather than working.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Twelve until 2026-08-12, and twelve was a budget in <i>passes</i> pretending to be a
-    ///     budget in <i>time</i>.</b> With no delay between drives the whole loop ran in a few
+    ///     ⚠
+    ///     <b>
+    ///         Twelve until 2026-08-12, and twelve was a budget in <i>passes</i> pretending to be a
+    ///         budget in <i>time</i>.
+    ///     </b> With no delay between drives the whole loop ran in a few
     ///     milliseconds, which is enough only when every remaining step is ours. The first operation
     ///     that had to wait for the API server to finish something — a <c>CascadePolicy.Foreground</c>
     ///     teardown, where the object is held under a <c>foregroundDeletion</c> finalizer until the
@@ -155,9 +161,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
 
             annotations.ShouldNotBeNull();
             foreach (var annotation in KubeLabels.MandatoryAnnotations) {
-                annotations[annotation].ShouldNotBeNull(
-                    $"the stored object for '{target}' is missing '{annotation}'."
-                );
+                annotations[annotation].ShouldNotBeNull($"the stored object for '{target}' is missing '{annotation}'.");
             }
 
             // ⚠ SERVER-SIDE APPLY UNDER OUR FIELD MANAGER, AS ADR-013 ASSUMES. managedFields is
@@ -233,25 +237,32 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         foreach (var target in objects) {
             var remaining = await ReadFromClusterAsync(harness, target, token);
 
-            remaining.ShouldBeNull(
-                $"'{target}' is still in the real cluster after a converged teardown."
-            );
+            remaining.ShouldBeNull($"'{target}' is still in the real cluster after a converged teardown.");
         }
     }
 
     // ── 1b. The claims a teardown keeps, on a real API server ──────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>The claims a real <c>StatefulSet</c> controller made outlive the teardown, and the
-    ///     purge removes them.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The claims a real <c>StatefulSet</c> controller made outlive the teardown, and the
+    ///         purge removes them.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the one assertion in the repository that observes the Kubernetes
-    ///         behaviour the whole recovery window rests on rather than assuming it.</b> docs/plan/08
-    ///         § Soft delete says a soft-deleted resource keeps its disks because <i>"deleting a
-    ///         <c>StatefulSet</c> does not delete the <c>PersistentVolumeClaim</c>s its
-    ///         <c>volumeClaimTemplate</c> created"</i> — that is the API server's behaviour and no
+    ///         ⚠
+    ///         <b>
+    ///             This is the one assertion in the repository that observes the Kubernetes
+    ///             behaviour the whole recovery window rests on rather than assuming it.
+    ///         </b> docs/plan/08
+    ///         § Soft delete says a soft-deleted resource keeps its disks because
+    ///         <i>
+    ///             "deleting a
+    ///             <c>StatefulSet</c> does not delete the <c>PersistentVolumeClaim</c>s its
+    ///             <c>volumeClaimTemplate</c> created"
+    ///         </i> — that is the API server's behaviour and no
     ///         provider's, so a fake cluster can only ever model it. Here the claims are made by the
     ///         real controller, survive a real teardown, and are read back with the raw
     ///         <c>KubernetesClient</c> around every line of our own code.
@@ -480,9 +491,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
                 ["metadata"] = new JsonObject {
                     ["name"] = target.Name,
                     ["namespace"] = target.Namespace,
-                    ["labels"] = new JsonObject {
-                        [KubeLabels.TenantId] = "00000000-0000-0000-0000-0000000000ff"
-                    }
+                    ["labels"] = new JsonObject { [KubeLabels.TenantId] = "00000000-0000-0000-0000-0000000000ff" }
                 }
             }.ToJsonString(),
             token
@@ -639,9 +648,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
                     [KubeLabels.ManagedBy] = KubeLabels.ManagedByValue,
                     [KubeLabels.ResourceId] = KubeLabels.GuidValue(orphanId)
                 },
-                ["annotations"] = new JsonObject {
-                    [KubeLabels.ResourcePathAnnotation] = "/orphaned/by/nobody"
-                }
+                ["annotations"] = new JsonObject { [KubeLabels.ResourcePathAnnotation] = "/orphaned/by/nobody" }
             }
         };
 
@@ -737,7 +744,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         var after = new DriftScanner(harness.Clock).Scan(
             ClusterConformanceHarness<TSource>.ClusterId,
             (await inventory.ListManagedAsync(ClusterConformanceHarness<TSource>.ClusterId, token))
-            .GetValueOrThrow(),
+                .GetValueOrThrow(),
             [
                 new ExpectedResource(
                     accepted.Resource.Id,
@@ -800,11 +807,11 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
 
         NamespaceReclaim.Decide(ClusterConformanceHarness<TSource>.ClusterId, ns, [], ambient)
             .Deletable
-            .ShouldBeTrue(
-                "a namespace holding nothing but Kubernetes' own objects is the state a finished "
-                + "resource group leaves behind, and under the original 'nothing at all' rule it was "
-                + "never deletable — which no test could show while nothing could list."
-            );
+                .ShouldBeTrue(
+                    "a namespace holding nothing but Kubernetes' own objects is the state a finished "
+                    + "resource group leaves behind, and under the original 'nothing at all' rule it was "
+                    + "never deletable — which no test could show while nothing could list."
+                );
 
         // ── And the enumeration is complete or it refuses, never partial ────────────────────────
         //
@@ -915,9 +922,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         // SystemTextJsonGrainStorageSerializer — the same instance type DurableTierConfigurator
         // installs — is what makes this an assertion about SERIALIZATION rather than about storage.
         var serializer = new SystemTextJsonGrainStorageSerializer();
-        var operationState = serializer.Deserialize<OperationGrainState>(
-            BinaryData.FromString(operationPayload)
-        );
+        var operationState = serializer.Deserialize<OperationGrainState>(BinaryData.FromString(operationPayload));
 
         operationState.Spec.ShouldNotBeNull(
             "OperationGrainState.Spec did not come back. docs/plan/08 § Long-running operations claims "
@@ -1000,8 +1005,11 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId);
 
     /// <summary>
-    ///     Asks the case whether one object carries what a desired body asked for, <b>at a named
-    ///     address</b>.
+    ///     Asks the case whether one object carries what a desired body asked for,
+    ///     <b>
+    ///         at a named
+    ///         address
+    ///     </b>.
     /// </summary>
     /// <param name="resourceId">The resource's GUID.</param>
     /// <param name="name">Its name.</param>
@@ -1057,8 +1065,11 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///     How long to wait between two drives of an operation that is not terminal yet.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A reminder does not fire twice in the same microsecond, and until 2026-08-12 this loop
-    ///     did.</b> Twelve back-to-back <c>DriveAsync</c> calls take a few milliseconds in total, so
+    ///     ⚠
+    ///     <b>
+    ///         A reminder does not fire twice in the same microsecond, and until 2026-08-12 this loop
+    ///         did.
+    ///     </b> Twelve back-to-back <c>DriveAsync</c> calls take a few milliseconds in total, so
     ///     the harness could only host a reconciler whose remaining work was <i>ours</i>. Anything
     ///     waiting on the API server to finish something — <c>CascadePolicy.Foreground</c>, which holds
     ///     the object under a <c>foregroundDeletion</c> finalizer until the garbage collector has
@@ -1132,9 +1143,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
                     // pass finds.
                     ClusterConformanceState<TSource>.Vault,
                     new RecordingLog()
-                ) {
-                    SecretWriter = ClusterConformanceState<TSource>.Vault
-                },
+                ) { SecretWriter = ClusterConformanceState<TSource>.Vault },
                 TestContext.Current.CancellationToken
             );
     }
@@ -1143,8 +1152,11 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     /// <param name="harness">The harness.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This used to peek the first applied command, and that was a proxy that held only
-    ///         while every apply in a run came from one provider.</b> It stopped holding the day
+    ///         ⚠
+    ///         <b>
+    ///             This used to peek the first applied command, and that was a proxy that held only
+    ///             while every apply in a run came from one provider.
+    ///         </b> It stopped holding the day
     ///         <c>NamespaceEnsurer</c> landed: the driver now applies the namespace before the pass,
     ///         under <c>cybercloud/resource-manager</c>, so the first command is the platform's and
     ///         every provider object was then checked against a manager that never wrote it. The
@@ -1216,8 +1228,8 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             return ((JsonElement)response.Body!).GetRawText();
         } catch (k8s.Autorest.HttpOperationException ex)
             when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
-            return null;
-        }
+                return null;
+            }
     }
 
     /// <summary>Waits until an object the suite deleted has actually gone.</summary>

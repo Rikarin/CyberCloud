@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json;
 
@@ -11,9 +12,15 @@ namespace CyberCloud.Providers.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE FIRST PROVIDER IN THE TREE WITH TWO RESOURCE TYPES, AND THE SECOND IS A CHILD OF
-///         THE FIRST.</b> docs/plan/15 § The three kinds names both halves in one row — <i>"Object ·
-///         <c>CyberCloud.Storage/accounts</c> <b>+ <c>/buckets</c></b>"</i> — and until now no
+///         ⚠
+///         <b>
+///             THE FIRST PROVIDER IN THE TREE WITH TWO RESOURCE TYPES, AND THE SECOND IS A CHILD OF
+///             THE FIRST.
+///         </b> docs/plan/15 § The three kinds names both halves in one row —
+///         <i>
+///             "Object ·
+///             <c>CyberCloud.Storage/accounts</c> <b>+ <c>/buckets</c></b>"
+///         </i> — and until now no
 ///         shipping provider had declared a nested type at all. What it cost, measured rather than
 ///         estimated: one chained block in <see cref="Describe" />, one contracts file, one
 ///         reconciler, one chart, one <c>ProviderConformanceCase</c> with <b>one extra member</b>,
@@ -36,8 +43,10 @@ namespace CyberCloud.Providers.Storage;
 ///         catalogue is <i>"databases, caches, brokers, search"</i> and contains no storage row at all.
 ///         This one is
 ///         [15 § The three kinds](../../../../docs/plan/15-storage-blob-file.md) —
-///         <i>"Object · <c>CyberCloud.Storage/accounts</c> + <c>/buckets</c> · SeaweedFS + S3
-///         gateway"</i>, <i>"Object storage — M1 · 2.0 EM"</i> — and it is the row every other
+///         <i>
+///             "Object · <c>CyberCloud.Storage/accounts</c> + <c>/buckets</c> · SeaweedFS + S3
+///             gateway"
+///         </i>, <i>"Object storage — M1 · 2.0 EM"</i> — and it is the row every other
 ///         document has been assuming: <c>charts/managed/postgres</c> renders a backup destination of
 ///         <c>s3://tenant-bucket/postgres</c>, docs/plan/12 § Backups sends every engine's native
 ///         backup <i>"to the tenant's bucket"</i>, and docs/plan/12's OpenSearch row wants a
@@ -51,10 +60,16 @@ namespace CyberCloud.Providers.Storage;
 ///         <c>charts/managed/seaweedfs/conformance.yaml § owed</c> rather than implied by an absence.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Piece 6 is discharged through its FIRST branch, which is that branch's second
-///         sighting.</b> The corrected piece 6 reads <i>"ask the operator for the scrape object
-///         wherever the operator accepts the request, and hand-write one into the chart only when
-///         there is no operator to ask."</i> CloudNativePG answered with
+///         ⚠
+///         <b>
+///             Piece 6 is discharged through its FIRST branch, which is that branch's second
+///             sighting.
+///         </b> The corrected piece 6 reads
+///         <i>
+///             "ask the operator for the scrape object
+///             wherever the operator accepts the request, and hand-write one into the chart only when
+///             there is no operator to ask."
+///         </i> CloudNativePG answered with
 ///         <c>spec.monitoring.enablePodMonitor</c>; Kafka reached the second branch and left the object
 ///         owed; NATS reached it and discharged it by owning the pod labels. This operator answers the
 ///         first branch with <c>metricsPort</c> on each component — see
@@ -72,17 +87,26 @@ namespace CyberCloud.Providers.Storage;
 ///         returned, and <see cref="StorageAccountListKeysHandler" /> hands the pair back.
 ///     </para>
 ///     <para>
-///         ⚠ <b>docs/plan/12 § The pattern, once assigned piece 5 to <c>ISecretResolver</c>, which
-///         reads and cannot provision, and that row is corrected.</b> The mint is <c>ISecretWriter</c>
+///         ⚠
+///         <b>
+///             docs/plan/12 § The pattern, once assigned piece 5 to <c>ISecretResolver</c>, which
+///             reads and cannot provision, and that row is corrected.
+///         </b> The mint is <c>ISecretWriter</c>
 ///         and the action is <c>IResourceActionHandler</c>; the resolver is the third of the three,
 ///         used to read the value back on both paths. Before the handler seam existed
 ///         <c>IProviderBuilder.Action</c> took no handler at all, so this action — and eleven others
 ///         across the catalogue — was declared, published, and could not run.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>SupportsSoftDelete(7)</c> on the account, and this is the type docs/plan/06 § Tags,
-///         locks names first.</b> That section gives 7 days to <i>"resources carrying data (Vault,
-///         Storage, databases)"</i>, and an object-storage account carries more of it than anything else
+///         ⚠
+///         <b>
+///             <c>SupportsSoftDelete(7)</c> on the account, and this is the type docs/plan/06 § Tags,
+///             locks names first.
+///         </b> That section gives 7 days to
+///         <i>
+///             "resources carrying data (Vault,
+///             Storage, databases)"
+///         </i>, and an object-storage account carries more of it than anything else
 ///         in the catalogue. It went undeclared while the manager did not read <c>SoftDeleteDays</c>,
 ///         because a recovery window the platform does not honour is a promise made to the users most
 ///         likely to test it. docs/plan/08 § Soft delete is now built — a <c>DELETE</c> parks the account
@@ -95,16 +119,22 @@ namespace CyberCloud.Providers.Storage;
 ///         The teardown runs, so the filer, the volume servers and the S3 gateway go; deleting a
 ///         <c>StatefulSet</c> does not delete the <c>PersistentVolumeClaim</c>s its
 ///         <c>volumeClaimTemplate</c> made, so the objects are still on disk. What the earlier note
-///         called <i>"a property of somebody else's configuration rather than a promise this type
-///         makes"</i> — reclaim policy leaving the PVCs behind — is now a promise this type does make,
+///         called
+///         <i>
+///             "a property of somebody else's configuration rather than a promise this type
+///             makes"
+///         </i> — reclaim policy leaving the PVCs behind — is now a promise this type does make,
 ///         because the window is what makes it one. And <c>ISecretWriter</c> mints once and has no
 ///         delete, so the restored account answers to the same access-key pair
 ///         <see cref="StorageAccountListKeysHandler" /> handed out before the delete: a client with a
 ///         cached key pair does not have to be re-credentialled.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The window is on <c>accounts</c> and NOT on <c>accounts/buckets</c>, which is a
-///         decision.</b> A bucket is a child of an account and its data lives in the account's volumes,
+///         ⚠
+///         <b>
+///             The window is on <c>accounts</c> and NOT on <c>accounts/buckets</c>, which is a
+///             decision.
+///         </b> A bucket is a child of an account and its data lives in the account's volumes,
 ///         so a parked account already holds every bucket's bytes. Declaring a second window on the child
 ///         would park a name whose data plane is a prefix inside its parent's, hold a second committed
 ///         quota for it, and give a tenant two recovery windows to reason about for one set of objects.
@@ -280,11 +310,11 @@ public sealed class StorageProvider : IResourceProvider {
                 "/properties/gateway/replicas"
             ],
             body => KubeQuantity.TryParse(StorageAccounts.Resources(body).Cpu, out var cores)
-            && KubeQuantity.TryParse(StorageAccounts.ControlPlaneCpu, out var share)
-                ? Result<decimal>.Success(
-                    (StorageAccounts.VolumeServers(body) * cores) + (ControlPlanePods(body) * share)
-                )
-                : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
+                && KubeQuantity.TryParse(StorageAccounts.ControlPlaneCpu, out var share)
+                    ? Result<decimal>.Success(
+                        StorageAccounts.VolumeServers(body) * cores + ControlPlanePods(body) * share
+                    )
+                    : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
         );
 
     /// <summary>Memory: the same two populations, in gibibytes.</summary>
@@ -300,17 +330,20 @@ public sealed class StorageProvider : IResourceProvider {
                 "/properties/gateway/replicas"
             ],
             body => KubeQuantity.TryGibibytes(StorageAccounts.Resources(body).Memory, out var gibibytes)
-            && KubeQuantity.TryGibibytes(StorageAccounts.ControlPlaneMemory, out var share)
-                ? Result<decimal>.Success(
-                    (StorageAccounts.VolumeServers(body) * gibibytes) + (ControlPlanePods(body) * share)
-                )
-                : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
+                && KubeQuantity.TryGibibytes(StorageAccounts.ControlPlaneMemory, out var share)
+                    ? Result<decimal>.Success(
+                        StorageAccounts.VolumeServers(body) * gibibytes + ControlPlanePods(body) * share
+                    )
+                    : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
         );
 
     /// <summary>Storage: every volume server's data volume, plus the filer's metadata volume.</summary>
     /// <remarks>
-    ///     ⚠ <b>Provisioned rather than replicated, which is a decision and the opposite of what
-    ///     docs/plan/15 § Metering says about <i>block</i> storage.</b> That table bills
+    ///     ⚠
+    ///     <b>
+    ///         Provisioned rather than replicated, which is a decision and the opposite of what
+    ///         docs/plan/15 § Metering says about <i>block</i> storage.
+    ///     </b> That table bills
     ///     <c>storage.block.gb_month</c> as <i>"Provisioned × replication factor"</i>, and this meter
     ///     deliberately does not multiply by <c>replication</c>: the volume servers' PVCs are what the
     ///     cluster provisions, and a replication code decides how the copies are spread <i>across</i>
@@ -327,9 +360,9 @@ public sealed class StorageProvider : IResourceProvider {
             "volumeServers × storage.size + 10Gi for the filer, in GiB",
             ["/properties/volumeServers", "/properties/storage/size"],
             body => KubeQuantity.TryGibibytes(StorageAccounts.StorageSize(body), out var gibibytes)
-            && KubeQuantity.TryGibibytes(StorageAccounts.FilerVolumeSize, out var filer)
-                ? Result<decimal>.Success((StorageAccounts.VolumeServers(body) * gibibytes) + filer)
-                : Unresolvable("storage", "storage.size")
+                && KubeQuantity.TryGibibytes(StorageAccounts.FilerVolumeSize, out var filer)
+                    ? Result<decimal>.Success(StorageAccounts.VolumeServers(body) * gibibytes + filer)
+                    : Unresolvable("storage", "storage.size")
         );
 
     /// <summary>How many pods are sized by the platform rather than by the tenant.</summary>

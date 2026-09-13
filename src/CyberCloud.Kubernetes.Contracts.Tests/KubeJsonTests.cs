@@ -115,9 +115,7 @@ public sealed class KubeJsonTests {
 
     [Fact]
     public void NestingIsFollowedAllTheWayDown() {
-        var actual = JsonNode.Parse(
-            """{"spec":{"template":{"spec":{"clusterName":"prod","extra":true}}}}"""
-        );
+        var actual = JsonNode.Parse("""{"spec":{"template":{"spec":{"clusterName":"prod","extra":true}}}}""");
 
         KubeJson.Contains(actual, JsonNode.Parse("""{"spec":{"template":{"spec":{"clusterName":"prod"}}}}"""))
             .ShouldBeTrue();

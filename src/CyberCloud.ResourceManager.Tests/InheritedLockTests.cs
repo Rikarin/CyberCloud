@@ -11,8 +11,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This class uses the <i>shipped</i> <c>ResourceScopeLockResolver</c> over real
-///         resource-group and subscription grains, and that is the entire point.</b> Every other test
+///         ⚠
+///         <b>
+///             This class uses the <i>shipped</i> <c>ResourceScopeLockResolver</c> over real
+///             resource-group and subscription grains, and that is the entire point.
+///         </b> Every other test
 ///         of the lock step in this repository goes through <c>SwitchableLockResolver</c> — a double
 ///         that returns whatever level the test set, at every scope, which is exactly right for
 ///         asking "does step 4 honour a lock" and exactly useless for asking "is a lock at the
@@ -59,12 +62,12 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
             // ⚠ And the resource is untouched — not merely "the call returned an error". A refusal
             // that had already released the index would have handed the name away.
             var entry = await cluster.Index(address).GetAsync();
-            entry.GetValueOrThrow().State.ShouldBe(
-                IndexEntryState.Confirmed,
-                "the refused delete released the name anyway"
-            );
-        }
-        finally {
+            entry.GetValueOrThrow()
+                .State.ShouldBe(
+                    IndexEntryState.Confirmed,
+                    "the refused delete released the name anyway"
+                );
+        } finally {
             await SetSubscriptionLockAsync(LockLevel.None);
         }
     }
@@ -105,8 +108,7 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
             // A read is still a read. ReadOnly means read-only, not invisible.
             var read = await manager.ReadAsync(Request(address), TestContext.Current.CancellationToken);
             read.IsSuccess.ShouldBeTrue(read.Error?.Message);
-        }
-        finally {
+        } finally {
             await SetSubscriptionLockAsync(LockLevel.None);
         }
     }
@@ -131,12 +133,12 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
             created.Error!.Code.ShouldBe(ErrorCode.ScopeLocked);
 
             var entry = await cluster.Index(address).GetAsync();
-            entry.GetValueOrThrow().State.ShouldBe(
-                IndexEntryState.Free,
-                "the refused create claimed the name anyway — step 4 runs before step 7"
-            );
-        }
-        finally {
+            entry.GetValueOrThrow()
+                .State.ShouldBe(
+                    IndexEntryState.Free,
+                    "the refused create claimed the name anyway — step 4 runs before step 7"
+                );
+        } finally {
             await SetSubscriptionLockAsync(LockLevel.None);
         }
     }
@@ -161,8 +163,7 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
 
             deleted.IsFailure.ShouldBeTrue("a CanNotDelete on the resource GROUP did not stop the delete");
             deleted.Error!.Code.ShouldBe(ErrorCode.ScopeLocked);
-        }
-        finally {
+        } finally {
             await SetGroupLockAsync(LockLevel.None);
         }
     }
@@ -192,11 +193,12 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
                 TestContext.Current.CancellationToken
             );
 
-            resolved.GetValueOrThrow().ShouldBe(
-                LockLevel.ReadOnly,
-                "the numerically larger CanNotDelete on the lower scope overruled the stronger "
-                + "ReadOnly above it"
-            );
+            resolved.GetValueOrThrow()
+                .ShouldBe(
+                    LockLevel.ReadOnly,
+                    "the numerically larger CanNotDelete on the lower scope overruled the stronger "
+                    + "ReadOnly above it"
+                );
 
             var written = await manager.WriteAsync(
                 new() {
@@ -211,8 +213,7 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
 
             written.IsFailure.ShouldBeTrue("the write went through under a ReadOnly subscription");
             written.Error!.Code.ShouldBe(ErrorCode.ScopeLocked);
-        }
-        finally {
+        } finally {
             await SetSubscriptionLockAsync(LockLevel.None);
             await SetGroupLockAsync(LockLevel.None);
         }
@@ -279,17 +280,11 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
 
     Task<Result> SetGroupLockAsync(LockLevel level) =>
         cluster.For(ResourceManagerCluster.Tenant)
-            .GetGrain<IResourceGroupGrain>(
-                GrainKeys.ResourceGroup(ResourceManagerCluster.Subscription, "prod")
-            )
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(ResourceManagerCluster.Subscription, "prod"))
             .SetLockAsync(level);
 
     static WriteRequest Request(ResourceId address) =>
-        new() {
-            Path = address.Path,
-            ApiVersion = TestingProvider.V2026,
-            Caller = ResourceManagerCluster.Caller()
-        };
+        new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() };
 
     static Task<Result<WriteAccepted>> Create(ResourceManagerService manager, ResourceId address) =>
         manager.WriteAsync(

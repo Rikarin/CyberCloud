@@ -27,8 +27,11 @@ interface IOperationReader {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This type performs no check of its own, which is the same property it had before and
-///         is the reason the seam survived the change.</b> docs/plan/10 § What the gateway must never
+///         ⚠
+///         <b>
+///             This type performs no check of its own, which is the same property it had before and
+///             is the reason the seam survived the change.
+///         </b> docs/plan/10 § What the gateway must never
 ///         do forbids the gateway from performing authorization; docs/plan/07 § The enforcement seam
 ///         puts the one decision inside the resource manager. So the interface above is a
 ///         <i>question</i> and this is a forwarder — it copies whatever answer comes back, including
@@ -39,8 +42,11 @@ interface IOperationReader {
 ///         itself — <c>ForTenant(…).GetGrain&lt;IOperationGrain&gt;</c> — and then ask
 ///         <see cref="IResourceManager.ReadAsync" /> about the operation's <i>resource</i>, because
 ///         "may this caller see that resource?" was the only question the interface could answer. That
-///         is an index resolve, a check, a resource-grain read and an api-version projection <b>per
-///         poll</b>, and <c>cyc --wait</c> polls a nine-minute cluster create continuously.
+///         is an index resolve, a check, a resource-grain read and an api-version projection
+///         <b>
+///             per
+///             poll
+///         </b>, and <c>cyc --wait</c> polls a nine-minute cluster create continuously.
 ///         <see cref="IResourceManager.GetOperationAsync" /> is the method docs/plan/08 § Long-running
 ///         operations always implied and the interface did not have; it reads the operation and runs
 ///         the same check once, in the seam.
@@ -106,16 +112,22 @@ static class GatewayRouterPaths {
     /// </param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>An absolute URL rather than a token in the body, because that is what makes
-    ///         <c>AsyncPageable&lt;T&gt;</c> work with no bespoke code</b> — the same argument
+    ///         ⚠
+    ///         <b>
+    ///             An absolute URL rather than a token in the body, because that is what makes
+    ///             <c>AsyncPageable&lt;T&gt;</c> work with no bespoke code
+    ///         </b> — the same argument
     ///         docs/plan/10 § Long-running operations makes for <c>Azure-AsyncOperation</c>. A client
     ///         that has to reassemble the next request from a bare token has to know the endpoint's
     ///         paging parameter, which is exactly the per-endpoint knowledge a generated SDK does not
     ///         have.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Which is also why every parameter that shaped THIS page has to be written into the
-    ///         next one's URL, and why <c>$top</c> was a bug (#76).</b> This built the next page's URL
+    ///         ⚠
+    ///         <b>
+    ///             Which is also why every parameter that shaped THIS page has to be written into the
+    ///             next one's URL, and why <c>$top</c> was a bug (#76).
+    ///         </b> This built the next page's URL
     ///         out of <c>api-version</c> and <c>$skipToken</c> alone, so a client that followed the
     ///         link it was handed — which is the only thing a generated pager does — asked for no page
     ///         size at all from page two onwards and got <c>ListRequest.DefaultPageSize</c>. The
@@ -125,8 +137,11 @@ static class GatewayRouterPaths {
     ///         endpoint grows later — an <c>$orderby</c>, a <c>$filter</c> — has the same obligation.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The caller's own <c>$top</c> is echoed, not the clamped
-    ///         <c>ListRequest.PageSize</c>.</b> Echoing the clamp would make the link a different
+    ///         ⚠
+    ///         <b>
+    ///             The caller's own <c>$top</c> is echoed, not the clamped
+    ///             <c>ListRequest.PageSize</c>.
+    ///         </b> Echoing the clamp would make the link a different
     ///         request from the one that produced this page — <c>$top=10000</c> would come back as
     ///         <c>$top=100</c> — and would put <c>ListRequest.MaxPageSize</c>, a number the platform
     ///         reserves the right to change, into a URL a client may store and replay after it does.

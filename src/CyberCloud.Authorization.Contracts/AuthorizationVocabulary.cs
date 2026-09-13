@@ -36,8 +36,11 @@ namespace CyberCloud.Authorization.Contracts;
 
 /// <summary>The object types the built-in schema defines. Constants so a typo is <c>CS0117</c>.</summary>
 /// <remarks>
-///     ⚠ <b>Every constant here is a type <c>CyberCloudSchema</c> defines, and
-///     <c>PermissionNameTests.EveryObjectTypeConstantIsInTheSchema</c> is what keeps that true.</b>
+///     ⚠
+///     <b>
+///         Every constant here is a type <c>CyberCloudSchema</c> defines, and
+///         <c>PermissionNameTests.EveryObjectTypeConstantIsInTheSchema</c> is what keeps that true.
+///     </b>
 ///     A constant naming a type the schema does not define would compile at every call site and fail
 ///     every tuple write against it with <see cref="ErrorCode.SchemaInvalid" /> — the failure that
 ///     reads as a permissions bug. See <see cref="SubjectTypes" /> for the two ReBAC subject
@@ -131,8 +134,8 @@ public static class Permissions {
     ///         purge test in the repository ran against a doubled authorizer, so a permission that
     ///         always evaluated false looked identical to one that worked.
     ///         <c>SoftDeleteEdgeTests.EveryDeclaredPurgePermissionIsOneTheSchemaDefinesOnAResource</c>
-///         is the assertion that they agree, and it sweeps the registry rather than pinning this
-///         string — a provider may name its own permission through <c>SupportsSoftDelete</c>.
+    ///         is the assertion that they agree, and it sweeps the registry rather than pinning this
+    ///         string — a provider may name its own permission through <c>SupportsSoftDelete</c>.
     ///     </para>
     /// </remarks>
     public const string Purge = "purge";
@@ -155,14 +158,20 @@ public static class Permissions {
 ///         <c>AuthorizationVocabularyTests</c> pins each literal byte-for-byte.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="User" /> is <see cref="ObjectTypes.User" /> rather than a second
-///         <c>"user"</c>, and that is the point of this class living here.</b> It used to be declared
+///         ⚠
+///         <b>
+///             <see cref="User" /> is <see cref="ObjectTypes.User" /> rather than a second
+///             <c>"user"</c>, and that is the point of this class living here.
+///         </b> It used to be declared
 ///         in <c>CyberCloud.Identity.Contracts</c>, which could not name <c>ObjectTypes</c> — so the
 ///         two spellings agreed by assertion rather than by construction. They now cannot disagree.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ServicePrincipal" /> and <see cref="ManagedIdentity" /> are here and not
-///         in <see cref="ObjectTypes" />, and the asymmetry is real rather than an oversight.</b>
+///         ⚠
+///         <b>
+///             <see cref="ServicePrincipal" /> and <see cref="ManagedIdentity" /> are here and not
+///             in <see cref="ObjectTypes" />, and the asymmetry is real rather than an oversight.
+///         </b>
 ///         <see cref="ObjectTypes" /> is what <c>CyberCloudSchema</c> <i>defines</i>, and
 ///         <c>TupleStoreGrain.Validate</c> checks a tuple's <c>Object.Type</c> against the schema and
 ///         its <c>Subject</c> against nothing — a subject type needs no schema entry, because nothing

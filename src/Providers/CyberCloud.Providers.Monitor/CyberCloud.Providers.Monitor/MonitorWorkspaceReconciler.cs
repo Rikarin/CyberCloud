@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`, which EnsureIngestKeyAsync returns. `CyberCloud.Core.Resources` is global
 // here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Globalization;
@@ -30,8 +31,11 @@ namespace CyberCloud.Providers.Monitor;
 ///         routing it names is a workspace advertised as ready and refusing every write.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A RETENTION A TENANT CAN SHORTEN IS A DATA-LOSS PATH, AND IT IS REFUSED HERE
-///         BECAUSE IT CANNOT BE REFUSED AT THE API.</b> docs/plan/16 § Cost and retention honesty
+///         ⚠
+///         <b>
+///             A RETENTION A TENANT CAN SHORTEN IS A DATA-LOSS PATH, AND IT IS REFUSED HERE
+///             BECAUSE IT CANNOT BE REFUSED AT THE API.
+///         </b> docs/plan/16 § Cost and retention honesty
 ///         prices retention, so it has to be settable; shortening it deletes everything already
 ///         outside the new window, and on the ClickHouse half that is not a slow drift — expiry runs
 ///         at the next merge, and ClickHouse performs an off-schedule merge when it detects expired
@@ -42,8 +46,11 @@ namespace CyberCloud.Providers.Monitor;
 ///         ⚠ <b>Fifth sighting of that limit</b> after <c>CyberCloud.Network/virtualNetworks</c>'
 ///         address-space overlap, <c>CyberCloud.ContainerService</c>'s version skew,
 ///         <c>CyberCloud.Storage/accounts</c>' bucket cluster and <c>clickhouseClusters</c>' volume
-///         shrink — and the first where the consequence is <b>irreversible destruction of tenant
-///         data authorised by a request the platform already answered <c>202</c> to</b>. So this
+///         shrink — and the first where the consequence is
+///         <b>
+///             irreversible destruction of tenant
+///             data authorised by a request the platform already answered <c>202</c> to
+///         </b>. So this
 ///         reconciler reads the existing row before it applies anything and fails the pass by name,
 ///         with both day counts in the message, rather than converging onto a smaller window. The
 ///         resource parks in a failed state that a <c>PUT</c> of the old tier reverses; the data is
@@ -268,8 +275,11 @@ public sealed class MonitorWorkspaceReconciler(IClock clock) : IResourceReconcil
     ///     now authoritative.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
-    ///     IDEMPOTENT.</b> <see cref="MonitorWorkspaces.GenerateIngestKey" /> produces a different
+    ///     ⚠
+    ///     <b>
+    ///         THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
+    ///         IDEMPOTENT.
+    ///     </b> <see cref="MonitorWorkspaces.GenerateIngestKey" /> produces a different
     ///     value every call — it has to, or a credential would be derivable from a resource id. What
     ///     reaches the rendered <c>Secret</c> is never that value: it is what
     ///     <see cref="ISecretResolver.ResolveAsync" /> returns afterwards, which is the key the
@@ -346,7 +356,7 @@ public sealed class MonitorWorkspaceReconciler(IClock clock) : IResourceReconcil
                 // ⚠ Background. Nothing this type applies owns anything, so a Foreground cascade
                 // would block on a dependent set that is always empty. The read-back below is what
                 // makes it safe: this returns Converged when the objects are GONE.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError)
                 && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -419,9 +429,7 @@ public sealed class MonitorWorkspaceReconciler(IClock clock) : IResourceReconcil
 
         if (row.TryGetError(out _)) {
             return new() {
-                Exists = false,
-                ObservedAt = clock.UtcNow,
-                Summary = "the workspace's ingest row is absent"
+                Exists = false, ObservedAt = clock.UtcNow, Summary = "the workspace's ingest row is absent"
             };
         }
 

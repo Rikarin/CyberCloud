@@ -14,13 +14,16 @@ public sealed class MachineReadableFailureTests {
     static readonly string[] Show = [
         "sample", "widgets", "show",
         "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t",
-        "--output", "json",
+        "--output", "json"
     ];
 
     [Fact]
     public async Task StdoutIsEmptyWhenTheRequestFails() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) =>
-            Responses.Error(HttpStatusCode.NotFound, "ResourceNotFound", "No widget called 'w1' in 'prod'.")));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, _) =>
+                Responses.Error(HttpStatusCode.NotFound, "ResourceNotFound", "No widget called 'w1' in 'prod'.")
+            )
+        );
 
         var code = await host.RunAsync(Show);
 
@@ -50,8 +53,11 @@ public sealed class MachineReadableFailureTests {
 
     [Fact]
     public async Task TheErrorItselfIsJsonOnStderr() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) =>
-            Responses.Error(HttpStatusCode.Conflict, "ResourceLocked", "A CanNotDelete lock is on 'prod'.")));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, _) =>
+                Responses.Error(HttpStatusCode.Conflict, "ResourceLocked", "A CanNotDelete lock is on 'prod'.")
+            )
+        );
 
         await host.RunAsync(Show);
 
@@ -67,8 +73,11 @@ public sealed class MachineReadableFailureTests {
 
     [Fact]
     public async Task ASucceedingCommandWritesOneDocumentAndNothingElse() {
-        using var host = TestHost.Create(new ScriptedTransport((_, _) =>
-            Responses.Json(HttpStatusCode.OK, """{"name":"w1","properties":{"tier":"free"}}""")));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, _) =>
+                Responses.Json(HttpStatusCode.OK, """{"name":"w1","properties":{"tier":"free"}}""")
+            )
+        );
 
         (await host.RunAsync(Show)).ShouldBe((int)ExitCode.Ok);
 
@@ -78,21 +87,43 @@ public sealed class MachineReadableFailureTests {
 
     [Fact]
     public async Task ProgressNeverReachesStdout() {
-        using var host = TestHost.Create(new ScriptedTransport((_, index) => index switch {
-            0 => Responses.Accepted("https://api.cybercloud.io/operations/op-1"),
-            1 => Responses.Json(HttpStatusCode.OK, """
-                {"status":"Running","percentComplete":40,
-                 "progress":[{"at":"2026-08-11T10:00:00Z","step":"etcd","message":"etcd cluster ready"}]}
-                """),
-            2 => Responses.Json(HttpStatusCode.OK, """{"status":"Succeeded"}"""),
-            _ => Responses.Json(HttpStatusCode.OK, """{"name":"w1"}"""),
-        }));
+        using var host = TestHost.Create(
+            new ScriptedTransport((_, index) => index switch {
+                    0 => Responses.Accepted("https://api.cybercloud.io/operations/op-1"),
+                    1 => Responses.Json(
+                        HttpStatusCode.OK,
+                        """
+                        {"status":"Running","percentComplete":40,
+                         "progress":[{"at":"2026-08-11T10:00:00Z","step":"etcd","message":"etcd cluster ready"}]}
+                        """
+                    ),
+                    2 => Responses.Json(HttpStatusCode.OK, """{"status":"Succeeded"}"""),
+                    _ => Responses.Json(HttpStatusCode.OK, """{"name":"w1"}"""),
+                }
+            )
+        );
 
         var code = await host.RunAsync(
-            "sample", "widgets", "create",
-            "--name", "w1", "--resource-group", "prod", "--subscription", "s", "--tenant", "t",
-            "--location", "eu-central", "--message", "hi", "--cluster-id", "c1",
-            "--output", "json");
+            "sample",
+            "widgets",
+            "create",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--subscription",
+            "s",
+            "--tenant",
+            "t",
+            "--location",
+            "eu-central",
+            "--message",
+            "hi",
+            "--cluster-id",
+            "c1",
+            "--output",
+            "json"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
 

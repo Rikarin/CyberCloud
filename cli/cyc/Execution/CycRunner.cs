@@ -1,6 +1,6 @@
-using System.CommandLine;
 using CyberCloud.Cli.Configuration;
 using CyberCloud.Cli.VerbTree;
+using System.CommandLine;
 
 namespace CyberCloud.Cli.Execution;
 

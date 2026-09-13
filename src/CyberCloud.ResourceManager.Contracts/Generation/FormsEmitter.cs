@@ -7,9 +7,12 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/02 § ADR-012's portal row: <i>"Angular reactive forms + xUI controls from the
-///         schema, with <c>x-cybercloud-*</c> hints for widgets (a <c>storageclass</c> picker, a
-///         region picker)"</i>, and docs/plan/20 § The shape that makes 100 resource types affordable
+///         docs/plan/02 § ADR-012's portal row:
+///         <i>
+///             "Angular reactive forms + xUI controls from the
+///             schema, with <c>x-cybercloud-*</c> hints for widgets (a <c>storageclass</c> picker, a
+///             region picker)"
+///         </i>, and docs/plan/20 § The shape that makes 100 resource types affordable
 ///         gives the schema→widget table this implements.
 ///     </para>
 ///     <para>
@@ -22,8 +25,11 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The escape hatch is named in the output rather than assumed.</b> docs/plan/20 allows a
-///         hand-written form keyed by <c>(resourceType, apiVersion)</c> and requires that <i>"every
-///         override must render the same schema"</i>. Each form carries the key an override is
+///         hand-written form keyed by <c>(resourceType, apiVersion)</c> and requires that
+///         <i>
+///             "every
+///             override must render the same schema"
+///         </i>. Each form carries the key an override is
 ///         registered under and the pointer list it must cover, so the test that document asks for —
 ///         submit the override's output against the schema — has something machine-readable to check
 ///         against instead of a convention.
@@ -72,7 +78,9 @@ public static class FormsEmitter {
             ["apiVersion"] = version,
             ["generatedFrom"] = OpenApiArtifacts.DirectoryName + "/" + version + ".json",
             ["description"] =
-                "Portal form schemas at api-version " + version + ". Generated from the OpenAPI "
+                "Portal form schemas at api-version "
+                + version
+                + ". Generated from the OpenAPI "
                 + "document — docs/plan/21 § Generation — and consumed by libs/resource-forms' "
                 + "schema-renderer (docs/plan/20).",
             ["forms"] = forms,
@@ -84,8 +92,11 @@ public static class FormsEmitter {
     /// <param name="scope">The scope.</param>
     /// <param name="version">The api-version.</param>
     /// <remarks>
-    ///     ⚠ <b>The same field vocabulary as a resource form, so the renderer needs no second
-    ///     code path.</b> docs/plan/20's schema→widget table is applied by
+    ///     ⚠
+    ///     <b>
+    ///         The same field vocabulary as a resource form, so the renderer needs no second
+    ///         code path.
+    ///     </b> docs/plan/20's schema→widget table is applied by
     ///     <see cref="ControlOf" /> either way; what differs is the envelope, and it differs because
     ///     a scope genuinely has no tags, no cluster, no soft-delete window and no actions.
     /// </remarks>
@@ -256,7 +267,8 @@ public static class FormsEmitter {
             field["disabledAfterCreate"] = true;
             field["disabledReason"] =
                 "This value cannot change after the resource is created. Create a new "
-                + type.DisplayName + " to change it.";
+                + type.DisplayName
+                + " to change it.";
         }
 
         if (schema["default"] is { } fallback) {
@@ -283,13 +295,15 @@ public static class FormsEmitter {
             var fields = new JsonArray();
 
             foreach (var leaf in DocumentReader.LeavesOf(request)) {
-                fields.Add(new JsonObject {
-                    ["jsonPointer"] = leaf.JsonPointer,
-                    ["name"] = leaf.Name,
-                    ["label"] = Label(leaf.Name),
-                    ["control"] = ControlOf(leaf.Schema, leaf.IsObject),
-                    ["required"] = leaf.Required
-                });
+                fields.Add(
+                    new JsonObject {
+                        ["jsonPointer"] = leaf.JsonPointer,
+                        ["name"] = leaf.Name,
+                        ["label"] = Label(leaf.Name),
+                        ["control"] = ControlOf(leaf.Schema, leaf.IsObject),
+                        ["required"] = leaf.Required
+                    }
+                );
             }
 
             node["fields"] = fields;

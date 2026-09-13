@@ -9,8 +9,11 @@ namespace CyberCloud.Core.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The claim under test is that the two grammars <i>partition</i> the paths that carry
-///         the fixed prefix.</b> A resource's tail is even because it ends on a name; a collection's
+///         ⚠
+///         <b>
+///             The claim under test is that the two grammars <i>partition</i> the paths that carry
+///             the fixed prefix.
+///         </b> A resource's tail is even because it ends on a name; a collection's
 ///         is odd because it ends on a type. If either parser ever accepted the other's shape, the
 ///         choice between them would move to whatever the caller happened to try first — and the
 ///         gateway decides which one a path is without looking at the verb.
@@ -61,8 +64,11 @@ public sealed class ResourceCollectionIdTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>Every generated resource id's collection round-trips, and its member round-trips
-    ///     back to the id.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Every generated resource id's collection round-trips, and its member round-trips
+    ///         back to the id.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     The two directions together are what make <see cref="ResourceCollectionId.Of" /> and
@@ -85,8 +91,11 @@ public sealed class ResourceCollectionIdTests {
     // ── The partition ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>No resource path parses as a collection, and no collection path parses as a
-    ///     resource.</b>
+    ///     ⚠
+    ///     <b>
+    ///         No resource path parses as a collection, and no collection path parses as a
+    ///         resource.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     This is the property the gateway relies on to decide from the path alone. It is asserted
@@ -125,8 +134,7 @@ public sealed class ResourceCollectionIdTests {
     [InlineData("")]
     [InlineData("tenants/x")]
     [InlineData("/tenants")]
-    public void ANonPathIsRefused(string? path) =>
-        ResourceCollectionId.TryParsePath(path, out _).ShouldBeFalse();
+    public void ANonPathIsRefused(string? path) => ResourceCollectionId.TryParsePath(path, out _).ShouldBeFalse();
 
     [Fact]
     public void AnEmptySegmentIsRefusedRatherThanAbsorbed() {
@@ -156,7 +164,7 @@ public sealed class ResourceCollectionIdTests {
             + "/providers/CyberCloud.Testing/widgets",
             out _
         )
-        .ShouldBeFalse();
+            .ShouldBeFalse();
 
     /// <summary>
     ///     ⚠ <b>Every ancestor name is validated, not just the structural segments.</b>
@@ -191,7 +199,7 @@ public sealed class ResourceCollectionIdTests {
             + "/Providers/CyberCloud.Testing/widgets",
             out var folded
         )
-        .ShouldBeTrue();
+            .ShouldBeTrue();
 
         folded.ResourceGroup.ShouldBe("prod");
 
@@ -200,7 +208,7 @@ public sealed class ResourceCollectionIdTests {
             + "/providers/CyberCloud.Testing/widgets",
             out _
         )
-        .ShouldBeFalse();
+            .ShouldBeFalse();
     }
 
     // ── Construction ───────────────────────────────────────────────────────────────────────────
@@ -216,8 +224,7 @@ public sealed class ResourceCollectionIdTests {
     /// </remarks>
     [Fact]
     public void ANestedTypeWithoutItsAncestorsNamesThrows() {
-        Should.Throw<ArgumentException>(
-            () => new ResourceCollectionId(
+        Should.Throw<ArgumentException>(() => new ResourceCollectionId(
                 Tenant,
                 Subscription,
                 "prod",
@@ -225,8 +232,7 @@ public sealed class ResourceCollectionIdTests {
             )
         );
 
-        Should.Throw<ArgumentException>(
-            () => new ResourceCollectionId(
+        Should.Throw<ArgumentException>(() => new ResourceCollectionId(
                 Tenant,
                 Subscription,
                 "prod",

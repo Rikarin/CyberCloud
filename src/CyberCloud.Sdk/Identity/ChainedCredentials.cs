@@ -46,11 +46,16 @@ public sealed class CyberCloudCliCredential : TokenCredential {
         (arguments, cancellationToken) => Subprocess.RunAsync(Executable, arguments, cancellationToken);
 
     /// <inheritdoc />
-    public override async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken = default) {
+    public override async ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken = default
+    ) {
         var cached = await options.TokenCache.GetAsync(cacheKey, cancellationToken).ConfigureAwait(false);
 
-        if (cached is { AccessToken.Length: > 0 } record && record.ExpiresOn - AccessTokenCache.RefreshWindow > DateTimeOffset.UtcNow)
+        if (cached is { AccessToken.Length: > 0 } record
+            && record.ExpiresOn - AccessTokenCache.RefreshWindow > DateTimeOffset.UtcNow) {
             return new AccessToken(record.AccessToken!, record.ExpiresOn);
+        }
 
         var arguments = new List<string> { "account", "get-access-token", "--output", "json" };
 
@@ -66,23 +71,29 @@ public sealed class CyberCloudCliCredential : TokenCredential {
 
         var result = await Run(arguments, cancellationToken).ConfigureAwait(false);
 
-        if (result.ExitCode != 0)
+        if (result.ExitCode != 0) {
             throw new CredentialUnavailableException(
                 // docs/plan/21 § Decisions: exit code 3 is auth. Anything else from the CLI is a
                 // different problem and saying "run cyc login" would be wrong advice.
                 result.ExitCode == 3
                     ? $"'{Executable}' is not signed in. Run 'cyc login'."
-                    : $"'{Executable} account get-access-token' failed with exit code {result.ExitCode}.");
+                    : $"'{Executable} account get-access-token' failed with exit code {result.ExitCode}."
+            );
+        }
 
         CliTokenPayload payload;
 
         try {
             payload = JsonSerializer.Deserialize(result.StandardOutput, SdkJsonContext.Default.CliTokenPayload)
-                ?? throw new CredentialUnavailableException($"'{Executable} account get-access-token' printed nothing.");
+                ?? throw new CredentialUnavailableException(
+                    $"'{Executable} account get-access-token' printed nothing."
+                );
         } catch (JsonException e) {
             // ⚠ The output is not in the message. It contains an access token.
             throw new CredentialUnavailableException(
-                $"'{Executable} account get-access-token --output json' did not print the expected JSON.", e);
+                $"'{Executable} account get-access-token --output json' did not print the expected JSON.",
+                e
+            );
         }
 
         return new AccessToken(payload.AccessToken, payload.ExpiresOn);
@@ -95,8 +106,11 @@ public sealed class CyberCloudCliCredential : TokenCredential {
 /// <remarks>
 ///     <c>CYC_TENANT_ID</c> and <c>CYC_CLIENT_ID</c>, plus either <c>CYC_CLIENT_SECRET</c> or
 ///     <c>CYC_CLIENT_CERTIFICATE_PATH</c> (with an optional <c>CYC_CLIENT_CERTIFICATE_PASSWORD</c>).
-///     The <c>CYC_</c> prefix is docs/plan/21 § Decisions' — <i>"every setting also an env var
-///     (<c>CYC_SUBSCRIPTION</c>, …) for CI"</i>.
+///     The <c>CYC_</c> prefix is docs/plan/21 § Decisions' —
+///     <i>
+///         "every setting also an env var
+///         (<c>CYC_SUBSCRIPTION</c>, …) for CI"
+///     </i>.
 /// </remarks>
 public sealed class EnvironmentCredential : TokenCredential, IDisposable {
     readonly TokenCredential inner;
@@ -110,9 +124,11 @@ public sealed class EnvironmentCredential : TokenCredential, IDisposable {
         var secret = Environment.GetEnvironmentVariable("CYC_CLIENT_SECRET");
         var certificatePath = Environment.GetEnvironmentVariable("CYC_CLIENT_CERTIFICATE_PATH");
 
-        if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId))
+        if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId)) {
             throw new CredentialUnavailableException(
-                "CYC_TENANT_ID and CYC_CLIENT_ID are not both set, so no service principal is described by this environment.");
+                "CYC_TENANT_ID and CYC_CLIENT_ID are not both set, so no service principal is described by this environment."
+            );
+        }
 
         if (!string.IsNullOrEmpty(secret)) {
             inner = new ClientSecretCredential(tenantId, clientId, secret, options);
@@ -131,12 +147,16 @@ public sealed class EnvironmentCredential : TokenCredential, IDisposable {
 
         throw new CredentialUnavailableException(
             "CYC_CLIENT_SECRET and CYC_CLIENT_CERTIFICATE_PATH are both unset, so the service principal named by "
-            + "CYC_CLIENT_ID has no credential to present.");
+            + "CYC_CLIENT_ID has no credential to present."
+        );
     }
 
     /// <inheritdoc />
-    public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken = default)
-        => inner.GetTokenAsync(context, cancellationToken);
+    public override ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        inner.GetTokenAsync(context, cancellationToken);
 
     /// <inheritdoc />
     public void Dispose() => (inner as IDisposable)?.Dispose();
@@ -159,14 +179,18 @@ public class ChainedTokenCredential : TokenCredential, IDisposable {
     public ChainedTokenCredential(params TokenCredential[] sources) {
         ArgumentNullException.ThrowIfNull(sources);
 
-        if (sources.Length == 0)
+        if (sources.Length == 0) {
             throw new ArgumentException("A credential chain needs at least one credential.", nameof(sources));
+        }
 
         this.sources = sources;
     }
 
     /// <inheritdoc />
-    public override async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken cancellationToken = default) {
+    public override async ValueTask<AccessToken> GetTokenAsync(
+        TokenRequestContext context,
+        CancellationToken cancellationToken = default
+    ) {
         List<Exception>? unavailable = null;
 
         foreach (var source in sources) {
@@ -183,7 +207,8 @@ public class ChainedTokenCredential : TokenCredential, IDisposable {
         throw new CredentialUnavailableException(
             "No credential in the chain could be used:"
             + string.Concat(unavailable!.Select(x => $"{Environment.NewLine}  • {x.Message}")),
-            new AggregateException(unavailable!));
+            new AggregateException(unavailable!)
+        );
     }
 
     /// <inheritdoc />
@@ -195,11 +220,13 @@ public class ChainedTokenCredential : TokenCredential, IDisposable {
     /// <summary>Disposes every credential in the chain that needs it.</summary>
     /// <param name="disposing">Whether managed state should be released.</param>
     protected virtual void Dispose(bool disposing) {
-        if (!disposing)
+        if (!disposing) {
             return;
+        }
 
-        foreach (var source in sources)
+        foreach (var source in sources) {
             (source as IDisposable)?.Dispose();
+        }
     }
 }
 
@@ -247,21 +274,24 @@ public sealed class DefaultCyberCloudCredential : ChainedTokenCredential {
                     $"{nameof(DefaultCyberCloudCredentialOptions.IncludeInteractiveCredential)} is set but "
                     + $"{nameof(DefaultCyberCloudCredentialOptions.OpenBrowser)} is not. The SDK does not decide on its "
                     + "own that opening a browser is appropriate here.",
-                    nameof(options));
+                    nameof(options)
+                );
 
             var clientId = options.ClientId ?? CyberCloudCliCredential.CliClientId;
 
             Add(() => new InteractiveBrowserCredential(clientId, openBrowser, options), true);
         }
 
-        if (chain.Count == 0)
+        if (chain.Count == 0) {
             throw new CredentialUnavailableException("Every credential was excluded, so the chain is empty.");
+        }
 
         return [.. chain];
 
         void Add(Func<TokenCredential> create, bool included) {
-            if (!included)
+            if (!included) {
                 return;
+            }
 
             try {
                 chain.Add(create());

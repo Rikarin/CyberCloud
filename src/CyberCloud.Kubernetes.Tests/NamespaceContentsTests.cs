@@ -1,7 +1,7 @@
 using CyberCloud.Kubernetes.Apply;
-using System.Text.Json.Nodes;
 using CyberCloud.Kubernetes.Tests.Infrastructure;
 using Shouldly;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.Kubernetes.Tests;
 
@@ -58,9 +58,8 @@ public sealed class NamespaceContentsTests {
             TestContext.Current.CancellationToken
         );
 
-        listed.TryGetError(out var error).ShouldBeTrue(
-            "a cluster that cannot say what it serves cannot be asked what a namespace holds."
-        );
+        listed.TryGetError(out var error)
+            .ShouldBeTrue("a cluster that cannot say what it serves cannot be asked what a namespace holds.");
 
         error.Message.ShouldContain(Namespace);
         api.Lists.ShouldBeEmpty("nothing may be listed once discovery has failed.");
@@ -71,7 +70,9 @@ public sealed class NamespaceContentsTests {
         // ⚠ A partial listing is not a smaller true answer. The kinds that were read would be
         // reported and the kind that was not would read as absent, which is precisely how a
         // namespace holding a tenant's Secrets reports as holding none.
-        var api = new RecordingApiClient { Discovery = Result<IReadOnlyList<GroupVersionKind>>.Success([Claims, Secrets]) };
+        var api = new RecordingApiClient {
+            Discovery = Result<IReadOnlyList<GroupVersionKind>>.Success([Claims, Secrets])
+        };
 
         api.Pages.Enqueue(Result<ListPage>.Success(new([Object("data-main-0")], "rv-1", string.Empty)));
         api.Pages.Enqueue(Result<ListPage>.Failure(ErrorCode.AuthorizationFailed, "secrets is forbidden"));
@@ -84,7 +85,10 @@ public sealed class NamespaceContentsTests {
         );
 
         listed.TryGetError(out var error).ShouldBeTrue();
-        error.Code.ShouldBe(ErrorCode.AuthorizationFailed, "the cluster's own code is what says whether another pass could differ.");
+        error.Code.ShouldBe(
+            ErrorCode.AuthorizationFailed,
+            "the cluster's own code is what says whether another pass could differ."
+        );
         error.Message.ShouldContain("Secret");
     }
 
@@ -169,11 +173,11 @@ public sealed class NamespaceContentsTests {
         );
 
         var found = (await NamespaceContents.ListAsync(
-            api,
-            ClusterId,
-            Namespace,
-            TestContext.Current.CancellationToken
-        )).GetValueOrThrow();
+                api,
+                ClusterId,
+                Namespace,
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow();
 
         found.Count.ShouldBe(2);
 
@@ -185,7 +189,5 @@ public sealed class NamespaceContentsTests {
     }
 
     static string Object(string name) =>
-        new JsonObject {
-            ["metadata"] = new JsonObject { ["name"] = name, ["namespace"] = Namespace }
-        }.ToJsonString();
+        new JsonObject { ["metadata"] = new JsonObject { ["name"] = name, ["namespace"] = Namespace } }.ToJsonString();
 }

@@ -318,27 +318,27 @@ public sealed class TenancyCluster : IAsyncLifetime {
                 // platform; wiring one here means this suite exercises the registration rather than
                 // the catch. In-memory rather than Redis (docs/plan/04 § Reminders): the production
                 // choice is the host's and this is a test.
-                .UseInMemoryReminderService()
-                .ConfigureServices(services => {
-                    // Registered BEFORE AddCyberCloudTenancy's TryAdd calls run, so these win.
-                    services.AddSingleton<IClock, TestClock>();
-                    services.AddSingleton<SwitchablePlatformOperatorAuthority>();
-                    services.AddSingleton<SwitchableDelegationStore>();
-                    services.AddSingleton<IPlatformOperatorAuthority>(sp =>
-                        sp.GetRequiredService<SwitchablePlatformOperatorAuthority>()
-                    );
-                    services.AddSingleton<ICrossTenantDelegationStore>(sp =>
-                        sp.GetRequiredService<SwitchableDelegationStore>()
-                    );
+                    .UseInMemoryReminderService()
+                    .ConfigureServices(services => {
+                            // Registered BEFORE AddCyberCloudTenancy's TryAdd calls run, so these win.
+                            services.AddSingleton<IClock, TestClock>();
+                            services.AddSingleton<SwitchablePlatformOperatorAuthority>();
+                            services.AddSingleton<SwitchableDelegationStore>();
+                            services.AddSingleton<IPlatformOperatorAuthority>(sp =>
+                                sp.GetRequiredService<SwitchablePlatformOperatorAuthority>()
+                            );
+                            services.AddSingleton<ICrossTenantDelegationStore>(sp =>
+                                sp.GetRequiredService<SwitchableDelegationStore>()
+                            );
 
-                    // ⚠ The background refresh loops are OFF and every test drives RefreshAsync by
-                    // hand. A test that asserts on cache MISSES cannot share a process with a loop that
-                    // is quietly filling the cache — the assertion would pass or fail on timing, which
-                    // is how a suite earns a `[Skip]`. The method the tests call is the method the loop
-                    // calls, so nothing is stubbed out; only the schedule is.
-                    services.Configure<TenancyRefreshOptions>(o => o.RunBackgroundRefresh = false);
-                }
-            ),
+                            // ⚠ The background refresh loops are OFF and every test drives RefreshAsync by
+                            // hand. A test that asserts on cache MISSES cannot share a process with a loop that
+                            // is quietly filling the cache — the assertion would pass or fail on timing, which
+                            // is how a suite earns a `[Skip]`. The method the tests call is the method the loop
+                            // calls, so nothing is stubbed out; only the schedule is.
+                            services.Configure<TenancyRefreshOptions>(o => o.RunBackgroundRefresh = false);
+                        }
+                    ),
             (silo, options) => silo.AddCyberCloudTenancy(options)
         );
 

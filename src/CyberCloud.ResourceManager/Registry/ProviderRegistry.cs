@@ -65,8 +65,11 @@ public sealed class ProviderRegistry : IProviderRegistry {
     ///         docs/plan/00 § Coding standards.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An empty provider set is <i>not</i> one of them, and the refusal it deserves lives
-    ///         one layer up.</b> A <b>host</b> with no providers is a wiring mistake whose whole
+    ///         ⚠
+    ///         <b>
+    ///             An empty provider set is <i>not</i> one of them, and the refusal it deserves lives
+    ///             one layer up.
+    ///         </b> A <b>host</b> with no providers is a wiring mistake whose whole
     ///         symptom is a <c>404</c> on every path — see
     ///         <c>ResourceManagerSiloBuilderExtensions.AddCyberCloudResourceManager</c>, which is where
     ///         that is refused. A <b>build step</b> with no providers is an ordinary state:
@@ -99,7 +102,11 @@ public sealed class ProviderRegistry : IProviderRegistry {
             // three would then decline to check, which is a way for a reconciler to opt its output
             // out of orphan detection and out of the labels gate at once. The type label itself is
             // one of ADR-013's seven and cannot be set by a caller; this closes the other door.
-            if (string.Equals(provider.ProviderNamespace, KubeLabels.ReservedNamespace, StringComparison.OrdinalIgnoreCase)) {
+            if (string.Equals(
+                    provider.ProviderNamespace,
+                    KubeLabels.ReservedNamespace,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
                 throw new InvalidOperationException(
                     $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
                     + $"'{KubeLabels.ReservedNamespace}'. The platform stamps that namespace on the "

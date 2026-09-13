@@ -8,10 +8,13 @@ using System.Reflection;
 namespace CyberCloud.Identity.Tests;
 
 /// <summary>
-///     docs/plan/11 § The object model: <i>"Groups hold no member list. This is the decision that
-///     makes the identity module small: membership is <c>group:X#member@user:Y</c>, so 'is Alice in
-///     Eng' is a <c>Check</c>, 'who is in Eng' is an <c>Expand</c>, nested groups work with no extra
-///     code, and revoking a group's access is a tuple write."</i>
+///     docs/plan/11 § The object model:
+///     <i>
+///         "Groups hold no member list. This is the decision that
+///         makes the identity module small: membership is <c>group:X#member@user:Y</c>, so 'is Alice in
+///         Eng' is a <c>Check</c>, 'who is in Eng' is an <c>Expand</c>, nested groups work with no extra
+///         code, and revoking a group's access is a tuple write."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     ⚠ These run against the <b>real</b> tuple store and check evaluator from
@@ -29,7 +32,8 @@ public sealed class GroupMembershipTests(IdentityCluster cluster) {
         var collections = typeof(GroupGrainState)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(x => x.PropertyType != typeof(string)
-                && typeof(System.Collections.IEnumerable).IsAssignableFrom(x.PropertyType))
+                && typeof(System.Collections.IEnumerable).IsAssignableFrom(x.PropertyType)
+            )
             .Select(x => x.Name)
             .ToList();
 
@@ -88,13 +92,13 @@ public sealed class GroupMembershipTests(IdentityCluster cluster) {
 
         (await cluster.Group(everyone).AddMemberAsync(engineeringMembers)).IsSuccess.ShouldBeTrue();
 
-        (await cluster.Group(everyone).IsMemberAsync(alice, Consistency.FullyConsistent)).GetValueOrThrow().ShouldBeTrue(
-            "nesting must work through the evaluator without any code in the identity module"
-        );
+        (await cluster.Group(everyone).IsMemberAsync(alice, Consistency.FullyConsistent)).GetValueOrThrow()
+            .ShouldBeTrue("nesting must work through the evaluator without any code in the identity module");
 
         // Removing Alice from the inner group removes her from the outer one, with one tuple delete.
         (await cluster.Group(engineering).RemoveMemberAsync(alice)).IsSuccess.ShouldBeTrue();
-        (await cluster.Group(everyone).IsMemberAsync(alice, Consistency.FullyConsistent)).GetValueOrThrow().ShouldBeFalse();
+        (await cluster.Group(everyone).IsMemberAsync(alice, Consistency.FullyConsistent)).GetValueOrThrow()
+            .ShouldBeFalse();
     }
 
     [Fact]
@@ -108,7 +112,8 @@ public sealed class GroupMembershipTests(IdentityCluster cluster) {
         var robot = SubjectRef.Of("servicePrincipal", Guid.NewGuid());
 
         (await cluster.Group(groupId).AddMemberAsync(robot)).IsSuccess.ShouldBeTrue();
-        (await cluster.Group(groupId).IsMemberAsync(robot, Consistency.FullyConsistent)).GetValueOrThrow().ShouldBeTrue();
+        (await cluster.Group(groupId).IsMemberAsync(robot, Consistency.FullyConsistent)).GetValueOrThrow()
+            .ShouldBeTrue();
     }
 
     [Fact]

@@ -124,11 +124,13 @@ public class ResourceNamingTests {
 
     [Fact]
     public void TheKindIsWovenIntoTheMessageSoTheCallerKnowsWhichFieldIsWrong() {
-        ResourceNaming.Validate("BAD", "resource group name").Error!.Message
-            .ShouldContain("is not a valid resource group name");
+        ResourceNaming.Validate("BAD", "resource group name").Error!
+            .Message
+                .ShouldContain("is not a valid resource group name");
 
-        ResourceNaming.Validate("BAD").Error!.Message
-            .ShouldContain("is not a valid resource name");
+        ResourceNaming.Validate("BAD").Error!
+            .Message
+                .ShouldContain("is not a valid resource name");
     }
 
     [Fact]

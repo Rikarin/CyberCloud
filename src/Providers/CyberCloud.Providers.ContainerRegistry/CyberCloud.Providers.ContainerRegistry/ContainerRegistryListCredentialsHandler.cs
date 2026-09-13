@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
@@ -22,8 +23,11 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         <c>ISecretWriter</c>'s mint-once rule. An action that minted on demand would give the first
 ///         caller a password and the second caller a different one — and only one of them would be the
 ///         one Harbor's database holds. ⚠ On this engine that is worse than on any other in the
-///         catalogue: <c>src/core/main.go</c> applies <c>HARBOR_ADMIN_PASSWORD</c> <b>only when the
-///         stored salt is empty</b>, so a second mint would not even take effect. The platform would
+///         catalogue: <c>src/core/main.go</c> applies <c>HARBOR_ADMIN_PASSWORD</c>
+///         <b>
+///             only when the
+///             stored salt is empty
+///         </b>, so a second mint would not even take effect. The platform would
 ///         hand out a password Harbor never accepted and nothing would report an error.
 ///     </para>
 ///     <para>

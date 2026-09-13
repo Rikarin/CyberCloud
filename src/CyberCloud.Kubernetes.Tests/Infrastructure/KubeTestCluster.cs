@@ -73,8 +73,7 @@ public sealed class LogCapture : ILoggerProvider {
 
     sealed class Sink : ILogger {
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull =>
-            null;
+            where TState : notnull => null;
 
         public bool IsEnabled(LogLevel logLevel) => true;
 

@@ -15,9 +15,8 @@ namespace CyberCloud.Identity.Host.Tests;
 public sealed class PasskeyAssertionTests {
     [Fact]
     public void TheCredentialIdIsReadFromAWellFormedAssertion() =>
-        PasskeyAssertion.CredentialIdOf(
-            """{"id":"q1w2e3r4","rawId":"q1w2e3r4","type":"public-key","response":{}}"""
-        ).ShouldBe("q1w2e3r4");
+        PasskeyAssertion.CredentialIdOf("""{"id":"q1w2e3r4","rawId":"q1w2e3r4","type":"public-key","response":{}}""")
+            .ShouldBe("q1w2e3r4");
 
     [Fact]
     public void RawIdIsNotUsedWhenItDisagreesWithId() =>
@@ -26,8 +25,7 @@ public sealed class PasskeyAssertionTests {
         PasskeyAssertion.CredentialIdOf("""{"id":"the-id","rawId":"the-raw-id"}""").ShouldBe("the-id");
 
     /// <summary>Bodies a hostile caller can post, none of which may throw.</summary>
-    public static TheoryData<string?> Malformed =>
-    [
+    public static TheoryData<string?> Malformed => [
         (string?)null,
         "",
         "   ",

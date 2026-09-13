@@ -1,6 +1,6 @@
+using CyberCloud.Cli.VerbTree;
 using System.CommandLine;
 using System.Reflection;
-using CyberCloud.Cli.VerbTree;
 
 namespace CyberCloud.Cli.Commands;
 
@@ -29,7 +29,7 @@ static class HostCommands {
             ConfigCommands.Build(host, globals, tree),
             ExtensionCommands.Build(host, globals, tree),
             CompletionCommand.Build(host),
-            VersionCommand(host, tree),
+            VersionCommand(host, tree)
         ];
     }
 
@@ -45,15 +45,20 @@ static class HostCommands {
         var command = new Command("logout", "Forget the signed-in account. Removes the SDK's keychain entry.");
 
         command.SetAction(async (parse, cancellationToken) => {
-            var cache = TokenCache.CreatePersistent();
-            var key = TokenCache.KeyFor(CyberCloudAuthorityHosts.Default, CyberCloudCliCredential.CliClientId, tenantId: null);
+                var cache = TokenCache.CreatePersistent();
+                var key = TokenCache.KeyFor(
+                    CyberCloudAuthorityHosts.Default,
+                    CyberCloudCliCredential.CliClientId,
+                    tenantId: null
+                );
 
-            await cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
+                await cache.RemoveAsync(key, cancellationToken).ConfigureAwait(false);
 
-            host.Console.Note("Signed out.");
+                host.Console.Note("Signed out.");
 
-            return (int)ExitCode.Ok;
-        });
+                return (int)ExitCode.Ok;
+            }
+        );
 
         return command;
     }
@@ -71,15 +76,18 @@ static class HostCommands {
         var command = new Command("version", "The build, the api-versions it carries, and its configuration file.");
 
         command.SetAction(parse => {
-            var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
+                var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
 
-            host.Console.Out.WriteLine($"cyc {version}");
-            host.Console.Out.WriteLine($"api-versions: {string.Join(", ", host.Catalog.ApiVersions)} (default {tree.ApiVersion})");
-            host.Console.Out.WriteLine($"config: {Path.Combine(host.StateDirectory, "config")}");
-            host.Console.Out.Flush();
+                host.Console.Out.WriteLine($"cyc {version}");
+                host.Console.Out.WriteLine(
+                    $"api-versions: {string.Join(", ", host.Catalog.ApiVersions)} (default {tree.ApiVersion})"
+                );
+                host.Console.Out.WriteLine($"config: {Path.Combine(host.StateDirectory, "config")}");
+                host.Console.Out.Flush();
 
-            return (int)ExitCode.Ok;
-        });
+                return (int)ExitCode.Ok;
+            }
+        );
 
         return command;
     }

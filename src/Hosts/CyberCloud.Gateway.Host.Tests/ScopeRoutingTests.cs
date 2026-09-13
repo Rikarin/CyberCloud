@@ -8,8 +8,11 @@ namespace CyberCloud.Gateway.Host.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>ADDING <c>RouteKind.Scope</c> CHANGED WHAT SOME PATHS ANSWER, AND HALF OF THIS SUITE
-///         IS ABOUT THE PATHS THAT DID NOT CHANGE.</b> <c>GatewayRouter.Resolve</c> is a total
+///         ⚠
+///         <b>
+///             ADDING <c>RouteKind.Scope</c> CHANGED WHAT SOME PATHS ANSWER, AND HALF OF THIS SUITE
+///             IS ABOUT THE PATHS THAT DID NOT CHANGE.
+///         </b> <c>GatewayRouter.Resolve</c> is a total
 ///         function over a closed set of route kinds, so a sixth member moves the boundary of
 ///         <c>RouteKind.Unknown</c>: three shapes that used to be a <c>400</c> now route. Every other
 ///         shape must still refuse, and a scope grammar that quietly swallowed a malformed resource
@@ -17,8 +20,11 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///         wrong — into a <c>404</c>, which sends them looking for a resource.
 ///     </para>
 ///     <para>
-///         ⚠ <b>These assertions are against a SUBSTITUTED <c>IScopeManager</c> and therefore prove
-///         exactly two things</b>: that stage 6 admits the shape, and that stage 8 hands it to the
+///         ⚠
+///         <b>
+///             These assertions are against a SUBSTITUTED <c>IScopeManager</c> and therefore prove
+///             exactly two things
+///         </b>: that stage 6 admits the shape, and that stage 8 hands it to the
 ///         scope manager rather than the resource manager, with the token's tenant. Whether a
 ///         permission is checked, whether a parent edge is written and whether anything is created is
 ///         <c>ScopeManagerService</c>'s, driven through the real engine in

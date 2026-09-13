@@ -11,8 +11,11 @@ namespace CyberCloud.Cluster.Conformance.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Over <see cref="IKubeApiClient" /> rather than over
-///         <c>IClusterConnectionGrain</c>, and the difference is one grain hop.</b> Everything the
+///         ⚠
+///         <b>
+///             Over <see cref="IKubeApiClient" /> rather than over
+///             <c>IClusterConnectionGrain</c>, and the difference is one grain hop.
+///         </b> Everything the
 ///         cluster-backed suite asserts about the API server — server-side apply under our field
 ///         manager, the 409 body, <c>ConflictParser</c>, the plural in the REST path, the labels
 ///         surviving admission — is implemented in <see cref="KubeApiClient" />, which is exactly
@@ -84,8 +87,11 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>The same code the connection grain runs, against the same API server, and that is
-    ///     what makes this the only place the namespace inventory is really exercised.</b> Everything
+    ///     ⚠
+    ///     <b>
+    ///         The same code the connection grain runs, against the same API server, and that is
+    ///         what makes this the only place the namespace inventory is really exercised.
+    ///     </b> Everything
     ///     it does that a dictionary cannot fail is here: the discovery of what a real cluster
     ///     serves, the objects Kubernetes puts in a namespace without being asked, and the CRDs the
     ///     conformance fixtures install.
@@ -106,8 +112,7 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
 /// <param name="connection">The connection.</param>
 public sealed class RealClusterConnectionFactory(RealClusterConnection connection) : IClusterConnectionFactory {
     /// <inheritdoc />
-    public IKubeClusterConnection? Connect(Guid clusterId) =>
-        clusterId == connection.ClusterId ? connection : null;
+    public IKubeClusterConnection? Connect(Guid clusterId) => clusterId == connection.ClusterId ? connection : null;
 }
 
 /// <summary>
@@ -131,8 +136,11 @@ public sealed class RealClusterConnectionFactory(RealClusterConnection connectio
 ///         owed, and the drift test's remarks say so where a reader will meet them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It refuses to report an empty inventory as a success for the same reason the shipped
-///         implementation does.</b> A list that failed halfway would say "every resource here is a
+///         ⚠
+///         <b>
+///             It refuses to report an empty inventory as a success for the same reason the shipped
+///             implementation does.
+///         </b> A list that failed halfway would say "every resource here is a
 ///         stray", and a scan that believed it would re-apply a cluster.
 ///     </para>
 /// </remarks>
@@ -156,12 +164,12 @@ public sealed class ListBackedClusterObjectInventory(
 
             do {
                 var page = await api.ListAsync(
-                        kind,
-                        ns,
-                        KubeLabels.ManagedBySelector,
-                        continueToken: string.IsNullOrEmpty(continueToken) ? null : continueToken,
-                        cancellationToken: cancellationToken
-                    )
+                    kind,
+                    ns,
+                    KubeLabels.ManagedBySelector,
+                    continueToken: string.IsNullOrEmpty(continueToken) ? null : continueToken,
+                    cancellationToken: cancellationToken
+                )
                     .ConfigureAwait(false);
 
                 if (page.TryGetError(out var error)) {
@@ -216,11 +224,7 @@ public sealed class ListBackedClusterObjectInventory(
             // finding. KubeLabels.IsGroupScoped is the test; ClusterObjectRecord's remarks say why
             // the member is `required`.
             ResourceType = Text(labels, KubeLabels.ResourceType),
-            Target = new() {
-                Kind = kind,
-                Namespace = Text(metadata, "namespace"),
-                Name = Text(metadata, "name")
-            }
+            Target = new() { Kind = kind, Namespace = Text(metadata, "namespace"), Name = Text(metadata, "name") }
         };
     }
 

@@ -10,8 +10,11 @@ namespace CyberCloud.Metering;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Read <see cref="IUsageEmitter" />'s remarks for why this is a grain call and not the
-///         NATS hop docs/plan/22 § The pipeline draws.</b> In short: docs/plan/04 § Streams' own rule
+///         ⚠
+///         <b>
+///             Read <see cref="IUsageEmitter" />'s remarks for why this is a grain call and not the
+///             NATS hop docs/plan/22 § The pipeline draws.
+///         </b> In short: docs/plan/04 § Streams' own rule
 ///         is that a thing needing an answer is a grain call, an emitter that cannot learn whether
 ///         the record landed cannot retry, and the stream's two contributions — buffering across a
 ///         consumer outage and fan-out to a second consumer — have no consumer to serve in M1.

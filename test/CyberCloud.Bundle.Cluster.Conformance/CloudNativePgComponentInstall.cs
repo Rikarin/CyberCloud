@@ -1,12 +1,12 @@
 using CyberCloud.Cluster.Conformance.Infrastructure;
-using k8s;
-using k8s.Autorest;
-using k8s.Models;
 using Shouldly;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using k8s;
+using k8s.Autorest;
+using k8s.Models;
 
 namespace CyberCloud.Bundle.Cluster.Conformance;
 
@@ -57,7 +57,8 @@ public sealed class CloudNativePgComponentInstaller {
         run.ExitCode.ShouldBe(
             0,
             $"charts/bundle/install.sh --dry-run --component {component} executes nothing and must "
-            + "therefore succeed on any machine with bash. Its output was:\n" + run.Output
+            + "therefore succeed on any machine with bash. Its output was:\n"
+            + run.Output
         );
 
         var chart = BundleInstaller.Pin(component, "chart");
@@ -75,16 +76,16 @@ public sealed class CloudNativePgComponentInstaller {
                 $"charts/bundle/install.sh --dry-run --component {component} did not mention "
                 + $"\"{expected}\". Every value above is read out of charts/bundle/{component}/"
                 + "component.yaml by this test and is supposed to be read out of the same file by "
-                + "the script — README.md § What a component owes. Its output was:\n" + run.Output
+                + "the script — README.md § What a component owes. Its output was:\n"
+                + run.Output
             );
         }
 
         // ⚠ The seven other rows of phase 50, named rather than counted, so a roster change that
         // moved one of them shows up here as a name instead of as an off-by-one.
         var alsoInPhase50 = new[] {
-            "clickhouse-operator", "mariadb-operator", "opensearch-operator",
-            "rabbitmq-cluster-operator", "redis-operator", "seaweedfs-operator",
-            "strimzi-kafka-operator"
+            "clickhouse-operator", "mariadb-operator", "opensearch-operator", "rabbitmq-cluster-operator",
+            "redis-operator", "seaweedfs-operator", "strimzi-kafka-operator"
         };
 
         foreach (var other in alsoInPhase50) {
@@ -94,7 +95,8 @@ public sealed class CloudNativePgComponentInstaller {
                 $"charts/bundle/install.sh --dry-run --component {component} also attempted "
                 + $"`{other}`, which shares phase 50 with it. --component selects one row; if it "
                 + "selected a phase instead, the cluster class in this file would install eight "
-                + "operators and would not fit in any per-PR lane. Its output was:\n" + run.Output
+                + "operators and would not fit in any per-PR lane. Its output was:\n"
+                + run.Output
             );
         }
     }
@@ -106,21 +108,33 @@ public sealed class CloudNativePgComponentInstaller {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS IS THE SENTENCE <c>charts/bundle/</c> EXISTS FOR, AND IT WAS UNEXERCISED UNTIL
-///         THIS CLASS.</b> <c>charts/bundle/bundle.yaml</c> § owed,
-///         <c>one-volume-has-been-provisioned</c>, states the target in its own words: <i>"the path
-///         that actually matters — a reconciler applies a resource, an operator creates the claim,
-///         the claim binds — is still unexercised end to end"</i>. What binds here is not this test's
+///         ⚠
+///         <b>
+///             THIS IS THE SENTENCE <c>charts/bundle/</c> EXISTS FOR, AND IT WAS UNEXERCISED UNTIL
+///             THIS CLASS.
+///         </b> <c>charts/bundle/bundle.yaml</c> § owed,
+///         <c>one-volume-has-been-provisioned</c>, states the target in its own words:
+///         <i>
+///             "the path
+///             that actually matters — a reconciler applies a resource, an operator creates the claim,
+///             the claim binds — is still unexercised end to end"
+///         </i>. What binds here is not this test's
 ///         hand-written claim. It is a PersistentVolumeClaim that <b>CloudNativePG</b> created, as a
 ///         controller-owned child of a <c>Cluster</c> rendered from <c>charts/managed/postgres</c>,
 ///         through the StorageClass <c>charts/bundle/openebs-localpv</c> installed a moment earlier.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ONE invocation of the installer, TWO components, TWO phases — the first time any of
-///         the three has been true.</b> Both older installing classes pass <c>--phase</c> and install
+///         ⚠
+///         <b>
+///             ONE invocation of the installer, TWO components, TWO phases — the first time any of
+///             the three has been true.
+///         </b> Both older installing classes pass <c>--phase</c> and install
 ///         one component onto a cluster of their own, which <c>bundle.yaml</c> § owed says
-///         explicitly does not add up to co-tenancy: <i>"NOTHING HAS INSTALLED TWO COMPONENTS ONTO
-///         ONE CLUSTER, AND THE TWO ROWS ABOVE DO NOT ADD UP TO THAT"</i>. This installs phase 25 and
+///         explicitly does not add up to co-tenancy:
+///         <i>
+///             "NOTHING HAS INSTALLED TWO COMPONENTS ONTO
+///             ONE CLUSTER, AND THE TWO ROWS ABOVE DO NOT ADD UP TO THAT"
+///         </i>. This installs phase 25 and
 ///         phase 50 in one run, in the roster's order, onto one API server.
 ///     </para>
 ///     <para>
@@ -172,8 +186,11 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
     ///     The seven values this test overrides on <c>charts/managed/postgres</c>, and why each.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Every one of them narrows what a green run says, so each is named rather than
-    ///     bundled into a "test values" file nobody reads.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Every one of them narrows what a green run says, so each is named rather than
+    ///         bundled into a "test values" file nobody reads.
+    ///     </b>
     ///     <c>replicas=1</c> — the chart defaults to 2, and the second instance is a second image
     ///     pull that proves nothing this one does not.
     ///     <c>pooling.enabled=false</c> — a <c>Pooler</c> is a second custom resource in the same
@@ -243,7 +260,9 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
                 "that one charts/bundle/install.sh run installs TWO components across TWO phases onto "
                 + "one API server, and that a charts/managed/postgres Cluster applied afterwards makes "
                 + "CloudNativePG create a PersistentVolumeClaim on the openebs-hostpath class the "
-                + "same run installed, bind it to a volume under " + BasePath + ", and report Ready."
+                + "same run installed, bind it to a volume under "
+                + BasePath
+                + ", and report Ready."
             )
         );
 
@@ -287,8 +306,10 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
         // before the operator that provisions through it. bundle.yaml puts openebs-localpv in phase
         // 25 and cloudnative-pg in phase 50, and the run below is asserted to obey that and not this.
         var run = await BundleInstaller.RunAsync(
-            "--component " + BundleInstaller.CloudNativePgComponent
-            + " --component " + BundleInstaller.OpenEbsLocalPvComponent,
+            "--component "
+            + BundleInstaller.CloudNativePgComponent
+            + " --component "
+            + BundleInstaller.OpenEbsLocalPvComponent,
             cluster.KubeconfigPath,
             token
         );
@@ -298,7 +319,8 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
             "charts/bundle/install.sh installing two components onto one fresh k3s failed. This is "
             + "the first run in this repository that puts two of them on one API server, so a "
             + "failure here is as likely to be co-tenancy as it is to be either pin. Its output "
-            + "was:\n" + run.Output
+            + "was:\n"
+            + run.Output
         );
 
         run.Output.IndexOf("\n  " + BundleInstaller.OpenEbsLocalPvComponent + "\n", StringComparison.Ordinal)
@@ -308,7 +330,8 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
                 + "command line asked for and not the order charts/bundle/bundle.yaml gives. The "
                 + "roster carries the order; a selector that reordered it would be a second place "
                 + "the order is written, and on a real bundle it is what installs a webhook onto a "
-                + "cluster with no CNI. Its output was:\n" + run.Output
+                + "cluster with no CNI. Its output was:\n"
+                + run.Output
             );
 
         // ── Both components are present afterwards, which is the co-tenancy claim ──────────────
@@ -323,7 +346,8 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
         installed.Provisioner.ShouldBe(
             "openebs.io/local",
             $"the {StorageClass} class is not on this component's provisioner after a run that also "
-            + "installed an operator. Installer output:\n" + run.Output
+            + "installed an operator. Installer output:\n"
+            + run.Output
         );
 
         // ── A charts/managed/ custom resource, rendered by helm and applied ────────────────────
@@ -471,7 +495,9 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
         ready.ShouldNotBeNull(
             $"the Cluster did not report Ready within {ReadyBudget.TotalMinutes:F0} minutes. Its "
             + "claim is bound and its definition is installed, so this is the operator's own "
-            + "bootstrap — read the instance pod's logs in `" + Probe + "`."
+            + "bootstrap — read the instance pod's logs in `"
+            + Probe
+            + "`."
         );
     }
 
@@ -528,7 +554,8 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
             0,
             "applying the rendered charts/managed/postgres document failed. The definition is "
             + "installed and served, so a rejection here is the API server's opinion of the chart's "
-            + "own body — which is the half no `helm lint` can reach. kubectl said:\n" + output
+            + "own body — which is the half no `helm lint` can reach. kubectl said:\n"
+            + output
         );
     }
 
@@ -614,11 +641,13 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
         resource.TryGetProperty("status", out var status)
         && status.TryGetProperty("conditions", out var conditions)
         && conditions.ValueKind == JsonValueKind.Array
-        && conditions.EnumerateArray().Any(condition =>
-            condition.TryGetProperty("type", out var type)
-            && type.ValueKind == JsonValueKind.String
-            && type.GetString() == "Ready"
-            && condition.TryGetProperty("status", out var value)
-            && value.ValueKind == JsonValueKind.String
-            && value.GetString() == "True");
+        && conditions.EnumerateArray()
+            .Any(condition =>
+                condition.TryGetProperty("type", out var type)
+                && type.ValueKind == JsonValueKind.String
+                && type.GetString() == "Ready"
+                && condition.TryGetProperty("status", out var value)
+                && value.ValueKind == JsonValueKind.String
+                && value.GetString() == "True"
+            );
 }

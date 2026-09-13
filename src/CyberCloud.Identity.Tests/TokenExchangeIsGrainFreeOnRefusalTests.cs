@@ -6,15 +6,21 @@ using CyberCloud.Identity.Tests.Infrastructure;
 namespace CyberCloud.Identity.Tests;
 
 /// <summary>
-///     docs/plan/11 § Credentials: <i>"an authentication endpoint whose failure path costs a grain
-///     activation is a denial-of-service amplifier"</i>. It is written about the lockout counter and
+///     docs/plan/11 § Credentials:
+///     <i>
+///         "an authentication endpoint whose failure path costs a grain
+///         activation is a denial-of-service amplifier"
+///     </i>. It is written about the lockout counter and
 ///     applies verbatim to <c>/token</c>, which is unauthenticated and reaches the platform through
 ///     <see cref="GrainTokenExchange" />.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><see cref="ManagedIdentityTests" /> goes straight to
-///         <see cref="IManagedIdentityGrain" /> and therefore never exercises this type at all.</b>
+///         ⚠
+///         <b>
+///             <see cref="ManagedIdentityTests" /> goes straight to
+///             <see cref="IManagedIdentityGrain" /> and therefore never exercises this type at all.
+///         </b>
 ///         That is the right shape for assertions about what the grain decides, and it leaves the one
 ///         decision this type does make — refusing before a grain reference exists — unasserted.
 ///     </para>

@@ -51,7 +51,8 @@ public sealed class NoteState {
 ///     spelling of docs/plan/05 § Choosing a tier.
 /// </summary>
 public sealed class HotStateGrain(
-    [PersistentState("note", StorageTiers.Hot)] IPersistentState<NoteState> state
+    [PersistentState("note", StorageTiers.Hot)]
+    IPersistentState<NoteState> state
 )
     : Grain, IHotStateGrain {
     /// <inheritdoc />
@@ -70,7 +71,8 @@ public sealed class HotStateGrain(
 
 /// <summary><see cref="IDurableStateGrain" />, bound to <see cref="StorageTiers.Durable" />.</summary>
 public sealed class DurableStateGrain(
-    [PersistentState("note", StorageTiers.Durable)] IPersistentState<NoteState> state
+    [PersistentState("note", StorageTiers.Durable)]
+    IPersistentState<NoteState> state
 )
     : Grain, IDurableStateGrain {
     /// <inheritdoc />

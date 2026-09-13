@@ -11,18 +11,30 @@ namespace CyberCloud.Providers.Network.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>The authority is docs/plan/14 § Virtual networks</b> — <i>"A tenant's VPC is a Kube-OVN
-///         <c>Vpc</c>; subnets are <c>Subnet</c>s bound to it"</i>, M1 · 2.5 EM — and ADR-019, which
+///         <b>The authority is docs/plan/14 § Virtual networks</b> —
+///         <i>
+///             "A tenant's VPC is a Kube-OVN
+///             <c>Vpc</c>; subnets are <c>Subnet</c>s bound to it"
+///         </i>, M1 · 2.5 EM — and ADR-019, which
 ///         puts Kube-OVN alongside Cilium with <c>ENABLE_LB=false</c> and <c>ENABLE_NP=false</c>
 ///         because it provides <i>tenant</i> networking rather than cluster networking.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE ISOLATION CLAIM, IN ONE SENTENCE, AND IT IS DELIBERATELY SMALLER THAN THE ONE A
-///         READER EXPECTS.</b> <see cref="IsolationClaim" /> is the sentence; <see cref="IsolationLimits" />
-///         is the table a test can walk. docs/plan/14 is explicit: Kube-OVN gives <i>"per-VPC L3
-///         isolation with separate routing tables and overlapping address spaces — genuine tenant
-///         separation at the network layer"</i>, and what it does <b>not</b> give is <i>"a hardware
-///         boundary; a kernel bug in OVS is a cross-tenant risk"</i>, with the instruction that
+///         ⚠
+///         <b>
+///             THE ISOLATION CLAIM, IN ONE SENTENCE, AND IT IS DELIBERATELY SMALLER THAN THE ONE A
+///             READER EXPECTS.
+///         </b> <see cref="IsolationClaim" /> is the sentence; <see cref="IsolationLimits" />
+///         is the table a test can walk. docs/plan/14 is explicit: Kube-OVN gives
+///         <i>
+///             "per-VPC L3
+///             isolation with separate routing tables and overlapping address spaces — genuine tenant
+///             separation at the network layer"
+///         </i>, and what it does <b>not</b> give is
+///         <i>
+///             "a hardware
+///             boundary; a kernel bug in OVS is a cross-tenant risk"
+///         </i>, with the instruction that
 ///         <i>"the marketing must not claim more than the substrate delivers"</i>. The
 ///         <c>Display</c> summary this type registers with, the chart's description and the
 ///         portal copy all derive from <see cref="IsolationClaim" /> rather than restating it, and
@@ -32,24 +44,36 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         optimistic in a release note.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS IS THE FIRST TYPE IN THE TREE WHOSE OBJECT IS CLUSTER-SCOPED, AND IT CHANGES THE
-///         ONE THING EVERY PROVIDER BEFORE IT COULD TAKE FOR GRANTED.</b> Checked in
+///         ⚠
+///         <b>
+///             THIS IS THE FIRST TYPE IN THE TREE WHOSE OBJECT IS CLUSTER-SCOPED, AND IT CHANGES THE
+///             ONE THING EVERY PROVIDER BEFORE IT COULD TAKE FOR GRANTED.
+///         </b> Checked in
 ///         <c>pkg/apis/kubeovn/v1/vpc.go</c> rather than in a README:
 ///         <c>// +kubebuilder:resource:scope="Cluster",shortName="vpc",path="vpcs"</c>. Every object
 ///         the nine earlier families render is <b>namespaced</b>, and
 ///         <c>ReconcileDriver.NamespaceFor</c> — <c>{subscriptionId:N}-{resourceGroup}</c> — is what
 ///         has kept two tenants' identically-named resources apart for all of them, without any
-///         provider having to think about it. <b>A cluster-scoped object has no namespace to be kept
-///         apart by.</b> Two tenants each creating a virtual network called <c>prod</c> would render
+///         provider having to think about it.
+///         <b>
+///             A cluster-scoped object has no namespace to be kept
+///             apart by.
+///         </b> Two tenants each creating a virtual network called <c>prod</c> would render
 ///         one <c>Vpc</c> named <c>prod</c>, each converging by overwriting the other, with neither
 ///         reporting an error anywhere — the same failure <c>StorageBuckets.ObjectNameOf</c> guards
 ///         against inside a namespace, one scope wider and with no namespace as a backstop.
-///         <see cref="ObjectNameOf" /> is the answer and it takes the namespace <i>as a name
-///         component</i> rather than as a placement.
+///         <see cref="ObjectNameOf" /> is the answer and it takes the namespace
+///         <i>
+///             as a name
+///             component
+///         </i> rather than as a placement.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND THE SHARED CLUSTER-BACKED HARNESS COULD NOT HOST A CLUSTER-SCOPED OBJECT AT
-///         ALL.</b> <c>ClusterConformanceHarness</c> derives a CRD stub per custom kind from the
+///         ⚠
+///         <b>
+///             AND THE SHARED CLUSTER-BACKED HARNESS COULD NOT HOST A CLUSTER-SCOPED OBJECT AT
+///             ALL.
+///         </b> <c>ClusterConformanceHarness</c> derives a CRD stub per custom kind from the
 ///         case's own <c>Objects</c> — group, version, kind and plural — and hard-coded
 ///         <c>Scope = "Namespaced"</c>. A cluster-scoped apply goes to
 ///         <c>/apis/{group}/{version}/{plural}/{name}</c>, which a <c>Namespaced</c> definition does
@@ -62,19 +86,27 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <c>ObjectRef</c>s carries a namespace, so every one still derives <c>Namespaced</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>Matches</c> IS CONTAINMENT, AND THE USUAL ARGUMENT FOR THAT IS FALSE HERE — THE
-///         REAL REASON IS BIGGER.</b> Three families argue containment from structural defaulting;
+///         ⚠
+///         <b>
+///             <c>Matches</c> IS CONTAINMENT, AND THE USUAL ARGUMENT FOR THAT IS FALSE HERE — THE
+///             REAL REASON IS BIGGER.
+///         </b> Three families argue containment from structural defaulting;
 ///         <c>ClickHouseClusters</c> is the first to find an operator with no defaults and no webhook,
 ///         and this is the second. Checked in <c>charts/kube-ovn/templates/kube-ovn-crd.yaml</c> and
 ///         the Go types rather than in a README: across <c>Vpc</c>, <c>Subnet</c>,
 ///         <c>SecurityGroup</c>, <c>IptablesEIP</c> and <c>OvnEip</c> there is exactly <b>one</b>
-///         <c>+kubebuilder:default</c> — <c>Vpc.spec.bfdPort.enabled=false</c> — and <b>no
-///         <c>MutatingWebhookConfiguration</c> anywhere in the project</b>; the only webhook is a
+///         <c>+kubebuilder:default</c> — <c>Vpc.spec.bfdPort.enabled=false</c> — and
+///         <b>
+///             no
+///             <c>MutatingWebhookConfiguration</c> anywhere in the project
+///         </b>; the only webhook is a
 ///         <c>ValidatingWebhookConfiguration</c> that is <b>off in a default install</b>
 ///         (<c>dist/images/install.sh</c> ships none, the v2 chart gates it on
 ///         <c>validatingWebhook.enabled: false</c>) and that never returns a patch.
-///         <b>The reason containment is nevertheless mandatory is that the Kube-OVN CONTROLLER writes
-///         back to <c>.spec</c>.</b> <c>pkg/controller/vpc.go</c>'s <c>formatVpc</c> fills
+///         <b>
+///             The reason containment is nevertheless mandatory is that the Kube-OVN CONTROLLER writes
+///             back to <c>.spec</c>.
+///         </b> <c>pkg/controller/vpc.go</c>'s <c>formatVpc</c> fills
 ///         <c>staticRoutes[].policy</c>, clears a <c>nextHopIP</c> on a non-reroute route, adds a
 ///         finalizer and issues a full <c>Vpcs().Update(...)</c>; <c>handleDeleteVpcStaticRoute</c>
 ///         <i>removes</i> entries from <c>spec.staticRoutes</c> outright. That is a third mechanism
@@ -83,8 +115,11 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         equality mistake against a controller-shaped read-back.
 ///     </para>
 ///     <para>
-///         ⚠ <b>NO <c>routeTables</c> CHILD TYPE, AND docs/plan/14'S RESOURCE TREE IS WRONG TO ASK FOR
-///         ONE AGAINST THIS SUBSTRATE.</b> That document draws
+///         ⚠
+///         <b>
+///             NO <c>routeTables</c> CHILD TYPE, AND docs/plan/14'S RESOURCE TREE IS WRONG TO ASK FOR
+///             ONE AGAINST THIS SUBSTRATE.
+///         </b> That document draws
 ///         <c>routeTables/{name} → static routes, next-hop</c> as a child of a virtual network.
 ///         <b>Kube-OVN has no route-table object.</b> Checked against the full CRD file: the project
 ///         defines 25 <c>kubeovn.io/v1</c> kinds and none of them is a <c>RouteTable</c>,
@@ -96,11 +131,17 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <c>Vpc.spec.staticRoutes</c> — and <b>that array is atomic under server-side apply</b>: it
 ///         carries no <c>x-kubernetes-list-type</c> and no <c>x-kubernetes-list-map-keys</c>, so the
 ///         last applier owns the whole list and two route tables in one VPC would each converge by
-///         erasing the other. ⚠ <b>Routing is therefore not modelled at all in M1, and there is a
-///         second, independent reason it could not be</b>: a static route is
+///         erasing the other. ⚠
+///         <b>
+///             Routing is therefore not modelled at all in M1, and there is a
+///             second, independent reason it could not be
+///         </b>: a static route is
 ///         <c>{cidr, nextHop, policy}</c>, which is an <i>array of objects</i>, and
-///         <c>SchemaProperty.ElementKind</c> refuses that outright — <i>"an array element is a
-///         scalar"</i> — so the body shape has nowhere to put one either. Both are recorded at
+///         <c>SchemaProperty.ElementKind</c> refuses that outright —
+///         <i>
+///             "an array element is a
+///             scalar"
+///         </i> — so the body shape has nowhere to put one either. Both are recorded at
 ///         <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>, <c>route-tables-have-no-object</c>
 ///         and <c>static-routes-are-not-expressible</c>.
 ///     </para>
@@ -143,11 +184,20 @@ public static class VirtualNetworks {
 
     /// <summary>The action that reports what this network's isolation does and does not guarantee.</summary>
     /// <remarks>
-    ///     ⚠ <b>AN UNUSUAL ACTION, AND IT EXISTS BECAUSE docs/plan/14 MAKES OVERCLAIMING THE NAMED
-    ///     RISK OF THIS ROW.</b> That document requires that <i>"the marketing must not claim more
-    ///     than the substrate delivers"</i>, and the usual way that requirement is met is a paragraph
-    ///     in a document nobody reads at the moment of the decision. This puts the claim <i>and its
-    ///     limits</i> on the API, next to the resource, so a tenant evaluating whether a VPC is
+    ///     ⚠
+    ///     <b>
+    ///         AN UNUSUAL ACTION, AND IT EXISTS BECAUSE docs/plan/14 MAKES OVERCLAIMING THE NAMED
+    ///         RISK OF THIS ROW.
+    ///     </b> That document requires that
+    ///     <i>
+    ///         "the marketing must not claim more
+    ///         than the substrate delivers"
+    ///     </i>, and the usual way that requirement is met is a paragraph
+    ///     in a document nobody reads at the moment of the decision. This puts the claim
+    ///     <i>
+    ///         and its
+    ///         limits
+    ///     </i> on the API, next to the resource, so a tenant evaluating whether a VPC is
     ///     sufficient for their compliance requirement can ask the platform rather than read the
     ///     marketing.
     ///     <para>
@@ -156,8 +206,11 @@ public static class VirtualNetworks {
     ///         credential out of a Vault that is not wired (<c>listKeys</c>), a figure from a usage
     ///         pipeline that does not exist (<c>stats</c>). This one is a pure function of
     ///         <see cref="IsolationClaim" /> and <see cref="IsolationLimits" />, both compile-time
-    ///         constants, so there is nothing to be owed. ⚠ <b>The handler seam itself is what is
-    ///         still missing</b> — no provider in the tree has one, actions are declared into the
+    ///         constants, so there is nothing to be owed. ⚠
+    ///         <b>
+    ///             The handler seam itself is what is
+    ///             still missing
+    ///         </b> — no provider in the tree has one, actions are declared into the
     ///         registry and routed by the gateway and there is nowhere to put the code — so this is
     ///         the first action whose <i>content</i> is ready and whose <i>plumbing</i> is not, which
     ///         is a different and more useful thing to record than another blocked credential.
@@ -181,8 +234,14 @@ public static class VirtualNetworks {
     ///     surface may make the claim in.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>docs/plan/14 § Virtual networks: <i>"the marketing must not claim more than the
-    ///     substrate delivers"</i>.</b> The word doing the work is <i>network-layer</i>. It is not
+    ///     ⚠
+    ///     <b>
+    ///         docs/plan/14 § Virtual networks:
+    ///         <i>
+    ///             "the marketing must not claim more than the
+    ///             substrate delivers"
+    ///         </i>.
+    ///     </b> The word doing the work is <i>network-layer</i>. It is not
     ///     "isolated", not "private" and not "secure", each of which a reader completes with a
     ///     stronger guarantee than OVS provides. <see cref="IsolationLimits" /> carries what is
     ///     explicitly <b>not</b> claimed, and <c>NetworkDeclarationTests</c> asserts that this string
@@ -264,8 +323,11 @@ public static class VirtualNetworks {
     /// <param name="ns">The namespace the resource's other objects would live in.</param>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>THE NAMESPACE IS A NAME COMPONENT HERE RATHER THAN A PLACEMENT, AND THAT INVERSION IS
-    ///     THE WHOLE POINT.</b> A <c>Vpc</c> is cluster-scoped, so
+    ///     ⚠
+    ///     <b>
+    ///         THE NAMESPACE IS A NAME COMPONENT HERE RATHER THAN A PLACEMENT, AND THAT INVERSION IS
+    ///         THE WHOLE POINT.
+    ///     </b> A <c>Vpc</c> is cluster-scoped, so
     ///     <c>ReconcileDriver.NamespaceFor</c>'s <c>{subscriptionId:N}-{resourceGroup}</c> — the thing
     ///     that has kept every earlier provider's tenants apart for free — places nothing. Folding it
     ///     into the object's <i>name</i> restores exactly the separation it was providing: two
@@ -307,17 +369,32 @@ public static class VirtualNetworks {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE ADDRESS SPACE IS TWO TYPED STRINGS RATHER THAN docs/plan/14'S LIST, AND THAT
-    ///         IS THE MOST CONSEQUENTIAL DECISION IN THIS FILE.</b> That document draws
+    ///         ⚠
+    ///         <b>
+    ///             THE ADDRESS SPACE IS TWO TYPED STRINGS RATHER THAN docs/plan/14'S LIST, AND THAT
+    ///             IS THE MOST CONSEQUENTIAL DECISION IN THIS FILE.
+    ///         </b> That document draws
     ///         <c>addressSpace: [10.20.0.0/16]</c> — an array. An array is exactly the shape that
-    ///         makes the CIDR unenforceable: <c>ADR-012</c>'s fifth surface <b>refuses
-    ///         <c>@pattern</c> on an array</b> while emitting <c>@enum</c> there, so
-    ///         <c>./build.sh Charts</c> fails with <i>"it refines a string, and JSON Schema ignores it
-    ///         on any other type"</i> — the gap <c>charts/managed/kafka</c> recorded as
-    ///         <c>cidr-shape-is-unenforced</c>, whose cost it describes as a body that <i>"may send
-    ///         999.0.0.1/99 and be accepted"</i>. Inheriting that here would be far worse than it was
-    ///         there: on Kafka the unchecked array is an optional firewall list, and here it is <b>the
-    ///         defining property of the resource</b>.
+    ///         makes the CIDR unenforceable: <c>ADR-012</c>'s fifth surface
+    ///         <b>
+    ///             refuses
+    ///             <c>@pattern</c> on an array
+    ///         </b> while emitting <c>@enum</c> there, so
+    ///         <c>./build.sh Charts</c> fails with
+    ///         <i>
+    ///             "it refines a string, and JSON Schema ignores it
+    ///             on any other type"
+    ///         </i> — the gap <c>charts/managed/kafka</c> recorded as
+    ///         <c>cidr-shape-is-unenforced</c>, whose cost it describes as a body that
+    ///         <i>
+    ///             "may send
+    ///             999.0.0.1/99 and be accepted"
+    ///         </i>. Inheriting that here would be far worse than it was
+    ///         there: on Kafka the unchecked array is an optional firewall list, and here it is
+    ///         <b>
+    ///             the
+    ///             defining property of the resource
+    ///         </b>.
     ///         <br />⚠ <b>Two properties are also a better model of the requirement.</b> docs/plan/14
     ///         § IPv6 asks for <i>"dual-stack from day one"</i> and says every subnet may carry
     ///         <i>"a v4 prefix, a v6 prefix, or both"</i> — which is precisely a v4 slot and a v6
@@ -327,8 +404,11 @@ public static class VirtualNetworks {
     ///         inherit <c>cidr-shape-is-unenforced</c> at all.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>WHAT THE ADDRESS SPACE DOES <i>NOT</i> DO: IT IS NOT RENDERED INTO THE
-    ///         <c>Vpc</c>.</b> A Kube-OVN <c>Vpc</c> carries no CIDR at all — the address space lives
+    ///         ⚠
+    ///         <b>
+    ///             WHAT THE ADDRESS SPACE DOES <i>NOT</i> DO: IT IS NOT RENDERED INTO THE
+    ///             <c>Vpc</c>.
+    ///         </b> A Kube-OVN <c>Vpc</c> carries no CIDR at all — the address space lives
     ///         on its <c>Subnet</c>s. So this property is a <i>platform</i> declaration with two real
     ///         jobs and one job a reader will assume and not get. It is the thing the reserved-range
     ///         check runs against at network level (<see cref="NetworkAddressing.ProblemWith" />), and
@@ -341,8 +421,11 @@ public static class VirtualNetworks {
     ///         <c>§ owed</c>, <c>subnets-are-not-checked-against-the-address-space</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>enableExternal</c> defaults to <c>false</c>, and the default is the security
-    ///         decision.</b> It attaches the VPC's router to the external network, which is what makes
+    ///         ⚠
+    ///         <b>
+    ///             <c>enableExternal</c> defaults to <c>false</c>, and the default is the security
+    ///             decision.
+    ///         </b> It attaches the VPC's router to the external network, which is what makes
     ///         a NAT gateway or a floating IP possible — and a network that reaches the outside by
     ///         default is a network whose owner did not choose that. docs/plan/12 § Cross-cutting
     ///         decisions defaults external exposure to off across the platform and this is the same
@@ -380,11 +463,7 @@ public static class VirtualNetworks {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose fabric carries the network."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
                 new(
                     "/properties/addressSpace",
                     SchemaKind.Nested,
@@ -451,27 +530,29 @@ public static class VirtualNetworks {
                     + "network whose owner did not choose that. ⚠ Turning it on requires the cluster "
                     + "to have an external subnet configured; without one the Vpc is accepted and the "
                     + "attachment never completes."
-                ) {
-                    DefaultJson = "false"
-                }
+                ) { DefaultJson = "false" }
             ]
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     /// <summary>
     ///     What a <c>POST …/showIsolation</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>THE LIMITS ARE AN ARRAY OF SENTENCES RATHER THAN AN ARRAY OF ROWS, AND THAT IS A
-    ///     REGISTRY LIMIT SHOWING THROUGH RATHER THAN A CHOICE.</b>
+    ///     ⚠
+    ///     <b>
+    ///         THE LIMITS ARE AN ARRAY OF SENTENCES RATHER THAN AN ARRAY OF ROWS, AND THAT IS A
+    ///         REGISTRY LIMIT SHOWING THROUGH RATHER THAN A CHOICE.
+    ///     </b>
     ///     <see cref="IsolationLimits" /> is four fields per row —
     ///     <c>id</c>, <c>notClaimed</c>, <c>because</c>, <c>instead</c> — and
     ///     <see cref="SchemaProperty.ElementKind" /> refuses an array of objects outright:
-    ///     <i>"an array element is a scalar … a nested or nested-array element would need its own
-    ///     pointer space, which is the flat-list property ResourceSchema is built on"</i>. So the
+    ///     <i>
+    ///         "an array element is a scalar … a nested or nested-array element would need its own
+    ///         pointer space, which is the flat-list property ResourceSchema is built on"
+    ///     </i>. So the
     ///     structured table this platform holds is flattened to prose on the way out, and a client
     ///     that wanted to render the four columns separately has to split strings. It is the same
     ///     refusal that stops <c>routeTables</c> and <c>securityGroups</c> from being expressible, met
@@ -498,18 +579,14 @@ public static class VirtualNetworks {
                     + "naming the guarantee, why the substrate does not deliver it, and what to ask "
                     + "for instead. ⚠ Read this before deciding a virtual network satisfies a "
                     + "compliance requirement."
-                ) {
-                    ElementKind = SchemaKind.Text
-                },
+                ) { ElementKind = SchemaKind.Text },
                 new(
                     "/substrate",
                     SchemaKind.Text,
                     Required: true,
                     Description: "The technology enforcing the separation, named so that a tenant's "
                     + "own security review has something to review."
-                ) {
-                    ExampleJson = "\"Kube-OVN (Open vSwitch)\""
-                }
+                ) { ExampleJson = "\"Kube-OVN (Open vSwitch)\"" }
             ]
         );
 
@@ -543,8 +620,11 @@ public static class VirtualNetworks {
     /// </summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>This is the check docs/plan/14 asks the API for and that runs after the <c>202</c>
-    ///     instead.</b> The whole argument, and what would close it, is on
+    ///     ⚠
+    ///     <b>
+    ///         This is the check docs/plan/14 asks the API for and that runs after the <c>202</c>
+    ///         instead.
+    ///     </b> The whole argument, and what would close it, is on
     ///     <see cref="NetworkAddressing" />. Both families are checked, so a dual-stack network whose
     ///     v6 half conflicts is refused for the v6 half by name rather than passing because its v4
     ///     half was fine.
@@ -583,7 +663,9 @@ public static class VirtualNetworks {
     ///     </para>
     ///     <list type="bullet">
     ///         <item>
-    ///             <b><c>namespaces</c></b> — it binds the VPC to Kubernetes namespaces, which is how
+    ///             <b>
+    ///                 <c>namespaces</c>
+    ///             </b> — it binds the VPC to Kubernetes namespaces, which is how
     ///             Kube-OVN's own multi-tenancy is usually driven. This platform's tenancy is
     ///             docs/plan/06's, the namespace is <c>ReconcileDriver.NamespaceFor</c>'s, and letting
     ///             a tenant body name namespaces would let one tenant bind another's namespace into
@@ -596,13 +678,17 @@ public static class VirtualNetworks {
     ///             <c>ResourceSchema</c> cannot express.
     ///         </item>
     ///         <item>
-    ///             <b><c>vpcPeerings</c></b> — docs/plan/14 puts <c>peerings</c> at <b>M3</b>, and a
+    ///             <b>
+    ///                 <c>vpcPeerings</c>
+    ///             </b> — docs/plan/14 puts <c>peerings</c> at <b>M3</b>, and a
     ///             peering names another VPC, which is a cross-resource reference this provider has no
     ///             reader for.
     ///         </item>
     ///         <item>
-    ///             <b><c>enableBfd</c>, <c>bfdPort</c>, <c>extraExternalSubnets</c>,
-    ///             <c>defaultSubnet</c></b> — each is a property of how the <i>platform</i> wires a
+    ///             <b>
+    ///                 <c>enableBfd</c>, <c>bfdPort</c>, <c>extraExternalSubnets</c>,
+    ///                 <c>defaultSubnet</c>
+    ///             </b> — each is a property of how the <i>platform</i> wires a
     ///             region's fabric rather than something a tenant chooses, and
     ///             <c>defaultSubnet</c> in particular would let a body elect one child subnet as the
     ///             VPC's default, which is a second, conflicting spelling of a fact the subnet's own
@@ -610,8 +696,11 @@ public static class VirtualNetworks {
     ///         </item>
     ///     </list>
     ///     <para>
-    ///         ⚠ <b><c>bfdPort</c> is the one field with a CRD default and it is still not
-    ///         rendered.</b> <c>+kubebuilder:default=false</c> on <c>bfdPort.enabled</c> means the API
+    ///         ⚠
+    ///         <b>
+    ///             <c>bfdPort</c> is the one field with a CRD default and it is still not
+    ///             rendered.
+    ///         </b> <c>+kubebuilder:default=false</c> on <c>bfdPort.enabled</c> means the API
     ///         server writes the object back carrying a <c>bfdPort</c> block this provider never sent
     ///         — which is the containment case in miniature and is exactly what
     ///         <c>NetworkMatchesTests</c> constructs, because the harness's derived CRD stub has an
@@ -640,8 +729,11 @@ public static class VirtualNetworks {
     /// <param name="objectJson">The object's JSON, exactly as the API server returned it.</param>
     /// <param name="desired">The desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>CONTAINMENT. It checks the ONE field this provider sets and ignores everything
-    ///     else.</b> The reasons are on this class and the short form is that the Kube-OVN controller
+    ///     ⚠
+    ///     <b>
+    ///         CONTAINMENT. It checks the ONE field this provider sets and ignores everything
+    ///         else.
+    ///     </b> The reasons are on this class and the short form is that the Kube-OVN controller
     ///     writes back to <c>.spec</c> — a finalizer, <c>staticRoutes[].policy</c>, and entries removed
     ///     from <c>staticRoutes</c> outright — quite apart from the <c>bfdPort</c> block the CRD
     ///     defaults in. An equality comparison would report drift on a converged network forever, and
@@ -677,9 +769,12 @@ public static class VirtualNetworks {
     /// <param name="enableExternal">Whether to attach the router externally.</param>
     /// <param name="location">The region.</param>
     /// <remarks>
-    ///     ⚠ <b>The default address space is <c>10.20.0.0/16</c>, which is docs/plan/14's own worked
-    ///     example and — checked rather than assumed — overlaps no row of
-    ///     <see cref="NetworkAddressing.ReservedRanges" /> in any region.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The default address space is <c>10.20.0.0/16</c>, which is docs/plan/14's own worked
+    ///         example and — checked rather than assumed — overlaps no row of
+    ///         <see cref="NetworkAddressing.ReservedRanges" /> in any region.
+    ///     </b>
     ///     <c>NetworkAddressTests</c> asserts that, because a default body that the reconciler then
     ///     refuses would make every conformance assertion in the family fail for a reason that has
     ///     nothing to do with what it was testing.
@@ -700,9 +795,7 @@ public static class VirtualNetworks {
             ["location"] = location,
             ["properties"] = new JsonObject {
                 ["clusterId"] = clusterId.ToString("D", CultureInfo.InvariantCulture),
-                ["addressSpace"] = new JsonObject {
-                    ["v4"] = addressSpaceV4, ["v6"] = addressSpaceV6
-                },
+                ["addressSpace"] = new JsonObject { ["v4"] = addressSpaceV4, ["v6"] = addressSpaceV6 },
                 ["enableExternal"] = enableExternal
             }
         }.ToJsonString();

@@ -25,9 +25,8 @@ public sealed class NatsDeclarationTests {
         var registry = ProviderRegistry.Build([new MessagingProvider()]);
 
         registry.TryGetType(NatsClusters.Type, out var registration).ShouldBeTrue();
-        registry.TryGetType(KafkaClusters.Type, out _).ShouldBeTrue(
-            "adding the second type removed the first one from the registry"
-        );
+        registry.TryGetType(KafkaClusters.Type, out _)
+            .ShouldBeTrue("adding the second type removed the first one from the registry");
 
         registration.RequiresCluster.ShouldBeTrue();
         registration.ClusterIdPointer.ShouldBe(NatsClusters.ClusterIdPointer);
@@ -65,11 +64,12 @@ public sealed class NatsDeclarationTests {
             meter.Derivation.Reads.ShouldNotBeEmpty(meter.Meter.ToString());
 
             foreach (var pointer in meter.Derivation.Reads) {
-                NatsClusters.Schema2026.Declares(pointer).ShouldBeTrue(
-                    $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
-                    + "api-version's schema does not declare. A read set that names a property the "
-                    + "schema dropped is what an api-version bump has to be diffed against."
-                );
+                NatsClusters.Schema2026.Declares(pointer)
+                    .ShouldBeTrue(
+                        $"the {meter.Meter} derivation declares it reads '{pointer}', which this "
+                        + "api-version's schema does not declare. A read set that names a property the "
+                        + "schema dropped is what an api-version bump has to be diffed against."
+                    );
             }
         }
     }
@@ -86,10 +86,11 @@ public sealed class NatsDeclarationTests {
                 Overridden(NatsClusters.Body(ClusterId), property.JsonPointer, property.DefaultJson)
             );
 
-            NatsClusters.Schema2026.Validate(body.RootElement, allowTags: true).IsSuccess.ShouldBeTrue(
-                $"the declared default for '{property.JsonPointer}' does not validate inside an "
-                + "otherwise-valid body."
-            );
+            NatsClusters.Schema2026.Validate(body.RootElement, allowTags: true)
+                .IsSuccess.ShouldBeTrue(
+                    $"the declared default for '{property.JsonPointer}' does not validate inside an "
+                    + "otherwise-valid body."
+                );
         }
     }
 
@@ -118,10 +119,7 @@ public sealed class NatsDeclarationTests {
         // Converting through KubeQuantity is what removes the question; this is what proves it was
         // removed.
         foreach (var (size, bytes) in new[] {
-                     ("10Gi", "10737418240"),
-                     ("512Mi", "536870912"),
-                     ("1T", "1000000000000"),
-                     ("2048", "2048"),
+                     ("10Gi", "10737418240"), ("512Mi", "536870912"), ("1T", "1000000000000"), ("2048", "2048"),
                      // ⚠ The trap, written out. Passing this through verbatim would cap JetStream at
                      // 500 MB on a half-byte volume; converting reads it as Kubernetes does.
                      ("500m", "0")

@@ -5,10 +5,16 @@ namespace CyberCloud.Gateway.Host.Http;
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>The Azure spellings are deliberate and are not ours to improve.</b> docs/plan/10
-///     § Request pipeline takes <c>x-ms-correlation-request-id</c> <i>"because tooling already sends
-///     it"</i>, and docs/plan/10 § Rate limiting keeps <c>Retry-After</c> and
-///     <c>x-ms-ratelimit-remaining-*</c> <i>"because every cloud SDK's retry policy already
-///     understands those headers"</i>. A prettier name here costs every SDK its retry behaviour.
+///     § Request pipeline takes <c>x-ms-correlation-request-id</c>
+///     <i>
+///         "because tooling already sends
+///         it"
+///     </i>, and docs/plan/10 § Rate limiting keeps <c>Retry-After</c> and
+///     <c>x-ms-ratelimit-remaining-*</c>
+///     <i>
+///         "because every cloud SDK's retry policy already
+///         understands those headers"
+///     </i>. A prettier name here costs every SDK its retry behaviour.
 /// </remarks>
 static class GatewayHeaders {
     /// <summary>The correlation id a caller supplies. Azure's name.</summary>
@@ -39,8 +45,11 @@ static class GatewayHeaders {
     ///     The verbs an address does accept, sent with a <c>405</c>. Required by RFC 9110 § 15.5.6.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A <c>405</c> without this header is a protocol violation and, more usefully, a dead
-    ///     end for the caller</b> — it says "not that verb" and not "which verb". A scope is the one
+    ///     ⚠
+    ///     <b>
+    ///         A <c>405</c> without this header is a protocol violation and, more usefully, a dead
+    ///         end for the caller
+    ///     </b> — it says "not that verb" and not "which verb". A scope is the one
     ///     address in this API that answers <c>405</c> at all; every other unsupported shape is a
     ///     <c>404</c> or a <c>400</c>, because for a resource the set of verbs is the same everywhere.
     /// </remarks>

@@ -3,22 +3,25 @@ using CyberCloud.Cli.Configuration;
 namespace CyberCloud.Cli.Tests;
 
 /// <summary>
-///     docs/plan/21 § Decisions: <i>"Config | <c>~/.cyc/config</c> with named profiles; every setting
-///     also an env var (<c>CYC_SUBSCRIPTION</c>, …) for CI."</i>
+///     docs/plan/21 § Decisions:
+///     <i>
+///         "Config | <c>~/.cyc/config</c> with named profiles; every setting
+///         also an env var (<c>CYC_SUBSCRIPTION</c>, …) for CI."
+///     </i>
 /// </summary>
 public sealed class ConfigurationTests {
     const string TwoProfiles = """
-        default = work
+                               default = work
 
-        [work]
-        subscription = sub-work
-        tenant = contoso
+                               [work]
+                               subscription = sub-work
+                               tenant = contoso
 
-        [lab]
-        subscription = sub-lab
-        tenant = fabrikam
-        endpoint = https://api.lab.internal/
-        """;
+                               [lab]
+                               subscription = sub-lab
+                               tenant = fabrikam
+                               endpoint = https://api.lab.internal/
+                               """;
 
     [Fact]
     public void EverySettingHasAMechanicalEnvironmentVariable() {
@@ -33,7 +36,9 @@ public sealed class ConfigurationTests {
     [Fact]
     public void TheFlagBeatsTheEnvironmentWhichBeatsTheProfile() {
         var file = CycConfigFile.Parse(TwoProfiles);
-        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CYC_SUBSCRIPTION"] = "sub-env" };
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+            ["CYC_SUBSCRIPTION"] = "sub-env"
+        };
 
         var settings = CycSettings.Resolve(file, environment, profileFlag: null);
 
@@ -61,7 +66,8 @@ public sealed class ConfigurationTests {
         var settings = CycSettings.Resolve(
             CycConfigFile.Parse(TwoProfiles),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-            profileFlag: "lab");
+            profileFlag: "lab"
+        );
 
         settings.Endpoint.ShouldBe(new Uri("https://api.lab.internal/"));
     }
@@ -71,7 +77,8 @@ public sealed class ConfigurationTests {
         var settings = CycSettings.Resolve(
             CycConfigFile.Parse("[default]\nendpoint = not a url\n"),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-            profileFlag: null);
+            profileFlag: null
+        );
 
         Should.Throw<CycUsageException>(() => settings.Endpoint);
     }
@@ -93,10 +100,22 @@ public sealed class ConfigurationTests {
         using var host = TestHost.Create(transport, config: TwoProfiles);
 
         // Neither --subscription nor --tenant is on the command line.
-        var code = await host.RunAsync("sample", "widgets", "show", "--name", "w1", "--resource-group", "prod", "--output", "none");
+        var code = await host.RunAsync(
+            "sample",
+            "widgets",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--output",
+            "none"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
-        transport.Requests[0].Uri.AbsolutePath.ShouldBe("/tenants/contoso/subscriptions/sub-work/resourceGroups/prod/providers/CyberCloud.Sample/widgets/w1");
+        transport.Requests[0].Uri.AbsolutePath.ShouldBe(
+            "/tenants/contoso/subscriptions/sub-work/resourceGroups/prod/providers/CyberCloud.Sample/widgets/w1"
+        );
     }
 
     [Fact]
@@ -106,11 +125,21 @@ public sealed class ConfigurationTests {
         using var host = TestHost.Create(
             transport,
             environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
-                ["CYC_SUBSCRIPTION"] = "sub-ci",
-                ["CYC_TENANT"] = "tenant-ci",
-            });
+                ["CYC_SUBSCRIPTION"] = "sub-ci", ["CYC_TENANT"] = "tenant-ci"
+            }
+        );
 
-        await host.RunAsync("sample", "widgets", "show", "--name", "w1", "--resource-group", "prod", "--output", "none");
+        await host.RunAsync(
+            "sample",
+            "widgets",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--output",
+            "none"
+        );
 
         transport.Requests[0].Uri.AbsolutePath.ShouldStartWith("/tenants/tenant-ci/subscriptions/sub-ci/");
     }
@@ -119,7 +148,17 @@ public sealed class ConfigurationTests {
     public async Task AMissingAddressValueNamesAllThreePlacesItCouldComeFrom() {
         using var host = TestHost.Create();
 
-        var code = await host.RunAsync("sample", "widgets", "show", "--name", "w1", "--resource-group", "prod", "--tenant", "t");
+        var code = await host.RunAsync(
+            "sample",
+            "widgets",
+            "show",
+            "--name",
+            "w1",
+            "--resource-group",
+            "prod",
+            "--tenant",
+            "t"
+        );
 
         code.ShouldBe((int)ExitCode.Usage);
         host.Stderr.ShouldContain("--subscription");
@@ -141,7 +180,10 @@ public sealed class ConfigurationTests {
     public async Task ConfigGetSaysWhereTheValueCameFrom() {
         using var host = TestHost.Create(
             config: TwoProfiles,
-            environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CYC_SUBSCRIPTION"] = "sub-env" });
+            environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+                ["CYC_SUBSCRIPTION"] = "sub-env"
+            }
+        );
 
         await host.RunAsync("config", "get", "subscription", "--output", "json");
 

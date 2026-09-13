@@ -11,8 +11,11 @@ namespace CyberCloud.Vault.Tests.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Real, and not a stubbed handler, because every property this suite asserts belongs
-///         to OpenBao rather than to us.</b> That a missing <c>kv-v2</c> path answers <c>404</c> with
+///         ⚠
+///         <b>
+///             Real, and not a stubbed handler, because every property this suite asserts belongs
+///             to OpenBao rather than to us.
+///         </b> That a missing <c>kv-v2</c> path answers <c>404</c> with
 ///         an <i>empty</i> error list while a refused token answers <c>403</c> with
 ///         <c>["permission denied"]</c>; that a <c>?version=</c> which never existed is
 ///         indistinguishable from a path that never existed; that a revoked token starts being
@@ -20,8 +23,11 @@ namespace CyberCloud.Vault.Tests.Infrastructure;
 ///         assert the belief rather than check it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Dev mode, in memory, unsealed, with a known root token — and none of that weakens
-///         what is under test.</b> Dev mode changes how OpenBao stores and unseals, not how it
+///         ⚠
+///         <b>
+///             Dev mode, in memory, unsealed, with a known root token — and none of that weakens
+///             what is under test.
+///         </b> Dev mode changes how OpenBao stores and unseals, not how it
 ///         answers an HTTP request; the status codes, the JSON envelopes and the token lifecycle are
 ///         the production paths. What it does mean is that this suite proves nothing about
 ///         docs/plan/18 § Shape's Raft topology or its transit-engine auto-unseal, which are
@@ -111,8 +117,11 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
     /// <param name="ttl">How long it lives.</param>
     /// <returns>The token and its accessor, so a test can revoke it.</returns>
     /// <remarks>
-    ///     ⚠ <b>This is how the suite gets a real token without a Kubernetes cluster, and it is the
-    ///     honest substitute rather than an equivalent one.</b> A token from
+    ///     ⚠
+    ///     <b>
+    ///         This is how the suite gets a real token without a Kubernetes cluster, and it is the
+    ///         honest substitute rather than an equivalent one.
+    ///     </b> A token from
     ///     <c>auth/token/create</c> and a token from <c>auth/kubernetes/login</c> are the same thing
     ///     to every path this suite exercises — the same <c>X-Vault-Token</c>, the same policy
     ///     evaluation, the same revocation. What differs is how it was obtained, and that is exactly
@@ -138,8 +147,11 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
 
     /// <summary>Enables the Kubernetes auth method, with no cluster behind it.</summary>
     /// <remarks>
-    ///     ⚠ Enabled precisely so a login can be attempted and <i>fail the way it does in
-    ///     production when the cluster is unreachable</i>. Nothing here can make it succeed.
+    ///     ⚠ Enabled precisely so a login can be attempted and
+    ///     <i>
+    ///         fail the way it does in
+    ///         production when the cluster is unreachable
+    ///     </i>. Nothing here can make it succeed.
     ///     <para>
     ///         ⚠ Idempotent, because the fixture is shared and a second enable answers <c>400</c>
     ///         with "path is already in use". The first version of this threw a fixture fault on
@@ -149,7 +161,7 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
     /// </remarks>
     public async Task EnableKubernetesAuthAsync() {
         using var request = new HttpRequestMessage(HttpMethod.Post, Address + "/v1/sys/auth/kubernetes") {
-            Content = JsonContent.Create(new { type = "kubernetes" }),
+            Content = JsonContent.Create(new { type = "kubernetes" })
         };
 
         request.Headers.Add(VaultHeaders.Token, RootToken);
@@ -176,7 +188,7 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
             // ⚠ A container has no certificate anybody trusts. VaultOptions' own remarks say why this
             // flag exists rather than an HttpMessageHandler that skips validation.
             AllowInsecureTransport = true,
-            RequestTimeout = TimeSpan.FromSeconds(10),
+            RequestTimeout = TimeSpan.FromSeconds(10)
         };
 
     /// <summary>A resolver pointed at this container, reading with a fixed token.</summary>
@@ -218,9 +230,7 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
     }
 
     async Task<JsonDocument?> RootAsync(HttpMethod method, string path, object body) {
-        using var request = new HttpRequestMessage(method, Address + path) {
-            Content = JsonContent.Create(body),
-        };
+        using var request = new HttpRequestMessage(method, Address + path) { Content = JsonContent.Create(body) };
 
         request.Headers.Add(VaultHeaders.Token, RootToken);
 

@@ -143,10 +143,10 @@ public sealed class ConsoleDeclarationTests {
         // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
         // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
         CliTokens.Collisions(
-            ProviderRegistry.Build([new TerminalProvider()]).Types.Select(
-                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
-            )
-        ).ShouldBeEmpty();
+            ProviderRegistry.Build([new TerminalProvider()])
+                .Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        )
+            .ShouldBeEmpty();
     }
 
     // ── The contract the portal is built against ──────────────────────────────────────────────
@@ -168,16 +168,17 @@ public sealed class ConsoleDeclarationTests {
         // and `recording` is here rather than only on the resource body because that document requires
         // the portal to be loud when recording is on — a panel that had to fetch the resource to find
         // out would render one frame of a terminal that lies.
-        CloudConsoles.ConnectResponse.Properties.Select(x => x.JsonPointer).ShouldBe(
-            [
-                "/sessionId",
-                "/hub",
-                "/state",
-                "/idleTimeoutSeconds",
-                "/maxDurationSeconds",
-                "/recording"
-            ]
-        );
+        CloudConsoles.ConnectResponse.Properties.Select(x => x.JsonPointer)
+            .ShouldBe(
+                [
+                    "/sessionId",
+                    "/hub",
+                    "/state",
+                    "/idleTimeoutSeconds",
+                    "/maxDurationSeconds",
+                    "/recording"
+                ]
+            );
 
         CloudConsoles.ConnectResponse.Properties.ShouldAllBe(x => x.Required);
 
@@ -201,10 +202,12 @@ public sealed class ConsoleDeclarationTests {
         foreach (var digest in CloudConsoles.ImageDigests.Values) {
             digest.ShouldStartWith("sha256:");
             digest.Length.ShouldBe("sha256:".Length + 64);
-            digest["sha256:".Length..].Distinct().Count().ShouldBe(
-                1,
-                "a real-looking digest has been written for an image nothing builds"
-            );
+            digest["sha256:".Length..].Distinct()
+                .Count()
+                .ShouldBe(
+                    1,
+                    "a real-looking digest has been written for an image nothing builds"
+                );
         }
 
         CloudConsoles.ImageDigests.Keys.Order(StringComparer.Ordinal).ShouldBe(["default", "minimal"]);
@@ -220,9 +223,8 @@ public sealed class ConsoleDeclarationTests {
 
         using var desired = JsonDocument.Parse(body.ToJsonString());
 
-        CloudConsoles.Image(desired.RootElement).ShouldBe(
-            CloudConsoles.ImageRepository + "@" + CloudConsoles.ImageDigests["default"]
-        );
+        CloudConsoles.Image(desired.RootElement)
+            .ShouldBe(CloudConsoles.ImageRepository + "@" + CloudConsoles.ImageDigests["default"]);
     }
 
     // ── The meters ────────────────────────────────────────────────────────────────────────────
@@ -280,7 +282,8 @@ public sealed class ConsoleDeclarationTests {
         using var broken = JsonDocument.Parse(body.ToJsonString());
 
         registration.Meters.Single(x => x.Meter == QuotaMeter.StorageGb)
-            .Derivation!.Amount(broken.RootElement)
+            .Derivation!
+            .Amount(broken.RootElement)
             .IsSuccess.ShouldBeFalse();
     }
 
@@ -306,7 +309,9 @@ public sealed class ConsoleDeclarationTests {
             (CloudConsoles.IdleTimeoutSeconds(desired) / 60).ToString(System.Globalization.CultureInfo.InvariantCulture)
         );
         Default(CloudConsoles.MaxDurationHoursPointer).ShouldBe(
-            (CloudConsoles.MaxDurationSeconds(desired) / 3600).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            (CloudConsoles.MaxDurationSeconds(desired) / 3600).ToString(
+                System.Globalization.CultureInfo.InvariantCulture
+            )
         );
         Default("/properties/network/egress").ShouldBe("\"" + CloudConsoles.EgressMode(desired) + "\"");
         Default("/properties/audit/sessionRecording").ShouldBe(
@@ -342,7 +347,7 @@ public sealed class ConsoleDeclarationTests {
         foreach (var pointer in enums) {
             CloudConsoles.Schema2026.Properties.Single(x => x.JsonPointer == pointer)
                 .AllowedValues
-                .ShouldNotBeEmpty(pointer);
+                    .ShouldNotBeEmpty(pointer);
         }
 
         CloudConsoles.EgressModes.ShouldBe(["Internet", "TenantOnly"]);

@@ -11,8 +11,11 @@ namespace CyberCloud.Providers.Mail.Conformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS FILE IS THE ENTIRE COST OF PUTTING THE FOURTEENTH PROVIDER UNDER CONFORMANCE,
-///         AND IT IS THE FIRST WHOSE OBJECTS THE CASE CANNOT PREDICT THE BYTES OF.</b>
+///         ⚠
+///         <b>
+///             THIS FILE IS THE ENTIRE COST OF PUTTING THE FOURTEENTH PROVIDER UNDER CONFORMANCE,
+///             AND IT IS THE FIRST WHOSE OBJECTS THE CASE CANNOT PREDICT THE BYTES OF.
+///         </b>
 ///         <c>test/CyberCloud.Conformance</c> was not touched. What is new is the <c>Secret</c>: its
 ///         contents are read back out of the vault rather than computed from the body, so a case that
 ///         compared documents byte for byte could not have described it.
@@ -23,8 +26,11 @@ namespace CyberCloud.Providers.Mail.Conformance;
 ///     <para>
 ///         ⚠ <b>SO STATE PLAINLY WHAT A GREEN RUN HERE PROVES AND WHAT IT DOES NOT.</b> It proves the
 ///         twelve-step write path, the verb grammar, the four reconciler clauses, the cross-tenant
-///         404, the seven labels and the delete-read-back, over five objects. It proves <b>nothing at
-///         all</b> about whether mail is accepted, delivered, signed, filtered or readable — the
+///         404, the seven labels and the delete-read-back, over five objects. It proves
+///         <b>
+///             nothing at
+///             all
+///         </b> about whether mail is accepted, delivered, signed, filtered or readable — the
 ///         images those three containers would run <b>do not exist</b>
 ///         (<c>charts/managed/mail/conformance.yaml § owed</c>, <c>the-images-do-not-exist</c>), so
 ///         no harness in this repository can start one. ⚠ It also proves nothing about the one
@@ -103,8 +109,11 @@ public sealed class MailDomainConformance(ProviderTestCluster<MailDomainCase> cl
 
 /// <summary>The container-backed half, skipped loudly, against the managed-mail provider.</summary>
 /// <remarks>
-///     ⚠ <b>Still declared, even though this provider has a real <c>*.Cluster.Conformance</c> project
-///     that makes the same assertions against a real API server.</b> The skips are not redundant with
+///     ⚠
+///     <b>
+///         Still declared, even though this provider has a real <c>*.Cluster.Conformance</c> project
+///         that makes the same assertions against a real API server.
+///     </b> The skips are not redundant with
 ///     it: they run on a machine with no Docker and say, by name, which criteria were not checked.
 ///     Deleting them here would make "conformance: green" readable as "the cluster-backed criteria
 ///     were met" on exactly the machines where they were not.

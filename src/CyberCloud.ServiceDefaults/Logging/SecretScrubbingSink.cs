@@ -12,8 +12,11 @@ namespace CyberCloud.ServiceDefaults.Logging;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/18 § Platform security, row Secrets asks for <i>"a log-scanning canary that
-///         alerts on a key-shaped string in the log pipeline"</i>.
+///         docs/plan/18 § Platform security, row Secrets asks for
+///         <i>
+///             "a log-scanning canary that
+///             alerts on a key-shaped string in the log pipeline"
+///         </i>.
 ///         <see cref="SecretShapedText" /> is the scanning; this is the attachment point and the
 ///         alert.
 ///     </para>
@@ -27,8 +30,11 @@ namespace CyberCloud.ServiceDefaults.Logging;
 ///         have covered). A sink wrapper can build a new event, so it covers all three.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHY THIS IS NOT "A CANARY IN THE SAME PROCESS THAT WRITES THE LOG", WHICH PROVES
-///         NOTHING.</b> A scanner reading the logs of the process it lives in is a scanner that can
+///         ⚠
+///         <b>
+///             WHY THIS IS NOT "A CANARY IN THE SAME PROCESS THAT WRITES THE LOG", WHICH PROVES
+///             NOTHING.
+///         </b> A scanner reading the logs of the process it lives in is a scanner that can
 ///         only report a leak that has already left. This one sits <i>in front of</i> every sink:
 ///         nothing is written to stdout and nothing is exported over OTLP until it has been through
 ///         here, so the finding and the prevention are the same act. The half it genuinely cannot see
@@ -134,7 +140,10 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
 
         properties ??= logEvent.Properties.Select(x => new LogEventProperty(x.Key, x.Value)).ToList();
         properties.Add(
-            new LogEventProperty(MarkerProperty, new ScalarValue(string.Join(", ", fired.Distinct(StringComparer.Ordinal))))
+            new LogEventProperty(
+                MarkerProperty,
+                new ScalarValue(string.Join(", ", fired.Distinct(StringComparer.Ordinal)))
+            )
         );
 
         return new LogEvent(
@@ -309,17 +318,37 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
     ///     and sends everything else through it, so a type nobody anticipated is scanned rather than
     ///     skipped.
     /// </remarks>
-    static bool CanCarrySecret(object value)
-        => value is not (bool or byte or sbyte or short or ushort or int or uint or long or ulong
-            or float or double or decimal or char or Guid or DateTime or DateTimeOffset or DateOnly
-            or TimeOnly or TimeSpan or Enum);
+    static bool CanCarrySecret(object value) =>
+        value is not (bool
+            or byte
+            or sbyte
+            or short
+            or ushort
+            or int
+            or uint
+            or long
+            or ulong
+            or float
+            or double
+            or decimal
+            or char
+            or Guid
+            or DateTime
+            or DateTimeOffset
+            or DateOnly
+            or TimeOnly
+            or TimeSpan
+            or Enum);
 
     /// <summary>
     ///     The exception, or a stand-in whose text is scrubbed.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The stand-in keeps the message, the stack and the full rendering, and loses only the
-    ///     CLR type.</b> An exception cannot be rewritten in place, and the alternatives are both
+    ///     ⚠
+    ///     <b>
+    ///         The stand-in keeps the message, the stack and the full rendering, and loses only the
+    ///         CLR type.
+    ///     </b> An exception cannot be rewritten in place, and the alternatives are both
     ///     worse: dropping it deletes the diagnostic that was trying to tell somebody what went
     ///     wrong, and keeping it exports the credential that was in its message. The original type's
     ///     name survives inside the scrubbed <c>ToString()</c>, which is what a reader is looking for.

@@ -139,10 +139,16 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     ///     § Deleting a parent resource that has children.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A code of its own rather than <see cref="ScopeLocked" />, and the document's sentence
-    ///     is the reason rather than an exception to it.</b> docs/plan/08 says the refusal <i>"reuses
-    ///     the shape <c>ScopeLocked</c> already has — 'you cannot delete this yet, here is what is
-    ///     holding it' — rather than inventing a second one"</i>. That shape is the <b>message</b>: a
+    ///     ⚠
+    ///     <b>
+    ///         A code of its own rather than <see cref="ScopeLocked" />, and the document's sentence
+    ///         is the reason rather than an exception to it.
+    ///     </b> docs/plan/08 says the refusal
+    ///     <i>
+    ///         "reuses
+    ///         the shape <c>ScopeLocked</c> already has — 'you cannot delete this yet, here is what is
+    ///         holding it' — rather than inventing a second one"
+    ///     </i>. That shape is the <b>message</b>: a
     ///     409 that names the blocker so the caller can go and remove it. The <i>code</i> is what a
     ///     client library branches on, and <see cref="ScopeLocked" />'s own summary is "a lock forbids
     ///     the write or the delete" — so reusing it would tell a caller with no lock anywhere in their
@@ -261,8 +267,11 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This lives on the code because it was living in the OpenAPI emitter, derived from
-    ///         the plan's prose.</b> That emitter's own remarks reported it as a gap: docs/plan/07
+    ///         ⚠
+    ///         <b>
+    ///             This lives on the code because it was living in the OpenAPI emitter, derived from
+    ///             the plan's prose.
+    ///         </b> That emitter's own remarks reported it as a gap: docs/plan/07
     ///         § The enforcement seam fixes 404-versus-403 and docs/plan/10 § API versioning fixes the
     ///         400, and nothing in the tree mapped the other twenty-odd codes onto a status — so the
     ///         generator wrote one list and the gateway would have had to agree with it by hand.
@@ -270,8 +279,11 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     ///         registry of codes is the only place both can read.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see cref="ResourceNotFound" /> and <see cref="SchemaInvalid" /> are both
-    ///         <c>404</c>, and that is the point rather than an oversight.</b>
+    ///         ⚠
+    ///         <b>
+    ///             <see cref="ResourceNotFound" /> and <see cref="SchemaInvalid" /> are both
+    ///             <c>404</c>, and that is the point rather than an oversight.
+    ///         </b>
     ///         docs/plan/00 § Non-negotiables forbids disclosing existence, so "you may not read this"
     ///         and "the authorization schema is broken" reach the caller identically. The difference
     ///         is that one of them also appears on a dashboard — see <see cref="SchemaInvalid" />'s
@@ -298,8 +310,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     ///     else uses adds that response to every generated operation without anyone editing a second
     ///     list.
     /// </remarks>
-    public static ImmutableArray<int> HttpStatuses { get; } =
-        [.. All.Select(x => x.HttpStatus).Distinct().Order()];
+    public static ImmutableArray<int> HttpStatuses { get; } = [.. All.Select(x => x.HttpStatus).Distinct().Order()];
 
     /// <summary>Every code that renders as one status, in declaration order.</summary>
     /// <param name="httpStatus">The status.</param>

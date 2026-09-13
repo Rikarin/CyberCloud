@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The write path validated the tenant, the subscription, the type and the api-version,
-///         and never the parent.</b> docs/plan/12 § Child resources gave a child an address that
+///         ⚠
+///         <b>
+///             The write path validated the tenant, the subscription, the type and the api-version,
+///             and never the parent.
+///         </b> docs/plan/12 § Child resources gave a child an address that
 ///         names its parent — <c>…/widgets/{widgetName}/gadgets/{gadgetName}</c> — and
 ///         <see cref="ResourceId.Parent" /> made that a pure function of the id, but nothing on the
 ///         write path called it. So a gadget could be created under a widget that was never created,
@@ -16,8 +19,11 @@ namespace CyberCloud.ResourceManager.Tests;
 ///         free, the quota was there, the claim succeeded, the reconciler ran.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What is left behind is worse than a bad reference, because of what step 8 does with
-///         it.</b> <c>IResourceRelationWriter.LinkToParentAsync</c> writes the ReBAC <c>parent</c>
+///         ⚠
+///         <b>
+///             What is left behind is worse than a bad reference, because of what step 8 does with
+///             it.
+///         </b> <c>IResourceRelationWriter.LinkToParentAsync</c> writes the ReBAC <c>parent</c>
 ///         edge from the address, so an orphan's edge points at a resource that does not exist —
 ///         permission inherits from nothing, and the interleaved grammar was chosen precisely so that
 ///         it would inherit from something.
@@ -147,9 +153,7 @@ public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
 
         var accepted = await CreateChildAsync(Child("host-widget", "attached"));
 
-        accepted.IsSuccess.ShouldBeTrue(
-            accepted.Error?.Message ?? "a child under a parent that exists was refused"
-        );
+        accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message ?? "a child under a parent that exists was refused");
     }
 
     [Fact]
@@ -190,11 +194,7 @@ public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
         var parent = await CreateParentAsync("doomed-widget");
 
         var deleted = await cluster.Manager.DeleteAsync(
-            new() {
-                Path = parent.Path,
-                ApiVersion = TestingProvider.V2026,
-                Caller = ResourceManagerCluster.Caller()
-            },
+            new() { Path = parent.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
             TestContext.Current.CancellationToken
         );
 
@@ -323,9 +323,7 @@ public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
         await ConvergeAsync(created.GetValueOrThrow());
 
         var request = new WriteRequest {
-            Path = child.Path,
-            ApiVersion = TestingProvider.V2026,
-            Caller = ResourceManagerCluster.Caller()
+            Path = child.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller()
         };
 
         (await cluster.Manager.ReadAsync(request, TestContext.Current.CancellationToken))

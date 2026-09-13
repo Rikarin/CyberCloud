@@ -16,9 +16,12 @@ namespace CyberCloud.Identity.Host.Api;
 /// </param>
 /// <param name="ExpiresAt">When it stops being accepted.</param>
 public sealed record PasskeyChallengeTicket(
-    [property: JsonPropertyName("o")] string OptionsJson,
-    [property: JsonPropertyName("e")] string Email,
-    [property: JsonPropertyName("x")] DateTimeOffset ExpiresAt
+    [property: JsonPropertyName("o")]
+    string OptionsJson,
+    [property: JsonPropertyName("e")]
+    string Email,
+    [property: JsonPropertyName("x")]
+    DateTimeOffset ExpiresAt
 );
 
 /// <summary>
@@ -26,8 +29,11 @@ public sealed record PasskeyChallengeTicket(
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE CHALLENGE MUST NOT COME BACK FROM THE CALLER, AND THIS TYPE IS WHY IT DOES
-///         NOT.</b> <c>Fido2PasskeyService</c> keeps no server-side state on purpose — its remarks
+///         ⚠
+///         <b>
+///             THE CHALLENGE MUST NOT COME BACK FROM THE CALLER, AND THIS TYPE IS WHY IT DOES
+///             NOT.
+///         </b> <c>Fido2PasskeyService</c> keeps no server-side state on purpose — its remarks
 ///         make the case, and the case is sound for <i>registration</i>, where the user is already
 ///         authenticated and the worst a forged challenge buys is enrolling a passkey onto your own
 ///         account. It does not carry over to <b>assertion</b>, which is the sign-in itself: an
@@ -37,8 +43,11 @@ public sealed record PasskeyChallengeTicket(
 ///         that exchange was ever chosen by this server.
 ///     </para>
 ///     <para>
-///         The fix is that the options the assertion is verified against are the ones <i>this
-///         process</i> issued. They ride in a cookie rather than in a grain or a cache because a
+///         The fix is that the options the assertion is verified against are the ones
+///         <i>
+///             this
+///             process
+///         </i> issued. They ride in a cookie rather than in a grain or a cache because a
 ///         challenge is a nonce belonging to one browser and one attempt:
 ///     </para>
 ///     <list type="bullet">

@@ -1,6 +1,7 @@
 // ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
 // `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
 // `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
@@ -14,14 +15,20 @@ namespace CyberCloud.Providers.DocumentDB;
 ///     <para>
 ///         ⚠ <b>IT READS AND DOES NOT MINT.</b> This type is a FerretDB gateway over a CloudNativePG
 ///         cluster, and the credential is the PostgreSQL superuser CloudNativePG generated —
-///         <c>internal/controller/cluster_create.go</c>, <c>password.Generate(64, 10, 0, false,
-///         true)</c> — into <see cref="DocumentDbAccounts.SuperuserSecretName" />. Nothing this
+///         <c>internal/controller/cluster_create.go</c>,
+///         <c>
+/// password.Generate(64, 10, 0, false,
+///         true)
+///         </c> — into <see cref="DocumentDbAccounts.SuperuserSecretName" />. Nothing this
 ///         platform minted would be the password the cluster accepts, so <c>regenerateKeys</c> is
 ///         not declared either.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The same two keys <c>DeploymentJson</c> projects, and that is the property worth
-///         keeping.</b> The gateway's environment is built from <c>username</c> and <c>password</c>
+///         ⚠
+///         <b>
+///             The same two keys <c>DeploymentJson</c> projects, and that is the property worth
+///             keeping.
+///         </b> The gateway's environment is built from <c>username</c> and <c>password</c>
 ///         of this Secret, so reading the same two is what makes the credential this action returns
 ///         the credential the gateway is actually using. ⚠ The Secret's own <c>uri</c> key is
 ///         <b>not</b> returned and must not be: <c>cluster_create.go</c> passes <c>"*"</c> as its

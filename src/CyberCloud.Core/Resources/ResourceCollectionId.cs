@@ -11,14 +11,15 @@ namespace CyberCloud.Core.Resources;
 ///     </code>
 ///     A nested type interleaves exactly as <see cref="ResourceId" /> does, and ends on the type
 ///     rather than on a name:
-///     <code>
-///     …/providers/CyberCloud.DBforPostgreSQL/servers/{serverName}/databases
-///     </code>
+///     <code>    …/providers/CyberCloud.DBforPostgreSQL/servers/{serverName}/databases</code>
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is a resource-group-scoped address and deliberately not a subscription-scoped
-///         one.</b> <c>SoftDeletePolicy.RestoreAction</c>'s remarks record that Key Vault's
+///         ⚠
+///         <b>
+///             This is a resource-group-scoped address and deliberately not a subscription-scoped
+///             one.
+///         </b> <c>SoftDeletePolicy.RestoreAction</c>'s remarks record that Key Vault's
 ///         subscription+location-scoped <c>deletedVaults</c> collection "cannot be built here,
 ///         because <c>ResourceId.ParsePath</c> has <c>const int fixedPrefix = 8</c> and there is no
 ///         subscription-scoped address for the collection to live at". That is still true and this
@@ -143,8 +144,11 @@ public readonly record struct ResourceCollectionId(
     /// </summary>
     /// <param name="path">The candidate path.</param>
     /// <remarks>
-    ///     ⚠ <b>Every component is validated the way <see cref="ResourceId.ParsePath" /> validates
-    ///     it</b>, including every ancestor name — they are segments of the same path and an
+    ///     ⚠
+    ///     <b>
+    ///         Every component is validated the way <see cref="ResourceId.ParsePath" /> validates
+    ///         it
+    ///     </b>, including every ancestor name — they are segments of the same path and an
     ///     unvalidated one is the same separator-injection hole. What is <i>not</i> here is the
     ///     trailing resource name, because a collection has none.
     /// </remarks>
@@ -282,14 +286,22 @@ public readonly record struct ResourceCollectionId(
     /// </summary>
     string Render(string providerNamespace, string typePath) {
         var built = new StringBuilder(128)
-            .Append('/').Append(TenantsSegment)
-            .Append('/').Append(TenantId.ToString("D", CultureInfo.InvariantCulture))
-            .Append('/').Append(SubscriptionsSegment)
-            .Append('/').Append(SubscriptionId.ToString("D", CultureInfo.InvariantCulture))
-            .Append('/').Append(ResourceGroupsSegment)
-            .Append('/').Append(ResourceGroup)
-            .Append('/').Append(ProvidersSegment)
-            .Append('/').Append(providerNamespace);
+            .Append('/')
+            .Append(TenantsSegment)
+            .Append('/')
+            .Append(TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .Append('/')
+            .Append(SubscriptionsSegment)
+            .Append('/')
+            .Append(SubscriptionId.ToString("D", CultureInfo.InvariantCulture))
+            .Append('/')
+            .Append(ResourceGroupsSegment)
+            .Append('/')
+            .Append(ResourceGroup)
+            .Append('/')
+            .Append(ProvidersSegment)
+            .Append('/')
+            .Append(providerNamespace);
 
         var typeSegments = typePath.Split('/');
         var names = ResourceId.SplitParents(ParentNames);

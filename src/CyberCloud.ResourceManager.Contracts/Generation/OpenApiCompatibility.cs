@@ -23,17 +23,29 @@ public readonly record struct BreakingChange(string JsonPointer, string Rule, st
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/21 § OpenAPI, in full: <i>"The diff rules are explicit — adding an optional field
-///         is fine, removing anything or narrowing a type is not."</i> and <i>"a breaking change to a
-///         published version fails CI"</i>. docs/plan/23 § The architecture gates lists it as its own
+///         docs/plan/21 § OpenAPI, in full:
+///         <i>
+///             "The diff rules are explicit — adding an optional field
+///             is fine, removing anything or narrowing a type is not."
+///         </i> and
+///         <i>
+///             "a breaking change to a
+///             published version fails CI"
+///         </i>. docs/plan/23 § The architecture gates lists it as its own
 ///         row, separate from the byte-identical one, because the two ask different questions: did
 ///         the generator drift from the registry, and did the registry drift from what was promised.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The rule is expressed as one property over JSON pointers rather than as a list of
-///         OpenAPI-shaped special cases</b>, and that is what makes it complete. <i>Every pointer that
-///         existed must still exist, and every value at it must be unchanged; anything new is an
-///         addition and is fine.</i> A removed path, a removed operation, a removed property, a
+///         ⚠
+///         <b>
+///             The rule is expressed as one property over JSON pointers rather than as a list of
+///             OpenAPI-shaped special cases
+///         </b>, and that is what makes it complete.
+///         <i>
+///             Every pointer that
+///             existed must still exist, and every value at it must be unchanged; anything new is an
+///             addition and is fine.
+///         </i> A removed path, a removed operation, a removed property, a
 ///         removed parameter, a removed response and a removed error code are the same rule applied
 ///         at six depths, and a list of six checks is a list that grows to five when somebody adds a
 ///         seventh kind of thing to the document.
@@ -109,18 +121,22 @@ public static class OpenApiCompatibility {
         }
 
         if (regenerated is null) {
-            found.Add(new(
-                "",
-                Removed,
-                "The regenerated document is empty and the published one is not."
-            ));
+            found.Add(
+                new(
+                    "",
+                    Removed,
+                    "The regenerated document is empty and the published one is not."
+                )
+            );
 
             return [.. found];
         }
 
         Compare(published, regenerated, "", found);
 
-        return [.. found.OrderBy(x => x.JsonPointer, StringComparer.Ordinal).ThenBy(x => x.Rule, StringComparer.Ordinal)];
+        return [
+            .. found.OrderBy(x => x.JsonPointer, StringComparer.Ordinal).ThenBy(x => x.Rule, StringComparer.Ordinal)
+        ];
     }
 
     static void Compare(JsonNode? published, JsonNode? regenerated, string pointer, List<BreakingChange> found) {
@@ -141,11 +157,13 @@ public static class OpenApiCompatibility {
 
     static void CompareObjects(JsonObject before, JsonNode? regenerated, string pointer, List<BreakingChange> found) {
         if (regenerated is not JsonObject after) {
-            found.Add(new(
-                pointer,
-                Changed,
-                $"was an object and is now {Describe(regenerated)}."
-            ));
+            found.Add(
+                new(
+                    pointer,
+                    Changed,
+                    $"was an object and is now {Describe(regenerated)}."
+                )
+            );
 
             return;
         }
@@ -158,20 +176,22 @@ public static class OpenApiCompatibility {
             }
 
             if (!after.ContainsKey(member.Key)) {
-                found.Add(new(
-                    child,
-                    Removed,
-                    IsConstraint(member.Key)
-                        // ⚠ Dropping a constraint relaxes the shape rather than removing a feature, so
-                        // this one is not "a caller breaks". It is still refused: docs/plan/08 § The
-                        // provider registry makes a published api-version immutable, and "we only made
-                        // it more permissive" is how a version stops meaning one thing.
-                        ? $"the '{member.Key}' constraint was published here and is gone. A published "
-                        + "api-version is immutable, so relaxing one needs a new date rather than an "
-                        + "edit."
-                        : $"'{member.Key}' was published here and is gone. Removing anything from a "
-                        + "published api-version is a breaking change — docs/plan/21 § OpenAPI."
-                ));
+                found.Add(
+                    new(
+                        child,
+                        Removed,
+                        IsConstraint(member.Key)
+                            // ⚠ Dropping a constraint relaxes the shape rather than removing a feature, so
+                            // this one is not "a caller breaks". It is still refused: docs/plan/08 § The
+                            // provider registry makes a published api-version immutable, and "we only made
+                            // it more permissive" is how a version stops meaning one thing.
+                            ? $"the '{member.Key}' constraint was published here and is gone. A published "
+                            + "api-version is immutable, so relaxing one needs a new date rather than an "
+                            + "edit."
+                            : $"'{member.Key}' was published here and is gone. Removing anything from a "
+                            + "published api-version is a breaking change — docs/plan/21 § OpenAPI."
+                    )
+                );
 
                 continue;
             }
@@ -196,12 +216,14 @@ public static class OpenApiCompatibility {
         var now = Strings(after["required"]);
 
         foreach (var name in now.Except(was, StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)) {
-            found.Add(new(
-                pointer + "/required",
-                RequiredAdded,
-                $"'{name}' was optional and is now required. Every request that was valid and omitted it "
-                + "is now invalid — the sanctioned way to add a required property is a new api-version."
-            ));
+            found.Add(
+                new(
+                    pointer + "/required",
+                    RequiredAdded,
+                    $"'{name}' was optional and is now required. Every request that was valid and omitted it "
+                    + "is now invalid — the sanctioned way to add a required property is a new api-version."
+                )
+            );
         }
     }
 
@@ -214,19 +236,21 @@ public static class OpenApiCompatibility {
         // Absent means "true" in JSON Schema, so an object that said nothing and now says false has
         // tightened just as much as one that said true.
         var was = before["additionalProperties"] is not JsonValue value
-                  || !value.TryGetValue<bool>(out var allowed)
-                  || allowed;
+            || !value.TryGetValue<bool>(out var allowed)
+            || allowed;
 
         var now = after["additionalProperties"] is not JsonValue current
-                  || !current.TryGetValue<bool>(out var stillAllowed)
-                  || stillAllowed;
+            || !current.TryGetValue<bool>(out var stillAllowed)
+            || stillAllowed;
 
         if (was && !now) {
-            found.Add(new(
-                pointer + "/additionalProperties",
-                AdditionalPropertiesTightened,
-                "unknown members were accepted here and are now refused."
-            ));
+            found.Add(
+                new(
+                    pointer + "/additionalProperties",
+                    AdditionalPropertiesTightened,
+                    "unknown members were accepted here and are now refused."
+                )
+            );
         }
     }
 
@@ -251,12 +275,14 @@ public static class OpenApiCompatibility {
             var now = Strings(after);
 
             foreach (var value in was.Except(now, StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)) {
-                found.Add(new(
-                    pointer,
-                    EnumValueRemoved,
-                    $"'{value}' was an accepted value and is gone. A caller that sends it, or a client "
-                    + "that has a member for it, now breaks."
-                ));
+                found.Add(
+                    new(
+                        pointer,
+                        EnumValueRemoved,
+                        $"'{value}' was an accepted value and is gone. A caller that sends it, or a client "
+                        + "that has a member for it, now breaks."
+                    )
+                );
             }
 
             return;
@@ -271,11 +297,13 @@ public static class OpenApiCompatibility {
                 var key = Key(entry);
 
                 if (!now.Contains(key)) {
-                    found.Add(new(
-                        pointer,
-                        Removed,
-                        $"parameter '{key}' was published here and is gone."
-                    ));
+                    found.Add(
+                        new(
+                            pointer,
+                            Removed,
+                            $"parameter '{key}' was published here and is gone."
+                        )
+                    );
                 }
             }
 
@@ -299,12 +327,14 @@ public static class OpenApiCompatibility {
         var now = regenerated?.ToJsonString() ?? "null";
 
         if (!string.Equals(was, now, StringComparison.Ordinal)) {
-            found.Add(new(
-                pointer,
-                Changed,
-                $"was {was} and is now {now}. An api-version is immutable — docs/plan/08 § The provider "
-                + "registry. Mint a new date rather than editing a published one."
-            ));
+            found.Add(
+                new(
+                    pointer,
+                    Changed,
+                    $"was {was} and is now {now}. An api-version is immutable — docs/plan/08 § The provider "
+                    + "registry. Mint a new date rather than editing a published one."
+                )
+            );
         }
     }
 

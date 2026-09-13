@@ -131,9 +131,9 @@ public sealed record PasskeyCredential {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-            "A WebAuthn credential public key is public by construction — the private half never "
-            + "leaves the authenticator. Verifying an assertion requires it, so it has to be in "
-            + "durable grain state, and holding it grants nothing."
+        "A WebAuthn credential public key is public by construction — the private half never "
+        + "leaves the authenticator. Verifying an assertion requires it, so it has to be in "
+        + "durable grain state, and holding it grants nothing."
     )]
     public string PublicKey { get; init; } = string.Empty;
 

@@ -11,8 +11,11 @@ public sealed class SamplerTests(MeteringCluster cluster) {
     // ── FAILURE CLASS: a sampler that runs twice produces one record ───────────────────────────
 
     /// <summary>
-    ///     docs/plan/22 § Two kinds of meter: <i>"The sampler … emits one event per (resource, meter,
-    ///     window) with a deterministic key — so a sampler that runs twice produces one record."</i>
+    ///     docs/plan/22 § Two kinds of meter:
+    ///     <i>
+    ///         "The sampler … emits one event per (resource, meter,
+    ///         window) with a deterministic key — so a sampler that runs twice produces one record."
+    ///     </i>
     /// </summary>
     /// <remarks>
     ///     ⚠ Time is <b>not</b> advanced between the two passes, which is the point: both compute the
@@ -104,10 +107,13 @@ public sealed class SamplerTests(MeteringCluster cluster) {
     // ── FAILURE CLASS: state-based meters see a resource that exists and is not running ────────
 
     /// <summary>
-    ///     docs/plan/22 § Two kinds of meter: <i>"A stopped VM still has a disk; a
-    ///     <c>Deployment</c> scaled to zero still has a <c>PersistentVolumeClaim</c>. Metrics know
-    ///     about running pods; the resource graph knows what exists. Getting this backwards
-    ///     under-bills storage."</i>
+    ///     docs/plan/22 § Two kinds of meter:
+    ///     <i>
+    ///         "A stopped VM still has a disk; a
+    ///         <c>Deployment</c> scaled to zero still has a <c>PersistentVolumeClaim</c>. Metrics know
+    ///         about running pods; the resource graph knows what exists. Getting this backwards
+    ///         under-bills storage."
+    ///     </i>
     /// </summary>
     /// <remarks>
     ///     ⚠ The assertion is <b>byte-identical output</b> across every run state there is, not

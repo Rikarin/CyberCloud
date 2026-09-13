@@ -11,8 +11,11 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is not the OpenAPI meta-schema, and pretending otherwise would be the useful
-///         lie.</b> It checks the structural rules this emitter can actually break — a
+///         ⚠
+///         <b>
+///             This is not the OpenAPI meta-schema, and pretending otherwise would be the useful
+///             lie.
+///         </b> It checks the structural rules this emitter can actually break — a
 ///         <c>$ref</c> that resolves nowhere, a component key that is not a legal component key, a
 ///         path template whose <c>{placeholders}</c> and declared parameters disagree, a duplicate
 ///         <c>operationId</c>, a <c>required</c> naming a property that is not there. Validating
@@ -270,7 +273,8 @@ public static partial class OpenApiStructure {
         if (Text(schema["type"]) is { } type && !JsonTypes.Contains(type, StringComparer.Ordinal)) {
             problems.Add(
                 $"{pointer}/type — '{type}' is not a JSON Schema type. The seven are "
-                + string.Join(", ", JsonTypes) + "."
+                + string.Join(", ", JsonTypes)
+                + "."
             );
         }
 

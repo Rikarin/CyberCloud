@@ -5,8 +5,11 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 
 /// <summary>
 ///     The two gates docs/plan/23 § The architecture gates asks for, exercised end to end against a
-///     real directory: <b>Generated surfaces</b> ("regenerate byte-identically") and <b>OpenAPI
-///     compatibility</b> ("a breaking change fails").
+///     real directory: <b>Generated surfaces</b> ("regenerate byte-identically") and
+///     <b>
+///         OpenAPI
+///         compatibility
+///     </b> ("a breaking change fails").
 /// </summary>
 /// <remarks>
 ///     ⚠ These write to a temporary directory rather than to <c>openapi/</c>. A test that regenerated
@@ -94,7 +97,8 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.Postgres());
 
         var path = FileFor(Fixtures.FirstVersion);
-        var edited = File.ReadAllText(path, Encoding.UTF8).Replace("Cyber Cloud", "Cyber Clouds", StringComparison.Ordinal);
+        var edited = File.ReadAllText(path, Encoding.UTF8)
+            .Replace("Cyber Cloud", "Cyber Clouds", StringComparison.Ordinal);
         File.WriteAllText(path, edited, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
         var checkOnly = Generate(Fixtures.Postgres(), write: false);
@@ -131,10 +135,12 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()));
 
         var widened = Fixtures.PostgresWith(
-            ResourceSchema.Of([
-                .. Fixtures.ServerSchema().Properties,
-                new SchemaProperty("/properties/backupDays", SchemaKind.WholeNumber, Description: "Retention.")
-            ])
+            ResourceSchema.Of(
+                [
+                    .. Fixtures.ServerSchema().Properties,
+                    new SchemaProperty("/properties/backupDays", SchemaKind.WholeNumber, Description: "Retention.")
+                ]
+            )
         );
 
         var report = Generate(widened, write: false);
@@ -151,10 +157,13 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()));
 
         var narrowed = Fixtures.PostgresWith(
-            ResourceSchema.Of([
-                .. Fixtures.ServerSchema().Properties
-                    .Where(x => !string.Equals(x.JsonPointer, "/properties/sku/vcpu", StringComparison.Ordinal))
-            ])
+            ResourceSchema.Of(
+                [
+                    .. Fixtures.ServerSchema()
+                        .Properties
+                            .Where(x => !string.Equals(x.JsonPointer, "/properties/sku/vcpu", StringComparison.Ordinal))
+                ]
+            )
         );
 
         var breaking = Generate(narrowed, write: false)
@@ -173,10 +182,14 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()));
 
         var narrowed = Fixtures.PostgresWith(
-            ResourceSchema.Of([
-                .. Fixtures.ServerSchema().Properties
-                    .Where(x => !string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal))
-            ])
+            ResourceSchema.Of(
+                [
+                    .. Fixtures.ServerSchema()
+                        .Properties
+                            .Where(x => !string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
+                            )
+                ]
+            )
         );
 
         Generate(narrowed, write: false)
@@ -190,12 +203,16 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()));
 
         var narrowed = Fixtures.PostgresWith(
-            ResourceSchema.Of([
-                .. Fixtures.ServerSchema().Properties
-                    .Select(x => string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
-                        ? x with { Required = true }
-                        : x)
-            ])
+            ResourceSchema.Of(
+                [
+                    .. Fixtures.ServerSchema()
+                        .Properties
+                            .Select(x => string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
+                                    ? x with { Required = true }
+                                    : x
+                            )
+                ]
+            )
         );
 
         Generate(narrowed, write: false)
@@ -209,23 +226,30 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()));
 
         var narrowed = Fixtures.PostgresWith(
-            ResourceSchema.Of([
-                .. Fixtures.ServerSchema().Properties
-                    // ⚠ The numeric bounds and default come off with the kind. Leaving them on is not
-                    // "a narrowed property", it is an incoherent declaration — a minimum on a string —
-                    // and ResourceSchema.Of refuses that before any document is emitted. The test is
-                    // about the compatibility diff, so the input has to be a schema that could exist.
-                    .Select(x => string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
-                        ? x with { Kind = SchemaKind.Text, Minimum = null, Maximum = null, DefaultJson = "" }
-                        : x)
-            ])
+            ResourceSchema.Of(
+                [
+                    .. Fixtures.ServerSchema()
+                        .Properties
+                        // ⚠ The numeric bounds and default come off with the kind. Leaving them on is not
+                        // "a narrowed property", it is an incoherent declaration — a minimum on a string —
+                        // and ResourceSchema.Of refuses that before any document is emitted. The test is
+                        // about the compatibility diff, so the input has to be a schema that could exist.
+                            .Select(x => string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
+                                    ? x with {
+                                        Kind = SchemaKind.Text, Minimum = null, Maximum = null, DefaultJson = ""
+                                    }
+                                    : x
+                            )
+                ]
+            )
         );
 
         Generate(narrowed, write: false)
             .Documents.Single(x => x.FileName == "2026-08-01.json")
             .BreakingChanges
             .ShouldContain(x => x.Rule == OpenApiCompatibility.Changed
-                && x.JsonPointer.Contains("storageGb", StringComparison.Ordinal));
+                && x.JsonPointer.Contains("storageGb", StringComparison.Ordinal)
+            );
     }
 
     [Fact]
@@ -236,8 +260,9 @@ public sealed class OpenApiArtifactsTests : IDisposable {
 
         report.Documents.Single(x => x.FileName == "2026-08-01.json")
             .BreakingChanges
-            .ShouldContain(x => x.Rule == OpenApiCompatibility.Removed
-                && x.JsonPointer.Contains("databases", StringComparison.Ordinal));
+                .ShouldContain(x => x.Rule == OpenApiCompatibility.Removed
+                    && x.JsonPointer.Contains("databases", StringComparison.Ordinal)
+                );
     }
 
     [Fact]
@@ -246,12 +271,16 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         Generate(Fixtures.PostgresWith(Fixtures.ServerSchema()));
 
         var reworded = Fixtures.PostgresWith(
-            ResourceSchema.Of([
-                .. Fixtures.ServerSchema().Properties
-                    .Select(x => string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
-                        ? x with { Description = "Storage, in gigabytes." }
-                        : x)
-            ])
+            ResourceSchema.Of(
+                [
+                    .. Fixtures.ServerSchema()
+                        .Properties
+                            .Select(x => string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
+                                    ? x with { Description = "Storage, in gigabytes." }
+                                    : x
+                            )
+                ]
+            )
         );
 
         var report = Generate(reworded, write: false);

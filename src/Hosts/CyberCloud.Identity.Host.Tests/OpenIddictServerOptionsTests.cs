@@ -12,8 +12,11 @@ namespace CyberCloud.Identity.Host.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b><see cref="IdentityHostAuthenticationTests" /> asserts the path <em>constants</em>,
-///         which is not the same claim.</b> A constant that says <c>/connect/token</c> proves nothing
+///         ⚠
+///         <b>
+///             <see cref="IdentityHostAuthenticationTests" /> asserts the path <em>constants</em>,
+///             which is not the same claim.
+///         </b> A constant that says <c>/connect/token</c> proves nothing
 ///         about whether the token endpoint is at that path, whether PKCE is required, or whether the
 ///         client-credentials flow the constant's neighbours describe is actually allowed. This file
 ///         calls <see cref="IdentityHostOpenIddict.AddIdentityHostOpenIddict" /> and reads

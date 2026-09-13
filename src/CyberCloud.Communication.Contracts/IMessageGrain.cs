@@ -13,16 +13,22 @@ namespace CyberCloud.Communication.Contracts;
 ///     </para>
 ///     <para>
 ///         <b>Why the key <i>is</i> the idempotency mechanism.</b> docs/plan/17 § The parts that are
-///         actually the work wants <i>"per-message status, retry with backoff, and idempotency in
-///         one place"</i>. Deriving the key from the caller's key puts all three in this activation:
+///         actually the work wants
+///         <i>
+///             "per-message status, retry with backoff, and idempotency in
+///             one place"
+///         </i>. Deriving the key from the caller's key puts all three in this activation:
 ///         a retry addresses the same grain, finds a recorded send, and gets the original snapshot
 ///         back without a carrier call. There is no index to consult, so there is no window in which
 ///         two concurrent retries both miss it — Orleans serializes calls to one activation, which
 ///         is the property that makes this correct rather than merely likely.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Hot tier, and docs/plan/17 § The parts that are actually the work says so directly:
-///         "Message grains (hot tier, TTL'd)".</b> The argument holds up against docs/plan/05
+///         ⚠
+///         <b>
+///             Hot tier, and docs/plan/17 § The parts that are actually the work says so directly:
+///             "Message grains (hot tier, TTL'd)".
+///         </b> The argument holds up against docs/plan/05
 ///         § Choosing a tier's test. What is lost if the hot tier is flushed is the ability to answer
 ///         "did this arrive" for messages sent in the retention window, and the ability to collapse a
 ///         retry that arrives after the flush. Neither is a record of account: the money is in
@@ -95,8 +101,11 @@ public interface IMessageGrain : IGrainWithStringKey {
     /// <returns>
     ///     The updated snapshot.
     ///     <para>
-    ///         ⚠ <b>Late, duplicate and out-of-order receipts are all normal and none of them is an
-    ///         error.</b> A receipt for a status the message has already passed is recorded and
+    ///         ⚠
+    ///         <b>
+    ///             Late, duplicate and out-of-order receipts are all normal and none of them is an
+    ///             error.
+    ///         </b> A receipt for a status the message has already passed is recorded and
     ///         ignored; a second copy of one already seen is recorded once. Carriers retry their
     ///         webhooks, and a delivery pipeline that treats a retry as a fault alerts on the
     ///         carrier working correctly.
@@ -123,8 +132,11 @@ public interface IMessageGrain : IGrainWithStringKey {
     ///         writing the record and hearing back from the carrier — so nobody knows whether it
     ///         went. Retrying automatically would resolve that ambiguity towards a duplicate, and
     ///         docs/plan/17 § The parts that are actually the work is explicit about which way to
-    ///         resolve it: <i>"an OTP sent twice is confusing; an invoice notice sent twice is a
-    ///         support call"</i>. So the platform holds, reports, and lets a human or a caller who
+    ///         resolve it:
+    ///         <i>
+    ///             "an OTP sent twice is confusing; an invoice notice sent twice is a
+    ///             support call"
+    ///         </i>. So the platform holds, reports, and lets a human or a caller who
     ///         knows the message is safe to repeat say so.
     ///     </para>
     ///     <para>

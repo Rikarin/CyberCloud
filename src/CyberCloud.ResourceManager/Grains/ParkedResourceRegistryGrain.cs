@@ -16,16 +16,22 @@ namespace CyberCloud.ResourceManager.Grains;
 ///         that already has one place.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It never reaches another grain, which is what makes it safe to call from the middle
-///         of three other choreographies.</b> <c>OperationGrain.ParkAsync</c> calls it between two
+///         ⚠
+///         <b>
+///             It never reaches another grain, which is what makes it safe to call from the middle
+///             of three other choreographies.
+///         </b> <c>OperationGrain.ParkAsync</c> calls it between two
 ///         writes it is retrying, and <c>ResourceManagerService</c> calls it on the request path with
 ///         a caller waiting. A registry that read the index to "verify" an entry would put a second
 ///         grain hop inside both, and would still be reading a value that can change the moment it
 ///         answers.
 ///     </para>
 ///     <para>
-///         ⚠ <b>That is also why the expiry sweeper is a grain of its own rather than a reminder
-///         here (2026-09-05, issue #12).</b> A sweep calls <c>IResourceManager.PurgeExpiredAsync</c>
+///         ⚠
+///         <b>
+///             That is also why the expiry sweeper is a grain of its own rather than a reminder
+///             here (2026-09-05, issue #12).
+///         </b> A sweep calls <c>IResourceManager.PurgeExpiredAsync</c>
 ///         and a purge calls <see cref="UnparkAsync" />, so a reminder on <i>this</i> activation
 ///         would await a call back into itself; and one turn at a time means a sweep in flight would
 ///         delay every park and unpark in the group, which is the property the paragraph above
@@ -35,7 +41,8 @@ namespace CyberCloud.ResourceManager.Grains;
 ///     </para>
 /// </remarks>
 public sealed class ParkedResourceRegistryGrain(
-    [PersistentState("parkedResources", StorageTiers.Durable)] IPersistentState<ParkedResourceRegistryState> state,
+    [PersistentState("parkedResources", StorageTiers.Durable)]
+    IPersistentState<ParkedResourceRegistryState> state,
     IClock clock
 )
     : Grain, IParkedResourceRegistryGrain {
@@ -83,9 +90,8 @@ public sealed class ParkedResourceRegistryGrain(
             return Result.Success;
         }
 
-        state.State.Entries[address.Id] = new() {
-            Path = address.Path, ResourceId = address.Id, ParkedAt = clock.UtcNow
-        };
+        state.State.Entries[address.Id] =
+            new() { Path = address.Path, ResourceId = address.Id, ParkedAt = clock.UtcNow };
 
         await state.WriteStateAsync();
         return Result.Success;
@@ -138,8 +144,11 @@ public sealed class ParkedResourceRegistryGrain(
     ///     Whether an address or a collection names a different resource group than this one.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Checked rather than trusted, exactly as <c>IResourceGroupGrain.BeginCreateAsync</c>
-    ///     checks it.</b> Every caller builds this grain's key from the same address it then passes
+    ///     ⚠
+    ///     <b>
+    ///         Checked rather than trusted, exactly as <c>IResourceGroupGrain.BeginCreateAsync</c>
+    ///         checks it.
+    ///     </b> Every caller builds this grain's key from the same address it then passes
     ///     in, so a mismatch means our own code composed a key from one address and an argument from
     ///     another — and the quiet version of that is a resource recorded as recoverable in somebody
     ///     else's group, where the restore that would find it is a restore nobody is entitled to

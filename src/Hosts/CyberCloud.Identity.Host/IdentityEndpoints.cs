@@ -22,8 +22,10 @@ namespace CyberCloud.Identity.Host;
 ///         page has to do, so whoever builds them is not reverse-engineering the protocol.
 ///     </para>
 ///     <para>
-///         <b>The pages are built and they live in
-///         <c>portal/apps/identity</c></b> — a second Angular app in the portal workspace, served
+///         <b>
+///             The pages are built and they live in
+///             <c>portal/apps/identity</c>
+///         </b> — a second Angular app in the portal workspace, served
 ///         from this origin. <c>src/app/identity-api.ts</c> is the counterparty to every contract in
 ///         <c>Api/IdentityApiContracts.cs</c>, and the two are kept in step by hand: a name changed
 ///         on one side and not the other produces a field that is <c>undefined</c> rather than an
@@ -38,8 +40,11 @@ namespace CyberCloud.Identity.Host;
 ///         at <c>/api/signin/otp</c> both work today.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Password reset is owed for a specific reason rather than for want of a caller, and
-///         the reason is a timing oracle.</b> Everything it needs now exists —
+///         ⚠
+///         <b>
+///             Password reset is owed for a specific reason rather than for want of a caller, and
+///             the reason is a timing oracle.
+///         </b> Everything it needs now exists —
 ///         <c>IUserGrain.IssueOtpAsync</c> mints and delivers a code, and
 ///         <see cref="OtpPurpose.PasswordReset" /> is a purpose it takes. What does not exist is a
 ///         way to send one without <i>waiting</i> for the carrier: docs/plan/11 § Credentials
@@ -58,8 +63,11 @@ namespace CyberCloud.Identity.Host;
 ///     <list type="number">
 ///         <item>
 ///             <b>Ask for the address first, and only then offer credentials.</b>
-///             <c>POST /api/signin/begin</c> returns the offered credential kinds <i>in
-///             <see cref="CredentialKind" /> order</i>, which puts a passkey first — docs/plan/11
+///             <c>POST /api/signin/begin</c> returns the offered credential kinds
+///             <i>
+///                 in
+///                 <see cref="CredentialKind" /> order
+///             </i>, which puts a passkey first — docs/plan/11
 ///             § Credentials makes it the default rather than an upsell. ⚠ It returns the same list
 ///             shape for an address with no account, because otherwise the page enumerates on the
 ///             platform's behalf.
@@ -180,8 +188,11 @@ public static class IdentityEndpoints {
     ///         renders the identical string for the same reason.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Under <c>/api</c>, so the cookie handler answers <c>401</c> rather than
-    ///         redirecting.</b> <see cref="IdentityHostAuthentication" />'s <c>OnRedirectToLogin</c>
+    ///         ⚠
+    ///         <b>
+    ///             Under <c>/api</c>, so the cookie handler answers <c>401</c> rather than
+    ///             redirecting.
+    ///         </b> <see cref="IdentityHostAuthentication" />'s <c>OnRedirectToLogin</c>
     ///         keys off that prefix; a script-called endpoint outside it would receive a <c>200</c>
     ///         carrying a sign-in page, which every caller then fails to parse.
     ///     </para>
@@ -275,7 +286,8 @@ public static class IdentityEndpoints {
                 SignInApi api,
                 CancellationToken cancellationToken
             ) => await IssueAsync(context, await api.VerifyTotpAsync(request, context.User, cancellationToken))
-        ).RequireAuthorization();
+        )
+            .RequireAuthorization();
 
         // ── The delivered second factor — docs/plan/11 § Credentials' email OTP row ────────────
         //
@@ -291,10 +303,9 @@ public static class IdentityEndpoints {
                 HttpContext context,
                 SignInApi api,
                 CancellationToken cancellationToken
-            ) => Results.Ok(
-                (await api.SendEmailOtpAsync(request, context.User, cancellationToken)).Response
-            )
-        ).RequireAuthorization();
+            ) => Results.Ok((await api.SendEmailOtpAsync(request, context.User, cancellationToken)).Response)
+        )
+            .RequireAuthorization();
 
         app.MapPost(
             "/api/signin/otp",
@@ -304,7 +315,8 @@ public static class IdentityEndpoints {
                 SignInApi api,
                 CancellationToken cancellationToken
             ) => await IssueAsync(context, await api.VerifyEmailOtpAsync(request, context.User, cancellationToken))
-        ).RequireAuthorization();
+        )
+            .RequireAuthorization();
 
         app.MapPost(
             "/api/signin/recovery-code",
@@ -317,7 +329,8 @@ public static class IdentityEndpoints {
                 context,
                 await api.RedeemRecoveryCodeAsync(request, context.User, cancellationToken)
             )
-        ).RequireAuthorization();
+        )
+            .RequireAuthorization();
     }
 
     /// <summary>

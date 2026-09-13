@@ -3,8 +3,8 @@ using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
-using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.SignIn;
 using CyberCloud.Tenancy.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,8 +41,11 @@ public sealed class TestClock : IClock {
 ///     Argon2id at parameters a test suite can afford.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Reducing the cost does not weaken the timing assertion, and it is worth being precise
-///     about why.</b> The property under test is that the exists and does-not-exist branches take the
+///     ⚠
+///     <b>
+///         Reducing the cost does not weaken the timing assertion, and it is worth being precise
+///         about why.
+///     </b> The property under test is that the exists and does-not-exist branches take the
 ///     <i>same</i> time, not that either takes a particular time. Both branches run the same
 ///     <c>Verify</c> against the same parameters, so lowering them scales both identically. At
 ///     production parameters (<c>m=64MB, t=3, p=4</c>) one verification is tens of milliseconds and
@@ -54,11 +57,7 @@ public sealed class TestClock : IClock {
 /// </remarks>
 public static class CheapArgon2 {
     /// <summary>8 MB, one pass, one lane. Fast enough for a suite, real enough to be the same code.</summary>
-    public static Argon2idOptions Options { get; } = new() {
-        MemoryKibibytes = 8_192,
-        Iterations = 1,
-        Parallelism = 1
-    };
+    public static Argon2idOptions Options { get; } = new() { MemoryKibibytes = 8_192, Iterations = 1, Parallelism = 1 };
 
     /// <summary>A hasher at <see cref="Options" />, with no pepper.</summary>
     public static Argon2idPasswordHasher Hasher { get; } = new(Options);
@@ -113,12 +112,7 @@ public sealed class ClusterSigner : IDisposable {
     /// <summary>What <c>IClusterOidcDiscovery</c> would have recorded for this cluster.</summary>
     /// <param name="at">When it was read.</param>
     public ClusterOidcIssuer AsRecorded(DateTimeOffset at) =>
-        new() {
-            Issuer = Issuer,
-            KeySetUri = Issuer + "/openid/v1/jwks",
-            PublicKeySetJson = KeySetJson,
-            ReadAt = at
-        };
+        new() { Issuer = Issuer, KeySetUri = Issuer + "/openid/v1/jwks", PublicKeySetJson = KeySetJson, ReadAt = at };
 
     /// <summary>Mints a projected service-account token the way a kubelet would.</summary>
     /// <param name="namespace">The namespace.</param>
@@ -360,13 +354,11 @@ public sealed class RecordingGrainFactory(IGrainFactory inner) : IGrainFactory {
 
     /// <inheritdoc />
     public TGrainObserverInterface CreateObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver =>
-        inner.CreateObjectReference<TGrainObserverInterface>(obj);
+        where TGrainObserverInterface : IGrainObserver => inner.CreateObjectReference<TGrainObserverInterface>(obj);
 
     /// <inheritdoc />
     public void DeleteObjectReference<TGrainObserverInterface>(IGrainObserver obj)
-        where TGrainObserverInterface : IGrainObserver =>
-        inner.DeleteObjectReference<TGrainObserverInterface>(obj);
+        where TGrainObserverInterface : IGrainObserver => inner.DeleteObjectReference<TGrainObserverInterface>(obj);
 
     /// <inheritdoc />
     public TGrainInterface GetGrain<TGrainInterface>(GrainId grainId)
@@ -426,8 +418,7 @@ public sealed class IdentityCluster : IAsyncLifetime {
 
     /// <summary>A tenant-qualified grain factory.</summary>
     /// <param name="tenant">The tenant.</param>
-    public TenantGrainFactory For(Guid tenant) =>
-        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>A user grain.</summary>
     /// <param name="userId">Which user.</param>

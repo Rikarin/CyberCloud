@@ -1,6 +1,6 @@
 using CyberCloud.Core.Time;
-using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Conformance;
+using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
 using System.Text.Json;
 
@@ -10,8 +10,11 @@ namespace CyberCloud.Providers.Mail.Tests;
 ///     The doubles this provider's hand-written tests drive the reconciler with.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>They are this provider's own rather than shared, which is the convention every family
-///     follows.</b> A shared recording connection would have to satisfy every provider's assertions
+///     ⚠
+///     <b>
+///         They are this provider's own rather than shared, which is the convention every family
+///         follows.
+///     </b> A shared recording connection would have to satisfy every provider's assertions
 ///     at once, and each family needs a different set of misbehaviours out of it.
 ///     <see cref="InMemorySecretVault" /> is the exception and IS shared, because a vault's
 ///     behaviour — <c>cas=0</c> writes once, resolves read back — is the platform's contract rather
@@ -68,9 +71,7 @@ static class MailHarness {
             connection,
             store,
             new NullLog()
-        ) {
-            SecretWriter = store
-        };
+        ) { SecretWriter = store };
     }
 }
 
@@ -164,15 +165,13 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
     /// <summary>The body applied for one object, or <see langword="null" />.</summary>
     /// <param name="target">The object.</param>
-    public string? Peek(ObjectRef target) =>
-        Objects.TryGetValue(Key(target), out var json) ? json : null;
+    public string? Peek(ObjectRef target) => Objects.TryGetValue(Key(target), out var json) ? json : null;
 
     /// <summary>
     ///     ⚠ Keyed by kind, namespace AND name. The namespace is in it because the cross-tenant test
     ///     puts the same domain name in two tenants.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

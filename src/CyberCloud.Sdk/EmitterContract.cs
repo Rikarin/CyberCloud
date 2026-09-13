@@ -9,20 +9,25 @@ namespace CyberCloud.Sdk;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/21 § Generation draws the line: <i>"Hand-written on top: the credential types, the
-///         pipeline policies, the convenience methods (<c>GetConnectionStringAsync</c>), and the tests.
-///         Everything else is regenerated per release and never edited."</i>
+///         docs/plan/21 § Generation draws the line:
+///         <i>
+///             "Hand-written on top: the credential types, the
+///             pipeline policies, the convenience methods (<c>GetConnectionStringAsync</c>), and the tests.
+///             Everything else is regenerated per release and never edited."
+///         </i>
 ///     </para>
-///
-///     <para><b>─── 1. What the emitter must produce ───</b></para>
-///
+///     <para>
+///         <b>─── 1. What the emitter must produce ───</b>
+///     </para>
 ///     <para>
 ///         <b>Per resource type</b> (one <c>x-cybercloud-resource-type</c> in
 ///         <c>openapi/{version}.json</c>), four <c>partial</c> types:
 ///     </para>
 ///     <list type="table">
 ///         <item>
-///             <term><c>{Type}Data</c></term>
+///             <term>
+///                 <c>{Type}Data</c>
+///             </term>
 ///             <description>
 ///                 The body. Properties from the type's schema; nullable reference types honouring
 ///                 <c>required</c>; a constructor taking the required members and init-only setters for
@@ -37,13 +42,18 @@ namespace CyberCloud.Sdk;
 ///             </description>
 ///         </item>
 ///         <item>
-///             <term><c>{Type}Resource</c></term>
+///             <term>
+///                 <c>{Type}Resource</c>
+///             </term>
 ///             <description>
 ///                 One instance. Holds a <see cref="CyberCloudClientContext" /> and its own URL, exposes
 ///                 <c>Data</c>, and carries the type's operations and its
 ///                 <c>x-cybercloud-action</c> actions.
-///                 ⚠ <b><c>Data</c> is <c>required</c>, so a hand-written constructor that assigns it
-///                 needs <c>[SetsRequiredMembers]</c>.</b> It was <c>= new()</c> until 2026-09-05, and
+///                 ⚠
+///                 <b>
+///                     <c>Data</c> is <c>required</c>, so a hand-written constructor that assigns it
+///                     needs <c>[SetsRequiredMembers]</c>.
+///                 </b> It was <c>= new()</c> until 2026-09-05, and
 ///                 that is <c>CS9035</c> for every type whose schema requires a property — the emitter
 ///                 gives those members C#'s own <c>required</c> so that a body the API would refuse
 ///                 does not compile, and a defaulted empty body is precisely such a body. 110 of them
@@ -55,7 +65,9 @@ namespace CyberCloud.Sdk;
 ///             </description>
 ///         </item>
 ///         <item>
-///             <term><c>{Type}Collection</c></term>
+///             <term>
+///                 <c>{Type}Collection</c>
+///             </term>
 ///             <description>
 ///                 The children of one parent scope: <c>GetAsync</c>, <c>GetIfExistsAsync</c>,
 ///                 <c>ExistsAsync</c>, <c>GetAll()</c> returning
@@ -64,7 +76,9 @@ namespace CyberCloud.Sdk;
 ///             </description>
 ///         </item>
 ///         <item>
-///             <term><c>{Type}OperationSource</c></term>
+///             <term>
+///                 <c>{Type}OperationSource</c>
+///             </term>
 ///             <description>
 ///                 An <see cref="IOperationSource{T}" /> that turns the resource <c>GET</c> that follows
 ///                 a successful operation into a <c>{Type}Resource</c>.
@@ -85,8 +99,9 @@ namespace CyberCloud.Sdk;
 ///         stand-in in <c>CyberCloud.Sdk.Tests/StandIn/</c> was compiled, which is what that stand-in
 ///         is for.
 ///     </para>
-///
-///     <para><b>─── 2. What the emitter must NOT produce ───</b></para>
+///     <para>
+///         <b>─── 2. What the emitter must NOT produce ───</b>
+///     </para>
 ///     <list type="bullet">
 ///         <item>
 ///             <b>The <c>Error</c>, <c>ErrorCode</c> and <c>ErrorResponse</c> schemas.</b> They are
@@ -95,14 +110,18 @@ namespace CyberCloud.Sdk;
 ///             a type that may or may not have been emitted this release.
 ///         </item>
 ///         <item>
-///             <b>The <c>OperationStatus</c>, <c>OperationState</c> and <c>OperationProgress</c>
-///             schemas.</b> They are <see cref="OperationStatus" />, <see cref="OperationState" /> and
+///             <b>
+///                 The <c>OperationStatus</c>, <c>OperationState</c> and <c>OperationProgress</c>
+///                 schemas.
+///             </b> They are <see cref="OperationStatus" />, <see cref="OperationState" /> and
 ///             <see cref="OperationProgress" />, for the same reason —
 ///             <see cref="OperationPoller" /> parses them.
 ///         </item>
 ///         <item>
-///             <b>Anything to do with authentication, retry, correlation or the api-version query
-///             parameter.</b> All four are pipeline handlers
+///             <b>
+///                 Anything to do with authentication, retry, correlation or the api-version query
+///                 parameter.
+///             </b> All four are pipeline handlers
 ///             (<see cref="BearerTokenHandler" />, <see cref="RetryHandler" />,
 ///             <see cref="CorrelationRequestIdHandler" />, <see cref="ApiVersionHandler" />) and a
 ///             generated method that set any of them by hand would be a second implementation that
@@ -112,8 +131,9 @@ namespace CyberCloud.Sdk;
 ///             <b>Synchronous overloads.</b> See § 4.
 ///         </item>
 ///     </list>
-///
-///     <para><b>─── 3. The exact call shapes ───</b></para>
+///     <para>
+///         <b>─── 3. The exact call shapes ───</b>
+///     </para>
 ///     <para>A read:</para>
 ///     <code>
 ///     public virtual async Task&lt;Response&lt;WidgetResource&gt;&gt; GetAsync(string name, CancellationToken cancellationToken = default) {
@@ -164,8 +184,9 @@ namespace CyberCloud.Sdk;
 ///             return new Page&lt;WidgetResource&gt;(values, nextLink, response);
 ///         }, cancellationToken);
 ///     </code>
-///
-///     <para><b>─── 4. Async only ───</b></para>
+///     <para>
+///         <b>─── 4. Async only ───</b>
+///     </para>
 ///     <para>
 ///         ⚠ There is no synchronous entry point anywhere in this assembly and the emitter must not
 ///         invent one. Every operation performs I/O; a synchronous wrapper over that deadlocks a caller
@@ -174,8 +195,9 @@ namespace CyberCloud.Sdk;
 ///         available — Azure.Core's <c>Operation</c> declares an abstract synchronous
 ///         <c>UpdateStatus</c> and would have forced one.
 ///     </para>
-///
-///     <para><b>─── 5. What the SDK needs from the identity server ───</b></para>
+///     <para>
+///         <b>─── 5. What the SDK needs from the identity server ───</b>
+///     </para>
 ///     <para>
 ///         <c>CyberCloud.Identity.Host</c> (docs/plan/11 § Hosts) does not exist yet. This SDK is built
 ///         against its <b>discovery document</b> rather than against hard-coded paths, so the list
@@ -222,8 +244,9 @@ namespace CyberCloud.Sdk;
 ///             claims would start depending on them.
 ///         </item>
 ///     </list>
-///
-///     <para><b>─── 6. What the SDK needs from the gateway ───</b></para>
+///     <para>
+///         <b>─── 6. What the SDK needs from the gateway ───</b>
+///     </para>
 ///     <list type="bullet">
 ///         <item>
 ///             <c>202</c> on every long-running write, with <b>both</b> <c>Azure-AsyncOperation</c>

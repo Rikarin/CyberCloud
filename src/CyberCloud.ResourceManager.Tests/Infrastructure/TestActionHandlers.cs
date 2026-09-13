@@ -81,9 +81,7 @@ public sealed class ListKeysHandler : IResourceActionHandler {
                 ReturnTheWrongShape
                     // Drops the required /secretAccessKey and invents a property the schema refuses.
                     ? new JsonObject { ["keys"] = new JsonArray { KeyId } }.ToJsonString()
-                    : new JsonObject {
-                        ["accessKeyId"] = KeyId, ["secretAccessKey"] = Secret
-                    }.ToJsonString()
+                    : new JsonObject { ["accessKeyId"] = KeyId, ["secretAccessKey"] = Secret }.ToJsonString()
             )
         );
 }

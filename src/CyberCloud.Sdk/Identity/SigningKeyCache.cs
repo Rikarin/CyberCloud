@@ -10,8 +10,11 @@ namespace CyberCloud.Sdk;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>A client that caches JWKS forever breaks on day 31, and this is why.</b> docs/plan/11
-///         § Protocol: access tokens are <i>"signed with a rotating key set (30-day rotation, both keys
-///         published for 60)"</i>. So a key that verified every token last month verifies none this
+///         § Protocol: access tokens are
+///         <i>
+///             "signed with a rotating key set (30-day rotation, both keys
+///             published for 60)"
+///         </i>. So a key that verified every token last month verifies none this
 ///         month, and the failure mode of an infinite cache is a client that worked for a month and
 ///         then stopped, everywhere at once, with no deploy to blame.
 ///     </para>
@@ -64,22 +67,25 @@ public sealed class SigningKeyCache {
     public async ValueTask<JsonWebKey?> GetKeyAsync(string? keyId, CancellationToken cancellationToken) {
         var now = time.GetUtcNow();
 
-        if (keys is { } cached && now - fetchedAt < Lifetime && Find(cached, keyId) is { } hit)
+        if (keys is { } cached && now - fetchedAt < Lifetime && Find(cached, keyId) is { } hit) {
             return hit;
+        }
 
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try {
             now = time.GetUtcNow();
 
-            if (keys is { } raced && Find(raced, keyId) is { } found && now - fetchedAt < Lifetime)
+            if (keys is { } raced && Find(raced, keyId) is { } found && now - fetchedAt < Lifetime) {
                 return found;
+            }
 
             // The rate limit on provoked refetches. Inside it, an unknown kid answers "no key" rather
             // than fetching — the token is refused either way, and a refusal that costs the identity
             // server nothing is the one to prefer.
-            if (keys is not null && now - fetchedAt < MinimumRefreshInterval)
+            if (keys is not null && now - fetchedAt < MinimumRefreshInterval) {
                 return Find(keys, keyId);
+            }
 
             keys = await identity.RequestKeysAsync(cancellationToken).ConfigureAwait(false);
             fetchedAt = now;
@@ -93,8 +99,9 @@ public sealed class SigningKeyCache {
 
     static JsonWebKey? Find(JsonWebKeySet set, string? keyId) {
         foreach (var key in set.Keys) {
-            if (keyId is null || string.Equals(key.Kid, keyId, StringComparison.Ordinal))
+            if (keyId is null || string.Equals(key.Kid, keyId, StringComparison.Ordinal)) {
                 return key;
+            }
         }
 
         return null;
@@ -133,14 +140,16 @@ public static class IdTokenValidator {
         string expectedIssuer,
         string expectedAudience,
         DateTimeOffset now,
-        CancellationToken cancellationToken = default) {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
         ArgumentNullException.ThrowIfNull(keys);
 
         var parts = token.Split('.');
 
-        if (parts.Length != 3)
+        if (parts.Length != 3) {
             throw new AuthenticationFailedException("The id token is not a compact JWS.");
+        }
 
         using var header = Parse(parts[0], "header");
         var algorithm = header.RootElement.TryGetProperty("alg", out var alg) ? alg.GetString() : null;
@@ -148,13 +157,15 @@ public static class IdTokenValidator {
 
         var key = await keys.GetKeyAsync(keyId, cancellationToken).ConfigureAwait(false)
             ?? throw new AuthenticationFailedException(
-                $"The id token names signing key '{keyId}', which the identity server does not publish.");
+                $"The id token names signing key '{keyId}', which the identity server does not publish."
+            );
 
         var signed = Encoding.ASCII.GetBytes($"{parts[0]}.{parts[1]}");
         var signature = Base64Url.Decode(parts[2]);
 
-        if (!Verify(algorithm, key, signed, signature))
+        if (!Verify(algorithm, key, signed, signature)) {
             throw new AuthenticationFailedException("The id token's signature is not valid.");
+        }
 
         var payload = Parse(parts[1], "payload");
 
@@ -170,43 +181,57 @@ public static class IdTokenValidator {
     }
 
     static void Check(JsonElement claims, string expectedIssuer, string expectedAudience, DateTimeOffset now) {
-        if (!claims.TryGetProperty("iss", out var issuer) || !string.Equals(issuer.GetString(), expectedIssuer, StringComparison.Ordinal))
-            throw new AuthenticationFailedException("The id token was issued by a different issuer than the discovery document names.");
+        if (!claims.TryGetProperty("iss", out var issuer)
+            || !string.Equals(issuer.GetString(), expectedIssuer, StringComparison.Ordinal)) {
+            throw new AuthenticationFailedException(
+                "The id token was issued by a different issuer than the discovery document names."
+            );
+        }
 
-        if (!HasAudience(claims, expectedAudience))
+        if (!HasAudience(claims, expectedAudience)) {
             throw new AuthenticationFailedException("The id token was not issued to this client.");
+        }
 
         // ⚠ 60 seconds of leeway, and no more. Clock skew between a developer's laptop and a server is
         // real; a wider window is a longer life for a stolen token.
         var leeway = TimeSpan.FromSeconds(60);
 
-        if (claims.TryGetProperty("exp", out var exp) && DateTimeOffset.FromUnixTimeSeconds(exp.GetInt64()) + leeway < now)
+        if (claims.TryGetProperty("exp", out var exp)
+            && DateTimeOffset.FromUnixTimeSeconds(exp.GetInt64()) + leeway < now) {
             throw new AuthenticationFailedException("The id token has expired.");
+        }
 
-        if (claims.TryGetProperty("nbf", out var nbf) && DateTimeOffset.FromUnixTimeSeconds(nbf.GetInt64()) - leeway > now)
+        if (claims.TryGetProperty("nbf", out var nbf)
+            && DateTimeOffset.FromUnixTimeSeconds(nbf.GetInt64()) - leeway > now) {
             throw new AuthenticationFailedException("The id token is not valid yet.");
+        }
     }
 
     static bool HasAudience(JsonElement claims, string expected) {
-        if (!claims.TryGetProperty("aud", out var audience))
+        if (!claims.TryGetProperty("aud", out var audience)) {
             return false;
+        }
 
-        if (audience.ValueKind is JsonValueKind.String)
+        if (audience.ValueKind is JsonValueKind.String) {
             return string.Equals(audience.GetString(), expected, StringComparison.Ordinal);
+        }
 
-        if (audience.ValueKind is not JsonValueKind.Array)
+        if (audience.ValueKind is not JsonValueKind.Array) {
             return false;
+        }
 
         foreach (var item in audience.EnumerateArray()) {
-            if (item.ValueKind is JsonValueKind.String && string.Equals(item.GetString(), expected, StringComparison.Ordinal))
+            if (item.ValueKind is JsonValueKind.String
+                && string.Equals(item.GetString(), expected, StringComparison.Ordinal)) {
                 return true;
+            }
         }
 
         return false;
     }
 
-    static bool Verify(string? algorithm, JsonWebKey key, byte[] signed, byte[] signature)
-        => algorithm switch {
+    static bool Verify(string? algorithm, JsonWebKey key, byte[] signed, byte[] signature) =>
+        algorithm switch {
             "RS256" => VerifyRsa(key, signed, signature, HashAlgorithmName.SHA256),
             "RS384" => VerifyRsa(key, signed, signature, HashAlgorithmName.SHA384),
             "RS512" => VerifyRsa(key, signed, signature, HashAlgorithmName.SHA512),
@@ -214,22 +239,28 @@ public static class IdTokenValidator {
             "ES384" => VerifyEcdsa(key, signed, signature, HashAlgorithmName.SHA384),
             // ⚠ Everything else, including "none", lands here. There is no arm that returns true
             // without checking a signature and there must never be one.
-            _ => throw new AuthenticationFailedException($"The id token is signed with an unsupported algorithm '{algorithm}'."),
+            _ => throw new AuthenticationFailedException(
+                $"The id token is signed with an unsupported algorithm '{algorithm}'."
+            ),
         };
 
     static bool VerifyRsa(JsonWebKey key, byte[] signed, byte[] signature, HashAlgorithmName hash) {
-        if (key.N is null || key.E is null)
+        if (key.N is null || key.E is null) {
             return false;
+        }
 
         using var rsa = RSA.Create();
-        rsa.ImportParameters(new RSAParameters { Modulus = Base64Url.Decode(key.N), Exponent = Base64Url.Decode(key.E) });
+        rsa.ImportParameters(
+            new RSAParameters { Modulus = Base64Url.Decode(key.N), Exponent = Base64Url.Decode(key.E) }
+        );
 
         return rsa.VerifyData(signed, signature, hash, RSASignaturePadding.Pkcs1);
     }
 
     static bool VerifyEcdsa(JsonWebKey key, byte[] signed, byte[] signature, HashAlgorithmName hash) {
-        if (key.X is null || key.Y is null)
+        if (key.X is null || key.Y is null) {
             return false;
+        }
 
         var curve = key.Crv switch {
             "P-256" => ECCurve.NamedCurves.nistP256,
@@ -238,10 +269,11 @@ public static class IdTokenValidator {
             _ => throw new AuthenticationFailedException($"The id token names an unsupported curve '{key.Crv}'."),
         };
 
-        using var ecdsa = ECDsa.Create(new ECParameters {
-            Curve = curve,
-            Q = new ECPoint { X = Base64Url.Decode(key.X), Y = Base64Url.Decode(key.Y) },
-        });
+        using var ecdsa = ECDsa.Create(
+            new ECParameters {
+                Curve = curve, Q = new ECPoint { X = Base64Url.Decode(key.X), Y = Base64Url.Decode(key.Y) }
+            }
+        );
 
         return ecdsa.VerifyData(signed, signature, hash);
     }

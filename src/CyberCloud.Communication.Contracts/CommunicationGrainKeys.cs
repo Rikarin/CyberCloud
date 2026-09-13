@@ -10,15 +10,21 @@ namespace CyberCloud.Communication.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ADR-002 (docs/plan/02 § ADR-002) makes <see cref="GrainKeys" /> <i>"the only type allowed
-///         to build the within-tenant part"</i>, and every method here ends in a call to it. This
+///         ADR-002 (docs/plan/02 § ADR-002) makes <see cref="GrainKeys" />
+///         <i>
+///             "the only type allowed
+///             to build the within-tenant part"
+///         </i>, and every method here ends in a call to it. This
 ///         type is in <c>.Contracts</c> rather than in the implementation assembly — unlike
 ///         <c>MeteringGrainKeys</c> — because the callers are outside the module: identity addresses
 ///         a message grain to send an OTP, and the gateway addresses one to answer a status read.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every grain here is keyed <c>res/{guid:N}</c>, and four of the five guids are
-///         derived rather than allocated.</b> <see cref="GrainKeys" /> accepts a closed set of key
+///         ⚠
+///         <b>
+///             Every grain here is keyed <c>res/{guid:N}</c>, and four of the five guids are
+///             derived rather than allocated.
+///         </b> <see cref="GrainKeys" /> accepts a closed set of key
 ///         shapes; adding <c>msg/{id}</c> would be a change to <see cref="GrainKeys" /> in
 ///         <c>CyberCloud.Core</c>, reviewed like a schema change, which is the same wall
 ///         <c>MeteringGrainKeys</c> stopped at and made the same call about. Two of the five are
@@ -40,8 +46,11 @@ namespace CyberCloud.Communication.Contracts;
 ///         mechanism: a retry carrying the same key computes the same guid, addresses the same
 ///         activation, and finds the send already recorded. No index grain, no lookup, no window
 ///         where two callers both miss the index and both send. docs/plan/17 § The parts that are
-///         actually the work asks for <i>"per-message status, retry with backoff, and idempotency in
-///         one place"</i>, and one place is what a deterministic key buys.
+///         actually the work asks for
+///         <i>
+///             "per-message status, retry with backoff, and idempotency in
+///             one place"
+///         </i>, and one place is what a deterministic key buys.
 ///     </para>
 /// </remarks>
 public static class CommunicationGrainKeys {

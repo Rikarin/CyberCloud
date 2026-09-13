@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.Terminal.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THIS IS THE HALF <c>./build.sh Charts</c> DOES NOT REACH, AND IT IS THE HALF THAT
-///         MATTERS ON THIS ROW.</b> That target regenerates the chart's <c>@param</c> block from
+///         ⚠
+///         <b>
+///             THIS IS THE HALF <c>./build.sh Charts</c> DOES NOT REACH, AND IT IS THE HALF THAT
+///             MATTERS ON THIS ROW.
+///         </b> That target regenerates the chart's <c>@param</c> block from
 ///         <c>CloudConsoles.Schema2026</c> and byte-diffs it, so the configuration SURFACE cannot
 ///         drift. <c>ChartSurfaces</c> filters <c>templates/</c> out on purpose — no emitter has ever
 ///         read a Helm template — so the values behind the surface can, and here that means the sizing

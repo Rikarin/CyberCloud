@@ -5,8 +5,10 @@ namespace CyberCloud.Gateway.Host.Pipeline;
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>The numbers are the contract, not decoration.</b> docs/plan/10 § Request pipeline:
-///     <i>"Order matters and each step is here for a named reason … Steps 5 and 8 are the
-///     load-bearing ones."</i> <see cref="GatewayTrace" /> compares a request's actual sequence
+///     <i>
+///         "Order matters and each step is here for a named reason … Steps 5 and 8 are the
+///         load-bearing ones."
+///     </i> <see cref="GatewayTrace" /> compares a request's actual sequence
 ///     against <see cref="GatewayTrace.Canonical" />, so moving a stage fails a test rather than a
 ///     review — the same instrument <c>WriteTrace</c> uses for the write path.
 /// </remarks>

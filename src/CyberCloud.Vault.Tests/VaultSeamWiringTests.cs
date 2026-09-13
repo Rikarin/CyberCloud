@@ -19,8 +19,11 @@ namespace CyberCloud.Vault.Tests;
 ///         host reaches for a convenience which changes the default for all of them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Shaped after <c>OtpSeamWiringTests</c> on purpose, because that suite exists because
-///         of a real defect.</b> Three files claimed <c>UnavailableOtpDelivery</c> was what "every
+///         ⚠
+///         <b>
+///             Shaped after <c>OtpSeamWiringTests</c> on purpose, because that suite exists because
+///             of a real defect.
+///         </b> Three files claimed <c>UnavailableOtpDelivery</c> was what "every
 ///         host in this repository" gets while no host registered the seam at all, so the message it
 ///         existed to hand an operator at 03:00 could not be produced. The claim was checked and was
 ///         false. Every claim below is checked rather than asserted in prose, including the
@@ -79,11 +82,12 @@ public sealed class VaultSeamWiringTests {
         // rather than reasoned about here.
         var services = Compose(silo => Both(silo, managerFirst));
 
-        services.Count(x => x.ServiceType == typeof(ISecretResolver)).ShouldBe(
-            1,
-            "a host that opted in should have one ISecretResolver registration, not the real one "
-            + "stacked on a refusing one that GetServices would still hand out"
-        );
+        services.Count(x => x.ServiceType == typeof(ISecretResolver))
+            .ShouldBe(
+                1,
+                "a host that opted in should have one ISecretResolver registration, not the real one "
+                + "stacked on a refusing one that GetServices would still hand out"
+            );
     }
 
     [Fact]
@@ -94,10 +98,11 @@ public sealed class VaultSeamWiringTests {
         var builder = new ServiceCollectionSiloBuilder();
         builder.AddCyberCloudResourceManager();
 
-        builder.Services.Any(x => x.ServiceType == typeof(VaultOptions)).ShouldBeFalse(
-            "AddCyberCloudResourceManager must not drag the vault module into a silo that did not "
-            + "ask for it — module-layering.txt has no ResourceManager -> Vault line and could not"
-        );
+        builder.Services.Any(x => x.ServiceType == typeof(VaultOptions))
+            .ShouldBeFalse(
+                "AddCyberCloudResourceManager must not drag the vault module into a silo that did not "
+                + "ask for it — module-layering.txt has no ResourceManager -> Vault line and could not"
+            );
 
         builder.Services
             .BuildServiceProvider()
@@ -126,7 +131,7 @@ public sealed class VaultSeamWiringTests {
                 new Dictionary<string, string?> {
                     ["CyberCloud:Vault:Address"] = "https://openbao.cc-vault.svc:8200",
                     ["CyberCloud:Vault:Role"] = "cc-silo",
-                    ["CyberCloud:Vault:KvMountPath"] = "platform",
+                    ["CyberCloud:Vault:KvMountPath"] = "platform"
                 }
             )
             .Build();
@@ -137,11 +142,12 @@ public sealed class VaultSeamWiringTests {
         var provider = builder.Services.BuildServiceProvider();
 
         provider.GetRequiredService<ISecretResolver>().ShouldBeOfType<OpenBaoSecretResolver>();
-        provider.GetRequiredService<VaultOptions>().KvMountPath.ShouldBe(
-            "platform",
-            "the configuration-bound overload must bind the whole section, not only the two keys it "
-            + "validates"
-        );
+        provider.GetRequiredService<VaultOptions>()
+            .KvMountPath.ShouldBe(
+                "platform",
+                "the configuration-bound overload must bind the whole section, not only the two keys it "
+                + "validates"
+            );
     }
 
     static ISecretResolver Resolver(Action<ISiloBuilder> compose) =>

@@ -49,10 +49,11 @@ public sealed class WidgetDeclarationTests {
 
         registration.RequiresCluster.ShouldBeTrue();
 
-        registration.ApiVersions[0].Schema.Declares("/properties/clusterId").ShouldBeTrue(
-            "the type declares RequiresCluster and its schema does not declare /properties/clusterId, "
-            + "which is the only pointer the write path reads a cluster id from"
-        );
+        registration.ApiVersions[0].Schema.Declares("/properties/clusterId")
+            .ShouldBeTrue(
+                "the type declares RequiresCluster and its schema does not declare /properties/clusterId, "
+                + "which is the only pointer the write path reads a cluster id from"
+            );
     }
 
     [Fact]
@@ -115,9 +116,9 @@ public sealed class WidgetDeclarationTests {
         using var desired = JsonDocument.Parse(SampleWidgets.Body(Guid.NewGuid(), "hi"));
 
         SampleWidgets.Matches(
-                """{"data":{"message":"hi","enabled":"true","addedByAnotherController":"x"}}""",
-                desired.RootElement
-            )
+            """{"data":{"message":"hi","enabled":"true","addedByAnotherController":"x"}}""",
+            desired.RootElement
+        )
             .ShouldBeTrue();
 
         SampleWidgets.Matches("""{"data":{"message":"different","enabled":"true"}}""", desired.RootElement)
@@ -303,7 +304,10 @@ public sealed class WidgetReconcilerTests {
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
         var reconciler = new WidgetReconciler(new FixedClock());
-        var torn = await reconciler.DeleteAsync(Context(connection, desired.RootElement), TestContext.Current.CancellationToken);
+        var torn = await reconciler.DeleteAsync(
+            Context(connection, desired.RootElement),
+            TestContext.Current.CancellationToken
+        );
 
         torn.IsConverged.ShouldBeTrue();
         connection.Objects.ShouldBeEmpty();

@@ -9,8 +9,11 @@ namespace CyberCloud.Sdk;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>There is no background task and no timer of our own, and that is a design choice
-///         rather than an omission.</b> Every poll is driven by a caller that is awaiting —
+///         ⚠
+///         <b>
+///             There is no background task and no timer of our own, and that is a design choice
+///             rather than an omission.
+///         </b> Every poll is driven by a caller that is awaiting —
 ///         <c>WaitForCompletionAsync</c>, <c>UpdateStatusAsync</c> or the <c>GetProgressAsync</c>
 ///         enumerator. The only timer that ever exists is inside
 ///         <c>Task.Delay(interval, cancellationToken)</c>, which that token cancels and disposes. So a
@@ -48,7 +51,8 @@ sealed class OperationPoller {
         Uri requestUri,
         Response initialResponse,
         string operationName,
-        bool fetchResourceOnSuccess) {
+        bool fetchResourceOnSuccess
+    ) {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(requestUri);
         ArgumentNullException.ThrowIfNull(initialResponse);
@@ -61,10 +65,12 @@ sealed class OperationPoller {
         // happened, so this is a hard failure at construction rather than a null that surfaces later
         // as a NullReferenceException inside WaitForCompletionAsync.
         if (!initialResponse.TryGetHeader(CyberCloudHeaders.AsyncOperation, out var location)
-            || !Uri.TryCreate(location, UriKind.Absolute, out var uri))
+            || !Uri.TryCreate(location, UriKind.Absolute, out var uri)) {
             throw new CyberCloudRequestFailedException(
                 $"The response to {operationName} has no usable {CyberCloudHeaders.AsyncOperation} header, so the "
-                + "operation cannot be polled — docs/plan/10 § Long-running operations, over HTTP.");
+                + "operation cannot be polled — docs/plan/10 § Long-running operations, over HTTP."
+            );
+        }
 
         pollUri = uri;
 
@@ -116,25 +122,30 @@ sealed class OperationPoller {
     /// <summary>Throws when the operation reached a terminal failure.</summary>
     /// <exception cref="CyberCloudRequestFailedException">The operation failed or was cancelled.</exception>
     public void ThrowIfFailed() {
-        if (Status is not { } status || status.State is not (OperationState.Failed or OperationState.Canceled))
+        if (Status is not { } status || status.State is not (OperationState.Failed or OperationState.Canceled)) {
             return;
+        }
 
         // ⚠ The error is carried by the poll response, which is a 200 — the poll worked and reported a
         // failure. CyberCloudRequestFailedException's own doc comment says so, because a caller who
         // branched on Status alone would otherwise conclude the operation succeeded.
         throw new CyberCloudRequestFailedException(
             RawResponse,
-            status.Error ?? new CyberCloudError(
+            status.Error
+            ?? new CyberCloudError(
                 status.State is OperationState.Canceled ? "OperationCanceled" : "ProvisioningFailed",
-                $"{operationName} ended in state {status.State} without an error body."));
+                $"{operationName} ended in state {status.State} without an error body."
+            )
+        );
     }
 
     /// <summary>Waits the current delay, then polls once. The step the enumerating and waiting callers repeat.</summary>
     public async ValueTask PollAfterDelayAsync(CancellationToken cancellationToken) {
         var delay = CurrentDelay;
 
-        if (delay > TimeSpan.Zero)
+        if (delay > TimeSpan.Zero) {
             await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+        }
 
         await PollAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -146,20 +157,26 @@ sealed class OperationPoller {
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try {
-            if (HasCompleted || Interlocked.Read(ref pollCount) != observed)
+            if (HasCompleted || Interlocked.Read(ref pollCount) != observed) {
                 return;
+            }
 
             using var request = context.CreateRequest(HttpMethod.Get, pollUri);
             Apply(await context.Pipeline.SendAsync(request, cancellationToken).ConfigureAwait(false));
 
-            if (!HasCompleted || Status?.State is not OperationState.Succeeded || resourceUri is null || ResourceResponse is not null)
+            if (!HasCompleted
+                || Status?.State is not OperationState.Succeeded
+                || resourceUri is null
+                || ResourceResponse is not null) {
                 return;
+            }
 
             using var resource = context.CreateRequest(HttpMethod.Get, resourceUri);
             var response = await context.Pipeline.SendAsync(resource, cancellationToken).ConfigureAwait(false);
 
-            if (response.IsError)
+            if (response.IsError) {
                 throw new CyberCloudRequestFailedException(response);
+            }
 
             ResourceResponse = response;
         } finally {
@@ -175,8 +192,9 @@ sealed class OperationPoller {
         // A poll that fails is not an operation that fails: a 404 on the operation URL means the id is
         // wrong or has aged out, and a 429 means we polled too fast. Both are request failures and
         // carry the one error shape, so they are reported as themselves.
-        if (response.IsError)
+        if (response.IsError) {
             throw new CyberCloudRequestFailedException(response);
+        }
 
         var status = OperationStatus.Parse(response.Content);
 
@@ -187,8 +205,9 @@ sealed class OperationPoller {
         // by an enumerator about to see the operation finish.
         feed.Publish(status.Progress);
 
-        if (!status.IsTerminal)
+        if (!status.IsTerminal) {
             return;
+        }
 
         HasCompleted = true;
         feed.Complete();

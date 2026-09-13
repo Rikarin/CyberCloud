@@ -48,12 +48,7 @@ public sealed class Fido2PasskeyServiceTests {
         );
 
     static PasskeyCredential Enrolled(string credentialId = "AQIDBA") =>
-        new() {
-            CredentialId = credentialId,
-            PublicKey = "AQIDBA",
-            SignCount = 3,
-            Label = "A key"
-        };
+        new() { CredentialId = credentialId, PublicKey = "AQIDBA", SignCount = 3, Label = "A key" };
 
     // ── Registration options ───────────────────────────────────────────────────────────────────
 
@@ -62,8 +57,8 @@ public sealed class Fido2PasskeyServiceTests {
         var userId = Guid.Parse("44444444-4444-4444-8444-444444444444");
 
         var challenge = (await Subject().BeginRegistrationAsync(
-            new() { UserId = userId, Email = "someone@example.com", DisplayName = "Someone", Existing = [] }
-        )).GetValueOrThrow();
+                new() { UserId = userId, Email = "someone@example.com", DisplayName = "Someone", Existing = [] }
+            )).GetValueOrThrow();
 
         var options = CredentialCreateOptions.FromJson(challenge.OptionsJson);
 
@@ -80,8 +75,8 @@ public sealed class Fido2PasskeyServiceTests {
     [Fact]
     public async Task AResidentCredentialWithUserVerificationIsRequiredRatherThanPreferred() {
         var challenge = (await Subject().BeginRegistrationAsync(
-            new() { UserId = Guid.NewGuid(), Email = "a@example.com", DisplayName = "A", Existing = [] }
-        )).GetValueOrThrow();
+                new() { UserId = Guid.NewGuid(), Email = "a@example.com", DisplayName = "A", Existing = [] }
+            )).GetValueOrThrow();
 
         var options = CredentialCreateOptions.FromJson(challenge.OptionsJson);
 
@@ -96,27 +91,27 @@ public sealed class Fido2PasskeyServiceTests {
     [Fact]
     public async Task NoAttestationIsRequested() {
         var challenge = (await Subject().BeginRegistrationAsync(
-            new() { UserId = Guid.NewGuid(), Email = "a@example.com", DisplayName = "A", Existing = [] }
-        )).GetValueOrThrow();
+                new() { UserId = Guid.NewGuid(), Email = "a@example.com", DisplayName = "A", Existing = [] }
+            )).GetValueOrThrow();
 
         // ⚠ Asking for attestation returns a certificate identifying the authenticator model and,
         // for some vendors, the device. It is a privacy liability, it needs an MDS blob store to
         // verify against, and it buys a policy this platform does not have.
         CredentialCreateOptions.FromJson(challenge.OptionsJson)
             .Attestation
-            .ShouldBe(AttestationConveyancePreference.None);
+                .ShouldBe(AttestationConveyancePreference.None);
     }
 
     [Fact]
     public async Task AlreadyEnrolledCredentialsAreExcluded() {
         var challenge = (await Subject().BeginRegistrationAsync(
-            new() {
-                UserId = Guid.NewGuid(),
-                Email = "a@example.com",
-                DisplayName = "A",
-                Existing = [Enrolled("AQIDBA"), Enrolled("BQYHCA")]
-            }
-        )).GetValueOrThrow();
+                new() {
+                    UserId = Guid.NewGuid(),
+                    Email = "a@example.com",
+                    DisplayName = "A",
+                    Existing = [Enrolled("AQIDBA"), Enrolled("BQYHCA")]
+                }
+            )).GetValueOrThrow();
 
         var excluded = CredentialCreateOptions.FromJson(challenge.OptionsJson).ExcludeCredentials;
 
@@ -151,15 +146,23 @@ public sealed class Fido2PasskeyServiceTests {
     // ── Hostile input reaches the library and comes back as a Result ───────────────────────────
 
     public static TheoryData<string> NotJson =>
-        new() { "", "   ", "{", "not json at all", "[1,2,3]", "\"a string\"", "{\"id\":" };
+        new() {
+            "",
+            "   ",
+            "{",
+            "not json at all",
+            "[1,2,3]",
+            "\"a string\"",
+            "{\"id\":"
+        };
 
     [Theory]
     [MemberData(nameof(NotJson))]
     public async Task AnAttestationThatIsNotAWebAuthnResponseIsARefusalAndNotAnException(string body) {
         var subject = Subject();
         var challenge = (await subject.BeginRegistrationAsync(
-            new() { UserId = Guid.NewGuid(), Email = "a@example.com", DisplayName = "A", Existing = [] }
-        )).GetValueOrThrow();
+                new() { UserId = Guid.NewGuid(), Email = "a@example.com", DisplayName = "A", Existing = [] }
+            )).GetValueOrThrow();
 
         var completed = await subject.CompleteRegistrationAsync(challenge, body);
 
@@ -185,8 +188,8 @@ public sealed class Fido2PasskeyServiceTests {
     public async Task AnAttestationShapedLikeTheBrowsersAnswerIsStillRefused() {
         var subject = Subject();
         var challenge = (await subject.BeginRegistrationAsync(
-            new() { UserId = Guid.NewGuid(), Email = "a@example.com", DisplayName = "A", Existing = [] }
-        )).GetValueOrThrow();
+                new() { UserId = Guid.NewGuid(), Email = "a@example.com", DisplayName = "A", Existing = [] }
+            )).GetValueOrThrow();
 
         // Shaped like the browser's answer, signed by nobody — the payload an attacker actually
         // posts, as opposed to the garbage in NotJson above.
@@ -222,10 +225,7 @@ public sealed class Fido2PasskeyServiceTests {
                 rawId = "AQIDBA",
                 type = "public-key",
                 response = new {
-                    authenticatorData = "AQIDBA",
-                    clientDataJson = "AQIDBA",
-                    signature = "AQIDBA",
-                    userHandle = "AQIDBA"
+                    authenticatorData = "AQIDBA", clientDataJson = "AQIDBA", signature = "AQIDBA", userHandle = "AQIDBA"
                 }
             }
         );

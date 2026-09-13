@@ -13,8 +13,11 @@ namespace CyberCloud.Sdk;
 public static class CyberCloudHeaders {
     /// <summary>
     ///     The caller's correlation id, sent on every request by
-    ///     <see cref="CorrelationRequestIdHandler" />. docs/plan/10 § Request pipeline: <i>"Azure's
-    ///     header, because tooling already sends it"</i>.
+    ///     <see cref="CorrelationRequestIdHandler" />. docs/plan/10 § Request pipeline:
+    ///     <i>
+    ///         "Azure's
+    ///         header, because tooling already sends it"
+    ///     </i>.
     /// </summary>
     public const string CorrelationRequestId = "x-ms-correlation-request-id";
 

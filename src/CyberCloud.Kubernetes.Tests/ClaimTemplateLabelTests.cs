@@ -12,8 +12,11 @@ namespace CyberCloud.Kubernetes.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Only a real API server can run this, and the provider conformance lanes cannot — not
-///         even the cluster-backed ones.</b> Both create a resource and converge it; neither applies
+///         ⚠
+///         <b>
+///             Only a real API server can run this, and the provider conformance lanes cannot — not
+///             even the cluster-backed ones.
+///         </b> Both create a resource and converge it; neither applies
 ///         the same object twice at two different api-versions, which is the sequence the hazard
 ///         lives in. The Docker-free harness has no admission at all.
 ///     </para>
@@ -45,15 +48,17 @@ public sealed class ClaimTemplateLabelTests(K3sFixture k3s) {
         var read = (await k3s.Api.GetAsync(command.Target, token)).GetValueOrThrow();
 
         var labels = JsonNode.Parse(read.Json)!["spec"]!["volumeClaimTemplates"]![0]!["metadata"]!
-            ["labels"] as JsonObject;
+            ["labels"]
+            as JsonObject;
 
         labels.ShouldNotBeNull();
 
         foreach (var key in KubeLabels.LifetimeStable) {
-            labels[key]?.GetValue<string>().ShouldBe(
-                command.Labels[key],
-                $"the claim template in the cluster is missing or disagrees about {key}."
-            );
+            labels[key]?.GetValue<string>()
+                .ShouldBe(
+                    command.Labels[key],
+                    $"the claim template in the cluster is missing or disagrees about {key}."
+                );
         }
 
         // ⚠ The seventh is absent on the template and present on the object, which is the whole
@@ -90,12 +95,12 @@ public sealed class ClaimTemplateLabelTests(K3sFixture k3s) {
         // The object's OWN api-version label did move, which is what makes the assertion above a
         // statement about the template rather than about an apply that changed nothing.
         (await k3s.ReadAppsFieldAsync(
-            "statefulsets",
-            "claims-reapplied",
-            "metadata",
-            "labels",
-            KubeLabels.ApiVersion
-        )).ShouldBe("2027-01-01");
+                "statefulsets",
+                "claims-reapplied",
+                "metadata",
+                "labels",
+                KubeLabels.ApiVersion
+            )).ShouldBe("2027-01-01");
     }
 
     [Fact]
@@ -178,9 +183,7 @@ public sealed class ClaimTemplateLabelTests(K3sFixture k3s) {
             .InNamespace(K3sFixture.Namespace)
             .WithFieldManager(OurManager)
             .WithApiVersion(apiVersion)
-            .ObjectJson(
-                StatefulSetJson(name, $$"""{ "{{KubeLabels.ApiVersion}}": "{{apiVersion}}" }""")
-            )
+            .ObjectJson(StatefulSetJson(name, $$"""{ "{{KubeLabels.ApiVersion}}": "{{apiVersion}}" }"""))
             .Build();
     }
 

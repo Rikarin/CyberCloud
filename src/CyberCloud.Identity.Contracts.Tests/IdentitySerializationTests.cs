@@ -24,8 +24,8 @@ public sealed class IdentitySerializationTests : IDisposable {
     public IdentitySerializationTests() {
         var services = new ServiceCollection();
         services.AddSerializer(builder => builder
-            .AddAssembly(typeof(UserProfile).Assembly)
-            .AddAssembly(typeof(ResultSurrogate).Assembly)
+                .AddAssembly(typeof(UserProfile).Assembly)
+                .AddAssembly(typeof(ResultSurrogate).Assembly)
         );
 
         provider = services.BuildServiceProvider();
@@ -149,9 +149,15 @@ public sealed class IdentitySerializationTests : IDisposable {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/00 § Non-negotiables: <i>"secrets are <c>SecretRef</c> handles resolved at
-    ///         the data plane"</i>. ⚠ <b>The absence is what makes the rule structural rather than a
-    ///         convention</b>: a nullable <c>Value</c> "for convenience" would be populated by the
+    ///         docs/plan/00 § Non-negotiables:
+    ///         <i>
+    ///             "secrets are <c>SecretRef</c> handles resolved at
+    ///             the data plane"
+    ///         </i>. ⚠
+    ///         <b>
+    ///             The absence is what makes the rule structural rather than a
+    ///             convention
+    ///         </b>: a nullable <c>Value</c> "for convenience" would be populated by the
     ///         first caller who found resolving inconvenient, and from then on every backup of the
     ///         durable tier would contain it.
     ///     </para>
@@ -165,11 +171,7 @@ public sealed class IdentitySerializationTests : IDisposable {
     /// </remarks>
     [Fact]
     public void TheSharedSecretRefIsAnAddressAndHasNowhereToPutAValue() {
-        var value = new SecretRef {
-            Path = "tenants/x/users/y/totp",
-            Field = "secret",
-            Version = "3"
-        };
+        var value = new SecretRef { Path = "tenants/x/users/y/totp", Field = "secret", Version = "3" };
 
         RoundTrip(value).ShouldBe(value);
 
@@ -204,8 +206,9 @@ public sealed class IdentitySerializationTests : IDisposable {
         // And it really is the one in CyberCloud.Core.Contracts, published under the alias it has
         // carried since it lived in the resource manager — docs/plan/04 § Failure and upgrade.
         typeof(SecretRef).Assembly.GetName().Name.ShouldBe("CyberCloud.Core.Contracts");
-        typeof(SecretRef).GetCustomAttribute<AliasAttribute>()!.Alias
-            .ShouldBe("CyberCloud.ResourceManager.SecretRef");
+        typeof(SecretRef).GetCustomAttribute<AliasAttribute>()!
+            .Alias
+                .ShouldBe("CyberCloud.ResourceManager.SecretRef");
     }
 
     /// <summary>
@@ -213,8 +216,11 @@ public sealed class IdentitySerializationTests : IDisposable {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This list is append-only, and it is the reason the handle type could be swapped
-    ///         at all.</b> Orleans serialization is positional: the number is the contract and the
+    ///         ⚠
+    ///         <b>
+    ///             This list is append-only, and it is the reason the handle type could be swapped
+    ///             at all.
+    ///         </b> Orleans serialization is positional: the number is the contract and the
     ///         member's <i>type</i> is looked up from it. Replacing
     ///         <c>CyberCloud.Identity.VaultSecretRef</c> with
     ///         <see cref="CyberCloud.Core.Contracts.SecretRef" /> was safe on the wire only because
@@ -265,10 +271,10 @@ public sealed class IdentitySerializationTests : IDisposable {
             .GetTypes()
             .Where(t => types.Contains(t.Name))
             .SelectMany(type => type
-                .GetMembers(BindingFlags.Public | BindingFlags.Instance)
-                .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
-                .Where(x => x.id is not null)
-                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
+                    .GetMembers(BindingFlags.Public | BindingFlags.Instance)
+                    .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                    .Where(x => x.id is not null)
+                    .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
             )
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .ThenBy(x => x.Id)
@@ -334,12 +340,10 @@ public sealed class IdentitySerializationTests : IDisposable {
         RoundTrip(new GroupDescriptor { GroupId = Guid.NewGuid(), Name = "Eng" }).Name.ShouldBe("Eng");
 
         RoundTrip(
-                new ServicePrincipalDescriptor {
-                    ServicePrincipalId = Guid.NewGuid(),
-                    DisplayName = "CI",
-                    CertificateThumbprints = ["aa", "bb"]
-                }
-            )
+            new ServicePrincipalDescriptor {
+                ServicePrincipalId = Guid.NewGuid(), DisplayName = "CI", CertificateThumbprints = ["aa", "bb"]
+            }
+        )
             .CertificateThumbprints.ShouldBe(["aa", "bb"]);
 
         RoundTrip(new RefreshRotation { Handle = "h", Generation = 2 }).Generation.ShouldBe(2);

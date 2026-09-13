@@ -42,6 +42,5 @@ sealed record GatewayOutcome {
     /// <summary>An error outcome.</summary>
     /// <param name="status">The status code <see cref="ResultShaper" /> chose for the code.</param>
     /// <param name="error">The error.</param>
-    public static GatewayOutcome Failure(int status, Error error) =>
-        new() { StatusCode = status, Error = error };
+    public static GatewayOutcome Failure(int status, Error error) => new() { StatusCode = status, Error = error };
 }

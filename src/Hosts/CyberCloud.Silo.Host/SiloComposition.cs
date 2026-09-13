@@ -22,8 +22,11 @@ namespace CyberCloud.Silo.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This exists so a test can compose the real host rather than a lookalike, and the reason
-///         is the defect it was written to close.</b> Every conformance and resource-manager suite in
+///         ⚠
+///         <b>
+///             This exists so a test can compose the real host rather than a lookalike, and the reason
+///             is the defect it was written to close.
+///         </b> Every conformance and resource-manager suite in
 ///         the repository builds its own <c>TestCluster</c>, registers the resource manager and
 ///         registers a provider — so all of them stayed green through the whole period in which
 ///         <c>CyberCloud.Silo.Host</c> referenced no provider module, composed no resource manager, and
@@ -93,8 +96,11 @@ public static class SiloComposition {
     /// <param name="silo">The silo builder.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>AddCyberCloudCommunication</c> adds seven grain types and no new start-up
-    ///         requirement</b> — docs/plan/17. It registers services only: the clock, the five refusing
+    ///         ⚠
+    ///         <b>
+    ///             <c>AddCyberCloudCommunication</c> adds seven grain types and no new start-up
+    ///             requirement
+    ///         </b> — docs/plan/17. It registers services only: the clock, the five refusing
     ///         channel providers, the provider registry, the client-side sender and the webhook router.
     ///         It configures no reminder service, no stream provider and no storage, because its grains
     ///         bind <c>StorageTiers.Hot</c> and <c>StorageTiers.Durable</c>, which are the two
@@ -141,34 +147,34 @@ public static class SiloComposition {
             //
             // ⚠ The default schema is CyberCloudSchema.Instance — docs/plan/07 § Azure RBAC, expressed
             // in it. A test silo may pass its own; a production one has exactly one.
-            .AddCyberCloudAuthorization()
-            // ── The kubeconfig resolver, BEFORE AddCyberCloudKubernetes ────────────────────────────
-            //
-            // ⚠ ORDER, AND FOR THE SAME REASON THE TWO CLUSTER SEAMS ARE ORDERED BELOW.
-            // AddCyberCloudKubernetes registers IKubeApiClientFactory with TryAddSingleton, so the
-            // FIRST registration wins and a resolver added afterwards would never be resolved.
-            .ConfigureServices(ConfigureKubeconfigResolver(silo.Configuration))
-            // ⚠ BEFORE AddCyberCloudResourceManager, and here the order does matter. The manager's
-            // registrations are TryAdd, so the two cluster seams below have to be in the container
-            // first or the refusing defaults win — NoClusterConnectionFactory, which answers null to
-            // every Connect, and UnavailableClusterConnectionRegistrar, which refuses every attach.
-            .AddCyberCloudKubernetes()
-            .ConfigureServices(services => {
-                    // ── The cluster fabric, docs/plan/09 ────────────────────────────────────────
-                    //
-                    // ⚠ THE ONLY IMPLEMENTATIONS OF THESE TWO OUTSIDE A TEST, AND UNTIL THEY EXISTED
-                    // NO PRODUCTION HOST COULD REACH A CLUSTER AT ALL. Every host registered
-                    // NoClusterConnectionFactory, so a resource type declaring RequiresCluster was
-                    // refused by ReconcileDriver by name — the right refusal, and not a connection.
-                    //
-                    // AddCyberCloudKubernetes above is the other half: it puts ClusterConnectionGrain
-                    // in the silo and registers ClusterConnectionTenantFilter, which is what
-                    // establishes the caller tenant the null-tenant grain checks against.
-                    services.AddSingleton<IClusterConnectionFactory, GrainClusterConnectionFactory>();
-                    services.AddSingleton<IClusterConnectionRegistrar, GrainClusterConnectionRegistrar>();
-                }
-            )
-            .AddCyberCloudResourceManager();
+                .AddCyberCloudAuthorization()
+                // ── The kubeconfig resolver, BEFORE AddCyberCloudKubernetes ────────────────────────────
+                //
+                // ⚠ ORDER, AND FOR THE SAME REASON THE TWO CLUSTER SEAMS ARE ORDERED BELOW.
+                // AddCyberCloudKubernetes registers IKubeApiClientFactory with TryAddSingleton, so the
+                // FIRST registration wins and a resolver added afterwards would never be resolved.
+                .ConfigureServices(ConfigureKubeconfigResolver(silo.Configuration))
+                // ⚠ BEFORE AddCyberCloudResourceManager, and here the order does matter. The manager's
+                // registrations are TryAdd, so the two cluster seams below have to be in the container
+                // first or the refusing defaults win — NoClusterConnectionFactory, which answers null to
+                // every Connect, and UnavailableClusterConnectionRegistrar, which refuses every attach.
+                .AddCyberCloudKubernetes()
+                .ConfigureServices(services => {
+                        // ── The cluster fabric, docs/plan/09 ────────────────────────────────────────
+                        //
+                        // ⚠ THE ONLY IMPLEMENTATIONS OF THESE TWO OUTSIDE A TEST, AND UNTIL THEY EXISTED
+                        // NO PRODUCTION HOST COULD REACH A CLUSTER AT ALL. Every host registered
+                        // NoClusterConnectionFactory, so a resource type declaring RequiresCluster was
+                        // refused by ReconcileDriver by name — the right refusal, and not a connection.
+                        //
+                        // AddCyberCloudKubernetes above is the other half: it puts ClusterConnectionGrain
+                        // in the silo and registers ClusterConnectionTenantFilter, which is what
+                        // establishes the caller tenant the null-tenant grain checks against.
+                        services.AddSingleton<IClusterConnectionFactory, GrainClusterConnectionFactory>();
+                        services.AddSingleton<IClusterConnectionRegistrar, GrainClusterConnectionRegistrar>();
+                    }
+                )
+                .AddCyberCloudResourceManager();
     }
 
     /// <summary>
@@ -178,8 +184,11 @@ public static class SiloComposition {
     /// <returns>The registration, which does nothing when no root is configured.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Doing nothing is the correct behaviour for a silo with no root, and it is not the
-    ///         same as doing nothing at all.</b> <c>KubeApiClientFactory</c> with no
+    ///         ⚠
+    ///         <b>
+    ///             Doing nothing is the correct behaviour for a silo with no root, and it is not the
+    ///             same as doing nothing at all.
+    ///         </b> <c>KubeApiClientFactory</c> with no
     ///         <c>ResolveKubeconfig</c> refuses every connect with a sentence naming this seam, which
     ///         is what a production silo should say until <c>CyberCloud.KeyVault</c> can answer for it.
     ///         What was wrong before was that <i>every</i> silo was in that state and nothing could
@@ -206,9 +215,7 @@ public static class SiloComposition {
                 new KubeApiClientFactory(
                     provider.GetRequiredService<IClock>(),
                     provider.GetService<ILogger<KubeApiClientFactory>>()
-                ) {
-                    ResolveKubeconfig = LocalKubeconfigFiles.ResolverFor(root)
-                }
+                ) { ResolveKubeconfig = LocalKubeconfigFiles.ResolverFor(root) }
             );
         };
     }
@@ -220,8 +227,11 @@ public static class SiloComposition {
     /// <param name="storage">The bound <c>CyberCloud:Storage</c> section.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The reconcile loop is a reminder, so without this the resource manager composes and
-    ///         then throws on the first create.</b> <c>OperationGrain</c> is <c>IRemindable</c> and
+    ///         ⚠
+    ///         <b>
+    ///             The reconcile loop is a reminder, so without this the resource manager composes and
+    ///             then throws on the first create.
+    ///         </b> <c>OperationGrain</c> is <c>IRemindable</c> and
     ///         calls <c>RegisterOrUpdateReminder</c>, which throws on a silo with no reminder service —
     ///         late, inside a grain call, rather than at start-up. <c>UsageSamplerGrain</c> and
     ///         <c>UsageRollupGrain</c> are the same. Every test fixture in the tree wires
@@ -235,8 +245,11 @@ public static class SiloComposition {
     ///         resource's reconcile tick survive the restart".
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>In the HOST and not in <c>OrleansApplication.CreateSilo</c>, which is where it was
-    ///         first written and where it was wrong.</b> <c>CreateSilo</c> wires the tiers whenever
+    ///         ⚠
+    ///         <b>
+    ///             In the HOST and not in <c>OrleansApplication.CreateSilo</c>, which is where it was
+    ///             first written and where it was wrong.
+    ///         </b> <c>CreateSilo</c> wires the tiers whenever
     ///         <c>CyberCloud:Storage</c> is configured, and "configured" is not "reachable":
     ///         <c>CyberCloud.ServiceDefaults.Tests</c>' unreachable-shard fixture sets a hot-tier
     ///         connection string and points it at nothing on purpose, so a reminder service on the same

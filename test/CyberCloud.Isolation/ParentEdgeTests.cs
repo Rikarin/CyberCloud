@@ -14,17 +14,23 @@ namespace CyberCloud.Isolation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every test here runs against the real <c>ReBacResourceRelationWriter</c>, the real
-///         <c>ReBacResourceAuthorizer</c> and the real <c>CyberCloudSchema</c>, and that is the whole
-///         reason they are in this project.</b> Both halves of the seam are doubled in every other
+///         ⚠
+///         <b>
+///             Every test here runs against the real <c>ReBacResourceRelationWriter</c>, the real
+///             <c>ReBacResourceAuthorizer</c> and the real <c>CyberCloudSchema</c>, and that is the whole
+///             reason they are in this project.
+///         </b> Both halves of the seam are doubled in every other
 ///         suite, which is right for testing step ordering and useless here: a double writes whatever
 ///         tuple its author believed in and a double answers whatever its author believed. The defect
 ///         these tests exist for — <b>a create succeeded and its own creator then got 404</b> — is
 ///         invisible to any pair of doubles that agree with each other.
 ///     </para>
 ///     <para>
-///         docs/plan/07 § The model: <c>From("parent", …)</c> is <i>"the whole of hierarchical
-///         inheritance"</i>, and it follows a <c>parent</c> tuple. docs/plan/08 § The write path, end
+///         docs/plan/07 § The model: <c>From("parent", …)</c> is
+///         <i>
+///             "the whole of hierarchical
+///             inheritance"
+///         </i>, and it follows a <c>parent</c> tuple. docs/plan/08 § The write path, end
 ///         to end's step 8 is what writes it.
 ///     </para>
 /// </remarks>
@@ -38,7 +44,8 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         // that grant down to a resource is the parent edge the write path writes at step 8. Before
         // that step existed, this read answered 404 — for a resource the same caller had just been
         // told, with a 202, that they had created.
-        var name = "creator-read-" + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
+        var name = "creator-read-"
+            + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
 
         var id = await cluster.CreateAsync(
             target,
@@ -64,7 +71,8 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         read.IsSuccess.ShouldBeTrue(
             "the creator cannot read the resource they just created — the write path did not write "
             + "the resource → resourceGroup parent edge, so CyberCloudSchema's From(parent, owner) "
-            + "rewrite has nothing to follow: " + read.Error?.Message
+            + "rewrite has nothing to follow: "
+            + read.Error?.Message
         );
 
         read.GetValueOrThrow().Id.ShouldBe(id);
@@ -91,7 +99,8 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         // row of this theory whichever way it stopped.
         ArgumentNullException.ThrowIfNull(target);
 
-        var name = "edge-shape-" + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
+        var name = "edge-shape-"
+            + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
 
         var id = await cluster.CreateAsync(
             target,
@@ -186,9 +195,7 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
             TestContext.Current.CancellationToken
         );
 
-        accepted.IsSuccess.ShouldBeTrue(
-            "the child could not be created at all: " + accepted.Error?.Message
-        );
+        accepted.IsSuccess.ShouldBeTrue("the child could not be created at all: " + accepted.Error?.Message);
 
         var childId = accepted.GetValueOrThrow().Resource.Id;
 
@@ -346,7 +353,8 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         // is already readable. The trace is where that ordering is observable from outside, and
         // WriteTraceBuilder throws rather than recording a step out of order, so this assertion and
         // the write path cannot drift apart.
-        var name = "ordering-" + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
+        var name = "ordering-"
+            + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
 
         var address = IsolationCluster.Address(
             target,
@@ -372,17 +380,19 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
 
         reached.IndexOf(WriteStep.LinkParent).ShouldBeGreaterThanOrEqualTo(0, "step 8 did not run");
 
-        reached.IndexOf(WriteStep.LinkParent).ShouldBeLessThan(
-            reached.IndexOf(WriteStep.SubmitDesired),
-            "the parent edge was written AFTER the durable resource, which reopens the window in "
-            + "which a resource exists and nobody can see it"
-        );
+        reached.IndexOf(WriteStep.LinkParent)
+            .ShouldBeLessThan(
+                reached.IndexOf(WriteStep.SubmitDesired),
+                "the parent edge was written AFTER the durable resource, which reopens the window in "
+                + "which a resource exists and nobody can see it"
+            );
 
-        reached.IndexOf(WriteStep.IndexClaim).ShouldBeLessThan(
-            reached.IndexOf(WriteStep.LinkParent),
-            "the edge was written before the name was claimed, so a lost name race leaves a tuple "
-            + "for a resource that was never created"
-        );
+        reached.IndexOf(WriteStep.IndexClaim)
+            .ShouldBeLessThan(
+                reached.IndexOf(WriteStep.LinkParent),
+                "the edge was written before the name was claimed, so a lost name race leaves a tuple "
+                + "for a resource that was never created"
+            );
 
         // And the edge really is there the moment the 202 comes back — before any reconcile pass has
         // run, which is the point at which a caller would first try to GET what they created.
@@ -391,13 +401,19 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>No tuple survives the resource, and "the resource is gone" is a different moment for
-    ///     a type that declares a recovery window.</b>
+    ///     ⚠
+    ///     <b>
+    ///         No tuple survives the resource, and "the resource is gone" is a different moment for
+    ///         a type that declares a recovery window.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE BRANCH BELOW IS READ OFF THE REGISTRY RATHER THAN OFF A LIST OF TYPE NAMES,
-    ///         AND THAT IS THE WHOLE OF WHY THIS STAYS ONE THEORY.</b> A test named "delete leaves no
+    ///         ⚠
+    ///         <b>
+    ///             THE BRANCH BELOW IS READ OFF THE REGISTRY RATHER THAN OFF A LIST OF TYPE NAMES,
+    ///             AND THAT IS THE WHOLE OF WHY THIS STAYS ONE THEORY.
+    ///         </b> A test named "delete leaves no
     ///         dangling tuple" that quietly came to mean "except for the types with a window, where
     ///         there is one and that is fine" would be the exact failure this suite exists to catch. So
     ///         the property the name states is asserted for every target — after the resource stops
@@ -408,8 +424,11 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
     ///         not dangling. It stops existing at the purge, and the purge is where this asserts empty.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The parked state is asserted POSITIVELY, and a <c>ShouldNotBeEmpty</c> there
-    ///         would have been the weaker assertion that lets the real leak through.</b> § Soft
+    ///         ⚠
+    ///         <b>
+    ///             The parked state is asserted POSITIVELY, and a <c>ShouldNotBeEmpty</c> there
+    ///             would have been the weaker assertion that lets the real leak through.
+    ///         </b> § Soft
     ///         delete's fourth decision re-parents the edge <i>to the subscription</i>, and the reason is
     ///         a lifetime one: a parked resource that kept pointing at its resource group would hold a
     ///         tuple naming an object its tenant may delete while the window runs — a dangling edge
@@ -436,7 +455,8 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         // and grows by one row per resource ever deleted. OperationGrain removes it after
         // CompleteDeleteAsync — when the resource is GONE rather than when the delete was asked for,
         // because a resource in Deleting is still visible and its owner still has to be able to see it.
-        var name = "unlink-" + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
+        var name = "unlink-"
+            + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
 
         var id = await cluster.CreateAsync(
             target,
@@ -486,9 +506,8 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         // here would disagree with the platform the day a provider declares or withdraws a window, and
         // it would disagree silently — in the direction of asserting the hard-delete shape against a
         // type that no longer has it, which is how this test first went red.
-        cluster.Registry.TryGetType(target.Type, out var registration).ShouldBeTrue(
-            $"'{target.Type}' is a target of this suite and the registry does not know it"
-        );
+        cluster.Registry.TryGetType(target.Type, out var registration)
+            .ShouldBeTrue($"'{target.Type}' is a target of this suite and the registry does not know it");
 
         if (registration.SoftDeleteDays == 0) {
             (await cluster.ParentsOfAsync(IsolationCluster.Victim, id)).ShouldBeEmpty(
@@ -590,7 +609,9 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         purged.IsSuccess.ShouldBeTrue(
             "the subscription owner cannot purge, so nothing can end the window: the name is held and "
             + "the committed quota is never returned, for the full seven days and then forever. "
-            + purged.Error?.Code + " \u2014 " + purged.Error?.Message
+            + purged.Error?.Code
+            + " \u2014 "
+            + purged.Error?.Message
         );
 
         var purge = cluster.For(IsolationCluster.Victim)

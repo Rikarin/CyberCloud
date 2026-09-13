@@ -53,8 +53,11 @@ public sealed record DerivedReport(
 ///         there.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No compatibility diff, and that is docs/plan/21 § Generation's design rather than an
-///         omission.</b> These are generated <i>from</i> the OpenAPI document, so a breaking change
+///         ⚠
+///         <b>
+///             No compatibility diff, and that is docs/plan/21 § Generation's design rather than an
+///             omission.
+///         </b> These are generated <i>from</i> the OpenAPI document, so a breaking change
 ///         reaches them only through a breaking change to that document — which
 ///         <see cref="OpenApiCompatibility" /> already fails on. One hop, one gate. A second diff here
 ///         would re-litigate the same question against a derived artifact whose shape is this
@@ -96,41 +99,47 @@ public static class DerivedSurfaces {
             var forms = FormsEmitter.Emit(document);
             var sdk = SdkEmitter.Emit(document);
 
-            produced.Add(Write(
-                CliEmitter.DirectoryName,
-                CliEmitter.FileNameOf(version),
-                version,
-                DeterministicJson.ToBytes(cli),
-                CliProblems(cli, document),
-                directory,
-                write,
-                expected
-            ));
+            produced.Add(
+                Write(
+                    CliEmitter.DirectoryName,
+                    CliEmitter.FileNameOf(version),
+                    version,
+                    DeterministicJson.ToBytes(cli),
+                    CliProblems(cli, document),
+                    directory,
+                    write,
+                    expected
+                )
+            );
 
-            produced.Add(Write(
-                FormsEmitter.DirectoryName,
-                FormsEmitter.FileNameOf(version),
-                version,
-                DeterministicJson.ToBytes(forms),
-                FormProblems(forms),
-                directory,
-                write,
-                expected
-            ));
+            produced.Add(
+                Write(
+                    FormsEmitter.DirectoryName,
+                    FormsEmitter.FileNameOf(version),
+                    version,
+                    DeterministicJson.ToBytes(forms),
+                    FormProblems(forms),
+                    directory,
+                    write,
+                    expected
+                )
+            );
 
-            produced.Add(Write(
-                SdkEmitter.DirectoryName,
-                SdkEmitter.FileNameOf(version),
-                version,
-                // ⚠ The same byte rules as the JSON surfaces: UTF-8 with no BOM, LF, one trailing
-                // newline. A generated .cs file is diffed exactly as a generated .json file is, and a
-                // CRLF from Environment.NewLine would make CI red on Windows and green here.
-                Text(sdk),
-                SdkProblems(sdk),
-                directory,
-                write,
-                expected
-            ));
+            produced.Add(
+                Write(
+                    SdkEmitter.DirectoryName,
+                    SdkEmitter.FileNameOf(version),
+                    version,
+                    // ⚠ The same byte rules as the JSON surfaces: UTF-8 with no BOM, LF, one trailing
+                    // newline. A generated .cs file is diffed exactly as a generated .json file is, and a
+                    // CRLF from Environment.NewLine would make CI red on Windows and green here.
+                    Text(sdk),
+                    SdkProblems(sdk),
+                    directory,
+                    write,
+                    expected
+                )
+            );
         }
 
         var root = new DirectoryInfo(directory);
@@ -223,8 +232,11 @@ public static class DerivedSurfaces {
     ///     that has fewer commands than the document has resource types is a CLI missing a type.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The count check is here because the collision it catches is invisible in the tree
-    ///     alone.</b> A JSON object cannot hold one key twice, so by the time two resource types have
+    ///     ⚠
+    ///     <b>
+    ///         The count check is here because the collision it catches is invisible in the tree
+    ///         alone.
+    ///     </b> A JSON object cannot hold one key twice, so by the time two resource types have
     ///     kebab-cased to the same command name, one of them is simply not in the file and nothing in
     ///     it records that it ever should have been. The only way to see the loss is to compare
     ///     against the source document — which is why this takes one. <see cref="CliEmitter" /> also
@@ -401,8 +413,11 @@ public static class DerivedSurfaces {
     ///         without bringing a compiler into a generation step.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>AND A COMPILER IS NOW BROUGHT IN, ONE STEP LATER, BECAUSE THIS WAS NOT ENOUGH —
-    ///         issue #73.</b> Balanced braces were the whole of what anything knew about this
+    ///         ⚠
+    ///         <b>
+    ///             AND A COMPILER IS NOW BROUGHT IN, ONE STEP LATER, BECAUSE THIS WAS NOT ENOUGH —
+    ///             issue #73.
+    ///         </b> Balanced braces were the whole of what anything knew about this
     ///         surface's validity, and four defect families shipped underneath that knowledge:
     ///         <c>CS0101</c>, <c>CS0246</c>, <c>CS0102</c> and <c>CS9035</c>. The
     ///         <c>Generated SDK compiles</c> gate in <c>build/Build.Architecture.cs</c> hands each

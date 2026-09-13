@@ -46,16 +46,18 @@ public sealed record CarrierSecretRef {
     public bool IsEmpty => Path.Length == 0 && Field.Length == 0;
 
     /// <inheritdoc />
-    public override string ToString() =>
-        Version.Length == 0 ? $"{Path}#{Field}" : $"{Path}#{Field}@{Version}";
+    public override string ToString() => Version.Length == 0 ? $"{Path}#{Field}" : $"{Path}#{Field}@{Version}";
 }
 
 /// <summary>
 ///     Which carrier account a channel bills to, and how to reach it.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Three handles rather than one, because every carrier wants at least two values and they
-///     rotate independently.</b> Twilio has an account SID and an auth token; Meta has a business
+///     ⚠
+///     <b>
+///         Three handles rather than one, because every carrier wants at least two values and they
+///         rotate independently.
+///     </b> Twilio has an account SID and an auth token; Meta has a business
 ///     account id and a bearer; SES has an access id and a secret. Modelling one opaque credential
 ///     would force the provider implementations to stuff a JSON blob into a single vault field, which
 ///     rotates as a unit and is unreadable in an audit.
@@ -89,8 +91,10 @@ public sealed record CarrierCredentials {
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>docs/plan/17 § The parts that are actually the work states the stake plainly:</b>
-///     <i>"An SMS loop is a five-figure incident within an hour, and the limit is the only thing
-///     between a bug and that invoice."</i> Both limits are present because they fail differently: a
+///     <i>
+///         "An SMS loop is a five-figure incident within an hour, and the limit is the only thing
+///         between a bug and that invoice."
+///     </i> Both limits are present because they fail differently: a
 ///     message count catches a loop sending cheap messages, and a spend cap catches a loop sending
 ///     expensive ones (a premium destination costs 30× a domestic one, so a count that looks sane can
 ///     still be a five-figure day).
@@ -167,8 +171,11 @@ public sealed record ChannelSpend {
 ///     A claim on a window's allowance, taken before the carrier is called and settled after.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A reservation rather than a counter, which is docs/plan/22 § Quota's rule applied
-///     here:</b> <i>"Reservation, not a counter — the lease expires if the operation dies."</i>
+///     ⚠
+///     <b>
+///         A reservation rather than a counter, which is docs/plan/22 § Quota's rule applied
+///         here:
+///     </b> <i>"Reservation, not a counter — the lease expires if the operation dies."</i>
 ///     Counting after dispatch means a loop that dispatches faster than it settles never sees the
 ///     limit; counting before and settling to the real price means the limit binds on the way in and
 ///     the figure is still accurate on the way out.
@@ -383,8 +390,11 @@ public sealed record RenderedMessage {
 ///     What a caller asks us to send. The grain assigns everything a caller must not choose.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>No status, no provider message id, no timestamps and no cost here, and their absence is
-///     the design.</b> A caller that could set a status could claim a message was delivered; one that
+///     ⚠
+///     <b>
+///         No status, no provider message id, no timestamps and no cost here, and their absence is
+///         the design.
+///     </b> A caller that could set a status could claim a message was delivered; one that
 ///     could set a provider id could point a delivery receipt at somebody else's message. Every field
 ///     that makes a <see cref="MessageSnapshot" /> evidence is assigned by <see cref="IMessageGrain" />
 ///     and is unreachable from the wire — the same argument <c>UsageLedgerAppend</c> makes.
@@ -432,8 +442,10 @@ public sealed record SendRequest {
 
     /// <summary>
     ///     The caller's idempotency key — docs/plan/17 § The parts that are actually the work:
-    ///     <i>"Every send carries a client-supplied key; a retry after a timeout must not send
-    ///     twice."</i>
+    ///     <i>
+    ///         "Every send carries a client-supplied key; a retry after a timeout must not send
+    ///         twice."
+    ///     </i>
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>Not a secret, and CC1005 is suppressed rather than the member renamed.</b> The rule
@@ -453,10 +465,10 @@ public sealed record SendRequest {
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
-            "Not a secret. This is the client-supplied idempotency key of docs/plan/17 § The parts "
-            + "that are actually the work — a value the caller chooses so that a retry repeats it, "
-            + "deliberately logged, traced and used as half a grain key. A credential is the thing "
-            + "you must not repeat; this is the thing you must. The name is docs/plan/17's."
+        "Not a secret. This is the client-supplied idempotency key of docs/plan/17 § The parts "
+        + "that are actually the work — a value the caller chooses so that a retry repeats it, "
+        + "deliberately logged, traced and used as half a grain key. A credential is the thing "
+        + "you must not repeat; this is the thing you must. The name is docs/plan/17's."
     )]
     public string IdempotencyKey { get; init; } = string.Empty;
 }
@@ -620,8 +632,11 @@ public sealed record DeliveryStatus {
 
 /// <summary>A message from a recipient to the tenant. Replies, and <c>STOP</c>.</summary>
 /// <remarks>
-///     ⚠ <b>docs/plan/17 § The parts that are actually the work: <c>STOP</c> handling is legally
-///     required in most jurisdictions.</b> Which is why inbound is not a nice-to-have surface that
+///     ⚠
+///     <b>
+///         docs/plan/17 § The parts that are actually the work: <c>STOP</c> handling is legally
+///         required in most jurisdictions.
+///     </b> Which is why inbound is not a nice-to-have surface that
 ///     forwards text somewhere — <see cref="IWebhookRouter.HandleInboundAsync" /> suppresses before
 ///     it forwards, so a router misconfiguration cannot cost an opt-out.
 /// </remarks>
@@ -800,8 +815,11 @@ public sealed record CommunicationService {
 ///     A carrier callback, in a form that does not drag ASP.NET Core into a contracts assembly.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>docs/plan/17 § The channel abstraction sketches
-///     <c>HandleWebhookAsync(HttpRequest request)</c>, and this deviates deliberately.</b> An
+///     ⚠
+///     <b>
+///         docs/plan/17 § The channel abstraction sketches
+///         <c>HandleWebhookAsync(HttpRequest request)</c>, and this deviates deliberately.
+///     </b> An
 ///     <c>HttpRequest</c> in <c>.Contracts</c> would make every assembly that references this one —
 ///     including <c>CyberCloud.Identity.Contracts</c>, which only wants to send an OTP — depend on
 ///     <c>Microsoft.AspNetCore.Http</c>. It also makes the seam untestable without a request pipeline

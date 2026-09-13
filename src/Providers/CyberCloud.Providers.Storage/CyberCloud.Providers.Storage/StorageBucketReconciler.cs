@@ -14,8 +14,11 @@ namespace CyberCloud.Providers.Storage;
 ///         create, in <c>ResourceManagerService.ResolveAsync</c>, where it runs before the enforcement
 ///         seam and answers the same 404 as an unauthorized read.
 ///         <para>
-///             ⚠ <b>And on THIS type there is a second reason, sharper than the first: the account
-///             never reports <c>Succeeded</c>.</b> Its S3 gateway mounts a <c>Secret</c> nothing writes
+///             ⚠
+///             <b>
+///                 And on THIS type there is a second reason, sharper than the first: the account
+///                 never reports <c>Succeeded</c>.
+///             </b> Its S3 gateway mounts a <c>Secret</c> nothing writes
 ///             — <see cref="StorageAccounts.ConfigSecretName" /> — so it stays <c>InProgress</c>
 ///             indefinitely and deliberately. A bucket reconciler that read its parent's <c>Seaweed</c>
 ///             back and waited for it would therefore never converge for anybody, and the symptom
@@ -48,8 +51,11 @@ namespace CyberCloud.Providers.Storage;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>Its own <c>Type</c> is a separate class from <see cref="StorageAccountReconciler" />
-///         even though the work rhymes, and that is forced rather than chosen.</b>
+///         ⚠
+///         <b>
+///             Its own <c>Type</c> is a separate class from <see cref="StorageAccountReconciler" />
+///             even though the work rhymes, and that is forced rather than chosen.
+///         </b>
 ///         <c>ProviderRegistry</c> stores each type's reconciler by CONCRETE TYPE and
 ///         <c>ReconcileDriver</c> resolves it from the container by that type, so one class cannot
 ///         serve two registrations — its <see cref="Type" /> can only name one of them, and
@@ -171,7 +177,7 @@ public sealed class StorageBucketReconciler(IClock clock) : IResourceReconciler 
             // bucket removes one object; a delete that also tidied up the parent — or that waited for
             // it — would be this type reaching outside its own resource. The whole of what a bucket
             // owns is the Bucket named here.
-            .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(deleteError);

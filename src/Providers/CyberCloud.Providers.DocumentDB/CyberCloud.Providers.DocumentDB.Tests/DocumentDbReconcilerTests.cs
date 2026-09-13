@@ -159,7 +159,10 @@ public sealed class DocumentDbReconcilerTests {
 
         read.ShouldBe(
             applied,
-            "the reconciler applied " + applied.Count + " object(s) and read back " + read.Count
+            "the reconciler applied "
+            + applied.Count
+            + " object(s) and read back "
+            + read.Count
             + ". An object applied and not read back is one the loop reports Converged without ever "
             + "having observed."
         );
@@ -263,7 +266,8 @@ public sealed class DocumentDbReconcilerTests {
 
         var deployment = connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment");
         var env = JsonNode.Parse(deployment.Body)!["spec"]!["template"]!["spec"]!["containers"]!
-            .AsArray()[0]!["env"]!.AsArray();
+            .AsArray()[0]!["env"]!
+            .AsArray();
 
         var refs = env.OfType<JsonObject>()
             .Where(x => x["valueFrom"] is not null)
@@ -298,7 +302,8 @@ public sealed class DocumentDbReconcilerTests {
 
         var deployment = connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment");
         var env = JsonNode.Parse(deployment.Body)!["spec"]!["template"]!["spec"]!["containers"]!
-            .AsArray()[0]!["env"]!.AsArray();
+            .AsArray()[0]!["env"]!
+            .AsArray();
 
         env.OfType<JsonObject>()
             .Where(x => x["valueFrom"] is not null)
@@ -313,9 +318,7 @@ public sealed class DocumentDbReconcilerTests {
             .Single(x => x["name"]!.GetValue<string>() == "FERRETDB_POSTGRESQL_URL")["value"]!
             .GetValue<string>();
 
-        url.ShouldBe(
-            "postgres://$(FERRETDB_PGUSER):$(FERRETDB_PGPASSWORD)@observed-pg-rw:5432/postgres"
-        );
+        url.ShouldBe("postgres://$(FERRETDB_PGUSER):$(FERRETDB_PGPASSWORD)@observed-pg-rw:5432/postgres");
     }
 
     [Fact]
@@ -334,10 +337,15 @@ public sealed class DocumentDbReconcilerTests {
 
         var deployment = connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment");
         var env = JsonNode.Parse(deployment.Body)!["spec"]!["template"]!["spec"]!["containers"]!
-            .AsArray()[0]!["env"]!.AsArray()
+            .AsArray()[0]!["env"]!
+            .AsArray()
             .OfType<JsonObject>()
             .Where(x => x["value"] is not null)
-            .ToDictionary(x => x["name"]!.GetValue<string>(), x => x["value"]!.GetValue<string>(), StringComparer.Ordinal);
+            .ToDictionary(
+                x => x["name"]!.GetValue<string>(),
+                x => x["value"]!.GetValue<string>(),
+                StringComparer.Ordinal
+            );
 
         env["FERRETDB_LISTEN_ADDR"].ShouldBe(":27017");
         env["FERRETDB_DEBUG_ADDR"].ShouldBe(":8088");
@@ -388,20 +396,14 @@ public sealed class DocumentDbReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var deployment = JsonNode.Parse(
-            connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment").Body
-        )!;
+        var deployment = JsonNode.Parse(connection.Applied.Single(x => x.Target.Kind.Kind == "Deployment").Body)!;
 
         var selector = Labels(deployment["spec"]!["selector"]!["matchLabels"]!);
         var template = Labels(deployment["spec"]!["template"]!["metadata"]!["labels"]!);
 
-        var service = JsonNode.Parse(
-            connection.Applied.Single(x => x.Target.Kind.Kind == "Service").Body
-        )!;
+        var service = JsonNode.Parse(connection.Applied.Single(x => x.Target.Kind.Kind == "Service").Body)!;
 
-        var monitor = JsonNode.Parse(
-            connection.Applied.Single(x => x.Target.Kind.Kind == "PodMonitor").Body
-        )!;
+        var monitor = JsonNode.Parse(connection.Applied.Single(x => x.Target.Kind.Kind == "PodMonitor").Body)!;
 
         // ⚠ LITERALS, and they are the fourth independent copy after the two templates and
         // charts/managed/ferretdb/conformance.yaml's `additional:` block. Deriving them from
@@ -463,10 +465,13 @@ public sealed class DocumentDbReconcilerTests {
 
         var cluster = connection.Applied.Single(x => x.Target.Kind.Kind == "Cluster");
 
-        JsonNode.Parse(cluster.Body)!["spec"]!.AsObject().ContainsKey("backup").ShouldBeFalse(
-            "a backup block was rendered with no destination. The archiver fails every WAL segment "
-            + "and the cluster looks backed up."
-        );
+        JsonNode.Parse(cluster.Body)!["spec"]!
+            .AsObject()
+            .ContainsKey("backup")
+            .ShouldBeFalse(
+                "a backup block was rendered with no destination. The archiver fails every WAL segment "
+                + "and the cluster looks backed up."
+            );
     }
 
     [Fact]
@@ -480,7 +485,8 @@ public sealed class DocumentDbReconcilerTests {
 
         var backup = JsonNode.Parse(
             connection.Applied.Single(x => x.Target.Kind.Kind == "Cluster").Body
-        )!["spec"]!["backup"]!.AsObject();
+        )!["spec"]!["backup"]!
+            .AsObject();
 
         backup["retentionPolicy"]!.GetValue<string>().ShouldBe("14d");
         backup["barmanObjectStore"]!["destinationPath"]!.GetValue<string>().ShouldBe("s3://t/docdb");
@@ -588,12 +594,14 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     public Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ReconcileOutcome.Converged);
+    ) =>
+        Task.FromResult(ReconcileOutcome.Converged);
 
     public Task<ObservedState> ObserveAsync(
         ObserveContext context,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(ObservedState.Absent);
+    ) =>
+        Task.FromResult(ObservedState.Absent);
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
@@ -710,8 +718,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     puts the same resource name in two tenants, which is the only shape in which one singleton
     ///     reconciler serving both can be caught mixing them.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

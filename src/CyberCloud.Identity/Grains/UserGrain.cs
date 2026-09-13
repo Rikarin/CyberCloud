@@ -23,7 +23,8 @@ namespace CyberCloud.Identity.Grains;
 ///     </para>
 /// </remarks>
 public sealed class UserGrain(
-    [PersistentState("user", StorageTiers.Durable)] IPersistentState<UserGrainState> state,
+    [PersistentState("user", StorageTiers.Durable)]
+    IPersistentState<UserGrainState> state,
     IPasswordHasher hasher,
     OtpCodeProtector otpCodes,
     IOtpDeliverySeam otpDelivery,
@@ -35,8 +36,11 @@ public sealed class UserGrain(
     ///     The plaintext of each outstanding code, for <see cref="OtpPolicy.ResendCooldown" /> only.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A field and not state, and the distinction is the whole of property 4 in
-    ///     <see cref="OtpPolicy" />.</b> Grain state is written to PostgreSQL and captured in every
+    ///     ⚠
+    ///     <b>
+    ///         A field and not state, and the distinction is the whole of property 4 in
+    ///         <see cref="OtpPolicy" />.
+    ///     </b> Grain state is written to PostgreSQL and captured in every
     ///     backup; this is the activation's own memory, which is where the plaintext of a credential
     ///     is allowed to be. It exists so that a <i>retried</i> issue redelivers the same code and
     ///     therefore computes the same idempotency key — see <see cref="OtpPolicy.ResendCooldown" />
@@ -193,7 +197,8 @@ public sealed class UserGrain(
         }
 
         if (state.State.Passkeys.Exists(x =>
-                string.Equals(x.CredentialId, credential.CredentialId, StringComparison.Ordinal))) {
+                string.Equals(x.CredentialId, credential.CredentialId, StringComparison.Ordinal)
+            )) {
             return Result<UserProfile>.Failure(
                 ErrorCode.Conflict,
                 "That credential is already enrolled on this account."
@@ -213,7 +218,8 @@ public sealed class UserGrain(
     /// <inheritdoc />
     public async Task<Result<bool>> RecordPasskeyAssertionAsync(string credentialId, uint signCount) {
         var index = state.State.Passkeys.FindIndex(x =>
-            string.Equals(x.CredentialId, credentialId, StringComparison.Ordinal));
+            string.Equals(x.CredentialId, credentialId, StringComparison.Ordinal)
+        );
 
         if (index < 0 || !CanAuthenticate()) {
             return Result<bool>.Success(false);
@@ -560,8 +566,7 @@ public sealed class UserGrain(
     }
 
     /// <summary>The outstanding challenge for one purpose, or <see langword="null" />.</summary>
-    OtpChallengeState? Challenge(OtpPurpose purpose) =>
-        state.State.OtpChallenges.Find(x => x.Purpose == purpose);
+    OtpChallengeState? Challenge(OtpPurpose purpose) => state.State.OtpChallenges.Find(x => x.Purpose == purpose);
 
     async Task ForgetChallengeAsync(OtpPurpose purpose) {
         state.State.OtpChallenges.RemoveAll(x => x.Purpose == purpose);
@@ -638,9 +643,7 @@ public sealed class UserGrain(
     }
 
     Result<T> NotFound<T>()
-        where T : notnull =>
-        Result<T>.Failure(ErrorCode.ResourceNotFound, $"User {userId:D} does not exist.");
+        where T : notnull => Result<T>.Failure(ErrorCode.ResourceNotFound, $"User {userId:D} does not exist.");
 
-    Result NotFound() =>
-        Result.Failure(ErrorCode.ResourceNotFound, $"User {userId:D} does not exist.");
+    Result NotFound() => Result.Failure(ErrorCode.ResourceNotFound, $"User {userId:D} does not exist.");
 }

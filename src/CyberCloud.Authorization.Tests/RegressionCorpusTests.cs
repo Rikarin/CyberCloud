@@ -57,12 +57,12 @@ public sealed class RegressionCorpusTests {
 
         foreach (var expectation in corpusCase.Expectations) {
             ReferenceEvaluator.Evaluate(
-                    CyberCloudSchema.Instance,
-                    tuples,
-                    ObjectRef.Parse(expectation.Object).GetValueOrThrow(),
-                    expectation.Permission,
-                    SubjectRef.Parse(expectation.Subject).GetValueOrThrow()
-                )
+                CyberCloudSchema.Instance,
+                tuples,
+                ObjectRef.Parse(expectation.Object).GetValueOrThrow(),
+                expectation.Permission,
+                SubjectRef.Parse(expectation.Subject).GetValueOrThrow()
+            )
                 .ShouldBe(
                     expectation.Expected,
                     $"{corpusCase.Name} disagrees with the reference evaluator — either the case's "

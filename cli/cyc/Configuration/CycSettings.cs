@@ -43,7 +43,11 @@ sealed class CycSettings {
     /// <param name="file">The parsed <c>~/.cyc/config</c>.</param>
     /// <param name="environment">The process environment, already read.</param>
     /// <param name="profileFlag">The <c>--profile</c> value, or <c>null</c>.</param>
-    public static CycSettings Resolve(CycConfigFile file, IReadOnlyDictionary<string, string> environment, string? profileFlag) {
+    public static CycSettings Resolve(
+        CycConfigFile file,
+        IReadOnlyDictionary<string, string> environment,
+        string? profileFlag
+    ) {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(environment);
 
@@ -63,11 +67,13 @@ sealed class CycSettings {
     /// </param>
     /// <param name="flagValue">What the flag said, or <c>null</c> when it was not given.</param>
     public string? Get(string key, string? flagValue = null) {
-        if (!string.IsNullOrEmpty(flagValue))
+        if (!string.IsNullOrEmpty(flagValue)) {
             return flagValue;
+        }
 
-        if (environment.TryGetValue(VariableFor(key), out var fromEnvironment) && fromEnvironment.Length > 0)
+        if (environment.TryGetValue(VariableFor(key), out var fromEnvironment) && fromEnvironment.Length > 0) {
             return fromEnvironment;
+        }
 
         return file.Value(profile, key);
     }
@@ -87,14 +93,16 @@ sealed class CycSettings {
     /// <exception cref="CycUsageException">The configured value is not an absolute URL.</exception>
     public Uri Endpoint {
         get {
-            if (Get("endpoint") is not { Length: > 0 } value)
+            if (Get("endpoint") is not { Length: > 0 } value) {
                 return CyberCloudClient.DefaultEndpoint;
+            }
 
             return Uri.TryCreate(value, UriKind.Absolute, out var uri)
                 ? uri
                 : throw new CycUsageException(
                     $"'{value}' is not an absolute URL, so it cannot be the endpoint. Set it with "
-                    + $"'cyc config set endpoint https://…' or {VariableFor("endpoint")}.");
+                    + $"'cyc config set endpoint https://…' or {VariableFor("endpoint")}."
+                );
         }
     }
 }

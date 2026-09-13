@@ -69,8 +69,10 @@ public sealed class VerbTreeTests {
 
     [Fact]
     public void UnknownFormatIsRefusedRatherThanGuessed() {
-        var failure = Should.Throw<CycUsageException>(
-            () => VerbTreeCatalog.Parse("""{"format":"99","apiVersion":"2026-08-01"}"""));
+        var failure = Should.Throw<CycUsageException>(() => VerbTreeCatalog.Parse(
+                """{"format":"99","apiVersion":"2026-08-01"}"""
+            )
+        );
 
         failure.Message.ShouldContain("format '99'");
     }

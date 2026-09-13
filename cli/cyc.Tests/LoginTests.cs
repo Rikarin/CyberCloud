@@ -6,8 +6,11 @@ namespace CyberCloud.Cli.Tests;
 ///     <c>cyc login</c> — the user experience over the SDK's grants.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>What is asserted here is what the CLI owns: the flags, the prompt, the browser and the
-///     report.</b> The device-authorization request, RFC 8628's polling and back-off, the token
+///     ⚠
+///     <b>
+///         What is asserted here is what the CLI owns: the flags, the prompt, the browser and the
+///         report.
+///     </b> The device-authorization request, RFC 8628's polling and back-off, the token
 ///     exchange and the keychain write are <c>CyberCloud.Sdk</c>'s, and the identity server they talk
 ///     to is scripted through <c>CyberCloudCredentialOptions.Transport</c>. The token cache is an
 ///     in-memory one, so no test touches a real keychain.
@@ -18,9 +21,9 @@ public sealed class LoginTests {
         var identity = new ScriptedTransport((request, _) => Identity(request));
 
         using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
-            Transport = identity,
-            TokenCache = TokenCache.CreateInMemory(),
-        });
+                Transport = identity, TokenCache = TokenCache.CreateInMemory()
+            }
+        );
 
         var code = await host.RunAsync("login", "--device-code", "--tenant", "contoso", "--output", "json");
 
@@ -44,9 +47,9 @@ public sealed class LoginTests {
         var identity = new ScriptedTransport((request, _) => Identity(request));
 
         using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
-            Transport = identity,
-            TokenCache = TokenCache.CreateInMemory(),
-        });
+                Transport = identity, TokenCache = TokenCache.CreateInMemory()
+            }
+        );
 
         await host.RunAsync("login", "--device-code", "--output", "json");
 
@@ -59,9 +62,9 @@ public sealed class LoginTests {
         var identity = new ScriptedTransport((request, _) => Identity(request));
 
         using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
-            Transport = identity,
-            TokenCache = TokenCache.CreateInMemory(),
-        });
+                Transport = identity, TokenCache = TokenCache.CreateInMemory()
+            }
+        );
 
         await host.RunAsync("login", "--device-code", "--output", "none");
 
@@ -101,15 +104,23 @@ public sealed class LoginTests {
 
         using var host = TestHost.Create(
             environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
-                ["CYC_CLIENT_SECRET"] = "s3cret",
+                ["CYC_CLIENT_SECRET"] = "s3cret"
             },
             credentialOptions: () => new CyberCloudCredentialOptions {
-                Transport = identity,
-                TokenCache = TokenCache.CreateInMemory(),
-            });
+                Transport = identity, TokenCache = TokenCache.CreateInMemory()
+            }
+        );
 
         var code = await host.RunAsync(
-            "login", "--service-principal", "--client-id", "app-1", "--tenant", "contoso", "--output", "none");
+            "login",
+            "--service-principal",
+            "--client-id",
+            "app-1",
+            "--tenant",
+            "contoso",
+            "--output",
+            "none"
+        );
 
         code.ShouldBe((int)ExitCode.Ok);
         host.Stderr.ShouldNotContain("s3cret");
@@ -118,16 +129,25 @@ public sealed class LoginTests {
 
     [Fact]
     public async Task AFailedSignInIsExitThree() {
-        var identity = new ScriptedTransport((request, _) => request.RequestUri!.AbsolutePath.EndsWith("token", StringComparison.Ordinal)
-            ? Responses.Json(HttpStatusCode.BadRequest, """{"error":"invalid_client","error_description":"Unknown client."}""")
-            : Identity(request));
+        var identity = new ScriptedTransport((request, _) => request.RequestUri!.AbsolutePath.EndsWith(
+                "token",
+                StringComparison.Ordinal
+            )
+                ? Responses.Json(
+                    HttpStatusCode.BadRequest,
+                    """{"error":"invalid_client","error_description":"Unknown client."}"""
+                )
+                : Identity(request)
+        );
 
         using var host = TestHost.Create(
-            environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["CYC_CLIENT_SECRET"] = "s3cret" },
+            environment: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+                ["CYC_CLIENT_SECRET"] = "s3cret"
+            },
             credentialOptions: () => new CyberCloudCredentialOptions {
-                Transport = identity,
-                TokenCache = TokenCache.CreateInMemory(),
-            });
+                Transport = identity, TokenCache = TokenCache.CreateInMemory()
+            }
+        );
 
         var code = await host.RunAsync("login", "--service-principal", "--client-id", "app-1", "--tenant", "contoso");
 
@@ -147,7 +167,9 @@ public sealed class LoginTests {
         var path = request.RequestUri!.AbsolutePath;
 
         if (path.EndsWith("openid-configuration", StringComparison.Ordinal)) {
-            return Responses.Json(HttpStatusCode.OK, """
+            return Responses.Json(
+                HttpStatusCode.OK,
+                """
                 {
                   "issuer": "https://login.cybercloud.io/",
                   "authorization_endpoint": "https://login.cybercloud.io/authorize",
@@ -155,11 +177,14 @@ public sealed class LoginTests {
                   "device_authorization_endpoint": "https://login.cybercloud.io/devicecode",
                   "jwks_uri": "https://login.cybercloud.io/jwks"
                 }
-                """);
+                """
+            );
         }
 
         if (path.EndsWith("devicecode", StringComparison.Ordinal)) {
-            return Responses.Json(HttpStatusCode.OK, """
+            return Responses.Json(
+                HttpStatusCode.OK,
+                """
                 {
                   "device_code": "secret-device-code",
                   "user_code": "ABCD-EFGH",
@@ -168,11 +193,15 @@ public sealed class LoginTests {
                   "expires_in": 300,
                   "interval": 0
                 }
-                """);
+                """
+            );
         }
 
-        return Responses.Json(HttpStatusCode.OK, $$"""
+        return Responses.Json(
+            HttpStatusCode.OK,
+            $$"""
             {"access_token":"{{SignedInToken}}","token_type":"Bearer","expires_in":600,"refresh_token":"{{RefreshToken}}"}
-            """);
+            """
+        );
     }
 }

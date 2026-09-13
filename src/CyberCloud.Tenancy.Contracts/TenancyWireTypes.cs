@@ -344,10 +344,16 @@ public sealed record IndexEntry {
     ///         released to whoever asked next.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Stamped from the type's declared retention at the moment of the delete and never
-    ///         rewritten.</b> docs/plan/08 § Soft delete: <i>"retention is set at creation and
-    ///         immutable afterwards — a window a caller can shorten under their own resource is not a
-    ///         recovery window."</i>
+    ///         ⚠
+    ///         <b>
+    ///             Stamped from the type's declared retention at the moment of the delete and never
+    ///             rewritten.
+    ///         </b> docs/plan/08 § Soft delete:
+    ///         <i>
+    ///             "retention is set at creation and
+    ///             immutable afterwards — a window a caller can shorten under their own resource is not a
+    ///             recovery window."
+    ///         </i>
     ///     </para>
     /// </remarks>
     [Id(5)]

@@ -19,8 +19,11 @@ using System.Text.Json;
 namespace CyberCloud.Identity.Tests;
 
 /// <summary>
-///     Issuing, delivering and redeeming a one-time code — docs/plan/11 § Credentials' <i>"6 digits,
-///     10 min, 5 attempts"</i>, against a silo wired the way <c>CyberCloud.Silo.Host</c> wires one.
+///     Issuing, delivering and redeeming a one-time code — docs/plan/11 § Credentials'
+///     <i>
+///         "6 digits,
+///         10 min, 5 attempts"
+///     </i>, against a silo wired the way <c>CyberCloud.Silo.Host</c> wires one.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -226,10 +229,8 @@ public sealed class OtpIssuanceTests(OtpIssuanceCluster cluster) {
         // many guesses are left — which is the whole of what an attacker holding a stolen mailbox
         // would want to know before spending their attempts.
         foreach (var (name, result) in new[] {
-                     ("a wrong code", wrong),
-                     ("a code for another user's challenge", neverIssued),
-                     ("a code for an account that does not exist", noSuchUser),
-                     ("an expired code", expired)
+                     ("a wrong code", wrong), ("a code for another user's challenge", neverIssued),
+                     ("a code for an account that does not exist", noSuchUser), ("an expired code", expired)
                  }) {
             result.IsSuccess.ShouldBeTrue(name + " must not be an error, which is itself an oracle");
             result.GetValueOrThrow().ShouldBeFalse(name);
@@ -322,7 +323,7 @@ public sealed class OtpIssuanceTests(OtpIssuanceCluster cluster) {
         // over variable-length values would leak the length rather than the value.
         withVault.Digest(tenant, user, OtpPurpose.SignIn, "1")
             .Length
-            .ShouldBe(withVault.Digest(tenant, user, OtpPurpose.SignIn, new string('9', 500)).Length);
+                .ShouldBe(withVault.Digest(tenant, user, OtpPurpose.SignIn, new string('9', 500)).Length);
     }
 
     [Fact]
@@ -464,8 +465,7 @@ public sealed class OtpIssuanceTests(OtpIssuanceCluster cluster) {
 
     /// <summary>A code that is not <paramref name="code" /> and is the same shape.</summary>
     /// <param name="code">The right one.</param>
-    static string Wrong(string code) =>
-        code[0] == '0' ? "1" + code[1..] : "0" + code[1..];
+    static string Wrong(string code) => code[0] == '0' ? "1" + code[1..] : "0" + code[1..];
 
     static string Serialized(UserGrainState state) => JsonSerializer.Serialize(state);
 }
@@ -475,8 +475,11 @@ public sealed class OtpIssuanceTests(OtpIssuanceCluster cluster) {
 ///     <b>not</b> opt into delivery.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This row is why <c>UnavailableOtpDelivery</c>'s message exists, and until now it could
-///     not be produced.</b> Three places in this tree claimed that type was "what every host gets";
+///     ⚠
+///     <b>
+///         This row is why <c>UnavailableOtpDelivery</c>'s message exists, and until now it could
+///         not be produced.
+///     </b> Three places in this tree claimed that type was "what every host gets";
 ///     no host registered an <c>IOtpDeliverySeam</c> at all and nothing called one, so the sentence
 ///     an operator was supposed to read at 03:00 was unreachable. It is reachable now, from the one
 ///     call that reaches the seam, and this is the assertion that keeps it so.
@@ -558,8 +561,7 @@ public sealed class OtpIssuanceCluster : IAsyncLifetime {
     ///     This is the only place in the suite the plaintext exists, and it exists because a carrier
     ///     is the one party that legitimately sees it.
     /// </remarks>
-    public IReadOnlyList<string> Codes =>
-        [.. Email.Sent.Select(x => x.Body.Split(' ', 2)[0])];
+    public IReadOnlyList<string> Codes => [.. Email.Sent.Select(x => x.Body.Split(' ', 2)[0])];
 
     /// <summary>The most recent code.</summary>
     public string LastCode => Codes[^1];
@@ -658,19 +660,15 @@ public sealed class OtpIssuanceCluster : IAsyncLifetime {
 
         foreach (var channel in (ChannelKind[])[ChannelKind.Email, ChannelKind.Sms]) {
             (await service.ConfigureChannelAsync(
-                new() {
-                    Channel = channel,
-                    Provider = "in-memory",
-                    Credentials = new() { Mode = CredentialMode.PlatformAccount },
-                    Limits = new() {
-                        MaxMessagesPerWindow = 10_000,
-                        MaxSpendPerWindow = 10_000m,
-                        Currency = "EUR"
-                    },
-                    EstimatedUnitCost = 0.05m,
-                    Enabled = true
-                }
-            )).IsSuccess.ShouldBeTrue();
+                    new() {
+                        Channel = channel,
+                        Provider = "in-memory",
+                        Credentials = new() { Mode = CredentialMode.PlatformAccount },
+                        Limits = new() { MaxMessagesPerWindow = 10_000, MaxSpendPerWindow = 10_000m, Currency = "EUR" },
+                        EstimatedUnitCost = 0.05m,
+                        Enabled = true
+                    }
+                )).IsSuccess.ShouldBeTrue();
         }
     }
 
@@ -718,8 +716,7 @@ public sealed class OtpIssuanceCluster : IAsyncLifetime {
 
         sealed class ForwardingLogger : ILogger {
             public IDisposable? BeginScope<TState>(TState state)
-                where TState : notnull =>
-                null;
+                where TState : notnull => null;
 
             public bool IsEnabled(LogLevel logLevel) => true;
 

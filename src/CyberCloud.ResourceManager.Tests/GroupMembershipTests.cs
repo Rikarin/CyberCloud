@@ -8,8 +8,11 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This suite exists because <c>TwoPhaseCreateTests</c> and <c>DeleteOrderingTests</c>
-///         were both green while nothing in the platform called the methods they cover.</b>
+///         ⚠
+///         <b>
+///             This suite exists because <c>TwoPhaseCreateTests</c> and <c>DeleteOrderingTests</c>
+///             were both green while nothing in the platform called the methods they cover.
+///         </b>
 ///         <c>IResourceGroupGrain</c> has owned <c>BeginCreateAsync</c>, <c>CompleteCreateAsync</c>,
 ///         <c>BeginDeleteAsync</c>, <c>FailDeleteAsync</c>, <c>CompleteDeleteAsync</c>,
 ///         <c>ListAsync</c> and <c>ListOrphansAsync</c> since that document was written, and every
@@ -24,7 +27,10 @@ namespace CyberCloud.ResourceManager.Tests;
 ///         at all and in the order docs/plan/06 fixes.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ResourceManagerCluster.IsolatedSubscription" /></b>, for the reason that
+///         ⚠
+///         <b>
+///             <see cref="ResourceManagerCluster.IsolatedSubscription" />
+///         </b>, for the reason that
 ///         property's remarks give: several cases here create resources and soft-delete them without
 ///         purging, which holds committed quota for the rest of the run by design.
 ///     </para>
@@ -36,8 +42,11 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
     // ── The create ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A create puts the resource into its group's membership, and it is <c>Creating</c>
-    ///     until the operation converges.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A create puts the resource into its group's membership, and it is <c>Creating</c>
+    ///         until the operation converges.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     docs/plan/06 § Two-phase create, step 2, from the group's side. The two halves are asserted
@@ -69,8 +78,11 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A write into a resource group that does not exist is refused, which it was not
-    ///     before.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A write into a resource group that does not exist is refused, which it was not
+    ///         before.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -82,8 +94,11 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
     ///         not be reached by anything walking the hierarchy downwards.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The second half is the one worth defending: the refusal leaves nothing
-    ///         behind.</b> The step sits after the index claim, so a refusal that left a confirmed
+    ///         ⚠
+    ///         <b>
+    ///             The second half is the one worth defending: the refusal leaves nothing
+    ///             behind.
+    ///         </b> The step sits after the index claim, so a refusal that left a confirmed
     ///         binding would make the name permanently unusable — the caller creates the group, retries
     ///         the identical <c>PUT</c>, and gets a <c>409</c> on a resource that does not exist. The
     ///         retry below is what proves the claim expired rather than stuck.
@@ -105,11 +120,12 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
 
         // ⚠ The index claim was never confirmed, so the name is not held by the refusal.
         var entry = await cluster.Index(address).GetAsync();
-        entry.GetValueOrThrow().State.ShouldNotBe(
-            IndexEntryState.Confirmed,
-            "a refused write must not leave a confirmed binding, or the retry that follows the group's "
-            + "creation would answer 409 for a resource that does not exist"
-        );
+        entry.GetValueOrThrow()
+            .State.ShouldNotBe(
+                IndexEntryState.Confirmed,
+                "a refused write must not leave a confirmed binding, or the retry that follows the group's "
+                + "creation would answer 409 for a resource that does not exist"
+            );
 
         // Create the group and the identical request goes through.
         var made = await cluster.Group(address).CreateAsync(ResourceManagerCluster.Tenant, "eu-west-1");
@@ -125,8 +141,11 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A create that fails terminally leaves the member <c>Failed</c> and not
-    ///     <c>Creating</c>, which is what keeps the reaper off it.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A create that fails terminally leaves the member <c>Failed</c> and not
+    ///         <c>Creating</c>, which is what keeps the reaper off it.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <c>IResourceGroupGrain.ListOrphansAsync</c> enumerates members that have been
@@ -161,8 +180,11 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>A member that never got its resource is what <c>ListOrphansAsync</c> returns, and
-    ///     until the write path recorded membership there was nothing for it to return.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A member that never got its resource is what <c>ListOrphansAsync</c> returns, and
+    ///         until the write path recorded membership there was nothing for it to return.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     docs/plan/06 § Two-phase create: an orphan is a resource grain with durable state and no
@@ -208,8 +230,11 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
     // ── The delete, which is the reverse order and the harder half ──────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A delete marks the member <c>Deleting</c> and it <i>stays listed</i> until the
-    ///     teardown converges — and a teardown that fails keeps it listed with the reason.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A delete marks the member <c>Deleting</c> and it <i>stays listed</i> until the
+    ///         teardown converges — and a teardown that fails keeps it listed with the reason.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     docs/plan/06 § Two-phase create: "A resource whose data plane teardown fails is left in
@@ -275,8 +300,11 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>The order is the reverse of the create's: the index is free while the member is still
-    ///     listed.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The order is the reverse of the create's: the index is free while the member is still
+    ///         listed.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     docs/plan/06 § Two-phase create: "release the index first (so the name is immediately
@@ -309,8 +337,11 @@ public sealed class GroupMembershipTests(ResourceManagerCluster cluster) {
     // ── Soft delete, where "leaves the group" and "is deleted" are different questions ───────────
 
     /// <summary>
-    ///     ⚠ <b>A soft delete takes the resource out of its group's membership, and a restore puts it
-    ///     back.</b>
+    ///     ⚠
+    ///     <b>
+    ///         A soft delete takes the resource out of its group's membership, and a restore puts it
+    ///         back.
+    ///     </b>
     /// </summary>
     /// <remarks>
     ///     <para>

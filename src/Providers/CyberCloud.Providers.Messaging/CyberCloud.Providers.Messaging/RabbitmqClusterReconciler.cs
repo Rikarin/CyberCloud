@@ -51,8 +51,11 @@ namespace CyberCloud.Providers.Messaging;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>There is no apply ORDER to get wrong, and that is worth stating because both
-///         reconcilers beside this one have one and both orders are load-bearing.</b> The Kafka one
+///         ⚠
+///         <b>
+///             There is no apply ORDER to get wrong, and that is worth stating because both
+///             reconcilers beside this one have one and both orders are load-bearing.
+///         </b> The Kafka one
 ///         applies a <c>Kafka</c> before its <c>KafkaNodePool</c> because a pool naming an absent
 ///         cluster is silently ignored; the NATS one applies a <c>ConfigMap</c> and a headless
 ///         <c>Service</c> before a <c>StatefulSet</c> because a pod cannot start without them. One
@@ -60,31 +63,43 @@ namespace CyberCloud.Providers.Messaging;
 ///         would assert it are absent for that reason rather than forgotten.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Converged here means "the custom resource is applied and reads back", not "the broker
-///         is serving", and on this operator the gap is wider than the phrase suggests.</b> A
+///         ⚠
+///         <b>
+///             Converged here means "the custom resource is applied and reads back", not "the broker
+///             is serving", and on this operator the gap is wider than the phrase suggests.
+///         </b> A
 ///         scale-DOWN is accepted by the API server, refused by the controller, and reported only in
 ///         <c>status.conditions[ReconcileSuccess]</c> with an <c>UnsupportedOperation</c> event — so
 ///         a shrink reads back as desired while the <c>StatefulSet</c> keeps its old node count. The
 ///         honest stronger check is that condition, and it is not made because nothing in this
 ///         repository can produce it: the Docker-free harness is a dictionary and the cluster-backed
-///         harness runs a bare k3s with the definitions installed and <b>no RabbitMQ cluster
-///         operator</b> — see <c>ClusterConformanceHarness</c>, which derives them from the case's
+///         harness runs a bare k3s with the definitions installed and
+///         <b>
+///             no RabbitMQ cluster
+///             operator
+///         </b> — see <c>ClusterConformanceHarness</c>, which derives them from the case's
 ///         own objects. A readiness gate written against a world where no controller ever sets the
 ///         condition would make every resource in every test hang and then fail, so the check is
 ///         written down as owed in <c>charts/managed/rabbitmq/conformance.yaml</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A cluster whose API server has no <c>rabbitmq.com/v1beta1</c> answers the apply with
-///         a 404, and since 2026-08-12 that comes back naming the API server's own message instead of
-///         a <c>CodecNotFoundException</c>.</b> That matters more here than on the other two rows,
+///         ⚠
+///         <b>
+///             A cluster whose API server has no <c>rabbitmq.com/v1beta1</c> answers the apply with
+///             a 404, and since 2026-08-12 that comes back naming the API server's own message instead of
+///             a <c>CodecNotFoundException</c>.
+///         </b> That matters more here than on the other two rows,
 ///         because this operator's bundle ALSO installs an admission webhook with
 ///         <c>failurePolicy: Fail</c> and a cert-manager dependency — so a half-installed bundle
 ///         refuses every create and update with a webhook error rather than a missing-kind one, and
 ///         the operator of the cluster needs to read which of the two it got.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
 ///         would let the platform silently overwrite a tenant's own controller. ⚠ On this type the
 ///         other field manager is most plausibly <b>the operator itself</b>: its mutating webhook
 ///         writes <c>spec.image</c>, and its controller writes <c>metadata.annotations</c> — so a
@@ -188,7 +203,7 @@ public sealed class RabbitmqClusterReconciler(IClock clock) : IResourceReconcile
             // and it is the reason InProgress below is the ordinary first answer rather than a rare
             // one: with no operator installed, the object never goes away at all and the resource
             // stays in Deleting, visibly, instead of the platform claiming a teardown it did not do.
-            .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(deleteError);
@@ -224,9 +239,7 @@ public sealed class RabbitmqClusterReconciler(IClock clock) : IResourceReconcile
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the RabbitmqCluster is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the RabbitmqCluster is absent" };
         }
 
         var found = read.GetValueOrThrow();
@@ -250,8 +263,11 @@ public sealed class RabbitmqClusterReconciler(IClock clock) : IResourceReconcile
     ///     <see langword="null" /> when the apply landed, or the outcome to return from the pass.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>A static method rather than an instance one with a cached builder, and that is the
-    ///     clause-2 rule rather than a style choice.</b> A reconciler is a singleton serving every
+    ///     ⚠
+    ///     <b>
+    ///         A static method rather than an instance one with a cached builder, and that is the
+    ///         clause-2 rule rather than a style choice.
+    ///     </b> A reconciler is a singleton serving every
     ///     tenant, so any field is shared state.
     /// </remarks>
     static async Task<ReconcileOutcome?> Apply(

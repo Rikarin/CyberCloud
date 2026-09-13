@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.DBforMySQL;
@@ -10,14 +11,23 @@ namespace CyberCloud.Providers.DBforMySQL;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/12 § The catalogue: <i>"MariaDB — <c>CyberCloud.DBforMySQL/servers</c> · M3 ·
-///         0.8 EM"</i>, on mariadb-operator (ADR-010 clause 1).
+///         docs/plan/12 § The catalogue:
+///         <i>
+///             "MariaDB — <c>CyberCloud.DBforMySQL/servers</c> · M3 ·
+///             0.8 EM"
+///         </i>, on mariadb-operator (ADR-010 clause 1).
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE DISPLAY SUMMARY BELOW IS THE PRODUCT PAGE, AND IT IS THE ROW'S CENTRAL
-///         OBLIGATION RATHER THAN COPY.</b> docs/plan/12 line 310 says this row is <i>"positioned as
-///         MySQL-compatible; the same honesty rule as FerretDB applies to the compatibility
-///         claim"</i>, and that rule requires the page to say it is a compatibility layer and to carry
+///         ⚠
+///         <b>
+///             THE DISPLAY SUMMARY BELOW IS THE PRODUCT PAGE, AND IT IS THE ROW'S CENTRAL
+///             OBLIGATION RATHER THAN COPY.
+///         </b> docs/plan/12 line 310 says this row is
+///         <i>
+///             "positioned as
+///             MySQL-compatible; the same honesty rule as FerretDB applies to the compatibility
+///             claim"
+///         </i>, and that rule requires the page to say it is a compatibility layer and to carry
 ///         a supported-subset table. The sentence is <c>MariaDbServers.CompatibilityClaim</c>, the
 ///         table is <c>MariaDbServers.SupportedSubset</c>, and <c>MariaDbCompatibilityTests</c>
 ///         asserts that both reach this <c>Display</c> and the emitted document — a summary that
@@ -33,10 +43,16 @@ namespace CyberCloud.Providers.DBforMySQL;
 ///         below for what changed.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>SupportsSoftDelete(7)</c>, matching <c>CyberCloud.DBforPostgreSQL/servers</c>, and
-///         the match is the point rather than a copy.</b> docs/plan/06 § Tags, locks asks for a window on
-///         a type carrying data — <i>"a dropped production database is not a support ticket you want to
-///         have to say no to"</i>, with 7 days named — and two managed relational databases that gave a
+///         ⚠
+///         <b>
+///             <c>SupportsSoftDelete(7)</c>, matching <c>CyberCloud.DBforPostgreSQL/servers</c>, and
+///             the match is the point rather than a copy.
+///         </b> docs/plan/06 § Tags, locks asks for a window on
+///         a type carrying data —
+///         <i>
+///             "a dropped production database is not a support ticket you want to
+///             have to say no to"
+///         </i>, with 7 days named — and two managed relational databases that gave a
 ///         tenant different recovery windows would be a difference the tenant has to look up. It went
 ///         undeclared while the manager did not read <c>SoftDeleteDays</c>; docs/plan/08 § Soft delete is
 ///         now built, so the declaration is the type's own claim about its data.
@@ -57,12 +73,18 @@ public sealed class MariaDbProvider : IResourceProvider {
     ///     What the CLI's alias table would spell this row.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>NOT <c>mysql</c>, and the reason is this row's whole obligation rather than a naming
-    ///     preference.</b> docs/plan/21 § Grammar's alias table maps a short form onto a long one, and
+    ///     ⚠
+    ///     <b>
+    ///         NOT <c>mysql</c>, and the reason is this row's whole obligation rather than a naming
+    ///         preference.
+    ///     </b> docs/plan/21 § Grammar's alias table maps a short form onto a long one, and
     ///     the long one here is <c>dbformysql server</c> — which <c>CliEmitter.GroupOf</c> derives from
     ///     the provider namespace and which nothing in this provider chooses. The SHORT form is the
-    ///     name a person types and reads back in their own shell history, and <c>cyc mysql server
-    ///     create</c> is a sentence that says the platform runs MySQL. <c>cyc mariadb server create</c>
+    ///     name a person types and reads back in their own shell history, and
+    ///     <c>
+    /// cyc mysql server
+    ///     create
+    ///     </c> is a sentence that says the platform runs MySQL. <c>cyc mariadb server create</c>
     ///     says what is actually running, in the one place a tenant sees it most often.
     ///     <para>
     ///         ⚠ <b>It is also checked against every CLI group key as a literal</b>, in

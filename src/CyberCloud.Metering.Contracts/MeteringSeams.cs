@@ -20,16 +20,22 @@ namespace CyberCloud.Metering.Contracts;
 ///     </para>
 ///     <list type="bullet">
 ///         <item>
-///             docs/plan/04 § Streams' own rule is <i>"a stream is for fan-out of facts, never for
-///             issuing commands. A command is a grain call, because a grain call has a result and a
-///             stream does not, and 'did it work' is not a question you want to answer by correlating
-///             a second stream."</i> An emitter must know whether the record landed — otherwise it
+///             docs/plan/04 § Streams' own rule is
+///             <i>
+///                 "a stream is for fan-out of facts, never for
+///                 issuing commands. A command is a grain call, because a grain call has a result and a
+///                 stream does not, and 'did it work' is not a question you want to answer by correlating
+///                 a second stream."
+///             </i> An emitter must know whether the record landed — otherwise it
 ///             cannot retry, and "never lost" reduces to hope. That makes this a command by
 ///             docs/plan/04's own test.
 ///         </item>
 ///         <item>
-///             The stream's contribution is <b>buffering across a rollup outage</b> and <b>fan-out to
-///             a second consumer</b>. Neither exists in M1: there is one consumer, and the rollup
+///             The stream's contribution is <b>buffering across a rollup outage</b> and
+///             <b>
+///                 fan-out to
+///                 a second consumer
+///             </b>. Neither exists in M1: there is one consumer, and the rollup
 ///             grain is durable, so a record that lands is already as safe as JetStream would make it.
 ///         </item>
 ///         <item>
@@ -72,12 +78,18 @@ public interface IUsageEmitter {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is a view of the resource graph and it must never become a view of a metrics
-///         pipeline.</b> docs/plan/22 § Two kinds of meter: <i>"State-based meters must be derived
-///         from the platform's own record of the resource, not from Kubernetes metrics. A stopped VM
-///         still has a disk; a <c>Deployment</c> scaled to zero still has a
-///         <c>PersistentVolumeClaim</c>. Metrics know about running pods; the resource graph knows
-///         what exists. Getting this backwards under-bills storage."</i>
+///         ⚠
+///         <b>
+///             This is a view of the resource graph and it must never become a view of a metrics
+///             pipeline.
+///         </b> docs/plan/22 § Two kinds of meter:
+///         <i>
+///             "State-based meters must be derived
+///             from the platform's own record of the resource, not from Kubernetes metrics. A stopped VM
+///             still has a disk; a <c>Deployment</c> scaled to zero still has a
+///             <c>PersistentVolumeClaim</c>. Metrics know about running pods; the resource graph knows
+///             what exists. Getting this backwards under-bills storage."
+///         </i>
 ///     </para>
 ///     <para>
 ///         The shape enforces as much of that as a type can. <see cref="MeteredResource.Quantities" />
@@ -104,8 +116,11 @@ public interface IMeteredResourceSource {
     /// <returns>
     ///     The resources, or a failure.
     ///     <para>
-    ///         ⚠ <b>An empty array and a failure are very different and an implementation must not
-    ///         confuse them.</b> Empty means "this subscription genuinely holds nothing" and produces
+    ///         ⚠
+    ///         <b>
+    ///             An empty array and a failure are very different and an implementation must not
+    ///             confuse them.
+    ///         </b> Empty means "this subscription genuinely holds nothing" and produces
     ///         no usage, correctly. A failure means "we could not find out", and the sampler must
     ///         skip the window and retry rather than record a zero — a zero written for a window that
     ///         had usage is the one loss docs/plan/22's opening property forbids, and it is
@@ -136,8 +151,10 @@ public interface IMeteredResourceSource {
 ///     </para>
 ///     <list type="number">
 ///         <item>
-///             <b><c>usage_raw</c> as a <c>ReplacingMergeTree</c> keyed on
-///             <see cref="UsageEvent.IdempotencyKey" /></b> — docs/plan/22 § The pipeline names both
+///             <b>
+///                 <c>usage_raw</c> as a <c>ReplacingMergeTree</c> keyed on
+///                 <see cref="UsageEvent.IdempotencyKey" />
+///             </b> — docs/plan/22 § The pipeline names both
 ///             the engine and the key. That is a <i>second</i> dedup behind the rollup grain's, not a
 ///             replacement for it: the grain's is synchronous and authoritative for what reaches the
 ///             ledger, and ClickHouse's collapses anything that reached the table by another route

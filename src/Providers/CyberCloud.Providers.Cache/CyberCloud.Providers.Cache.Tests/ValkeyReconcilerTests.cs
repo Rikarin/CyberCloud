@@ -63,8 +63,12 @@ public sealed class ValkeyReconcilerTests {
         // mode (which changes the storage block AND two customConfig lines) and the volume size. A
         // cache that kept one of them would be caught; a cache that kept a whole rendered document
         // would be caught three times over.
-        using var aliceBody = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, replicas: 3, persistence: "AOF", size: "8Gi"));
-        using var bobBody = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, replicas: 5, persistence: "None", size: "64Gi"));
+        using var aliceBody = JsonDocument.Parse(
+            ValkeyCaches.Body(ClusterId, replicas: 3, persistence: "AOF", size: "8Gi")
+        );
+        using var bobBody = JsonDocument.Parse(
+            ValkeyCaches.Body(ClusterId, replicas: 5, persistence: "None", size: "64Gi")
+        );
 
         // Interleaved on purpose: A, B, A. A reconciler that remembered anything from its first pass
         // would answer the third pass with B's values.
@@ -81,9 +85,8 @@ public sealed class ValkeyReconcilerTests {
         applied.Count.ShouldBe(6);
 
         foreach (var (index, kind) in new[] {
-                     (0, "Secret"), (1, "RedisFailover"),
-                     (2, "Secret"), (3, "RedisFailover"),
-                     (4, "Secret"), (5, "RedisFailover")
+                     (0, "Secret"), (1, "RedisFailover"), (2, "Secret"), (3, "RedisFailover"), (4, "Secret"),
+                     (5, "RedisFailover")
                  }) {
             applied[index].Target.Kind.Kind.ShouldBe(kind);
         }
@@ -93,12 +96,14 @@ public sealed class ValkeyReconcilerTests {
         Redis(applied[5].Body)["replicas"]!.GetValue<int>().ShouldBe(3);
 
         Redis(applied[1].Body)["storage"]!["persistentVolumeClaim"]!["spec"]!["resources"]!["requests"]!["storage"]!
-            .GetValue<string>().ShouldBe("8Gi");
-        Redis(applied[3].Body)["storage"]!.AsObject().ContainsKey("emptyDir").ShouldBeTrue(
-            "tenant B asked for no persistence and got tenant A's volume claim"
-        );
+            .GetValue<string>()
+            .ShouldBe("8Gi");
+        Redis(applied[3].Body)["storage"]!.AsObject()
+            .ContainsKey("emptyDir")
+            .ShouldBeTrue("tenant B asked for no persistence and got tenant A's volume claim");
         Redis(applied[5].Body)["storage"]!["persistentVolumeClaim"]!["spec"]!["resources"]!["requests"]!["storage"]!
-            .GetValue<string>().ShouldBe("8Gi");
+            .GetValue<string>()
+            .ShouldBe("8Gi");
 
         applied[1].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantA));
         applied[3].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantB));
@@ -413,10 +418,11 @@ public sealed class ValkeyReconcilerTests {
         // 16Gi × 0.75, in bytes.
         config.ShouldContain("maxmemory 12884901888");
         config.ShouldContain("maxmemory-policy allkeys-lru");
-        config.IndexOf("maxmemory 12884901888").ShouldBeLessThan(
-            config.IndexOf("maxmemory-policy allkeys-lru"),
-            "the ceiling is set before the policy that reads it, which is how redis.conf is read"
-        );
+        config.IndexOf("maxmemory 12884901888")
+            .ShouldBeLessThan(
+                config.IndexOf("maxmemory-policy allkeys-lru"),
+                "the ceiling is set before the policy that reads it, which is how redis.conf is read"
+            );
     }
 
     [Theory]
@@ -509,12 +515,13 @@ public sealed class ValkeyReconcilerTests {
         var claims = ValkeyCaches.RetainedClaims("ns", "observed", desired.RootElement);
 
         claims.Length.ShouldBe(2);
-        claims.Select(x => x.Claim.Name).ShouldBe(
-            [
-                RetainedVolume.NameFor(template, "rfr-observed", 0),
-                RetainedVolume.NameFor(template, "rfr-observed", 1)
-            ]
-        );
+        claims.Select(x => x.Claim.Name)
+            .ShouldBe(
+                [
+                    RetainedVolume.NameFor(template, "rfr-observed", 0),
+                    RetainedVolume.NameFor(template, "rfr-observed", 1)
+                ]
+            );
 
         // ⚠ `rfr-` is names.go's GetRedisName and not a guess — see OperatorSetName's remarks for why
         // reading an archived project's convention is safe here and would not be elsewhere.
@@ -584,11 +591,12 @@ public sealed class ValkeyReconcilerTests {
         outcome.IsConverged.ShouldBeTrue(outcome.ToString());
 
         foreach (var claim in planted) {
-            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim)).ShouldBeFalse(
-                $"'{claim.Claim}' survived the final teardown. `keepAfterDeletion: true` asks spotahome "
-                + "to leave it, and CyberCloud.Cache/redis declares no recovery window, so nothing "
-                + "else is ever coming back for it."
-            );
+            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim))
+                .ShouldBeFalse(
+                    $"'{claim.Claim}' survived the final teardown. `keepAfterDeletion: true` asks spotahome "
+                    + "to leave it, and CyberCloud.Cache/redis declares no recovery window, so nothing "
+                    + "else is ever coming back for it."
+                );
         }
     }
 
@@ -627,9 +635,7 @@ public sealed class ValkeyReconcilerTests {
                 connection,
                 store,
                 new NullLog()
-            ) {
-                SecretWriter = store
-            },
+            ) { SecretWriter = store },
             TestContext.Current.CancellationToken
         );
     }
@@ -638,8 +644,11 @@ public sealed class ValkeyReconcilerTests {
     ///     A pass's context, with a vault that mints once and resolves what it minted.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><see cref="InMemorySecretVault" /> rather than a stub that always answers, and the
-    ///     difference is the whole point of the idempotence assertions below.</b> A double that
+    ///     ⚠
+    ///     <b>
+    ///         <see cref="InMemorySecretVault" /> rather than a stub that always answers, and the
+    ///         difference is the whole point of the idempotence assertions below.
+    ///     </b> A double that
     ///     overwrote on every call would make "the rendered Secret is byte-identical across two
     ///     passes" pass against a writer with no mint-once property — the test would be measuring
     ///     itself. This one implements <c>cas=0</c> for real, with <c>TryAdd</c>.
@@ -667,9 +676,7 @@ public sealed class ValkeyReconcilerTests {
             connection,
             store,
             new NullLog()
-        ) {
-            SecretWriter = store
-        };
+        ) { SecretWriter = store };
     }
 
     /// <summary>An address in a named tenant and its own subscription.</summary>
@@ -808,8 +815,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     test puts the same resource name in two tenants, which is the only shape in which one
     ///     singleton reconciler serving both can be caught mixing them.
     /// </summary>
-    internal static string Key(ObjectRef target) =>
-        target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+    internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

@@ -1,5 +1,6 @@
 // ⚠ For `Result<T>` on the retained-volume seam. Safe beside the GlobalUsings ErrorCode alias, which
 // is what disambiguates the one name this namespace collides with.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Collections.Immutable;
@@ -14,8 +15,11 @@ namespace CyberCloud.Providers.Mail;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>NO OPERATOR EXISTS FOR ANY OF THE THREE COMPONENTS, AND THAT IS THE FIRST FACT ABOUT
-///         THIS RECONCILER.</b> Postfix, Dovecot and Rspamd are three of the oldest and most widely
+///         ⚠
+///         <b>
+///             NO OPERATOR EXISTS FOR ANY OF THE THREE COMPONENTS, AND THAT IS THE FIRST FACT ABOUT
+///             THIS RECONCILER.
+///         </b> Postfix, Dovecot and Rspamd are three of the oldest and most widely
 ///         run daemons on the internet and not one has a Kubernetes controller worth depending on —
 ///         so every object here is a core kind this provider names itself, the shape
 ///         <see cref="MailDomains" /> shares with <c>charts/managed/nats</c> after
@@ -27,8 +31,11 @@ namespace CyberCloud.Providers.Mail;
 ///     </para>
 ///     <list type="number">
 ///         <item>
-///             <b>Idempotent.</b> ⚠ <b>This is the clause this type is most able to break, and the
-///             mint is where.</b> <see cref="MailDomains.GenerateCredentials" /> returns a NEW DKIM
+///             <b>Idempotent.</b> ⚠
+///             <b>
+///                 This is the clause this type is most able to break, and the
+///                 mint is where.
+///             </b> <see cref="MailDomains.GenerateCredentials" /> returns a NEW DKIM
 ///             keypair on every call, and what reaches the <c>Secret</c> is never that keypair: it is
 ///             what <c>ISecretWriter.MintAsync</c>'s <c>cas=0</c> left in the vault on the first pass
 ///             and <c>ISecretResolver</c> read back on this one. A pass that rendered the freshly
@@ -69,16 +76,22 @@ namespace CyberCloud.Providers.Mail;
 ///         Operator fails <i>after</i> the mail is running rather than instead of it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Converged here means "the five objects are applied and read back", not "mail is
-///         flowing".</b> The honest stronger check is an LMTP conversation with the back end, and it
+///         ⚠
+///         <b>
+///             Converged here means "the five objects are applied and read back", not "mail is
+///             flowing".
+///         </b> The honest stronger check is an LMTP conversation with the back end, and it
 ///         is not made because nothing in this repository can hold one: the Docker-free harness is a
 ///         dictionary and the cluster-backed harness runs a bare k3s with no mail images. That is
 ///         written down as owed in <c>charts/managed/mail/conformance.yaml</c> rather than left for
 ///         somebody to discover.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
 ///         would let the platform silently overwrite a tenant's own controller.
 ///     </para>
 /// </remarks>
@@ -149,9 +162,9 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
                 // the StatefulSet controller makes is findable by selector — see
                 // MailDomains.ClaimTemplatePath. It is a no-op on the four objects that have no
                 // template at that path.
-                .WithTemplateLabels(MailDomains.ClaimTemplatePath)
-                .ObjectJson(body)
-                .ApplyAsync(cancellationToken);
+                    .WithTemplateLabels(MailDomains.ClaimTemplatePath)
+                    .ObjectJson(body)
+                    .ApplyAsync(cancellationToken);
 
             if (applied.TryGetError(out var applyError)) {
                 // ⚠ The code decides, not this call site. An apply that could not reach the cluster
@@ -230,7 +243,7 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
                 // would run out of passes waiting for a controller it does not drive. The read-back
                 // below is what makes Background safe: this returns Converged when the objects are
                 // GONE, not when the deletes were issued.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError)
                 && deleteError.Code != ErrorCode.ResourceNotFound) {
@@ -292,9 +305,7 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the mail back end is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the mail back end is absent" };
         }
 
         var found = read.GetValueOrThrow();
@@ -316,8 +327,11 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
     ///     reads back whichever pair is now authoritative.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
-    ///     IDEMPOTENT.</b> See this type's clause-1 note: a rendered fresh key would break DKIM for
+    ///     ⚠
+    ///     <b>
+    ///         THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
+    ///         IDEMPOTENT.
+    ///     </b> See this type's clause-1 note: a rendered fresh key would break DKIM for
     ///     the domain silently. <c>MintAsync</c>'s <c>cas=0</c> writes only when the path is empty,
     ///     so the value read back afterwards is the first pass's on every pass.
     /// </remarks>
@@ -378,13 +392,14 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
         string name,
         JsonElement desired,
         IReadOnlyDictionary<string, string> secrets
-    ) => [
-        (MailDomains.CredentialsSecretRef(ns, name), MailDomains.CredentialsSecretJson(name, secrets)),
-        (MailDomains.ConfigMapRef(ns, name), MailDomains.ConfigMapJson(name, desired)),
-        (MailDomains.ServiceRef(ns, name), MailDomains.ServiceJson(name, desired)),
-        (MailDomains.SetRef(ns, name), MailDomains.StatefulSetJson(name, desired)),
-        (MailDomains.PodMonitorRef(ns, name), MailDomains.PodMonitorJson(name))
-    ];
+    ) =>
+        [
+            (MailDomains.CredentialsSecretRef(ns, name), MailDomains.CredentialsSecretJson(name, secrets)),
+            (MailDomains.ConfigMapRef(ns, name), MailDomains.ConfigMapJson(name, desired)),
+            (MailDomains.ServiceRef(ns, name), MailDomains.ServiceJson(name, desired)),
+            (MailDomains.SetRef(ns, name), MailDomains.StatefulSetJson(name, desired)),
+            (MailDomains.PodMonitorRef(ns, name), MailDomains.PodMonitorJson(name))
+        ];
 
     /// <summary>The smallest object a delete command will accept.</summary>
     /// <remarks>
@@ -400,8 +415,11 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
     ///     <see langword="null" /> when it landed.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A static method rather than an instance one with a cached builder, and that is the
-    ///     clause-2 rule rather than a style choice.</b> A reconciler is a singleton serving every
+    ///     ⚠
+    ///     <b>
+    ///         A static method rather than an instance one with a cached builder, and that is the
+    ///         clause-2 rule rather than a style choice.
+    ///     </b> A reconciler is a singleton serving every
     ///     tenant, so any field is shared state.
     /// </remarks>
     static ReconcileOutcome? Unfinished(ReconcileContext context, ApplyOutcome outcome) {

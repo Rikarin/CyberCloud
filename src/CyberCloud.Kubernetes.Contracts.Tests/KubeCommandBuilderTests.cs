@@ -121,15 +121,15 @@ public sealed class KubeCommandBuilderTests {
     // ── Nested claim templates ─────────────────────────────────────────────────────────────────
 
     const string StatefulSetJson = """
-        {
-          "metadata": { "name": "main" },
-          "spec": {
-            "replicas": 2,
-            "template": { "metadata": { "labels": { "app": "main" } }, "spec": {} },
-            "volumeClaimTemplates": [ { "metadata": { "name": "data" }, "spec": {} } ]
-          }
-        }
-        """;
+                                   {
+                                     "metadata": { "name": "main" },
+                                     "spec": {
+                                       "replicas": 2,
+                                       "template": { "metadata": { "labels": { "app": "main" } }, "spec": {} },
+                                       "volumeClaimTemplates": [ { "metadata": { "name": "data" }, "spec": {} } ]
+                                     }
+                                   }
+                                   """;
 
     [Fact]
     public void WithoutWithTemplateLabelsAClaimTemplateCarriesNothing() {

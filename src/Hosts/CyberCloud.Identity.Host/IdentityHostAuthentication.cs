@@ -29,8 +29,11 @@ namespace CyberCloud.Identity.Host;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b><see cref="SchemeName" /> is not
-///         <see cref="CookieAuthenticationDefaults.AuthenticationScheme" />.</b> The default is
+///         ⚠
+///         <b>
+///             <see cref="SchemeName" /> is not
+///             <see cref="CookieAuthenticationDefaults.AuthenticationScheme" />.
+///         </b> The default is
 ///         <c>"Cookies"</c>, which several libraries also use as their default — including some that
 ///         register a second cookie handler on the side. Naming it explicitly means a second
 ///         registration is a duplicate-scheme exception at start-up rather than a silent override of

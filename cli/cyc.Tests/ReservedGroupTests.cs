@@ -15,8 +15,11 @@ namespace CyberCloud.Cli.Tests;
 ///         name on the list has a command behind it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This list is not what stops an <i>extension</i> shadowing a built-in, and must not be
-///         made to be.</b> It covers the generated tree, which is ours: a collision there is a build
+///         ⚠
+///         <b>
+///             This list is not what stops an <i>extension</i> shadowing a built-in, and must not be
+///             made to be.
+///         </b> It covers the generated tree, which is ours: a collision there is a build
 ///         defect and failing the whole CLI is the right cost. An extension's name comes out of a
 ///         directory a user can write, so the same throw would let a file called <c>cyc-login</c>
 ///         disable <c>cyc</c> entirely. <c>ExtensionDispatch</c> handles that case instead, by running
@@ -35,9 +38,12 @@ namespace CyberCloud.Cli.Tests;
 ///     </para>
 /// </remarks>
 public sealed class ReservedGroupTests {
-    /// <summary>Every name the host owns. Kept in step with <c>CommandTree.ReservedGroups</c> by <see cref="TheReservedListIsExactlyTheseNames" />.</summary>
+    /// <summary>
+    ///     Every name the host owns. Kept in step with <c>CommandTree.ReservedGroups</c> by
+    ///     <see cref="TheReservedListIsExactlyTheseNames" />.
+    /// </summary>
     static readonly string[] ReservedNames = [
-        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version",
+        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version"
     ];
 
     /// <summary>The same names, as xUnit theory rows.</summary>
@@ -48,8 +54,12 @@ public sealed class ReservedGroupTests {
     public void RefusesAGeneratedGroupThatShadowsAHostCommand(string reserved) {
         using var test = TestHost.Create();
 
-        var failure = Should.Throw<CycUsageException>(
-            () => CommandTree.Build(test.Host, GlobalOptions.For(test.Host.Catalog), TreeWith(reserved)));
+        var failure = Should.Throw<CycUsageException>(() => CommandTree.Build(
+                test.Host,
+                GlobalOptions.For(test.Host.Catalog),
+                TreeWith(reserved)
+            )
+        );
 
         // The message has to name the group and say what to do about it: the reader is a provider
         // author whose namespace is wrong, and "collision" alone does not tell them which one.
@@ -80,11 +90,16 @@ public sealed class ReservedGroupTests {
     public void TheReservedListIsExactlyTheseNames() {
         using var test = TestHost.Create();
 
-        var failure = Should.Throw<CycUsageException>(
-            () => CommandTree.Build(test.Host, GlobalOptions.For(test.Host.Catalog), TreeWith("login")));
+        var failure = Should.Throw<CycUsageException>(() => CommandTree.Build(
+                test.Host,
+                GlobalOptions.For(test.Host.Catalog),
+                TreeWith("login")
+            )
+        );
 
-        foreach (var name in ReservedNames)
+        foreach (var name in ReservedNames) {
             failure.Message.ShouldContain(name);
+        }
     }
 
     /// <summary>
@@ -96,8 +111,12 @@ public sealed class ReservedGroupTests {
     public async Task RefusingATreeCostsTheWholeCli() {
         using var test = TestHost.Create();
 
-        var failure = Should.Throw<CycUsageException>(
-            () => CommandTree.Build(test.Host, GlobalOptions.For(test.Host.Catalog), TreeWith("extension")));
+        var failure = Should.Throw<CycUsageException>(() => CommandTree.Build(
+                test.Host,
+                GlobalOptions.For(test.Host.Catalog),
+                TreeWith("extension")
+            )
+        );
 
         failure.Message.ShouldContain("extension");
 
@@ -115,11 +134,12 @@ public sealed class ReservedGroupTests {
     ///     reservation it is testing.
     /// </remarks>
     /// <param name="group">The group name.</param>
-    static VerbTreeDocument TreeWith(string group) => new() {
-        Format = VerbTreeCatalog.SupportedFormat,
-        ApiVersion = "2026-08-01",
-        Groups = new Dictionary<string, VerbTreeGroup>(StringComparer.Ordinal) {
-            [group] = new() { Name = group, Summary = "A group invented by this test." },
-        },
-    };
+    static VerbTreeDocument TreeWith(string group) =>
+        new() {
+            Format = VerbTreeCatalog.SupportedFormat,
+            ApiVersion = "2026-08-01",
+            Groups = new Dictionary<string, VerbTreeGroup>(StringComparer.Ordinal) {
+                [group] = new() { Name = group, Summary = "A group invented by this test." }
+            }
+        };
 }

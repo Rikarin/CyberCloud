@@ -1,5 +1,5 @@
-using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Core.Time;
+using CyberCloud.Kubernetes.Contracts;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Text.Json;
@@ -46,8 +46,11 @@ public static class FakeWorld {
     ///     <see cref="ErrorCode.ProvisioningFailed" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A separate dictionary rather than a second field on <see cref="FailWith" />, so that
-    ///     every existing caller keeps the code it already asserts.</b> What needs a different one is
+    ///     ⚠
+    ///     <b>
+    ///         A separate dictionary rather than a second field on <see cref="FailWith" />, so that
+    ///         every existing caller keeps the code it already asserts.
+    ///     </b> What needs a different one is
     ///     the namespace memo's invalidation channel: the driver reads a pass that came back
     ///     <see cref="ErrorCode.ResourceNotFound" /> as evidence the namespace is gone, and that
     ///     branch is unreachable while every scripted failure is a ProvisioningFailed.
@@ -69,9 +72,12 @@ public static class FakeWorld {
     ///     Resources whose teardown deliberately keeps a volume, and what the claim is called.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Standing in for the three families with a <c>volumeClaimTemplate</c>, and it is a
-    ///     switch rather than a constant because the interesting assertion is what a purge does when
-    ///     the volumes CANNOT be removed.</b> This harness registers
+    ///     ⚠
+    ///     <b>
+    ///         Standing in for the three families with a <c>volumeClaimTemplate</c>, and it is a
+    ///         switch rather than a constant because the interesting assertion is what a purge does when
+    ///         the volumes CANNOT be removed.
+    ///     </b> This harness registers
     ///     <c>NoClusterConnectionFactory</c>, so a resource here has no API server to delete a claim
     ///     from — which is exactly the state <c>VolumeReclaimer</c> refuses to converge on, and the
     ///     reason it refuses is that converging would report disks destroyed that are still there.
@@ -188,7 +194,9 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
 
         // ⚠ Converged once the objects are GONE, read back — not once a delete was issued.
         if (FakeWorld.Applied.ContainsKey(context.Id.Id)) {
-            return Task.FromResult(ReconcileOutcome.InProgress("objects are still terminating", TimeSpan.FromSeconds(5)));
+            return Task.FromResult(
+                ReconcileOutcome.InProgress("objects are still terminating", TimeSpan.FromSeconds(5))
+            );
         }
 
         context.Log.Report("deleted", "everything this resource applied is gone", 100);
@@ -214,8 +222,11 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
 ///     <see cref="ConformingReconciler" />'s behaviour, declared against the soft-deletable type.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A second class rather than a second registration, because <see cref="Type" /> is a property
-///     of the reconciler and not of the declaration.</b> <c>ReconcileDriver</c> resolves the registry's
+///     ⚠
+///     <b>
+///         A second class rather than a second registration, because <see cref="Type" /> is a property
+///         of the reconciler and not of the declaration.
+///     </b> <c>ReconcileDriver</c> resolves the registry's
 ///     <c>ReconcilerType</c> from the container and the registry pairs it with the type that declared
 ///     it, so one instance cannot serve two types. The behaviour is delegated rather than copied —
 ///     <see cref="FakeWorld" /> is keyed on the resource GUID and knows nothing about types, so the
@@ -328,9 +339,7 @@ public sealed class NonConformingReconciler : IResourceReconciler {
 
     /// <inheritdoc />
     public Task<ObservedState> ObserveAsync(ObserveContext context, CancellationToken cancellationToken = default) =>
-        Task.FromResult(
-            new ObservedState { Exists = applied, Json = "{}", Summary = "remembered" }
-        );
+        Task.FromResult(new ObservedState { Exists = applied, Json = "{}", Summary = "remembered" });
 }
 
 /// <summary>A reconciler that blows through clause 3's thirty-second budget.</summary>
@@ -396,8 +405,11 @@ public sealed class TestingProvider : IResourceProvider {
 
     /// <summary>The 2026 schema — location, size, a label, and one secret.</summary>
     /// <remarks>
-    ///     ⚠ <b><c>/properties/adminPassword</c> is the only <c>Secret</c> body property in the
-    ///     codebase, and it is here because something has to prove the read path drops one.</b> Real
+    ///     ⚠
+    ///     <b>
+    ///         <c>/properties/adminPassword</c> is the only <c>Secret</c> body property in the
+    ///         codebase, and it is here because something has to prove the read path drops one.
+    ///     </b> Real
     ///     providers must not declare one — the write path stores the value in plaintext, which is why
     ///     <c>PostgresSecretTests</c> asserts <c>CyberCloud.DBforPostgreSQL/servers</c> has none. See
     ///     the remarks on <c>SchemaProperty</c>. A fixture is the one place the hazard is worth taking,
@@ -587,14 +599,11 @@ public sealed class TestingProvider : IResourceProvider {
             properties["enablePurgeProtection"] = flag;
         }
 
-        return JsonSerializer.Serialize(
-            new JsonObject { ["location"] = "eu-central", ["properties"] = properties }
-        );
+        return JsonSerializer.Serialize(new JsonObject { ["location"] = "eu-central", ["properties"] = properties });
     }
 
     /// <summary>The declared pointers of <see cref="VaultSchema" />.</summary>
-    public static ImmutableArray<string> VaultPointers =>
-        [.. VaultSchema.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> VaultPointers => [.. VaultSchema.Properties.Select(x => x.JsonPointer)];
 
     // ── The third type: a child of `widgets` ───────────────────────────────────────────────────
 
@@ -617,10 +626,7 @@ public sealed class TestingProvider : IResourceProvider {
     /// <summary>A body that satisfies <see cref="ChildSchema" />.</summary>
     public static string ChildBody(string label = "first") =>
         JsonSerializer.Serialize(
-            new JsonObject {
-                ["location"] = "eu-central",
-                ["properties"] = new JsonObject { ["label"] = label }
-            }
+            new JsonObject { ["location"] = "eu-central", ["properties"] = new JsonObject { ["label"] = label } }
         );
 
     /// <summary>The pointer <see cref="SizedSchema" /> puts the disk quantity at.</summary>
@@ -662,14 +668,12 @@ public sealed class TestingProvider : IResourceProvider {
     public static string Body(int size = 2, string label = "first") =>
         JsonSerializer.Serialize(
             new JsonObject {
-                ["location"] = "eu-central",
-                ["properties"] = new JsonObject { ["size"] = size, ["label"] = label }
+                ["location"] = "eu-central", ["properties"] = new JsonObject { ["size"] = size, ["label"] = label }
             }
         );
 
     /// <summary>The declared pointers of <see cref="Schema2026" />.</summary>
-    public static ImmutableArray<string> Pointers2026 =>
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 => [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The second type: quantities, not numbers ───────────────────────────────────────────────
 
@@ -748,8 +752,6 @@ public sealed class TestingProvider : IResourceProvider {
             properties["disk"] = disk;
         }
 
-        return JsonSerializer.Serialize(
-            new JsonObject { ["location"] = "eu-central", ["properties"] = properties }
-        );
+        return JsonSerializer.Serialize(new JsonObject { ["location"] = "eu-central", ["properties"] = properties });
     }
 }

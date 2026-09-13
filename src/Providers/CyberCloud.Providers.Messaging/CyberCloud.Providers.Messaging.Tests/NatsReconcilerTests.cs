@@ -11,8 +11,11 @@ namespace CyberCloud.Providers.Messaging.Tests;
 ///     The NATS reconciler against a connection that misbehaves in the ways a real cluster does.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The whole file exists a second time for a second reconciler in one assembly, and that is
-///     not duplication for its own sake.</b> Clause 2 is a property of an <i>instance</i>: a
+///     ⚠
+///     <b>
+///         The whole file exists a second time for a second reconciler in one assembly, and that is
+///         not duplication for its own sake.
+///     </b> Clause 2 is a property of an <i>instance</i>: a
 ///     singleton <c>KafkaClusterReconciler</c> being stateless says nothing about a singleton
 ///     <c>NatsClusterReconciler</c>, and the container registers the two separately by concrete type.
 ///     What IS shared is the harness — <c>RecordingConnection</c>, <c>FixedClock</c>,
@@ -92,9 +95,8 @@ public sealed class NatsReconcilerTests {
 
             outcome.ShouldBe(ReconcileOutcome.Converged, $"monitoring.enabled = {monitoring}");
 
-            var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target)).ToHashSet(
-                StringComparer.Ordinal
-            );
+            var applied = connection.Applied.Select(x => RecordingConnection.Key(x.Target))
+                .ToHashSet(StringComparer.Ordinal);
 
             var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
 
@@ -104,7 +106,10 @@ public sealed class NatsReconcilerTests {
             // would notice.
             read.ShouldBe(
                 applied,
-                "the reconciler applied " + applied.Count + " object(s) and read back " + read.Count
+                "the reconciler applied "
+                + applied.Count
+                + " object(s) and read back "
+                + read.Count
                 + ". An object rendered and not read back is one the loop reports Converged without "
                 + "ever having observed."
             );
@@ -314,7 +319,8 @@ public sealed class NatsReconcilerTests {
     static string Config(RecordingConnection connection, ResourceId address) =>
         JsonNode.Parse(Stored(connection, address, NatsClusters.ConfigMapRef))!["data"]![
             NatsClusters.ConfigKey
-        ]!.GetValue<string>();
+        ]!
+            .GetValue<string>();
 
     static JsonObject Spec(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!.AsObject();
 

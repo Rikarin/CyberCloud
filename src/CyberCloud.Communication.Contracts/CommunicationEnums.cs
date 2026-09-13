@@ -39,9 +39,12 @@ public enum ChannelKind {
 ///     <i>"queued → dispatched → delivered/failed"</i>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><see cref="Refused" /> is a sixth state the sentence above does not name, and it is here
-///     because collapsing it into <see cref="Failed" /> loses the only distinction that matters
-///     operationally.</b> A refusal means no carrier was called: the address is suppressed, the
+///     ⚠
+///     <b>
+///         <see cref="Refused" /> is a sixth state the sentence above does not name, and it is here
+///         because collapsing it into <see cref="Failed" /> loses the only distinction that matters
+///         operationally.
+///     </b> A refusal means no carrier was called: the address is suppressed, the
 ///     template is missing a parameter, the sender is unregistered, or the day's spend is gone.
 ///     Nothing was sent, nothing will be charged, and a retry with the same content will refuse
 ///     again. <see cref="Failed" /> means the carrier was called and said no, which is a different
@@ -73,8 +76,11 @@ public enum MessageStatus {
 ///     the work: <i>"Bounces, complaints, opt-outs"</i>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The reason decides whether the tenant may lift it, and that is the whole point of
-///     recording one.</b> A <see cref="HardBounce" /> is a fact about an address and a tenant
+///     ⚠
+///     <b>
+///         The reason decides whether the tenant may lift it, and that is the whole point of
+///         recording one.
+///     </b> A <see cref="HardBounce" /> is a fact about an address and a tenant
 ///     correcting a typo may clear it. A <see cref="Complaint" /> and an <see cref="OptOut" /> are
 ///     statements by the recipient: clearing either on the tenant's say-so is how a sending domain
 ///     gets blocked, and for <see cref="OptOut" /> it is unlawful in most jurisdictions.
@@ -104,8 +110,11 @@ public enum SuppressionReason {
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>Both are M1 of this module and <see cref="TenantAccount" /> is not a later addition.</b>
-///     docs/plan/17 § The channel abstraction: <i>"BYO is offered from day one, because a tenant with
-///     an existing Twilio contract will not move it and refusing them is refusing the customer."</i>
+///     docs/plan/17 § The channel abstraction:
+///     <i>
+///         "BYO is offered from day one, because a tenant with
+///         an existing Twilio contract will not move it and refusing them is refusing the customer."
+///     </i>
 ///     The design consequence is <see cref="CarrierCredentials" />: the credential is a handle, per
 ///     channel, resolved at dispatch, so the two modes differ by which handle is read and not by
 ///     which code path runs.
@@ -127,9 +136,12 @@ public enum CredentialMode {
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>We are a broker, not a carrier, and this enum is where the product says so.</b>
-///     docs/plan/17 § The channel abstraction: <i>"Sender-id registration, 10DLC campaign approval in
-///     the US, WhatsApp template pre-approval, and per-country content rules are the tenant's
-///     compliance obligations with our tooling, not obligations we assume."</i> The platform records
+///     docs/plan/17 § The channel abstraction:
+///     <i>
+///         "Sender-id registration, 10DLC campaign approval in
+///         the US, WhatsApp template pre-approval, and per-country content rules are the tenant's
+///         compliance obligations with our tooling, not obligations we assume."
+///     </i> The platform records
 ///     and reports this status; it does not grant it, and
 ///     <see cref="ISenderIdentityGrain.RecordDecisionAsync" /> takes the carrier's answer rather than
 ///     making one.

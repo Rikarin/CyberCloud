@@ -51,8 +51,8 @@ public sealed class StorageFixture : IAsyncLifetime {
         // bug, not a capacity event — it must page, not silently drop state)". Set explicitly rather
         // than relying on the image default, because relying on a default is how a tier ends up with
         // allkeys-lru in one environment and noeviction in another.
-        .WithCommand("--maxmemory-policy", "noeviction", "--appendonly", "yes", "--appendfsync", "everysec")
-        .Build();
+            .WithCommand("--maxmemory-policy", "noeviction", "--appendonly", "yes", "--appendfsync", "everysec")
+            .Build();
 
     readonly PostgreSqlContainer shardA = NewShard();
     readonly PostgreSqlContainer shardB = NewShard();

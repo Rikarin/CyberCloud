@@ -7,8 +7,11 @@ namespace CyberCloud.Providers.Network.Tests;
 ///     and that therefore has nothing but this file holding it up.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>THIS IS THE LARGEST TEST FILE IN THE FAMILY AND THAT IS PROPORTIONATE RATHER THAN
-///     THOROUGH-FOR-ITS-OWN-SAKE.</b> Every other constraint this provider declares is enforced by
+///     ⚠
+///     <b>
+///         THIS IS THE LARGEST TEST FILE IN THE FAMILY AND THAT IS PROPORTIONATE RATHER THAN
+///         THOROUGH-FOR-ITS-OWN-SAKE.
+///     </b> Every other constraint this provider declares is enforced by
 ///     <c>ResourceSchema.Validate</c> at the API, which is code the platform owns and the platform
 ///     tests. The reserved-range rule is enforced by <see cref="NetworkAddressing" /> alone, called
 ///     from two reconcilers, after the write path has already answered <c>202</c> — so a bug here is
@@ -87,10 +90,11 @@ public sealed class NetworkAddressTests {
     public void APrefixOverlapsItself() {
         Cidr.TryParse("10.20.0.0/16", out var a).ShouldBeTrue();
 
-        a.Overlaps(a).ShouldBeTrue(
-            "an identical range is the most important overlap to catch and the easiest to lose to an "
-            + "off-by-one in the mask"
-        );
+        a.Overlaps(a)
+            .ShouldBeTrue(
+                "an identical range is the most important overlap to catch and the easiest to lose to an "
+                + "off-by-one in the mask"
+            );
     }
 
     [Fact]
@@ -135,10 +139,12 @@ public sealed class NetworkAddressTests {
     public void EveryReservedRangeHasADistinctIdAndAReasonAWholeSentenceLong() {
         var ids = NetworkAddressing.ReservedRanges.Select(x => x.Id).ToList();
 
-        ids.Distinct(StringComparer.Ordinal).Count().ShouldBe(
-            ids.Count,
-            "two rows share an id, so a refusal naming one of them is ambiguous"
-        );
+        ids.Distinct(StringComparer.Ordinal)
+            .Count()
+            .ShouldBe(
+                ids.Count,
+                "two rows share an id, so a refusal naming one of them is ambiguous"
+            );
 
         foreach (var reserved in NetworkAddressing.ReservedRanges) {
             // docs/plan/08 § Errors requires an actionable message. A row whose `Because` is a
@@ -163,11 +169,12 @@ public sealed class NetworkAddressTests {
 
         regional.AppliesIn(regional.Region).ShouldBeTrue();
 
-        regional.AppliesIn("somewhere-else").ShouldBeFalse(
-            "a per-region row leaking into another region would refuse an address space that is "
-            + "perfectly legal there, and docs/plan/14 makes the reserved list per-region precisely "
-            + "because an underlay differs per datacentre"
-        );
+        regional.AppliesIn("somewhere-else")
+            .ShouldBeFalse(
+                "a per-region row leaking into another region would refuse an address space that is "
+                + "perfectly legal there, and docs/plan/14 makes the reserved list per-region precisely "
+                + "because an underlay differs per datacentre"
+            );
     }
 
     [Fact]
@@ -230,10 +237,11 @@ public sealed class NetworkAddressTests {
         NetworkAddressing.ProblemWith(Same, "eu-central", "/x").ShouldBeNull();
         NetworkAddressing.ProblemWith(Same, "eu-central", "/x").ShouldBeNull();
 
-        NetworkAddressing.ProblemWith(Same, "us-east", "/x").ShouldBeNull(
-            "the same range in a different region is also fine — nothing about a tenant's private "
-            + "address space is globally unique"
-        );
+        NetworkAddressing.ProblemWith(Same, "us-east", "/x")
+            .ShouldBeNull(
+                "the same range in a different region is also fine — nothing about a tenant's private "
+                + "address space is globally unique"
+            );
     }
 
     [Fact]
@@ -242,10 +250,11 @@ public sealed class NetworkAddressTests {
 
         NetworkAddressing.ProblemWith(regional.Prefix, regional.Region, "/x").ShouldNotBeNull();
 
-        NetworkAddressing.ProblemWith(regional.Prefix, "somewhere-else", "/x").ShouldBeNull(
-            "a region's underlay is not reserved in another region, and refusing it there would deny "
-            + "a tenant an address space that works"
-        );
+        NetworkAddressing.ProblemWith(regional.Prefix, "somewhere-else", "/x")
+            .ShouldBeNull(
+                "a region's underlay is not reserved in another region, and refusing it there would deny "
+                + "a tenant an address space that works"
+            );
     }
 
     [Fact]
@@ -295,15 +304,13 @@ public sealed class NetworkAddressTests {
         foreach (var region in regions) {
             using var network = JsonDocument.Parse(VirtualNetworks.Body(cluster, location: region));
 
-            VirtualNetworks.AddressProblem(network.RootElement).ShouldBeNull(
-                $"VirtualNetworks.Body's default address space is refused in '{region}'"
-            );
+            VirtualNetworks.AddressProblem(network.RootElement)
+                .ShouldBeNull($"VirtualNetworks.Body's default address space is refused in '{region}'");
 
             using var subnet = JsonDocument.Parse(NetworkSubnets.Body(cluster, location: region));
 
-            NetworkSubnets.AddressProblem(subnet.RootElement).ShouldBeNull(
-                $"NetworkSubnets.Body's default prefix is refused in '{region}'"
-            );
+            NetworkSubnets.AddressProblem(subnet.RootElement)
+                .ShouldBeNull($"NetworkSubnets.Body's default prefix is refused in '{region}'");
         }
     }
 
@@ -322,10 +329,11 @@ public sealed class NetworkAddressTests {
         Cidr.TryParse(VirtualNetworks.AddressSpaceV4(network.RootElement), out var space).ShouldBeTrue();
         Cidr.TryParse(NetworkSubnets.PrefixV4(subnet.RootElement), out var prefix).ShouldBeTrue();
 
-        space.Contains(prefix).ShouldBeTrue(
-            "the example subnet is outside the example network, which would teach every reader of "
-            + "this provider's fixtures the wrong shape"
-        );
+        space.Contains(prefix)
+            .ShouldBeTrue(
+                "the example subnet is outside the example network, which would teach every reader of "
+                + "this provider's fixtures the wrong shape"
+            );
     }
 
     [Fact]
@@ -363,9 +371,7 @@ public sealed class NetworkAddressTests {
             + "CIDR shape is enforced by nothing"
         );
 
-        using var body = JsonDocument.Parse(
-            VirtualNetworks.Body(Guid.NewGuid(), addressSpaceV4: "not-a-cidr")
-        );
+        using var body = JsonDocument.Parse(VirtualNetworks.Body(Guid.NewGuid(), addressSpaceV4: "not-a-cidr"));
 
         VirtualNetworks.Schema2026.Validate(body.RootElement, allowTags: true)
             .TryGetError(out var error)
@@ -381,9 +387,7 @@ public sealed class NetworkAddressTests {
 
         property.Pattern.ShouldBe(Cidr.V4Pattern);
 
-        using var body = JsonDocument.Parse(
-            NetworkSubnets.Body(Guid.NewGuid(), prefixV4: "10.0.0.0")
-        );
+        using var body = JsonDocument.Parse(NetworkSubnets.Body(Guid.NewGuid(), prefixV4: "10.0.0.0"));
 
         NetworkSubnets.Schema2026.Validate(body.RootElement, allowTags: true)
             .TryGetError(out var error)
@@ -406,9 +410,8 @@ public sealed class NetworkAddressTests {
             .IsMatch(PatternAcceptsParserRefuses, "^(?:" + Cidr.V4Pattern + ")$")
             .ShouldBeTrue("the loose pattern is expected to admit this");
 
-        Cidr.TryParse(PatternAcceptsParserRefuses, out _).ShouldBeFalse(
-            "and the parser is what actually refuses it — the reconciler's message names the pointer"
-        );
+        Cidr.TryParse(PatternAcceptsParserRefuses, out _)
+            .ShouldBeFalse("and the parser is what actually refuses it — the reconciler's message names the pointer");
 
         // The safe direction, over every example and every reserved range the family declares.
         foreach (var legal in NetworkAddressing.ReservedRanges.Select(x => x.Prefix)) {

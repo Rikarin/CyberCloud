@@ -44,8 +44,9 @@ sealed class OperationProgressFeed {
             for (var i = seen.Count; i < snapshot.Count; i++) {
                 seen.Add(snapshot[i]);
 
-                foreach (var subscriber in subscribers)
+                foreach (var subscriber in subscribers) {
                     subscriber.Writer.TryWrite(snapshot[i]);
+                }
             }
         }
     }
@@ -53,31 +54,34 @@ sealed class OperationProgressFeed {
     /// <summary>Ends every subscriber's enumeration. Idempotent.</summary>
     public void Complete() {
         lock (gate) {
-            if (completed)
+            if (completed) {
                 return;
+            }
 
             completed = true;
 
-            foreach (var subscriber in subscribers)
+            foreach (var subscriber in subscribers) {
                 subscriber.Writer.TryComplete();
+            }
         }
     }
 
     /// <summary>Opens a subscription, pre-loaded with everything published so far.</summary>
     public Channel<OperationProgress> Subscribe() {
-        var channel = Channel.CreateUnbounded<OperationProgress>(new UnboundedChannelOptions {
-            SingleReader = true,
-            SingleWriter = false,
-        });
+        var channel = Channel.CreateUnbounded<OperationProgress>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false }
+        );
 
         lock (gate) {
-            foreach (var entry in seen)
+            foreach (var entry in seen) {
                 channel.Writer.TryWrite(entry);
+            }
 
-            if (completed)
+            if (completed) {
                 channel.Writer.TryComplete();
-            else
+            } else {
                 subscribers.Add(channel);
+            }
         }
 
         return channel;
@@ -85,7 +89,8 @@ sealed class OperationProgressFeed {
 
     /// <summary>Closes a subscription. Called from the enumerator's <c>finally</c>, including on an early <c>break</c>.</summary>
     public void Unsubscribe(Channel<OperationProgress> channel) {
-        lock (gate)
+        lock (gate) {
             subscribers.Remove(channel);
+        }
     }
 }

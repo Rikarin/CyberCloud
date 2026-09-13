@@ -7,8 +7,11 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is a different question from <see cref="IClusterObjectInventory" />, and the
-///         difference is the whole safety of a namespace delete.</b> That one lists objects carrying
+///         ⚠
+///         <b>
+///             This is a different question from <see cref="IClusterObjectInventory" />, and the
+///             difference is the whole safety of a namespace delete.
+///         </b> That one lists objects carrying
 ///         <c>cybercloud.io/managed-by=cybercloud</c>, because a drift scan compares what the platform
 ///         wrote against what it meant to write. Deleting a namespace asks the opposite question —
 ///         <i>is there anything here that is not ours</i> — and a label-selected listing cannot answer
@@ -18,9 +21,15 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         listing that is empty precisely when the delete is most dangerous.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every implementation refuses rather than reporting an empty namespace, and that rule
-///         did not relax when a real one arrived.</b> An empty listing says <i>this namespace holds
-///         nothing</i>, which is a licence to run a recursive delete over a tenant's live data. A
+///         ⚠
+///         <b>
+///             Every implementation refuses rather than reporting an empty namespace, and that rule
+///             did not relax when a real one arrived.
+///         </b> An empty listing says
+///         <i>
+///             this namespace holds
+///             nothing
+///         </i>, which is a licence to run a recursive delete over a tenant's live data. A
 ///         failure says <i>do not conclude anything</i>. <c>ConnectionNamespaceInventory</c> is the
 ///         one that ships and it refuses on a cluster it cannot reach, on a kind it could not list,
 ///         and on a listing it could not finish. <c>UnavailableNamespaceInventory</c> stays in the
@@ -83,22 +92,31 @@ public readonly record struct NamespaceOccupant {
     ///     unmanaged object is either somebody else's or the most safety-critical thing in the
     ///     namespace, and <see cref="NamespaceReclaim" /> treats both the same way: it stops.
     ///     <para>
-    ///         ⚠ <b>The <c>PersistentVolumeClaim</c>s a <c>StatefulSet</c>'s
-    ///         <c>volumeClaimTemplate</c> creates used to be the headline example of that, and as of
-    ///         <c>IKubeCommandBuilder.WithTemplateLabels</c> they are not — with two qualifications
-    ///         that matter here.</b> A claim created from a template stamped with
+    ///         ⚠
+    ///         <b>
+    ///             The <c>PersistentVolumeClaim</c>s a <c>StatefulSet</c>'s
+    ///             <c>volumeClaimTemplate</c> creates used to be the headline example of that, and as of
+    ///             <c>IKubeCommandBuilder.WithTemplateLabels</c> they are not — with two qualifications
+    ///             that matter here.
+    ///         </b> A claim created from a template stamped with
     ///         <see cref="KubeLabels.LifetimeStable" /> carries <c>managed-by</c> and reads as
     ///         <see cref="IsManaged" />. But the StatefulSet controller labels a claim once, when it
-    ///         creates it, and never revisits one — so <b>every claim that already exists is still
-    ///         unlabelled and always will be</b> — and only the families that declared a template
+    ///         creates it, and never revisits one — so
+    ///         <b>
+    ///             every claim that already exists is still
+    ///             unlabelled and always will be
+    ///         </b> — and only the families that declared a template
     ///         path render one. docs/plan/08 § Soft delete makes those exact claims the thing a
     ///         restore restores from, so the conservative reading of an unlabelled claim is the one
     ///         to keep.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>That change moved a namespace of leftover volumes out of
-    ///         <see cref="NamespaceReclaim.OperatorReclaimable" /> and into neither verdict, and it
-    ///         has been repaired.</b> The flag used to require <i>every</i> occupant to be unmanaged,
+    ///         ⚠
+    ///         <b>
+    ///             That change moved a namespace of leftover volumes out of
+    ///             <see cref="NamespaceReclaim.OperatorReclaimable" /> and into neither verdict, and it
+    ///             has been repaired.
+    ///         </b> The flag used to require <i>every</i> occupant to be unmanaged,
     ///         so a group whose only remaining objects were its own now-labelled claims satisfied
     ///         neither it nor <see cref="NamespaceReclaim.Deletable" /> and reported as a plain
     ///         refusal. It now asks only what its own remarks always said it asked — the control
@@ -118,8 +136,11 @@ public readonly record struct NamespaceOccupant {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The whole point of this type is that <see cref="Deletable" /> is unreachable except
-///         through <see cref="Decide" />.</b> The constructor is private and there is no initializer,
+///         ⚠
+///         <b>
+///             The whole point of this type is that <see cref="Deletable" /> is unreachable except
+///             through <see cref="Decide" />.
+///         </b> The constructor is private and there is no initializer,
 ///         so a caller cannot assemble a permissive verdict, and <c>default(NamespaceReclaim)</c>
 ///         carries <see cref="Deletable" /> <see langword="false" /> and an empty
 ///         <see cref="Namespace" /> that <c>NamespaceEnsurer.DeleteAsync</c> refuses to match. The
@@ -141,9 +162,12 @@ public readonly record struct NamespaceOccupant {
 ///         condition an operator can check by eye.
 ///     </para>
 ///     <para>
-///         ⚠ <b>"Nothing at all" turned out to be literally unsatisfiable, and the rule is now
-///         "nothing but what Kubernetes itself puts in every namespace" — <see cref="IsAmbient" /> is
-///         the exception list and it is three entries long.</b> The gap was invisible while
+///         ⚠
+///         <b>
+///             "Nothing at all" turned out to be literally unsatisfiable, and the rule is now
+///             "nothing but what Kubernetes itself puts in every namespace" — <see cref="IsAmbient" /> is
+///             the exception list and it is three entries long.
+///         </b> The gap was invisible while
 ///         <see cref="INamespaceInventory" /> had no implementation: with nothing producing
 ///         occupants, the only lists the rule was ever weighed against were the empty ones tests
 ///         supplied, and against a real API server <see cref="Deletable" /> would have been
@@ -174,28 +198,40 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
     /// <param name="occupant">The object found in the namespace.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THIS PREDICATE EXISTS BECAUSE "THE NAMESPACE HOLDS NOTHING AT ALL" IS
-    ///         UNREACHABLE AGAINST A REAL API SERVER, AND THAT WAS NOT KNOWN UNTIL SOMETHING COULD
-    ///         LIST.</b> The rule was written against an inventory that refused, so nothing ever
+    ///         ⚠
+    ///         <b>
+    ///             THIS PREDICATE EXISTS BECAUSE "THE NAMESPACE HOLDS NOTHING AT ALL" IS
+    ///             UNREACHABLE AGAINST A REAL API SERVER, AND THAT WAS NOT KNOWN UNTIL SOMETHING COULD
+    ///             LIST.
+    ///         </b> The rule was written against an inventory that refused, so nothing ever
     ///         produced an occupant list to test it with. Two controllers in every conformant
     ///         cluster make the literal rule impossible to satisfy: the service-account controller
-    ///         creates <c>ServiceAccount/default</c> in every namespace and <b>recreates it if it is
-    ///         deleted</b>, and the root-CA publisher creates
+    ///         creates <c>ServiceAccount/default</c> in every namespace and
+    ///         <b>
+    ///             recreates it if it is
+    ///             deleted
+    ///         </b>, and the root-CA publisher creates
     ///         <c>ConfigMap/kube-root-ca.crt</c> in every namespace and does the same. A namespace
     ///         that has finished being used therefore holds exactly these two, forever, and
     ///         <see cref="Deletable" /> would never once be <see langword="true" /> in production
     ///         while being <see langword="true" /> in every unit test that supplied an empty array.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The allowance is by kind AND name, never by kind alone, for everything the
-    ///         control plane names.</b> <c>default</c> and <c>kube-root-ca.crt</c> are names
+    ///         ⚠
+    ///         <b>
+    ///             The allowance is by kind AND name, never by kind alone, for everything the
+    ///             control plane names.
+    ///         </b> <c>default</c> and <c>kube-root-ca.crt</c> are names
     ///         Kubernetes reserves, so no tenant object can wear one; a kind-wide exemption for
     ///         <c>ServiceAccount</c> or <c>ConfigMap</c> would hide a tenant's own, which is exactly
     ///         the class of object this whole file exists to refuse over.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>Event</c> is the one kind-wide entry, and it is the one kind that carries no
-    ///         state.</b> An event is a timestamped sentence about something that already happened,
+    ///         ⚠
+    ///         <b>
+    ///             <c>Event</c> is the one kind-wide entry, and it is the one kind that carries no
+    ///             state.
+    ///         </b> An event is a timestamped sentence about something that already happened,
     ///         the API server expires it on its own within the hour, and nothing restores from one.
     ///         Without this entry a group could only be reclaimed during the gaps between its own
     ///         teardown events expiring, which is a delete that succeeds or fails depending on how
@@ -252,8 +288,11 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
     ///     has to decide.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is the honest answer for every group that ever ran a stateful type, and it is not
-    ///     a rare case.</b> The group holds no members and the namespace still holds something —
+    ///     ⚠
+    ///     <b>
+    ///         This is the honest answer for every group that ever ran a stateful type, and it is not
+    ///         a rare case.
+    ///     </b> The group holds no members and the namespace still holds something —
     ///     which is what a purged <c>StatefulSet</c>-backed resource leaves behind, because
     ///     docs/plan/08 § Soft delete records that a purge still leaves the volumes. So the namespace
     ///     is not empty, never becomes empty, and <see cref="Deletable" /> is never
@@ -293,8 +332,11 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
     ///     shipped implementation fails rather than returning an empty array.
     /// </param>
     /// <remarks>
-    ///     ⚠ <b>Both pieces are required and neither is redundant, which is easy to get wrong in
-    ///     either direction.</b> The member list alone is worthless today, because nothing records
+    ///     ⚠
+    ///     <b>
+    ///         Both pieces are required and neither is redundant, which is easy to get wrong in
+    ///         either direction.
+    ///     </b> The member list alone is worthless today, because nothing records
     ///     membership. The namespace listing alone would authorize a delete during the seconds between
     ///     a group's last object going and its grain state being cleared. Together they say: the
     ///     control plane believes the group is empty, <i>and</i> the cluster agrees.
@@ -368,8 +410,7 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
     }
 
     /// <summary>Every refusal, on one line, for a message or a log.</summary>
-    public string Explain() =>
-        Refusals.IsDefaultOrEmpty ? string.Empty : string.Join(" ", Refusals);
+    public string Explain() => Refusals.IsDefaultOrEmpty ? string.Empty : string.Join(" ", Refusals);
 
     /// <inheritdoc />
     public bool Equals(NamespaceReclaim other) =>

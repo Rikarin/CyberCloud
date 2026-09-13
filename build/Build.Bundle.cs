@@ -33,18 +33,17 @@
 //     serving one, OR two components claiming the same group/version                      → Coverage
 //   * one commit that both bumps a pin and edits a managed template                       → Ordering
 
+using Nuke.Common.IO;
+using Nuke.Common.Tooling;
+using Nuke.Common.Tools.Git;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Nuke.Common.IO;
-using Nuke.Common.Tooling;
-using Nuke.Common.Tools.Git;
 
-partial class Build
-{
+partial class Build {
     /// <summary>
     ///     The operator layer a platform cluster needs before any provider can converge —
     ///     charts/bundle/README.md.
@@ -75,9 +74,15 @@ partial class Build
     ///         fails here and the failure is where the argument gets written down.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>GPL-2.0 and GPL-3.0 are absent, and "the gate fails on SSPL/BUSL/AGPL" is not
-    ///         what this list does.</b> ADR-011 § Enforcement is worded as a deny-list — <i>"fails on
-    ///         any SSPL/BUSL/AGPL image outside an allow-list"</i> — and reading it that way gives the
+    ///         ⚠
+    ///         <b>
+    ///             GPL-2.0 and GPL-3.0 are absent, and "the gate fails on SSPL/BUSL/AGPL" is not
+    ///             what this list does.
+    ///         </b> ADR-011 § Enforcement is worded as a deny-list —
+    ///         <i>
+    ///             "fails on
+    ///             any SSPL/BUSL/AGPL image outside an allow-list"
+    ///         </i> — and reading it that way gives the
     ///         wrong answer for every licence in neither set. This is an ALLOW-list: a component
     ///         declaring GPL-3.0 fails here, exactly as an SSPL one does. ADR-011's table marks
     ///         LINSTOR (GPL-3.0), DRBD (GPL-2.0) and ClamAV (GPL-2.0) ✓ on their own terms, so the
@@ -88,20 +93,22 @@ partial class Build
     ///         argument is the artifact this list exists to produce.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What this checks is a DECLARATION, and the distance from what ADR-011
-    ///         § Enforcement asks for is the distance from an attestation to a scan.</b> That clause
+    ///         ⚠
+    ///         <b>
+    ///             What this checks is a DECLARATION, and the distance from what ADR-011
+    ///             § Enforcement asks for is the distance from an attestation to a scan.
+    ///         </b> That clause
     ///         wants "a licence scan over the chart set and the container images in the platform
     ///         bundle"; <c>build/Build.Licence.cs</c> is still <c>NotImplementedYet</c>. This catches
     ///         a component added under SSPL or BUSL by an author who wrote the licence down honestly,
     ///         and catches nothing else. charts/bundle/bundle.yaml § owed says so in its own words.
     ///     </para>
     /// </remarks>
-    static readonly string[] BundleLicenceAllowList =
-    [
+    static readonly string[] BundleLicenceAllowList = [
         "Apache-2.0",
         "BSD-3-Clause",
         "MIT",
-        "MPL-2.0",
+        "MPL-2.0"
     ];
 
     /// <summary>
@@ -115,8 +122,7 @@ partial class Build
     ///     group in this tree. It would have silently excused the four charts whose objects need the
     ///     most installing. A list is longer and cannot make that mistake.
     /// </remarks>
-    static readonly HashSet<string> BuiltInApiGroups = new(StringComparer.Ordinal)
-    {
+    static readonly HashSet<string> BuiltInApiGroups = new(StringComparer.Ordinal) {
         "",
         "admissionregistration.k8s.io",
         "apiextensions.k8s.io",
@@ -138,7 +144,7 @@ partial class Build
         "resource.k8s.io",
         "scheduling.k8s.io",
         "storage.k8s.io",
-        "storagemigration.k8s.io",
+        "storagemigration.k8s.io"
     };
 
     /// <summary>One component, as its <c>component.yaml</c> declares it.</summary>
@@ -156,17 +162,18 @@ partial class Build
     ///     Everything charts/bundle/ owes, in one row of the <c>Architecture</c> report.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The candidate count is components PLUS charts, and both halves have to be non-zero
-    ///     for this row to be anything but <see cref="GateStatus.Vacuous" />.</b> Components alone
+    ///     ⚠
+    ///     <b>
+    ///         The candidate count is components PLUS charts, and both halves have to be non-zero
+    ///         for this row to be anything but <see cref="GateStatus.Vacuous" />.
+    ///     </b> Components alone
     ///     would let a bundle with eighteen perfect manifests and nothing to cover report ✔; charts
     ///     alone would do the same for a tree with twenty charts and no bundle — which is exactly the
     ///     state this directory was created out of, and the state a gate counting one of the two
     ///     would have called clean.
     /// </remarks>
-    GateOutcome BundleGate()
-    {
-        if (!BundleDirectory.DirectoryExists())
-        {
+    GateOutcome BundleGate() {
+        if (!BundleDirectory.DirectoryExists()) {
             return new(
                 "Bundle",
                 GateStatus.Vacuous,
@@ -174,7 +181,8 @@ partial class Build
                 + "manifest was read and no chart's rendered api-groups were covered. Every chart "
                 + "under charts/managed/ renders a custom resource and installs no operator — three "
                 + "say so verbatim — so a tree in this state converges nothing",
-                []);
+                []
+            );
         }
 
         var components = ReadBundleComponents(out var manifestViolations);
@@ -196,7 +204,8 @@ partial class Build
             + $"{components.Sum(x => ReadBundleSequence(x.File, "images").Count)} image digest(s); "
             + $"{chartsInspected} chart(s) rendering {rendered.Count} "
             + $"non-built-in group/version(s); {orderingDetail}",
-            violations);
+            violations
+        );
     }
 
     // ── The manifests ─────────────────────────────────────────────────────────────────────────
@@ -206,8 +215,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A component directory is one that contains a <c>component.yaml</c>, and a
-    ///         directory that does not is a violation rather than a skip.</b> That is the whole
+    ///         ⚠
+    ///         <b>
+    ///             A component directory is one that contains a <c>component.yaml</c>, and a
+    ///             directory that does not is a violation rather than a skip.
+    ///         </b> That is the whole
     ///         lesson of the failure Task #109 names: <c>Build.Charts</c> requires <c>SOURCE</c> and
     ///         <c>conformance.yaml</c> only under <c>charts/managed/</c>, so a chart one directory
     ///         over "quietly owes no conformance manifest" — and one of docs/plan/12's eight pieces
@@ -219,25 +231,23 @@ partial class Build
     ///         rather than throws.
     ///     </para>
     /// </remarks>
-    List<BundleComponent> ReadBundleComponents(out List<string> violations)
-    {
+    List<BundleComponent> ReadBundleComponents(out List<string> violations) {
         violations = [];
 
         var components = new List<BundleComponent>();
 
-        foreach (var directory in BundleDirectory.GlobDirectories("*").OrderBy(x => x.Name, StringComparer.Ordinal))
-        {
+        foreach (var directory in BundleDirectory.GlobDirectories("*").OrderBy(x => x.Name, StringComparer.Ordinal)) {
             var file = directory / ComponentFileName;
             var relative = RootDirectory.GetRelativePathTo(file);
 
-            if (!file.FileExists())
-            {
+            if (!file.FileExists()) {
                 violations.Add(
                     $"{RootDirectory.GetRelativePathTo(directory)}/ has no {ComponentFileName}. Every "
                     + "directory under charts/bundle/ is a component and every component declares its "
                     + "pin, its licence and the api-groups it serves — charts/bundle/README.md § What "
                     + "a component owes. A directory that owes nothing is how a rule gets dropped by a "
-                    + "directory name");
+                    + "directory name"
+                );
 
                 continue;
             }
@@ -254,33 +264,35 @@ partial class Build
             // carry one, so the rule was true of the files and false of the machine — which is the
             // same shape as the `imageDigest:` key that claimed `--verify` compared it: a control
             // that reads as a control and is not one. Issue #75.
-            foreach (var required in new[] { "component", "phase", "licence", "install", "source", "checked", "requiredBy" })
-            {
-                if (!scalars.ContainsKey(required))
+            foreach (var required in new[] {
+                         "component", "phase", "licence", "install", "source", "checked", "requiredBy"
+                     }) {
+                if (!scalars.ContainsKey(required)) {
                     violations.Add($"{relative} declares no `{required}:`.");
+                }
             }
 
             violations.AddRange(UnknownKeyViolations(relative, scalars));
 
             if (scalars.TryGetValue("component", out var declaredName)
-                && !string.Equals(declaredName, directory.Name, StringComparison.Ordinal))
-            {
+                && !string.Equals(declaredName, directory.Name, StringComparison.Ordinal)) {
                 violations.Add(
                     $"{relative} declares `component: {declaredName}` and sits in a directory called "
                     + $"'{directory.Name}'. install.sh resolves a component's directory from the "
                     + "roster's name, so the two disagreeing means the file you edit and the "
-                    + "component that gets installed are different things");
+                    + "component that gets installed are different things"
+                );
             }
 
             violations.AddRange(ServesViolations(relative, file, serves));
 
-            foreach (var entry in serves.Where(entry => !GroupVersion.IsMatch(entry)))
-            {
+            foreach (var entry in serves.Where(entry => !GroupVersion.IsMatch(entry))) {
                 violations.Add(
                     $"{relative} lists `{entry}` under `serves:`, which is not a `group/version` "
                     + "pair. The coverage check compares these against the apiVersion strings charts "
                     + "render, so an entry in another shape matches nothing and silently covers "
-                    + "nothing");
+                    + "nothing"
+                );
             }
 
             violations.AddRange(ImagesViolations(relative, file));
@@ -298,9 +310,12 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The escape exists because the rule "every component installs a
-    ///         CustomResourceDefinition" was true of eighteen operators and is false of the
-    ///         nineteenth.</b> <c>charts/bundle/openebs-localpv</c> installs a Deployment, a
+    ///         ⚠
+    ///         <b>
+    ///             The escape exists because the rule "every component installs a
+    ///             CustomResourceDefinition" was true of eighteen operators and is false of the
+    ///             nineteenth.
+    ///         </b> <c>charts/bundle/openebs-localpv</c> installs a Deployment, a
     ///         ClusterRole and a <c>StorageClass</c>. Every kind in it is a Kubernetes built-in, so
     ///         there is nothing honest to write on a <c>serves:</c> line — and the dishonest thing
     ///         was available and tempting: <c>storage.k8s.io/v1</c> matches
@@ -326,14 +341,12 @@ partial class Build
         AbsolutePath file,
         // List rather than IReadOnlyList: CA1859 is an error here and this is a private helper — the
         // same reason ShippingAssemblyPaths and ShippingProjectFiles do it in Build.Architecture.cs.
-        List<string> serves)
-    {
+        List<string> serves
+    ) {
         var reason = ReadBundleReason(file, "servesNoDefinitions");
 
-        if (serves.Count > 0)
-        {
-            if (reason is not null)
-            {
+        if (serves.Count > 0) {
+            if (reason is not null) {
                 yield return
                     $"{relative} declares {serves.Count} `serves:` entr(y/ies) AND "
                     + "`servesNoDefinitions:`. One of the two is wrong, and this gate will not choose "
@@ -344,8 +357,7 @@ partial class Build
             yield break;
         }
 
-        if (reason is null)
-        {
+        if (reason is null) {
             yield return
                 $"{relative} declares no `serves:` entries. A component that serves no "
                 + "group/version covers no chart, and the coverage check is the only thing "
@@ -361,8 +373,7 @@ partial class Build
             yield break;
         }
 
-        if (reason.Length < ServesNoDefinitionsMinimumReason)
-        {
+        if (reason.Length < ServesNoDefinitionsMinimumReason) {
             yield return
                 $"{relative} declares `servesNoDefinitions:` in {reason.Length} character(s) and the "
                 + $"floor is {ServesNoDefinitionsMinimumReason}. This is the one check in this file "
@@ -398,28 +409,32 @@ partial class Build
     ///         record from being unreadable, absent, or quietly emptied.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It does NOT resolve anything, and the reason is the same one
-    ///         <see cref="CheckedDateViolations" /> gives for having no maximum age.</b> An
+    ///         ⚠
+    ///         <b>
+    ///             It does NOT resolve anything, and the reason is the same one
+    ///             <see cref="CheckedDateViolations" /> gives for having no maximum age.
+    ///         </b> An
     ///         architecture gate that made thirty registry calls would be a gate that goes red when
     ///         a network is slow, and a gate that goes red for reasons unrelated to the tree is a
     ///         gate somebody switches off. The network half is a script a person runs, exactly as
     ///         <c>--verify</c> is.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The prose escape is <c>servesNoDefinitions:</c>'s shape and exists for one real
-    ///         component.</b> <c>prometheus-operator-crds</c> renders CustomResourceDefinition
+    ///         ⚠
+    ///         <b>
+    ///             The prose escape is <c>servesNoDefinitions:</c>'s shape and exists for one real
+    ///             component.
+    ///         </b> <c>prometheus-operator-crds</c> renders CustomResourceDefinition
     ///         documents and no container at all. An empty <c>images:</c> list and a list nobody has
     ///         filled in look identical, which is exactly the checkbox failure the sixty-character
     ///         floor exists to prevent.
     ///     </para>
     /// </remarks>
-    static IEnumerable<string> ImagesViolations(string relative, AbsolutePath file)
-    {
+    static IEnumerable<string> ImagesViolations(string relative, AbsolutePath file) {
         var images = ReadBundleSequence(file, "images");
         var reason = ReadBundleReason(file, "rendersNoWorkloadImages");
 
-        if (images.Count > 0 && reason is not null)
-        {
+        if (images.Count > 0 && reason is not null) {
             yield return
                 $"{relative} declares {images.Count} `images:` entr(y/ies) AND "
                 + "`rendersNoWorkloadImages:`. One of the two is wrong, and this gate will not choose "
@@ -429,10 +444,8 @@ partial class Build
             yield break;
         }
 
-        if (images.Count == 0)
-        {
-            if (reason is null)
-            {
+        if (images.Count == 0) {
+            if (reason is null) {
                 yield return
                     $"{relative} records no `images:`. Every image this bundle pulls is a tag inside "
                     + "somebody else's chart, and a tag is mutable — charts/bundle/bundle.yaml § owed, "
@@ -442,9 +455,7 @@ partial class Build
                     + "CustomResourceDefinitions does — say so in `rendersNoWorkloadImages:`, in at "
                     + $"least {ServesNoDefinitionsMinimumReason} characters of prose. Do NOT write an "
                     + "empty `images:` list: it is indistinguishable from one nobody filled in";
-            }
-            else if (reason.Length < ServesNoDefinitionsMinimumReason)
-            {
+            } else if (reason.Length < ServesNoDefinitionsMinimumReason) {
                 yield return
                     $"{relative} declares `rendersNoWorkloadImages:` in {reason.Length} character(s) "
                     + $"and the floor is {ServesNoDefinitionsMinimumReason}, for the same reason "
@@ -455,8 +466,7 @@ partial class Build
             yield break;
         }
 
-        foreach (var image in images.Where(image => !ImageReference.IsMatch(image)))
-        {
+        foreach (var image in images.Where(image => !ImageReference.IsMatch(image))) {
             yield return
                 $"{relative} lists `{image}` under `images:`, which is not a "
                 + "`repository:tag@sha256:<64 hex>` reference. charts/bundle/images.sh compares its "
@@ -492,8 +502,7 @@ partial class Build
         // hazard as tracked somewhere it is not is the defect #75 is about, one level up from the
         // `imageDigest:` key nothing read. Within the record itself an untagged entry is impossible:
         // ImageReference requires a tag.
-        foreach (var image in images.Where(image => LatestTag.IsMatch(image)))
-        {
+        foreach (var image in images.Where(image => LatestTag.IsMatch(image))) {
             yield return
                 $"{relative} lists `{image}` under `images:`, whose tag is `latest`. A tag that names "
                 + "a version is a weak pin; a tag that names no version is not a pin at all — "
@@ -510,9 +519,8 @@ partial class Build
         // two different digests for one reference and the comparison would accept whichever came
         // first. A record that can hold two answers is a record that has none.
         foreach (var duplicate in images
-            .GroupBy(image => image.Split('@')[0], StringComparer.Ordinal)
-            .Where(group => group.Count() > 1))
-        {
+                     .GroupBy(image => image.Split('@')[0], StringComparer.Ordinal)
+                     .Where(group => group.Count() > 1)) {
             yield return
                 $"{relative} lists `{duplicate.Key}` under `images:` {duplicate.Count()} times. One "
                 + "reference has one digest; two rows for it means one of them is stale and nothing "
@@ -520,13 +528,14 @@ partial class Build
         }
     }
 
-    static IEnumerable<string> LicenceViolations(string relative, Dictionary<string, string> scalars)
-    {
-        if (!scalars.TryGetValue("licence", out var licence))
+    static IEnumerable<string> LicenceViolations(string relative, Dictionary<string, string> scalars) {
+        if (!scalars.TryGetValue("licence", out var licence)) {
             yield break;
+        }
 
-        if (Array.IndexOf(BundleLicenceAllowList, licence) >= 0)
+        if (Array.IndexOf(BundleLicenceAllowList, licence) >= 0) {
             yield break;
+        }
 
         yield return
             $"{relative} declares `licence: {licence}`, which is not on ADR-011's allow-list "
@@ -547,21 +556,19 @@ partial class Build
     ///     chart published as a release asset (Altinity and SeaweedFS both do this), <c>manifest</c>
     ///     is a plain document applied with <c>kubectl</c>.
     /// </remarks>
-    static IEnumerable<string> PinViolations(string relative, Dictionary<string, string> scalars)
-    {
-        if (!scalars.TryGetValue("install", out var install))
+    static IEnumerable<string> PinViolations(string relative, Dictionary<string, string> scalars) {
+        if (!scalars.TryGetValue("install", out var install)) {
             yield break;
+        }
 
-        var required = install switch
-        {
+        var required = install switch {
             "helm" => new[] { "repo", "chart", "version" },
             "helm-archive" => ["archive", "chart", "version"],
             "manifest" => ["manifest", "release"],
             _ => [],
         };
 
-        if (required.Length == 0)
-        {
+        if (required.Length == 0) {
             yield return
                 $"{relative} declares `install: {install}`, which is not one of helm, helm-archive or "
                 + "manifest. install.sh switches on this value and does nothing for a kind it does "
@@ -570,8 +577,7 @@ partial class Build
             yield break;
         }
 
-        foreach (var key in required.Where(key => !scalars.ContainsKey(key)))
-        {
+        foreach (var key in required.Where(key => !scalars.ContainsKey(key))) {
             yield return
                 $"{relative} declares `install: {install}` and no `{key}:`. install.sh reads the pin "
                 + "out of this file and hard-codes no version, so a missing key is not a default — it "
@@ -594,8 +600,11 @@ partial class Build
     ///         charts/bundle/bundle.yaml § owed, <c>images-are-not-pinned-by-digest</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An allow-list rather than "every key must be machine-read", because three of
-    ///         these are read by people and saying so is the honest version.</b> <c>appVersion</c>,
+    ///         ⚠
+    ///         <b>
+    ///             An allow-list rather than "every key must be machine-read", because three of
+    ///             these are read by people and saying so is the honest version.
+    ///         </b> <c>appVersion</c>,
     ///         <c>notes</c> and <c>requiredBy</c> are consumed by whoever opens the file and by no
     ///         script; they are here deliberately, and the difference between "documented" and
     ///         "checked" is exactly what <c>imageDigest:</c> blurred. Everything else is read by
@@ -609,8 +618,7 @@ partial class Build
     ///         a check nobody wrote.
     ///     </para>
     /// </remarks>
-    static readonly HashSet<string> BundleComponentKeys = new(StringComparer.Ordinal)
-    {
+    static readonly HashSet<string> BundleComponentKeys = new(StringComparer.Ordinal) {
         // Read by this gate.
         "component",
         "phase",
@@ -639,18 +647,16 @@ partial class Build
         // this list exists to catch and a key a reader needs is not.
         "appVersion",
         "notes",
-        "requiredBy",
+        "requiredBy"
     };
 
     /// <summary>
     ///     A <c>component.yaml</c> carries no top-level key this directory has no reader for.
     /// </summary>
-    static IEnumerable<string> UnknownKeyViolations(string relative, Dictionary<string, string> scalars)
-    {
+    static IEnumerable<string> UnknownKeyViolations(string relative, Dictionary<string, string> scalars) {
         foreach (var key in scalars.Keys
-            .Where(key => !BundleComponentKeys.Contains(key))
-            .OrderBy(key => key, StringComparer.Ordinal))
-        {
+                     .Where(key => !BundleComponentKeys.Contains(key))
+                     .OrderBy(key => key, StringComparer.Ordinal)) {
             yield return
                 $"{relative} declares `{key}:`, which nothing under charts/bundle/ reads — not "
                 + "install.sh, not images.sh, not this gate. The key that produced this rule was "
@@ -662,13 +668,18 @@ partial class Build
         }
     }
 
-    static IEnumerable<string> CheckedDateViolations(string relative, Dictionary<string, string> scalars)
-    {
-        if (!scalars.TryGetValue("checked", out var checkedText))
+    static IEnumerable<string> CheckedDateViolations(string relative, Dictionary<string, string> scalars) {
+        if (!scalars.TryGetValue("checked", out var checkedText)) {
             yield break;
+        }
 
-        if (!DateOnly.TryParseExact(checkedText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var checkedOn))
-        {
+        if (!DateOnly.TryParseExact(
+                checkedText,
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var checkedOn
+            )) {
             yield return
                 $"{relative} declares `checked: {checkedText}`, which is not an ISO date. It is the "
                 + "one field that says how old the claim \"this pin resolves\" is, and a date nothing "
@@ -681,8 +692,7 @@ partial class Build
         // has not happened is a pin nobody resolved. There is deliberately no MAXIMUM AGE — a gate
         // that goes red on a Tuesday because a correct pin got old is a gate somebody switches off,
         // and `install.sh --verify` is the thing that answers staleness.
-        if (checkedOn > DateOnly.FromDateTime(DateTime.UtcNow))
-        {
+        if (checkedOn > DateOnly.FromDateTime(DateTime.UtcNow)) {
             yield return
                 $"{relative} declares `checked: {checkedText}`, which is in the future. That date is a "
                 + "claim that somebody resolved this pin against its registry on that day";
@@ -700,10 +710,8 @@ partial class Build
     ///     the filesystem's order is alphabetical and alphabetical puts <c>cert-manager</c> before
     ///     <c>kube-ovn</c>, which installs a webhook onto a cluster with no CNI.
     /// </remarks>
-    IEnumerable<string> RosterViolations(List<BundleComponent> components)
-    {
-        if (!BundleRosterFile.FileExists())
-        {
+    IEnumerable<string> RosterViolations(List<BundleComponent> components) {
+        if (!BundleRosterFile.FileExists()) {
             yield return
                 $"{RootDirectory.GetRelativePathTo(BundleRosterFile)} is missing. It is what install.sh "
                 + "reads to get the install ORDER, which the filesystem does not carry";
@@ -714,31 +722,30 @@ partial class Build
         var roster = ReadRoster();
         var onDisk = components.Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
 
-        foreach (var name in roster.Keys.Where(name => !onDisk.Contains(name)).OrderBy(x => x, StringComparer.Ordinal))
-        {
+        foreach (var name in roster.Keys.Where(name => !onDisk.Contains(name))
+                     .OrderBy(x => x, StringComparer.Ordinal)) {
             yield return
                 $"charts/bundle/bundle.yaml lists `{name}` and charts/bundle/{name}/ does not exist. "
                 + "install.sh would report it missing at install time, on a cluster, rather than here";
         }
 
-        foreach (var component in components.Where(x => !roster.ContainsKey(x.Name)))
-        {
+        foreach (var component in components.Where(x => !roster.ContainsKey(x.Name))) {
             yield return
                 $"charts/bundle/{component.Name}/ is a component and charts/bundle/bundle.yaml does "
                 + "not list it, so install.sh never installs it. Adding a component is meant to be a "
                 + "visible diff in the roster rather than a directory somebody has to notice";
         }
 
-        foreach (var component in components)
-        {
-            if (!roster.TryGetValue(component.Name, out var rosterPhase))
+        foreach (var component in components) {
+            if (!roster.TryGetValue(component.Name, out var rosterPhase)) {
                 continue;
+            }
 
-            if (!component.Scalars.TryGetValue("phase", out var componentPhase))
+            if (!component.Scalars.TryGetValue("phase", out var componentPhase)) {
                 continue;
+            }
 
-            if (!string.Equals(rosterPhase, componentPhase, StringComparison.Ordinal))
-            {
+            if (!string.Equals(rosterPhase, componentPhase, StringComparison.Ordinal)) {
                 yield return
                     $"charts/bundle/{component.Name}/{ComponentFileName} declares `phase: "
                     + $"{componentPhase}` and charts/bundle/bundle.yaml puts it in phase "
@@ -749,36 +756,37 @@ partial class Build
     }
 
     /// <summary>Component name to phase, from the roster's <c>components:</c> block.</summary>
-    Dictionary<string, string> ReadRoster()
-    {
+    Dictionary<string, string> ReadRoster() {
         var roster = new Dictionary<string, string>(StringComparer.Ordinal);
         var inside = false;
         string? name = null;
 
-        foreach (var line in BundleRosterFile.ReadAllLines())
-        {
-            if (line.StartsWith("components:", StringComparison.Ordinal))
-            {
+        foreach (var line in BundleRosterFile.ReadAllLines()) {
+            if (line.StartsWith("components:", StringComparison.Ordinal)) {
                 inside = true;
 
                 continue;
             }
 
-            if (line.Length > 0 && !char.IsWhiteSpace(line[0]) && line[0] != '#')
+            if (line.Length > 0 && !char.IsWhiteSpace(line[0]) && line[0] != '#') {
                 inside = false;
+            }
 
-            if (!inside)
+            if (!inside) {
                 continue;
+            }
 
             var match = RosterEntry.Match(line);
 
-            if (!match.Success)
+            if (!match.Success) {
                 continue;
+            }
 
-            if (match.Groups["key"].Value is "name")
+            if (match.Groups["key"].Value is "name") {
                 name = match.Groups["value"].Value;
-            else if (name is not null)
+            } else if (name is not null) {
                 roster[name] = match.Groups["value"].Value;
+            }
         }
 
         return roster;
@@ -787,7 +795,8 @@ partial class Build
     /// <summary><c>  - name: x</c> or <c>    phase: 10</c>.</summary>
     static readonly Regex RosterEntry = new(
         @"^\s+-?\s*(?<key>name|phase):\s*(?<value>\S+)\s*$",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled
+    );
 
     // ── Coverage ──────────────────────────────────────────────────────────────────────────────
 
@@ -796,8 +805,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>This is the check the directory exists for, and it goes red on three distinct
-    ///         mistakes rather than one.</b> A chart rendering a group nothing installs — the state
+    ///         ⚠
+    ///         <b>
+    ///             This is the check the directory exists for, and it goes red on three distinct
+    ///             mistakes rather than one.
+    ///         </b> A chart rendering a group nothing installs — the state
     ///         the whole tree was in. A pin moved to a release that stopped serving a group some
     ///         chart still renders — Strimzi 1.0.0 against <c>charts/managed/kafka</c>, which is a
     ///         live example and not a hypothetical. And two components claiming one group/version,
@@ -815,23 +827,22 @@ partial class Build
     /// </remarks>
     static IEnumerable<string> CoverageViolations(
         List<BundleComponent> components,
-        IReadOnlyDictionary<string, List<string>> rendered)
-    {
+        IReadOnlyDictionary<string, List<string>> rendered
+    ) {
         var servedBy = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 
-        foreach (var component in components)
-        {
-            foreach (var entry in component.Serves)
-            {
-                if (!servedBy.TryGetValue(entry, out var owners))
+        foreach (var component in components) {
+            foreach (var entry in component.Serves) {
+                if (!servedBy.TryGetValue(entry, out var owners)) {
                     servedBy[entry] = owners = [];
+                }
 
                 owners.Add(component.Name);
             }
         }
 
-        foreach (var (entry, owners) in servedBy.Where(x => x.Value.Count > 1).OrderBy(x => x.Key, StringComparer.Ordinal))
-        {
+        foreach (var (entry, owners) in servedBy.Where(x => x.Value.Count > 1)
+                     .OrderBy(x => x.Key, StringComparer.Ordinal)) {
             yield return
                 $"{entry} is declared under `serves:` by {owners.Count} components — "
                 + $"{string.Join(", ", owners.OrderBy(x => x, StringComparer.Ordinal))}. One "
@@ -839,10 +850,10 @@ partial class Build
                 + "last wins, and an upgrade of either silently rewrites the other's schema";
         }
 
-        foreach (var (entry, sources) in rendered.OrderBy(x => x.Key, StringComparer.Ordinal))
-        {
-            if (servedBy.ContainsKey(entry))
+        foreach (var (entry, sources) in rendered.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+            if (servedBy.ContainsKey(entry)) {
                 continue;
+            }
 
             yield return
                 $"{entry} is rendered by {string.Join(", ", sources)} and no component under "
@@ -862,8 +873,11 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A text scan of <c>templates/</c>, not a <c>helm template</c> render, and the
-    ///         difference is a deliberate trade.</b> Rendering would need values that satisfy every
+    ///         ⚠
+    ///         <b>
+    ///             A text scan of <c>templates/</c>, not a <c>helm template</c> render, and the
+    ///             difference is a deliberate trade.
+    ///         </b> Rendering would need values that satisfy every
     ///         chart's schema and a working <c>helm</c>, and would then miss any object behind a
     ///         conditional the default values switch off. Reading the literal <c>apiVersion:</c>
     ///         lines sees every object in the file including the conditional ones, which is the set
@@ -881,55 +895,57 @@ partial class Build
     ///         scan cannot see it, and a regex that guessed would cover a chart it had not read.
     ///     </para>
     /// </remarks>
-    Dictionary<string, List<string>> ReadRenderedApiGroups(out int chartsInspected)
-    {
+    Dictionary<string, List<string>> ReadRenderedApiGroups(out int chartsInspected) {
         var rendered = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var charts = 0;
 
-        if (!ManagedChartsDirectory.DirectoryExists())
-        {
+        if (!ManagedChartsDirectory.DirectoryExists()) {
             chartsInspected = 0;
 
             return rendered;
         }
 
-        foreach (var chart in ManagedChartsDirectory.GlobDirectories("*").OrderBy(x => x.Name, StringComparer.Ordinal))
-        {
+        foreach (var chart in ManagedChartsDirectory.GlobDirectories("*")
+                     .OrderBy(x => x.Name, StringComparer.Ordinal)) {
             var templates = chart / "templates";
 
-            if (!templates.DirectoryExists())
+            if (!templates.DirectoryExists()) {
                 continue;
+            }
 
             charts++;
 
             foreach (var template in templates.GlobFiles("**/*.yaml", "**/*.yml", "**/*.tpl")
-                         .OrderBy(x => x.ToString(), StringComparer.Ordinal))
-            {
-                foreach (var line in template.ReadAllLines())
-                {
+                         .OrderBy(x => x.ToString(), StringComparer.Ordinal)) {
+                foreach (var line in template.ReadAllLines()) {
                     var match = RenderedApiVersion.Match(line);
 
-                    if (!match.Success)
+                    if (!match.Success) {
                         continue;
+                    }
 
                     var value = match.Groups["value"].Value;
 
-                    if (value.Contains("{{", StringComparison.Ordinal))
+                    if (value.Contains("{{", StringComparison.Ordinal)) {
                         continue;
+                    }
 
                     var slash = value.LastIndexOf('/');
                     var group = slash < 0 ? string.Empty : value[..slash];
 
-                    if (BuiltInApiGroups.Contains(group))
+                    if (BuiltInApiGroups.Contains(group)) {
                         continue;
+                    }
 
-                    if (!rendered.TryGetValue(value, out var sources))
+                    if (!rendered.TryGetValue(value, out var sources)) {
                         rendered[value] = sources = [];
+                    }
 
                     var source = RootDirectory.GetRelativePathTo(template).ToString();
 
-                    if (!sources.Contains(source, StringComparer.Ordinal))
+                    if (!sources.Contains(source, StringComparer.Ordinal)) {
                         sources.Add(source);
+                    }
                 }
             }
         }
@@ -942,12 +958,14 @@ partial class Build
     /// <summary>An <c>apiVersion:</c> line at any indent, with its value.</summary>
     static readonly Regex RenderedApiVersion = new(
         @"^\s*-?\s*apiVersion:\s*(?<value>[^\s#]+)\s*$",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled
+    );
 
     /// <summary>A <c>group/version</c> pair, as <c>serves:</c> must spell one.</summary>
     static readonly Regex GroupVersion = new(
         @"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/v[0-9]+((alpha|beta)[0-9]+)?$",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled
+    );
 
     /// <summary>
     ///     An <c>images:</c> entry: a reference, a tag, and the digest that tag served when somebody
@@ -965,18 +983,23 @@ partial class Build
     /// </remarks>
     static readonly Regex ImageReference = new(
         @"^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled
+    );
 
     /// <summary>An <c>images:</c> entry whose tag is <c>latest</c>, in any casing.</summary>
     /// <remarks>
-    ///     ⚠ <b>The tag is the segment between the LAST colon and the <c>@</c>, and matching it any
-    ///     other way gets a repository called <c>latest/…</c> or a registry on a port wrong.</b>
+    ///     ⚠
+    ///     <b>
+    ///         The tag is the segment between the LAST colon and the <c>@</c>, and matching it any
+    ///         other way gets a repository called <c>latest/…</c> or a registry on a port wrong.
+    ///     </b>
     ///     Case-insensitive because a registry's tag namespace is case-sensitive and a reviewer's
     ///     eye is not: <c>Latest</c> would be a different tag and the same absence of a pin.
     /// </remarks>
     static readonly Regex LatestTag = new(
         @":latest@sha256:[0-9a-f]{64}$",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
 
     // ── Ordering ──────────────────────────────────────────────────────────────────────────────
 
@@ -986,13 +1009,18 @@ partial class Build
     /// <remarks>
     ///     <para>
     ///         charts/managed/opensearch/conformance.yaml § owed, <c>api-group-is-deprecated</c>:
-    ///         <i>"Closing it is a new api-version on the resource type plus a charts/bundle/ bump,
-    ///         in that order, and the two must not be done in one commit: a bundle that moved first
-    ///         would strand every existing service."</i>
+    ///         <i>
+    ///             "Closing it is a new api-version on the resource type plus a charts/bundle/ bump,
+    ///             in that order, and the two must not be done in one commit: a bundle that moved first
+    ///             would strand every existing service."
+    ///         </i>
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A CHANGED pin, not a touched file, and the difference is what makes this
-    ///         usable.</b> Adding a component adds pin lines and removes none, so the commit that
+    ///         ⚠
+    ///         <b>
+    ///             A CHANGED pin, not a touched file, and the difference is what makes this
+    ///             usable.
+    ///         </b> Adding a component adds pin lines and removes none, so the commit that
     ///         created this directory does not trip it. What trips it is a <c>version:</c> or
     ///         <c>release:</c> line that was replaced — a bump — landing beside a template edit.
     ///     </para>
@@ -1006,16 +1034,20 @@ partial class Build
     ///         the detail rather than a silence.
     ///     </para>
     /// </remarks>
-    IEnumerable<string> OrderingViolations(out string detail)
-    {
+    IEnumerable<string> OrderingViolations(out string detail) {
         var diff = GitTasks
-            .Git("diff --unified=0 HEAD~1 HEAD -- charts", RootDirectory, logOutput: false, logInvocation: false, exitHandler: _ => 0)
+            .Git(
+                "diff --unified=0 HEAD~1 HEAD -- charts",
+                RootDirectory,
+                logOutput: false,
+                logInvocation: false,
+                exitHandler: _ => 0
+            )
             .Where(x => x.Type == OutputType.Std)
             .Select(x => x.Text)
             .ToList();
 
-        if (diff.Count == 0)
-        {
+        if (diff.Count == 0) {
             detail = "the ordering rule was not inspected (no reachable parent commit, or no change under charts/)";
 
             return [];
@@ -1027,16 +1059,13 @@ partial class Build
         var templates = new List<string>();
         var file = string.Empty;
 
-        foreach (var line in diff)
-        {
-            if (line.StartsWith("+++ b/", StringComparison.Ordinal))
-            {
+        foreach (var line in diff) {
+            if (line.StartsWith("+++ b/", StringComparison.Ordinal)) {
                 file = line[6..];
 
                 if (file.Contains("/templates/", StringComparison.Ordinal)
                     && file.StartsWith("charts/managed/", StringComparison.Ordinal)
-                    && !templates.Contains(file, StringComparer.Ordinal))
-                {
+                    && !templates.Contains(file, StringComparer.Ordinal)) {
                     templates.Add(file);
                 }
 
@@ -1045,34 +1074,38 @@ partial class Build
 
             // A removed pin line. `-` and not `+`: a version that was replaced is a bump, and a
             // version that was only added is a new component.
-            if (line.StartsWith("--", StringComparison.Ordinal) || !line.StartsWith('-'))
+            if (line.StartsWith("--", StringComparison.Ordinal) || !line.StartsWith('-')) {
                 continue;
+            }
 
-            if (!file.StartsWith("charts/bundle/", StringComparison.Ordinal))
+            if (!file.StartsWith("charts/bundle/", StringComparison.Ordinal)) {
                 continue;
+            }
 
-            if (PinLine.IsMatch(line[1..]) && !bumped.Contains(file, StringComparer.Ordinal))
+            if (PinLine.IsMatch(line[1..]) && !bumped.Contains(file, StringComparer.Ordinal)) {
                 bumped.Add(file);
+            }
         }
 
-        if (bumped.Count == 0 || templates.Count == 0)
+        if (bumped.Count == 0 || templates.Count == 0) {
             return [];
+        }
 
-        return
-        [
+        return [
             $"HEAD changes a version pin in {string.Join(", ", bumped)} and edits "
             + $"{string.Join(", ", templates)} in the same commit. "
             + "charts/managed/opensearch/conformance.yaml § owed, api-group-is-deprecated: \"the two "
             + "must not be done in one commit: a bundle that moved first would strand every existing "
             + "service\". Split it — the chart's new api-version first, the bundle bump after, so "
-            + "that at no commit does a rendered group/version go unserved",
+            + "that at no commit does a rendered group/version go unserved"
         ];
     }
 
     /// <summary>A pin, as a <c>component.yaml</c> spells one.</summary>
     static readonly Regex PinLine = new(
         @"^\s*(version|release|versionCrds|archive|manifest|manifestExtra):",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled
+    );
 
     // ── The one reader this file adds ─────────────────────────────────────────────────────────
 
@@ -1088,36 +1121,38 @@ partial class Build
     ///     <c>servesNoDefinitions:</c>) is written folded, so reading the block is the normal case
     ///     rather than a tolerance.
     /// </remarks>
-    static string? ReadBundleReason(AbsolutePath file, string key)
-    {
+    static string? ReadBundleReason(AbsolutePath file, string key) {
         var lines = file.ReadAllLines();
 
-        for (var index = 0; index < lines.Length; index++)
-        {
-            if (!lines[index].StartsWith(key + ":", StringComparison.Ordinal))
+        for (var index = 0; index < lines.Length; index++) {
+            if (!lines[index].StartsWith(key + ":", StringComparison.Ordinal)) {
                 continue;
+            }
 
             var inline = lines[index][(key.Length + 1)..].Trim();
 
-            if (inline.Length > 0 && inline is not (">" or "|" or ">-" or "|-" or ">+" or "|+"))
+            if (inline.Length > 0 && inline is not (">" or "|" or ">-" or "|-" or ">+" or "|+")) {
                 return Unquote(inline);
+            }
 
             var block = new List<string>();
 
-            for (var next = index + 1; next < lines.Length; next++)
-            {
+            for (var next = index + 1; next < lines.Length; next++) {
                 var line = lines[next];
 
-                if (line.Trim().Length == 0)
+                if (line.Trim().Length == 0) {
                     continue;
+                }
 
-                if (!char.IsWhiteSpace(line[0]))
+                if (!char.IsWhiteSpace(line[0])) {
                     break;
+                }
 
                 var trimmed = line.Trim();
 
-                if (trimmed[0] != '#')
+                if (trimmed[0] != '#') {
                     block.Add(trimmed);
+                }
             }
 
             return string.Join(' ', block);
@@ -1135,33 +1170,32 @@ partial class Build
     ///     the one key here that the coverage check depends on. This is the narrowest possible
     ///     addition rather than a second YAML reader: one nesting level, one shape, comments skipped.
     /// </remarks>
-    static List<string> ReadBundleSequence(AbsolutePath file, string key)
-    {
+    static List<string> ReadBundleSequence(AbsolutePath file, string key) {
         var entries = new List<string>();
         var inside = false;
 
-        foreach (var line in file.ReadAllLines())
-        {
-            if (line.StartsWith(key + ":", StringComparison.Ordinal))
-            {
+        foreach (var line in file.ReadAllLines()) {
+            if (line.StartsWith(key + ":", StringComparison.Ordinal)) {
                 inside = true;
 
                 continue;
             }
 
-            if (line.Length > 0 && !char.IsWhiteSpace(line[0]))
+            if (line.Length > 0 && !char.IsWhiteSpace(line[0])) {
                 inside = false;
+            }
 
-            if (!inside)
+            if (!inside) {
                 continue;
+            }
 
             var trimmed = line.Trim();
 
-            if (trimmed.Length == 0 || trimmed[0] == '#')
+            if (trimmed.Length == 0 || trimmed[0] == '#') {
                 continue;
+            }
 
-            if (trimmed[0] != '-')
-            {
+            if (trimmed[0] != '-') {
                 inside = false;
 
                 continue;

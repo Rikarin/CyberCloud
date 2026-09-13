@@ -1,5 +1,6 @@
 // ⚠ For `Result<T>` on the retained-volume seam. Safe beside the GlobalUsings ErrorCode alias, which
 // is what disambiguates the one name this namespace collides with.
+
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Collections.Immutable;
@@ -12,8 +13,11 @@ namespace CyberCloud.Providers.Messaging;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is the first reconciler in the platform with no operator on the other side of
-///         it.</b> The three before it apply one or two custom resources and a controller turns each
+///         ⚠
+///         <b>
+///             This is the first reconciler in the platform with no operator on the other side of
+///             it.
+///         </b> The three before it apply one or two custom resources and a controller turns each
 ///         into a workload; <c>nats-io/nats-operator</c> was archived on 2025-04-10 and upstream's
 ///         answer is a Helm chart, so what this applies is the workload — a <c>ConfigMap</c>, a
 ///         headless <c>Service</c>, a <c>StatefulSet</c>, a client <c>Service</c> and a
@@ -72,8 +76,11 @@ namespace CyberCloud.Providers.Messaging;
 ///         cluster missing the bundle finds out what is missing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced.</b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced.
+///         </b> ADR-013 makes a conflict <i>"a drift event with a name"</i>; forcing
 ///         would let the platform silently overwrite a tenant's own controller, and on this type that
 ///         controller is plausibly an autoscaler writing <c>spec.replicas</c> through the
 ///         <c>StatefulSet</c>'s own <c>scale</c> subresource.
@@ -177,7 +184,7 @@ public sealed class NatsClusterReconciler(IClock clock) : IResourceReconciler {
                 // and a converge loop with a bounded PASS budget would run out of passes waiting for
                 // a controller it does not drive. The read-back below is what makes Background safe:
                 // this returns Converged when the objects are GONE, not when the deletes were issued.
-                .DeleteAsync(CascadePolicy.Background, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
                 return ReconcileOutcome.FromFailure(deleteError);
@@ -243,9 +250,7 @@ public sealed class NatsClusterReconciler(IClock clock) : IResourceReconciler {
         );
 
         if (read.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the NATS StatefulSet is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the NATS StatefulSet is absent" };
         }
 
         var found = read.GetValueOrThrow();
@@ -266,8 +271,11 @@ public sealed class NatsClusterReconciler(IClock clock) : IResourceReconciler {
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>A method rather than a field, and that is the clause-2 rule rather than a style
-    ///     choice.</b> A reconciler is a singleton serving every tenant, so any field is shared state
+    ///     ⚠
+    ///     <b>
+    ///         A method rather than a field, and that is the clause-2 rule rather than a style
+    ///         choice.
+    ///     </b> A reconciler is a singleton serving every tenant, so any field is shared state
     ///     — and this one would be tenant-specific, which is the exact shape clause 2 forbids.
     ///     <c>NatsReconcilerTests</c> asserts the declared field count is one, the clock.
     /// </remarks>
@@ -291,8 +299,11 @@ public sealed class NatsClusterReconciler(IClock clock) : IResourceReconciler {
     /// <param name="name">The resource's own name.</param>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>It must stay in step with <see cref="Rendered" />, and nothing enforces that but a
-    ///     test.</b> An object rendered and not read back is an object the loop reports Converged
+    ///     ⚠
+    ///     <b>
+    ///         It must stay in step with <see cref="Rendered" />, and nothing enforces that but a
+    ///         test.
+    ///     </b> An object rendered and not read back is an object the loop reports Converged
     ///     without ever having observed — clause 4's whole point — and one read back and never
     ///     rendered is a resource that never converges.
     ///     <c>NatsReconcilerTests.EveryRenderedObjectIsAlsoReadBack</c> is what holds the pair
@@ -311,7 +322,7 @@ public sealed class NatsClusterReconciler(IClock clock) : IResourceReconciler {
 
     /// <summary>Progress for the object at <paramref name="done" /> of <paramref name="total" />.</summary>
     /// <remarks>Capped below 100, which is the reading's to report — clause 4.</remarks>
-    static int Percent(int done, int total) => 10 + (done * 80 / total);
+    static int Percent(int done, int total) => 10 + done * 80 / total;
 
     /// <summary>
     ///     Applies one object and turns the two outcomes that are not failures into progress.
@@ -335,9 +346,9 @@ public sealed class NatsClusterReconciler(IClock clock) : IResourceReconciler {
             // ⚠ Six labels, into the JetStream claim template — see NatsClusters.ClaimTemplatePath.
             // Not the seventh: a live StatefulSet refuses any change to volumeClaimTemplates, and
             // api-version is the one of the seven that changes between requests.
-            .WithTemplateLabels(NatsClusters.ClaimTemplatePath)
-            .ObjectJson(json)
-            .ApplyAsync(cancellationToken);
+                .WithTemplateLabels(NatsClusters.ClaimTemplatePath)
+                .ObjectJson(json)
+                .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
             // ⚠ The code decides, not this call site. An apply that could not reach the cluster is a

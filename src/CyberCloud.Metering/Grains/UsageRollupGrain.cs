@@ -11,7 +11,8 @@ namespace CyberCloud.Metering.Grains;
 ///     docs/plan/22 § The pipeline's rollup worker.
 /// </summary>
 public sealed class UsageRollupGrain(
-    [PersistentState("usage-rollup", StorageTiers.Durable)] IPersistentState<UsageRollupState> state,
+    [PersistentState("usage-rollup", StorageTiers.Durable)]
+    IPersistentState<UsageRollupState> state,
     IUsageSink sink,
     IGrainFactory grains,
     IClock clock
@@ -345,30 +346,29 @@ public sealed class UsageRollupGrain(
     ///     is a thing that does not happen and a resource that was renamed mid-hour is, and the
     ///     rename must not split one hour into two invoice lines.
     /// </remarks>
-    ImmutableArray<UsageAggregate> Aggregate(List<UsageEvent> records, UsageWindow hour) =>
-        [
-            .. records
-                .GroupBy(x => (x.ResourceId, x.Meter))
-                .OrderBy(x => x.Key.ResourceId)
-                .ThenBy(x => x.Key.Meter)
-                .Select(group => {
-                        var last = group.OrderBy(x => x.WindowStart).Last();
+    ImmutableArray<UsageAggregate> Aggregate(List<UsageEvent> records, UsageWindow hour) => [
+        .. records
+            .GroupBy(x => (x.ResourceId, x.Meter))
+            .OrderBy(x => x.Key.ResourceId)
+            .ThenBy(x => x.Key.Meter)
+            .Select(group => {
+                    var last = group.OrderBy(x => x.WindowStart).Last();
 
-                        return new UsageAggregate {
-                            TenantId = tenantId,
-                            SubscriptionId = subscriptionId,
-                            ResourceId = group.Key.ResourceId,
-                            ResourcePath = last.ResourcePath,
-                            Meter = group.Key.Meter,
-                            Region = last.Region,
-                            HourStart = hour.Start,
-                            HourEnd = hour.End,
-                            Quantity = group.Sum(x => x.Quantity),
-                            SampleCount = group.Count()
-                        };
-                    }
-                )
-        ];
+                    return new UsageAggregate {
+                        TenantId = tenantId,
+                        SubscriptionId = subscriptionId,
+                        ResourceId = group.Key.ResourceId,
+                        ResourcePath = last.ResourcePath,
+                        Meter = group.Key.Meter,
+                        Region = last.Region,
+                        HourStart = hour.Start,
+                        HourEnd = hour.End,
+                        Quantity = group.Sum(x => x.Quantity),
+                        SampleCount = group.Count()
+                    };
+                }
+            )
+    ];
 
     /// <summary>Drops keys and closed hours past the retention horizon. Returns whether anything went.</summary>
     bool Prune(DateTimeOffset now) {

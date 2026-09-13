@@ -261,8 +261,11 @@ public static class OrleansApplication {
     ///         and mounted secrets reach the logger, which is how it is configured in a cluster.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE SINKS MOVED OUT OF <c>appsettings.json</c> AND INTO THIS METHOD, AND THAT IS
-    ///         THE LOG CANARY RATHER THAN A TIDY-UP.</b> docs/plan/18 § Platform security, row
+    ///         ⚠
+    ///         <b>
+    ///             THE SINKS MOVED OUT OF <c>appsettings.json</c> AND INTO THIS METHOD, AND THAT IS
+    ///             THE LOG CANARY RATHER THAN A TIDY-UP.
+    ///         </b> docs/plan/18 § Platform security, row
     ///         Secrets asks for a scanner on the log pipeline;
     ///         <see cref="Logging.SecretScrubbingSink" /> is it, and it is only a control over the
     ///         sinks it wraps. <c>ReadFrom.Configuration</c> adds sinks beside the wrapper rather
@@ -273,8 +276,11 @@ public static class OrleansApplication {
     ///         <c>appsettings.json</c>.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>ClearProviders</c>, and what it does <i>not</i> close — because the first
-    ///         version of this note claimed the opposite and was wrong.</b> The obvious reading is
+    ///         ⚠
+    ///         <b>
+    ///             <c>ClearProviders</c>, and what it does <i>not</i> close — because the first
+    ///             version of this note claimed the opposite and was wrong.
+    ///         </b> The obvious reading is
     ///         that the console, debug and event-source providers
     ///         <c>WebApplication.CreateBuilder</c> installs are unscrubbed egress paths, since a
     ///         <c>Microsoft.Extensions.Logging</c> provider is fed directly and not through Serilog.
@@ -295,20 +301,20 @@ public static class OrleansApplication {
         builder.Logging.ClearProviders();
 
         builder.Services.AddSerilog((services, logger) => logger
-            .ReadFrom.Configuration(builder.Configuration)
-            .ReadFrom.Services(services)
-            .Enrich.FromLogContext()
-            .WriteTo.ScrubbingSecrets(sinks => {
-                    // stdout, which in a cluster is the node's log collector. Formerly
-                    // `Serilog:WriteTo: [{ Name: Console }]` in every host's appsettings.json.
-                    sinks.Console();
+                .ReadFrom.Configuration(builder.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext()
+                .WriteTo.ScrubbingSecrets(sinks => {
+                        // stdout, which in a cluster is the node's log collector. Formerly
+                        // `Serilog:WriteTo: [{ Name: Console }]` in every host's appsettings.json.
+                        sinks.Console();
 
-                    // The OTLP sink, so logs land in the same pipeline as traces (docs/plan/16). It
-                    // is a no-op without OTEL_EXPORTER_OTLP_ENDPOINT, which is what makes a local
-                    // run quiet.
-                    sinks.OpenTelemetry();
-                }
-            )
+                        // The OTLP sink, so logs land in the same pipeline as traces (docs/plan/16). It
+                        // is a no-op without OTEL_EXPORTER_OTLP_ENDPOINT, which is what makes a local
+                        // run quiet.
+                        sinks.OpenTelemetry();
+                    }
+                )
         );
     }
 

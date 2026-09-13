@@ -10,8 +10,11 @@ namespace CyberCloud.Identity.Credentials;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>These are options rather than constants because the sign-in path's constant-time
-///         guarantee is written against whatever they are.</b> The timing test has to run a real
+///         ⚠
+///         <b>
+///             These are options rather than constants because the sign-in path's constant-time
+///             guarantee is written against whatever they are.
+///         </b> The timing test has to run a real
 ///         verification on both the exists and does-not-exist branches, and at the production
 ///         parameters that is tens of milliseconds each; a suite that does it a hundred times would
 ///         take a minute for one assertion. Lowering them for a test lowers <i>both</i> branches
@@ -92,8 +95,11 @@ public interface IPasswordHasher {
 ///         the cost a migration; storing them alongside makes it a no-op.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The pepper is <c>KnownSecret</c>, which is a real KDF input rather than a
-///         hash-the-hash wrapper.</b> docs/plan/11 § Credentials asks for a "pepper from Vault", and
+///         ⚠
+///         <b>
+///             The pepper is <c>KnownSecret</c>, which is a real KDF input rather than a
+///             hash-the-hash wrapper.
+///         </b> docs/plan/11 § Credentials asks for a "pepper from Vault", and
 ///         RFC 9106 has a secret input for exactly this. Its value: an attacker with the database
 ///         but not the vault cannot even begin a dictionary attack, because they cannot compute a
 ///         single candidate hash. It is <b>not</b> stored in the encoded form — a pepper written next
@@ -159,7 +165,9 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher {
 
     /// <inheritdoc />
     public bool Verify(string candidate, string encoded) {
-        if (candidate is null || string.IsNullOrEmpty(encoded) || !encoded.StartsWith(Prefix, StringComparison.Ordinal)) {
+        if (candidate is null
+            || string.IsNullOrEmpty(encoded)
+            || !encoded.StartsWith(Prefix, StringComparison.Ordinal)) {
             return false;
         }
 
@@ -213,8 +221,11 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher {
     /// </summary>
     /// <param name="candidate">The plaintext.</param>
     /// <remarks>
-    ///     ⚠ <b>The prefix exists because <c>Konscious</c> throws on an empty password, and that
-    ///     throw lands on the sign-in path.</b> <c>new Argon2id([])</c> is an
+    ///     ⚠
+    ///     <b>
+    ///         The prefix exists because <c>Konscious</c> throws on an empty password, and that
+    ///         throw lands on the sign-in path.
+    ///     </b> <c>new Argon2id([])</c> is an
     ///     <see cref="ArgumentException" /> — "Argon2 needs a password set" — so a caller who posts
     ///     an empty password would get a <c>500</c> and a paged engineer instead of the uniform
     ///     failure docs/plan/11 § Credentials requires. Returning early for an empty candidate would
@@ -262,7 +273,12 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher {
         foreach (var pair in text.Split(',')) {
             var equals = pair.IndexOf('=', StringComparison.Ordinal);
             if (equals <= 0
-                || !int.TryParse(pair[(equals + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var value)) {
+                || !int.TryParse(
+                    pair[(equals + 1)..],
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out var value
+                )) {
                 return false;
             }
 

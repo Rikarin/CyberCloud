@@ -77,16 +77,18 @@ public readonly record struct DurableSchemaState(
         QueryTable && StorageTable && StorageIndex && WriteFunction && QueryRows == ExpectedQueryRows;
 
     /// <summary>Whether nothing the two scripts create is present.</summary>
-    public bool IsEmpty =>
-        !QueryTable && !StorageTable && !StorageIndex && !WriteFunction && QueryRows == 0;
+    public bool IsEmpty => !QueryTable && !StorageTable && !StorageIndex && !WriteFunction && QueryRows == 0;
 
     /// <summary>
     ///     What to run against a shard in this state.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Only two partial states are repairable, and that is a claim about transactions
-    ///         rather than caution.</b> Each script runs as one statement batch inside one explicit
+    ///         ⚠
+    ///         <b>
+    ///             Only two partial states are repairable, and that is a claim about transactions
+    ///             rather than caution.
+    ///         </b> Each script runs as one statement batch inside one explicit
     ///         transaction (<see cref="OrleansAdoNetSchema.ApplyAsync(string, CancellationToken)" />),
     ///         and PostgreSQL DDL is transactional — so an interrupted apply rolls back whole scripts,
     ///         never half of one. The only states an interruption can leave are therefore

@@ -100,8 +100,9 @@ public sealed class KubeLabelTests {
         KubernetesAcceptsKey("CyberCloud.io/tenant-id").ShouldBeFalse();
         LabelSyntax.IsValidKey("CyberCloud.io/tenant-id").ShouldBeFalse();
 
-        LabelSyntax.ValidateKey("CyberCloud.io/tenant-id").Error!.Message
-            .ShouldContain("lower-case");
+        LabelSyntax.ValidateKey("CyberCloud.io/tenant-id").Error!
+            .Message
+                .ShouldContain("lower-case");
     }
 
     [Fact]

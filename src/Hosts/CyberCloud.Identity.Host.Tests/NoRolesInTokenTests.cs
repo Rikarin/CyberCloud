@@ -6,8 +6,11 @@ using System.Security.Claims;
 namespace CyberCloud.Identity.Host.Tests;
 
 /// <summary>
-///     docs/plan/11 § Protocol: <i>"Roles and permissions are <b>not</b> in the token. They are
-///     looked up per request from ReBAC."</i>
+///     docs/plan/11 § Protocol:
+///     <i>
+///         "Roles and permissions are <b>not</b> in the token. They are
+///         looked up per request from ReBAC."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -144,9 +147,7 @@ public sealed class NoRolesInTokenTests {
         // presence rather than by comparing its value to an empty string.
         claimCount.ShouldBe(8 + Session.Methods.Count);
 
-        var busy = Session with {
-            Methods = [AuthenticationMethod.Passkey, AuthenticationMethod.Totp]
-        };
+        var busy = Session with { Methods = [AuthenticationMethod.Passkey, AuthenticationMethod.Totp] };
 
         AccessTokenPrincipalFactory.Build(busy, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User)
             .Claims.Count()
@@ -189,12 +190,20 @@ public sealed class NoRolesInTokenTests {
 
         // ⚠ Ordinal. `serviceprincipal` is a subject the tuple store has never heard of, so a token
         // carrying it would deny every check and look like a permissions bug.
-        Should.Throw<ArgumentException>(
-            () => AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], "serviceprincipal")
+        Should.Throw<ArgumentException>(() => AccessTokenPrincipalFactory.Build(
+                Session,
+                "cyc.api",
+                ["cyc.api"],
+                "serviceprincipal"
+            )
         );
 
-        Should.Throw<ArgumentException>(
-            () => AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], "group")
+        Should.Throw<ArgumentException>(() => AccessTokenPrincipalFactory.Build(
+                Session,
+                "cyc.api",
+                ["cyc.api"],
+                "group"
+            )
         );
     }
 

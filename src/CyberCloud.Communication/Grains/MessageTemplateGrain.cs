@@ -8,12 +8,16 @@ namespace CyberCloud.Communication.Grains;
 ///     <see cref="IMessageTemplateGrain" /> — Entity, Durable, key <c>res/{templateId:N}</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>There is no method here that reaches an existing version's body, and that absence is the
-///     design.</b> A carrier approved a specific body; editing it in place invalidates the approval
+///     ⚠
+///     <b>
+///         There is no method here that reaches an existing version's body, and that absence is the
+///         design.
+///     </b> A carrier approved a specific body; editing it in place invalidates the approval
 ///     without changing anything a reviewer would notice. See <see cref="IMessageTemplateGrain" />.
 /// </remarks>
 public sealed class MessageTemplateGrain(
-    [PersistentState("message-template", StorageTiers.Durable)] IPersistentState<MessageTemplateState> state,
+    [PersistentState("message-template", StorageTiers.Durable)]
+    IPersistentState<MessageTemplateState> state,
     IClock clock
 )
     : Grain, IMessageTemplateGrain {
@@ -141,8 +145,8 @@ public sealed class MessageTemplateGrain(
         // could walk a template back to a state that hides a rejection; a caller who could write
         // Unknown could erase one.
         if (status is not (SenderRegistrationStatus.Approved
-            or SenderRegistrationStatus.Rejected
-            or SenderRegistrationStatus.Revoked)) {
+                or SenderRegistrationStatus.Rejected
+                or SenderRegistrationStatus.Revoked)) {
             return Result<MessageTemplateVersion>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"{status} is not a carrier decision. Record Approved, Rejected or Revoked — the "
@@ -169,8 +173,7 @@ public sealed class MessageTemplateGrain(
         }
 
         state.State.Versions[index] = state.State.Versions[index] with {
-            Approval = status,
-            ProviderTemplateName = providerTemplateName
+            Approval = status, ProviderTemplateName = providerTemplateName
         };
 
         await state.WriteStateAsync();

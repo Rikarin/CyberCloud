@@ -1,9 +1,12 @@
 namespace CyberCloud.Communication.Tests;
 
 /// <summary>
-///     docs/plan/17 § The parts that are actually the work: <i>"Every send carries a client-supplied
-///     key; a retry after a timeout must not send twice. An OTP sent twice is confusing; an invoice
-///     notice sent twice is a support call."</i>
+///     docs/plan/17 § The parts that are actually the work:
+///     <i>
+///         "Every send carries a client-supplied
+///         key; a retry after a timeout must not send twice. An OTP sent twice is confusing; an invoice
+///         notice sent twice is a support call."
+///     </i>
 /// </summary>
 [Collection(CommunicationClusterFixture.Name)]
 public sealed class IdempotencyTests(CommunicationCluster cluster) {
@@ -29,7 +32,7 @@ public sealed class IdempotencyTests(CommunicationCluster cluster) {
 
         second.GetValueOrThrow()
             .MessageId
-            .ShouldBe(first.GetValueOrThrow().MessageId, "a retry is the same message, not a second one");
+                .ShouldBe(first.GetValueOrThrow().MessageId, "a retry is the same message, not a second one");
 
         TestProviders.Sms.Sent.Count.ShouldBe(1);
         TestProviders.Sms.Calls.ShouldBe(1, "the second send must not have reached the carrier at all");

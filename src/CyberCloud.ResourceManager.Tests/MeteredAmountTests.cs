@@ -1,7 +1,7 @@
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Registry;
-using Microsoft.Extensions.DependencyInjection;
 using CyberCloud.ResourceManager.Tests.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CyberCloud.ResourceManager.Tests;
@@ -34,8 +34,11 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The failure this pins is quota drifting up across deletes, and it has happened
-    ///         here once.</b> Committed amounts were not re-derived on delete, so a subscription's
+    ///         ⚠
+    ///         <b>
+    ///             The failure this pins is quota drifting up across deletes, and it has happened
+    ///             here once.
+    ///         </b> Committed amounts were not re-derived on delete, so a subscription's
     ///         committed figure climbed by one resource's worth on every create/delete cycle and the
     ///         allowance never came back — silent, and worse the longer a subscription is used. The
     ///         repair made the delete path fill <see cref="OperationSpec.CommittedQuota" /> from the
@@ -45,8 +48,11 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
     ///         that could break it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A derivation is provider code on the quota path, and the symmetry survives only
-    ///         because it is a pure function of the body.</b> Both sides run the same lambda over the
+    ///         ⚠
+    ///         <b>
+    ///             A derivation is provider code on the quota path, and the symmetry survives only
+    ///             because it is a pure function of the body.
+    ///         </b> Both sides run the same lambda over the
     ///         same JSON — the request's on the create, the stored superset on the delete — so they
     ///         cannot disagree. A derivation that read a clock, a config value or a table that ships
     ///         separately from the body would reintroduce exactly this drift, which is why
@@ -133,9 +139,7 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
 
             var deleted = await cluster.Manager.DeleteAsync(
                 new() {
-                    Path = address.Path,
-                    ApiVersion = TestingProvider.V2026,
-                    Caller = ResourceManagerCluster.Caller()
+                    Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller()
                 },
                 TestContext.Current.CancellationToken
             );
@@ -208,8 +212,11 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
     ///     A provider's derivation that throws becomes the same refusal a returned failure is.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The seam puts provider code on the write path, and an escaping exception would land in
-    ///     two bad places.</b> On a create it is a <c>500</c> with a stack trace where a stated error
+    ///     ⚠
+    ///     <b>
+    ///         The seam puts provider code on the write path, and an escaping exception would land in
+    ///         two bad places.
+    ///     </b> On a create it is a <c>500</c> with a stack trace where a stated error
     ///     belongs; on a <c>DELETE</c> it would escape <i>after</i> the index was released, leaving a
     ///     name freed and a resource that never tears down. Both become the refusal instead.
     /// </remarks>

@@ -28,8 +28,11 @@ namespace CyberCloud.Providers.Terminal;
 ///         </item>
 ///         <item>
 ///             <b>No hidden state.</b> The only field is the primary constructor's
-///             <see cref="IClock" />. ⚠ A reconciler is registered <b>as a singleton, by concrete
-///             type</b>, so one instance serves every tenant in the process, and a <c>readonly</c>
+///             <see cref="IClock" />. ⚠ A reconciler is registered
+///             <b>
+///                 as a singleton, by concrete
+///                 type
+///             </b>, so one instance serves every tenant in the process, and a <c>readonly</c>
 ///             mutable field would hand tenant B tenant A's egress posture.
 ///             <c>ReconcilerConformance.CheckNoHiddenState</c> reports that shape now;
 ///             <c>ConsoleReconcilerTests</c> holds the structural check, the calibration that pins it
@@ -54,8 +57,11 @@ namespace CyberCloud.Providers.Terminal;
 ///         short.
 ///     </para>
 ///     <para>
-///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
-///         never forced</b> — ADR-013 makes a conflict "a drift event with a name". On this type the
+///         ⚠
+///         <b>
+///             An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
+///             never forced
+///         </b> — ADR-013 makes a conflict "a drift event with a name". On this type the
 ///         plausible rival is a mutating admission policy: a cluster running a Pod Security or
 ///         Kyverno policy that edits security contexts and network policies is exactly the kind of
 ///         cluster this row is deployed into, and forcing would take a field back from it once per
@@ -172,8 +178,11 @@ public sealed class CloudConsoleReconciler(IClock clock) : IResourceReconciler {
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>THE POD IS DELETED HERE EVEN THOUGH IT IS NEVER APPLIED HERE, AND THE ASYMMETRY IS
-    ///     DELIBERATE.</b> A teardown's job is that nothing of the resource is left running. The
+    ///     ⚠
+    ///     <b>
+    ///         THE POD IS DELETED HERE EVEN THOUGH IT IS NEVER APPLIED HERE, AND THE ASYMMETRY IS
+    ///         DELIBERATE.
+    ///     </b> A teardown's job is that nothing of the resource is left running. The
     ///     session handler may have started a shell seconds ago; leaving it would be a pod holding a
     ///     deleted console's identity, mounting a volume that is about to go, with nothing left in the
     ///     platform that knows it exists. So the delete path knows about an object the create path
@@ -205,8 +214,7 @@ public sealed class CloudConsoleReconciler(IClock clock) : IResourceReconciler {
         // bytes to outlive it — TerminalProvider's remarks and CloudConsoles.HomeClaimJson carry both
         // halves. charts/managed/cloud-shell/conformance.yaml § owed, `delete-takes-the-home-directory`.
         var targets = new[] {
-            CloudConsoles.PodRef(context.Namespace, name),
-            CloudConsoles.NetworkPolicyRef(context.Namespace, name),
+            CloudConsoles.PodRef(context.Namespace, name), CloudConsoles.NetworkPolicyRef(context.Namespace, name),
             CloudConsoles.ServiceAccountRef(context.Namespace, name),
             CloudConsoles.HomeClaimRef(context.Namespace, name)
         };
@@ -225,7 +233,7 @@ public sealed class CloudConsoleReconciler(IClock clock) : IResourceReconciler {
                 // being billed while somebody is still typing into it is the failure the read-back
                 // exists to prevent. docs/plan/06 § Two-phase create: "never silently gone while its
                 // pods still run and its meter still ticks."
-                .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
+                    .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
                 return ReconcileOutcome.FromFailure(deleteError);
@@ -252,16 +260,22 @@ public sealed class CloudConsoleReconciler(IClock clock) : IResourceReconciler {
     /// <inheritdoc />
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>IT READS THE THREE DURABLE OBJECTS AND, SEPARATELY, THE POD — AND ONLY THE FIRST
-    ///         THREE DECIDE <see cref="ObservedState.Exists" />.</b> This is the whole of what
+    ///         ⚠
+    ///         <b>
+    ///             IT READS THE THREE DURABLE OBJECTS AND, SEPARATELY, THE POD — AND ONLY THE FIRST
+    ///             THREE DECIDE <see cref="ObservedState.Exists" />.
+    ///         </b> This is the whole of what
     ///         "observing a session" can mean. The pod's absence is the ordinary state of a console
     ///         nobody is using, so an observer that folded it into existence would report every idle
     ///         console as gone, and the drift scanner — which reads this — would repair a resource
     ///         that is working exactly as designed.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The pod is reported in <see cref="ObservedState.Summary" /> and nowhere else,
-    ///         which is a deliberate downgrade from a fact to a sentence.</b> There is no field on
+    ///         ⚠
+    ///         <b>
+    ///             The pod is reported in <see cref="ObservedState.Summary" /> and nowhere else,
+    ///             which is a deliberate downgrade from a fact to a sentence.
+    ///         </b> There is no field on
     ///         <see cref="ObservedState" /> for "a session is attached", and adding one to a
     ///         platform-wide wire type for one provider would be this row spending the manager's
     ///         budget. The summary is what a person sees in the portal, and for a terminal "a shell
@@ -283,9 +297,7 @@ public sealed class CloudConsoleReconciler(IClock clock) : IResourceReconciler {
         );
 
         if (claim.TryGetError(out _)) {
-            return new() {
-                Exists = false, ObservedAt = clock.UtcNow, Summary = "the home volume is absent"
-            };
+            return new() { Exists = false, ObservedAt = clock.UtcNow, Summary = "the home volume is absent" };
         }
 
         var found = claim.GetValueOrThrow();
@@ -320,8 +332,8 @@ public sealed class CloudConsoleReconciler(IClock clock) : IResourceReconciler {
             Revision = found.ResourceVersion,
             Summary = matches
                 ? (pod.IsSuccess
-                    ? "the console is attachable and a shell is running"
-                    : "the console is attachable and no shell is running")
+                        ? "the console is attachable and a shell is running"
+                        : "the console is attachable and no shell is running")
                 : "the console has drifted"
         };
     }

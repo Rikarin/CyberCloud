@@ -8,8 +8,11 @@ namespace CyberCloud.Providers.DocumentDB.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>CHECKED AGAINST THE CRD AND THE OPERATOR'S SOURCE RATHER THAN AGAINST A README, AND
-///         THIS TYPE NEEDS CONTAINMENT FOR THREE INDEPENDENT REASONS.</b> It is the first provider
+///         ⚠
+///         <b>
+///             CHECKED AGAINST THE CRD AND THE OPERATOR'S SOURCE RATHER THAN AGAINST A README, AND
+///             THIS TYPE NEEDS CONTAINMENT FOR THREE INDEPENDENT REASONS.
+///         </b> It is the first provider
 ///         that renders objects from three different worlds — an operator's custom resource, two
 ///         built-in kinds, and a third party's custom resource — so the three arguments the earlier
 ///         providers each made once all apply here at the same time.
@@ -53,7 +56,11 @@ public sealed class DocumentDbMatchesTests {
         var spec = read["spec"]!.AsObject();
 
         spec["postgresql"]!["shared_preload_libraries"] = new JsonArray {
-            "pg_cron", "pg_documentdb_core", "pg_documentdb", "pg_stat_statements", "auto_explain"
+            "pg_cron",
+            "pg_documentdb_core",
+            "pg_documentdb",
+            "pg_stat_statements",
+            "auto_explain"
         };
 
         // And what the API server and the operator add to every object.
@@ -61,14 +68,13 @@ public sealed class DocumentDbMatchesTests {
         spec["primaryUpdateStrategy"] = "unsupervised";
         spec["logLevel"] = "info";
         read["metadata"]!.AsObject()["generation"] = 1;
-        read["status"] = new JsonObject {
-            ["instances"] = 2, ["readyInstances"] = 0, ["phase"] = "Setting up primary"
-        };
+        read["status"] = new JsonObject { ["instances"] = 2, ["readyInstances"] = 0, ["phase"] = "Setting up primary" };
 
-        DocumentDbAccounts.Matches(read.ToJsonString(), desired.RootElement).ShouldBeTrue(
-            "a Cluster read back with the operator's own preload libraries appended was reported as "
-            + "drifted. That account would never leave InProgress while being perfectly correct."
-        );
+        DocumentDbAccounts.Matches(read.ToJsonString(), desired.RootElement)
+            .ShouldBeTrue(
+                "a Cluster read back with the operator's own preload libraries appended was reported as "
+                + "drifted. That account would never leave InProgress while being perfectly correct."
+            );
     }
 
     [Fact]
@@ -115,11 +121,12 @@ public sealed class DocumentDbMatchesTests {
         read["kind"] = "Cluster";
         read["spec"]!["enableSuperuserAccess"] = false;
 
-        DocumentDbAccounts.Matches(read.ToJsonString(), desired.RootElement).ShouldBeFalse(
-            "a Cluster whose superuser access was turned off read back as matching. CloudNativePG "
-            + "deletes the Secret the gateway mounts, so the database is fine and the service is "
-            + "gone."
-        );
+        DocumentDbAccounts.Matches(read.ToJsonString(), desired.RootElement)
+            .ShouldBeFalse(
+                "a Cluster whose superuser access was turned off read back as matching. CloudNativePG "
+                + "deletes the Secret the gateway mounts, so the database is fine and the service is "
+                + "gone."
+            );
     }
 
     [Fact]
@@ -132,9 +139,7 @@ public sealed class DocumentDbMatchesTests {
 
         var read = JsonNode.Parse(DocumentDbAccounts.ClusterJson("orders", desired.RootElement))!.AsObject();
         read["kind"] = "Cluster";
-        read["spec"]!["postgresql"]!["shared_preload_libraries"] = new JsonArray {
-            "pg_cron", "pg_documentdb_core"
-        };
+        read["spec"]!["postgresql"]!["shared_preload_libraries"] = new JsonArray { "pg_cron", "pg_documentdb_core" };
 
         DocumentDbAccounts.Matches(read.ToJsonString(), desired.RootElement).ShouldBeFalse();
     }
@@ -178,11 +183,12 @@ public sealed class DocumentDbMatchesTests {
         var monitor = JsonNode.Parse(DocumentDbAccounts.PodMonitorJson("orders"))!.AsObject();
         monitor["kind"] = "PodMonitor";
         monitor["spec"]!["podMetricsEndpoints"]!.AsArray()[0]!["path"] = "/metrics";
-        DocumentDbAccounts.Matches(monitor.ToJsonString(), desired.RootElement).ShouldBeFalse(
-            "a PodMonitor pointed at /metrics read back as matching. It would scrape a 404 forever "
-            + "without failing, which is the quiet-scrape hazard docs/plan/12 § piece 6 exists to "
-            + "avoid."
-        );
+        DocumentDbAccounts.Matches(monitor.ToJsonString(), desired.RootElement)
+            .ShouldBeFalse(
+                "a PodMonitor pointed at /metrics read back as matching. It would scrape a 404 forever "
+                + "without failing, which is the quiet-scrape hazard docs/plan/12 § piece 6 exists to "
+                + "avoid."
+            );
     }
 
     [Fact]
@@ -212,11 +218,13 @@ public sealed class DocumentDbMatchesTests {
         DocumentDbAccounts.Matches(
             "{\"kind\":\"ConfigMap\",\"spec\":{}}",
             desired.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
 
         DocumentDbAccounts.Matches(
             "{\"kind\":\"StatefulSet\",\"spec\":{\"replicas\":2}}",
             desired.RootElement
-        ).ShouldBeFalse();
+        )
+            .ShouldBeFalse();
     }
 }

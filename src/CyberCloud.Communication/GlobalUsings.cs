@@ -4,8 +4,8 @@
 // has two candidates for the simple name and the compiler reports CS0104.
 
 global using ErrorCode = CyberCloud.Core.ErrorCode;
-global using CyberCloud.Core;
-global using CyberCloud.Core.Resources;
 
 // Every wire type, seam and grain interface here is named on nearly every file.
 global using CyberCloud.Communication.Contracts;
+global using CyberCloud.Core;
+global using CyberCloud.Core.Resources;

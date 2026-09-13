@@ -6,8 +6,11 @@ namespace CyberCloud.Metering.Contracts;
 ///     What one ledger append says. The grain assigns everything a caller must not choose.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>No <c>Sequence</c>, no <c>EntryId</c>, no <c>RecordedAt</c> and no
-///     <c>CorrectsEntryId</c> here, and their absence is the design.</b> A caller that could set a
+///     ⚠
+///     <b>
+///         No <c>Sequence</c>, no <c>EntryId</c>, no <c>RecordedAt</c> and no
+///         <c>CorrectsEntryId</c> here, and their absence is the design.
+///     </b> A caller that could set a
 ///     sequence could write an entry into the middle of the history; one that could set an entry id
 ///     could overwrite an existing entry by naming it; one that could set <c>RecordedAt</c> could
 ///     backdate. Every field that makes the ledger a ledger is assigned by
@@ -62,10 +65,16 @@ public sealed record UsageLedgerAppend {
 ///         tenant-qualified.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS INTERFACE DECLARES NO UPDATE, SET, EDIT, REPLACE OR DELETE, AND THAT ABSENCE IS
-///         THE FEATURE.</b> docs/plan/22 § The pipeline: <i>"The ledger is durable-tier and
-///         append-only. Corrections are new entries with a reason and a link to the original, never
-///         edits. An adjustable ledger cannot be audited and cannot be defended in a dispute."</i>
+///         ⚠
+///         <b>
+///             THIS INTERFACE DECLARES NO UPDATE, SET, EDIT, REPLACE OR DELETE, AND THAT ABSENCE IS
+///             THE FEATURE.
+///         </b> docs/plan/22 § The pipeline:
+///         <i>
+///             "The ledger is durable-tier and
+///             append-only. Corrections are new entries with a reason and a link to the original, never
+///             edits. An adjustable ledger cannot be audited and cannot be defended in a dispute."
+///         </i>
 ///         The property is structural, not a convention a reviewer has to remember: there is no
 ///         method that reaches an existing entry, and <c>UsageLedgerEntry</c>'s members are all
 ///         <c>init</c>-only, so a caller holding one cannot mutate its copy either.
@@ -77,8 +86,11 @@ public sealed record UsageLedgerAppend {
 ///         The row that is M2 is <i>"Rating, price lists, tiers, free tier, ledger grain"</i> — a
 ///         ledger of <b>charges</b>, which needs prices, which M1 does not have. This is the ledger
 ///         of <b>usage</b>: quantities, not money. It is M1 because the same sentence that defers
-///         rating demands this — <i>"the meters must be correct from the first resource because usage
-///         that was never recorded cannot be recovered"</i> — and a record that is not durable and
+///         rating demands this —
+///         <i>
+///             "the meters must be correct from the first resource because usage
+///             that was never recorded cannot be recovered"
+///         </i> — and a record that is not durable and
 ///         not append-only is not a record. When rating lands, charges are a second ledger derived
 ///         from this one, and this one does not change.
 ///     </para>

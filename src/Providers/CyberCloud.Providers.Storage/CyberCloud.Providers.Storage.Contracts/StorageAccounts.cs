@@ -1,6 +1,7 @@
 // ⚠ For SecretRef, which lives here rather than in CyberCloud.ResourceManager.Contracts where it
 // started — see its own remarks on why the [Alias] stayed put through the move. This is the first
 // provider in the tree that names the type at all, so it is the first that needs the import.
+
 using CyberCloud.Core.Contracts;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
@@ -23,10 +24,15 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///         [12 § The catalogue](../../../../docs/plan/12-managed-data-services.md), whose subject is
 ///         <i>"databases, caches, brokers, search"</i>. Object storage is
 ///         [15 § The three kinds](../../../../docs/plan/15-storage-blob-file.md):
-///         <i>"Object · <c>CyberCloud.Storage/accounts</c> + <c>/buckets</c> · SeaweedFS + S3 gateway ·
-///         HTTPS, S3 API"</i>, and <i>"Object storage — M1 · 2.0 EM"</i>. docs/plan/12 mentions the
-///         service only as something it <i>consumes</i> — CloudNativePG's <i>"declarative backup to S3
-///         (which we have — [15])"</i> — which is the gap this provider closes:
+///         <i>
+///             "Object · <c>CyberCloud.Storage/accounts</c> + <c>/buckets</c> · SeaweedFS + S3 gateway ·
+///             HTTPS, S3 API"
+///         </i>, and <i>"Object storage — M1 · 2.0 EM"</i>. docs/plan/12 mentions the
+///         service only as something it <i>consumes</i> — CloudNativePG's
+///         <i>
+///             "declarative backup to S3
+///             (which we have — [15])"
+///         </i> — which is the gap this provider closes:
 ///         <c>charts/managed/postgres</c> renders a backup destination of
 ///         <c>s3://tenant-bucket/postgres</c> against a provider that did not exist.
 ///     </para>
@@ -58,9 +64,15 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///         <c>charts/managed/seaweedfs/SOURCE</c> records the line.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>buckets</c> is docs/plan/15's other half and SHIPS — see
-///         <see cref="StorageBuckets" />.</b> ⚠ <b>The claim this paragraph used to make was wrong
-///         within the hour and the correction is worth keeping.</b> It said the blocker was "the
+///         ⚠
+///         <b>
+///             <c>buckets</c> is docs/plan/15's other half and SHIPS — see
+///             <see cref="StorageBuckets" />.
+///         </b> ⚠
+///         <b>
+///             The claim this paragraph used to make was wrong
+///             within the hour and the correction is worth keeping.
+///         </b> It said the blocker was "the
 ///         conformance harness being single-type, which is somebody else's to close"; that harness
 ///         gained <c>IProviderCaseSource.Ancestors</c> on 2026-08-12, the same day, and what was left
 ///         was scope. What an account owes its child now is one thing and it is a
@@ -94,8 +106,11 @@ public static class StorageAccounts {
     ///     ⚠ <b>Not <c>CyberCloud.ObjectStorage</c>, and the distinction is docs/plan/15's own.</b> That
     ///     document puts <i>three</i> kinds under one namespace — <c>accounts</c>/<c>buckets</c> for
     ///     object, <c>fileShares</c> for file — and puts block storage under
-    ///     <c>CyberCloud.Compute/disks</c> instead, <i>"because merging them into 'storage' produces an
-    ///     API where two thirds of the properties are inapplicable"</i>. The namespace is shared; the
+    ///     <c>CyberCloud.Compute/disks</c> instead,
+    ///     <i>
+    ///         "because merging them into 'storage' produces an
+    ///         API where two thirds of the properties are inapplicable"
+    ///     </i>. The namespace is shared; the
     ///     types are not.
     /// </remarks>
     public const string ProviderNamespace = "CyberCloud.Storage";
@@ -114,8 +129,11 @@ public static class StorageAccounts {
 
     /// <summary>How long a deleted account can be restored for. docs/plan/06 § Tags, locks.</summary>
     /// <remarks>
-    ///     ⚠ <b>Seven days, and this is the type docs/plan/06 § Tags, locks names first</b> — <i>"7 days
-    ///     for resources carrying data (Vault, Storage, databases)"</i>. An object-storage account
+    ///     ⚠ <b>Seven days, and this is the type docs/plan/06 § Tags, locks names first</b> —
+    ///     <i>
+    ///         "7 days
+    ///         for resources carrying data (Vault, Storage, databases)"
+    ///     </i>. An object-storage account
     ///     carries more of it than anything else in the catalogue. What the window preserves is what the
     ///     teardown leaves: deleting the volume servers' <c>StatefulSet</c> does not delete the
     ///     <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> made, so the objects are still on
@@ -162,16 +180,17 @@ public static class StorageAccounts {
     ///     <c>ProviderConformanceCase.Objects</c>.
     /// </remarks>
     public static GroupVersionKind SeaweedKind { get; } =
-        new() {
-            Group = "seaweed.seaweedfs.com", Version = "v1", Kind = "Seaweed", Plural = "seaweeds"
-        };
+        new() { Group = "seaweed.seaweedfs.com", Version = "v1", Kind = "Seaweed", Plural = "seaweeds" };
 
     // ── Ports and names the operator owns ─────────────────────────────────────────────────────
 
     /// <summary>The S3 port. <c>seaweedv1.FilerS3Port</c>, and the operator's own fallback.</summary>
     /// <remarks>
-    ///     ⚠ <b>Not declared as a property, because the operator's <c>s3EffectivePort</c> already
-    ///     defaults to it and a port a tenant can move is a connection string that changes shape.</b>
+    ///     ⚠
+    ///     <b>
+    ///         Not declared as a property, because the operator's <c>s3EffectivePort</c> already
+    ///         defaults to it and a port a tenant can move is a connection string that changes shape.
+    ///     </b>
     ///     The IAM API is served on the same port when <c>spec.s3.iam</c> is on, which it is by default
     ///     — <c>api/v1/seaweed_types.go</c>, <c>+kubebuilder:default:=true</c> on
     ///     <c>S3GatewaySpec.IAM</c>.
@@ -180,10 +199,16 @@ public static class StorageAccounts {
 
     /// <summary>The port every component serves Prometheus metrics on when monitoring is asked for.</summary>
     /// <remarks>
-    ///     ⚠ <b>Setting this is the whole of docs/plan/12 § The pattern, once, piece 6's FIRST
-    ///     branch on this service, and it is that branch's second sighting.</b> The corrected piece 6
-    ///     reads <i>"ask the operator for the scrape object wherever the operator accepts the
-    ///     request"</i>; CloudNativePG answered with <c>spec.monitoring.enablePodMonitor</c> and this
+    ///     ⚠
+    ///     <b>
+    ///         Setting this is the whole of docs/plan/12 § The pattern, once, piece 6's FIRST
+    ///         branch on this service, and it is that branch's second sighting.
+    ///     </b> The corrected piece 6
+    ///     reads
+    ///     <i>
+    ///         "ask the operator for the scrape object wherever the operator accepts the
+    ///         request"
+    ///     </i>; CloudNativePG answered with <c>spec.monitoring.enablePodMonitor</c> and this
     ///     operator answers with <c>metricsPort</c>. <c>internal/controller/controller_s3.go</c>:
     ///     <c>if m.Spec.S3.MetricsPort != nil { ensureS3ServiceMonitor(m) }</c>, with an <c>else</c>
     ///     branch that <i>deletes</i> the <c>ServiceMonitor</c> when the port is taken away. So the
@@ -200,18 +225,24 @@ public static class StorageAccounts {
 
     /// <summary>The filer's metadata volume, per docs/plan/05's durability rules.</summary>
     /// <remarks>
-    ///     ⚠ <b>The filer's embedded store is the object namespace, and without this volume it lives in
-    ///     the pod's writable layer.</b> With no <c>spec.filer.config</c> the operator mounts no
+    ///     ⚠
+    ///     <b>
+    ///         The filer's embedded store is the object namespace, and without this volume it lives in
+    ///         the pod's writable layer.
+    ///     </b> With no <c>spec.filer.config</c> the operator mounts no
     ///     <c>filer.toml</c> at all — deliberately, see
     ///     <c>internal/controller/controller_filer_configmap.go</c>'s <c>hasFilerConfig</c> — and
     ///     SeaweedFS falls back to its embedded <c>leveldb2</c> store at
     ///     <c>{-defaultStoreDir}/filerldb2</c>. <c>weed/command/filer.go</c> defaults
     ///     <c>-defaultStoreDir</c> to <c>"."</c> and the operator never sets it, so the store lands in
-    ///     the container's working directory. ⚠ <b>That working directory is <c>/data</c> only because
-    ///     the upstream image says <c>WORKDIR /data</c>, and the operator's
-    ///     <c>PersistenceSpec.MountPath</c> defaults to <c>"/data"</c> — two independently defaulted
-    ///     values in two repositories that happen to agree, with nothing in either stating the
-    ///     dependency.</b> <see cref="SeaweedJson" /> writes the mount path explicitly rather than
+    ///     the container's working directory. ⚠
+    ///     <b>
+    ///         That working directory is <c>/data</c> only because
+    ///         the upstream image says <c>WORKDIR /data</c>, and the operator's
+    ///         <c>PersistenceSpec.MountPath</c> defaults to <c>"/data"</c> — two independently defaulted
+    ///         values in two repositories that happen to agree, with nothing in either stating the
+    ///         dependency.
+    ///     </b> <see cref="SeaweedJson" /> writes the mount path explicitly rather than
     ///     inheriting it, so the coupling is a line in this file instead of a coincidence.
     /// </remarks>
     public const string FilerVolumeSize = "10Gi";
@@ -278,8 +309,7 @@ public static class StorageAccounts {
     ///     <c>storageClassName</c>. A body that ever set a host path would produce node-local disks
     ///     and no claims, which is why this is read from the render rather than assumed.
     /// </remarks>
-    public static string VolumeDiskName(int disk) =>
-        "mount" + disk.ToString(CultureInfo.InvariantCulture);
+    public static string VolumeDiskName(int disk) => "mount" + disk.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     ///     The filer's <c>volumeClaimTemplate</c> name, which is <c>{name}-filer</c> — the same
@@ -325,8 +355,11 @@ public static class StorageAccounts {
     /// <param name="desired">The validated desired body, which is where the volume-server count lives.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Nothing in the operator removes these, and here that is a <i>decision</i> upstream
-    ///         made rather than an omission.</b> <c>internal/controller/pv_reclaim.go</c> pins
+    ///         ⚠
+    ///         <b>
+    ///             Nothing in the operator removes these, and here that is a <i>decision</i> upstream
+    ///             made rather than an omission.
+    ///         </b> <c>internal/controller/pv_reclaim.go</c> pins
     ///         <c>WhenDeleted</c> to <c>Retain</c> as a constant — <c>spec.enablePVReclaim</c> moves
     ///         only <c>WhenScaled</c> — with a comment saying deleting on cluster delete "would be an
     ///         unpleasant surprise", and the operator's own unit test asserts it for every input. No
@@ -342,8 +375,11 @@ public static class StorageAccounts {
     ///         <c>volumeClaimTemplates</c> field in any configuration.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Version-coupled to a maintained project, and the failure direction is the quiet
-    ///         one.</b> This platform does not render either <c>StatefulSet</c>, so both halves of
+    ///         ⚠
+    ///         <b>
+    ///             Version-coupled to a maintained project, and the failure direction is the quiet
+    ///             one.
+    ///         </b> This platform does not render either <c>StatefulSet</c>, so both halves of
     ///         every claim name are the operator's. A bump that renames one produces a claim this
     ///         file cannot find — <c>VolumeReclaimer</c> treats absence as convergence — so the
     ///         volume is left exactly as it is left today. The guard protects against destroying
@@ -384,8 +420,11 @@ public static class StorageAccounts {
     /// <summary>The <c>Service</c> the operator puts in front of the S3 gateway.</summary>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
-    ///     ⚠ <b>Not an object this provider applies, and it is here because <see cref="Endpoint" />
-    ///     needs it.</b> <c>internal/controller/controller_s3.go</c>'s <c>buildS3Service</c> names it
+    ///     ⚠
+    ///     <b>
+    ///         Not an object this provider applies, and it is here because <see cref="Endpoint" />
+    ///         needs it.
+    ///     </b> <c>internal/controller/controller_s3.go</c>'s <c>buildS3Service</c> names it
     ///     <c>{name}-s3</c>. Writing a <c>Service</c> of our own would be this chart competing with the
     ///     controller that owns it — the same rule <c>charts/managed/valkey</c> states.
     /// </remarks>
@@ -395,8 +434,11 @@ public static class StorageAccounts {
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE SECRET IS WRITTEN NOW, AND THE REASON IT HAS TO BE IS THE MOST IMPORTANT FACT ON
-    ///         THIS TYPE.</b> <c>StorageAccountReconciler</c> mints an S3 key pair into the
+    ///         ⚠
+    ///         <b>
+    ///             THE SECRET IS WRITTEN NOW, AND THE REASON IT HAS TO BE IS THE MOST IMPORTANT FACT ON
+    ///             THIS TYPE.
+    ///         </b> <c>StorageAccountReconciler</c> mints an S3 key pair into the
     ///         tenant's vault before it applies anything, renders it into this <c>Secret</c> through
     ///         <see cref="ConfigSecretJson" />, and hands it back through <c>listKeys</c>. Until
     ///         2026-08-13 none of that was possible: docs/plan/12 § The pattern, once assigned piece 5
@@ -413,20 +455,34 @@ public static class StorageAccounts {
     ///         it. See its own remarks.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The alternative is worse here than on any service before it, and the reason was
-    ///         checked in SeaweedFS' own source rather than inferred.</b>
-    ///         <c>weed/s3api/auth_credentials.go</c> sets <c>iam.isAuthEnabled = len(iam.identities) &gt;
-    ///         0</c>, and <c>AuthenticateRequest</c> begins <c>if !iam.isAuthEnabled { return
+    ///         ⚠
+    ///         <b>
+    ///             The alternative is worse here than on any service before it, and the reason was
+    ///             checked in SeaweedFS' own source rather than inferred.
+    ///         </b>
+    ///         <c>weed/s3api/auth_credentials.go</c> sets
+    ///         <c>
+    /// iam.isAuthEnabled = len(iam.identities) &gt;
+    ///         0
+    ///         </c>, and <c>AuthenticateRequest</c> begins
+    ///         <c>
+    /// if !iam.isAuthEnabled { return
     ///         &amp;Identity{Name: "admin", Account: &amp;AccountAdmin, Actions: []Action{ACTION_ADMIN}}
-    ///         }</c>. A gateway with no identity file therefore does not merely skip authentication: it
+    ///         }
+    ///         </c>. A gateway with no identity file therefore does not merely skip authentication: it
     ///         answers every unauthenticated request <b>as an administrator</b>. docs/plan/12's own
-    ///         <i>"a managed database on a public IP with a weak password is the single most common
-    ///         cloud breach"</i> applies with no password at all, over HTTP, to a protocol every tool in
+    ///         <i>
+    ///             "a managed database on a public IP with a weak password is the single most common
+    ///             cloud breach"
+    ///         </i> applies with no password at all, over HTTP, to a protocol every tool in
     ///         the industry already speaks.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Why this service is where piece 5 landed rather than
-    ///         <c>CyberCloud.DBforPostgreSQL/servers</c>.</b> CloudNativePG <i>generates</i> a password
+    ///         ⚠
+    ///         <b>
+    ///             Why this service is where piece 5 landed rather than
+    ///             <c>CyberCloud.DBforPostgreSQL/servers</c>.
+    ///         </b> CloudNativePG <i>generates</i> a password
     ///         when the <c>Secret</c> its CR references is absent, so that service had a working
     ///         database whose credentials <c>listKeys</c> merely could not hand out — an inconvenience.
     ///         There is no equivalent here: an S3 endpoint is reachable only with an access-key pair,
@@ -439,8 +495,11 @@ public static class StorageAccounts {
 
     /// <summary>The <c>core/v1</c> <c>Secret</c> the S3 gateway's identities file lives in.</summary>
     /// <remarks>
-    ///     ⚠ <b>The core group, so <see cref="GroupVersionKind.Group" /> is empty and
-    ///     <see cref="GroupVersionKind.IsCoreGroup" /> is what reads it.</b> The plural is carried
+    ///     ⚠
+    ///     <b>
+    ///         The core group, so <see cref="GroupVersionKind.Group" /> is empty and
+    ///         <see cref="GroupVersionKind.IsCoreGroup" /> is what reads it.
+    ///     </b> The plural is carried
     ///     rather than derived, for the reason that property gives.
     /// </remarks>
     public static GroupVersionKind SecretKind { get; } =
@@ -467,8 +526,11 @@ public static class StorageAccounts {
     /// <remarks>
     ///     ⚠ <c>http</c> and not <c>https</c>, and that is a statement rather than an oversight. The
     ///     operator's <c>TLSSpec</c> issues certificates through cert-manager for the cluster's
-    ///     <i>internal</i> gRPC, and nothing terminates TLS on the S3 port; docs/plan/15's <i>"Consumed
-    ///     as HTTPS"</i> is an ingress-side promise this type cannot yet keep. See
+    ///     <i>internal</i> gRPC, and nothing terminates TLS on the S3 port; docs/plan/15's
+    ///     <i>
+    ///         "Consumed
+    ///         as HTTPS"
+    ///     </i> is an ingress-side promise this type cannot yet keep. See
     ///     <c>conformance.yaml § owed</c>, <c>external-exposure</c>.
     /// </remarks>
     public static string Endpoint(string ns, string name) =>
@@ -489,8 +551,11 @@ public static class StorageAccounts {
     /// <param name="id">The resource, with its GUID resolved.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>KEYED ON THE RESOURCE GUID AND NOT ON ITS NAME, WHICH IS THE DIFFERENCE BETWEEN A
-    ///         RECREATED ACCOUNT AND THE OLD ONE'S CREDENTIAL.</b> docs/plan/06 § Identifiers makes a
+    ///         ⚠
+    ///         <b>
+    ///             KEYED ON THE RESOURCE GUID AND NOT ON ITS NAME, WHICH IS THE DIFFERENCE BETWEEN A
+    ///             RECREATED ACCOUNT AND THE OLD ONE'S CREDENTIAL.
+    ///         </b> docs/plan/06 § Identifiers makes a
     ///         name reusable the moment the index entry is released — the delete path releases it
     ///         first, on purpose, "so the name is immediately reusable". A path built from the name
     ///         would therefore hand a brand-new account the key pair of the account somebody deleted an
@@ -521,8 +586,7 @@ public static class StorageAccounts {
 
     /// <summary>The handle that reads an account's access key id back.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
-    public static SecretRef AccessKeyIdRef(ResourceId id) =>
-        new() { Path = SecretPath(id), Field = AccessKeyIdField };
+    public static SecretRef AccessKeyIdRef(ResourceId id) => new() { Path = SecretPath(id), Field = AccessKeyIdField };
 
     /// <summary>The handle that reads an account's secret access key back.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
@@ -562,8 +626,11 @@ public static class StorageAccounts {
     ///     The symbols a generated key is drawn from: RFC 4648 base32, without padding.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>No lower case and no <c>0</c>, <c>1</c> or <c>8</c>, which is base32's own choice and
-    ///     is worth keeping rather than widening.</b> A key pair is a value people copy out of a
+    ///     ⚠
+    ///     <b>
+    ///         No lower case and no <c>0</c>, <c>1</c> or <c>8</c>, which is base32's own choice and
+    ///         is worth keeping rather than widening.
+    ///     </b> A key pair is a value people copy out of a
     ///     terminal and into a configuration file by hand at least once, and <c>O</c>/<c>0</c> and
     ///     <c>l</c>/<c>1</c> are where that goes wrong. Widening to base64 would buy 0.2 bits per
     ///     character and cost the property that a mistyped key fails at the client rather than
@@ -608,8 +675,11 @@ public static class StorageAccounts {
     ///         the file in.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The action list is what stops the "no identities" behaviour rather than what grants
-    ///         access.</b> <c>weed/s3api/auth_credentials.go</c> sets
+    ///         ⚠
+    ///         <b>
+    ///             The action list is what stops the "no identities" behaviour rather than what grants
+    ///             access.
+    ///         </b> <c>weed/s3api/auth_credentials.go</c> sets
     ///         <c>isAuthEnabled = len(identities) &gt; 0</c>, so the <i>presence</i> of one identity is
     ///         what turns authentication on at all; <c>Admin</c> is then what this identity may do
     ///         once it has authenticated. An empty action list would authenticate the tenant and
@@ -625,11 +695,15 @@ public static class StorageAccounts {
                 new JsonObject {
                     ["name"] = IdentityName,
                     ["credentials"] = new JsonArray {
-                        new JsonObject {
-                            ["accessKey"] = accessKeyId, ["secretKey"] = secretAccessKey
-                        }
+                        new JsonObject { ["accessKey"] = accessKeyId, ["secretKey"] = secretAccessKey }
                     },
-                    ["actions"] = new JsonArray { "Admin", "Read", "Write", "List", "Tagging" }
+                    ["actions"] = new JsonArray {
+                        "Admin",
+                        "Read",
+                        "Write",
+                        "List",
+                        "Tagging"
+                    }
                 }
             }
         }.ToJsonString();
@@ -643,15 +717,21 @@ public static class StorageAccounts {
     /// <param name="secretAccessKey">The secret access key, as the vault holds it.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE ONE OBJECT THIS PROVIDER RENDERS THAT CARRIES A SECRET VALUE, AND IT IS BUILT
-    ///         FROM WHAT THE VAULT RETURNED RATHER THAN FROM DESIRED STATE.</b> The account's body has
+    ///         ⚠
+    ///         <b>
+    ///             THE ONE OBJECT THIS PROVIDER RENDERS THAT CARRIES A SECRET VALUE, AND IT IS BUILT
+    ///             FROM WHAT THE VAULT RETURNED RATHER THAN FROM DESIRED STATE.
+    ///         </b> The account's body has
     ///         no credential property and must not grow one: docs/plan/00 § Non-negotiables keeps
     ///         secrets out of grain state, and a body is grain state. The value exists in a local
     ///         inside one reconcile pass, goes into this document, and is gone when the pass returns.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>data</c> with the base64 written out, rather than the <c>stringData</c>
-    ///         convenience field, and the reason is the read-back.</b> <c>stringData</c> is write-only:
+    ///         ⚠
+    ///         <b>
+    ///             <c>data</c> with the base64 written out, rather than the <c>stringData</c>
+    ///             convenience field, and the reason is the read-back.
+    ///         </b> <c>stringData</c> is write-only:
     ///         the API server folds it into <c>data</c> and never returns it, so an object applied with
     ///         one field and read back with another is an object <see cref="Matches" /> would have to
     ///         accept in two shapes — one of which no real cluster ever produces, and which therefore
@@ -691,8 +771,11 @@ public static class StorageAccounts {
 
     /// <summary>The sizing presets of docs/plan/12 § Sizing vocabulary, <c>s1</c> family.</summary>
     /// <remarks>
-    ///     ⚠ <b>docs/plan/12 § Sizing vocabulary has no row for a storage service, and the table was
-    ///     followed anyway rather than extended.</b> Its five families are burstable, CPU-bound,
+    ///     ⚠
+    ///     <b>
+    ///         docs/plan/12 § Sizing vocabulary has no row for a storage service, and the table was
+    ///         followed anyway rather than extended.
+    ///     </b> Its five families are burstable, CPU-bound,
     ///     general, memory-bound and latency-sensitive; a volume server is bound by disk and by network,
     ///     which is a sixth thing. <c>s1</c> — <i>"1:4 · General — most databases"</i> — is the closest,
     ///     and taking it is the point of having a vocabulary: a service that invents a family because
@@ -743,8 +826,11 @@ public static class StorageAccounts {
     ///     else's encoding; publishing a count would lose the placement, which is the whole of what the
     ///     code says. The member names are the placement and the code is the rendering.
     ///     <para>
-    ///         ⚠ <b>A code the topology cannot satisfy is accepted by the API and never satisfied by
-    ///         the cluster.</b> <c>DifferentDataCenter</c> on a single-zone cluster leaves every write
+    ///         ⚠
+    ///         <b>
+    ///             A code the topology cannot satisfy is accepted by the API and never satisfied by
+    ///             the cluster.
+    ///         </b> <c>DifferentDataCenter</c> on a single-zone cluster leaves every write
     ///         under-replicated, and SeaweedFS reports that as a volume that will not go writable rather
     ///         than as an error on the create. That is a relation between this property and the
     ///         cluster's own topology, which <c>ResourceSchema</c> validates nothing about — the same
@@ -754,10 +840,7 @@ public static class StorageAccounts {
     /// </remarks>
     public static FrozenDictionary<string, string> ReplicationCodes { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal) {
-            ["None"] = "000",
-            ["SameRack"] = "001",
-            ["DifferentRack"] = "010",
-            ["DifferentDataCenter"] = "100"
+            ["None"] = "000", ["SameRack"] = "001", ["DifferentRack"] = "010", ["DifferentDataCenter"] = "100"
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
@@ -789,11 +872,7 @@ public static class StorageAccounts {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the object store."
-                ) {
-                    Format = SchemaFormat.Uuid,
-                    Widget = WidgetHint.Cluster,
-                    Immutable = true
-                },
+                ) { Format = SchemaFormat.Uuid, Widget = WidgetHint.Cluster, Immutable = true },
 
                 // ── The chart's API surface, in the chart's own declaration order ───────────────
                 new(
@@ -804,10 +883,7 @@ public static class StorageAccounts {
                     + "maintains no long-term branch, so docs/plan/12's \"supported major versions\" is "
                     + "a shape this project does not have; the two values here are the two most recent "
                     + "releases and a new api-version is what adds a third."
-                ) {
-                    AllowedValues = ["4.40", "4.41"],
-                    DefaultJson = "\"4.41\""
-                },
+                ) { AllowedValues = ["4.40", "4.41"], DefaultJson = "\"4.41\"" },
                 new(
                     "/properties/replication",
                     SchemaKind.Text,
@@ -830,22 +906,14 @@ public static class StorageAccounts {
                     Description: "Number of master servers. The masters hold the volume topology in a "
                     + "Raft group, so three is the smallest count that survives losing one. One is "
                     + "offered for development and has no quorum at all."
-                ) {
-                    Minimum = 1,
-                    Maximum = 5,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 5, DefaultJson = "3" },
                 new(
                     "/properties/volumeServers",
                     SchemaKind.WholeNumber,
                     Required: true,
                     Description: "Number of volume servers. This is the capacity axis: total raw "
                     + "capacity is this count times the volume size below, before replication."
-                ) {
-                    Minimum = 1,
-                    Maximum = 16,
-                    DefaultJson = "3"
-                },
+                ) { Minimum = 1, Maximum = 16, DefaultJson = "3" },
                 new(
                     "/properties/sizing",
                     SchemaKind.Nested,
@@ -868,19 +936,13 @@ public static class StorageAccounts {
                     SchemaKind.Text,
                     Description: "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. "
                     + "Empty means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/sizing/memory",
                     SchemaKind.Text,
                     Description: "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty "
                     + "means take it from the preset."
-                ) {
-                    Pattern = OptionalQuantityPattern,
-                    DefaultJson = "\"\""
-                },
+                ) { Pattern = OptionalQuantityPattern, DefaultJson = "\"\"" },
                 new(
                     "/properties/storage",
                     SchemaKind.Nested,
@@ -892,21 +954,13 @@ public static class StorageAccounts {
                     Required: true,
                     Description: "Data volume size per volume server, in Kubernetes quantity form. Grows "
                     + "online; never shrinks."
-                ) {
-                    Pattern = QuantityPattern,
-                    DefaultJson = "\"100Gi\"",
-                    ExampleJson = "\"100Gi\""
-                },
+                ) { Pattern = QuantityPattern, DefaultJson = "\"100Gi\"", ExampleJson = "\"100Gi\"" },
                 new(
                     "/properties/storage/class",
                     SchemaKind.Text,
                     Description: "StorageClass name for the volume servers. Empty means the cluster "
                     + "default."
-                ) {
-                    Widget = WidgetHint.StorageClass,
-                    Immutable = true,
-                    DefaultJson = "\"\""
-                },
+                ) { Widget = WidgetHint.StorageClass, Immutable = true, DefaultJson = "\"\"" },
                 new(
                     "/properties/gateway",
                     SchemaKind.Nested,
@@ -918,11 +972,7 @@ public static class StorageAccounts {
                     Required: true,
                     Description: "Number of S3 gateway pods. The gateway is stateless, so this is a "
                     + "throughput and availability setting rather than a topology one."
-                ) {
-                    Minimum = 1,
-                    Maximum = 10,
-                    DefaultJson = "2"
-                },
+                ) { Minimum = 1, Maximum = 10, DefaultJson = "2" },
                 new(
                     "/properties/monitoring",
                     SchemaKind.Nested,
@@ -936,9 +986,7 @@ public static class StorageAccounts {
                     + "of is a black box they will not trust with production\". Turning it off removes "
                     + "the metrics port as well as the scrape, which is the operator's own behaviour "
                     + "rather than this provider's."
-                ) {
-                    DefaultJson = "true"
-                }
+                ) { DefaultJson = "true" }
             ]
         );
 
@@ -946,8 +994,11 @@ public static class StorageAccounts {
     ///     What a <c>POST …/listKeys</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Declared even though no handler serves it, because an undeclared response is the one
-    ///     part of the API surface with no contract.</b> What leaves the platform through a
+    ///     ⚠
+    ///     <b>
+    ///         Declared even though no handler serves it, because an undeclared response is the one
+    ///         part of the API surface with no contract.
+    ///     </b> What leaves the platform through a
     ///     <c>secret: true</c> action is exactly the thing that should be written down before it
     ///     leaves. There is no request shape, for the reason <c>ActionRegistration</c> gives.
     /// </remarks>
@@ -989,8 +1040,7 @@ public static class StorageAccounts {
         );
 
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
-    public static ImmutableArray<string> Pointers2026 { get; } =
-        [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+    public static ImmutableArray<string> Pointers2026 { get; } = [.. Schema2026.Properties.Select(x => x.JsonPointer)];
 
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
@@ -1006,8 +1056,11 @@ public static class StorageAccounts {
     /// </summary>
     /// <param name="desired">The validated desired body.</param>
     /// <remarks>
-    ///     ⚠ <b>The billing region and the SigV4 region are one string here, and they are not the same
-    ///     idea.</b> SeaweedFS does not route on a region at all — it accepts whatever the client
+    ///     ⚠
+    ///     <b>
+    ///         The billing region and the SigV4 region are one string here, and they are not the same
+    ///         idea.
+    ///     </b> SeaweedFS does not route on a region at all — it accepts whatever the client
     ///     signed with — so the platform is free to choose, and choosing the value the tenant already
     ///     sees on the resource means <c>listKeys</c> hands back something they can check. The day
     ///     SeaweedFS starts caring, this becomes its own property rather than a second reading of
@@ -1032,8 +1085,7 @@ public static class StorageAccounts {
 
     /// <summary>The volume-server count a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static int VolumeServers(JsonElement desired) =>
-        Number(desired, "volumeServers", DefaultVolumeServers);
+    public static int VolumeServers(JsonElement desired) => Number(desired, "volumeServers", DefaultVolumeServers);
 
     /// <summary>The S3 gateway replica count a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -1042,8 +1094,7 @@ public static class StorageAccounts {
 
     /// <summary>The data-volume size per volume server a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static string StorageSize(JsonElement desired) =>
-        Text(desired, "storage", "size", DefaultStorageSize);
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", DefaultStorageSize);
 
     /// <summary>The SeaweedFS replication code a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -1063,8 +1114,7 @@ public static class StorageAccounts {
 
     /// <summary>Whether the desired body asks for the operator's scrape objects.</summary>
     /// <param name="desired">The validated desired body.</param>
-    public static bool MonitoringEnabled(JsonElement desired) =>
-        Flag(desired, "monitoring", "enabled", true);
+    public static bool MonitoringEnabled(JsonElement desired) => Flag(desired, "monitoring", "enabled", true);
 
     /// <summary>
     ///     The CPU and memory one volume server asks for: the explicit quantities when both are given,
@@ -1095,15 +1145,21 @@ public static class StorageAccounts {
     /// <remarks>
     ///     <para>
     ///         ⚠ <b><c>spec.s3</c> and not <c>spec.filer.s3</c>, and the CRD refuses both.</b>
-    ///         <c>internal/controller/controller_s3.go</c>'s header: the standalone gateway <i>"is the
-    ///         preferred way to expose S3. The older <c>FilerSpec.S3</c> path (embedded S3 inside every
-    ///         filer pod) is retained for backward compatibility but is deprecated. When both are set
-    ///         the webhook rejects the CR."</i> The embedded path would also tie gateway throughput to
+    ///         <c>internal/controller/controller_s3.go</c>'s header: the standalone gateway
+    ///         <i>
+    ///             "is the
+    ///             preferred way to expose S3. The older <c>FilerSpec.S3</c> path (embedded S3 inside every
+    ///             filer pod) is retained for backward compatibility but is deprecated. When both are set
+    ///             the webhook rejects the CR."
+    ///         </i> The embedded path would also tie gateway throughput to
     ///         filer replicas, which on this type is pinned at one.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>spec.filer.replicas</c> is 1 and is not a property, and the reason is a store
-    ///         rather than a preference.</b> With no <c>spec.filer.config</c> the filer runs its
+    ///         ⚠
+    ///         <b>
+    ///             <c>spec.filer.replicas</c> is 1 and is not a property, and the reason is a store
+    ///             rather than a preference.
+    ///         </b> With no <c>spec.filer.config</c> the filer runs its
     ///         embedded <c>leveldb2</c> — see <see cref="FilerVolumeSize" /> — which is per-pod. Two
     ///         filers would be two divergent object namespaces behind one Service, and neither would
     ///         report an error. An HA filer needs a shared metadata store, which is a Postgres this
@@ -1142,9 +1198,7 @@ public static class StorageAccounts {
         // controller_volume_statefulset.go lifts into the claim template, and everything else in the
         // same map is filtered down to the container. One map, two destinations, decided by key.
         var volumeRequests = new JsonObject { ["storage"] = StorageSize(desired) };
-        var volume = new JsonObject {
-            ["replicas"] = VolumeServers(desired), ["requests"] = volumeRequests
-        };
+        var volume = new JsonObject { ["replicas"] = VolumeServers(desired), ["requests"] = volumeRequests };
 
         if (cpu.Length > 0 && memory.Length > 0) {
             volumeRequests["cpu"] = cpu;
@@ -1167,9 +1221,7 @@ public static class StorageAccounts {
                 // two repositories this line stops depending on.
                 ["mountPath"] = FilerMountPath,
                 ["accessModes"] = new JsonArray { "ReadWriteOnce" },
-                ["resources"] = new JsonObject {
-                    ["requests"] = new JsonObject { ["storage"] = FilerVolumeSize }
-                }
+                ["resources"] = new JsonObject { ["requests"] = new JsonObject { ["storage"] = FilerVolumeSize } }
             }
         };
 
@@ -1179,9 +1231,7 @@ public static class StorageAccounts {
             ["limits"] = ControlPlaneQuantities(),
             // ⚠ The reference is unconditional. See ConfigSecretName: a gateway with no identities
             // authenticates nobody and authorises everybody.
-            ["configSecret"] = new JsonObject {
-                ["name"] = ConfigSecretName(name), ["key"] = ConfigSecretKey
-            }
+            ["configSecret"] = new JsonObject { ["name"] = ConfigSecretName(name), ["key"] = ConfigSecretKey }
         };
 
         if (monitoring) {
@@ -1212,10 +1262,16 @@ public static class StorageAccounts {
     /// <returns><c>true</c> when the fields this provider owns hold the desired values.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Containment, not equality, and this type has TWO reasons where the three before it
-    ///         had one apiece — which is worth stating as a contrast rather than as a restatement.</b>
-    ///         <c>KafkaClusters.Matches</c> found that Strimzi's CRD declares <b>no <c>default:</c>
-    ///         anywhere</b>, so the structural-defaulting argument was false for it;
+    ///         ⚠
+    ///         <b>
+    ///             Containment, not equality, and this type has TWO reasons where the three before it
+    ///             had one apiece — which is worth stating as a contrast rather than as a restatement.
+    ///         </b>
+    ///         <c>KafkaClusters.Matches</c> found that Strimzi's CRD declares
+    ///         <b>
+    ///             no <c>default:</c>
+    ///             anywhere
+    ///         </b>, so the structural-defaulting argument was false for it;
     ///         <c>NatsClusters.Matches</c> found the opposite, because built-in kinds are the most
     ///         heavily defaulted objects in Kubernetes. Here the object is a <i>custom</i> resource and
     ///         the CRD declares defaults anyway — <c>api/v1/seaweed_types.go</c> carries
@@ -1225,12 +1281,18 @@ public static class StorageAccounts {
     ///         <c>iam: true</c> this provider never sent.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The second reason is the one no earlier provider met: this operator installs a
-    ///         MUTATING webhook, and its defaulter is a scaffold.</b>
+    ///         ⚠
+    ///         <b>
+    ///             The second reason is the one no earlier provider met: this operator installs a
+    ///             MUTATING webhook, and its defaulter is a scaffold.
+    ///         </b>
     ///         <c>api/v1/seaweed_webhook.go</c> registers
     ///         <c>/mutate-seaweed-seaweedfs-com-v1-seaweed</c> on <c>create;update</c>, and the body of
-    ///         <c>SeaweedCustomDefaulter.Default</c> is a log line and <c>// TODO(user): fill in your
-    ///         defaulting logic.</c> — it mutates nothing <i>today</i>. An equality comparison would
+    ///         <c>SeaweedCustomDefaulter.Default</c> is a log line and
+    ///         <c>
+    /// // TODO(user): fill in your
+    ///         defaulting logic.
+    ///         </c> — it mutates nothing <i>today</i>. An equality comparison would
     ///         therefore pass on this version of the operator and break silently on whichever release
     ///         fills that TODO in, with the symptom being every account stuck in <c>InProgress</c>
     ///         while its cluster is perfectly correct. That is a different hazard from
@@ -1367,8 +1429,7 @@ public static class StorageAccounts {
 
     // ── Rendering helpers ─────────────────────────────────────────────────────────────────────
 
-    static JsonObject ControlPlaneQuantities() =>
-        new() { ["cpu"] = ControlPlaneCpu, ["memory"] = ControlPlaneMemory };
+    static JsonObject ControlPlaneQuantities() => new() { ["cpu"] = ControlPlaneCpu, ["memory"] = ControlPlaneMemory };
 
     // ── Reading one pointer out of a body ─────────────────────────────────────────────────────
 

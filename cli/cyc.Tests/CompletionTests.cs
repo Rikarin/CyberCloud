@@ -6,8 +6,11 @@ namespace CyberCloud.Cli.Tests;
 ///     docs/plan/21 § Decisions: <i>"Completion | bash, zsh, fish, pwsh — generated."</i>
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The completions are computed from the verb tree at the moment of the keystroke, not
-///     baked into the script.</b> The four scripts are shims that call <c>cyc complete</c>; a script
+///     ⚠
+///     <b>
+///         The completions are computed from the verb tree at the moment of the keystroke, not
+///         baked into the script.
+///     </b> The four scripts are shims that call <c>cyc complete</c>; a script
 ///     that listed the verbs would be a snapshot that goes wrong the day the tree changes, and the
 ///     tree changes every release.
 /// </remarks>
@@ -31,8 +34,9 @@ public sealed class CompletionTests {
 
     [Fact]
     public void TheShellListAndTheScriptsAgree() {
-        foreach (var shell in CompletionCommand.Shells)
+        foreach (var shell in CompletionCommand.Shells) {
             CompletionCommand.Script(shell).ShouldNotBeNullOrWhiteSpace();
+        }
 
         Should.Throw<CycUsageException>(() => CompletionCommand.Script("csh"))
             .Message.ShouldContain("bash, zsh, fish, pwsh");
@@ -98,7 +102,8 @@ public sealed class CompletionTests {
 
         await host.RunAsync("complete", "--", "sample", "widgets", "show", "--output", string.Empty);
 
-        foreach (var format in Output.OutputFormats.Names)
+        foreach (var format in Output.OutputFormats.Names) {
             host.Stdout.ShouldContain(format);
+        }
     }
 }

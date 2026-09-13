@@ -1,11 +1,11 @@
 using CyberCloud.Core.Resources;
 using CyberCloud.Kubernetes.Health;
 using CyberCloud.Kubernetes.Tests.Infrastructure;
-using k8s.Autorest;
 using Orleans.Serialization;
 using Shouldly;
 using System.Net;
 using System.Net.Http;
+using k8s.Autorest;
 
 namespace CyberCloud.Kubernetes.Tests;
 
@@ -240,11 +240,11 @@ public sealed class SuspendedReconcileTests(KubeTestCluster cluster) {
         FakeApiClientFactory.Client.ThrowOnApply = new HttpOperationException(
             "Operation returned an invalid status code 'Forbidden'"
         ) {
-            Response = new HttpResponseMessageWrapper(
-                new HttpResponseMessage(HttpStatusCode.Forbidden),
-                """{"kind":"Status","code":403,"reason":"Forbidden","message":"admission webhook denied the request"}"""
-            )
-        };
+                Response = new HttpResponseMessageWrapper(
+                    new HttpResponseMessage(HttpStatusCode.Forbidden),
+                    """{"kind":"Status","code":403,"reason":"Forbidden","message":"admission webhook denied the request"}"""
+                )
+            };
 
         try {
             var thrown = await Record.ExceptionAsync(() => reacher.ReachApplyAsync(clusterId, Command()));

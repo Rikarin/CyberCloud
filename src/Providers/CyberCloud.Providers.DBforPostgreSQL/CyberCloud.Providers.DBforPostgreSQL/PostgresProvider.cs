@@ -1,6 +1,7 @@
 // ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
 // global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
 // over the `Orleans.ErrorCode` this import would otherwise put back in play.
+
 using CyberCloud.Core;
 
 namespace CyberCloud.Providers.DBforPostgreSQL;
@@ -10,20 +11,29 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/12 § The catalogue: <i>"PostgreSQL — <c>CyberCloud.DBforPostgreSQL/servers</c>
-///         · M1 · 1.2 EM"</i>, on CloudNativePG. This is the first provider that is a feature rather
+///         docs/plan/12 § The catalogue:
+///         <i>
+///             "PostgreSQL — <c>CyberCloud.DBforPostgreSQL/servers</c>
+///             · M1 · 1.2 EM"
+///         </i>, on CloudNativePG. This is the first provider that is a feature rather
 ///         than an instrument — <c>CyberCloud.Providers.Sample</c> is deliberately trivial and stays
 ///         that way (docs/plan/24 § Phase 1, docs/plan/25 § R1).
 ///     </para>
 ///     <para>
-///         ⚠ <b>Six of docs/plan/12 § The pattern, once's eight pieces are here or next door, and the
-///         two that are not are named rather than implied.</b> The chart (1), its generated schema
+///         ⚠
+///         <b>
+///             Six of docs/plan/12 § The pattern, once's eight pieces are here or next door, and the
+///             two that are not are named rather than implied.
+///         </b> The chart (1), its generated schema
 ///         (2), this registration (3), the reconciler (4) and the conformance manifest (8) exist;
 ///         monitoring (6) is one annotated boolean rendered into the <c>Cluster</c> CR's
 ///         <c>spec.monitoring.enablePodMonitor</c>, which is the correction that document records, and
 ///         backup (7) is the <c>backup</c> block rendering into barman-cloud rather than the
-///         unread <c>backup.yaml</c> the same document calls under-specified. <b>Piece 5 —
-///         credential provisioning into the tenant's Vault — is not built</b>, because there is no
+///         unread <c>backup.yaml</c> the same document calls under-specified.
+///         <b>
+///             Piece 5 —
+///             credential provisioning into the tenant's Vault — is not built
+///         </b>, because there is no
 ///         OpenBao integration and <c>ISecretResolver</c>'s only implementation refuses. What that
 ///         costs is on <c>PostgresServers.ClusterJson</c>, in the place a reader hits it.
 ///     </para>
@@ -36,10 +46,16 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         below for what changed.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>SupportsSoftDelete(7)</c>, and the seven days are this type's own claim about its
-///         data rather than a platform default.</b> docs/plan/06 § Tags, locks asks for exactly this on a
-///         type carrying data — <i>"a dropped production database is not a support ticket you want to have
-///         to say no to"</i>, with 7 days named. It went undeclared while the manager did not read
+///         ⚠
+///         <b>
+///             <c>SupportsSoftDelete(7)</c>, and the seven days are this type's own claim about its
+///             data rather than a platform default.
+///         </b> docs/plan/06 § Tags, locks asks for exactly this on a
+///         type carrying data —
+///         <i>
+///             "a dropped production database is not a support ticket you want to have
+///             to say no to"
+///         </i>, with 7 days named. It went undeclared while the manager did not read
 ///         <c>SoftDeleteDays</c>, because a recovery window the platform does not honour is a promise made
 ///         to the one type whose users would test it. docs/plan/08 § Soft delete is now built: a
 ///         <c>DELETE</c> of a type declaring a window parks the resource at
