@@ -14,7 +14,7 @@ import { serverRoutes } from './app.routes.server';
  * than by review.
  */
 const serverConfig: ApplicationConfig = {
-  providers: [provideServerRendering(withRoutes(serverRoutes))],
+  providers: [provideServerRendering(withRoutes(serverRoutes))]
 };
 
 export const config = mergeApplicationConfig(appConfig, serverConfig);

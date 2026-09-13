@@ -1,9 +1,9 @@
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, RouterOutlet, withComponentInputBinding } from '@angular/router';
+import { ContextBar, NotificationsTray, TenantContextStore } from '@cybercloud/shell';
 import axe from 'axe-core';
 import { appRoutes } from './app.routes';
-import { ContextBar, NotificationsTray, TenantContextStore } from '@cybercloud/shell';
 
 /**
  * ⚠ **The accessibility gate.**
@@ -34,22 +34,22 @@ const WCAG_22_AA = {
     // (docs/plan/20 § Accessibility, i18n, theming — "Theming is tokens"), so the place to check it
     // is once per theme against real rendered colour, in the browser-driven suite that lands with
     // the e2e layer. Until then it is a known, named gap and not a silent one.
-    'color-contrast': { enabled: false },
-  },
+    'color-contrast': { enabled: false }
+  }
 };
 
 @Component({
   selector: 'cc-a11y-host',
   imports: [RouterOutlet],
-  template: '<main><router-outlet /></main>',
+  template: '<main><router-outlet /></main>'
 })
 class A11yHost {}
 
 /** Every path in the route table that can be reached without a wildcard match. */
 const routePaths = appRoutes
-  .map((r) => r.path ?? '')
-  .filter((p) => p !== '**')
-  .map((p) => `/${p}`.replace('/:provider/:type/:name', '/net/vpc/example').replace(/^\/\//, '/'));
+  .map(r => r.path ?? '')
+  .filter(p => p !== '**')
+  .map(p => `/${p}`.replace('/:provider/:type/:name', '/net/vpc/example').replace(/^\/\//, '/'));
 
 describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () => {
   beforeEach(() => {
@@ -59,12 +59,12 @@ describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () =>
         // `withComponentInputBinding()` mirrors `appConfig`. Without it a route whose component
         // takes required inputs from the URL throws NG0950 here but works in the app, which would
         // make this suite fail for a reason that has nothing to do with accessibility.
-        provideRouter(appRoutes, withComponentInputBinding()),
-      ],
+        provideRouter(appRoutes, withComponentInputBinding())
+      ]
     });
   });
 
-  it.each([...routePaths, '/definitely-not-a-route'])('%s has no WCAG 2.2 AA violations', async (path) => {
+  it.each([...routePaths, '/definitely-not-a-route'])('%s has no WCAG 2.2 AA violations', async path => {
     const harness = TestBed.createComponent(A11yHost);
     await TestBed.inject(Router).navigateByUrl(path);
     await harness.whenStable();
@@ -73,7 +73,7 @@ describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () =>
 
     // Named in the failure message, because "3 violations" sends someone to the axe docs while
     // "aria-required-children on xui-select" sends them to the component.
-    const summary = results.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.length} node(s) — ${v.help}`);
+    const summary = results.violations.map(v => `${v.id} (${v.impact}): ${v.nodes.length} node(s) — ${v.help}`);
 
     expect(summary).toEqual([]);
   });
@@ -84,7 +84,7 @@ describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () =>
     // route happens to render it.
     TestBed.inject(TenantContextStore).load(
       [{ id: 't-1', displayName: 'Acme Corporation' }],
-      [{ id: 's-1', tenantId: 't-1', displayName: 'Acme Production' }],
+      [{ id: 's-1', tenantId: 't-1', displayName: 'Acme Production' }]
     );
     TestBed.inject(TenantContextStore).selectTenant('t-1');
 
@@ -92,7 +92,7 @@ describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () =>
     await harness.whenStable();
 
     const results = await axe.run(harness.nativeElement as HTMLElement, WCAG_22_AA);
-    expect(results.violations.map((v) => v.id)).toEqual([]);
+    expect(results.violations.map(v => v.id)).toEqual([]);
 
     // An `aria-live` region, so a switch is announced rather than only shown.
     expect((harness.nativeElement as HTMLElement).querySelector('[aria-live="polite"]')).not.toBeNull();
@@ -103,7 +103,7 @@ describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () =>
     await harness.whenStable();
 
     const results = await axe.run(harness.nativeElement as HTMLElement, WCAG_22_AA);
-    expect(results.violations.map((v) => v.id)).toEqual([]);
+    expect(results.violations.map(v => v.id)).toEqual([]);
 
     const trigger = (harness.nativeElement as HTMLElement).querySelector('button');
     expect(trigger?.getAttribute('aria-label')).toBeTruthy();

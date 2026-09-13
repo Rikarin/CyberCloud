@@ -128,12 +128,12 @@ export async function assertPasskey(optionsJson: string): Promise<string | null>
     ...(options.allowCredentials === undefined
       ? {}
       : {
-          allowCredentials: options.allowCredentials.map((credential) => ({
+          allowCredentials: options.allowCredentials.map(credential => ({
             ...credential,
             id: decode(String(credential.id)),
-            type: 'public-key' as const,
-          })),
-        }),
+            type: 'public-key' as const
+          }))
+        })
   };
 
   let credential: Credential | null;
@@ -165,7 +165,7 @@ export async function assertPasskey(optionsJson: string): Promise<string | null>
       authenticatorData: encode(response.authenticatorData),
       clientDataJSON: encode(response.clientDataJSON),
       signature: encode(response.signature),
-      userHandle: response.userHandle === null ? null : encode(response.userHandle),
-    },
+      userHandle: response.userHandle === null ? null : encode(response.userHandle)
+    }
   });
 }

@@ -36,15 +36,16 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { missingClassRules, missingClassRulesMessage } from './rendered-class-coverage.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverBundle = join(here, '..', 'dist', 'portal', 'server', 'server.mjs');
 
 if (!existsSync(serverBundle)) {
-  console.error(`✗ ${serverBundle} does not exist. Run \`pnpm build\` first — this gate tests the built SSR bundle, not a mock of it.`);
+  console.error(
+    `✗ ${serverBundle} does not exist. Run \`pnpm build\` first — this gate tests the built SSR bundle, not a mock of it.`
+  );
   process.exit(1);
 }
 
@@ -71,7 +72,7 @@ const check = (name, fn) => {
     if (returned instanceof Promise) {
       throw new Error(
         'check() was given an async function. Its assertions would be evaluated after this ' +
-          'helper had already recorded a pass. Await outside, assert inside.',
+          'helper had already recorded a pass. Await outside, assert inside.'
       );
     }
 
@@ -86,7 +87,7 @@ const { reqHandler } = await import(pathToFileURL(serverBundle).href);
 const { createServer } = await import('node:http');
 
 const server = createServer(reqHandler);
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 /**
@@ -100,16 +101,16 @@ const [acme, initech] = await Promise.all([
     headers: {
       cookie: 'cc_session=acme-session-token; cc_refresh=acme-refresh',
       'x-cc-tenant': 'Acme Corporation',
-      authorization: 'Bearer acme.eyJhbGciOiJIUzI1NiJ9.acme-access-token',
-    },
-  }).then(async (r) => ({ status: r.status, headers: r.headers, body: await r.text() })),
+      authorization: 'Bearer acme.eyJhbGciOiJIUzI1NiJ9.acme-access-token'
+    }
+  }).then(async r => ({ status: r.status, headers: r.headers, body: await r.text() })),
   fetch(`${base}/resources`, {
     headers: {
       cookie: 'cc_session=initech-session-token; cc_refresh=initech-refresh',
       'x-cc-tenant': 'Initech Holdings',
-      authorization: 'Bearer initech.eyJhbGciOiJIUzI1NiJ9.initech-access-token',
-    },
-  }).then(async (r) => ({ status: r.status, headers: r.headers, body: await r.text() })),
+      authorization: 'Bearer initech.eyJhbGciOiJIUzI1NiJ9.initech-access-token'
+    }
+  }).then(async r => ({ status: r.status, headers: r.headers, body: await r.text() }))
 ]);
 
 check('both concurrent renders succeed', () => {
@@ -142,7 +143,7 @@ check('neither rendered page carries the other request’s tenant', () => {
  * autoplays during SSR from an unguarded `setInterval` and would do exactly that — the portal does
  * not depend on it, and adding that dependency is what would break this.
  */
-const normalise = (html) => html;
+const normalise = html => html;
 
 check('no shared state: two concurrent renders produce identical shells', () => {
   // The strongest form of "no shared state" available at this layer. The SSR process holds no
@@ -152,7 +153,7 @@ check('no shared state: two concurrent renders produce identical shells', () => 
   assert.equal(
     normalise(acme.body),
     normalise(initech.body),
-    'the two renders differ, which means request identity reached the server render',
+    'the two renders differ, which means request identity reached the server render'
   );
 });
 
@@ -160,7 +161,10 @@ check('the SSR process holds no tokens', () => {
   // docs/plan/20 § SSR: "The SSR process holds no tokens; it renders the shell and the client
   // hydrates with the user's token." Each request above sent a bearer token and a session cookie;
   // none of it may appear in the rendered output.
-  for (const [label, page] of [['acme', acme], ['initech', initech]]) {
+  for (const [label, page] of [
+    ['acme', acme],
+    ['initech', initech]
+  ]) {
     assert.ok(!/Bearer\s/i.test(page.body), `${label}: a bearer token reached the rendered HTML`);
     assert.ok(!/eyJ[A-Za-z0-9_-]{5,}/.test(page.body), `${label}: a JWT reached the rendered HTML`);
     assert.ok(!page.body.includes('-session-token'), `${label}: a session cookie reached the rendered HTML`);
@@ -170,7 +174,10 @@ check('the SSR process holds no tokens', () => {
 
 check('the rendered page is never cacheable across users', () => {
   // The header half of the same guarantee, and the one a CDN actually reads.
-  for (const [label, page] of [['acme', acme], ['initech', initech]]) {
+  for (const [label, page] of [
+    ['acme', acme],
+    ['initech', initech]
+  ]) {
     const cacheControl = page.headers.get('cache-control') ?? '';
     assert.match(cacheControl, /no-store/, `${label}: Cache-Control lacks no-store — got "${cacheControl}"`);
     assert.match(cacheControl, /private/, `${label}: Cache-Control lacks private — got "${cacheControl}"`);
@@ -194,7 +201,7 @@ check('no access token is written to web storage by the shipped bundles', () => 
   const browserDir = join(here, '..', 'dist', 'portal', 'browser');
   const offenders = [];
 
-  for (const file of readdirSync(browserDir).filter((f) => f.endsWith('.js'))) {
+  for (const file of readdirSync(browserDir).filter(f => f.endsWith('.js'))) {
     const source = readFileSync(join(browserDir, file), 'utf8');
     if (/\b(localStorage|sessionStorage)\s*\.\s*setItem/.test(source)) offenders.push(file);
   }
@@ -214,7 +221,7 @@ check('no access token is written to web storage by the shipped bundles', () => 
 check('every class the rendered page uses has a rule behind it', () => {
   const missing = missingClassRules({
     browserDir: join(here, '..', 'dist', 'portal', 'browser'),
-    html: acme.body,
+    html: acme.body
   });
 
   assert.deepEqual(missing, [], missingClassRulesMessage(missing, 'apps/portal/src/styles.css'));
@@ -225,7 +232,7 @@ server.close();
 console.log('\nSSR isolation — docs/plan/20 § SSR\n');
 for (const r of results) console.log(`  ${r.ok ? '✓' : '✗'} ${r.name}`);
 
-const failed = results.filter((r) => !r.ok);
+const failed = results.filter(r => !r.ok);
 
 if (failed.length > 0) {
   console.error('');

@@ -17,6 +17,6 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
     <p class="text-foreground-muted mt-2 text-sm" i18n="@@home.body">
       The dashboard is a bespoke page and is not part of the M1 shell. Press Ctrl+K to search.
     </p>
-  `,
+  `
 })
 export class Home {}

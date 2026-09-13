@@ -43,19 +43,12 @@ import { sanitizeReturnUrl } from '../return-url';
           ⚠ The confirmation is identical whether or not the address already had an account, and it
           is phrased so that it stays true in both cases.
         -->
-        <p
-          class="bg-surface text-foreground mt-5 rounded-md px-3 py-3 text-sm"
-          role="status"
-          aria-live="polite"
-        >
+        <p class="bg-surface text-foreground mt-5 rounded-md px-3 py-3 text-sm" role="status" aria-live="polite">
           {{ sent() }}
         </p>
 
         <p class="text-foreground-muted mt-6 text-sm">
-          <a
-            class="text-primary underline"
-            [href]="signInHref()"
-            i18n="@@identity.signUp.backToSignIn"
+          <a class="text-primary underline" [href]="signInHref()" i18n="@@identity.signUp.backToSignIn"
             >Back to sign in</a
           >
         </p>
@@ -72,11 +65,7 @@ import { sanitizeReturnUrl } from '../return-url';
 
         <form class="mt-5 flex flex-col gap-4" (ngSubmit)="onSubmit()">
           <div class="flex flex-col gap-1.5">
-            <label
-              class="text-sm font-medium"
-              for="cc-signup-email"
-              i18n="@@identity.signUp.emailLabel"
-            >
+            <label class="text-sm font-medium" for="cc-signup-email" i18n="@@identity.signUp.emailLabel">
               Email address
             </label>
             <input
@@ -139,24 +128,17 @@ import { sanitizeReturnUrl } from '../return-url';
 
       <p class="text-foreground-muted mt-6 text-sm">
         <span i18n="@@identity.signUp.haveAccount">Already have an account?</span>
-        <a
-          class="text-primary ms-1 underline"
-          [href]="signInHref()"
-          i18n="@@identity.signUp.signIn"
-          >Sign in</a
-        >
+        <a class="text-primary ms-1 underline" [href]="signInHref()" i18n="@@identity.signUp.signIn">Sign in</a>
       </p>
     </div>
-  `,
+  `
 })
 export class SignUpPage {
   readonly #api = inject(IdentityApi);
   readonly #route = inject(ActivatedRoute);
 
   /** Sanitized on read; the raw query value is never stored. See `sign-in.ts` for why. */
-  readonly returnUrl = computed(() =>
-    sanitizeReturnUrl(this.#route.snapshot.queryParamMap.get('returnUrl')),
-  );
+  readonly returnUrl = computed(() => sanitizeReturnUrl(this.#route.snapshot.queryParamMap.get('returnUrl')));
 
   /** The address, bound to the field. */
   readonly email = signal('');
@@ -174,9 +156,7 @@ export class SignUpPage {
   readonly passkeyBlockedBy = computed(() => passkeyUnavailableReason());
 
   /** The sign-in link, carrying the same sanitized return URL. */
-  readonly signInHref = computed(
-    () => `/signin?returnUrl=${encodeURIComponent(this.returnUrl())}`,
-  );
+  readonly signInHref = computed(() => `/signin?returnUrl=${encodeURIComponent(this.returnUrl())}`);
 
   /** Submits the address. */
   onSubmit(): void {
@@ -188,7 +168,7 @@ export class SignUpPage {
     this.error.set(null);
 
     this.#api.signUp(this.email(), this.returnUrl()).subscribe({
-      next: (result) => {
+      next: result => {
         this.busy.set(false);
         // ⚠ Rendered verbatim. `result.message` is `UniformFailures.SignUp` whether the address was
         // free or taken; deriving our own copy here would be a second source of truth for a string
@@ -197,10 +177,8 @@ export class SignUpPage {
       },
       error: () => {
         this.busy.set(false);
-        this.error.set(
-          $localize`:@@identity.signUp.failed:We could not start that just now. Try again in a moment.`,
-        );
-      },
+        this.error.set($localize`:@@identity.signUp.failed:We could not start that just now. Try again in a moment.`);
+      }
     });
   }
 }

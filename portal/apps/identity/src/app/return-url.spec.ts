@@ -43,7 +43,7 @@ describe('sanitizeReturnUrl', () => {
     'evil.example',
     'signin',
     '../admin',
-    '',
+    ''
   ];
 
   const accepted = [
@@ -53,17 +53,17 @@ describe('sanitizeReturnUrl', () => {
     '/resource-groups/prod?tab=access',
     '/a/b/c',
     '/path#fragment',
-    '/redirect:target',
+    '/redirect:target'
   ];
 
-  it.each(rejected)('refuses %j and falls back to the default', (candidate) => {
+  it.each(rejected)('refuses %j and falls back to the default', candidate => {
     expect(isSafeReturnUrl(candidate)).toBe(false);
     // ⚠ The second assertion is the one that catches a fail-open refactor: a sanitize that returned
     // its input regardless would still satisfy the first.
     expect(sanitizeReturnUrl(candidate)).toBe(DEFAULT_RETURN_URL);
   });
 
-  it.each(accepted)('lets the same-origin path %j through unchanged', (candidate) => {
+  it.each(accepted)('lets the same-origin path %j through unchanged', candidate => {
     expect(isSafeReturnUrl(candidate)).toBe(true);
     expect(sanitizeReturnUrl(candidate)).toBe(candidate);
   });

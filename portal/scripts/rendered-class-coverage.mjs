@@ -55,7 +55,7 @@ import { join } from 'node:path';
  * a real rule — is still checked. Excusing every token containing a bracket would have left
  * arbitrary-value utilities unguarded, which is most of what xUI's icon sizing uses.
  */
-const isBracketFragment = (cls) => {
+const isBracketFragment = cls => {
   const opens = (cls.match(/\[/g) ?? []).length;
   const closes = (cls.match(/\]/g) ?? []).length;
 
@@ -69,7 +69,7 @@ const isBracketFragment = (cls) => {
  * the bar for adding one is that the class *cannot* have a rule — not that it happens not to.
  * Anything added because "that one is fine" would have been the line that let this defect back in.
  */
-const isRuleless = (cls) =>
+const isRuleless = cls =>
   // Tailwind's variant markers. `group` and `peer` exist to be referenced by `group-*:` and
   // `peer-*:` selectors on other elements; they emit nothing themselves, by design.
   cls === 'group' ||
@@ -91,7 +91,7 @@ const isRuleless = (cls) =>
  * class as it is written in the markup.
  */
 function definedClasses(browserDir) {
-  const stylesheets = readdirSync(browserDir).filter((f) => f.endsWith('.css'));
+  const stylesheets = readdirSync(browserDir).filter(f => f.endsWith('.css'));
   const defined = new Set();
 
   for (const sheet of stylesheets) {
@@ -147,7 +147,7 @@ export function missingClassRules({ browserDir, html }) {
     throw new Error('the rendered document carries no classes at all — is this the shell?');
   }
 
-  return [...used].filter((cls) => !defined.has(cls) && !isRuleless(cls)).sort();
+  return [...used].filter(cls => !defined.has(cls) && !isRuleless(cls)).sort();
 }
 
 /** The failure message, kept here so both SSR suites report it identically. */

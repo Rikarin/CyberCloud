@@ -1,0 +1,13 @@
+# ⚠ libs/api IS GENERATED AND MUST NOT BE FORMATTED. `./build.sh Generate` writes every file under it
+# — package.json, tsconfig.json and src/*.ts — from the provider registry and then runs the same
+# generator again with `--check`, refusing the build if a byte differs. A formatter touching these
+# files would make Generate red on every run, and prettier-plugin-packagejson would reorder its
+# package.json the same way. Change the emitter in CyberCloud.ResourceManager.Generator instead.
+libs/api/
+
+# Build and tool output.
+node_modules/
+dist/
+.angular/
+coverage/
+pnpm-lock.yaml

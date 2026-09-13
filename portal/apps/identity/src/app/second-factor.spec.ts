@@ -1,11 +1,11 @@
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { provideZonelessChangeDetection } from '@angular/core';
 import { NAVIGATE } from './navigate';
-import { sanitizeReturnUrl } from './return-url';
 import { SignInPage } from './pages/sign-in';
+import { sanitizeReturnUrl } from './return-url';
 
 /**
  * The step a password sign-in lands on, and the two ways it must not behave.
@@ -37,13 +37,13 @@ describe('the second-factor step', () => {
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/after' }) } },
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/after' }) } }
         },
         // ⚠ The stub sanitizes exactly as the real NAVIGATE does. Leaving that out would make the
         // hostile-returnUrl assertion below pass against a page that never sanitized anything —
         // the test would be asserting the stub's behaviour rather than the page's contract.
-        { provide: NAVIGATE, useValue: (url: string) => assigned.push(sanitizeReturnUrl(url)) },
-      ],
+        { provide: NAVIGATE, useValue: (url: string) => assigned.push(sanitizeReturnUrl(url)) }
+      ]
     });
 
     fixture = TestBed.createComponent(SignInPage);
@@ -70,7 +70,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: true,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
     expect(page.step()).toBe('second-factor');
@@ -82,7 +82,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: true,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
     // ⚠ The password is not needed again, and a signal still holding it while the user types a code
@@ -96,7 +96,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: true,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
     page.code.set('123456');
@@ -113,7 +113,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: false,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
     expect(assigned).toEqual(['/after']);
@@ -124,7 +124,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: true,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
     page.onSwitchFactor();
@@ -137,7 +137,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: false,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
     expect(assigned).toEqual(['/after']);
@@ -148,7 +148,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: true,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
     page.code.set('123456');
@@ -164,11 +164,10 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: true,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
-    const uniform =
-      'The email address or credential is incorrect, or the account cannot sign in right now.';
+    const uniform = 'The email address or credential is incorrect, or the account cannot sign in right now.';
 
     page.code.set('000000');
     page.onSubmit();
@@ -176,7 +175,7 @@ describe('the second-factor step', () => {
       succeeded: false,
       secondFactorRequired: false,
       returnUrl: '/after',
-      message: uniform,
+      message: uniform
     });
 
     // ⚠ Verbatim, and the same string every other failure produces. A page that translated "that
@@ -193,7 +192,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: true,
       returnUrl: '/after',
-      message: '',
+      message: ''
     });
 
     page.code.set('123456');
@@ -205,7 +204,7 @@ describe('the second-factor step', () => {
       succeeded: true,
       secondFactorRequired: false,
       returnUrl: '//evil.example',
-      message: '',
+      message: ''
     });
 
     expect(assigned).toEqual(['/']);
@@ -234,9 +233,9 @@ describe('the passkey button', () => {
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/after' }) } },
-        },
-      ],
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/after' }) } }
+        }
+      ]
     });
 
     fixture = TestBed.createComponent(SignInPage);
@@ -268,9 +267,7 @@ describe('the passkey button', () => {
     // address — so it must not get its own message either.
     http.expectOne('/api/signin/passkey/begin').flush({ optionsJson: '' });
 
-    expect(page.error()).toBe(
-      'The email address or credential is incorrect, or the account cannot sign in right now.',
-    );
+    expect(page.error()).toBe('The email address or credential is incorrect, or the account cannot sign in right now.');
     expect(page.busy()).toBe(false);
   });
 });

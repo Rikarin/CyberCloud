@@ -34,7 +34,7 @@ const serverBundle = join(here, '..', 'dist', 'identity', 'server', 'server.mjs'
 
 if (!existsSync(serverBundle)) {
   console.error(
-    `✗ ${serverBundle} does not exist. Run \`pnpm build:identity\` first — this gate tests the built SSR bundle, not a mock of it.`,
+    `✗ ${serverBundle} does not exist. Run \`pnpm build:identity\` first — this gate tests the built SSR bundle, not a mock of it.`
   );
   process.exit(1);
 }
@@ -55,7 +55,7 @@ const check = (name, fn) => {
     if (returned instanceof Promise) {
       throw new Error(
         'check() was given an async function. Its assertions would be evaluated after this ' +
-          'helper had already recorded a pass. Await outside, assert inside.',
+          'helper had already recorded a pass. Await outside, assert inside.'
       );
     }
 
@@ -69,7 +69,7 @@ const { reqHandler } = await import(pathToFileURL(serverBundle).href);
 const { createServer } = await import('node:http');
 
 const server = createServer(reqHandler);
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 
 /**
@@ -81,14 +81,14 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const hostileHeaders = {
   cookie: '__Host-cyc-session=SESSIONVALUE9f3a; other=OTHERVALUE7b21',
   authorization: 'Bearer eyJhbGciOiJFUzI1NiJ9.PAYLOADMARKER.SIGNATUREMARKER',
-  'x-forwarded-for': '203.0.113.9',
+  'x-forwarded-for': '203.0.113.9'
 };
 
-const fetchPage = (path) =>
-  fetch(`${base}${path}`, { headers: hostileHeaders }).then(async (r) => ({
+const fetchPage = path =>
+  fetch(`${base}${path}`, { headers: hostileHeaders }).then(async r => ({
     status: r.status,
     headers: r.headers,
-    body: await r.text(),
+    body: await r.text()
   }));
 
 const [signIn, signUp] = await Promise.all([
@@ -96,12 +96,12 @@ const [signIn, signUp] = await Promise.all([
   // `returnUrl` or an unexpected `password` parameter into the DOM would be the same leak by a
   // different route.
   fetchPage('/signin?returnUrl=%2Fafter&password=QUERYPASSWORD&code=123456'),
-  fetchPage('/signup?returnUrl=%2Fafter'),
+  fetchPage('/signup?returnUrl=%2Fafter')
 ]);
 
 const pages = [
   ['signin', signIn],
-  ['signup', signUp],
+  ['signup', signUp]
 ];
 
 check('both pages render server-side without throwing', () => {
@@ -111,7 +111,7 @@ check('both pages render server-side without throwing', () => {
     assert.equal(
       page.status,
       200,
-      `${label} did not render server-side (HTTP ${page.status}). The usual cause is an @xui component that touches the DOM in a constructor effect — XuiDialog, XuiDrawer, XuiAlertDialog, overflow-list, XuiText and node-graph are all known-broken under SSR.`,
+      `${label} did not render server-side (HTTP ${page.status}). The usual cause is an @xui component that touches the DOM in a constructor effect — XuiDialog, XuiDrawer, XuiAlertDialog, overflow-list, XuiText and node-graph are all known-broken under SSR.`
     );
   }
 });
@@ -132,11 +132,11 @@ check('no credential material reaches the rendered document', () => {
       'PAYLOADMARKER',
       'SIGNATUREMARKER',
       'QUERYPASSWORD',
-      '203.0.113.9',
+      '203.0.113.9'
     ]) {
       assert.ok(
         !page.body.includes(marker),
-        `${label}: "${marker}" reached the rendered HTML. Anything the server resolves is serialized into the document's transfer state and ships to the browser inside the page.`,
+        `${label}: "${marker}" reached the rendered HTML. Anything the server resolves is serialized into the document's transfer state and ships to the browser inside the page.`
       );
     }
 
@@ -174,22 +174,18 @@ check('the transfer state carries no application data', () => {
     }
 
     const parsed = JSON.parse(payload);
-    const applicationKeys = Object.keys(parsed).filter((key) => !HYDRATION_KEYS.has(key));
+    const applicationKeys = Object.keys(parsed).filter(key => !HYDRATION_KEYS.has(key));
 
     assert.deepEqual(
       applicationKeys,
       [],
-      `${label}: the SSR transfer state carries application data under ${applicationKeys.join(', ')}. These pages must resolve nothing server-side — whatever is in here ships inside the rendered document.`,
+      `${label}: the SSR transfer state carries application data under ${applicationKeys.join(', ')}. These pages must resolve nothing server-side — whatever is in here ships inside the rendered document.`
     );
 
     // The hydration table itself must be empty of content too: a non-empty `__nghData__` would
     // mean a component rendered state the client is expected to adopt.
     if (Array.isArray(parsed['__nghData__'])) {
-      assert.equal(
-        parsed['__nghData__'].length,
-        0,
-        `${label}: the hydration annotation table is not empty`,
-      );
+      assert.equal(parsed['__nghData__'].length, 0, `${label}: the hydration annotation table is not empty`);
     }
   }
 });
@@ -212,7 +208,7 @@ check('the credential form cannot be framed', () => {
     assert.equal(
       page.headers.get('x-frame-options'),
       'DENY',
-      `${label}: the page can be framed, which makes the credential form clickjackable`,
+      `${label}: the page can be framed, which makes the credential form clickjackable`
     );
   }
 });
@@ -231,7 +227,7 @@ check('an absolute off-origin returnUrl is refused server-side too', () => {
   assert.equal(hostile.status, 200);
   assert.ok(
     !hostile.body.includes('evil.example'),
-    'an off-origin returnUrl reached the rendered HTML — the pre-hydration document offers a link that leaves this origin',
+    'an off-origin returnUrl reached the rendered HTML — the pre-hydration document offers a link that leaves this origin'
   );
 });
 
@@ -249,7 +245,7 @@ check('an absolute off-origin returnUrl is refused server-side too', () => {
 check('every class the rendered page uses has a rule behind it', () => {
   const missing = missingClassRules({
     browserDir: join(here, '..', 'dist', 'identity', 'browser'),
-    html: signIn.body,
+    html: signIn.body
   });
 
   assert.deepEqual(missing, [], missingClassRulesMessage(missing, 'apps/identity/src/styles.css'));
@@ -257,7 +253,7 @@ check('every class the rendered page uses has a rule behind it', () => {
 
 server.close();
 
-const failures = results.filter((r) => !r.ok);
+const failures = results.filter(r => !r.ok);
 for (const result of results) {
   console.log(result.ok ? `  ✓ ${result.name}` : `  ✗ ${result.name}`);
   if (!result.ok) {

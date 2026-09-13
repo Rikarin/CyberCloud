@@ -35,7 +35,7 @@ import { OmnibarRegistry, OmnibarResult } from './omnibar-registry';
       [recentLabel]="recentLabel"
       (itemSelected)="choose($event)"
     />
-  `,
+  `
 })
 export class ShellOmnibar {
   protected readonly registry = inject(OmnibarRegistry);

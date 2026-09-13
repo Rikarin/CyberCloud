@@ -45,9 +45,7 @@ export class TenantContextStore {
   private readonly _activeSubscriptionId = signal<string | null>(null);
 
   readonly tenants = this._tenants.asReadonly();
-  readonly activeTenant = computed(
-    () => this._tenants().find((t) => t.id === this._activeTenantId()) ?? null,
-  );
+  readonly activeTenant = computed(() => this._tenants().find(t => t.id === this._activeTenantId()) ?? null);
 
   /**
    * Only the active tenant's subscriptions are ever offered. A subscription picker that lists
@@ -56,11 +54,11 @@ export class TenantContextStore {
    */
   readonly subscriptions = computed(() => {
     const tenantId = this._activeTenantId();
-    return tenantId === null ? [] : this._subscriptions().filter((s) => s.tenantId === tenantId);
+    return tenantId === null ? [] : this._subscriptions().filter(s => s.tenantId === tenantId);
   });
 
   readonly activeSubscription = computed(
-    () => this.subscriptions().find((s) => s.id === this._activeSubscriptionId()) ?? null,
+    () => this.subscriptions().find(s => s.id === this._activeSubscriptionId()) ?? null
   );
 
   /**
@@ -85,16 +83,16 @@ export class TenantContextStore {
     this._activeTenantId.set(tenantId);
     this._activeSubscriptionId.set(null);
 
-    const only = this._subscriptions().filter((s) => s.tenantId === tenantId);
+    const only = this._subscriptions().filter(s => s.tenantId === tenantId);
     if (only.length === 1) this._activeSubscriptionId.set(only[0].id);
   }
 
   selectSubscription(subscriptionId: string): void {
-    const target = this.subscriptions().find((s) => s.id === subscriptionId);
+    const target = this.subscriptions().find(s => s.id === subscriptionId);
     if (target === undefined) {
       throw new Error(
         `Subscription ${subscriptionId} does not belong to the active tenant. Refusing to switch — ` +
-          'acting in the wrong subscription is the mistake the context bar exists to prevent.',
+          'acting in the wrong subscription is the mistake the context bar exists to prevent.'
       );
     }
 

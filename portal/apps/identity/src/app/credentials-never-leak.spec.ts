@@ -1,8 +1,8 @@
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { provideZonelessChangeDetection } from '@angular/core';
 import { SignInPage } from './pages/sign-in';
 
 /**
@@ -40,8 +40,8 @@ describe('the sign-in page never leaks credential material', () => {
     for (const level of ['log', 'info', 'warn', 'error', 'debug'] as const) {
       spies.push(
         jest.spyOn(console, level).mockImplementation((...args: unknown[]) => {
-          consoleCalls.push(args.map((a) => String(a)).join(' '));
-        }),
+          consoleCalls.push(args.map(a => String(a)).join(' '));
+        })
       );
     }
 
@@ -53,9 +53,9 @@ describe('the sign-in page never leaks credential material', () => {
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/after' }) } },
-        },
-      ],
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ returnUrl: '/after' }) } }
+        }
+      ]
     });
 
     fixture = TestBed.createComponent(SignInPage);
@@ -85,7 +85,7 @@ describe('the sign-in page never leaks credential material', () => {
   it('sends the password in the request body and never in the URL', () => {
     submitPassword();
 
-    const request = http.expectOne((candidate) => candidate.url === '/api/signin/password');
+    const request = http.expectOne(candidate => candidate.url === '/api/signin/password');
 
     // ⚠ The URL is asserted whole, not just for the absence of the secret. A password smuggled in
     // as `?p=…` under a different name would pass a substring check on the secret alone if the
@@ -153,7 +153,7 @@ describe('the sign-in page never leaks credential material', () => {
       succeeded: false,
       secondFactorRequired: false,
       returnUrl: '/',
-      message: uniform,
+      message: uniform
     });
     fixture.detectChanges();
 

@@ -28,7 +28,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
     <p class="text-foreground-muted mt-4 text-sm" i18n="@@resourceBlade.pending">
       The generated form renderer is not part of the M1 shell.
     </p>
-  `,
+  `
 })
 export class ResourceBlade {
   // Bound from the route parameters by `withComponentInputBinding()`.

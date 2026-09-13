@@ -51,7 +51,7 @@ if (actualMajor === pinnedMajor) {
   console.log(
     recap
       ? `node ${actual} matches the pin (${pinned}) — the figures above are CI's runtime.`
-      : `node ${actual} matches the pin (${pinned}).`,
+      : `node ${actual} matches the pin (${pinned}).`
   );
   process.exit(0);
 }
@@ -73,15 +73,13 @@ if (recap) {
       `  which CI runs first, fails on this Node.\n\n` +
       `  Do not record these figures without saying which Node produced them.\n` +
       `${where}\n` +
-      `${rule}\n`,
+      `${rule}\n`
   );
 
   process.exit(0);
 }
 
-const message =
-  `Node ${actual} does not match the portal's pin of ${pinned}.\n` +
-  `${where}`;
+const message = `Node ${actual} does not match the portal's pin of ${pinned}.\n` + `${where}`;
 
 if (strict) {
   console.error(`\n  ✗ ${message}\n`);
@@ -91,5 +89,5 @@ if (strict) {
 console.warn(
   `\n  ⚠ ${message}\n` +
     `  Continuing — this is a warning locally and a hard failure in CI. Anything this run\n` +
-    `  measures is a Node ${actualMajor} figure; \`pnpm node:recap\` says so again at the end.\n`,
+    `  measures is a Node ${actualMajor} figure; \`pnpm node:recap\` says so again at the end.\n`
 );

@@ -40,16 +40,16 @@ export class NotificationsStore {
   private readonly _items = signal<readonly OperationNotification[]>([]);
 
   readonly items = this._items.asReadonly();
-  readonly unreadCount = computed(() => this._items().filter((n) => !n.read).length);
-  readonly running = computed(() => this._items().filter((n) => n.status === 'running'));
+  readonly unreadCount = computed(() => this._items().filter(n => !n.read).length);
+  readonly running = computed(() => this._items().filter(n => n.status === 'running'));
 
   /**
    * Operations arrive out of order across a reconnect — docs/plan/10 § SignalR resubscribes with a
    * `since` version, which replays. Keying on id and replacing makes a replay idempotent.
    */
   upsert(notification: OperationNotification): void {
-    this._items.update((items) => {
-      const index = items.findIndex((n) => n.id === notification.id);
+    this._items.update(items => {
+      const index = items.findIndex(n => n.id === notification.id);
       if (index < 0) return [notification, ...items];
 
       const next = [...items];
@@ -59,13 +59,11 @@ export class NotificationsStore {
   }
 
   markAllRead(): void {
-    this._items.update((items) =>
-      items.map((n) => (n.read ? n : { ...n, read: true })),
-    );
+    this._items.update(items => items.map(n => (n.read ? n : { ...n, read: true })));
   }
 
   dismiss(id: string): void {
-    this._items.update((items) => items.filter((n) => n.id !== id));
+    this._items.update(items => items.filter(n => n.id !== id));
   }
 
   clear(): void {

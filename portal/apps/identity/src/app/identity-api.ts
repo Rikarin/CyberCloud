@@ -12,14 +12,7 @@ import { Observable } from 'rxjs';
  * passkey button never appears" rather than as an error.
  */
 export type CredentialKind =
-  | 'passkey'
-  | 'password'
-  | 'totp'
-  | 'recoveryCode'
-  | 'emailOtp'
-  | 'smsOtp'
-  | 'whatsAppOtp'
-  | 'certificate';
+  'passkey' | 'password' | 'totp' | 'recoveryCode' | 'emailOtp' | 'smsOtp' | 'whatsAppOtp' | 'certificate';
 
 /** What `POST /api/signin/begin` answers. */
 export interface SignInBeginResponse {
@@ -110,15 +103,11 @@ export class IdentityApi {
    * navigation — three places docs/plan/00 § Non-negotiables' "secrets are handles" discipline says
    * a credential must never be.
    */
-  signInWithPassword(
-    email: string,
-    password: string,
-    returnUrl: string,
-  ): Observable<SignInResultResponse> {
+  signInWithPassword(email: string, password: string, returnUrl: string): Observable<SignInResultResponse> {
     return this.#http.post<SignInResultResponse>('/api/signin/password', {
       email,
       password,
-      returnUrl,
+      returnUrl
     });
   }
 
@@ -160,7 +149,7 @@ export class IdentityApi {
   completePasskey(assertionJson: string, returnUrl: string): Observable<SignInResultResponse> {
     return this.#http.post<SignInResultResponse>('/api/signin/passkey/complete', {
       assertionJson,
-      returnUrl,
+      returnUrl
     });
   }
 

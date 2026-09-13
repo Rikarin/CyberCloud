@@ -48,9 +48,7 @@ describe('Portal conventions', () => {
     // A `dark:` utility bakes a colour pair in at build time. It cannot follow a runtime theme
     // switch and it cannot follow a tenant's token override, so it silently opts out of both of the
     // properties the token layer exists to provide.
-    const offenders = files
-      .filter((f) => /\bdark:[a-z]/.test(code(f)))
-      .map((f) => relative(workspace, f));
+    const offenders = files.filter(f => /\bdark:[a-z]/.test(code(f))).map(f => relative(workspace, f));
 
     expect(offenders).toEqual([]);
   });
@@ -59,21 +57,19 @@ describe('Portal conventions', () => {
     // "a `ChangeDetectorRef` in portal code is a code-review failure". Lint enforces this on the
     // TypeScript AST; this is the coarse backstop that also catches it in a comment-free string,
     // an inline template or a file lint has been told to ignore.
-    const offenders = files
-      .filter((f) => /\bChangeDetectorRef\b/.test(code(f)))
-      .map((f) => relative(workspace, f));
+    const offenders = files.filter(f => /\bChangeDetectorRef\b/.test(code(f))).map(f => relative(workspace, f));
 
     expect(offenders).toEqual([]);
   });
 
   it('no component sets a change-detection strategy other than OnPush', () => {
     const offenders = files
-      .filter((f) => f.endsWith('.ts'))
-      .filter((f) => {
+      .filter(f => f.endsWith('.ts'))
+      .filter(f => {
         const source = code(f);
         return /@Component\(/.test(source) && /ChangeDetectionStrategy\.Default/.test(source);
       })
-      .map((f) => relative(workspace, f));
+      .map(f => relative(workspace, f));
 
     expect(offenders).toEqual([]);
   });
@@ -102,8 +98,8 @@ describe('Portal conventions', () => {
     // `Build.Architecture`'s plan-citation gate — docs/code-documentation-style.md § Citing the
     // plan. A line number is a citation that rots on the next edit to the doc.
     const offenders = files
-      .filter((f) => /docs\/plan\/\d+[A-Za-z0-9._-]*:\d+/.test(readFileSync(f, 'utf8')))
-      .map((f) => relative(workspace, f));
+      .filter(f => /docs\/plan\/\d+[A-Za-z0-9._-]*:\d+/.test(readFileSync(f, 'utf8')))
+      .map(f => relative(workspace, f));
 
     expect(offenders).toEqual([]);
   });
