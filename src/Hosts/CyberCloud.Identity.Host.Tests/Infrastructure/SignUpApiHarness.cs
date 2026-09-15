@@ -617,6 +617,10 @@ public sealed class RecordingScopeManager : IScopeManager {
     /// <inheritdoc />
     public Task<Result<ScopeSnapshot>> ReadAsync(ScopeRequest request, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
+
+    /// <inheritdoc />
+    public Task<Result<ScopeListPage>> ListAsync(ScopeListRequest request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
 }
 
 /// <summary>An <see cref="IPasskeyService" /> that issues a registration challenge and accepts any attestation.</summary>

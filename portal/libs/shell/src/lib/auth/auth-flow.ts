@@ -24,8 +24,16 @@ export const PKCE_COOKIE_MAX_AGE_SECONDS = 600;
  */
 export const AUTH_NAVIGATE = new InjectionToken<(url: string) => void>('cc.authNavigate', {
   providedIn: 'root',
-  factory: () => (url: string) => {
-    inject(DOCUMENT).defaultView?.location.assign(url);
+  factory: () => {
+    // ⚠ Resolved here, at factory time, and not inside the closure. The closure runs after an
+    // `await` — the guard's failed refresh, the callback's exchange — where there is no injection
+    // context, and an `inject()` there throws NG0203 in the browser while every unit test, which
+    // provides its own navigator for this token, stays green. The first dev run landed on the
+    // portal's empty shell with that error in the console and no redirect.
+    const view = inject(DOCUMENT).defaultView;
+    return (url: string) => {
+      view?.location.assign(url);
+    };
   }
 });
 

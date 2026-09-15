@@ -154,11 +154,13 @@ public sealed class AppHostTopologyTests {
         gateway["CyberCloud__Gateway__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer);
         feeds["CyberCloud__Feeds__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer);
 
-        // ⚠ The identity host infers its issuer from the request, so the only way the string above
-        // is the string it announces is if it listens on exactly that port. An Issuer handed to it
-        // explicitly would also work; an Issuer handed to it that DIFFERED from the port would be a
-        // discovery document the gateway refuses, with both hosts healthy.
-        identity.ShouldNotContainKey("CyberCloud__Identity__Issuer", "inferred, so that the port is the one place the origin is decided");
+        // ⚠ The identity host is handed the issuer rather than inferring it, and the string has to
+        // name the port it listens on. Inference was the first shape, and it held until /authorize
+        // was proxied through the identity app's dev server: a request resumed through 4201 minted
+        // a code under `http://localhost:4201/`, and /token on 5101 refused it (OpenIddict ID2088)
+        // with every host healthy — CyberCloudTopology's issuer note. An Issuer that DIFFERED from
+        // the port would be a discovery document the gateway refuses, just as quietly.
+        identity["CyberCloud__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer, "one issuer, whichever origin the request arrived on");
         new Uri(CyberCloudResources.IdentityIssuer).Port.ShouldBe(CyberCloudResources.IdentityPort);
 
         // ⚠ The person's path, pinned on the identity host's side: where an unauthenticated

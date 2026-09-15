@@ -32,3 +32,20 @@ export function stringClaim(payload: Readonly<Record<string, unknown>> | null, n
   const value = payload?.[name];
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
+
+/**
+ * A GUID claim as an address spells it: the `D` form, `8-4-4-4-12` lower-case hex.
+ *
+ * ⚠ **The token and the address disagree about the form, and this is where they meet.** The
+ * identity host writes `tid` and `sub` in the `N` form (32 hex digits, `AccessTokenClaims`), and
+ * the gateway's scope grammar reads `/tenants/{t}/…` in the `D` form — docs/plan/06
+ * § Identifiers. The first dev run sent `GET /api/tenants/76fe0b2b…` straight from the claim and
+ * the gateway answered 400 `InvalidResourceId` with every host healthy. A claim that is not 32
+ * hex digits is returned as it came, so a value that is already an address, or not a GUID at
+ * all, is not mangled.
+ */
+export function guidClaimAsAddress(value: string): string {
+  if (!/^[0-9a-fA-F]{32}$/.test(value)) return value;
+  const n = value.toLowerCase();
+  return `${n.slice(0, 8)}-${n.slice(8, 12)}-${n.slice(12, 16)}-${n.slice(16, 20)}-${n.slice(20)}`;
+}

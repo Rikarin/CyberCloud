@@ -16,6 +16,8 @@ import axe from 'axe-core';
 import { AuthCallback } from './callback';
 
 const TENANT = '7f3a1c2e4b7d4e3a9c1d2b6f8a7e5d43';
+/** The same tenant as an address spells it — what `AuthSession` answers from the claim above. */
+const TENANT_ADDRESS = '7f3a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43';
 const STATE = 'the-state';
 const VERIFIER = 'the-verifier';
 
@@ -92,7 +94,7 @@ describe('the sign-in callback page', () => {
 
     expect(endpoint.calls[0].form.get('code_verifier')).toBe(VERIFIER);
     const context = TestBed.inject(TenantContextStore);
-    expect(context.activeTenant()).toEqual({ id: TENANT, displayName: 'Tenant 7f3a' });
+    expect(context.activeTenant()).toEqual({ id: TENANT_ADDRESS, displayName: 'Tenant 7f3a' });
     expect(context.activeSubscription()?.id).toBe('s-1');
     expect(TestBed.inject(AccessTokenStore).hasToken()).toBe(true);
     expect(router.url).toBe('/subscriptions/s-1');
@@ -116,7 +118,7 @@ describe('the sign-in callback page', () => {
     await settle();
 
     expect(TestBed.inject(AuthSession).account()).toEqual({
-      tenantId: TENANT,
+      tenantId: TENANT_ADDRESS,
       subjectId: 'u-1',
       email: 'rene@example.com',
       name: 'Rene'

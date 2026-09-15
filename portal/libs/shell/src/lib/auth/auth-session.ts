@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { AccessTokenStore } from './access-token-store';
 import { CookieJar } from './cookies';
-import { decodeJwtPayload, stringClaim } from './jwt-payload';
+import { decodeJwtPayload, guidClaimAsAddress, stringClaim } from './jwt-payload';
 
 /** The cookie the last signed-in tenant is remembered in — the `tenant` hint on the next `/authorize`. */
 export const TENANT_COOKIE = 'cyc-tenant';
@@ -20,9 +20,12 @@ export interface TokenResponse {
 
 /** Who is signed in, as the tokens describe them. Labels, not authority — see `decodeJwtPayload`. */
 export interface SignedInAccount {
-  /** The access token's `tid`, `N` form. */
+  /**
+   * The access token's `tid`, in the `D` form every address takes — `guidClaimAsAddress`. It is
+   * the tenant segment of `/tenants/{t}/…` and the `tenant` hint remembered for the next sign-in.
+   */
   readonly tenantId: string;
-  /** The access token's `sub`. */
+  /** The access token's `sub`, in the `D` form for the same reason. */
   readonly subjectId: string;
   /** The id_token's `email`, when the response carried one. */
   readonly email: string | null;
@@ -62,9 +65,11 @@ export class AuthSession {
    */
   accept(response: TokenResponse, nowMs: number = Date.now()): SignedInAccount | null {
     const access = decodeJwtPayload(response.access_token);
-    const tenantId = stringClaim(access, 'tid');
-    const subjectId = stringClaim(access, 'sub');
-    if (tenantId === null || subjectId === null) return null;
+    const tid = stringClaim(access, 'tid');
+    const sub = stringClaim(access, 'sub');
+    if (tid === null || sub === null) return null;
+    const tenantId = guidClaimAsAddress(tid);
+    const subjectId = guidClaimAsAddress(sub);
 
     const identity = response.id_token === undefined ? null : decodeJwtPayload(response.id_token);
     const previous = this._account();

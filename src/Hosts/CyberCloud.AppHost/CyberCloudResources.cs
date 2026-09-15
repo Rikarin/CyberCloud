@@ -114,9 +114,9 @@ public static class CyberCloudResources {
     ///     <para>
     ///         The identity host's port is also its <b>issuer</b>: the gateway and the feeds host
     ///         validate tokens against exactly the origin they were configured with, and the
-    ///         identity host infers its <c>iss</c> from the request — so <c>http://localhost:5101</c>
-    ///         has to be the same string on every side. Choosing the port here is what makes it one
-    ///         string rather than three.
+    ///         identity host is handed the same string as its <c>iss</c> — so <c>http://localhost:5101</c>
+    ///         has to be the same string on every side and the port it names has to be the one the
+    ///         host listens on. Choosing the port here is what makes it one string rather than three.
     ///     </para>
     /// </remarks>
     public const int GatewayPort = 5100;

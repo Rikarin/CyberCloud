@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiResponse, Page, PageRequest, ScopeResource } from '@cybercloud/api';
 import { SubscriptionRef } from '@cybercloud/shell';
-import { HttpApiTransport } from './http-transport';
 import { skipTokenOf } from './paging';
+import { PlatformApi } from './platform-api';
 
 /**
  * A subscription or a resource group as the collection renders it: the scope resource, with the
@@ -17,22 +17,16 @@ export const SUBSCRIPTION_TYPE = 'CyberCloud.Resources/subscriptions';
 export const RESOURCE_GROUP_TYPE = 'CyberCloud.Resources/subscriptions/resourceGroups';
 
 /**
- * The two scope collections, by hand, until the generated client learns them.
+ * The two scope collections, as the pages and the sign-in flow call them.
  *
  * `GET /tenants/{tid}/subscriptions` and `GET /tenants/{tid}/subscriptions/{sid}/resourceGroups`
  * are the third scope grammar — `RouteKind.ScopeCollection` on the gateway, served by
  * `IScopeManager.ListAsync` as index → page → `ListObjects` read filter, in the same
  * `{ value, nextLink }` envelope and `$top`/`$skipToken` paging as every resource collection
- * (#37). They are emitted through `OpenApiEmitter.ScopePathItems`, so `./build.sh Generate`
- * regenerates `libs/api` with them — and until that regeneration lands beside this branch, this
- * is the seam the pages and the sign-in flow call, built over the same `HttpApiTransport` as the
- * generated client so the token, the `api-version` and the error mapping are owned once.
- *
- * ⚠ **Coded to the contract's shape, not to a running gateway.** The address, the envelope and
- * the `$skipToken` continuation are the contract's § 6; `pages.spec.ts` plays the gateway. The
- * day `libs/api` carries `listSubscriptions`/`listResourceGroups`, the two methods below become
- * delegations and nothing that calls them moves — the same arrangement `role-assignments.ts` has
- * with the address the emitters cannot see.
+ * (#37). They are emitted through `OpenApiEmitter.ScopePathItems`, so the generated client
+ * carries them as `listSubscriptions` and `listResourceGroups`, and the two methods below are
+ * delegations to those — the seam stays so that `allSubscriptions` and the two helpers have one
+ * home, and so a page that lists a collection names the collection rather than the client.
  *
  * ⚠ **The next page is fetched by `$skipToken`, never by following `nextLink`**, for the reason
  * `resource-list.ts` gives: the link is a URL the server chose, and a URL the server chose must
@@ -40,14 +34,10 @@ export const RESOURCE_GROUP_TYPE = 'CyberCloud.Resources/subscriptions/resourceG
  */
 @Injectable({ providedIn: 'root' })
 export class ScopeCollections {
-  private readonly transport = inject(HttpApiTransport);
+  private readonly api = inject(PlatformApi);
 
   listSubscriptions(tenantId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeListItem>>> {
-    return this.transport.send<Page<ScopeListItem>>({
-      method: 'GET',
-      path: `/tenants/${encodeURIComponent(tenantId)}/subscriptions`,
-      query: pageQuery(page)
-    });
+    return this.api.listSubscriptions(tenantId, page);
   }
 
   listResourceGroups(
@@ -55,11 +45,7 @@ export class ScopeCollections {
     subscriptionId: string,
     page: PageRequest = {}
   ): Promise<ApiResponse<Page<ScopeListItem>>> {
-    return this.transport.send<Page<ScopeListItem>>({
-      method: 'GET',
-      path: `/tenants/${encodeURIComponent(tenantId)}/subscriptions/${encodeURIComponent(subscriptionId)}/resourceGroups`,
-      query: pageQuery(page)
-    });
+    return this.api.listResourceGroups(tenantId, subscriptionId, page);
   }
 
   /**
@@ -106,12 +92,4 @@ export function lastSegmentOf(item: ScopeListItem): string {
   const segments = item.id.split('/').filter(segment => segment.length > 0);
   const last = segments.at(-1);
   return last === undefined ? item.name : decodeURIComponent(last);
-}
-
-/** `$top`/`$skipToken`, spelled as `CyberCloudApi.pageQuery` spells them — the query the gateway parses. */
-function pageQuery(page: PageRequest): Record<string, string> {
-  const query: Record<string, string> = {};
-  if (page.top !== undefined) query['$top'] = String(page.top);
-  if (page.skipToken !== undefined) query['$skipToken'] = page.skipToken;
-  return query;
 }

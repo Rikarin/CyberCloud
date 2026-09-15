@@ -82,11 +82,21 @@ fail at start with the CLI's own message and nothing above them is affected. The
 not install (`WithPnpm(install: false)`), because an install that can write the lockfile is not a
 thing to run on every start.
 
-⚠ **What the portal can and cannot do against this run today.** Sign-in and sign-up work on the
-identity app. The portal's pages render and call the gateway through the proxy — and every call
-answers `401`, because a person has no token path yet (#88): the gateway validates bearer tokens the
-identity host issues, and the identity host issues them to service principals only. That is the gap
-this topology makes visible rather than hides.
+⚠ **What the portal can do against this run.** Open http://localhost:4200/: with no session the
+portal leaves for the identity host's `/authorize`, which sends a person with no cookie to the
+identity app's sign-in page. "Create one" runs the self-serve sign-up — an address, a six-digit
+code, a name, an organisation and a passkey or a password — and lands back in the portal signed
+in, with the new tenant's default subscription and resource group in the context bar; from there
+the subscription and resource-group pages list what sign-up created and a resource can be created
+and watched to `Succeeded` (#88). ⚠ **The code is not mailed — there is no MTA (#93).** The silo
+that minted it logs it at Warning: open the Aspire dashboard, Structured logs, and filter for
+`DEVELOPMENT OTP`; the console log of `silo-1` or `silo-2` carries the same line. ⚠ **A stop of the
+AppHost empties the durable tier**, so the tenant is gone with it, but `.identity/` beside this
+AppHost keeps the signing and encryption keys (gitignored), so a restart of the identity host alone
+keeps every portal tab signed in. `PersonOverHttpTests` performs the same story against this
+topology, minus the browser. `CyberCloud.Sample/widgets` needs a `clusterId`, so on a run where k3s
+is still starting the type to create first is one that declares no cluster — a
+`CyberCloud.Communication/services`, for one.
 
 ⚠ **The AppHost fixes eleven ports** — 11111/30011 and 11112/30012 for the two silos' Orleans
 sockets, 6443 for the k3s API server, 8333/8888 for SeaweedFS, and the five in the table. Orleans'

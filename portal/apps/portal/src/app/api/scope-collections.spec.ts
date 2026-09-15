@@ -9,7 +9,7 @@ const TENANT = '7f3a1c2e4b7d4e3a9c1d2b6f8a7e5d43';
 const V = `api-version=${apiVersion}`;
 
 /**
- * The hand-written seam for the two scope collections, against the contract's § 6: the address,
+ * The seam over the generated client for the two scope collections, against the contract's § 6: the address,
  * the envelope, and `$skipToken` paging — never `nextLink` followed as a URL.
  */
 describe('ScopeCollections — GET /tenants/{tid}/subscriptions and …/resourceGroups', () => {

@@ -95,7 +95,13 @@ it. The decisions that shape the served half, each argued in the type that makes
   unauthenticated caller choose which tenant's lockout counters and email index it probes": a
   made-up value activates nothing. Absent, the configured tenant applies, or the platform tenant in
   Development only. Never a tenant in the path or the issuer: OpenIddict serves one issuer and the
-  gateway pins one issuer string, and `tid` carries the tenant on every token.
+  gateway pins one issuer string, and `tid` carries the tenant on every token. ⚠ And the host is
+  *handed* that string rather than inferring it from the request, on the AppHost as in production:
+  a person's `/authorize` is resumed through the identity app's dev server, whose proxy forwards it
+  with its own `Host` header, and the first dev run minted an authorization code under
+  `http://localhost:4201/` that `/token` on `5101` refused (OpenIddict's ID2088) with every host
+  healthy. `CyberCloudTopology` sets `CyberCloud:Identity:Issuer` to the one string the gateway and
+  the feeds host already validate against.
 - **First-party clients are static.** `cyc-portal` and `cyc-cli` are `ApplicationRegistration`
   records in the host (`FirstPartyClients`), consulted before a tenant's `IClientIndexGrain` so no
   tenant can shadow them; `cyc-cli`'s loopback redirect matches any port, RFC 8252 § 7.3. Every
@@ -148,9 +154,13 @@ naming one id. `ClientResolver` in the identity host is the reader.
 - **An HTTP surface that creates a service principal at a tenant** — `TenantOverHttpTests` still
   creates one by grain, and the client-credentials grant still takes its tenant from configuration
   rather than from an application registration.
-- **The person half of `TenantOverHttpTests`** — the path `GrantsOverHttpTests` drives against the
-  identity host alone (password, delivered code, `/authorize`, `/token`, refresh, replay, restart,
-  `/logout`), with the gateway on the far end.
+- ~~The person half of `TenantOverHttpTests`~~ — landed as `PersonOverHttpTests` in
+  `CyberCloud.AppHost.Tests`: sign-up with the code read from the silo's console, `/authorize`,
+  `/token`, the tenant and both scope collections through the gateway, a resource that converges,
+  a refresh from the cookie, a replay refused, `/logout` — against the AppHost's own processes.
+  #88's closing criterion (a person signs in, holds a `cyc.api` token, reads through the gateway,
+  refreshes, survives a restart) was also performed by hand on the dev run, in a browser, on
+  2026-09-15.
 - **Device authorization and token exchange (RFC 8693)** remain owed as before — the device flow
   needs a verification page and a code store, and token exchange has `ITokenExchange` built and
   waiting on `/token` to accept the grant.

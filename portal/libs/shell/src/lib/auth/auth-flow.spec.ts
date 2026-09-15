@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FakeTokenEndpoint, MemoryCookieJar, unsignedJwt } from '@cybercloud/shell/testing';
@@ -12,6 +13,8 @@ import { TENANT_CONTEXT_SOURCE, TenantContextSource } from './tenant-context-sou
 
 const ISSUER = 'http://localhost:5101';
 const TENANT = '7f3a1c2e4b7d4e3a9c1d2b6f8a7e5d43';
+/** The same tenant as an address spells it — what `AuthSession` answers from the claim above. */
+const TENANT_ADDRESS = '7f3a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43';
 
 /**
  * docs/plan/10 § Authentication inputs, the Portal row: "Authorization Code + PKCE → access token
@@ -125,7 +128,7 @@ describe('AuthFlow — Authorization Code + PKCE from the portal', () => {
     expect(outcome).toEqual({
       kind: 'signedIn',
       returnTo: '/subscriptions/s-1',
-      account: { tenantId: TENANT, subjectId: 'u-1', email: 'rene@example.com', name: 'Rene' }
+      account: { tenantId: TENANT_ADDRESS, subjectId: 'u-1', email: 'rene@example.com', name: 'Rene' }
     });
 
     // The exchange: a form POST with credentials, the verifier, and the redirect URI the code
@@ -149,13 +152,13 @@ describe('AuthFlow — Authorization Code + PKCE from the portal', () => {
     expect(tokens.isExpired(before + 600_000 - 31_000)).toBe(false);
     expect(tokens.isExpired(before + 600_000 - 29_000)).toBe(true);
 
-    expect(cookies.read(TENANT_COOKIE)).toBe(TENANT);
+    expect(cookies.read(TENANT_COOKIE)).toBe(TENANT_ADDRESS);
     expect(cookies.attributesOf(TENANT_COOKIE)).toEqual({ path: '/', maxAgeSeconds: 34_560_000 });
     expect(cookies.read(PKCE_COOKIE)).toBeNull();
 
     // The tenant context came from the app's source, keyed by the token's `tid`.
     const context = TestBed.inject(TenantContextStore);
-    expect(context.activeTenant()).toEqual({ id: TENANT, displayName: 'Contoso' });
+    expect(context.activeTenant()).toEqual({ id: TENANT_ADDRESS, displayName: 'Contoso' });
     expect(context.activeSubscription()?.displayName).toBe('Default');
     expect(TestBed.inject(AuthSession).account()?.email).toBe('rene@example.com');
   });
@@ -198,7 +201,7 @@ describe('AuthFlow — Authorization Code + PKCE from the portal', () => {
 
     expect(TestBed.inject(AccessTokenStore).hasToken()).toBe(false);
     expect(TestBed.inject(AuthSession).account()).toBeNull();
-    expect(cookies.read(TENANT_COOKIE)).toBe(TENANT);
+    expect(cookies.read(TENANT_COOKIE)).toBe(TENANT_ADDRESS);
     expect(navigated).toEqual([
       `${ISSUER}/logout?client_id=cyc-portal&post_logout_redirect_uri=${encodeURIComponent('http://localhost/')}`
     ]);
@@ -222,5 +225,31 @@ describe('AuthFlow — Authorization Code + PKCE from the portal', () => {
 
     await flow.beginSignIn('/auth/callback?code=stale');
     expect(cookies.read(PKCE_COOKIE)!.split('.').slice(2).join('.')).toBe('/');
+  });
+});
+
+/**
+ * The default `AUTH_NAVIGATE` — the one the app runs, which every test above replaces. It is
+ * called after an `await` (the guard's failed refresh, the callback's exchange), where there is
+ * no injection context, so everything it needs from the injector has to be resolved when the
+ * token is created and nothing when it is called. The first dev run found the other shape:
+ * NG0203 in the console, and the portal's empty shell instead of the identity host.
+ */
+describe('AUTH_NAVIGATE — the default navigator', () => {
+  it('resolvesItsDocumentAtCreationSoACallAfterAnAwaitHasNothingToInject', async () => {
+    // jsdom's `location` cannot be spied on, so the document is a double with one method on it.
+    const assign = jest.fn();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: DOCUMENT, useValue: { defaultView: { location: { assign } } } }
+      ]
+    });
+    const navigate = TestBed.inject(AUTH_NAVIGATE);
+
+    await Promise.resolve();
+
+    expect(() => navigate('http://localhost:5101/authorize')).not.toThrow();
+    expect(assign).toHaveBeenCalledWith('http://localhost:5101/authorize');
   });
 });

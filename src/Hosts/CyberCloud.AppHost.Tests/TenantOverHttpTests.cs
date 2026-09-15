@@ -552,7 +552,8 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     ///         are now the silo's <c>PlatformBootstrapTask</c>'s, run at start when
     ///         <c>CyberCloud:Identity:SelfServeSignUp</c> is on, which this topology sets; the
     ///         person half — sign-up through <c>/api/signup/*</c>, then the code and the token — is
-    ///         what drives it, and lands with the Integrate run rather than here.
+    ///         what drives it, and it is <see cref="PersonOverHttpTests" />, against the AppHost's
+    ///         own identity host and gateway rather than the two this file builds.
     ///     </para>
     /// </remarks>
     async Task BootstrapTenantAsync(CancellationToken cancellationToken) {

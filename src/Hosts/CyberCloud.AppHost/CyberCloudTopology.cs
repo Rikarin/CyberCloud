@@ -284,11 +284,18 @@ public static class CyberCloudTopology {
         //
         // ⚠ THREE FIXED PORTS, AND THE ISSUER IS WHY. The gateway and the feeds host validate a bearer
         // token against exactly the issuer they were configured with — JwksCallerContextResolver refuses a
-        // discovery document whose `issuer` differs — and the identity host, given no Issuer, infers it
-        // from the request it is asked on. So `http://localhost:5101` has to be one string on three sides;
-        // CyberCloudResources.IdentityIssuer is that string, and the port it names is pinned rather than
-        // allocated so that it can be. The gateway's port is pinned for the portal's proxy file (below),
-        // and the feeds host's for `dotnet nuget push`, which wants a URL a person can type.
+        // discovery document whose `issuer` differs — so `http://localhost:5101` has to be one string on
+        // three sides; CyberCloudResources.IdentityIssuer is that string, and the port it names is pinned
+        // rather than allocated so that it can be. The gateway's port is pinned for the portal's proxy
+        // file (below), and the feeds host's for `dotnet nuget push`, which wants a URL a person can type.
+        //
+        // ⚠ THE IDENTITY HOST IS HANDED THE ISSUER TOO, BECAUSE ITS REQUESTS ARRIVE ON TWO ORIGINS. Left
+        // to infer it, OpenIddict stamps every token with the origin of the request that minted it — and
+        // a person's /authorize is resumed through the identity app's dev server (4201), which proxies it
+        // here with its own Host header. The first run of the dev-run story minted an authorization code
+        // under `http://localhost:4201/` and /token on 5101 refused it with OpenIddict's ID2088, "the
+        // issuer associated to the specified token is not valid", with every host healthy. One explicit
+        // issuer is one key set, one discovery document and one `iss`, whichever origin asked.
         //
         // ⚠ ALL THREE ARE ORLEANS CLIENTS AND WAIT ON SILO 1 — see AsOrleansClient. None waits on k3s, for
         // the reason the silos do not.
@@ -301,6 +308,8 @@ public static class CyberCloudTopology {
             // would be refused with "origin not allowed" and nothing in that message names this line.
             // `localhost` is a secure context to every browser, so plain http is fine for the ceremony.
             .WithEnvironment("CyberCloud__Identity__Origins__0", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            // The same string the gateway and the feeds host validate against — see the issuer note above.
+            .WithEnvironment("CyberCloud__Identity__Issuer", CyberCloudResources.IdentityIssuer)
             // The third of the three (see silo-one), plus the region a signed-up tenant is homed to and
             // its default resource group is placed in. `local` is the region this laptop is.
             .WithEnvironment(SelfServeSignUpVariable, "true")

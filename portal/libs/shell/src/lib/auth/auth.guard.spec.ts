@@ -12,6 +12,8 @@ import { IDENTITY_ISSUER } from './identity-issuer';
 import { TENANT_CONTEXT_SOURCE } from './tenant-context-source';
 
 const TENANT = '7f3a1c2e4b7d4e3a9c1d2b6f8a7e5d43';
+/** The same tenant as an address spells it — what `AuthSession` answers from the claim above. */
+const TENANT_ADDRESS = '7f3a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43';
 
 @Component({ selector: 'cc-guarded', template: '<span i18n="@@test.guarded">guarded</span>' })
 class Guarded {}
@@ -65,7 +67,7 @@ describe('authGuard', () => {
     expect(navigated).toEqual([]);
     expect(TestBed.inject(AccessTokenStore).hasToken()).toBe(true);
     // The reload path loads the context the same way the callback does.
-    expect(loads).toEqual([TENANT]);
+    expect(loads).toEqual([TENANT_ADDRESS]);
     expect(TestBed.inject(TenantContextStore).activeTenant()?.displayName).toBe('Contoso');
   });
 
@@ -95,7 +97,7 @@ describe('authGuard', () => {
     expect(await TestBed.inject(Router).navigateByUrl('/subscriptions')).toBe(true);
     expect(endpoint.calls).toEqual([]);
     expect(navigated).toEqual([]);
-    expect(loads).toEqual([TENANT]);
+    expect(loads).toEqual([TENANT_ADDRESS]);
   });
 
   it('on the server passes without a token, a refresh, or a redirect — docs/plan/20 § SSR', async () => {
