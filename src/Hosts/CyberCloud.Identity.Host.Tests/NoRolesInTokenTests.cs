@@ -355,4 +355,69 @@ public sealed class NoRolesInTokenTests {
         AccessTokenClaims.EnsurePermitted(["sub", "roles"]).IsFailure.ShouldBeTrue();
         AccessTokenClaims.EnsurePermitted(["sub", "sub_typ", "act_sub"]).IsSuccess.ShouldBeTrue();
     }
+
+    // ── What rides beside the access token, and what OpenIddict would serialize ────────────────
+
+    /// <summary>
+    ///     The claims OpenIddict writes into an access token: the ones whose destinations name it.
+    ///     This is the rule <c>PrepareAccessTokenPrincipal</c> applies, and asserting through it is
+    ///     asserting on the token rather than on the principal.
+    /// </summary>
+    static IReadOnlyList<Claim> SerializedIntoTheAccessToken(ClaimsPrincipal principal) =>
+        [.. principal.Claims.Where(x => x.GetDestinations().Contains(OpenIddictConstants.Destinations.AccessToken))];
+
+    [Fact]
+    public void TheRefreshHandleAndInteractiveSidNeverReachTheAccessToken() {
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User);
+
+        AccessTokenPrincipalFactory.AppendRefreshOnly(principal, "handle-shown-once", Guid.NewGuid());
+
+        // ⚠ On the principal, so the refresh token carries them; with NO destination, so neither the
+        // access token nor the id_token does. A claim without a destination is exactly "refresh
+        // token only" in OpenIddict's model, and the refresh token is encrypted.
+        principal.FindFirst(AccessTokenPrincipalFactory.RefreshHandleClaim).ShouldNotBeNull();
+        principal.FindFirst(AccessTokenPrincipalFactory.RefreshHandleClaim)!.GetDestinations().ShouldBeEmpty();
+        principal.FindFirst(AccessTokenPrincipalFactory.InteractiveSessionClaim)!.GetDestinations().ShouldBeEmpty();
+
+        SerializedIntoTheAccessToken(principal).Select(x => x.Type)
+            .ShouldNotContain(AccessTokenPrincipalFactory.RefreshHandleClaim);
+        SerializedIntoTheAccessToken(principal).Select(x => x.Type)
+            .ShouldNotContain(AccessTokenPrincipalFactory.InteractiveSessionClaim);
+    }
+
+    [Fact]
+    public void EmailAndNameReachOnlyTheIdToken() {
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User);
+
+        AccessTokenPrincipalFactory.AppendIdentityTokenOnly(principal, "someone@example.com", "Someone");
+
+        foreach (var type in new[] { OpenIddictConstants.Claims.Email, OpenIddictConstants.Claims.Name }) {
+            principal.FindFirst(type)!.GetDestinations().ShouldBe([OpenIddictConstants.Destinations.IdentityToken]);
+            SerializedIntoTheAccessToken(principal).Select(x => x.Type).ShouldNotContain(type);
+        }
+
+        // An empty value adds no claim at all rather than an empty one.
+        var bare = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], SubjectTypes.User);
+        AccessTokenPrincipalFactory.AppendIdentityTokenOnly(bare, string.Empty, string.Empty);
+        bare.FindFirst(OpenIddictConstants.Claims.Email).ShouldBeNull();
+    }
+
+    [Fact]
+    public void TheAccessTokenClaimSetIsStillExactlyPermitted() {
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User);
+
+        AccessTokenPrincipalFactory.AppendRefreshOnly(principal, "handle", Guid.NewGuid());
+        AccessTokenPrincipalFactory.AppendIdentityTokenOnly(principal, "someone@example.com", "Someone");
+
+        // ⚠ Asserted on what would be SERIALIZED, because the principal now legitimately carries
+        // four claims outside the set — that is what the two Append methods are for. What must stay
+        // true is that none of them has the access-token destination, so the token on the wire is
+        // still exactly the closed set. GrantsOverHttpTests decodes a real one and asserts the same.
+        var serialized = SerializedIntoTheAccessToken(principal).Select(x => x.Type).ToList();
+
+        serialized.ShouldAllBe(x => AccessTokenClaims.Permitted.Contains(x));
+        serialized.ShouldNotBeEmpty();
+
+        principal.Claims.Count().ShouldBe(serialized.Count + 4, "cyc:rh, cyc:isid, email and name ride beside the token");
+    }
 }

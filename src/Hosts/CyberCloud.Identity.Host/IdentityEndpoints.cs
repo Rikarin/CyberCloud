@@ -1,3 +1,4 @@
+using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Api;
 using CyberCloud.Identity.Host.Tokens;
@@ -7,8 +8,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
+using Orleans.Multitenant;
 
 namespace CyberCloud.Identity.Host;
 
@@ -37,11 +40,16 @@ namespace CyberCloud.Identity.Host;
 ///     </para>
 ///     <para>
 ///         <b>What is still owed.</b> The consent page described at the foot of these remarks has no
-///         endpoint here, and neither does password reset —
+///         endpoint here (a tenant-registered client is answered <c>consent_required</c> at
+///         <c>/authorize</c> until it does), and neither does password reset —
 ///         <c>SignInService.RequestPasswordResetAsync</c> exists and answers uniformly, but nothing
 ///         mails the link. TOTP is mapped and will refuse every code until an
 ///         <c>ITotpSecretSeam</c> is wired over a vault; recovery codes and the delivered email code
-///         at <c>/api/signin/otp</c> both work today.
+///         at <c>/api/signin/otp</c> both work today. <c>/userinfo</c> is not mapped — the portal
+///         reads <c>tid</c> and <c>sub</c> off the access token and <c>email</c> and <c>name</c> off
+///         the id_token. One-time use of an authorization code is not enforced: it needs a hot-tier
+///         code store, and PKCE binds a replayed code to the verifier only the legitimate tab holds.
+///         The device flow and token exchange keep their <c>temporarily_unavailable</c> answers.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -65,6 +73,14 @@ namespace CyberCloud.Identity.Host;
 ///         <b>What the sign-in page needs, end to end:</b>
 ///     </para>
 ///     <list type="number">
+///         <item>
+///             <b>Name the tenant.</b> The <c>returnUrl</c> the page was sent with is the
+///             <c>/authorize</c> request, and its <c>tenant</c> query parameter — a tenant id or a
+///             slug — is what the page posts as <c>tenant</c> on <c>begin</c>, <c>password</c> and
+///             <c>passkey/begin</c>. When the request named none, the page asks for an organisation
+///             and posts that instead; when neither says, the host's fallback applies
+///             (<c>TenantHint</c>).
+///         </item>
 ///         <item>
 ///             <b>Ask for the address first, and only then offer credentials.</b>
 ///             <c>POST /api/signin/begin</c> returns the offered credential kinds
@@ -98,17 +114,16 @@ namespace CyberCloud.Identity.Host;
 ///             second factor goes.
 ///         </item>
 ///         <item>
-///             <b>Then resume the OIDC request</b> by re-issuing the original
+///             <b>Then resume the OIDC request</b> by navigating — a full page load, not a route
+///             change — to the sanitized <c>returnUrl</c>, which is the original
 ///             <c>GET /authorize</c> with its query string intact. The cookie set by the sign-in is
-///             what makes the second attempt succeed.
+///             what makes the second attempt succeed; <c>MapAuthorize</c> says what it checks.
 ///         </item>
 ///     </list>
 ///     <para>
-///         <b>What the sign-up page needs:</b> offer a passkey first and a password second, on the
-///         same screen, with the passkey as the primary action. The response to
-///         <c>POST /api/signup</c> is <see cref="UniformFailures.SignUp" /> whether or not the
-///         address was free — the mail that follows is what differs, and it goes to the address
-///         either way.
+///         <b>What the sign-up page needs</b> is the <c>/api/signup/*</c> surface docs/plan/11
+///         § Sign-up and tenant creation describes, which lands beside this file; the stub this
+///         file used to map at <c>/api/signup</c> is gone with it.
 ///     </para>
 ///     <para>
 ///         <b>What the consent page needs:</b> the client's display name, the scopes requested, and
@@ -123,14 +138,15 @@ public static class IdentityEndpoints {
     /// </summary>
     /// <param name="app">The host's route builder.</param>
     /// <remarks>
-    ///     ⚠ The OIDC endpoints themselves — <c>/authorize</c>, <c>/token</c>, <c>/userinfo</c>,
-    ///     <c>/device</c>, <c>/logout</c> and <c>/.well-known/*</c> — are OpenIddict's;
-    ///     <see cref="IdentityHostOpenIddict" /> configures them, and the passthrough options let a
-    ///     handler here take over where a decision needs our grains. <c>/token</c> is the one that
-    ///     has such a handler today — <see cref="MapToken" />. ⚠ A passthrough with no handler behind
-    ///     it is a <c>404</c>, which is what <c>/token</c> answered for as long as nothing mapped it
-    ///     and the reason https://github.com/Rikarin/CyberCloud/issues/68's gateway had no token
-    ///     to validate.
+    ///     ⚠ The OIDC endpoints themselves — <c>/authorize</c>, <c>/token</c>, <c>/logout</c> and
+    ///     <c>/.well-known/*</c> — are OpenIddict's; <see cref="IdentityHostOpenIddict" /> configures
+    ///     them, and the passthrough options let a handler here take over where a decision needs our
+    ///     grains: <see cref="MapAuthorize" />, <see cref="MapToken" /> and <see cref="MapLogout" />.
+    ///     ⚠ A passthrough with no handler behind it is a <c>404</c>, which is what <c>/token</c>
+    ///     answered for as long as nothing mapped it and the reason
+    ///     https://github.com/Rikarin/CyberCloud/issues/68's gateway had no token to validate.
+    ///     <c>/userinfo</c>, <c>/device</c> and <c>/device/verify</c> are enabled and unmapped, and
+    ///     their validators refuse before the passthrough is reached.
     ///     <para>
     ///         The <c>/api</c> prefix is what
     ///         <see cref="IdentityHostAuthentication" />'s <c>OnRedirectToLogin</c> keys off to answer
@@ -170,10 +186,82 @@ public static class IdentityEndpoints {
         );
 
         MapSignIn(app);
+        MapAuthorize(app);
         MapToken(app);
+        MapLogout(app);
 
         return app;
     }
+
+    // ── /authorize ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Maps the authorization endpoint's passthrough — the half of <c>/authorize</c> that reads
+    ///     the cookie.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ By the time this runs,
+    ///         <c>DegradedModeHandlers.ValidateAuthorizationRequest</c> has resolved the tenant and
+    ///         the client and validated the redirect URI, the grant, the scopes and PKCE, and left
+    ///         the first two in the transaction. <see cref="AuthorizeApi" /> decides what the cookie
+    ///         is worth; this lambda turns the decision into one of three responses:
+    ///         <c>Results.SignIn</c> with OpenIddict's scheme, which mints the code and redirects to
+    ///         the client; <c>Results.Forbid</c> with the same scheme, which OpenIddict turns into an
+    ///         error redirect to the client (the request was validated, so that is safe); or a plain
+    ///         redirect to the sign-in page with this request as the return URL.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The return URL is this request's <b>path and query</b>, never its absolute URL.
+    ///         <see cref="ReturnUrl.Sanitize" /> accepts only a same-origin path, on both ends of the
+    ///         redirect, and the sign-in page resumes by navigating to it — on the development run
+    ///         through its dev server's proxy, which is what makes the page's origin look like this
+    ///         one and carry the cookie.
+    ///     </para>
+    /// </remarks>
+    static void MapAuthorize(IEndpointRouteBuilder app) {
+        app.MapGet(
+            IdentityHostOpenIddict.AuthorizationPath,
+            async (HttpContext context, AuthorizeApi api, CancellationToken cancellationToken) => {
+                var request = context.GetOpenIddictServerRequest()
+                    ?? throw new InvalidOperationException(
+                        "The authorization endpoint was reached outside OpenIddict's pipeline. "
+                        + "EnableAuthorizationEndpointPassthrough is what routes a validated request here."
+                    );
+
+                var transaction = context.Features.Get<OpenIddictServerAspNetCoreFeature>()?.Transaction;
+
+                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.TenantProperty, out var tenantValue) != true
+                    || tenantValue is not Guid tenantId
+                    || !transaction.Properties.TryGetValue(DegradedModeHandlers.ClientProperty, out var clientValue)
+                    || clientValue is not ApplicationRegistration client) {
+                    return OpenIddictError(OpenIddictConstants.Errors.InvalidRequest, "The request was not validated.");
+                }
+
+                var decision = await api.DecideAsync(
+                    request,
+                    tenantId,
+                    client,
+                    context.User,
+                    context.Request.Path + context.Request.QueryString,
+                    cancellationToken
+                );
+
+                return decision switch {
+                    AuthorizeDecision.IssueCode code => Results.SignIn(
+                        code.Principal,
+                        authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
+                    ),
+                    AuthorizeDecision.Refuse refused => OpenIddictError(refused.Error, refused.Description),
+                    AuthorizeDecision.SignIn signIn => Results.Redirect(signIn.Location),
+                    _ => throw new InvalidOperationException($"Unhandled decision {decision.GetType().Name}.")
+                };
+            }
+        );
+    }
+
+    // ── /token ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     ///     Maps the token endpoint's passthrough — the half of <c>/token</c> that mints.
@@ -184,62 +272,154 @@ public static class IdentityEndpoints {
     ///         ⚠
     ///         <b>
     ///             By the time this runs, OpenIddict has parsed the request and
-    ///             <see cref="DegradedModeHandlers.ValidateClientCredentials" /> has authenticated
-    ///             the client.
+    ///             <c>DegradedModeHandlers.ValidateTokenRequest</c> has resolved the client.
     ///         </b> The passthrough is the tail of OpenIddict's own pipeline, not a route beside it:
     ///         a request that failed validation was answered with an OAuth error before this lambda
-    ///         existed, so the only thing left to do here is to mint. The authenticated principal
-    ///         travels in the transaction under
-    ///         <see cref="DegradedModeHandlers.ServicePrincipalProperty" />, and a request that
-    ///         arrives without it — which is a request the validator did not run for — is refused
-    ///         rather than re-authenticated, because a second path that authenticates is a second
-    ///         path to get wrong.
+    ///         existed, so what is left is to mint. For client credentials the authenticated principal
+    ///         travels in the transaction under <c>DegradedModeHandlers.ServicePrincipalProperty</c>;
+    ///         for a code or a refresh the token's principal comes back from
+    ///         <c>AuthenticateAsync</c> with OpenIddict's scheme, which is the library's way of
+    ///         handing a passthrough the token it decrypted. A request that arrives without either is
+    ///         refused rather than re-authenticated, because a second path that authenticates is a
+    ///         second path to get wrong.
     ///     </para>
     ///     <para>
-    ///         <c>Results.SignIn</c> with OpenIddict's scheme is what turns a principal into a signed
-    ///         token: the server's sign-in handler serializes it, signs it with the key set the JWKS
-    ///         endpoint publishes, and writes the token response. Nothing here touches a key.
+    ///         <c>Results.SignIn</c> with OpenIddict's scheme is what turns a principal into signed
+    ///         tokens: the server's sign-in handler serializes it, signs it with the key set the JWKS
+    ///         endpoint publishes, and writes the token response — and
+    ///         <c>DegradedModeHandlers.MoveRefreshTokenToCookie</c> moves the browser client's refresh
+    ///         token into <see cref="RefreshCookie" /> on the way out. Nothing here touches a key.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Marked with the first-party CORS policy: the portal calls this cross-origin with
+    ///         credentials, and no other origin gets a CORS header.
     ///     </para>
     /// </remarks>
     static void MapToken(IEndpointRouteBuilder app) {
         app.MapPost(
-            IdentityHostOpenIddict.TokenPath,
-            (HttpContext context, TokenApi api) => {
-                var request = context.GetOpenIddictServerRequest()
-                    ?? throw new InvalidOperationException(
-                        "The token endpoint was reached outside OpenIddict's pipeline. "
-                        + "EnableTokenEndpointPassthrough is what routes a validated request here; "
-                        + "a request that did not come through it has not been validated."
-                    );
+                IdentityHostOpenIddict.TokenPath,
+                async (HttpContext context, TokenApi api, CancellationToken cancellationToken) => {
+                    var request = context.GetOpenIddictServerRequest()
+                        ?? throw new InvalidOperationException(
+                            "The token endpoint was reached outside OpenIddict's pipeline. "
+                            + "EnableTokenEndpointPassthrough is what routes a validated request here; "
+                            + "a request that did not come through it has not been validated."
+                        );
 
-                var transaction = context.Features.Get<OpenIddictServerAspNetCoreFeature>()?.Transaction;
+                    var transaction = context.Features.Get<OpenIddictServerAspNetCoreFeature>()?.Transaction;
 
-                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.ServicePrincipalProperty, out var value)
-                    != true
-                    || value is not ServicePrincipalDescriptor principal) {
-                    return Results.Forbid(
-                        new AuthenticationProperties(
-                            new Dictionary<string, string?>(StringComparer.Ordinal) {
-                                [OpenIddictServerAspNetCoreConstants.Properties.Error] =
-                                    OpenIddictConstants.Errors.InvalidClient,
-                                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] =
-                                    TokenApi.InvalidClientDescription
-                            }
-                        ),
-                        [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]
+                    if (request.IsClientCredentialsGrantType()) {
+                        if (transaction?.Properties.TryGetValue(DegradedModeHandlers.ServicePrincipalProperty, out var value) != true
+                            || value is not ServicePrincipalDescriptor principal) {
+                            return OpenIddictError(OpenIddictConstants.Errors.InvalidClient, TokenApi.InvalidClientDescription);
+                        }
+
+                        return Results.SignIn(
+                            api.Mint(principal, request.ClientId ?? string.Empty, request.GetScopes()),
+                            authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
+                        );
+                    }
+
+                    if (transaction?.Properties.TryGetValue(DegradedModeHandlers.ClientProperty, out var clientValue) != true
+                        || clientValue is not ApplicationRegistration client) {
+                        return OpenIddictError(OpenIddictConstants.Errors.InvalidClient, "The client was not validated.");
+                    }
+
+                    var token = await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+
+                    if (token.Principal is not { } presented) {
+                        return OpenIddictError(OpenIddictConstants.Errors.InvalidGrant, "The token could not be read.");
+                    }
+
+                    var minted = request.IsRefreshTokenGrantType()
+                        ? await api.MintForRefreshAsync(presented, client, cancellationToken)
+                        : await api.MintForCodeAsync(presented, client, Describe(context), cancellationToken);
+
+                    if (minted.TryGetError(out var refused)) {
+                        return OpenIddictError(OpenIddictConstants.Errors.InvalidGrant, refused.Message);
+                    }
+
+                    return Results.SignIn(
+                        minted.GetValueOrThrow(),
+                        authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
                     );
                 }
+            )
+            .RequireCors(FirstPartyClients.CorsPolicy);
+    }
 
-                return Results.SignIn(
-                    api.Mint(principal, request.ClientId ?? string.Empty, request.GetScopes()),
-                    authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
-                );
-            }
-        );
+    // ── /logout ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Maps the end-session endpoint's passthrough: sign the cookie out, revoke its session,
+    ///     forget the refresh cookie, and send the browser back to the client.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ Three things end here, and only one of them is the cookie. The cookie is signed
+    ///         out through its own scheme so the handler clears it the way it set it; the
+    ///         interactive <c>ISessionGrain</c> is revoked, which is what makes every token session
+    ///         bound to it fail its next refresh (<see cref="TokenApi.MintForRefreshAsync" />) — they
+    ///         are not enumerated here; and <see cref="RefreshCookie" /> is cleared so the portal's
+    ///         next load starts a sign-in rather than presenting a token that will be refused.
+    ///     </para>
+    ///     <para>
+    ///         The redirect is OpenIddict's: <c>Results.SignOut</c> with its scheme lands on the
+    ///         <c>post_logout_redirect_uri</c> that <c>DegradedModeHandlers.ValidateEndSessionRequest</c>
+    ///         matched against the registration, with <c>state</c> echoed. A navigation, not a
+    ///         <c>fetch</c>, so the cookie's <c>SameSite=Lax</c> lets it through.
+    ///     </para>
+    /// </remarks>
+    static void MapLogout(IEndpointRouteBuilder app) {
+        app.MapGet(
+                IdentityHostOpenIddict.EndSessionPath,
+                async (HttpContext context, IGrainFactory grains, ILoggerFactory loggers) => {
+                    var request = context.GetOpenIddictServerRequest()
+                        ?? throw new InvalidOperationException(
+                            "The end-session endpoint was reached outside OpenIddict's pipeline. "
+                            + "EnableEndSessionEndpointPassthrough is what routes a validated request here."
+                        );
+
+                    if (IdentitySessionPrincipal.TenantId(context.User) is { } tenantId
+                        && IdentitySessionPrincipal.SessionId(context.User) is { } sessionId) {
+                        await grains.ForTenant(TenantHint.Qualifier(tenantId))
+                            .GetGrain<ISessionGrain>(GrainKeys.Session(sessionId))
+                            .RevokeAsync(RevocationReason.SignOut);
+
+                        GrantLog.SignedOut(loggers.CreateLogger(typeof(IdentityEndpoints)), tenantId, sessionId);
+                    }
+
+                    RefreshCookie.Clear(context.Response);
+
+                    return Results.SignOut(
+                        new AuthenticationProperties { RedirectUri = request.PostLogoutRedirectUri },
+                        [IdentityHostAuthentication.SchemeName, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]
+                    );
+                }
+            )
+            .RequireCors(FirstPartyClients.CorsPolicy);
     }
 
     /// <summary>
-    ///     Maps the interactive sign-in and sign-up endpoints the pages call.
+    ///     An OAuth error answered through OpenIddict, so it takes the shape the endpoint's protocol
+    ///     gives errors — a JSON body at <c>/token</c>, an error redirect or page at <c>/authorize</c>.
+    /// </summary>
+    static IResult OpenIddictError(string error, string description) =>
+        Results.Forbid(
+            new AuthenticationProperties(
+                new Dictionary<string, string?>(StringComparer.Ordinal) {
+                    [OpenIddictServerAspNetCoreConstants.Properties.Error] = error,
+                    [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = description
+                }
+            ),
+            [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]
+        );
+
+    // ── The sign-in API ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Maps the interactive sign-in endpoints the pages call.
     /// </summary>
     /// <param name="app">The host's route builder.</param>
     /// <remarks>
@@ -288,11 +468,6 @@ public static class IdentityEndpoints {
             )
         );
 
-        app.MapPost(
-            "/api/signup",
-            async (SignUpRequest? request, SignInApi api, CancellationToken cancellationToken) =>
-                Results.Ok((await api.SignUpAsync(request, cancellationToken)).Response)
-        );
 
         // ── The passkey pair ───────────────────────────────────────────────────────────────────
         //

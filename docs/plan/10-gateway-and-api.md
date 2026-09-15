@@ -240,7 +240,7 @@ that slept through a deploy catches up rather than showing stale state forever.
 
 | Caller | Credential | Notes |
 |---|---|---|
-| Portal | Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie scoped to the identity host | Access token never in `localStorage` |
+| Portal | Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie scoped to the identity host | Access token never in `localStorage`. The cookie is `__Host-cyc-refresh`, `SameSite=Lax`, and the identity host reads it back only when the request's `Origin` is one of the portal's registered redirect-URI origins — `Lax` lets a same-site subdomain's `POST` carry it, and the `Origin` check is what refuses that ([11 § Protocol](11-identity.md#protocol)) |
 | CLI | Device code, or client credentials for CI | Token cached in the OS keychain |
 | SDK | `TokenCredential` — the Azure SDK shape, so the mental model transfers | |
 | Service principal | Client credentials, or a certificate | |

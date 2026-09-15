@@ -1,45 +1,28 @@
 namespace CyberCloud.Identity.Host;
 
 /// <summary>
-///     What the interactive sign-in endpoints need that is not in the request. docs/plan/11 § Hosts.
+///     What the interactive endpoints and the OIDC surface need that is not in the request.
+///     docs/plan/11 § Hosts.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠
-///         <b>
-///             <see cref="TenantId" /> exists because there is no way to derive it, and that is a
-///             real gap rather than a configuration preference.
-///         </b> docs/plan/11 § Sign-up and tenant
-///         creation makes email uniqueness <i>per tenant</i> and refuses a global email index —
-///         "global email uniqueness would be a global index, the thing we do not have and do not
-///         want". <c>IEmailIndexGrain</c> is keyed by <c>hash(tenantId + normalized email)</c>, so an
-///         address alone resolves to nothing. The sign-in page posts an address alone.
+///         ⚠ <b>The tenant is a request parameter now, and <see cref="TenantId" /> is only the
+///         fallback.</b> docs/plan/11 § Sign-up and tenant creation refuses a global email index, so
+///         an address alone resolves to nothing and something has to name the tenant. This type used
+///         to answer that with "one host signs into one tenant, named in configuration", and listed
+///         the two reasons a caller-chosen tenant was worse: it needs a per-tenant client index
+///         (which now exists — <c>IClientIndexGrain</c>), and it "would let an unauthenticated caller
+///         choose which tenant's lockout counters and email index it probes". <c>TenantHint</c> meets
+///         the second objection by resolving every hint through the platform tenant directory before
+///         any per-tenant grain is touched: a made-up GUID or slug activates nothing, and every real
+///         tenant is reachable by anyone by construction once sign-up is self-serve. A tenant per
+///         path or per issuer was rejected because OpenIddict serves one issuer and the gateway pins
+///         exactly one issuer string.
 ///     </para>
 ///     <para>
-///         The two answers that do not need a configured tenant both cost more than this milestone
-///         has:
-///     </para>
-///     <list type="bullet">
-///         <item>
-///             <b>Derive it from the OIDC request.</b> The sign-in page is reached from
-///             <c>/authorize</c>, whose <c>client_id</c> belongs to an
-///             <c>ApplicationRegistration</c> that names a tenant — but <c>client_id</c> is
-///             unique <i>within</i> a tenant (see that record), so resolving one needs a per-tenant
-///             index. That index now exists — <c>IClientIndexGrain</c>, claimed by
-///             <c>ApplicationGrain.CreateAsync</c> — but the <c>/authorize</c> handler that would use
-///             it to derive the tenant is still owed, so this host still takes its tenant from
-///             configuration.
-///         </item>
-///         <item>
-///             <b>Ask the caller.</b> A tenant hint in the request body would let an unauthenticated
-///             caller choose which tenant's lockout counters and email index it probes, which is a
-///             worse starting point than a fixed one.
-///         </item>
-///     </list>
-///     <para>
-///         So: one host signs into one tenant, named in configuration. A deployment that serves
-///         several tenants runs several of these, which is the same shape as the origin-per-tenant
-///         arrangement the <c>__Host-</c> cookie prefix already implies.
+///         So <see cref="TenantId" /> is what the host falls back to when a request names no tenant:
+///         set explicitly it wins, unset it is the platform tenant in Development and "no tenant"
+///         anywhere else. The full rule is on <c>TenantHint</c>.
 ///     </para>
 /// </remarks>
 public sealed class IdentityHostOptions {
@@ -47,16 +30,24 @@ public sealed class IdentityHostOptions {
     public const string SectionName = "CyberCloud:Identity";
 
     /// <summary>
-    ///     The tenant whose users may sign in here. See the ⚠ block on the type.
+    ///     The tenant a request that names none signs into, when a deployment wants one.
     /// </summary>
     /// <remarks>
-    ///     <see cref="Guid.Empty" /> is the platform tenant
-    ///     (<c>PlatformCrossTenantAuthorizer.PlatformTenantId</c>) and is the default so a
-    ///     development run works without configuration. ⚠ A production deployment that leaves it
-    ///     unset is signing every user into the platform tenant, which is the one tenant whose
-    ///     members can reach across all the others.
+    ///     <para>
+    ///         Nullable so "explicitly configured" and "unset" can be told apart, which the rule
+    ///         needs: unset means the platform tenant (<see cref="Guid.Empty" />,
+    ///         <c>PlatformCrossTenantAuthorizer.PlatformTenantId</c>) <b>only when the environment is
+    ///         Development</b>, and "no tenant" — <c>invalid_request</c> on <c>/authorize</c>, the
+    ///         uniform failure on <c>/api/signin/*</c> — everywhere else.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ A production deployment that sets this to the platform tenant is signing every
+    ///         request that names no tenant into the one tenant whose members can reach across all
+    ///         the others. Leave it unset outside Development; the portal sends the tenant it
+    ///         remembers, and the sign-in page asks for one when nothing does.
+    ///     </para>
     /// </remarks>
-    public Guid TenantId { get; set; }
+    public Guid? TenantId { get; set; }
 
     /// <summary>
     ///     The <c>iss</c> every token carries and the discovery document announces — this host's
@@ -79,6 +70,49 @@ public sealed class IdentityHostOptions {
     ///     </para>
     /// </remarks>
     public string Issuer { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     Where an unauthenticated <c>/authorize</c> sends a person: the origin the sign-in pages
+    ///     are served from, with no trailing slash. Empty means this host's own origin.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Only the <i>origin</i> differs between the two cases; the redirect is always to
+    ///     <c>{SignInPageBaseUri}/signin?returnUrl=…</c> and the return URL is always a same-origin
+    ///     path, because <c>ReturnUrl.Sanitize</c> accepts nothing else. In production the pages are
+    ///     built into this host and this stays empty. On the development run they are served by
+    ///     <c>ng serve</c> on another port, whose proxy file forwards <c>/authorize</c> back here —
+    ///     which is what lets the sanitized relative return URL resume the OIDC request through the
+    ///     page's origin while carrying the cookie. The AppHost sets <c>http://localhost:4201</c>.
+    /// </remarks>
+    public string SignInPageBaseUri { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     A directory the signing key, the encryption key and the data-protection key ring persist
+    ///     to across restarts. Development only; empty means ephemeral keys.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Set outside Development, the host refuses to start.</b> docs/plan/11 § Protocol's
+    ///         rotating key set is <c>CyberCloud.Vault</c>'s (docs/plan/18), and a key file on a disk
+    ///         is not a substitute for it anywhere a second replica or a backup exists. The
+    ///         environment gate is the same one <c>IdentityHostOpenIddict</c> uses for plain HTTP:
+    ///         keyed on the environment rather than on a setting, because a value somebody can set is
+    ///         a value somebody will set. <c>DevelopmentKeyFile</c> carries the refusal.
+    ///     </para>
+    ///     <para>
+    ///         Both keys, not only the signing key: authorization codes and refresh tokens are
+    ///         encrypted with the encryption key, so an ephemeral one would still end every portal
+    ///         session on restart. The AppHost points this at <c>.identity/</c> beside its
+    ///         <c>.k3s/</c> and <c>.seaweedfs/</c>.
+    ///     </para>
+    /// </remarks>
+    public string DevelopmentKeyDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     The first-party clients' redirect URIs. <c>FirstPartyClients</c> builds the static
+    ///     registrations from them.
+    /// </summary>
+    public ClientOptions Clients { get; } = new();
 
     /// <summary>
     ///     The WebAuthn relying-party id — the registrable domain a passkey is bound to.
@@ -105,4 +139,43 @@ public sealed class IdentityHostOptions {
     ///     assertion, which is the correct behaviour for a host nobody has configured.
     /// </remarks>
     public IList<string> Origins { get; } = ["https://localhost:5001"];
+
+    /// <summary>
+    ///     The two first-party clients' redirect URIs — the only thing about them a deployment
+    ///     decides. Everything else on the registration is fixed in <c>FirstPartyClients</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Empty lists mean "not usable from a browser or a CLI here", and the lists are empty by
+    ///     default so a production deployment has to say where its portal is. <c>FirstPartyClients</c>
+    ///     fills in the development run's values — <c>http://localhost:4200/auth/callback</c> and the
+    ///     RFC 8252 loopback — only when the environment is Development and nothing is configured.
+    /// </remarks>
+    public sealed class ClientOptions {
+        /// <summary>The browser client, <c>cyc-portal</c>.</summary>
+        public BrowserClientOptions Portal { get; } = new();
+
+        /// <summary>The native client, <c>cyc-cli</c>.</summary>
+        public NativeClientOptions Cli { get; } = new();
+    }
+
+    /// <summary>A browser client's two URI lists.</summary>
+    public sealed class BrowserClientOptions {
+        /// <summary>
+        ///     Where the authorization code may be sent. ⚠ Compared whole and ordinally — the
+        ///     origins of these are also the CORS allow-list for <c>/token</c>.
+        /// </summary>
+        public IList<string> RedirectUris { get; } = [];
+
+        /// <summary>Where the browser may be sent after <c>/logout</c>.</summary>
+        public IList<string> PostLogoutRedirectUris { get; } = [];
+    }
+
+    /// <summary>A native client's redirect URIs.</summary>
+    public sealed class NativeClientOptions {
+        /// <summary>
+        ///     Where the authorization code may be sent. A loopback URI here matches any port, per
+        ///     RFC 8252 § 7.3 — see <c>FirstPartyClients.RedirectUriMatches</c>.
+        /// </summary>
+        public IList<string> RedirectUris { get; } = [];
+    }
 }

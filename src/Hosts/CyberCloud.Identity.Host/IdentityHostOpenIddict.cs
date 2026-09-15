@@ -1,5 +1,6 @@
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Tokens;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -107,14 +108,15 @@ public static class IdentityHostOpenIddict {
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             The signing and encryption keys here are ephemeral, and that is a hole with a
-    ///             name.
+    ///             The signing and encryption keys are ephemeral unless a development key directory
+    ///             is configured, and either way that is a hole with a name.
     ///         </b> docs/plan/11 § Protocol wants "a rotating key set (30-day rotation, both keys
     ///         published for 60)", which needs the keys to live somewhere every silo can read and
     ///         somewhere a rotation job can write — that is <c>CyberCloud.Vault</c> (docs/plan/18),
     ///         which does not exist. Ephemeral keys mean every process restart invalidates every
-    ///         issued token, which is survivable in development and is not a production
-    ///         configuration. <see cref="AccessTokenPolicy.SigningKeyRotation" /> and
+    ///         issued token; <see cref="DevelopmentKeyFile" /> keeps a development run's keys on
+    ///         disk so a restart does not sign everybody out, and refuses to do so anywhere else.
+    ///         <see cref="AccessTokenPolicy.SigningKeyRotation" /> and
     ///         <see cref="AccessTokenPolicy.SigningKeyOverlap" /> are the numbers whoever wires the
     ///         vault has to honour.
     ///     </para>
@@ -137,16 +139,34 @@ public static class IdentityHostOpenIddict {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The signing key is ES256, by name.</b> <see cref="AccessTokenPolicy.SigningAlgorithm" />
-    ///         is the one algorithm the gateway is told to accept, and <c>AddEphemeralSigningKey()</c>
-    ///         with no argument mints RSA — a server that published an RS256 key beside a contract
-    ///         saying ES256 would have every token refused by a validator that honoured the contract.
-    ///         The algorithm is passed from the contract so the two cannot disagree.
+    ///         is the one algorithm the gateway is told to accept, and an ephemeral signing key
+    ///         minted with no algorithm named is RSA — a server that published an RS256 key beside
+    ///         a contract saying ES256 would have every token refused by a validator that honoured
+    ///         the contract. <see cref="IdentityHostKeys" /> passes the algorithm from the contract
+    ///         on both of its paths so the two cannot disagree.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The CORS policy for <c>/token</c> is registered beside the server and applied
+    ///         by the endpoints.</b> The portal calls <c>/token</c> and <c>/logout</c> cross-origin
+    ///         with credentials — docs/plan/10 § Authentication inputs, and docs/plan/20 § SSR says
+    ///         the render process holds no tokens, so nothing may proxy the call — and the allowed
+    ///         origins are derived from the browser client's redirect URIs
+    ///         (<see cref="FirstPartyClients.AllowedOrigins" />) so there is no second list to
+    ///         drift. Every other origin, the gateway's included, gets no CORS headers at all;
+    ///         <c>CorsPolicyTests</c> holds both halves.
     ///     </para>
     /// </remarks>
     public static IServiceCollection AddIdentityHostOpenIddict(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<TokenApi>();
+
+        // ⚠ The keys, through an IConfigureOptions rather than the builder's AddEphemeral* calls —
+        // which keys depends on IdentityHostOptions.DevelopmentKeyDirectory and the environment,
+        // and the builder's lambda sees neither. DevelopmentKeyFile carries the environment gate and
+        // the reason both keys, not only the signing one, have to persist.
+        services.TryAddSingleton<DevelopmentKeyFile>();
+        services.AddSingleton<IConfigureOptions<OpenIddictServerOptions>, IdentityHostKeys>();
 
         // ⚠ The issuer comes from IdentityHostOptions, and only when it is set. OpenIddict infers
         // one from the request otherwise, which is right on a developer's 127.0.0.1:port and wrong
@@ -169,6 +189,20 @@ public static class IdentityHostOpenIddict {
         services.AddOptions<OpenIddictServerAspNetCoreOptions>()
             .Configure<IHostEnvironment>((options, environment) =>
                 options.DisableTransportSecurityRequirement = environment.IsDevelopment()
+            );
+
+        // The first-party browser origins, with credentials, on the two paths the endpoints mark
+        // with RequireCors — and no default policy, so an endpoint that does not ask gets nothing.
+        services.AddCors();
+        services.AddOptions<CorsOptions>()
+            .Configure<FirstPartyClients>((cors, clients) => cors.AddPolicy(
+                    FirstPartyClients.CorsPolicy,
+                    policy => policy
+                        .WithOrigins([.. clients.AllowedOrigins])
+                        .WithMethods("POST", "GET")
+                        .WithHeaders("Content-Type")
+                        .AllowCredentials()
+                )
             );
 
         services
@@ -197,6 +231,17 @@ public static class IdentityHostOpenIddict {
 
                     options.RequireProofKeyForCodeExchange();
 
+                    // ⚠ S256 only. OpenIddict advertises `plain` beside it by default, and a plain
+                    // challenge is the verifier itself — a client that used it would send the one
+                    // value PKCE exists to keep off the wire, in the /authorize query that lands in
+                    // every access log. The discovery document says S256 and nothing else, so a
+                    // client library that reads it picks the right one without being told.
+                    options.Configure(server => {
+                            server.CodeChallengeMethods.Clear();
+                            server.CodeChallengeMethods.Add(OpenIddictConstants.CodeChallengeMethods.Sha256);
+                        }
+                    );
+
                     // ⚠ Registered, not merely declared. OpenIddict validates every requested scope
                     // against this list — in degraded mode too — and answers invalid_scope for one it
                     // has not been told about. Scopes declared the four below for as long as nothing
@@ -211,11 +256,28 @@ public static class IdentityHostOpenIddict {
                     options.SetAccessTokenLifetime(AccessTokenPolicy.AccessTokenLifetime);
                     options.SetRefreshTokenLifetime(AccessTokenPolicy.RefreshTokenLifetime);
 
-                    // ⚠ Development keys. See the remarks above — the production key set is the
-                    // vault's, and it does not exist yet. The signing algorithm is the contract's,
-                    // so the published key set and the gateway's pinned algorithm are one value.
-                    options.AddEphemeralEncryptionKey();
-                    options.AddEphemeralSigningKey(AccessTokenPolicy.SigningAlgorithm);
+                    // Five minutes for a code: long enough for a slow redirect chain, short enough
+                    // that a code that leaked through a Referer or a log is stale before anybody
+                    // reads it. ⚠ One-time use is not enforced (no token store in degraded mode);
+                    // PKCE is the mitigation, and the code store is owed — IdentityEndpoints' list.
+                    options.SetAuthorizationCodeLifetime(TimeSpan.FromMinutes(5));
+
+                    // ⚠ The claims a code and a refresh token carry that OpenIddict does not know by
+                    // name, registered so it keeps them through its own claim mapping. The two
+                    // `cyc:` claims never reach an access token — AccessTokenPrincipalFactory.
+                    options.RegisterClaims(
+                        AccessTokenClaims.Subject,
+                        AccessTokenClaims.SubjectType,
+                        AccessTokenClaims.TenantId,
+                        AccessTokenClaims.SessionId,
+                        AccessTokenClaims.AuthenticationTime,
+                        AccessTokenClaims.AuthenticationMethods,
+                        AccessTokenClaims.Scope,
+                        AccessTokenPrincipalFactory.RefreshHandleClaim,
+                        AccessTokenPrincipalFactory.InteractiveSessionClaim,
+                        OpenIddictConstants.Claims.Email,
+                        OpenIddictConstants.Claims.Name
+                    );
 
                     // ⚠ Access tokens are NOT encrypted, deliberately. OpenIddict encrypts by
                     // default, which makes a token opaque to anything but OpenIddict's own validation

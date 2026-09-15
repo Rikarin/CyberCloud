@@ -90,9 +90,11 @@ export class IdentityApi {
    * Asks which credentials to offer for an address.
    *
    * @param email The address typed. Sent as-is; the server normalizes it.
+   * @param tenant The tenant to sign into — see {@link signInWithPassword}. Carried here so the
+   * three first-factor calls send one shape; the server reads nothing from this endpoint's body.
    */
-  begin(email: string): Observable<SignInBeginResponse> {
-    return this.#http.post<SignInBeginResponse>('/api/signin/begin', { email });
+  begin(email: string, tenant?: string): Observable<SignInBeginResponse> {
+    return this.#http.post<SignInBeginResponse>('/api/signin/begin', { email, tenant });
   }
 
   /**
@@ -102,12 +104,28 @@ export class IdentityApi {
    * in the server's access log, in the browser's history, and in the `Referer` of the next
    * navigation — three places docs/plan/00 § Non-negotiables' "secrets are handles" discipline says
    * a credential must never be.
+   *
+   * ⚠ **The tenant names where to sign in, and an address alone names nothing.** docs/plan/11
+   * § Sign-up and tenant creation refuses a global email index, so the same address may exist in
+   * two tenants and the server has to be told which. It arrives on the `/authorize` request that
+   * sent the person here (`tenant=<id or slug>` in the return URL) or is typed as the organisation;
+   * `undefined` leaves it to the server's fallback. An unknown value is the uniform failure — the
+   * server looks it up in the platform directory and touches nothing in a tenant that does not
+   * exist.
+   *
+   * @param tenant A tenant id or slug, or `undefined`.
    */
-  signInWithPassword(email: string, password: string, returnUrl: string): Observable<SignInResultResponse> {
+  signInWithPassword(
+    email: string,
+    password: string,
+    returnUrl: string,
+    tenant?: string
+  ): Observable<SignInResultResponse> {
     return this.#http.post<SignInResultResponse>('/api/signin/password', {
       email,
       password,
-      returnUrl
+      returnUrl,
+      tenant
     });
   }
 
@@ -131,9 +149,11 @@ export class IdentityApi {
    * guess.
    *
    * @param email The address typed. Sent as-is; the server normalizes it.
+   * @param tenant The tenant to sign into — see {@link signInWithPassword}. The server carries it in
+   * the challenge ticket, so `completePasskey` needs none.
    */
-  beginPasskey(email: string): Observable<PasskeyBeginResponse> {
-    return this.#http.post<PasskeyBeginResponse>('/api/signin/passkey/begin', { email });
+  beginPasskey(email: string, tenant?: string): Observable<PasskeyBeginResponse> {
+    return this.#http.post<PasskeyBeginResponse>('/api/signin/passkey/begin', { email, tenant });
   }
 
   /**

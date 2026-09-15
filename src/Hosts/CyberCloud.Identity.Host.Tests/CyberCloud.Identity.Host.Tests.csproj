@@ -1,31 +1,46 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-      The identity host's two security boundaries, asserted against the host's REAL registrations:
+      The identity host's security boundaries and its grants, asserted against the host's REAL
+      registrations and — for the grants — the real host on a socket:
 
         IdentityHostAuthenticationTests — a session cookie is a credential here and a bearer token is
                                           not, which is docs/plan/11 § Hosts' whole reason for two
                                           hosts on two origins
         NoRolesInTokenTests             — the principal an access token is built from carries no role
-                                          or permission claim
+                                          or permission claim, and the refresh-only claims never
+                                          reach it
+        AuthorizeHandlerTests           — what /authorize does with a cookie: which cookies get a
+                                          code, which go back to the sign-in page, and which client
+                                          ids no tenant can shadow
+        TokenApiTests                   — the three grants' decisions: client credentials over a
+                                          vault double, the code exchange and the refresh over real
+                                          session grains
+        GrantsOverHttpTests             — the person's whole path over HTTP: password, delivered
+                                          code, /authorize, /token with PKCE, the refresh cookie and
+                                          its Origin rule, the replay, /logout, and a restart on the
+                                          same key directory
 
       ⚠ NO TestServer AND NO WebApplicationFactory, AND THAT IS A DELIBERATE CHOICE RATHER THAN A
       MISSING PACKAGE. Both would need Microsoft.AspNetCore.Mvc.Testing, which docs/plan/02's
-      dependency register does not list. More to the point, the property under test is not "what does
-      this endpoint return" — it is "which authentication schemes does this host have", and that is a
-      question about the service collection, which can be asked directly and answered exactly.
+      dependency register does not list. The boundary suites ask their question of the service
+      collection, which can be asked directly and answered exactly; the grant suites start the real
+      composition — IdentityComposition.BuildAsync, the call Program.cs makes — on 127.0.0.1:0 as a
+      client of an in-process Orleans TestCluster with memory storage, which is the arrangement
+      CyberCloud.Registry.Feeds.Host.Tests uses for the feeds host and what lets an HttpClient drive
+      OpenIddict's pipeline end to end without Docker, Aspire or the AppHost.
 
-      What that costs, stated so it can be paid rather than forgotten: nothing here drives an actual
-      HTTP request, so the assertion is that no bearer handler is REGISTERED rather than that a bearer
-      token is REJECTED over the wire. The two differ only if ASP.NET authenticates with a scheme it
-      was never told about, which it does not. The end-to-end version belongs in CyberCloud.E2E, where
-      both hosts exist at once and a cookie can actually be presented to the gateway — which is the
-      test that would catch the two hosts drifting, and is owed.
+      What that still does not cover, stated so it can be paid rather than forgotten: the gateway
+      validating a code-grant token against this host's JWKS is CyberCloud.AppHost.Tests'
+      TenantOverHttpTests', and the person half of that story — the same path with the gateway on the
+      far end — lands there.
     -->
 
     <ItemGroup>
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -38,6 +53,10 @@
 
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj"/>
+        <!-- The silo half of the grant suites: the identity grains, the tenancy grains the host resolves a tenant and a client through, and the engine the identity module composes beside. -->
+        <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
     </ItemGroup>
 
 </Project>

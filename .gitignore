@@ -222,6 +222,10 @@ src/Hosts/CyberCloud.AppHost/.k3s/
 # The one-identity s3.json the AppHost writes for SeaweedFS's bind mount, from constants in
 # CyberCloudResources. Regenerated on every run for the same reason as the kubeconfig above.
 src/Hosts/CyberCloud.AppHost/.seaweedfs/
+# The identity host's development keys — signing.key, encryption.key and the data-protection ring
+# — so a restart within a run does not sign every portal tab out. Kept ACROSS runs on purpose
+# (DevelopmentKeyFile loads what is there), and a signing key all the same: never commit it.
+src/Hosts/CyberCloud.AppHost/.identity/
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 # The generated Python and Go SDKs — issue #40

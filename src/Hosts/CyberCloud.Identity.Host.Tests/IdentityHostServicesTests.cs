@@ -5,6 +5,7 @@ using CyberCloud.Identity.Host.Tests.Infrastructure;
 using CyberCloud.Identity.SignIn;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace CyberCloud.Identity.Host.Tests;
@@ -28,9 +29,9 @@ namespace CyberCloud.Identity.Host.Tests;
 ///     <para>
 ///         ⚠
 ///         <b>
-///             <see cref="IGrainFactory" /> and data protection are supplied here rather than
+///             <see cref="IGrainFactory" />, the environment and data protection are supplied here rather than
 ///             asserted.
-///         </b> They come from <c>OrleansApplication.CreateClient</c> and from
+///         </b> They come from <c>OrleansApplication.CreateClient</c>, the host builder and from
 ///         <c>WebApplicationBuilder</c> respectively, so a test that registered neither would be
 ///         asserting that <c>AddIdentityHostApi</c> provides things it must not. What is under test
 ///         is that <b>everything else</b> the endpoints need is in that one call.
@@ -43,8 +44,9 @@ public sealed class IdentityHostServicesTests {
         services.AddLogging();
         services.AddDataProtection();
 
-        // The two the host builder supplies. See the ⚠ block above.
+        // The three the host builder supplies. See the ⚠ block above.
         services.AddSingleton<IGrainFactory, RefusingGrainFactory>();
+        services.AddSingleton<IHostEnvironment>(TestEnvironment.Development);
 
         services.AddIdentityHostApi(
             new ConfigurationBuilder().AddInMemoryCollection(configuration.ToDictionary(x => x.Key, x => x.Value))

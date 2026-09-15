@@ -286,6 +286,21 @@ public static class CyberCloudTopology {
             // would be refused with "origin not allowed" and nothing in that message names this line.
             // `localhost` is a secure context to every browser, so plain http is fine for the ceremony.
             .WithEnvironment("CyberCloud__Identity__Origins__0", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            // ⚠ THE KEYS PERSIST UNDER THIS DIRECTORY, AND ONLY BECAUSE THIS IS DEVELOPMENT. Signing and
+            // encryption keys and the data-protection ring go to .identity/ beside .k3s/ and .seaweedfs/
+            // (all three gitignored), so a restart of the identity host does not sign every portal tab
+            // out — an ephemeral encryption key would refuse every refresh cookie, with an invalid_grant
+            // that reads as a session bug. DevelopmentKeyFile refuses this setting in any other
+            // environment and names the vault seam that replaces it.
+            .WithEnvironment("CyberCloud__Identity__DevelopmentKeyDirectory", Path.Combine(builder.AppHostDirectory, ".identity"))
+            // An unauthenticated /authorize sends the person to the identity app's dev server, whose proxy
+            // forwards the resumed /authorize back here with the cookie. In production the pages are
+            // built into this host and this stays empty.
+            .WithEnvironment("CyberCloud__Identity__SignInPageBaseUri", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            // The portal's registration: where a code may be sent and where the browser lands after
+            // sign-out. The CORS origin for /token is derived from the first — FirstPartyClients.
+            .WithEnvironment("CyberCloud__Identity__Clients__Portal__RedirectUris__0", $"http://localhost:{CyberCloudResources.PortalPort.ToString(CultureInfo.InvariantCulture)}/auth/callback")
+            .WithEnvironment("CyberCloud__Identity__Clients__Portal__PostLogoutRedirectUris__0", $"http://localhost:{CyberCloudResources.PortalPort.ToString(CultureInfo.InvariantCulture)}/")
             .WithHttpEndpoint(CyberCloudResources.IdentityPort, isProxied: false)
             .WithHttpHealthCheck("/health")
             .WaitFor(siloOne);

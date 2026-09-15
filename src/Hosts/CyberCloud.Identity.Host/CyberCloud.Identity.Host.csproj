@@ -74,6 +74,13 @@
         <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
         <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
         <ProjectReference Include="../../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+        <!--
+          The platform tenant directory (TenantHint resolves the `tenant` a request names through
+          it, before any per-tenant grain is touched) and the per-tenant client index (ClientResolver
+          reaches a tenant's application registrations through it). Both are contracts, reached as
+          grains; nothing from CyberCloud.Tenancy itself is referenced.
+        -->
+        <ProjectReference Include="../../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">

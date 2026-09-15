@@ -15,13 +15,20 @@ namespace CyberCloud.Identity.Host.Api;
 ///     answered on behalf of a different account than the one <c>begin</c> was called with.
 /// </param>
 /// <param name="ExpiresAt">When it stops being accepted.</param>
+/// <param name="TenantId">
+///     The tenant <c>begin</c> resolved the request's hint to. ⚠ Carried for the same reason the
+///     address is: <c>complete</c> takes no <c>tenant</c> of its own, so the assertion is verified
+///     against the tenant the challenge was issued for and cannot be redirected to another.
+/// </param>
 public sealed record PasskeyChallengeTicket(
     [property: JsonPropertyName("o")]
     string OptionsJson,
     [property: JsonPropertyName("e")]
     string Email,
     [property: JsonPropertyName("x")]
-    DateTimeOffset ExpiresAt
+    DateTimeOffset ExpiresAt,
+    [property: JsonPropertyName("t")]
+    Guid TenantId = default
 );
 
 /// <summary>
