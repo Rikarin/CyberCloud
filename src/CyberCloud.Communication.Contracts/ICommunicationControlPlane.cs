@@ -205,6 +205,13 @@ public interface ICommunicationControlPlane {
     /// <param name="destination">The address, in any spelling.</param>
     /// <param name="reason">Why. See <see cref="SuppressionReason" />.</param>
     /// <param name="note">The words the support case will read.</param>
+    /// <param name="ownerResourceId">
+    ///     The <c>services/{service}/suppressions/{name}</c> resource placing a manual block, or
+    ///     <see cref="Guid.Empty" /> for an entry no resource speaks for. ⚠
+    ///     <see cref="SuppressionEntry.OwnerResourceId" /> is what lets two resources naming one
+    ///     address be told apart; the provider refuses the second by name rather than letting the
+    ///     delete of either release the other's block.
+    /// </param>
     /// <param name="cancellationToken">Cancels the call.</param>
     Task<Result<SuppressionEntry>> SuppressAsync(
         Guid tenantId,
@@ -213,6 +220,7 @@ public interface ICommunicationControlPlane {
         string destination,
         SuppressionReason reason,
         string note,
+        Guid ownerResourceId,
         CancellationToken cancellationToken = default
     );
 

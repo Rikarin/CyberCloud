@@ -112,9 +112,23 @@ that would otherwise have un-unsubscribed a recipient. `SuppressionEnforcementTe
 every channel resolves to the module's refusing seam unless a host registers a real `IChannelProvider`,
 so a `send` today refuses honestly rather than sending. The sender-id registration flow has its grain
 (`ISenderIdentityGrain`) and no resource surface, so `ChannelConfiguration.SenderId` is always empty
-from this surface. Inbound `STOP` suppresses and is forwarded nowhere. And the platform's own outbound
-MTA — "our own Postfix" above — does not exist, which is the item `charts/bundle/bundle.yaml § owed`
-carries as `the-platform-has-no-mta`.
+from this surface. Inbound `STOP` suppresses and is forwarded nowhere. **Delivery receipts have their
+read half only**: `status` renders what `IWebhookRouter` recorded, and no host maps a path a carrier's
+callback could reach — `HandleWebhookAsync(HttpRequest)` at the top of this document is the provider's
+half, and the ingress in front of it lands with the first carrier, because the carrier's signature is
+the only authentication a callback has (`charts/bundle/bundle.yaml § owed`,
+`communication-receipts-have-no-ingress`). And the platform's own outbound MTA — "our own Postfix"
+above — does not exist, which is the item the same section carries as `the-platform-has-no-mta`.
+
+⚠ **A manual block has one owner, and it was the review of #33 that found the hole.** The first cut
+let any number of `suppressions` resources name one address: the second read the first's entry as its
+own and reported converged, and deleting either released the block while the other still declared it —
+an address sendable with a resource saying it is not, and nothing to re-converge it, because
+[08 § The reconcile loop](08-resource-manager.md)'s drift scan is per cluster and this family has none.
+`SuppressionEntry.OwnerResourceId` is the fix and it is the same one `channels` already had for a
+kind: a second resource for an address another resource holds as a manual block is refused by name
+with `Conflict`, and a delete releases only its own. An entry from before the field existed reads back
+unowned and is adopted by the first pass that names it.
 
 ### Chat — M3
 

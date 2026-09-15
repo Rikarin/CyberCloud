@@ -154,9 +154,10 @@ public sealed class GrainCommunicationControlPlane(IGrainFactory grains) : IComm
         string destination,
         SuppressionReason reason,
         string note,
+        Guid ownerResourceId,
         CancellationToken cancellationToken = default
     ) =>
-        Suppression(tenantId, serviceId).SuppressAsync(channel, destination, reason, note);
+        Suppression(tenantId, serviceId).SuppressAsync(channel, destination, reason, note, ownerResourceId);
 
     /// <inheritdoc />
     public Task<Result<SuppressionCheck>> CheckSuppressionAsync(

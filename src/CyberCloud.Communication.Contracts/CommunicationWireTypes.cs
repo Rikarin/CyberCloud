@@ -730,6 +730,27 @@ public sealed record SuppressionEntry {
     /// <summary>What happened, in the carrier's or the operator's words.</summary>
     [Id(4)]
     public string Note { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     The <c>CyberCloud.Communication/services/{service}/suppressions/{name}</c> resource that
+    ///     placed this entry, or empty for one nobody's resource wrote — a carrier's receipt, an
+    ///     inbound <c>STOP</c>, or a manual block written before this field existed.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A manual block is one entry, and this is what says whose it is.</b> Without it, two
+    ///     <c>suppressions</c> resources naming one address both read the entry as theirs, and the
+    ///     delete of either releases it while the other still declares the address blocked — and
+    ///     this family is clusterless, so no drift scan ever puts it back (docs/plan/08 § The
+    ///     reconcile loop's scan is per cluster). The same arrangement as
+    ///     <see cref="ChannelConfiguration.OwnerResourceId" />: the provider refuses the second
+    ///     resource by name before it writes, and releases only what it owns. Only a
+    ///     <see cref="SuppressionReason.ManualBlock" /> ever carries an owner; the other three
+    ///     reasons are statements by the carrier or the recipient, and no resource speaks for those.
+    ///     Appended as a new <c>[Id]</c>, so an entry written before it existed reads back as unowned
+    ///     and the first resource to name it adopts it.
+    /// </remarks>
+    [Id(5)]
+    public Guid OwnerResourceId { get; init; }
 }
 
 /// <summary>Whether an address is suppressed, and the entry if it is.</summary>

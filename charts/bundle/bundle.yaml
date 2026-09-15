@@ -746,3 +746,25 @@ owed:
       destination on the service, no queue, and no property to declare one. A reply that is not a
       STOP is dropped on the floor. The property belongs on CyberCloud.Communication/services once
       there is something to forward to.
+  - id: communication-receipts-have-no-ingress
+    says: >
+      docs/plan/24's Communication row names four nouns and the fourth — delivery receipts — has its
+      read half only. The `status` action renders every receipt IWebhookRouter recorded, and NOTHING
+      CAN DELIVER ONE: no host maps an HTTP path a carrier's callback could reach, and the gateway's
+      pipeline authenticates every request by bearer token (GatewayRoute's closed set of route kinds,
+      AuthenticateStage), which a carrier does not carry. Nothing outside the tests calls
+      IWebhookRouter.HandleAsync; the receipt-fed hard-bounce test in
+      CyberCloud.Providers.Communication.Tests hands the router a receipt in-process and pins
+      everything from the router down. Found by review of #33, and NOT closable ahead of
+      the-platform-has-no-mta above, for a reason that is a security property rather than a
+      sequencing preference: docs/plan/17 § The channel abstraction puts HandleWebhookAsync on the
+      channel provider because the ONLY authentication a carrier callback has is the carrier's own
+      signature over the raw body, and the provider is what knows how to verify it. With no carrier
+      registered, WebhookRouter.HandleAsync resolves no provider for any channel and applies nothing —
+      so an ingress today would be a public endpoint that answers 200 and does nothing, and an ingress
+      that bypassed the provider to feed HandleReceiptAsync directly would let anyone on the internet
+      hard-bounce any address on any tenant's list. What the ingress will be, so the first carrier
+      lands with it: a gateway route kind beside SecurityTxt that skips the bearer-token stage and
+      carries the service id in its path (WebhookEnvelope.ServiceId — "this is where the tenant comes
+      from"), rate-limited, handing the raw bytes to the router unparsed because the signature is over
+      them.

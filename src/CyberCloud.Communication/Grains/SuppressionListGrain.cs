@@ -40,7 +40,8 @@ public sealed class SuppressionListGrain(
         ChannelKind channel,
         string destination,
         SuppressionReason reason,
-        string note
+        string note,
+        Guid ownerResourceId
     ) {
         if (reason == SuppressionReason.Unknown) {
             return Result<SuppressionEntry>.Failure(
@@ -69,7 +70,8 @@ public sealed class SuppressionListGrain(
             SuppressedAt = state.State.Entries.TryGetValue(key, out var existing)
                 ? existing.SuppressedAt
                 : clock.UtcNow,
-            Note = note
+            Note = note,
+            OwnerResourceId = ownerResourceId
         };
 
         state.State.Entries[key] = entry;

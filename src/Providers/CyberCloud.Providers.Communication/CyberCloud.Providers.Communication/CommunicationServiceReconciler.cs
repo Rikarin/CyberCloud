@@ -75,7 +75,17 @@ public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationC
             );
         }
 
-        context.Log.Report("ready", $"the communication service '{context.Id.Name}' reads back as desired", 100);
+        // ⚠ The derived id is in the line on purpose: it is what SiloIdentityOptions.ServiceId
+        // wants, it is not the GUID a listing shows, and this progress line is the one place an
+        // operator can read it without computing it — docs/plan/08 § The reconcile loop has
+        // progress reaching the portal and `cyc --wait`.
+        context.Log.Report(
+            "ready",
+            $"the communication service '{context.Id.Name}' reads back as desired; its grains are keyed by "
+            + serviceId.ToString("D", System.Globalization.CultureInfo.InvariantCulture),
+            100
+        );
+
         return ReconcileOutcome.Converged;
     }
 
@@ -125,6 +135,7 @@ public sealed class CommunicationServiceReconciler(IClock clock, ICommunicationC
             Exists = true,
             Json = new JsonObject {
                 ["name"] = service.Name,
+                ["serviceId"] = CommunicationServices.ServiceIdOf(context.Id).ToString("D", System.Globalization.CultureInfo.InvariantCulture),
                 ["defaultLocale"] = service.DefaultLocale,
                 ["channels"] = service.Channels.IsDefault ? 0 : service.Channels.Length,
                 ["createdAt"] = service.CreatedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture)

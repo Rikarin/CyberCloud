@@ -23,15 +23,22 @@ namespace CyberCloud.Providers.Communication.Tests;
 ///         runs before <c>IChannelProviderRegistry.Resolve</c> ever names a carrier. The platform's
 ///         own service is a <c>services</c> resource like any tenant's — <c>SiloIdentityOptions</c>
 ///         names it — so its list is the same grain <c>services/suppressions</c> writes to. There is
-///         no second send path to check, and <c>CyberCloud.Identity.Tests.OtpDeliveryTests</c> is
-///         the witness from the other end of the seam.
+///         no second send path to check. ⚠ This suite drives the tenant's half — <see cref="IMessageSender" />
+///         directly and the <c>send</c> action over it — and does not construct
+///         <c>CommunicationOtpDelivery</c>; the platform's half is pinned from the other end of the
+///         seam by <c>CyberCloud.Identity.Tests.OtpDeliveryTests.ACodeForASuppressedDestinationIsRefusedBeforeTheCarrier</c>,
+///         which sends a one-time code to a suppressed address through the real adapter.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Sabotage-tested.</b> With the suppression check in <c>MessageGrain.DispatchAsync</c>
 ///         moved below the dispatch, <see cref="ATenantsOwnSendToASuppressedAddressIsRefusedBeforeAnyCarrier" />
 ///         went red on the carrier count; with the delete path releasing regardless of reason,
 ///         <see cref="DeletingTheResourceLeavesAComplaintInPlaceAndTheSendStillRefuses" /> went red
-///         on the second send. Both were restored before this suite was committed.
+///         on the second send. Both were restored before this suite was committed. The owner rule
+///         the review of #33 added was tested the same way: with the reconciler's conflict check
+///         disabled, <see cref="ASecondResourceForTheSameAddressIsRefusedAndTheFirstsDeleteReleasesOnlyItsOwn" />
+///         went red on the refusal; with the delete's owner check disabled, on the send after the
+///         second resource's delete. Both restored.
 ///     </para>
 /// </remarks>
 [Collection(CommunicationSilo.Name)]
@@ -78,17 +85,19 @@ public sealed class SuppressionEnforcementTests(CommunicationTestCluster cluster
     }
 
     [Fact]
-    public async Task ThePlatformsOwnSeamRefusesTheSameWayThroughTheSendAction() {
+    public async Task TheSendActionRefusesTheSameWayAsADirectSend() {
         Carriers.Reset();
 
-        var service = await cluster.ConvergedServiceAsync("platform-otp");
-        await cluster.ConvergedEmailChannelAsync("platform-otp");
+        var service = await cluster.ConvergedServiceAsync("send-action");
+        await cluster.ConvergedEmailChannelAsync("send-action");
 
-        var block = CommunicationTestCluster.Child(CommunicationSuppressions.Type, "platform-otp", "opted-out");
+        var block = CommunicationTestCluster.Child(CommunicationSuppressions.Type, "send-action", "opted-out");
         (await cluster.ReconcileAsync(block, CommunicationSuppressions.Body(destination: "user@example.com")))
             .IsConverged.ShouldBeTrue();
 
-        // The tenant-facing surface: POST …/send, through the same IMessageSender identity holds.
+        // The tenant-facing surface: POST …/send, over the same IMessageSender the test above drove
+        // directly — and the same one identity's OTP adapter holds, which is that adapter's suite
+        // to pin rather than this one's.
         var handler = new ServiceSendHandler(cluster.Sender);
 
         using var body = JsonDocument.Parse(
@@ -116,6 +125,7 @@ public sealed class SuppressionEnforcementTests(CommunicationTestCluster cluster
             "angry@example.com",
             SuppressionReason.Complaint,
             "marked as spam",
+            Guid.Empty,
             CommunicationTestCluster.Ct
         )).IsSuccess.ShouldBeTrue();
 
@@ -150,6 +160,7 @@ public sealed class SuppressionEnforcementTests(CommunicationTestCluster cluster
             "someone@example.com",
             SuppressionReason.Complaint,
             "marked as spam",
+            Guid.Empty,
             CommunicationTestCluster.Ct
         )).IsSuccess.ShouldBeTrue();
 
@@ -194,6 +205,77 @@ public sealed class SuppressionEnforcementTests(CommunicationTestCluster cluster
     }
 
     [Fact]
+    public async Task ASecondResourceForTheSameAddressIsRefusedAndTheFirstsDeleteReleasesOnlyItsOwn() {
+        Carriers.Reset();
+
+        var service = await cluster.ConvergedServiceAsync("one-block");
+        await cluster.ConvergedEmailChannelAsync("one-block");
+        var serviceId = CommunicationServices.ServiceIdOf(service);
+
+        // Two resources, one address. The first converges and owns the block…
+        var first = CommunicationTestCluster.Child(CommunicationSuppressions.Type, "one-block", "first");
+        var body = CommunicationSuppressions.Body(destination: "shared@example.com", note: "first's note");
+        (await cluster.ReconcileAsync(first, body)).IsConverged.ShouldBeTrue();
+
+        var held = await cluster.Plane.CheckSuppressionAsync(CommunicationTestCluster.Tenant, serviceId, ChannelKind.Email, "shared@example.com", CommunicationTestCluster.Ct);
+        held.GetValueOrThrow().Entry!.OwnerResourceId.ShouldBe(first.Id, "the entry does not name the resource that wrote it");
+
+        // …and the second is refused by name, whether its note is the first's or its own. Before
+        // the owner existed the identical note read as converged onto the first's entry.
+        var second = CommunicationTestCluster.Child(CommunicationSuppressions.Type, "one-block", "second");
+
+        foreach (var note in new[] { "first's note", "second's note" }) {
+            var refused = await cluster.ReconcileAsync(second, CommunicationSuppressions.Body(destination: "Shared@Example.com", note: note));
+
+            refused.Kind.ShouldBe(ReconcileOutcomeKind.Failed, $"a second resource with note '{note}' was not refused: {refused}");
+            refused.Error!.Code.ShouldBe(ErrorCode.Conflict);
+            refused.Error.Message.ShouldContain(first.Id.D(), customMessage: "the refusal does not name the resource that holds the address");
+        }
+
+        // The second's delete touches nothing: the block is not its to release.
+        (await cluster.DeleteAsync(second, CommunicationSuppressions.Body(destination: "shared@example.com", note: "second's note")))
+            .IsConverged.ShouldBeTrue();
+
+        (await cluster.Sender.SendAsync(CommunicationTestCluster.Tenant, CommunicationTestCluster.Send(service, "shared@example.com", "while-owned"), CommunicationTestCluster.Ct))
+            .IsFailure.ShouldBeTrue("the delete of a resource that never owned the block released it");
+        Carriers.Email.Calls.ShouldBe(0);
+
+        // The first's delete releases its own, and the address is sendable — with no resource left
+        // saying otherwise.
+        (await cluster.DeleteAsync(first, body)).IsConverged.ShouldBeTrue();
+
+        var sent = await cluster.Sender.SendAsync(CommunicationTestCluster.Tenant, CommunicationTestCluster.Send(service, "shared@example.com", "after-owner-gone"), CommunicationTestCluster.Ct);
+        sent.IsSuccess.ShouldBeTrue(sent.Error?.Message);
+        Carriers.Email.Calls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task AnUnownedManualBlockIsAdoptedByTheFirstResourceThatNamesIt() {
+        var service = await cluster.ConvergedServiceAsync("adoption");
+        var serviceId = CommunicationServices.ServiceIdOf(service);
+
+        // An entry from before SuppressionEntry.OwnerResourceId existed reads back with Guid.Empty;
+        // this is that entry, written the way the field's absence would have left it.
+        (await cluster.Plane.SuppressAsync(
+            CommunicationTestCluster.Tenant,
+            serviceId,
+            ChannelKind.Email,
+            "legacy@example.com",
+            SuppressionReason.ManualBlock,
+            "written before the owner existed",
+            Guid.Empty,
+            CommunicationTestCluster.Ct
+        )).IsSuccess.ShouldBeTrue();
+
+        var resource = CommunicationTestCluster.Child(CommunicationSuppressions.Type, "adoption", "adopter");
+        (await cluster.ReconcileAsync(resource, CommunicationSuppressions.Body(destination: "legacy@example.com", note: "adopted"))).IsConverged.ShouldBeTrue();
+
+        var held = await cluster.Plane.CheckSuppressionAsync(CommunicationTestCluster.Tenant, serviceId, ChannelKind.Email, "legacy@example.com", CommunicationTestCluster.Ct);
+        held.GetValueOrThrow().Entry!.OwnerResourceId.ShouldBe(resource.Id, "the pass did not adopt the unowned entry");
+        held.GetValueOrThrow().Entry!.Note.ShouldBe("adopted");
+    }
+
+    [Fact]
     public async Task AHardBounceReceiptFeedsTheListAndTheNextSendIsRefused() {
         Carriers.Reset();
 
@@ -206,7 +288,10 @@ public sealed class SuppressionEnforcementTests(CommunicationTestCluster cluster
         Carriers.Email.Calls.ShouldBe(1);
 
         // The carrier's receipt: permanently undeliverable. docs/plan/17 § The parts that are
-        // actually the work — a bounce "must not be lost" by the suppression list.
+        // actually the work — a bounce "must not be lost" by the suppression list. ⚠ Handed to the
+        // router in-process: no HTTP ingress exists for a carrier to reach IWebhookRouter through,
+        // which charts/bundle/bundle.yaml § owed carries as communication-receipts-have-no-ingress.
+        // What this pins is everything from the router down.
         var handled = await cluster.Router.HandleReceiptAsync(
             CommunicationTestCluster.Tenant,
             serviceId,

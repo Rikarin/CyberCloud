@@ -159,7 +159,9 @@ public sealed class WebhookRouter(
                     snapshot.Channel,
                     snapshot.Destination,
                     receipt.Suppresses,
-                    receipt.Detail.Length > 0 ? receipt.Detail : receipt.ProviderStatus
+                    receipt.Detail.Length > 0 ? receipt.Detail : receipt.ProviderStatus,
+                    // The carrier's statement, not a resource's — see SuppressionEntry.OwnerResourceId.
+                    Guid.Empty
                 );
         }
 
@@ -195,7 +197,9 @@ public sealed class WebhookRouter(
                 inbound.Channel,
                 inbound.From,
                 SuppressionReason.OptOut,
-                $"Replied '{keyword}' on {inbound.ReceivedAt.ToString("O", CultureInfo.InvariantCulture)}."
+                $"Replied '{keyword}' on {inbound.ReceivedAt.ToString("O", CultureInfo.InvariantCulture)}.",
+                // The recipient's statement, not a resource's — see SuppressionEntry.OwnerResourceId.
+                Guid.Empty
             );
 
         if (suppressed.TryGetError(out var failed)) {

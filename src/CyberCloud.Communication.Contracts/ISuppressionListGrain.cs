@@ -54,19 +54,30 @@ public interface ISuppressionListGrain : IGrainWithStringKey {
     /// </param>
     /// <param name="reason">Why. See <see cref="SuppressionReason" /> — it decides who may lift it.</param>
     /// <param name="note">The carrier's or the operator's words, verbatim, for the support case.</param>
+    /// <param name="ownerResourceId">
+    ///     The <c>services/{service}/suppressions/{name}</c> resource placing a
+    ///     <see cref="SuppressionReason.ManualBlock" />, or <see cref="Guid.Empty" /> from every other
+    ///     caller — a receipt and a <c>STOP</c> speak for the carrier or the recipient, not for a
+    ///     resource. See <see cref="SuppressionEntry.OwnerResourceId" />.
+    /// </param>
     /// <returns>
     ///     The entry as stored.
     ///     <para>
     ///         ⚠ Suppressing an address that is already suppressed succeeds and is not a conflict.
     ///         The operation is naturally idempotent, which is what lets a duplicate carrier webhook
-    ///         and a repeated <c>STOP</c> both be handled by doing the obvious thing.
+    ///         and a repeated <c>STOP</c> both be handled by doing the obvious thing. The owner is
+    ///         stored as passed, so a complaint arriving over a resource's block reads back unowned:
+    ///         the recipient's statement replaced the tenant's, and no resource speaks for it. Who
+    ///         may write over whose manual block is the provider's rule, not this grain's —
+    ///         <c>CommunicationSuppressionReconciler</c> reads before it writes.
     ///     </para>
     /// </returns>
     Task<Result<SuppressionEntry>> SuppressAsync(
         ChannelKind channel,
         string destination,
         SuppressionReason reason,
-        string note
+        string note,
+        Guid ownerResourceId
     );
 
     /// <summary>Whether an address is suppressed. The check every send makes before dispatch.</summary>

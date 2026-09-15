@@ -66,11 +66,15 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
 
     /// <inheritdoc />
     /// <remarks>
-    ///     Removes every channel kind on the shared ancestor service, and nothing else: a channel
-    ///     kind has one owner, and the previous test's channel resource still owns it. Templates
-    ///     and suppressions carry their own names or addresses and cannot collide across tests.
-    ///     ⚠ Blocks on the grain calls, because every reset in the suite is synchronous; the test
-    ///     runner has no synchronization context to deadlock against.
+    ///     Removes every channel kind and releases every manual block on the shared ancestor
+    ///     service, and nothing else: a channel kind and a manual block each have one owner, and
+    ///     the previous test's resource still owns it — every test in the suppression suite blocks
+    ///     the same address from a fresh resource, so without the release the second would be
+    ///     refused by the first's leftover, correctly and uselessly. Templates carry their own names
+    ///     and cannot collide across tests. ⚠ Only a manual block is released; the suite writes
+    ///     nothing stronger, and a release that reached a complaint would be refused by the grain,
+    ///     which is the grain being right. ⚠ Blocks on the grain calls, because every reset in the
+    ///     suite is synchronous; the test runner has no synchronization context to deadlock against.
     /// </remarks>
     public void Reset() {
         if (grains is null || !underAService) {
@@ -92,6 +96,22 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
         Task.Run(async () => {
                 foreach (var spelled in ChannelKinds.AllowedValues) {
                     Throwing(await plane.RemoveChannelAsync(ancestor.TenantId, serviceId, ChannelKinds.Parse(spelled), CancellationToken.None));
+                }
+
+                // A list is never not-found: the grain answers empty for a service never created.
+                var listed = Throwing(await plane.ListSuppressionsAsync(ancestor.TenantId, serviceId, ChannelKind.Unknown, CancellationToken.None));
+
+                foreach (var entry in listed.Where(x => x.Reason == SuppressionReason.ManualBlock)) {
+                    Throwing(
+                        await plane.ReleaseSuppressionAsync(
+                            ancestor.TenantId,
+                            serviceId,
+                            entry.Channel,
+                            entry.Destination,
+                            "released between tests by the conformance suite",
+                            CancellationToken.None
+                        )
+                    );
                 }
             }
         ).GetAwaiter().GetResult();
@@ -121,12 +141,13 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
             }
 
             case CommunicationSuppressions.TypePath: {
-                // A manual block is the only entry a resource can own; Holds asks for the resource's
-                // contribution, and without a body the list is the only place to look for it.
+                // A manual block is the only entry a resource can own, and the entry names its owner;
+                // Holds asks for the resource's contribution, and without a body the list is the only
+                // place to look for it.
                 var listed = await plane.ListSuppressionsAsync(id.TenantId, serviceId, ChannelKind.Unknown, cancellationToken);
                 return listed.TryGetValue(out var entries)
                     && !entries.IsDefault
-                    && entries.Any(x => x.Reason == SuppressionReason.ManualBlock);
+                    && entries.Any(x => x.Reason == SuppressionReason.ManualBlock && x.OwnerResourceId == id.Id);
             }
 
             default:
@@ -175,7 +196,7 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
 
                 return check.TryGetValue(out var result)
                     && result is { IsSuppressed: true, Entry: { } entry }
-                    && CommunicationSuppressions.Matches(entry, body);
+                    && CommunicationSuppressions.Matches(entry, id, body);
             }
 
             default:
@@ -274,6 +295,9 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
                 break;
 
             case CommunicationSuppressions.TypePath:
+                // ⚠ Unowned, like a hand edit: nobody's resource wrote it, and the next pass adopts
+                // it — an owned corruption would be a second resource's, which the pass refuses
+                // rather than overwrites, and the suite would read the refusal as a failed repair.
                 Throwing(
                     await plane.SuppressAsync(
                         id.TenantId,
@@ -282,6 +306,7 @@ public sealed class CommunicationModule(bool underAService) : IConvergedModule {
                         CommunicationSuppressions.DestinationOf(body),
                         SuppressionReason.ManualBlock,
                         "edited by hand",
+                        Guid.Empty,
                         cancellationToken
                     )
                 );

@@ -170,10 +170,12 @@ public sealed class CommunicationTemplateCase : IProviderCaseSource {
 ///     suite.
 /// </summary>
 /// <remarks>
-///     ⚠ Every test here blocks the same address on the same ancestor, and that is fine for the
-///     reason it would not be for a channel: a manual block is one entry however many resources
-///     name it, the reconciler reads before it writes, and the delete releases only a manual block.
-///     What the suite cannot see — an entry held for a complaint surviving the resource that named
+///     ⚠ Every test here blocks the same address on the same ancestor from a fresh resource, and
+///     that collides for exactly the reason a channel kind does: a manual block has one owner
+///     (<see cref="SuppressionEntry.OwnerResourceId" />), and a second resource naming the address
+///     is refused by name. So <c>IConvergedModule.Reset</c> releases the previous test's block
+///     before each test, the way it removes the previous test's channel kind. What the suite cannot
+///     see — the refusal itself, and an entry held for a complaint surviving the resource that named
 ///     it — is <c>SuppressionEnforcementTests</c>' to pin.
 /// </remarks>
 public sealed class CommunicationSuppressionCase : IProviderCaseSource {
