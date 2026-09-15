@@ -403,6 +403,459 @@ type ValkeyCacheListKeysResult struct {
 	Port int64 `json:"port"`
 }
 
+// CommunicationServiceData is Communication service: the body a caller writes. A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send.
+type CommunicationServiceData struct {
+	// The region the service is billed in.
+	Location string `json:"location"`
+	// The service's own settings.
+	Properties *CommunicationServiceProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// CommunicationServiceProperties is The service's own settings.
+type CommunicationServiceProperties struct {
+	// The locale a send is rendered in when the request names none — a BCP 47 tag such as cs-CZ. Empty falls back to en, then to whichever body the template has first.
+	DefaultLocale *string `json:"defaultLocale,omitempty"`
+}
+
+// CommunicationServiceResource is one Communication service, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type CommunicationServiceResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data CommunicationServiceData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *CommunicationServiceResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// CommunicationServiceCheckSuppressionContentChannel is the values /channel accepts. ⚠ Closed: the write path refuses anything else.
+type CommunicationServiceCheckSuppressionContentChannel string
+
+const (
+	CommunicationServiceCheckSuppressionContentChannelSms      CommunicationServiceCheckSuppressionContentChannel = "sms"
+	CommunicationServiceCheckSuppressionContentChannelWhatsapp CommunicationServiceCheckSuppressionContentChannel = "whatsapp"
+	CommunicationServiceCheckSuppressionContentChannelEmail    CommunicationServiceCheckSuppressionContentChannel = "email"
+	CommunicationServiceCheckSuppressionContentChannelPush     CommunicationServiceCheckSuppressionContentChannel = "push"
+	CommunicationServiceCheckSuppressionContentChannelVoice    CommunicationServiceCheckSuppressionContentChannel = "voice"
+)
+
+// CommunicationServiceCheckSuppressionContent is the parameters of checkSuppression.
+type CommunicationServiceCheckSuppressionContent struct {
+	// The channel the address would be sent on.
+	Channel CommunicationServiceCheckSuppressionContentChannel `json:"channel"`
+	// The address, in any spelling.
+	Destination string `json:"destination"`
+}
+
+// CommunicationServiceCheckSuppressionResult is what checkSuppression returns.
+type CommunicationServiceCheckSuppressionResult struct {
+	// The carrier's, the recipient's or the operator's words.
+	Note *string `json:"note,omitempty"`
+	// Why, when it is: hardBounce, complaint, optOut or manualBlock.
+	Reason *string `json:"reason,omitempty"`
+	// Whether a send to it would be refused.
+	Suppressed bool `json:"suppressed"`
+	// When it was suppressed.
+	SuppressedAt *string `json:"suppressedAt,omitempty"`
+}
+
+// CommunicationServiceListSuppressionsContent is the parameters of listSuppressions.
+type CommunicationServiceListSuppressionsContent struct {
+	// One of sms, whatsapp, email, push or voice, or empty for every channel.
+	Channel *string `json:"channel,omitempty"`
+}
+
+// CommunicationServiceListSuppressionsResult is what listSuppressions returns.
+type CommunicationServiceListSuppressionsResult struct {
+	// How many entries are on the list.
+	Count int64 `json:"count"`
+	// Every entry, oldest first, one line each: '{channel} {destination} {reason} {suppressedAt}: {note}'.
+	Entries []string `json:"entries"`
+}
+
+// CommunicationServiceSendContentChannel is the values /channel accepts. ⚠ Closed: the write path refuses anything else.
+type CommunicationServiceSendContentChannel string
+
+const (
+	CommunicationServiceSendContentChannelSms      CommunicationServiceSendContentChannel = "sms"
+	CommunicationServiceSendContentChannelWhatsapp CommunicationServiceSendContentChannel = "whatsapp"
+	CommunicationServiceSendContentChannelEmail    CommunicationServiceSendContentChannel = "email"
+	CommunicationServiceSendContentChannelPush     CommunicationServiceSendContentChannel = "push"
+	CommunicationServiceSendContentChannelVoice    CommunicationServiceSendContentChannel = "voice"
+)
+
+// CommunicationServiceSendContent is the parameters of send.
+type CommunicationServiceSendContent struct {
+	// The template's arguments, one name=value per element.
+	Arguments []string `json:"arguments,omitempty"`
+	// The message text, when no template is named.
+	Body *string `json:"body,omitempty"`
+	// Which channel to send on.
+	Channel CommunicationServiceSendContentChannel `json:"channel"`
+	// The caller's key for this message. A retry carrying the same key returns the message already sent and calls no carrier; derive it from the thing being notified about, never from the attempt.
+	IdempotencyKey string `json:"idempotencyKey"`
+	// The locale to render in, or empty for the service's default.
+	Locale *string `json:"locale,omitempty"`
+	// The name of a template under this service to render, or empty to send body as written. WhatsApp requires one.
+	Template *string `json:"template,omitempty"`
+	// Which version of the template, or 0 for the newest one a send may use.
+	TemplateVersion *int64 `json:"templateVersion,omitempty"`
+	// The recipient — an E.164 number for sms, whatsapp and voice, an address for email, a device token for push.
+	To string `json:"to"`
+}
+
+// CommunicationServiceSendResultChannel is the values /channel accepts. ⚠ Closed: the write path refuses anything else.
+type CommunicationServiceSendResultChannel string
+
+const (
+	CommunicationServiceSendResultChannelSms      CommunicationServiceSendResultChannel = "sms"
+	CommunicationServiceSendResultChannelWhatsapp CommunicationServiceSendResultChannel = "whatsapp"
+	CommunicationServiceSendResultChannelEmail    CommunicationServiceSendResultChannel = "email"
+	CommunicationServiceSendResultChannelPush     CommunicationServiceSendResultChannel = "push"
+	CommunicationServiceSendResultChannelVoice    CommunicationServiceSendResultChannel = "voice"
+)
+
+// CommunicationServiceSendResultStatus is the values /status accepts. ⚠ Closed: the write path refuses anything else.
+type CommunicationServiceSendResultStatus string
+
+const (
+	CommunicationServiceSendResultStatusQueued     CommunicationServiceSendResultStatus = "queued"
+	CommunicationServiceSendResultStatusDispatched CommunicationServiceSendResultStatus = "dispatched"
+	CommunicationServiceSendResultStatusDelivered  CommunicationServiceSendResultStatus = "delivered"
+	CommunicationServiceSendResultStatusFailed     CommunicationServiceSendResultStatus = "failed"
+	CommunicationServiceSendResultStatusRefused    CommunicationServiceSendResultStatus = "refused"
+)
+
+// CommunicationServiceSendResult is what send returns.
+type CommunicationServiceSendResult struct {
+	// The channel it went on.
+	Channel CommunicationServiceSendResultChannel `json:"channel"`
+	// What the carrier charged, once it said.
+	Cost *float64 `json:"cost,omitempty"`
+	// The currency of cost.
+	Currency *string `json:"currency,omitempty"`
+	// The last thing the platform or the carrier said about it.
+	Detail *string `json:"detail,omitempty"`
+	// When a carrier accepted it. Absent until then.
+	DispatchedAt *string `json:"dispatchedAt,omitempty"`
+	// The platform's id for the message.
+	MessageID string `json:"messageId"`
+	// Which carrier implementation served it.
+	Provider *string `json:"provider,omitempty"`
+	// The carrier's own id, once it has one.
+	ProviderMessageID *string `json:"providerMessageId,omitempty"`
+	// When the platform accepted it.
+	QueuedAt string `json:"queuedAt"`
+	// How many delivery receipts have arrived.
+	ReceiptCount int64 `json:"receiptCount"`
+	// Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'.
+	Receipts []string `json:"receipts,omitempty"`
+	// When it was delivered, failed or refused. Absent until then.
+	SettledAt *string `json:"settledAt,omitempty"`
+	// Where the message is in its life.
+	Status CommunicationServiceSendResultStatus `json:"status"`
+	// The recipient, normalized.
+	To string `json:"to"`
+}
+
+// CommunicationServiceStatusContent is the parameters of status.
+type CommunicationServiceStatusContent struct {
+	// The key the message was sent under.
+	IdempotencyKey string `json:"idempotencyKey"`
+}
+
+// CommunicationServiceStatusResultChannel is the values /channel accepts. ⚠ Closed: the write path refuses anything else.
+type CommunicationServiceStatusResultChannel string
+
+const (
+	CommunicationServiceStatusResultChannelSms      CommunicationServiceStatusResultChannel = "sms"
+	CommunicationServiceStatusResultChannelWhatsapp CommunicationServiceStatusResultChannel = "whatsapp"
+	CommunicationServiceStatusResultChannelEmail    CommunicationServiceStatusResultChannel = "email"
+	CommunicationServiceStatusResultChannelPush     CommunicationServiceStatusResultChannel = "push"
+	CommunicationServiceStatusResultChannelVoice    CommunicationServiceStatusResultChannel = "voice"
+)
+
+// CommunicationServiceStatusResultStatus is the values /status accepts. ⚠ Closed: the write path refuses anything else.
+type CommunicationServiceStatusResultStatus string
+
+const (
+	CommunicationServiceStatusResultStatusQueued     CommunicationServiceStatusResultStatus = "queued"
+	CommunicationServiceStatusResultStatusDispatched CommunicationServiceStatusResultStatus = "dispatched"
+	CommunicationServiceStatusResultStatusDelivered  CommunicationServiceStatusResultStatus = "delivered"
+	CommunicationServiceStatusResultStatusFailed     CommunicationServiceStatusResultStatus = "failed"
+	CommunicationServiceStatusResultStatusRefused    CommunicationServiceStatusResultStatus = "refused"
+)
+
+// CommunicationServiceStatusResult is what status returns.
+type CommunicationServiceStatusResult struct {
+	// The channel it went on.
+	Channel CommunicationServiceStatusResultChannel `json:"channel"`
+	// What the carrier charged, once it said.
+	Cost *float64 `json:"cost,omitempty"`
+	// The currency of cost.
+	Currency *string `json:"currency,omitempty"`
+	// The last thing the platform or the carrier said about it.
+	Detail *string `json:"detail,omitempty"`
+	// When a carrier accepted it. Absent until then.
+	DispatchedAt *string `json:"dispatchedAt,omitempty"`
+	// The platform's id for the message.
+	MessageID string `json:"messageId"`
+	// Which carrier implementation served it.
+	Provider *string `json:"provider,omitempty"`
+	// The carrier's own id, once it has one.
+	ProviderMessageID *string `json:"providerMessageId,omitempty"`
+	// When the platform accepted it.
+	QueuedAt string `json:"queuedAt"`
+	// How many delivery receipts have arrived.
+	ReceiptCount int64 `json:"receiptCount"`
+	// Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'.
+	Receipts []string `json:"receipts,omitempty"`
+	// When it was delivered, failed or refused. Absent until then.
+	SettledAt *string `json:"settledAt,omitempty"`
+	// Where the message is in its life.
+	Status CommunicationServiceStatusResultStatus `json:"status"`
+	// The recipient, normalized.
+	To string `json:"to"`
+}
+
+// CommunicationChannelAccount is the values /properties/account accepts. ⚠ Closed: the write path refuses anything else.
+type CommunicationChannelAccount string
+
+const (
+	CommunicationChannelAccountPlatform CommunicationChannelAccount = "platform"
+	CommunicationChannelAccountTenant   CommunicationChannelAccount = "tenant"
+)
+
+// CommunicationChannelKind is the values /properties/kind accepts. ⚠ Closed: the write path refuses anything else.
+type CommunicationChannelKind string
+
+const (
+	CommunicationChannelKindSms      CommunicationChannelKind = "sms"
+	CommunicationChannelKindWhatsapp CommunicationChannelKind = "whatsapp"
+	CommunicationChannelKindEmail    CommunicationChannelKind = "email"
+	CommunicationChannelKindPush     CommunicationChannelKind = "push"
+	CommunicationChannelKindVoice    CommunicationChannelKind = "voice"
+)
+
+// CommunicationChannelData is Communication channel: the body a caller writes. One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day.
+type CommunicationChannelData struct {
+	// The region the channel is billed in.
+	Location string `json:"location"`
+	// The channel's own settings.
+	Properties *CommunicationChannelProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// CommunicationChannelProperties is The channel's own settings.
+type CommunicationChannelProperties struct {
+	// Whose carrier account pays. platform is marked up and needs no setup; tenant is the tenant's own contract, reached through accountRef and authRef.
+	Account *CommunicationChannelAccount `json:"account,omitempty"`
+	// For account: tenant — the vault handle of the account identifier (a Twilio account SID, a Meta business account id), as path#field.
+	AccountRef *string `json:"accountRef,omitempty"`
+	// For account: tenant — the vault handle of the authenticating value (an auth token, a bearer, an access secret), as path#field.
+	AuthRef *string `json:"authRef,omitempty"`
+	// Whether sending on this channel is allowed at all. The kill switch: turning it off keeps the configuration and refuses every send.
+	Enabled *bool `json:"enabled,omitempty"`
+	// What one message is expected to cost, in currency, reserved before dispatch. Set it to the most expensive destination the channel sends to; an estimate that is too low turns the spend limit into a suggestion.
+	EstimatedUnitCost *float64 `json:"estimatedUnitCost,omitempty"`
+	// Which channel this configures. One service holds one configuration per kind.
+	Kind CommunicationChannelKind `json:"kind"`
+	// What the channel may send and spend per UTC day.
+	Limits *CommunicationChannelPropertiesLimits `json:"limits,omitempty"`
+	// Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.
+	Provider *string `json:"provider,omitempty"`
+	// The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet.
+	SigningRef *string `json:"signingRef,omitempty"`
+}
+
+// CommunicationChannelPropertiesLimits is What the channel may send and spend per UTC day.
+type CommunicationChannelPropertiesLimits struct {
+	// ISO 4217, for the spend limit and the refusal that names it.
+	Currency *string `json:"currency,omitempty"`
+	// The most messages this channel dispatches in one UTC day. Zero — the default — means none: a channel with no limit is a channel that cannot send, on purpose.
+	MaxMessagesPerDay *int64 `json:"maxMessagesPerDay,omitempty"`
+	// The most this channel spends in one UTC day, in currency. Zero means none.
+	MaxSpendPerDay *float64 `json:"maxSpendPerDay,omitempty"`
+}
+
+// CommunicationChannelResource is one Communication channel, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type CommunicationChannelResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data CommunicationChannelData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *CommunicationChannelResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// SuppressionChannel is the values /properties/channel accepts. ⚠ Closed: the write path refuses anything else.
+type SuppressionChannel string
+
+const (
+	SuppressionChannelSms      SuppressionChannel = "sms"
+	SuppressionChannelWhatsapp SuppressionChannel = "whatsapp"
+	SuppressionChannelEmail    SuppressionChannel = "email"
+	SuppressionChannelPush     SuppressionChannel = "push"
+	SuppressionChannelVoice    SuppressionChannel = "voice"
+)
+
+// SuppressionData is Suppression: the body a caller writes. An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources.
+type SuppressionData struct {
+	// The region the suppression is billed in.
+	Location string `json:"location"`
+	// The suppression's own settings.
+	Properties *SuppressionProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// SuppressionProperties is The suppression's own settings.
+type SuppressionProperties struct {
+	// The channel the address is blocked on. Suppression is per channel: an email bounce says nothing about a phone number.
+	Channel SuppressionChannel `json:"channel"`
+	// The address, in any spelling. Normalized before it is stored, so two spellings of one address are one entry.
+	Destination string `json:"destination"`
+	// Why, in the tenant's words. What a support case reads.
+	Note *string `json:"note,omitempty"`
+}
+
+// SuppressionResource is one Suppression, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type SuppressionResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data SuppressionData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *SuppressionResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// MessageTemplateChannel is the values /properties/channel accepts. ⚠ Closed: the write path refuses anything else.
+type MessageTemplateChannel string
+
+const (
+	MessageTemplateChannelSms      MessageTemplateChannel = "sms"
+	MessageTemplateChannelWhatsapp MessageTemplateChannel = "whatsapp"
+	MessageTemplateChannelEmail    MessageTemplateChannel = "email"
+	MessageTemplateChannelPush     MessageTemplateChannel = "push"
+	MessageTemplateChannelVoice    MessageTemplateChannel = "voice"
+)
+
+// MessageTemplateData is Message template: the body a caller writes. A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants.
+type MessageTemplateData struct {
+	// The region the template is billed in.
+	Location string `json:"location"`
+	// The template's own settings.
+	Properties *MessageTemplateProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// MessageTemplateProperties is The template's own settings.
+type MessageTemplateProperties struct {
+	// The message text. A {name} is replaced by the argument of that name, left to right, and a substituted value is never re-scanned.
+	Body string `json:"body"`
+	// Which channel the body is written for. A WhatsApp body is not an email body, and the channel decides whether carrier pre-approval is consulted at all.
+	Channel MessageTemplateChannel `json:"channel"`
+	// The BCP 47 tag the body is written in. One locale per template; a second language is a second template.
+	Locale *string `json:"locale,omitempty"`
+	// The placeholders a send may supply. An unsupplied one is left as written, so a tenant testing the template sees it.
+	OptionalVariables []string `json:"optionalVariables,omitempty"`
+	// The subject line, for channels that have one. Placeholders are substituted here too.
+	Subject *string `json:"subject,omitempty"`
+	// The placeholders a send must supply. A send missing one is refused before any carrier is called.
+	Variables []string `json:"variables,omitempty"`
+}
+
+// MessageTemplateResource is one Message template, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type MessageTemplateResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data MessageTemplateData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *MessageTemplateResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// MessageTemplateRenderContent is the parameters of render.
+type MessageTemplateRenderContent struct {
+	// The arguments, one name=value per element. A missing required variable is refused, naming every missing one at once.
+	Arguments []string `json:"arguments,omitempty"`
+}
+
+// MessageTemplateRenderResult is what render returns.
+type MessageTemplateRenderResult struct {
+	// The body, substituted.
+	Body string `json:"body"`
+	// The locale it was rendered in.
+	Locale string `json:"locale"`
+	// The subject, substituted.
+	Subject string `json:"subject"`
+}
+
+// ArtifactFeedKind is the values /properties/kind accepts. ⚠ Closed: the write path refuses anything else.
+type ArtifactFeedKind string
+
+const (
+	ArtifactFeedKindNuget ArtifactFeedKind = "nuget"
+	ArtifactFeedKindNpm   ArtifactFeedKind = "npm"
+	ArtifactFeedKindMaven ArtifactFeedKind = "maven"
+)
+
+// ArtifactFeedData is Artifact feed: the body a caller writes. A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage.
+type ArtifactFeedData struct {
+	// The region the feed is billed in and served from.
+	Location string `json:"location"`
+	// The feed's own settings.
+	Properties *ArtifactFeedProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ArtifactFeedProperties is The feed's own settings.
+type ArtifactFeedProperties struct {
+	// What the feed is for, shown in the portal beside its name.
+	Description *string `json:"description,omitempty"`
+	// Which protocol the feed speaks: nuget (the v3 API), npm (the registry API) or maven (the repository layout). Immutable, because the three have three versioning models.
+	Kind ArtifactFeedKind `json:"kind"`
+}
+
+// ArtifactFeedResource is one Artifact feed, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ArtifactFeedResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ArtifactFeedData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ArtifactFeedResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
 // ContainerRegistryPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
 type ContainerRegistryPreset string
 
@@ -502,6 +955,53 @@ type ContainerRegistryListCredentialsResult struct {
 	PortalUrl string `json:"portalUrl"`
 	// The administrator's username. Always admin — Harbor seeds that row and nothing renames it.
 	Username string `json:"username"`
+}
+
+// ConnectedKubernetesClusterData is Connected Kubernetes cluster: the body a caller writes. A cluster you run yourself — on-prem, behind NAT, anywhere with outbound HTTPS — reached through an agent you install in it. Create it, run the install command it gives you, and place resources in it once it reports Succeeded.
+type ConnectedKubernetesClusterData struct {
+	// The region the cluster is billed in. ⚠ Where the cluster physically is is the tenant's business; this is the region whose gateway the agent dials and whose silos hold the connection.
+	Location string `json:"location"`
+	// The connected cluster's own settings.
+	Properties *ConnectedKubernetesClusterProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ConnectedKubernetesClusterProperties is The connected cluster's own settings.
+type ConnectedKubernetesClusterProperties struct {
+	// What the cluster runs — k3s, kubeadm, OpenShift, a hosted service. Informational: the agent works against any conformant API server and nothing here changes what it does.
+	Distribution *string `json:"distribution,omitempty"`
+	// How often the agent reports in. Read when listInstallCommand is called: the command passes it to the chart and the platform repeats it in the welcome the agent adopts on every connection. A change after that takes effect on the next listInstallCommand — no re-install; the running agent adopts it on its next connection. ⚠ The platform calls a cluster Degraded after ninety seconds without a heartbeat (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.
+	HeartbeatSeconds *int64 `json:"heartbeatSeconds,omitempty"`
+}
+
+// ConnectedKubernetesClusterResource is one Connected Kubernetes cluster, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ConnectedKubernetesClusterResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ConnectedKubernetesClusterData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ConnectedKubernetesClusterResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// ConnectedKubernetesClusterListInstallCommandResult is what listInstallCommand returns. ⚠ Secret material — never log or persist this.
+type ConnectedKubernetesClusterListInstallCommandResult struct {
+	// The chart reference the command installs: the OCI reference this deployment publishes the agent chart under, or charts/agent — the path in a checkout of the CyberCloud repository — when it has not published one, in which case run the command from that checkout.
+	Chart string `json:"chart"`
+	// The helm command to run against the cluster being connected, with the one-time token inline. Run it from a workstation with cluster-admin on that cluster; the platform needs nothing from the cluster's side.
+	Command string `json:"command"`
+	// When the token stops being accepted, RFC 3339. Twenty-four hours from the call; ask again for a fresh one.
+	ExpiresAt string `json:"expiresAt"`
+	// The one-time enrollment token, separately, for an install that does not use helm. It admits exactly one agent connection and is spent by it.
+	Token string `json:"token"`
+	// The WebSocket URL the agent dials — wss://{gateway}/agent/v1/tunnel. The cluster needs outbound HTTPS to it and nothing inbound.
+	TunnelEndpoint string `json:"tunnelEndpoint"`
 }
 
 // ManagedKubernetesClusterVersion is the values /properties/version accepts. ⚠ Closed: the write path refuses anything else.
@@ -1704,6 +2204,132 @@ type MonitorWorkspaceListKeysResult struct {
 	SqlEndpoint string `json:"sqlEndpoint"`
 }
 
+// AlertRuleChannel is the values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else.
+type AlertRuleChannel string
+
+const (
+	AlertRuleChannelSms      AlertRuleChannel = "sms"
+	AlertRuleChannelWhatsapp AlertRuleChannel = "whatsapp"
+	AlertRuleChannelEmail    AlertRuleChannel = "email"
+	AlertRuleChannelPush     AlertRuleChannel = "push"
+	AlertRuleChannelVoice    AlertRuleChannel = "voice"
+)
+
+// AlertRuleOperator is the values /properties/condition/operator accepts. ⚠ Closed: the write path refuses anything else.
+type AlertRuleOperator string
+
+const (
+	AlertRuleOperatorGreaterThan    AlertRuleOperator = "greaterThan"
+	AlertRuleOperatorGreaterOrEqual AlertRuleOperator = "greaterOrEqual"
+	AlertRuleOperatorLessThan       AlertRuleOperator = "lessThan"
+	AlertRuleOperatorLessOrEqual    AlertRuleOperator = "lessOrEqual"
+	AlertRuleOperatorEqual          AlertRuleOperator = "equal"
+	AlertRuleOperatorNotEqual       AlertRuleOperator = "notEqual"
+)
+
+// AlertRuleSignal is the values /properties/condition/signal accepts. ⚠ Closed: the write path refuses anything else.
+type AlertRuleSignal string
+
+const (
+	AlertRuleSignalMetrics AlertRuleSignal = "metrics"
+	AlertRuleSignalLogs    AlertRuleSignal = "logs"
+)
+
+// AlertRuleSeverity is the values /properties/severity accepts. ⚠ Closed: the write path refuses anything else.
+type AlertRuleSeverity string
+
+const (
+	AlertRuleSeverityCritical      AlertRuleSeverity = "critical"
+	AlertRuleSeverityError         AlertRuleSeverity = "error"
+	AlertRuleSeverityWarning       AlertRuleSeverity = "warning"
+	AlertRuleSeverityInformational AlertRuleSeverity = "informational"
+)
+
+// AlertRuleData is Alert rule: the body a caller writes. A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.
+type AlertRuleData struct {
+	// The region the rule is evaluated in — the workspace's.
+	Location string `json:"location"`
+	// The rule's own settings.
+	Properties *AlertRuleProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// AlertRuleProperties is The rule's own settings.
+type AlertRuleProperties struct {
+	// Who is told, and how.
+	ActionGroup *AlertRulePropertiesActionGroup `json:"actionGroup,omitempty"`
+	// What is asked, and what answer counts.
+	Condition *AlertRulePropertiesCondition `json:"condition,omitempty"`
+	// Whether the rule is evaluated. Off keeps the rule and its history and stops the clock; an open alert is resolved without a notification.
+	Enabled *bool `json:"enabled,omitempty"`
+	// How often, and how long before it counts.
+	Evaluation *AlertRulePropertiesEvaluation `json:"evaluation,omitempty"`
+	// How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing.
+	Severity AlertRuleSeverity `json:"severity"`
+}
+
+// AlertRulePropertiesActionGroup is Who is told, and how.
+type AlertRulePropertiesActionGroup struct {
+	// Which of that service's channels carries it. The service must have the channel configured and enabled, or every notification is refused by name.
+	Channel AlertRuleChannel `json:"channel"`
+	// Whether the recipients are told when the condition stops holding, as well as when it starts.
+	NotifyOnResolve *bool `json:"notifyOnResolve,omitempty"`
+	// Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. At least one and at most 20; a list outside that is refused when the rule is reconciled.
+	Recipients []string `json:"recipients"`
+	// The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant.
+	Service string `json:"service"`
+}
+
+// AlertRulePropertiesCondition is What is asked, and what answer counts.
+type AlertRulePropertiesCondition struct {
+	// How far back the query may read, in seconds. Capped at a day: the look-back is the query's cost, and the cap is the platform's, not the tenant's.
+	LookbackSeconds *int64 `json:"lookbackSeconds,omitempty"`
+	// How a value is compared with the threshold.
+	Operator AlertRuleOperator `json:"operator"`
+	// The query, verbatim. It must produce numbers; the rule fires when any of them satisfies the operator against the threshold.
+	Query string `json:"query"`
+	// Which store the query runs against: metrics is MetricsQL over the workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database.
+	Signal AlertRuleSignal `json:"signal"`
+	// The number the value is compared with.
+	Threshold float64 `json:"threshold"`
+}
+
+// AlertRulePropertiesEvaluation is How often, and how long before it counts.
+type AlertRulePropertiesEvaluation struct {
+	// How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes.
+	ForSeconds *int64 `json:"forSeconds,omitempty"`
+	// How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. Anything else is refused when the rule is reconciled.
+	IntervalSeconds *int64 `json:"intervalSeconds,omitempty"`
+}
+
+// AlertRuleResource is one Alert rule, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type AlertRuleResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data AlertRuleData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *AlertRuleResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// AlertRuleListInstancesResult is what listInstances returns.
+type AlertRuleListInstancesResult struct {
+	// How many firings the rule keeps.
+	Count int64 `json:"count"`
+	// Every firing, oldest first, one line each: '{state} {severity} fired {firedAt} resolved {resolvedAt} value {value}: {summary} | {notification}'.
+	Instances []string `json:"instances"`
+	// How many of them are still firing.
+	Open int64 `json:"open"`
+	// Where the rule is now: ok, pending or firing.
+	State string `json:"state"`
+}
+
 // PublicIPAddressData is Public IP address: the body a caller writes. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.
 type PublicIPAddressData struct {
 	// The region the address is allocated in. ⚠ It must be a region whose operator has an external pool — nothing checks that, and an address in a region with none never becomes ready.
@@ -1747,7 +2373,7 @@ func (r *PublicIPAddressResource) UnmarshalJSON(data []byte) error {
 
 // PublicIPAddressShowAllocationResult is what showAllocation returns.
 type PublicIPAddressShowAllocationResult struct {
-	// The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic, which in this api-version is every address — nothing can attach one yet.
+	// The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic. The only thing that can attach one is a natGateways resource, which puts a subnet's outbound traffic on it; nothing can yet publish anything inbound on an address.
 	AttachedTo *string `json:"attachedTo,omitempty"`
 	// The MAC address the fabric bound to it. ⚠ Reported because it is what an operator needs to find this address in an ARP table when it is unreachable.
 	MacAddress *string `json:"macAddress,omitempty"`
@@ -1777,7 +2403,7 @@ type VirtualNetworkProperties struct {
 	AddressSpace *VirtualNetworkPropertiesAddressSpace `json:"addressSpace,omitempty"`
 	// The cluster whose fabric carries the network.
 	ClusterID string `json:"clusterId"`
-	// Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.
+	// Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. A natGateways child needs it on: without the attachment its translation is programmed and its packets are dropped. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.
 	EnableExternal *bool `json:"enableExternal,omitempty"`
 }
 
@@ -1932,6 +2558,57 @@ type LoadBalancerShowBackendsResult struct {
 	Servers []string `json:"servers"`
 }
 
+// NATGatewayData is NAT gateway: the body a caller writes. Outbound-only internet access for one subnet of a virtual network, translated to a public IP address the tenant holds. Inbound traffic is not admitted.
+type NATGatewayData struct {
+	// The region the NAT gateway is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here.
+	Location string `json:"location"`
+	// The NAT gateway's own settings.
+	Properties *NATGatewayProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// NATGatewayProperties is The NAT gateway's own settings.
+type NATGatewayProperties struct {
+	// The cluster whose fabric holds the network. ⚠ It must be the cluster the virtual network and the public address were created in: a rule in another cluster names a subnet and an address that do not exist there.
+	ClusterID string `json:"clusterId"`
+	// The name of a publicIpAddresses resource in the same resource group whose address the subnet's traffic leaves with. ⚠ A name, not a resource id: the address must be in this subscription and resource group, and one in another cannot be named. An address that does not exist is refused by the fabric rather than by the API.
+	PublicIpAddress string `json:"publicIpAddress"`
+	// The subnet of this virtual network whose workloads egress through the address. One subnet per NAT gateway; a network with several private subnets creates one per subnet, and they may share the address. ⚠ A name that is not a subnet of this network is refused by the fabric rather than by the API, and the gateway never becomes ready.
+	Subnet string `json:"subnet"`
+}
+
+// NATGatewayResource is one NAT gateway, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type NATGatewayResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data NATGatewayData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *NATGatewayResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// NATGatewayShowEgressResult is what showEgress returns.
+type NATGatewayShowEgressResult struct {
+	// The IPv4 address the subnet's traffic leaves with, or empty until the fabric has resolved the named public address.
+	PublicV4 string `json:"publicV4"`
+	// The IPv6 address the subnet's traffic leaves with, or empty for an IPv4-only pool.
+	PublicV6 *string `json:"publicV6,omitempty"`
+	// Whether the fabric has programmed the translation. ⚠ False with every address empty is a rule whose subnet or public address the fabric cannot find — check both names.
+	Ready bool `json:"ready"`
+	// When the platform read the object, RFC 3339.
+	SampledAt string `json:"sampledAt"`
+	// The IPv4 range being translated — the subnet's prefix as the fabric resolved it, or empty until it has.
+	SourceV4 string `json:"sourceV4"`
+	// The IPv6 range being translated, or empty for an IPv4-only subnet.
+	SourceV6 *string `json:"sourceV6,omitempty"`
+}
+
 // SecurityGroupData is Security group: the body a caller writes. A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.
 type SecurityGroupData struct {
 	// The region the security group lives in. It must be the network's own region — nothing checks that.
@@ -2029,7 +2706,7 @@ type SubnetProperties struct {
 	ClusterID string `json:"clusterId"`
 	// Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container.
 	EnableDhcp *bool `json:"enableDhcp,omitempty"`
-	// Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.
+	// Whether the fabric's node gateway masquerades this subnet's outbound traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: Kube-OVN honors it only for subnets of its default VPC, and every subnet here is in a tenant's own. It stays because the api-version is published. Outbound access for a subnet is a natGateways resource, which translates the subnet to a public IP address you hold.
 	NatOutgoing *bool `json:"natOutgoing,omitempty"`
 	// Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all.
 	Private *bool `json:"private,omitempty"`
@@ -2420,8 +3097,61 @@ type BucketStatsResult struct {
 	ObjectCount int64 `json:"objectCount"`
 	// When the two figures above were sampled, RFC 3339. ⚠ Returned because a sampled number with no timestamp is a number a caller will read as live.
 	SampledAt string `json:"sampledAt"`
-	// How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — docs/plan/15 § Metering samples SeaweedFS volume stats hourly per bucket — so it is not a number to write an assertion against immediately after a PUT.
+	// How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — the operator refreshes every Bucket's status.usage from collection.list every five minutes — so it is not a number to write an assertion against immediately after a PUT.
 	SizeBytes int64 `json:"sizeBytes"`
+}
+
+// FileShareData is File share: the body a caller writes. A ReadWriteMany file share on a managed object-storage account's filer, mounted into pods through the SeaweedFS CSI driver with an enforced size.
+type FileShareData struct {
+	// The region the share is billed in.
+	Location string `json:"location"`
+	// The share's own settings.
+	Properties *FileShareProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// FileShareProperties is The share's own settings.
+type FileShareProperties struct {
+	// The cluster whose namespace holds the share. Must be the cluster the account is in — nothing checks that, and a share placed elsewhere is a claim against a driver whose filer reference resolves to nothing.
+	ClusterID string `json:"clusterId"`
+	// How much the share may hold.
+	Quota *FileSharePropertiesQuota `json:"quota,omitempty"`
+}
+
+// FileSharePropertiesQuota is How much the share may hold.
+type FileSharePropertiesQuota struct {
+	// The share's size, in Kubernetes quantity form. Enforced as a SeaweedFS collection quota on the mount. Grows online; never shrinks. ⚠ This is a ceiling inside capacity the account's volume servers already reserved; it does not add any, and docs/plan/15 § Metering bills the provisioned figure rather than what is used.
+	Size string `json:"size"`
+}
+
+// FileShareResource is one File share, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type FileShareResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data FileShareData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *FileShareResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// FileShareListMountTargetsResult is what listMountTargets returns.
+type FileShareListMountTargetsResult struct {
+	// The access mode the claim was bound with. Always ReadWriteMany.
+	AccessMode string `json:"accessMode"`
+	// The PersistentVolumeClaim a pod in the resource group's namespace names under volumes[].persistentVolumeClaim.claimName.
+	ClaimName string `json:"claimName"`
+	// The SeaweedFS collection the share's quota is enforced on — `weed mount -collection=`. A mount that omits it writes outside the quota.
+	Collection string `json:"collection"`
+	// The account's filer, host:port, for a `weed mount -filer=` from a VM on the cluster network. ⚠ In-cluster only, for the reason the account's listKeys endpoint is.
+	Filer string `json:"filer"`
+	// The filer path the share lives at — `weed mount -filer.path=`.
+	Path string `json:"path"`
 }
 
 // CloudTerminalVariant is the values /properties/image/variant accepts. ⚠ Closed: the write path refuses anything else.

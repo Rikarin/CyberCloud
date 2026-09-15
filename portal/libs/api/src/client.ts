@@ -29,6 +29,8 @@ import type {
   CommunicationServicesTemplatesRenderContent,
   CommunicationServicesTemplatesRenderResult,
   CommunicationServicesTemplatesResource,
+  ContainerRegistryFeedsData,
+  ContainerRegistryFeedsResource,
   ContainerRegistryRegistriesData,
   ContainerRegistryRegistriesListCredentialsResult,
   ContainerRegistryRegistriesResource,
@@ -346,6 +348,31 @@ export class CyberCloudApi {
   /** render — permission 'read'. */
   renderMessageTemplate(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, content: CommunicationServicesTemplatesRenderContent): Promise<ApiResponse<CommunicationServicesTemplatesRenderResult>> {
     return this.transport.send<CommunicationServicesTemplatesRenderResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/templates/${CyberCloudApi.segment(resourceName)}/render`, body: content });
+  }
+
+  /** Reads one Artifact feed. */
+  getArtifactFeed(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ContainerRegistryFeedsResource>> {
+    return this.transport.send<ContainerRegistryFeedsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerRegistry/feeds/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Artifact feed. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateArtifactFeed(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: ContainerRegistryFeedsData): Promise<ApiResponse<ContainerRegistryFeedsResource>> {
+    return this.transport.send<ContainerRegistryFeedsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerRegistry/feeds/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Artifact feed. A merge patch: what is not set is not changed. */
+  updateArtifactFeed(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<ContainerRegistryFeedsData>): Promise<ApiResponse<ContainerRegistryFeedsResource>> {
+    return this.transport.send<ContainerRegistryFeedsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerRegistry/feeds/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Artifact feed. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteArtifactFeed(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerRegistry/feeds/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Artifact feeds in a resource group. ⚠ A short page never means "that is all there is". */
+  listArtifactFeed(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<ContainerRegistryFeedsResource>>> {
+    return this.transport.send<Page<ContainerRegistryFeedsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerRegistry/feeds`, query: CyberCloudApi.pageQuery(page) });
   }
 
   /** Reads one Container registry. */

@@ -668,6 +668,961 @@ class ValkeyCacheListKeysResult:
         return wire
 
 
+@dataclass
+class CommunicationServiceData:
+    """Communication service. A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The service's own settings."""
+
+        # The locale a send is rendered in when the request names none — a BCP 47 tag such as cs-CZ. Empty falls back to en, then to whichever body the template has first.
+        default_locale: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> CommunicationServiceData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                default_locale=wire.get("defaultLocale"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            if self.default_locale is not None:
+                wire["defaultLocale"] = self.default_locale
+            return wire
+
+    # The region the service is billed in.
+    location: str
+    # The service's own settings.
+    properties: Optional[CommunicationServiceData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", CommunicationServiceData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class CommunicationServiceResource:
+    """One Communication service, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: CommunicationServiceData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=CommunicationServiceData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+CommunicationServiceCheckSuppressionContentChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class CommunicationServiceCheckSuppressionContent:
+    """The parameters of checkSuppression."""
+
+    # The channel the address would be sent on.
+    channel: CommunicationServiceCheckSuppressionContentChannel
+    # The address, in any spelling.
+    destination: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceCheckSuppressionContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            channel=wire["channel"],
+            destination=wire["destination"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["channel"] = self.channel
+        wire["destination"] = self.destination
+        return wire
+
+
+@dataclass
+class CommunicationServiceCheckSuppressionResult:
+    """What checkSuppression returns."""
+
+    # Whether a send to it would be refused.
+    suppressed: bool
+    # The carrier's, the recipient's or the operator's words.
+    note: Optional[str] = None
+    # Why, when it is: hardBounce, complaint, optOut or manualBlock.
+    reason: Optional[str] = None
+    # When it was suppressed.
+    suppressed_at: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceCheckSuppressionResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            suppressed=wire["suppressed"],
+            note=wire.get("note"),
+            reason=wire.get("reason"),
+            suppressed_at=wire.get("suppressedAt"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["suppressed"] = self.suppressed
+        if self.note is not None:
+            wire["note"] = self.note
+        if self.reason is not None:
+            wire["reason"] = self.reason
+        if self.suppressed_at is not None:
+            wire["suppressedAt"] = self.suppressed_at
+        return wire
+
+
+@dataclass
+class CommunicationServiceListSuppressionsContent:
+    """The parameters of listSuppressions."""
+
+    # One of sms, whatsapp, email, push or voice, or empty for every channel.
+    channel: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceListSuppressionsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            channel=wire.get("channel"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.channel is not None:
+            wire["channel"] = self.channel
+        return wire
+
+
+@dataclass
+class CommunicationServiceListSuppressionsResult:
+    """What listSuppressions returns."""
+
+    # How many entries are on the list.
+    count: int
+    # Every entry, oldest first, one line each: '{channel} {destination} {reason} {suppressedAt}: {note}'.
+    entries: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceListSuppressionsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            count=wire["count"],
+            entries=wire["entries"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["count"] = self.count
+        wire["entries"] = self.entries
+        return wire
+
+
+CommunicationServiceSendContentChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class CommunicationServiceSendContent:
+    """The parameters of send."""
+
+    # Which channel to send on.
+    channel: CommunicationServiceSendContentChannel
+    # The caller's key for this message. A retry carrying the same key returns the message already sent and calls no carrier; derive it from the thing being notified about, never from the attempt.
+    idempotency_key: str
+    # The recipient — an E.164 number for sms, whatsapp and voice, an address for email, a device token for push.
+    to: str
+    # The template's arguments, one name=value per element.
+    arguments: Optional[List[str]] = None
+    # The message text, when no template is named.
+    body: Optional[str] = None
+    # The locale to render in, or empty for the service's default.
+    locale: Optional[str] = None
+    # The name of a template under this service to render, or empty to send body as written. WhatsApp requires one.
+    template: Optional[str] = None
+    # Which version of the template, or 0 for the newest one a send may use.
+    template_version: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceSendContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            channel=wire["channel"],
+            idempotency_key=wire["idempotencyKey"],
+            to=wire["to"],
+            arguments=wire.get("arguments"),
+            body=wire.get("body"),
+            locale=wire.get("locale"),
+            template=wire.get("template"),
+            template_version=wire.get("templateVersion"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["channel"] = self.channel
+        wire["idempotencyKey"] = self.idempotency_key
+        wire["to"] = self.to
+        if self.arguments is not None:
+            wire["arguments"] = self.arguments
+        if self.body is not None:
+            wire["body"] = self.body
+        if self.locale is not None:
+            wire["locale"] = self.locale
+        if self.template is not None:
+            wire["template"] = self.template
+        if self.template_version is not None:
+            wire["templateVersion"] = self.template_version
+        return wire
+
+
+CommunicationServiceSendResultChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+CommunicationServiceSendResultStatus = Literal["queued", "dispatched", "delivered", "failed", "refused"]
+"""The values /status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class CommunicationServiceSendResult:
+    """What send returns."""
+
+    # The channel it went on.
+    channel: CommunicationServiceSendResultChannel
+    # The platform's id for the message.
+    message_id: str
+    # When the platform accepted it.
+    queued_at: str
+    # How many delivery receipts have arrived.
+    receipt_count: int
+    # Where the message is in its life.
+    status: CommunicationServiceSendResultStatus
+    # The recipient, normalized.
+    to: str
+    # What the carrier charged, once it said.
+    cost: Optional[float] = None
+    # The currency of cost.
+    currency: Optional[str] = None
+    # The last thing the platform or the carrier said about it.
+    detail: Optional[str] = None
+    # When a carrier accepted it. Absent until then.
+    dispatched_at: Optional[str] = None
+    # Which carrier implementation served it.
+    provider: Optional[str] = None
+    # The carrier's own id, once it has one.
+    provider_message_id: Optional[str] = None
+    # Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'.
+    receipts: Optional[List[str]] = None
+    # When it was delivered, failed or refused. Absent until then.
+    settled_at: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceSendResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            channel=wire["channel"],
+            message_id=wire["messageId"],
+            queued_at=wire["queuedAt"],
+            receipt_count=wire["receiptCount"],
+            status=wire["status"],
+            to=wire["to"],
+            cost=wire.get("cost"),
+            currency=wire.get("currency"),
+            detail=wire.get("detail"),
+            dispatched_at=wire.get("dispatchedAt"),
+            provider=wire.get("provider"),
+            provider_message_id=wire.get("providerMessageId"),
+            receipts=wire.get("receipts"),
+            settled_at=wire.get("settledAt"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["channel"] = self.channel
+        wire["messageId"] = self.message_id
+        wire["queuedAt"] = self.queued_at
+        wire["receiptCount"] = self.receipt_count
+        wire["status"] = self.status
+        wire["to"] = self.to
+        if self.cost is not None:
+            wire["cost"] = self.cost
+        if self.currency is not None:
+            wire["currency"] = self.currency
+        if self.detail is not None:
+            wire["detail"] = self.detail
+        if self.dispatched_at is not None:
+            wire["dispatchedAt"] = self.dispatched_at
+        if self.provider is not None:
+            wire["provider"] = self.provider
+        if self.provider_message_id is not None:
+            wire["providerMessageId"] = self.provider_message_id
+        if self.receipts is not None:
+            wire["receipts"] = self.receipts
+        if self.settled_at is not None:
+            wire["settledAt"] = self.settled_at
+        return wire
+
+
+@dataclass
+class CommunicationServiceStatusContent:
+    """The parameters of status."""
+
+    # The key the message was sent under.
+    idempotency_key: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceStatusContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            idempotency_key=wire["idempotencyKey"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["idempotencyKey"] = self.idempotency_key
+        return wire
+
+
+CommunicationServiceStatusResultChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+CommunicationServiceStatusResultStatus = Literal["queued", "dispatched", "delivered", "failed", "refused"]
+"""The values /status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class CommunicationServiceStatusResult:
+    """What status returns."""
+
+    # The channel it went on.
+    channel: CommunicationServiceStatusResultChannel
+    # The platform's id for the message.
+    message_id: str
+    # When the platform accepted it.
+    queued_at: str
+    # How many delivery receipts have arrived.
+    receipt_count: int
+    # Where the message is in its life.
+    status: CommunicationServiceStatusResultStatus
+    # The recipient, normalized.
+    to: str
+    # What the carrier charged, once it said.
+    cost: Optional[float] = None
+    # The currency of cost.
+    currency: Optional[str] = None
+    # The last thing the platform or the carrier said about it.
+    detail: Optional[str] = None
+    # When a carrier accepted it. Absent until then.
+    dispatched_at: Optional[str] = None
+    # Which carrier implementation served it.
+    provider: Optional[str] = None
+    # The carrier's own id, once it has one.
+    provider_message_id: Optional[str] = None
+    # Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'.
+    receipts: Optional[List[str]] = None
+    # When it was delivered, failed or refused. Absent until then.
+    settled_at: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationServiceStatusResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            channel=wire["channel"],
+            message_id=wire["messageId"],
+            queued_at=wire["queuedAt"],
+            receipt_count=wire["receiptCount"],
+            status=wire["status"],
+            to=wire["to"],
+            cost=wire.get("cost"),
+            currency=wire.get("currency"),
+            detail=wire.get("detail"),
+            dispatched_at=wire.get("dispatchedAt"),
+            provider=wire.get("provider"),
+            provider_message_id=wire.get("providerMessageId"),
+            receipts=wire.get("receipts"),
+            settled_at=wire.get("settledAt"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["channel"] = self.channel
+        wire["messageId"] = self.message_id
+        wire["queuedAt"] = self.queued_at
+        wire["receiptCount"] = self.receipt_count
+        wire["status"] = self.status
+        wire["to"] = self.to
+        if self.cost is not None:
+            wire["cost"] = self.cost
+        if self.currency is not None:
+            wire["currency"] = self.currency
+        if self.detail is not None:
+            wire["detail"] = self.detail
+        if self.dispatched_at is not None:
+            wire["dispatchedAt"] = self.dispatched_at
+        if self.provider is not None:
+            wire["provider"] = self.provider
+        if self.provider_message_id is not None:
+            wire["providerMessageId"] = self.provider_message_id
+        if self.receipts is not None:
+            wire["receipts"] = self.receipts
+        if self.settled_at is not None:
+            wire["settledAt"] = self.settled_at
+        return wire
+
+
+CommunicationChannelAccount = Literal["platform", "tenant"]
+"""The values /properties/account accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+CommunicationChannelKind = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class CommunicationChannelData:
+    """Communication channel. One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The channel's own settings."""
+
+        @dataclass
+        class Limits:
+            """What the channel may send and spend per UTC day."""
+
+            # ISO 4217, for the spend limit and the refusal that names it.
+            currency: Optional[str] = None
+            # The most messages this channel dispatches in one UTC day. Zero — the default — means none: a channel with no limit is a channel that cannot send, on purpose.
+            max_messages_per_day: Optional[int] = None
+            # The most this channel spends in one UTC day, in currency. Zero means none.
+            max_spend_per_day: Optional[float] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> CommunicationChannelData.Properties.Limits:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    currency=wire.get("currency"),
+                    max_messages_per_day=wire.get("maxMessagesPerDay"),
+                    max_spend_per_day=wire.get("maxSpendPerDay"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.currency is not None:
+                    wire["currency"] = self.currency
+                if self.max_messages_per_day is not None:
+                    wire["maxMessagesPerDay"] = self.max_messages_per_day
+                if self.max_spend_per_day is not None:
+                    wire["maxSpendPerDay"] = self.max_spend_per_day
+                return wire
+
+        # Which channel this configures. One service holds one configuration per kind.
+        kind: CommunicationChannelKind
+        # Whose carrier account pays. platform is marked up and needs no setup; tenant is the tenant's own contract, reached through accountRef and authRef.
+        account: Optional[CommunicationChannelAccount] = None
+        # For account: tenant — the vault handle of the account identifier (a Twilio account SID, a Meta business account id), as path#field.
+        account_ref: Optional[str] = None
+        # For account: tenant — the vault handle of the authenticating value (an auth token, a bearer, an access secret), as path#field.
+        auth_ref: Optional[str] = None
+        # Whether sending on this channel is allowed at all. The kill switch: turning it off keeps the configuration and refuses every send.
+        enabled: Optional[bool] = None
+        # What one message is expected to cost, in currency, reserved before dispatch. Set it to the most expensive destination the channel sends to; an estimate that is too low turns the spend limit into a suggestion.
+        estimated_unit_cost: Optional[float] = None
+        # What the channel may send and spend per UTC day.
+        limits: Optional[CommunicationChannelData.Properties.Limits] = None
+        # Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.
+        provider: Optional[str] = None
+        # The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet.
+        signing_ref: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> CommunicationChannelData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                kind=wire["kind"],
+                account=wire.get("account"),
+                account_ref=wire.get("accountRef"),
+                auth_ref=wire.get("authRef"),
+                enabled=wire.get("enabled"),
+                estimated_unit_cost=wire.get("estimatedUnitCost"),
+                limits=_opt(wire, "limits", CommunicationChannelData.Properties.Limits.from_wire),
+                provider=wire.get("provider"),
+                signing_ref=wire.get("signingRef"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["kind"] = self.kind
+            if self.account is not None:
+                wire["account"] = self.account
+            if self.account_ref is not None:
+                wire["accountRef"] = self.account_ref
+            if self.auth_ref is not None:
+                wire["authRef"] = self.auth_ref
+            if self.enabled is not None:
+                wire["enabled"] = self.enabled
+            if self.estimated_unit_cost is not None:
+                wire["estimatedUnitCost"] = self.estimated_unit_cost
+            if self.limits is not None:
+                wire["limits"] = self.limits.to_wire()
+            if self.provider is not None:
+                wire["provider"] = self.provider
+            if self.signing_ref is not None:
+                wire["signingRef"] = self.signing_ref
+            return wire
+
+    # The region the channel is billed in.
+    location: str
+    # The channel's own settings.
+    properties: Optional[CommunicationChannelData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationChannelData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", CommunicationChannelData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class CommunicationChannelResource:
+    """One Communication channel, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: CommunicationChannelData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> CommunicationChannelResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=CommunicationChannelData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+SuppressionChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /properties/channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class SuppressionData:
+    """Suppression. An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The suppression's own settings."""
+
+        # The channel the address is blocked on. Suppression is per channel: an email bounce says nothing about a phone number.
+        channel: SuppressionChannel
+        # The address, in any spelling. Normalized before it is stored, so two spellings of one address are one entry.
+        destination: str
+        # Why, in the tenant's words. What a support case reads.
+        note: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> SuppressionData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                channel=wire["channel"],
+                destination=wire["destination"],
+                note=wire.get("note"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["channel"] = self.channel
+            wire["destination"] = self.destination
+            if self.note is not None:
+                wire["note"] = self.note
+            return wire
+
+    # The region the suppression is billed in.
+    location: str
+    # The suppression's own settings.
+    properties: Optional[SuppressionData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> SuppressionData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", SuppressionData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class SuppressionResource:
+    """One Suppression, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: SuppressionData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> SuppressionResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=SuppressionData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+MessageTemplateChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /properties/channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class MessageTemplateData:
+    """Message template. A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The template's own settings."""
+
+        # The message text. A {name} is replaced by the argument of that name, left to right, and a substituted value is never re-scanned.
+        body: str
+        # Which channel the body is written for. A WhatsApp body is not an email body, and the channel decides whether carrier pre-approval is consulted at all.
+        channel: MessageTemplateChannel
+        # The BCP 47 tag the body is written in. One locale per template; a second language is a second template.
+        locale: Optional[str] = None
+        # The placeholders a send may supply. An unsupplied one is left as written, so a tenant testing the template sees it.
+        optional_variables: Optional[List[str]] = None
+        # The subject line, for channels that have one. Placeholders are substituted here too.
+        subject: Optional[str] = None
+        # The placeholders a send must supply. A send missing one is refused before any carrier is called.
+        variables: Optional[List[str]] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> MessageTemplateData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                body=wire["body"],
+                channel=wire["channel"],
+                locale=wire.get("locale"),
+                optional_variables=wire.get("optionalVariables"),
+                subject=wire.get("subject"),
+                variables=wire.get("variables"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["body"] = self.body
+            wire["channel"] = self.channel
+            if self.locale is not None:
+                wire["locale"] = self.locale
+            if self.optional_variables is not None:
+                wire["optionalVariables"] = self.optional_variables
+            if self.subject is not None:
+                wire["subject"] = self.subject
+            if self.variables is not None:
+                wire["variables"] = self.variables
+            return wire
+
+    # The region the template is billed in.
+    location: str
+    # The template's own settings.
+    properties: Optional[MessageTemplateData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MessageTemplateData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", MessageTemplateData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class MessageTemplateResource:
+    """One Message template, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: MessageTemplateData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MessageTemplateResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=MessageTemplateData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class MessageTemplateRenderContent:
+    """The parameters of render."""
+
+    # The arguments, one name=value per element. A missing required variable is refused, naming every missing one at once.
+    arguments: Optional[List[str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MessageTemplateRenderContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            arguments=wire.get("arguments"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.arguments is not None:
+            wire["arguments"] = self.arguments
+        return wire
+
+
+@dataclass
+class MessageTemplateRenderResult:
+    """What render returns."""
+
+    # The body, substituted.
+    body: str
+    # The locale it was rendered in.
+    locale: str
+    # The subject, substituted.
+    subject: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MessageTemplateRenderResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            body=wire["body"],
+            locale=wire["locale"],
+            subject=wire["subject"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["body"] = self.body
+        wire["locale"] = self.locale
+        wire["subject"] = self.subject
+        return wire
+
+
+ArtifactFeedKind = Literal["nuget", "npm", "maven"]
+"""The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ArtifactFeedData:
+    """Artifact feed. A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The feed's own settings."""
+
+        # Which protocol the feed speaks: nuget (the v3 API), npm (the registry API) or maven (the repository layout). Immutable, because the three have three versioning models.
+        kind: ArtifactFeedKind
+        # What the feed is for, shown in the portal beside its name.
+        description: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ArtifactFeedData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                kind=wire["kind"],
+                description=wire.get("description"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["kind"] = self.kind
+            if self.description is not None:
+                wire["description"] = self.description
+            return wire
+
+    # The region the feed is billed in and served from.
+    location: str
+    # The feed's own settings.
+    properties: Optional[ArtifactFeedData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ArtifactFeedData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ArtifactFeedData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ArtifactFeedResource:
+    """One Artifact feed, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ArtifactFeedData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ArtifactFeedResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ArtifactFeedData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
 ContainerRegistryPreset = Literal["s1.2xlarge", "s1.4xlarge", "s1.large", "s1.medium", "s1.micro", "s1.nano", "s1.small", "s1.xlarge"]
 """The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -892,6 +1847,130 @@ class ContainerRegistryListCredentialsResult:
         wire["password"] = self.password
         wire["portalUrl"] = self.portal_url
         wire["username"] = self.username
+        return wire
+
+
+@dataclass
+class ConnectedKubernetesClusterData:
+    """Connected Kubernetes cluster. A cluster you run yourself — on-prem, behind NAT, anywhere with outbound HTTPS — reached through an agent you install in it. Create it, run the install command it gives you, and place resources in it once it reports Succeeded. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The connected cluster's own settings."""
+
+        # What the cluster runs — k3s, kubeadm, OpenShift, a hosted service. Informational: the agent works against any conformant API server and nothing here changes what it does.
+        distribution: Optional[str] = None
+        # How often the agent reports in. Read when listInstallCommand is called: the command passes it to the chart and the platform repeats it in the welcome the agent adopts on every connection. A change after that takes effect on the next listInstallCommand — no re-install; the running agent adopts it on its next connection. ⚠ The platform calls a cluster Degraded after ninety seconds without a heartbeat (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.
+        heartbeat_seconds: Optional[int] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ConnectedKubernetesClusterData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                distribution=wire.get("distribution"),
+                heartbeat_seconds=wire.get("heartbeatSeconds"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            if self.distribution is not None:
+                wire["distribution"] = self.distribution
+            if self.heartbeat_seconds is not None:
+                wire["heartbeatSeconds"] = self.heartbeat_seconds
+            return wire
+
+    # The region the cluster is billed in. ⚠ Where the cluster physically is is the tenant's business; this is the region whose gateway the agent dials and whose silos hold the connection.
+    location: str
+    # The connected cluster's own settings.
+    properties: Optional[ConnectedKubernetesClusterData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ConnectedKubernetesClusterData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ConnectedKubernetesClusterData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ConnectedKubernetesClusterResource:
+    """One Connected Kubernetes cluster, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ConnectedKubernetesClusterData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ConnectedKubernetesClusterResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ConnectedKubernetesClusterData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class ConnectedKubernetesClusterListInstallCommandResult:
+    """What listInstallCommand returns. ⚠ Secret material — never log or persist this."""
+
+    # The chart reference the command installs: the OCI reference this deployment publishes the agent chart under, or charts/agent — the path in a checkout of the CyberCloud repository — when it has not published one, in which case run the command from that checkout.
+    chart: str
+    # The helm command to run against the cluster being connected, with the one-time token inline. Run it from a workstation with cluster-admin on that cluster; the platform needs nothing from the cluster's side.
+    command: str
+    # When the token stops being accepted, RFC 3339. Twenty-four hours from the call; ask again for a fresh one.
+    expires_at: str
+    # The one-time enrollment token, separately, for an install that does not use helm. It admits exactly one agent connection and is spent by it.
+    token: str
+    # The WebSocket URL the agent dials — wss://{gateway}/agent/v1/tunnel. The cluster needs outbound HTTPS to it and nothing inbound.
+    tunnel_endpoint: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ConnectedKubernetesClusterListInstallCommandResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            chart=wire["chart"],
+            command=wire["command"],
+            expires_at=wire["expiresAt"],
+            token=wire["token"],
+            tunnel_endpoint=wire["tunnelEndpoint"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["chart"] = self.chart
+        wire["command"] = self.command
+        wire["expiresAt"] = self.expires_at
+        wire["token"] = self.token
+        wire["tunnelEndpoint"] = self.tunnel_endpoint
         return wire
 
 
@@ -3620,6 +4699,252 @@ class MonitorWorkspaceListKeysResult:
         return wire
 
 
+AlertRuleChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+AlertRuleOperator = Literal["greaterThan", "greaterOrEqual", "lessThan", "lessOrEqual", "equal", "notEqual"]
+"""The values /properties/condition/operator accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+AlertRuleSignal = Literal["metrics", "logs"]
+"""The values /properties/condition/signal accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+AlertRuleSeverity = Literal["critical", "error", "warning", "informational"]
+"""The values /properties/severity accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class AlertRuleData:
+    """Alert rule. A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The rule's own settings."""
+
+        @dataclass
+        class ActionGroup:
+            """Who is told, and how."""
+
+            # Which of that service's channels carries it. The service must have the channel configured and enabled, or every notification is refused by name.
+            channel: AlertRuleChannel
+            # Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. At least one and at most 20; a list outside that is refused when the rule is reconciled.
+            recipients: List[str]
+            # The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant.
+            service: str
+            # Whether the recipients are told when the condition stops holding, as well as when it starts.
+            notify_on_resolve: Optional[bool] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> AlertRuleData.Properties.ActionGroup:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    channel=wire["channel"],
+                    recipients=wire["recipients"],
+                    service=wire["service"],
+                    notify_on_resolve=wire.get("notifyOnResolve"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["channel"] = self.channel
+                wire["recipients"] = self.recipients
+                wire["service"] = self.service
+                if self.notify_on_resolve is not None:
+                    wire["notifyOnResolve"] = self.notify_on_resolve
+                return wire
+
+        @dataclass
+        class Condition:
+            """What is asked, and what answer counts."""
+
+            # How a value is compared with the threshold.
+            operator: AlertRuleOperator
+            # The query, verbatim. It must produce numbers; the rule fires when any of them satisfies the operator against the threshold.
+            query: str
+            # Which store the query runs against: metrics is MetricsQL over the workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database.
+            signal: AlertRuleSignal
+            # The number the value is compared with.
+            threshold: float
+            # How far back the query may read, in seconds. Capped at a day: the look-back is the query's cost, and the cap is the platform's, not the tenant's.
+            lookback_seconds: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> AlertRuleData.Properties.Condition:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    operator=wire["operator"],
+                    query=wire["query"],
+                    signal=wire["signal"],
+                    threshold=wire["threshold"],
+                    lookback_seconds=wire.get("lookbackSeconds"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["operator"] = self.operator
+                wire["query"] = self.query
+                wire["signal"] = self.signal
+                wire["threshold"] = self.threshold
+                if self.lookback_seconds is not None:
+                    wire["lookbackSeconds"] = self.lookback_seconds
+                return wire
+
+        @dataclass
+        class Evaluation:
+            """How often, and how long before it counts."""
+
+            # How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes.
+            for_seconds: Optional[int] = None
+            # How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. Anything else is refused when the rule is reconciled.
+            interval_seconds: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> AlertRuleData.Properties.Evaluation:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    for_seconds=wire.get("forSeconds"),
+                    interval_seconds=wire.get("intervalSeconds"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.for_seconds is not None:
+                    wire["forSeconds"] = self.for_seconds
+                if self.interval_seconds is not None:
+                    wire["intervalSeconds"] = self.interval_seconds
+                return wire
+
+        # How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing.
+        severity: AlertRuleSeverity
+        # Who is told, and how.
+        action_group: Optional[AlertRuleData.Properties.ActionGroup] = None
+        # What is asked, and what answer counts.
+        condition: Optional[AlertRuleData.Properties.Condition] = None
+        # Whether the rule is evaluated. Off keeps the rule and its history and stops the clock; an open alert is resolved without a notification.
+        enabled: Optional[bool] = None
+        # How often, and how long before it counts.
+        evaluation: Optional[AlertRuleData.Properties.Evaluation] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> AlertRuleData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                severity=wire["severity"],
+                action_group=_opt(wire, "actionGroup", AlertRuleData.Properties.ActionGroup.from_wire),
+                condition=_opt(wire, "condition", AlertRuleData.Properties.Condition.from_wire),
+                enabled=wire.get("enabled"),
+                evaluation=_opt(wire, "evaluation", AlertRuleData.Properties.Evaluation.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["severity"] = self.severity
+            if self.action_group is not None:
+                wire["actionGroup"] = self.action_group.to_wire()
+            if self.condition is not None:
+                wire["condition"] = self.condition.to_wire()
+            if self.enabled is not None:
+                wire["enabled"] = self.enabled
+            if self.evaluation is not None:
+                wire["evaluation"] = self.evaluation.to_wire()
+            return wire
+
+    # The region the rule is evaluated in — the workspace's.
+    location: str
+    # The rule's own settings.
+    properties: Optional[AlertRuleData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> AlertRuleData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", AlertRuleData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class AlertRuleResource:
+    """One Alert rule, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: AlertRuleData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> AlertRuleResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=AlertRuleData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class AlertRuleListInstancesResult:
+    """What listInstances returns."""
+
+    # How many firings the rule keeps.
+    count: int
+    # Every firing, oldest first, one line each: '{state} {severity} fired {firedAt} resolved {resolvedAt} value {value}: {summary} | {notification}'.
+    instances: List[str]
+    # How many of them are still firing.
+    open: int
+    # Where the rule is now: ok, pending or firing.
+    state: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> AlertRuleListInstancesResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            count=wire["count"],
+            instances=wire["instances"],
+            open=wire["open"],
+            state=wire["state"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["count"] = self.count
+        wire["instances"] = self.instances
+        wire["open"] = self.open
+        wire["state"] = self.state
+        return wire
+
+
 @dataclass
 class PublicIPAddressData:
     """Public IP address. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic. The body a caller writes."""
@@ -3742,7 +5067,7 @@ class PublicIPAddressShowAllocationResult:
     sampled_at: str
     # The IPv4 address the fabric allocated, or empty when it has not allocated one yet.
     v4: str
-    # The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic, which in this api-version is every address — nothing can attach one yet.
+    # The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic. The only thing that can attach one is a natGateways resource, which puts a subnet's outbound traffic on it; nothing can yet publish anything inbound on an address.
     attached_to: Optional[str] = None
     # The MAC address the fabric bound to it. ⚠ Reported because it is what an operator needs to find this address in an ARP table when it is unreachable.
     mac_address: Optional[str] = None
@@ -3813,7 +5138,7 @@ class VirtualNetworkData:
         cluster_id: str
         # The address range the network plans for. ⚠ Declarative: it is checked against the region's reserved ranges and is not rendered into the fabric, because a Kube-OVN Vpc carries no CIDR — the subnets do.
         address_space: Optional[VirtualNetworkData.Properties.AddressSpace] = None
-        # Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.
+        # Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. A natGateways child needs it on: without the attachment its translation is programmed and its packets are dropped. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.
         enable_external: Optional[bool] = None
 
         @classmethod
@@ -4212,6 +5537,138 @@ class LoadBalancerShowBackendsResult:
 
 
 @dataclass
+class NATGatewayData:
+    """NAT gateway. Outbound-only internet access for one subnet of a virtual network, translated to a public IP address the tenant holds. Inbound traffic is not admitted. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The NAT gateway's own settings."""
+
+        # The cluster whose fabric holds the network. ⚠ It must be the cluster the virtual network and the public address were created in: a rule in another cluster names a subnet and an address that do not exist there.
+        cluster_id: str
+        # The name of a publicIpAddresses resource in the same resource group whose address the subnet's traffic leaves with. ⚠ A name, not a resource id: the address must be in this subscription and resource group, and one in another cannot be named. An address that does not exist is refused by the fabric rather than by the API.
+        public_ip_address: str
+        # The subnet of this virtual network whose workloads egress through the address. One subnet per NAT gateway; a network with several private subnets creates one per subnet, and they may share the address. ⚠ A name that is not a subnet of this network is refused by the fabric rather than by the API, and the gateway never becomes ready.
+        subnet: str
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> NATGatewayData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                public_ip_address=wire["publicIpAddress"],
+                subnet=wire["subnet"],
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["publicIpAddress"] = self.public_ip_address
+            wire["subnet"] = self.subnet
+            return wire
+
+    # The region the NAT gateway is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here.
+    location: str
+    # The NAT gateway's own settings.
+    properties: Optional[NATGatewayData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> NATGatewayData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", NATGatewayData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class NATGatewayResource:
+    """One NAT gateway, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: NATGatewayData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> NATGatewayResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=NATGatewayData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class NATGatewayShowEgressResult:
+    """What showEgress returns."""
+
+    # The IPv4 address the subnet's traffic leaves with, or empty until the fabric has resolved the named public address.
+    public_v4: str
+    # Whether the fabric has programmed the translation. ⚠ False with every address empty is a rule whose subnet or public address the fabric cannot find — check both names.
+    ready: bool
+    # When the platform read the object, RFC 3339.
+    sampled_at: str
+    # The IPv4 range being translated — the subnet's prefix as the fabric resolved it, or empty until it has.
+    source_v4: str
+    # The IPv6 address the subnet's traffic leaves with, or empty for an IPv4-only pool.
+    public_v6: Optional[str] = None
+    # The IPv6 range being translated, or empty for an IPv4-only subnet.
+    source_v6: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> NATGatewayShowEgressResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            public_v4=wire["publicV4"],
+            ready=wire["ready"],
+            sampled_at=wire["sampledAt"],
+            source_v4=wire["sourceV4"],
+            public_v6=wire.get("publicV6"),
+            source_v6=wire.get("sourceV6"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["publicV4"] = self.public_v4
+        wire["ready"] = self.ready
+        wire["sampledAt"] = self.sampled_at
+        wire["sourceV4"] = self.source_v4
+        if self.public_v6 is not None:
+            wire["publicV6"] = self.public_v6
+        if self.source_v6 is not None:
+            wire["sourceV6"] = self.source_v6
+        return wire
+
+
+@dataclass
 class SecurityGroupData:
     """Security group. A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several. The body a caller writes."""
 
@@ -4465,7 +5922,7 @@ class SubnetData:
         address_prefix: Optional[SubnetData.Properties.AddressPrefix] = None
         # Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container.
         enable_dhcp: Optional[bool] = None
-        # Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.
+        # Whether the fabric's node gateway masquerades this subnet's outbound traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: Kube-OVN honors it only for subnets of its default VPC, and every subnet here is in a tenant's own. It stays because the api-version is published. Outbound access for a subnet is a natGateways resource, which translates the subnet to a public IP address you hold.
         nat_outgoing: Optional[bool] = None
         # Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all.
         private: Optional[bool] = None
@@ -5403,7 +6860,7 @@ class BucketStatsResult:
     object_count: int
     # When the two figures above were sampled, RFC 3339. ⚠ Returned because a sampled number with no timestamp is a number a caller will read as live.
     sampled_at: str
-    # How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — docs/plan/15 § Metering samples SeaweedFS volume stats hourly per bucket — so it is not a number to write an assertion against immediately after a PUT.
+    # How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — the operator refreshes every Bucket's status.usage from collection.list every five minutes — so it is not a number to write an assertion against immediately after a PUT.
     size_bytes: int
 
     @classmethod
@@ -5421,6 +6878,149 @@ class BucketStatsResult:
         wire["objectCount"] = self.object_count
         wire["sampledAt"] = self.sampled_at
         wire["sizeBytes"] = self.size_bytes
+        return wire
+
+
+@dataclass
+class FileShareData:
+    """File share. A ReadWriteMany file share on a managed object-storage account's filer, mounted into pods through the SeaweedFS CSI driver with an enforced size. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The share's own settings."""
+
+        @dataclass
+        class Quota:
+            """How much the share may hold."""
+
+            # The share's size, in Kubernetes quantity form. Enforced as a SeaweedFS collection quota on the mount. Grows online; never shrinks. ⚠ This is a ceiling inside capacity the account's volume servers already reserved; it does not add any, and docs/plan/15 § Metering bills the provisioned figure rather than what is used.
+            size: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> FileShareData.Properties.Quota:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    size=wire["size"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["size"] = self.size
+                return wire
+
+        # The cluster whose namespace holds the share. Must be the cluster the account is in — nothing checks that, and a share placed elsewhere is a claim against a driver whose filer reference resolves to nothing.
+        cluster_id: str
+        # How much the share may hold.
+        quota: Optional[FileShareData.Properties.Quota] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> FileShareData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                quota=_opt(wire, "quota", FileShareData.Properties.Quota.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            if self.quota is not None:
+                wire["quota"] = self.quota.to_wire()
+            return wire
+
+    # The region the share is billed in.
+    location: str
+    # The share's own settings.
+    properties: Optional[FileShareData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> FileShareData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", FileShareData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class FileShareResource:
+    """One File share, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: FileShareData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> FileShareResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=FileShareData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class FileShareListMountTargetsResult:
+    """What listMountTargets returns."""
+
+    # The access mode the claim was bound with. Always ReadWriteMany.
+    access_mode: str
+    # The PersistentVolumeClaim a pod in the resource group's namespace names under volumes[].persistentVolumeClaim.claimName.
+    claim_name: str
+    # The SeaweedFS collection the share's quota is enforced on — `weed mount -collection=`. A mount that omits it writes outside the quota.
+    collection: str
+    # The account's filer, host:port, for a `weed mount -filer=` from a VM on the cluster network. ⚠ In-cluster only, for the reason the account's listKeys endpoint is.
+    filer: str
+    # The filer path the share lives at — `weed mount -filer.path=`.
+    path: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> FileShareListMountTargetsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            access_mode=wire["accessMode"],
+            claim_name=wire["claimName"],
+            collection=wire["collection"],
+            filer=wire["filer"],
+            path=wire["path"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["accessMode"] = self.access_mode
+        wire["claimName"] = self.claim_name
+        wire["collection"] = self.collection
+        wire["filer"] = self.filer
+        wire["path"] = self.path
         return wire
 
 
@@ -5795,11 +7395,45 @@ __all__ = [
     "ValkeyCacheData",
     "ValkeyCacheResource",
     "ValkeyCacheListKeysResult",
+    "CommunicationServiceData",
+    "CommunicationServiceResource",
+    "CommunicationServiceCheckSuppressionContentChannel",
+    "CommunicationServiceCheckSuppressionContent",
+    "CommunicationServiceCheckSuppressionResult",
+    "CommunicationServiceListSuppressionsContent",
+    "CommunicationServiceListSuppressionsResult",
+    "CommunicationServiceSendContentChannel",
+    "CommunicationServiceSendContent",
+    "CommunicationServiceSendResultChannel",
+    "CommunicationServiceSendResultStatus",
+    "CommunicationServiceSendResult",
+    "CommunicationServiceStatusContent",
+    "CommunicationServiceStatusResultChannel",
+    "CommunicationServiceStatusResultStatus",
+    "CommunicationServiceStatusResult",
+    "CommunicationChannelAccount",
+    "CommunicationChannelKind",
+    "CommunicationChannelData",
+    "CommunicationChannelResource",
+    "SuppressionChannel",
+    "SuppressionData",
+    "SuppressionResource",
+    "MessageTemplateChannel",
+    "MessageTemplateData",
+    "MessageTemplateResource",
+    "MessageTemplateRenderContent",
+    "MessageTemplateRenderResult",
+    "ArtifactFeedKind",
+    "ArtifactFeedData",
+    "ArtifactFeedResource",
     "ContainerRegistryPreset",
     "ContainerRegistryVersion",
     "ContainerRegistryData",
     "ContainerRegistryResource",
     "ContainerRegistryListCredentialsResult",
+    "ConnectedKubernetesClusterData",
+    "ConnectedKubernetesClusterResource",
+    "ConnectedKubernetesClusterListInstallCommandResult",
     "ManagedKubernetesClusterVersion",
     "ManagedKubernetesClusterData",
     "ManagedKubernetesClusterResource",
@@ -5854,6 +7488,13 @@ __all__ = [
     "MonitorWorkspaceData",
     "MonitorWorkspaceResource",
     "MonitorWorkspaceListKeysResult",
+    "AlertRuleChannel",
+    "AlertRuleOperator",
+    "AlertRuleSignal",
+    "AlertRuleSeverity",
+    "AlertRuleData",
+    "AlertRuleResource",
+    "AlertRuleListInstancesResult",
     "PublicIPAddressData",
     "PublicIPAddressResource",
     "PublicIPAddressShowAllocationResult",
@@ -5865,6 +7506,9 @@ __all__ = [
     "LoadBalancerData",
     "LoadBalancerResource",
     "LoadBalancerShowBackendsResult",
+    "NATGatewayData",
+    "NATGatewayResource",
+    "NATGatewayShowEgressResult",
     "SecurityGroupData",
     "SecurityGroupResource",
     "SecurityGroupShowEffectiveRulesResult",
@@ -5890,6 +7534,9 @@ __all__ = [
     "BucketData",
     "BucketResource",
     "BucketStatsResult",
+    "FileShareData",
+    "FileShareResource",
+    "FileShareListMountTargetsResult",
     "CloudTerminalVariant",
     "CloudTerminalEgress",
     "CloudTerminalPreset",

@@ -10,6 +10,11 @@ from urllib.parse import quote
 
 from ._runtime import Operation, Pager, Request, Transport, raise_for_status, wire_of
 from .models import (
+    AlertRuleData,
+    AlertRuleListInstancesResult,
+    AlertRuleResource,
+    ArtifactFeedData,
+    ArtifactFeedResource,
     BucketData,
     BucketResource,
     BucketStatsResult,
@@ -20,12 +25,30 @@ from .models import (
     CloudTerminalData,
     CloudTerminalResource,
     CloudTerminalTerminateResult,
+    CommunicationChannelData,
+    CommunicationChannelResource,
+    CommunicationServiceCheckSuppressionContent,
+    CommunicationServiceCheckSuppressionResult,
+    CommunicationServiceData,
+    CommunicationServiceListSuppressionsContent,
+    CommunicationServiceListSuppressionsResult,
+    CommunicationServiceResource,
+    CommunicationServiceSendContent,
+    CommunicationServiceSendResult,
+    CommunicationServiceStatusContent,
+    CommunicationServiceStatusResult,
+    ConnectedKubernetesClusterData,
+    ConnectedKubernetesClusterListInstallCommandResult,
+    ConnectedKubernetesClusterResource,
     ContainerRegistryData,
     ContainerRegistryListCredentialsResult,
     ContainerRegistryResource,
     DocumentDatabaseAccountData,
     DocumentDatabaseAccountListKeysResult,
     DocumentDatabaseAccountResource,
+    FileShareData,
+    FileShareListMountTargetsResult,
+    FileShareResource,
     KafkaClusterData,
     KafkaClusterListKeysResult,
     KafkaClusterResource,
@@ -40,9 +63,16 @@ from .models import (
     MariaDBServerData,
     MariaDBServerListKeysResult,
     MariaDBServerResource,
+    MessageTemplateData,
+    MessageTemplateRenderContent,
+    MessageTemplateRenderResult,
+    MessageTemplateResource,
     MonitorWorkspaceData,
     MonitorWorkspaceListKeysResult,
     MonitorWorkspaceResource,
+    NATGatewayData,
+    NATGatewayResource,
+    NATGatewayShowEgressResult,
     NATSClusterData,
     NATSClusterListKeysResult,
     NATSClusterResource,
@@ -73,6 +103,8 @@ from .models import (
     SubnetListAddressUsageResult,
     SubnetResource,
     SubscriptionCreateContent,
+    SuppressionData,
+    SuppressionResource,
     ValkeyCacheData,
     ValkeyCacheListKeysResult,
     ValkeyCacheResource,
@@ -266,6 +298,231 @@ class CacheProvider:
         self.redis = ValkeyCacheClient(transport)
 
 
+class CommunicationServiceClient:
+    """Communication services — CyberCloud.Communication/services. A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> CommunicationServiceResource:
+        """Reads one Communication service."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return CommunicationServiceResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: CommunicationServiceData) -> Operation[CommunicationServiceResource]:
+        """Creates or replaces one Communication service. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, CommunicationServiceResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: CommunicationServiceData) -> Operation[CommunicationServiceResource]:
+        """Amends one Communication service. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, CommunicationServiceResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Communication service. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[CommunicationServiceResource]:
+        """Lists the Communication services in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services", top, CommunicationServiceResource.from_wire)
+
+    def check_suppression(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: CommunicationServiceCheckSuppressionContent) -> CommunicationServiceCheckSuppressionResult:
+        """checkSuppression — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(resource_name)}/checkSuppression", body=content.to_wire()))
+        raise_for_status(response)
+        return CommunicationServiceCheckSuppressionResult.from_wire(wire_of(response))
+
+    def list_suppressions(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: CommunicationServiceListSuppressionsContent) -> CommunicationServiceListSuppressionsResult:
+        """listSuppressions — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(resource_name)}/listSuppressions", body=content.to_wire()))
+        raise_for_status(response)
+        return CommunicationServiceListSuppressionsResult.from_wire(wire_of(response))
+
+    def send(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: CommunicationServiceSendContent) -> CommunicationServiceSendResult:
+        """send — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(resource_name)}/send", body=content.to_wire()))
+        raise_for_status(response)
+        return CommunicationServiceSendResult.from_wire(wire_of(response))
+
+    def status(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: CommunicationServiceStatusContent) -> CommunicationServiceStatusResult:
+        """status — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(resource_name)}/status", body=content.to_wire()))
+        raise_for_status(response)
+        return CommunicationServiceStatusResult.from_wire(wire_of(response))
+
+
+class CommunicationChannelClient:
+    """Communication channels — CyberCloud.Communication/services/channels. One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str) -> CommunicationChannelResource:
+        """Reads one Communication channel."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/channels/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return CommunicationChannelResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str, data: CommunicationChannelData) -> Operation[CommunicationChannelResource]:
+        """Creates or replaces one Communication channel. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/channels/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, CommunicationChannelResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str, data: CommunicationChannelData) -> Operation[CommunicationChannelResource]:
+        """Amends one Communication channel. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/channels/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, CommunicationChannelResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Communication channel. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/channels/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, *, top: Optional[int] = None) -> Pager[CommunicationChannelResource]:
+        """Lists the Communication channels in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/channels", top, CommunicationChannelResource.from_wire)
+
+
+class SuppressionClient:
+    """Suppressions — CyberCloud.Communication/services/suppressions. An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str) -> SuppressionResource:
+        """Reads one Suppression."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/suppressions/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return SuppressionResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str, data: SuppressionData) -> Operation[SuppressionResource]:
+        """Creates or replaces one Suppression. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/suppressions/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, SuppressionResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str, data: SuppressionData) -> Operation[SuppressionResource]:
+        """Amends one Suppression. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/suppressions/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, SuppressionResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Suppression. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/suppressions/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, *, top: Optional[int] = None) -> Pager[SuppressionResource]:
+        """Lists the Suppressions in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/suppressions", top, SuppressionResource.from_wire)
+
+
+class MessageTemplateClient:
+    """Message templates — CyberCloud.Communication/services/templates. A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str) -> MessageTemplateResource:
+        """Reads one Message template."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/templates/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return MessageTemplateResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str, data: MessageTemplateData) -> Operation[MessageTemplateResource]:
+        """Creates or replaces one Message template. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/templates/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, MessageTemplateResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str, data: MessageTemplateData) -> Operation[MessageTemplateResource]:
+        """Amends one Message template. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/templates/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, MessageTemplateResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Message template. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/templates/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, *, top: Optional[int] = None) -> Pager[MessageTemplateResource]:
+        """Lists the Message templates in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/templates", top, MessageTemplateResource.from_wire)
+
+    def render(self, tenant_id: str, subscription_id: str, resource_group_name: str, services_name: str, resource_name: str, content: MessageTemplateRenderContent) -> MessageTemplateRenderResult:
+        """render — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Communication/services/{_segment(services_name)}/templates/{_segment(resource_name)}/render", body=content.to_wire()))
+        raise_for_status(response)
+        return MessageTemplateRenderResult.from_wire(wire_of(response))
+
+
+class CommunicationProvider:
+    """The resource types of CyberCloud.Communication."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.services = CommunicationServiceClient(transport)
+        self.services_channels = CommunicationChannelClient(transport)
+        self.services_suppressions = SuppressionClient(transport)
+        self.services_templates = MessageTemplateClient(transport)
+
+
+class ArtifactFeedClient:
+    """Artifact feeds — CyberCloud.ContainerRegistry/feeds. A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ArtifactFeedResource:
+        """Reads one Artifact feed."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerRegistry/feeds/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ArtifactFeedResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ArtifactFeedData) -> Operation[ArtifactFeedResource]:
+        """Creates or replaces one Artifact feed. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerRegistry/feeds/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ArtifactFeedResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ArtifactFeedData) -> Operation[ArtifactFeedResource]:
+        """Amends one Artifact feed. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerRegistry/feeds/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ArtifactFeedResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Artifact feed. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerRegistry/feeds/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[ArtifactFeedResource]:
+        """Lists the Artifact feeds in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerRegistry/feeds", top, ArtifactFeedResource.from_wire)
+
+
 class ContainerRegistryClient:
     """Container registries — CyberCloud.ContainerRegistry/registries. A private OCI container registry on Harbor, with a web portal, an image store and a seven-day recovery window."""
 
@@ -325,7 +582,51 @@ class ContainerRegistryProvider:
     """The resource types of CyberCloud.ContainerRegistry."""
 
     def __init__(self, transport: Transport) -> None:
+        self.feeds = ArtifactFeedClient(transport)
         self.registries = ContainerRegistryClient(transport)
+
+
+class ConnectedKubernetesClusterClient:
+    """Connected Kubernetes clusters — CyberCloud.ContainerService/connectedClusters. A cluster you run yourself — on-prem, behind NAT, anywhere with outbound HTTPS — reached through an agent you install in it. Create it, run the install command it gives you, and place resources in it once it reports Succeeded."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ConnectedKubernetesClusterResource:
+        """Reads one Connected Kubernetes cluster."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerService/connectedClusters/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ConnectedKubernetesClusterResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ConnectedKubernetesClusterData) -> Operation[ConnectedKubernetesClusterResource]:
+        """Creates or replaces one Connected Kubernetes cluster. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerService/connectedClusters/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ConnectedKubernetesClusterResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: ConnectedKubernetesClusterData) -> Operation[ConnectedKubernetesClusterResource]:
+        """Amends one Connected Kubernetes cluster. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerService/connectedClusters/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ConnectedKubernetesClusterResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Connected Kubernetes cluster. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerService/connectedClusters/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[ConnectedKubernetesClusterResource]:
+        """Lists the Connected Kubernetes clusters in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerService/connectedClusters", top, ConnectedKubernetesClusterResource.from_wire)
+
+    def list_install_command(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> ConnectedKubernetesClusterListInstallCommandResult:
+        """listInstallCommand — permission 'listInstallCommand'. ⚠ The response carries secret material."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerService/connectedClusters/{_segment(resource_name)}/listInstallCommand"))
+        raise_for_status(response)
+        return ConnectedKubernetesClusterListInstallCommandResult.from_wire(wire_of(response))
 
 
 class ManagedKubernetesClusterClient:
@@ -418,6 +719,7 @@ class ContainerServiceProvider:
     """The resource types of CyberCloud.ContainerService."""
 
     def __init__(self, transport: Transport) -> None:
+        self.connected_clusters = ConnectedKubernetesClusterClient(transport)
         self.managed_clusters = ManagedKubernetesClusterClient(transport)
         self.managed_clusters_agent_pools = NodePoolClient(transport)
 
@@ -833,11 +1135,55 @@ class MonitorWorkspaceClient:
         return Operation(self._transport, response, MonitorWorkspaceResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}")
 
 
+class AlertRuleClient:
+    """Alert rules — CyberCloud.Monitor/workspaces/alertRules. A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> AlertRuleResource:
+        """Reads one Alert rule."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/alertRules/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return AlertRuleResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, data: AlertRuleData) -> Operation[AlertRuleResource]:
+        """Creates or replaces one Alert rule. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/alertRules/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, AlertRuleResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, data: AlertRuleData) -> Operation[AlertRuleResource]:
+        """Amends one Alert rule. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/alertRules/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, AlertRuleResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Alert rule. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/alertRules/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, *, top: Optional[int] = None) -> Pager[AlertRuleResource]:
+        """Lists the Alert rules in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/alertRules", top, AlertRuleResource.from_wire)
+
+    def list_instances(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> AlertRuleListInstancesResult:
+        """listInstances — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/alertRules/{_segment(resource_name)}/listInstances"))
+        raise_for_status(response)
+        return AlertRuleListInstancesResult.from_wire(wire_of(response))
+
+
 class MonitorProvider:
     """The resource types of CyberCloud.Monitor."""
 
     def __init__(self, transport: Transport) -> None:
         self.workspaces = MonitorWorkspaceClient(transport)
+        self.workspaces_alert_rules = AlertRuleClient(transport)
 
 
 class PublicIPAddressClient:
@@ -969,6 +1315,49 @@ class LoadBalancerClient:
         return LoadBalancerShowBackendsResult.from_wire(wire_of(response))
 
 
+class NATGatewayClient:
+    """NAT gateways — CyberCloud.Network/virtualNetworks/natGateways. Outbound-only internet access for one subnet of a virtual network, translated to a public IP address the tenant holds. Inbound traffic is not admitted."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> NATGatewayResource:
+        """Reads one NAT gateway."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/natGateways/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return NATGatewayResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str, data: NATGatewayData) -> Operation[NATGatewayResource]:
+        """Creates or replaces one NAT gateway. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/natGateways/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, NATGatewayResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str, data: NATGatewayData) -> Operation[NATGatewayResource]:
+        """Amends one NAT gateway. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/natGateways/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, NATGatewayResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one NAT gateway. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/natGateways/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, *, top: Optional[int] = None) -> Pager[NATGatewayResource]:
+        """Lists the NAT gateways in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/natGateways", top, NATGatewayResource.from_wire)
+
+    def show_egress(self, tenant_id: str, subscription_id: str, resource_group_name: str, virtual_networks_name: str, resource_name: str) -> NATGatewayShowEgressResult:
+        """showEgress — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Network/virtualNetworks/{_segment(virtual_networks_name)}/natGateways/{_segment(resource_name)}/showEgress"))
+        raise_for_status(response)
+        return NATGatewayShowEgressResult.from_wire(wire_of(response))
+
+
 class SecurityGroupClient:
     """Security groups — CyberCloud.Network/virtualNetworks/securityGroups. A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several."""
 
@@ -1062,6 +1451,7 @@ class NetworkProvider:
         self.public_ip_addresses = PublicIPAddressClient(transport)
         self.virtual_networks = VirtualNetworkClient(transport)
         self.virtual_networks_load_balancers = LoadBalancerClient(transport)
+        self.virtual_networks_nat_gateways = NATGatewayClient(transport)
         self.virtual_networks_security_groups = SecurityGroupClient(transport)
         self.virtual_networks_subnets = SubnetClient(transport)
 
@@ -1264,12 +1654,56 @@ class BucketClient:
         return BucketStatsResult.from_wire(wire_of(response))
 
 
+class FileShareClient:
+    """File shares — CyberCloud.Storage/accounts/fileShares. A ReadWriteMany file share on a managed object-storage account's filer, mounted into pods through the SeaweedFS CSI driver with an enforced size."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, accounts_name: str, resource_name: str) -> FileShareResource:
+        """Reads one File share."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Storage/accounts/{_segment(accounts_name)}/fileShares/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return FileShareResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, accounts_name: str, resource_name: str, data: FileShareData) -> Operation[FileShareResource]:
+        """Creates or replaces one File share. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Storage/accounts/{_segment(accounts_name)}/fileShares/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, FileShareResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, accounts_name: str, resource_name: str, data: FileShareData) -> Operation[FileShareResource]:
+        """Amends one File share. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Storage/accounts/{_segment(accounts_name)}/fileShares/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, FileShareResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, accounts_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one File share. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Storage/accounts/{_segment(accounts_name)}/fileShares/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, accounts_name: str, *, top: Optional[int] = None) -> Pager[FileShareResource]:
+        """Lists the File shares in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Storage/accounts/{_segment(accounts_name)}/fileShares", top, FileShareResource.from_wire)
+
+    def list_mount_targets(self, tenant_id: str, subscription_id: str, resource_group_name: str, accounts_name: str, resource_name: str) -> FileShareListMountTargetsResult:
+        """listMountTargets — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Storage/accounts/{_segment(accounts_name)}/fileShares/{_segment(resource_name)}/listMountTargets"))
+        raise_for_status(response)
+        return FileShareListMountTargetsResult.from_wire(wire_of(response))
+
+
 class StorageProvider:
     """The resource types of CyberCloud.Storage."""
 
     def __init__(self, transport: Transport) -> None:
         self.accounts = StorageAccountClient(transport)
         self.accounts_buckets = BucketClient(transport)
+        self.accounts_file_shares = FileShareClient(transport)
 
 
 class CloudTerminalClient:
@@ -1344,6 +1778,7 @@ class CyberCloudClient:
         self.resource_groups = ResourceGroupsClient(transport)
         self.analytics = AnalyticsProvider(transport)
         self.cache = CacheProvider(transport)
+        self.communication = CommunicationProvider(transport)
         self.containerregistry = ContainerRegistryProvider(transport)
         self.containerservice = ContainerServiceProvider(transport)
         self.dbformysql = DBforMySQLProvider(transport)

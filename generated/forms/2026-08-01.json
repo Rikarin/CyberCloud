@@ -1419,6 +1419,104 @@
         }
       ]
     },
+    "CyberCloud.ContainerRegistry/feeds": {
+      "resourceType": "CyberCloud.ContainerRegistry/feeds",
+      "apiVersion": "2026-08-01",
+      "title": "Artifact feed",
+      "plural": "Artifact feeds",
+      "summary": "A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage.",
+      "overrideKey": "CyberCloud.ContainerRegistry/feeds@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/description",
+        "/properties/kind",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the feed is billed in and served from.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Artifact feed to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The feed's own settings."
+        },
+        {
+          "jsonPointer": "/properties/description",
+          "name": "description",
+          "label": "Description",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "What the feed is for, shown in the portal beside its name.",
+          "maxLength": 256
+        },
+        {
+          "jsonPointer": "/properties/kind",
+          "name": "kind",
+          "label": "Kind",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Which protocol the feed speaks: nuget (the v3 API), npm (the registry API) or maven (the repository layout). Immutable, because the three have three versioning models.",
+          "choices": [
+            {
+              "value": "nuget",
+              "label": "Nuget"
+            },
+            {
+              "value": "npm",
+              "label": "Npm"
+            },
+            {
+              "value": "maven",
+              "label": "Maven"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Artifact feed to change it.",
+          "default": "nuget",
+          "placeholder": "nuget"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": []
+    },
     "CyberCloud.ContainerRegistry/registries": {
       "resourceType": "CyberCloud.ContainerRegistry/registries",
       "apiVersion": "2026-08-01",

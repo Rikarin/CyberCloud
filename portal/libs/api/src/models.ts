@@ -318,13 +318,9 @@ export interface CommunicationServicesData {
   tags?: Record<string, string>;
 }
 
-/** One Communication service, as the API returns it. */
-export interface CommunicationServicesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Communication service, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface CommunicationServicesResource extends Resource, CommunicationServicesData {
   readonly type: 'CyberCloud.Communication/services';
-  readonly properties?: CommunicationServicesData['properties'];
 }
 
 /** The values /channel accepts. ⚠ Closed: the write path refuses anything else. */
@@ -548,13 +544,9 @@ export interface CommunicationServicesChannelsData {
   tags?: Record<string, string>;
 }
 
-/** One Communication channel, as the API returns it. */
-export interface CommunicationServicesChannelsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Communication channel, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface CommunicationServicesChannelsResource extends Resource, CommunicationServicesChannelsData {
   readonly type: 'CyberCloud.Communication/services/channels';
-  readonly properties?: CommunicationServicesChannelsData['properties'];
 }
 
 /** The values /properties/channel accepts. ⚠ Closed: the write path refuses anything else. */
@@ -582,13 +574,9 @@ export interface CommunicationServicesSuppressionsData {
   tags?: Record<string, string>;
 }
 
-/** One Suppression, as the API returns it. */
-export interface CommunicationServicesSuppressionsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Suppression, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface CommunicationServicesSuppressionsResource extends Resource, CommunicationServicesSuppressionsData {
   readonly type: 'CyberCloud.Communication/services/suppressions';
-  readonly properties?: CommunicationServicesSuppressionsData['properties'];
 }
 
 /** The values /properties/channel accepts. ⚠ Closed: the write path refuses anything else. */
@@ -622,13 +610,9 @@ export interface CommunicationServicesTemplatesData {
   tags?: Record<string, string>;
 }
 
-/** One Message template, as the API returns it. */
-export interface CommunicationServicesTemplatesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Message template, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface CommunicationServicesTemplatesResource extends Resource, CommunicationServicesTemplatesData {
   readonly type: 'CyberCloud.Communication/services/templates';
-  readonly properties?: CommunicationServicesTemplatesData['properties'];
 }
 
 /** The parameters of render. */
@@ -645,6 +629,32 @@ export interface CommunicationServicesTemplatesRenderResult {
   locale: string;
   /** The subject, substituted. */
   subject: string;
+}
+
+/** The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else. */
+export type ContainerRegistryFeedsKind =
+  | 'nuget'
+  | 'npm'
+  | 'maven';
+
+/** Artifact feed. A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage. */
+export interface ContainerRegistryFeedsData {
+  /** The region the feed is billed in and served from. */
+  location: string;
+  /** The feed's own settings. */
+  properties?: {
+    /** What the feed is for, shown in the portal beside its name. */
+    description?: string;
+    /** Which protocol the feed speaks: nuget (the v3 API), npm (the registry API) or maven (the repository layout). Immutable, because the three have three versioning models. */
+    kind: ContainerRegistryFeedsKind;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Artifact feed, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ContainerRegistryFeedsResource extends Resource, ContainerRegistryFeedsData {
+  readonly type: 'CyberCloud.ContainerRegistry/feeds';
 }
 
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
@@ -735,13 +745,9 @@ export interface ContainerServiceConnectedClustersData {
   tags?: Record<string, string>;
 }
 
-/** One Connected Kubernetes cluster, as the API returns it. */
-export interface ContainerServiceConnectedClustersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Connected Kubernetes cluster, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ContainerServiceConnectedClustersResource extends Resource, ContainerServiceConnectedClustersData {
   readonly type: 'CyberCloud.ContainerService/connectedClusters';
-  readonly properties?: ContainerServiceConnectedClustersData['properties'];
 }
 
 /** What listInstallCommand returns. ⚠ Secret material — never log or persist this. */
@@ -1687,13 +1693,9 @@ export interface MonitorWorkspacesAlertRulesData {
   tags?: Record<string, string>;
 }
 
-/** One Alert rule, as the API returns it. */
-export interface MonitorWorkspacesAlertRulesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Alert rule, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MonitorWorkspacesAlertRulesResource extends Resource, MonitorWorkspacesAlertRulesData {
   readonly type: 'CyberCloud.Monitor/workspaces/alertRules';
-  readonly properties?: MonitorWorkspacesAlertRulesData['properties'];
 }
 
 /** What listInstances returns. */
@@ -1887,13 +1889,9 @@ export interface NetworkVirtualNetworksNatGatewaysData {
   tags?: Record<string, string>;
 }
 
-/** One NAT gateway, as the API returns it. */
-export interface NetworkVirtualNetworksNatGatewaysResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One NAT gateway, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface NetworkVirtualNetworksNatGatewaysResource extends Resource, NetworkVirtualNetworksNatGatewaysData {
   readonly type: 'CyberCloud.Network/virtualNetworks/natGateways';
-  readonly properties?: NetworkVirtualNetworksNatGatewaysData['properties'];
 }
 
 /** What showEgress returns. */
@@ -2287,13 +2285,9 @@ export interface StorageAccountsFileSharesData {
   tags?: Record<string, string>;
 }
 
-/** One File share, as the API returns it. */
-export interface StorageAccountsFileSharesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One File share, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface StorageAccountsFileSharesResource extends Resource, StorageAccountsFileSharesData {
   readonly type: 'CyberCloud.Storage/accounts/fileShares';
-  readonly properties?: StorageAccountsFileSharesData['properties'];
 }
 
 /** What listMountTargets returns. */

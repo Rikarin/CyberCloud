@@ -91,7 +91,7 @@ Architecture`'s **Generated surfaces** gate regenerates every surface from the p
 compares bytes, which is what makes "and drift fails the build" a fact rather than an intention:
 
 ```text
-✔ Generated surfaces  Enforced  23 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
+✔ Generated surfaces  Enforced  32 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
   the cyc verb tree, the .NET SDK, the portal forms, and the Python and Go SDKs (#40) — and 6 file(s)
   of the portal's TypeScript client, all regenerated and compared byte-for-byte
 ✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 251 type(s), each compiled on its
@@ -123,10 +123,10 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Item | EM | Doc | Landed |
 |---|---|---|---|
 | Identity: OpenIddict, users/groups/apps/SPs, passkeys, TOTP, sign-up flow, sessions | 4.8 | [11](11-identity.md) | — [01](01-azure-parity-catalogue.md) gives this row a module and no resource type, so nothing in the type list is evidence either way |
-| Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 24. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
+| Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 32. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
 | Gateway: pipeline, auth, rate limits, region proxy, SignalR hubs, LRO endpoints | 4.2 | [10](10-gateway-and-api.md) | — no resource type. ⚠ #68 is an open **blocker**: the deployed gateway registers no `ICallerContextResolver` and 500s on every request, which is a different failure from "not written" and a worse one to read a green table over |
 | **Managed Kubernetes** (CAPI + Kamaji + KubeVirt) + node pools + credentials | 4.0 | [09](09-kubernetes-fabric.md), [13](13-compute-vm-containers.md) | ◐ `ContainerService/managedClusters` and `…/agentPools` both published; **the third noun in this row is the one that is owed.** The descriptor writes `kube-secret://{namespace}/{cluster}-kubeconfig#value` and nothing resolves that scheme, so the first call through an attached connection fails on the credential — `charts/managed/kubernetes/conformance.yaml` § `the-cluster-this-creates-is-not-connectable`. #24 is open behind it: no bootable node image for a Kubernetes minor worth offering |
-| Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 24 |
+| Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 32 |
 | Postgres · Valkey · NATS providers | 3.0 | [12](12-managed-data-services.md) | ✅ all three — `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`. ⚠ #69 (the seven-day recovery window came back to an `initdb`) closed 2026-09-15 by taking the claims into the platform's custody across the soft delete; the operator re-electing a primary over reattached claims is the half only a cluster with CloudNativePG installed can show — `charts/managed/postgres/conformance.yaml § owed` |
 | Container registry (Harbor) | 1.5 | [13](13-compute-vm-containers.md) | ✅ `ContainerRegistry/registries` |
 | Network: VPC, subnets, security groups, public IPs, DNS, L4 LB, WireGuard | 6.3 | [14](14-networking.md) | ◐ **3.3 shipped, 3.0 ⛔ blocked outside this repository (#23).** The split is below, and it is the row this reconciliation was asked for by name |
@@ -175,14 +175,14 @@ target scale.
 |---|---|---|---|---|
 | Data | FerretDB, RabbitMQ, Kafka, ClickHouse | 4.4 | — | ✅ **SHIPPED AHEAD OF PHASE 3 — all four, and the whole row.** `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, every one published with a provider, a chart and a conformance suite. ⚠ The 4.4 is [12 § Effort](12-managed-data-services.md)'s four M2 lines exactly — 1.2 + 0.8 + 1.2 + 1.2 — so the whole of it is spent, not part |
 | Compute | VMs + disks + images, scale sets, container instances | 3.8 | #28 | |
-| Registry | NuGet/npm/Maven feeds | 1.5 | #29 | |
+| Registry | NuGet/npm/Maven feeds | 1.5 | #29 | ◐ `ContainerRegistry/feeds` published (#29, 2026-09-15) with `CyberCloud.Registry.Feeds.Host` serving NuGet v3, npm and Maven over the gateway's bearer tokens, artefacts on the platform's object store, the catalogue in a durable grain. ⚠ The *host* third of [13](13-compute-vm-containers.md)'s "proxy + host + retention"; proxy and retention are not declared, and both are owed at `charts/managed/feeds/conformance.yaml § owed`, together with the two meters the row must emit and does not |
 | Storage | File shares, backup vaults, customer-managed keys | 3.0 | #30 | ◐ `Storage/accounts/fileShares` published (#30, 2026-09-15) with the chart under `charts/managed/seaweedfs-fileshare` — a `ReadWriteMany` claim the SeaweedFS CSI driver binds against the account's filer. ⚠ **The first noun of three, and a correction to [15](15-storage-blob-file.md) came with it:** the engine serves no NFS, so the pod half ships and the VM half is owed. Backup vaults and customer-managed keys are not resource types yet; `charts/managed/seaweedfs/conformance.yaml` § owed, `backup-vaults` and `customer-managed-keys`, say what blocks each. The same pass took `buckets`' `stats` action off `actions-without-handlers.txt`. ⚠ The k3s-backed lifecycle and silo-kill suites for all three Storage types first ran green on a real API server on 2026-09-15, after #30's review found them skipped on every machine that had tried — the harness now starts k3s 1.35 on a cgroup v1 Docker host — and the first real run found two defects the fake could not: the API server respells a claim's request (`102400Mi` → `100Gi`) and a shared driver cannot pass "delete → gone" with a sibling left behind |
-| Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | |
+| Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | ◐ `Network/virtualNetworks/natGateways` published (#31, 2026-09-15), on the router's own `OvnSnatRule` naming the address `publicIpAddresses` already renders rather than on the `VpcNatGateway` pod [14](14-networking.md) names — and it is the first thing on the platform that attaches a public address to anything. ⚠ **Peering is ⛔ blocked inside this repository, and the blocker is the platform's apply path rather than the substrate alone.** A Kube-OVN peering is two entries on two `Vpc` specs, both atomic lists (the `routeTables` refusal, twice over), and `KubeCommandBuilder` stamps every apply with the *applying* resource's ADR-013 labels — so a child writing its parent's object is a `FieldManagerConflict` on `resource-id`, `resource-type` and `reconcile-hash` by construction. Two resources cannot own one Kubernetes object on this platform today; what would close it is in `src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network/NetworkProvider.cs` and `charts/managed/kube-ovn-vpc/conformance.yaml § owed`. ⚠ **#31 stays open: one noun of four landed, and the other three are owed rows rather than a sentence.** Application gateway + WAF is measured and owed at `charts/managed/haproxy/conformance.yaml § owed`, `application-gateway-is-not-an-http-mode-of-this-proxy` — the L7 controller is not in `charts/bundle` at all, so its first deliverable is a bundle component and [ADR-019](02-technology-decisions.md)'s comparison, not a chart. Flow logs are measured and owed at `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `flow-logs-have-nothing-to-render` — the bundle installs no Cilium and so no Hubble, the substrate's CRDs export no flow, and [01](01-azure-parity-catalogue.md) files the deliverable under `CyberCloud.Monitor` at M3 rather than here. ⚠ The 3.6 is [14 § Effort](14-networking.md)'s 2.0 + 0.8 + 0.8; what landed is the NAT half of the 0.8 line, so no EM is claimed for this row |
 | Observability | App Insights views, OTel collector service, managed Grafana, alerts | 3.0 | #32 | ◐ `Monitor/workspaces/alertRules` published 2026-09-15 (#32, the alerts half): a condition over the workspace's metrics or logs, a severity and an action group naming a `Communication/services` resource, evaluated by one grain per workspace on a reminder — [16 § Alerts](16-observability.md). ⚠ **The fourth noun of four**; App Insights views, the collector service and managed Grafana are not resource types yet, so the type list confirms nothing about the other three, and the debt has an id — `charts/managed/monitor-workspace/conformance.yaml § owed`, `observability-three-of-four-nouns-not-landed` — rather than only this sentence (the #32 review asked for all four; the three are each a type with a chart or a portal surface, priced at 1.0 and 0.8 EM for the two doc 16 prices, and are not a follow-up commit's size). ⚠ **What ◐ does not mean**: no host registers a real query seam, so every evaluation in this tree runs against the refusing default and moves nothing — same file, `alert-rules-query-seam-is-refusing` — a notification reaches a carrier only where one is registered, which is the `Communication` row's own caveat one row down, and the action group offers the sending module's five channels and not doc 16's five: webhook and the portal inbox are `alert-rules-webhook-and-inbox-not-landed`. ⚠ **Reviewed the same day** (#32 review): a seam that throws no longer ends the pass, the pass stops asking at a budget under Orleans' response timeout with the reads interleaved, and the reconciler judges an enabled rule converged on its spec *and* its reminder row — [16 § Alerts](16-observability.md) |
 | Communication | Channels, templates, suppression, delivery receipts | 2.0 | #33 | ✅ **SHIPPED 2026-09-15 (#33)**: `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions` — the tenant-facing face of the module that had carried the platform's OTPs since before any provider existed. ⚠ **Three of the four nouns are types and the fourth is not, deliberately**: a delivery receipt is per send, a send is an event rather than desired state, and the receipts come back on the `services` type's `status` action — [17 § `CyberCloud.Communication/services`](17-communication-and-email.md) says why a `messages` type would have had a PUT nothing could apply. ⚠ **The first clusterless family in the catalogue**, and the shared conformance suite grew a clusterless half to say what a green run over it proves. ⚠ **What ✅ does not mean here**: no carrier client ships — every channel resolves to the module's refusing seam, so a `send` refuses honestly — doc 17's sender-id registration flow has its grain and no resource surface, and the fourth noun has its read half only: `status` renders receipts and no HTTP ingress exists for a carrier to deliver one through, which lands with the first carrier because its signature is the callback's only authentication; `charts/bundle/bundle.yaml § owed` carries all three |
 | **Mail** | Postfix/Dovecot/Rspamd, domains, mailboxes, deliverability, minimal webmail | 3.5 | #34 | ◐ `Mail/domains` published (#34, 2026-09-12) with the chart under `charts/managed/mail`. ⚠ The first noun of five; mailboxes, deliverability and the webmail are not resource types yet, so the type list confirms nothing about the other four |
 | Security | Malware scanning | 1.5 | #35 | |
-| Fabric | ⚠ Agent-initiated cluster connections (BYO behind NAT) | 1.5 | #36 | |
+| Fabric | ⚠ Agent-initiated cluster connections (BYO behind NAT) | 1.5 | #36 | ◐ `ContainerService/connectedClusters` published (#36, 2026-09-15): the agent (`charts/agent`, `CyberCloud.Agent.Host`), the gateway's tunnel endpoint, the tunnel grain and the connection grain's route through it, with the attach flow — create, `listInstallCommand`, first heartbeat → `Succeeded` — pinned end to end in-process. ⚠ **Two halves are not landed and the row stays ◐ for both:** informers do not cross the tunnel (a watch is a stream, a frame has one answer), and **no suite crosses a real NAT** — the M2 exit criterion this row exists for is unproved until the "deliberately hostile BYO cluster" of [09 § Testing the fabric](09-kubernetes-fabric.md) exists. `charts/agent/conformance.yaml § owed` holds both |
 | ReBAC | `ListObjects`, Leopard index | 2.2 | #37 | ✅ `ListObjects` landed 2026-09-15 as `IListObjectsGrain` — a scoped reverse walk the resource list now intersects with instead of a `Check` per member. The Leopard index landed the same day as `IMembershipIndexGrain`, keyed by subject object and holding both directions, written by the tuple store as a step of every write and delete; `Check` tests membership against it and the walk reads a subject's closed usersets from it in one read. ⚠ **Owed, and recorded in [07 § The Leopard index](07-rebac-authorization.md)**: the materialization threshold, the roaring bitmap, a tenant-wide rebuild after a schema bump, and the resource-graph access column |
 | Billing | Rating, invoicing, PSP, tax service, cost views, budgets | 3.6 | #38 | |
 | Platform | Management groups, deployments (templates), shard pinning | 1.5 | #39 | |
@@ -218,13 +218,16 @@ other — see [§ Running total](#running-total), which is where the consequence
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
 median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 
-⚠ **On "28 resource types": there are 28 today**, and ten of them are this phase's — the `Data` row's
-four, `Mail/domains`, the `Communication` row's four, and `Monitor/workspaces/alertRules`. The other
+⚠ **On "28 resource types": there are 32 today**, and fourteen of them are this phase's — the `Data`
+row's four, `Mail/domains`, the `Communication` row's four, `Monitor/workspaces/alertRules`, and the
+four that merged on 2026-09-15 from four branches that each counted only itself:
+`Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`,
+`ContainerService/connectedClusters` and `ContainerRegistry/feeds`. The other
 eighteen are counted, phase by phase, in [§ What has landed](#what-has-landed--recounted-2026-09-15) —
-which is also where to see that two of the 28 belong to phase 4 and one is phase 1's deliberately
-trivial sample. ⚠ **The count now equals the criterion and the criterion is not met**: "28 resource
-types" was written as a proxy for a catalogue, five of the 28 are children of two families, and the
-three rows that reached the number are each one noun of several. Read the exit off the rows, not the
+which is also where to see that two of the 32 belong to phase 4 and one is phase 1's deliberately
+trivial sample. ⚠ **The count passed the criterion and the criterion is not met**: "28 resource
+types" was written as a proxy for a catalogue, nine of the 32 are children of families, and the
+rows that reached the number are each one noun of several. Read the exit off the rows, not the
 total.
 
 ---
@@ -330,30 +333,29 @@ counting its own paragraph. #45 said 22, and 22 was right until #34 published `M
 recounting here — the test this section describes went red and stayed red for three days, which is
 exactly the drift it exists to catch; 23 was right until #33 published the four `Communication` types
 on 2026-09-15, recounting in the same change, and 27 until #32 published `Monitor/workspaces/alertRules`
-the same day, again recounting in the same change; 28 is right. That is worth *establishing* rather than
+the same day, again recounting in the same change; 28 until the merge of 2026-09-15 landed four
+more from four branches (#30, #31, #36, #29), each of which had recounted itself to 24 against a
+master that had 23 — the merge took none of their numbers and re-ran the command; 32 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
-⚠ **Two branches recounted to 24 on the same day from the same 23, and only one of them can be
-right after the other merges.** #31 counts `Network/virtualNetworks/natGateways`; #30's branch
-counts `Storage/accounts/fileShares`, in this same paragraph, the phase-3 row below, and the phase-3
-exit paragraph above. Whichever merges second lands on a master that already has 24 and is itself
-the 25th. ⚠ And the merge was run rather than imagined — `git merge-tree --write-tree` over the two
-branches — and it conflicts on the *prose* and not on the *numbers*: the phase-3 row, this
-paragraph, the exit paragraph and the two M2 rows conflict, while the pinned `24` under the command,
-the gate line, "All 24" and the **Total** row were changed identically on both sides and merge
-clean — at 24, which is then wrong. Resolve it by re-running the command, not by picking a side:
-every count in this section, the phase-3 row and its Total, the phase-3 exit paragraph, the gate
-line quoted under phase 2's criterion 4, and the three rows that say "the 24" in prose (managed
-identity, Vault, tenancy) all move to 25 together. `RoadmapReconciliationTests` fails on the table,
-the Total and the pinned number if that is skipped; the prose it cannot see is why the list is
-written out here.
+⚠ **Four branches recounted to 24 on the same day from the same 23, and none of them was right
+after the others merged.** #30 counted `Storage/accounts/fileShares`, #31 `Network/virtualNetworks/natGateways`,
+#36 `ContainerService/connectedClusters` and #29 `ContainerRegistry/feeds`, each in its own phase-3
+row, this paragraph and the exit paragraph above — and each merged onto a master that already held
+the earlier ones. The merge conflicted on the *prose* and not on the *numbers*: the pinned count
+under the command, the gate line, "All N" and the **Total** row were changed identically on every
+side and would have merged clean at 24, which was wrong by four. It was resolved by re-running the
+command, not by picking a side, which is what this paragraph asks for: every count in this
+section, the phase-3 row and its Total, the phase-3 exit paragraph, and the gate line quoted under
+phase 2's criterion 4 move together. `RoadmapReconciliationTests` fails on the table, the Total and
+the pinned number if that is skipped; the prose it cannot see is why the list is written out here.
 
 The document, read directly:
 
 ```console
 $ grep -o '"x-cybercloud-resource-type": "[^"]*"' openapi/2026-08-01.json \
     | sed 's/.*: "//;s/"$//' | sort -u | wc -l
-28
+32
 ```
 
 and the build, from the other end — `./build.sh Architecture`'s **Generated surfaces** gate regenerates
@@ -361,7 +363,7 @@ every surface from `src/CyberCloud.ResourceManager/Registry/` and compares bytes
 registry's rather than the document's:
 
 ```text
-✔ Generated surfaces  Enforced  28 resource type(s) over 2 OpenAPI document(s), …
+✔ Generated surfaces  Enforced  32 resource type(s) over 2 OpenAPI document(s), …
 ```
 
 ⚠ **What would make this stale, said plainly so it can be checked rather than trusted:** any provider's
@@ -389,7 +391,7 @@ only.** No EM figure anywhere in this document is machine-checked — not a phas
 the 69.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
 heading is still what says when a person last read the rest.
 
-All 28, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
+All 32, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
 published document and asserts the two sets are equal, so an abbreviated `…/subnets` would be a name no
 test could match and the check would quietly become a check of nothing.
@@ -398,9 +400,9 @@ test could match and the check would quietly become a check of nothing.
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles` | 15 |
-| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules` | 10 |
+| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds` | 14 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
-| **Total** | | **28** |
+| **Total** | | **32** |
 
 ⚠ **`agentPools` is itself an ahead-of-phase landing that this table cannot show twice.** Phase 2's row
 names node pools, so it is counted as phase 2 here — but [01](01-azure-parity-catalogue.md) verdicts
@@ -428,7 +430,7 @@ Where an issue tracks one of these rows it is named on the row; where none does,
 the finding.
 
 ⚠ **Tenancy is the case that looks like a gap and is not.** `CyberCloud.Platform/subscriptions` is an M1
-row in the catalogue and is not in the 24 — because tenants, subscriptions and resource groups are
+row in the catalogue and is not in the 32 — because tenants, subscriptions and resource groups are
 published as *scope paths* (`/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/…`) and
 not as typed resources under a provider (#63). Counting it as missing would have been the easy error in
 this recount, and it is written down here so the next recount does not make it.
