@@ -471,50 +471,142 @@ public sealed class DerivedSurfaceTests {
         depth.ShouldBe(0);
     }
 
-    // ── The two shapes issue #73's gate found on its first run ────────────────────────────────
+    // ── The shape issue #73's gate found, and the shape issue #79 gave the body instead ───────
     //
     // ⚠ Both had been checked in for as long as this emitter had existed, and both are the same
     // defect as the CS0101 and CS0246 that TypeScriptSurfaceTests records: a generated surface that
     // nothing compiles is a surface whose validity nobody has ever checked. The `Generated surfaces`
-    // gate compared it byte-for-byte the whole time and byte-identical is not valid.
+    // gate compared it byte-for-byte the whole time and byte-identical is not valid — and, one layer
+    // down, a file that compiles is not a file that serialises.
 
     /// <summary>
-    ///     ⚠ <b>Two leaves whose names are equal declare two properties, not one name twice.</b>
+    ///     ⚠ <b>A container is a nested class, and every leaf keeps its own wire name.</b>
     /// </summary>
     /// <remarks>
-    ///     The body is flattened onto one class, so <c>/properties/mode</c> and
+    ///     The body was flattened onto one class, so <c>/properties/mode</c> and
     ///     <c>/properties/persistence/mode</c> both emitted <c>public … Mode { get; set; }</c> —
-    ///     <c>CS0102</c>: fourteen duplicated names over eight declaring types in
-    ///     <c>generated/sdk/2026-08-01.cs</c> — seventeen diagnostics, because three of the names were
-    ///     declared three times — including <c>ValkeyCacheData.Mode</c> and
-    ///     <c>SubnetResource.ListAddressUsageResult.Total</c>. Only the nested one moves, which is
-    ///     the rule <c>SdkEmitter.EnumNaming</c> already applied one level up to the enum TYPE names
-    ///     of this very pair — the property names were left behind.
+    ///     <c>CS0102</c>, fourteen duplicated names over eight declaring types in
+    ///     <c>generated/sdk/2026-08-01.cs</c>. Issue #73's fix moved the nested one to
+    ///     <c>PersistenceMode</c> and left both carrying <c>[JsonPropertyName("mode")]</c>: a
+    ///     program that compiles and that <c>System.Text.Json</c> throws on, and one that would not
+    ///     round-trip even alone, because the wire body is
+    ///     <c>{"properties":{"mode":…,"persistence":{"mode":…}}}</c> and a flat class has no correct
+    ///     wire name for a nested leaf. Issue #79: the container is a class of its own, the two
+    ///     <c>mode</c>s are two members of two classes, and neither needs a path in its name.
     /// </remarks>
     [Fact]
-    public void TwoLeavesWithTheSameNameDeclareTwoPropertiesAndNotOneTwice() {
-        var body = Body(SdkOf(CollidingLeafNames()), "ServerData");
+    public void AContainerIsANestedClassAndItsLeavesKeepTheirOwnWireNames() {
+        var sdk = SdkOf(CollidingLeafNames());
 
-        PropertyNames(body).ShouldBe(["Mode", "PersistenceMode"], ignoreOrder: true);
+        sdk.ShouldContain("    public sealed partial class PropertiesData {");
+        sdk.ShouldContain("        public sealed partial class PersistenceData {");
+        sdk.ShouldContain("    public required PropertiesData Properties { get; set; }");
+        sdk.ShouldContain("        public PersistenceData? Persistence { get; set; }");
+        sdk.ShouldNotContain("PersistenceMode");
+
+        var scopes = WireNamesByScope(sdk);
+
+        scopes["ServerData.PropertiesData"].ShouldBe(["mode", "persistence"]);
+        scopes["ServerData.PropertiesData.PersistenceData"].ShouldBe(["mode"]);
     }
 
     /// <summary>
-    ///     ⚠ <b>A pair the nested form cannot separate throws, naming both pointers.</b>
+    ///     ⚠ <b>The pair the flat class could not separate needs no separating once the class nests.</b>
     /// </summary>
     /// <remarks>
-    ///     <c>/properties/persistenceMode</c> beside <c>/properties/persistence/mode</c> is the case
-    ///     the fallback runs out on. Thrown from the emitter for <c>SdkEmitter.ModelNames</c>'
-    ///     reason: the alternative is a <c>CS0102</c> in generated code that names neither the
-    ///     resource type nor the two schema properties that produced it, and the gate that would now
-    ///     catch it reports a line number in a 250 KB file rather than a cause.
+    ///     <c>/properties/persistenceMode</c> beside <c>/properties/persistence/mode</c> was the case
+    ///     issue #73's nested-name fallback ran out on, and this test asserted that it threw. It
+    ///     collided only because the fallback had put a path into a member name; with the nested
+    ///     leaf declared inside <c>PersistenceData</c>, <c>PersistenceMode</c> is the flat leaf's own
+    ///     name and nothing else's.
     /// </remarks>
     [Fact]
-    public void APairTheNestedNameCannotSeparateFailsRatherThanEmittingOneNameTwice() {
-        var thrown = Should.Throw<InvalidOperationException>(() => SdkOf(UnseparableLeafNames()));
+    public void APairTheFlatClassCouldNotSeparateNeedsNoSeparatingOnceTheClassNests() {
+        var scopes = WireNamesByScope(SdkOf(UnseparableLeafNames()));
 
-        thrown.Message.ShouldContain("/properties/persistence/mode");
-        thrown.Message.ShouldContain("/properties/persistenceMode");
-        thrown.Message.ShouldContain("ServerData.PersistenceMode");
+        scopes["ServerData.PropertiesData"].ShouldBe(["mode", "persistence", "persistenceMode"]);
+        scopes["ServerData.PropertiesData.PersistenceData"].ShouldBe(["mode"]);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Every wire name is declared once within its class, over every fixture this suite emits.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The unit-level twin of <c>build/GeneratedSdkSurface.cs</c>'s wire-name check, which reads
+    ///     the checked-in file with Roslyn and cannot see a fixture. A brace-scope pass over the text
+    ///     is the same pass issue #79 counted its fourteen with by hand.
+    /// </remarks>
+    [Fact]
+    public void EveryWireNameIsDeclaredOnceWithinItsClass() {
+        foreach (var sdk in new[] { Sdk, SdkOf(CollidingLeafNames()), SdkOf(UnseparableLeafNames()) }) {
+            var scopes = WireNamesByScope(sdk);
+
+            scopes.ShouldNotBeEmpty();
+
+            foreach (var (scope, names) in scopes) {
+                names.ShouldBeUnique(customMessage: scope);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A container is <c>required</c> when its parent says so, nullable when it does not, and never initialised.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <c>= new()</c> on an optional container whose members are <c>required</c> is
+    ///     <c>CS9035</c>, the family issue #73 found 110 of on <c>{Model}Resource.Data</c>; and an
+    ///     omitted container is what a merge patch means by "not changed". The tag bag is the one
+    ///     <c>object</c> that stays an initialised <c>IDictionary</c>: it has no members to require.
+    /// </remarks>
+    [Fact]
+    public void AContainerIsRequiredOrNullableAsItsParentSaysAndIsNeverInitialised() {
+        Sdk.ShouldContain("    public required PropertiesData Properties { get; set; }");
+        Sdk.ShouldContain("        public required SkuData Sku { get; set; }");
+        Sdk.ShouldContain("    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);");
+        Sdk.ShouldNotContain("Data Properties { get; set; } = new");
+        SdkOf(CollidingLeafNames()).ShouldContain("        public PersistenceData? Persistence { get; set; }");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Two siblings that differ in the document and not in C# throw, naming both pointers.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <c>max_memory</c> beside <c>maxMemory</c> are two JSON members and one identifier —
+    ///     <c>CS0102</c>. Thrown from the emitter for <c>SdkEmitter.ModelNames</c>' reason: the
+    ///     alternative is a compiler error in generated code that names neither the resource type
+    ///     nor the two schema properties that produced it, and the gate that would catch it reports
+    ///     a line number in a 250 KB file rather than a cause.
+    /// </remarks>
+    [Fact]
+    public void TwoSiblingsThatAreOneIdentifierFailRatherThanDeclaringOneNameTwice() {
+        var thrown = Should.Throw<InvalidOperationException>(() => SdkOf(CaseCollidingSiblings()));
+
+        thrown.Message.ShouldContain("/properties/max_memory");
+        thrown.Message.ShouldContain("/properties/maxMemory");
+        thrown.Message.ShouldContain("ServerData.PropertiesData.MaxMemory");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A sibling leaf named for a container's class throws, because a type and a property share one declaration space.</b>
+    /// </summary>
+    [Fact]
+    public void ASiblingLeafNamedForAContainersClassFailsRatherThanColliding() {
+        var thrown = Should.Throw<InvalidOperationException>(() => SdkOf(LeafNamedForASiblingsClass()));
+
+        thrown.Message.ShouldContain("/properties/persistence (its class)");
+        thrown.Message.ShouldContain("/properties/persistenceData");
+        thrown.Message.ShouldContain("ServerData.PropertiesData.PersistenceData");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A leaf named for the class that holds it throws, which is <c>CS0542</c> said at the source.</b>
+    /// </summary>
+    [Fact]
+    public void ALeafNamedForItsOwnContainerFailsRatherThanBeingCS0542() {
+        var thrown = Should.Throw<InvalidOperationException>(() => SdkOf(LeafNamedForItsOwnContainer()));
+
+        thrown.Message.ShouldContain("/properties/persistence/persistenceData");
+        thrown.Message.ShouldContain("CS0542");
     }
 
     /// <summary>
@@ -844,25 +936,53 @@ public sealed class DerivedSurfaceTests {
             )
         );
 
-    /// <summary>The body of one top-level emitted class, between its brace and the one at column 0.</summary>
-    static string Body(string source, string className) {
-        var head = "public sealed partial class " + className + " {\n";
-        var at = source.IndexOf(head, StringComparison.Ordinal);
+    /// <summary>
+    ///     Every <c>[JsonPropertyName]</c> in an emitted file, grouped by the dotted name of the class
+    ///     that declares it — <c>ServerData.PropertiesData.PersistenceData</c>.
+    /// </summary>
+    /// <remarks>
+    ///     A brace-scope pass over the declaration lines this emitter writes: a <c>class</c> or
+    ///     <c>enum</c> line ending in <c>{</c> opens a scope, a bare <c>}</c> closes one, and an
+    ///     attribute line is credited to the scope its property is declared in. The real reader is
+    ///     Roslyn, in <c>build/GeneratedSdkSurface.cs</c>; this is the fixture-level twin.
+    /// </remarks>
+    static Dictionary<string, List<string>> WireNamesByScope(string source) {
+        var scopes = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var open = new Stack<string>();
+        string? pending = null;
 
-        at.ShouldBeGreaterThanOrEqualTo(0, $"the emitter declared no '{className}'");
+        foreach (var raw in source.Split('\n')) {
+            var line = raw.Trim();
 
-        var rest = source[(at + head.Length)..];
+            if (line.StartsWith("[JsonPropertyName(\"", StringComparison.Ordinal)) {
+                pending = line["[JsonPropertyName(\"".Length..line.IndexOf("\")]", StringComparison.Ordinal)];
+                continue;
+            }
 
-        return rest[..rest.IndexOf("\n}\n", StringComparison.Ordinal)];
+            if (line.StartsWith("public ", StringComparison.Ordinal) && line.EndsWith(" {", StringComparison.Ordinal)) {
+                var words = line[..^2].Split(' ');
+                var name = words[^1];
+
+                open.Push(open.Count == 0 ? name : open.Peek() + "." + name);
+                scopes.TryAdd(open.Peek(), []);
+                continue;
+            }
+
+            if (line == "}") {
+                open.Pop();
+                continue;
+            }
+
+            if (pending is { } wire && line.StartsWith("public ", StringComparison.Ordinal)) {
+                scopes[open.Peek()].Add(wire);
+                pending = null;
+            }
+        }
+
+        open.ShouldBeEmpty();
+
+        return scopes;
     }
-
-    /// <summary>The identifier of every auto-property declared in a class body.</summary>
-    static IEnumerable<string> PropertyNames(string body) =>
-        body.Split('\n')
-            .Select(x => x.Trim())
-            .Where(x => x.Contains(" { get; set; }", StringComparison.Ordinal))
-            .Select(x => x[..x.IndexOf(" { get; set; }", StringComparison.Ordinal)])
-            .Select(x => x[(x.LastIndexOf(' ') + 1)..]);
 
     /// <summary>A body with <c>mode</c> at two depths — the shape that emitted <c>Mode</c> twice.</summary>
     static ResourceSchema CollidingLeafNames() =>
@@ -876,8 +996,8 @@ public sealed class DerivedSurfaceTests {
         );
 
     /// <summary>
-    ///     The same pair plus the flat spelling of the nested one's fallback name, which is the case
-    ///     the fallback runs out on.
+    ///     The same pair plus the flat spelling of the nested one's old fallback name — the case
+    ///     issue #73's fallback ran out on, and the nested class does not notice.
     /// </summary>
     static ResourceSchema UnseparableLeafNames() =>
         ResourceSchema.Of(
@@ -886,7 +1006,38 @@ public sealed class DerivedSurfaceTests {
                 new("/properties/mode", SchemaKind.Text, Description: "The top-level one."),
                 new("/properties/persistence", SchemaKind.Nested),
                 new("/properties/persistence/mode", SchemaKind.Text, Description: "The nested one."),
-                new("/properties/persistenceMode", SchemaKind.Text, Description: "The one that ends it.")
+                new("/properties/persistenceMode", SchemaKind.Text, Description: "The one that used to end it.")
+            ]
+        );
+
+    /// <summary>Two siblings that are two JSON members and one C# identifier.</summary>
+    static ResourceSchema CaseCollidingSiblings() =>
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties/max_memory", SchemaKind.Text),
+                new("/properties/maxMemory", SchemaKind.Text)
+            ]
+        );
+
+    /// <summary>A leaf whose identifier is the class its sibling container declares.</summary>
+    static ResourceSchema LeafNamedForASiblingsClass() =>
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties/persistence", SchemaKind.Nested),
+                new("/properties/persistence/mode", SchemaKind.Text),
+                new("/properties/persistenceData", SchemaKind.Text)
+            ]
+        );
+
+    /// <summary>A leaf whose identifier is the class that holds it.</summary>
+    static ResourceSchema LeafNamedForItsOwnContainer() =>
+        ResourceSchema.Of(
+            [
+                new("/properties", SchemaKind.Nested, Required: true),
+                new("/properties/persistence", SchemaKind.Nested),
+                new("/properties/persistence/persistenceData", SchemaKind.Text)
             ]
         );
 }

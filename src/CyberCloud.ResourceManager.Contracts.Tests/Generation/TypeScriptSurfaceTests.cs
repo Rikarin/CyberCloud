@@ -161,6 +161,50 @@ public sealed class TypeScriptSurfaceTests {
     }
 
     /// <summary>
+    ///     ⚠ <b>The two clients agree about the shape of a body: every container the document
+    ///     declares is a nested object on both.</b>
+    /// </summary>
+    /// <remarks>
+    ///     Issue #79's evidence that the flat .NET SDK was a defect and not a taste: this emitter
+    ///     read <c>{"properties":{"sku":{"name":…}}}</c> and wrote <c>sku: { name }</c>, while
+    ///     <c>SdkEmitter</c> read the same document and wrote <c>SkuName</c> on a flat class with
+    ///     <c>[JsonPropertyName("name")]</c>. Two generated clients for one API disagreed about what
+    ///     the API returns, and only one could be right. The document is the shape, and docs/plan/21
+    ///     § Generation's conventions table now says so for every surface; this holds the two that
+    ///     have a nesting to it.
+    /// </remarks>
+    [Fact]
+    public void BothClientsNestEveryContainerTheDocumentDeclares() {
+        var document = Document;
+        var models = TypeScriptEmitter.Emit(document)["src/models.ts"];
+        var sdk = SdkEmitter.Emit(document);
+        var containers = 0;
+
+        foreach (var type in DocumentReader.TypesOf(document)) {
+            foreach (var leaf in DocumentReader.LeavesOf(type.Body)) {
+                if (!leaf.IsObject) {
+                    continue;
+                }
+
+                containers++;
+
+                models.ShouldContain(
+                    leaf.Name + (leaf.Required ? ": {" : "?: {"),
+                    customMessage: $"{type.ResourceType} {leaf.JsonPointer} on the TypeScript client"
+                );
+                sdk.ShouldContain(
+                    "public sealed partial class " + SdkEmitter.Pascal(leaf.Name) + "Data {",
+                    customMessage: $"{type.ResourceType} {leaf.JsonPointer} on the .NET SDK"
+                );
+            }
+        }
+
+        // The fixture declares /properties and /properties/sku on the server and /properties on the
+        // database; a fixture with no container would make this a test of nothing.
+        containers.ShouldBeGreaterThanOrEqualTo(3);
+    }
+
+    /// <summary>
     ///     ⚠ <b>A path is built with every segment encoded.</b>
     /// </summary>
     /// <remarks>

@@ -57,6 +57,13 @@ makes the gateway serve `openapi/` as files. Nothing here is served to anyone.
   to Roslyn against the real `CyberCloud.Sdk`, accepting `CS8795` and nothing else. It is the C#
   equivalent of the `pnpm typecheck:api` that has always covered the TypeScript client.
 
+  ⚠ **And a file that compiles is not a file that serialises.** After #73's fix the file compiled
+  while fourteen `[JsonPropertyName]`s across eight types were declared twice on one type — the
+  identifiers had been renamed and the wire names had not, because a flat class has no correct wire
+  name for a nested leaf. The same gate now reads every one of those attributes off the checked-in
+  file and refuses a name declared twice by one type (#79); the emitter declares a nested class per
+  container, which is the shape `portal/libs/api` had from the start.
+
   ⚠ **The row above it compares BYTES, and byte-identical is not valid.** That distinction is not
   theoretical: `sdk/2026-08-01.cs` was shipping `CS0101` (a duplicated enum name), `CS0246` (an
   action's enum referenced and never declared), seventeen `CS0102`s over fourteen duplicated property

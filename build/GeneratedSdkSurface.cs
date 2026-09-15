@@ -9,6 +9,7 @@
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Nuke.Common.IO;
 using System;
 using System.Collections.Generic;
@@ -32,7 +33,25 @@ using System.Linq;
 ///     One line per compiler error, already filtered to the ones that are defects. Empty is the
 ///     verdict the gate wants.
 /// </param>
-sealed record GeneratedSdkFile(string File, int Types, int Declared, IReadOnlyList<string> Errors);
+/// <param name="WireNames">
+///     How many <c>[JsonPropertyName]</c> members it declares, over every type. ⚠ The second
+///     vacuity guard: a file whose types name nothing on the wire has nothing for
+///     <see cref="DuplicateWireNames" /> to find, and a tick over it would be the tick issue #79
+///     was filed about.
+/// </param>
+/// <param name="DuplicateWireNames">
+///     One line per wire name declared more than once by the direct members of one type. Empty is
+///     the verdict; see <see cref="GeneratedSdkSurface.WireNamesOf" /> for why the compiler cannot
+///     be asked this.
+/// </param>
+sealed record GeneratedSdkFile(
+    string File,
+    int Types,
+    int Declared,
+    IReadOnlyList<string> Errors,
+    int WireNames,
+    IReadOnlyList<string> DuplicateWireNames
+);
 
 /// <summary>
 ///     Hands <c>generated/sdk/{api-version}.cs</c> to Roslyn, against the real
@@ -274,13 +293,134 @@ static class GeneratedSdkSurface {
             .Select(Describe)
             .ToList();
 
+        var root = tree.GetRoot();
+        var (wireNames, duplicates) = WireNamesOf(root);
+
         return new GeneratedSdkFile(
             file.Name,
-            tree.GetRoot().DescendantNodes().Count(IsTypeDeclaration),
+            root.DescendantNodes().Count(IsTypeDeclaration),
             diagnostics.Count(x => string.Equals(x.Id, PartialWithoutImplementation, StringComparison.Ordinal)),
-            errors
+            errors,
+            wireNames,
+            duplicates
         );
     }
+
+    /// <summary>
+    ///     Every <c>[JsonPropertyName]</c> in the file, checked for a name declared twice by the
+    ///     direct members of one type.
+    /// </summary>
+    /// <param name="root">The parsed file.</param>
+    /// <returns>How many wire names were read, and one line per duplicate.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             THE COMPILER CANNOT SEE THIS, AND THAT IS WHY IT IS HERE — issue #79.
+    ///         </b> Issue #73's <c>CS0102</c> fix renamed the colliding C# IDENTIFIERS —
+    ///         <c>ValkeyCacheData.Mode</c> twice became <c>Mode</c> and <c>PersistenceMode</c> — and
+    ///         left each property's <c>[JsonPropertyName]</c> as the leaf's own name. The file then
+    ///         compiled while carrying <b>fourteen duplicated wire names across eight types</b>
+    ///         (<c>"mode"</c> twice on <c>ValkeyCacheData</c>, <c>"enabled"</c> three times on each
+    ///         of <c>KafkaClusterData</c>, <c>NATSClusterData</c> and <c>PostgreSQLServerData</c>,
+    ///         and so on), which is a valid C# program that <c>System.Text.Json</c> refuses on the
+    ///         first serialisation of each such type. <see cref="Compile" /> reports errors, and a
+    ///         wrong program compiles; this is the check that reads the attribute the compiler only
+    ///         parses.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Scoped to the DIRECT members of one type, not the type's subtree.</b> A nested
+    ///         class is a nested object on the wire, and <c>"mode"</c> on
+    ///         <c>ValkeyCacheData.PropertiesData</c> beside <c>"mode"</c> on
+    ///         <c>ValkeyCacheData.PropertiesData.PersistenceData</c> is the CORRECT rendering of
+    ///         <c>{"properties":{"mode":…,"persistence":{"mode":…}}}</c> — it is the shape
+    ///         <c>SdkEmitter</c> now emits, and the reason the fourteen went away. Grouping over a
+    ///         subtree would fail the fix.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Read off the syntax tree rather than the semantic model, deliberately.</b> The
+    ///         attribute's argument is a string literal the emitter wrote, and a literal is a fact
+    ///         the parser already has; binding the attribute would make this check depend on
+    ///         <c>System.Text.Json</c> resolving, which is the reference set's business and would
+    ///         turn a missing assembly into a silent zero. The name is matched with and without the
+    ///         <c>Attribute</c> suffix, because both spellings are legal and the emitter could
+    ///         switch.
+    ///     </para>
+    ///     <para>
+    ///         ✔ <b>Verified over the file it was written against.</b> Run over
+    ///         <c>generated/sdk/2026-08-01.cs</c> as checked in before the emitter change, on
+    ///         2026-09-15, this reported the fourteen names on the eight types that issue #79 counted
+    ///         by hand — the same fourteen, derived a second way — and zero over the regenerated file.
+    ///     </para>
+    /// </remarks>
+    internal static (int Checked, IReadOnlyList<string> Duplicates) WireNamesOf(SyntaxNode root) {
+        var checkedNames = 0;
+        var duplicates = new List<string>();
+
+        foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>()) {
+            var named = type.Members
+                .OfType<PropertyDeclarationSyntax>()
+                .Select(property => (Property: property, Wire: WireNameOf(property)))
+                .Where(x => x.Wire is not null)
+                .ToList();
+
+            checkedNames += named.Count;
+
+            foreach (var group in named.GroupBy(x => x.Wire, StringComparer.Ordinal)) {
+                if (group.Count() < 2) {
+                    continue;
+                }
+
+                var members = string.Join(
+                    ", ",
+                    group.Select(x => $"{x.Property.Identifier.ValueText} (line {LineOf(x.Property)})")
+                );
+
+                duplicates.Add(
+                    $"line {LineOf(group.First().Property)}: \"{group.Key}\" is the wire name of "
+                    + $"{group.Count()} members of {ScopeOf(type)} — {members}. System.Text.Json "
+                    + "throws on the first serialisation of the type, and no flat class has a "
+                    + "correct wire name for a nested leaf"
+                );
+            }
+        }
+
+        return (checkedNames, duplicates);
+    }
+
+    /// <summary>The string a property's <c>[JsonPropertyName]</c> carries, or <c>null</c> when it has none.</summary>
+    static string? WireNameOf(PropertyDeclarationSyntax property) {
+        foreach (var attribute in property.AttributeLists.SelectMany(x => x.Attributes)) {
+            var name = attribute.Name switch {
+                QualifiedNameSyntax qualified => qualified.Right.Identifier.ValueText,
+                SimpleNameSyntax simple => simple.Identifier.ValueText,
+                _ => attribute.Name.ToString()
+            };
+
+            if (name is not ("JsonPropertyName" or "JsonPropertyNameAttribute")) {
+                continue;
+            }
+
+            if (attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression
+                is LiteralExpressionSyntax { RawKind: (int)SyntaxKind.StringLiteralExpression } literal) {
+                return literal.Token.ValueText;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A type's name as a reader would write it — <c>SubnetResource.ListAddressUsageResult</c>.</summary>
+    static string ScopeOf(TypeDeclarationSyntax type) =>
+        string.Join(
+            ".",
+            type.AncestorsAndSelf()
+                .OfType<TypeDeclarationSyntax>()
+                .Reverse()
+                .Select(x => x.Identifier.ValueText)
+        );
+
+    static int LineOf(SyntaxNode node) => node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
     /// <summary>
     ///     A diagnostic as a line somebody can act on: the id, the 1-based line, and the message.
@@ -296,8 +436,7 @@ static class GeneratedSdkSurface {
         return $"line {line}: {diagnostic.Id} {diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture)}";
     }
 
-    static bool IsTypeDeclaration(SyntaxNode node) =>
-        node is Microsoft.CodeAnalysis.CSharp.Syntax.BaseTypeDeclarationSyntax;
+    static bool IsTypeDeclaration(SyntaxNode node) => node is BaseTypeDeclarationSyntax;
 
     /// <summary>
     ///     The shared framework, taken from the list this process was started with.

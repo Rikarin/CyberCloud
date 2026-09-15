@@ -297,6 +297,27 @@ partial class Build {
                         + "that is correct."
                     );
                 }
+
+                // ⚠ AND THE CHECK A COMPILER CANNOT MAKE — issue #79. The file compiled for ten
+                // days while fourteen of its wire names were declared twice on one type, because
+                // the CS0102 fix renamed identifiers and [JsonPropertyName] is a string the compiler
+                // only parses. Same reasoning as the compile check: this target has just rewritten
+                // the file, so it is the earliest place to say so.
+                foreach (var duplicate in compiled.DuplicateWireNames) {
+                    failures.Add(
+                        $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} "
+                        + $"compiles and does not serialise — {duplicate}. Fix the emitter, not the "
+                        + "file."
+                    );
+                }
+
+                if (compiled.Types > 0 && compiled.WireNames == 0) {
+                    failures.Add(
+                        $"{DerivedSurfacesDirectory.Name}/{SdkSurfaceDirectory}/{compiled.File} "
+                        + $"declares {compiled.Types} type(s) and not one [JsonPropertyName], so the "
+                        + "wire-name check had nothing to read."
+                    );
+                }
             }
         }
 
@@ -333,12 +354,14 @@ partial class Build {
             Log.Information(
                 "Generate: {Count} document(s) regenerate byte-identically and break nothing published; "
                 + "{Client} TypeScript client file(s) for the portal; {Sdk} .NET SDK api-version "
-                + "file(s) declaring {Types} type(s), each compiled on its own against {Assembly}",
+                + "file(s) declaring {Types} type(s), each compiled on its own against {Assembly}, "
+                + "with {WireNames} [JsonPropertyName] member(s) and none declared twice by one type",
                 report.Documents.Count,
                 report.TypeScript.Count,
                 compiledSdk.Count,
                 compiledSdk.Sum(x => x.Types),
-                SdkAssemblyName
+                SdkAssemblyName,
+                compiledSdk.Sum(x => x.WireNames)
             );
 
             // ⚠ Zero files is news rather than silence, the same distinction Build.Charts.cs draws:

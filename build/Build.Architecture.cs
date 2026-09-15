@@ -167,7 +167,7 @@ partial class Build {
         ("Generated surfaces",
             "OpenAPI/CLI/SDK/forms and the portal's TypeScript client regenerate byte-identically from the registry"),
         ("Generated SDK compiles",
-            "every generated/sdk/{api-version}.cs is handed to Roslyn against the real CyberCloud.Sdk — the row above compares bytes, and byte-identical is not valid. Issue #73; not in docs/plan/23"),
+            "every generated/sdk/{api-version}.cs is handed to Roslyn against the real CyberCloud.Sdk — the row above compares bytes, and byte-identical is not valid — and no type in it declares one [JsonPropertyName] twice, which compiles and does not serialise. Issues #73 and #79; not in docs/plan/23"),
         ("Action handlers",
             "every synchronous declared action names an IResourceActionHandler; a long-running one must not — not in docs/plan/23"),
         ("OpenAPI compatibility", "published api-versions diffed; a breaking change fails"),
@@ -1480,6 +1480,18 @@ partial class Build {
     ///         "the file in git is not valid C#" is the sentence issue #73 is about.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>And since issue #79 it asks one question the compiler cannot: is any wire name
+    ///         declared twice by one type.</b> Issue #73's <c>CS0102</c> fix renamed the colliding
+    ///         identifiers and left each <c>[JsonPropertyName]</c> as the leaf's own name, so the
+    ///         file compiled for ten days carrying fourteen duplicated wire names across eight
+    ///         types — <c>"mode"</c> twice on <c>ValkeyCacheData</c>, <c>"enabled"</c> three times
+    ///         on <c>KafkaClusterData</c> — each a <c>System.Text.Json</c> throw on the type's first
+    ///         serialisation, and green here. <see cref="GeneratedSdkSurface.WireNamesOf" /> reads
+    ///         the attributes off the same syntax tree, scoped to a type's DIRECT members because a
+    ///         nested class is a nested wire object and the same name at two depths is the fix, not
+    ///         the defect. Run over the pre-fix file on 2026-09-15 it listed exactly the fourteen.
+    ///     </para>
+    ///     <para>
     ///         ⚠
     ///         <b>
     ///             Counted in FILES and in the types they declare, and the second number is the
@@ -1516,6 +1528,28 @@ partial class Build {
                     + "generator that produced nothing, not an SDK that is correct"
                 );
             }
+
+            // ⚠ THE CHECK THE COMPILER CANNOT MAKE — issue #79. A valid C# class may carry one
+            // [JsonPropertyName] twice, and the checked-in file carried fourteen such pairs across
+            // eight types after issue #73's fix renamed the identifiers and nothing else. Reported
+            // beside the compiler's own errors because it is the same question one layer down:
+            // "would a consumer's serializer accept this type".
+            foreach (var duplicate in file.DuplicateWireNames) {
+                violations.Add(
+                    $"generated/{SdkSurfaceDirectory}/{file.File} compiles and does not serialise — "
+                    + $"{duplicate}. The fix is in SdkEmitter, which declares a nested class per "
+                    + "container so that each leaf keeps the wire name the document gives it, and "
+                    + "then ./build.sh Generate"
+                );
+            }
+
+            if (file.Types > 0 && file.WireNames == 0) {
+                violations.Add(
+                    $"generated/{SdkSurfaceDirectory}/{file.File} declares {file.Types} type(s) and "
+                    + "not one [JsonPropertyName], so the wire-name check above had nothing to read. "
+                    + "An SDK whose models name nothing on the wire is not one that round-trips"
+                );
+            }
         }
 
         return GateOutcome.From(
@@ -1524,7 +1558,8 @@ partial class Build {
             $"api-version file(s) declaring {compiled.Sum(x => x.Types)} type(s), each compiled on "
             + $"its own against {SdkAssemblyName} — {compiled.Sum(x => x.Declared)} partial member(s) "
             + "accepted as declared-but-not-implemented, which is the hand-written half that does "
-            + "not exist yet (docs/plan/21 § Generation)",
+            + $"not exist yet (docs/plan/21 § Generation); {compiled.Sum(x => x.WireNames)} "
+            + "[JsonPropertyName] member(s) read, none declared twice by one type (issue #79)",
             violations
         );
     }

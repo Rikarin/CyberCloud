@@ -87,64 +87,96 @@ public sealed partial class ClickHouseClusterData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the ClickHouse cluster.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Number of ClickHouse Keeper nodes. Keeper is a Raft quorum, so three is the smallest count that survives losing one and an even count tolerates no more failures than the odd count below it. One is offered for development and has no quorum at all.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("keeperNodes")]
-    public required long KeeperNodes { get; set; }
-
-    /// <summary>Whether ClickHouse's own Prometheus endpoint is served on port 9363. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ It makes the metrics exist; the object that scrapes them is not built — see conformance.yaml § owed.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>Number of replicas per shard. This is the availability axis, and it only applies to tables the tenant creates as Replicated — the resource does not manage tables. Total server count is shards times replicas.</summary>
-    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("replicas")]
-    public required long Replicas { get; set; }
-
-    /// <summary>Number of shards. This is the capacity and parallelism axis: a table's data is split across shards and a query fans out to all of them. ⚠ Resharding an existing table is not something the operator or this resource does, so growing this moves new data only.</summary>
-    /// <remarks>Required on a create. Defaults to 1 when left unset.</remarks>
-    [JsonPropertyName("shards")]
-    public required long Shards { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Analytics uses the m1 family, which is 1 vCPU to 8 GiB.</summary>
-    /// <remarks>Defaults to "m1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public ClickHouseClusterPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name for the ClickHouse servers and the Keeper nodes. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Data volume size per ClickHouse server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
-    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>ClickHouse version, which is also the ClickHouse Keeper version — the two share a release train and a wire protocol. Only long-term-support lines are offered; a new api-version is what adds a third.</summary>
-    /// <remarks>Required on a create. Defaults to "25.3" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required ClickHouseClusterVersion Version { get; set; }
+    /// <summary>The cluster's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The cluster's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the ClickHouse cluster.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Number of ClickHouse Keeper nodes. Keeper is a Raft quorum, so three is the smallest count that survives losing one and an even count tolerates no more failures than the odd count below it. One is offered for development and has no quorum at all.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("keeperNodes")]
+        public required long KeeperNodes { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>Number of replicas per shard. This is the availability axis, and it only applies to tables the tenant creates as Replicated — the resource does not manage tables. Total server count is shards times replicas.</summary>
+        /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+        [JsonPropertyName("replicas")]
+        public required long Replicas { get; set; }
+
+        /// <summary>Number of shards. This is the capacity and parallelism axis: a table's data is split across shards and a query fans out to all of them. ⚠ Resharding an existing table is not something the operator or this resource does, so growing this moves new data only.</summary>
+        /// <remarks>Required on a create. Defaults to 1 when left unset.</remarks>
+        [JsonPropertyName("shards")]
+        public required long Shards { get; set; }
+
+        /// <summary>CPU and memory per ClickHouse server, either by preset or explicitly. The Keeper nodes are sized by the platform and are not affected.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The data volume, per ClickHouse server.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>ClickHouse version, which is also the ClickHouse Keeper version — the two share a release train and a wire protocol. Only long-term-support lines are offered; a new api-version is what adds a third.</summary>
+        /// <remarks>Required on a create. Defaults to "25.3" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required ClickHouseClusterVersion Version { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether ClickHouse's own Prometheus endpoint is served on port 9363. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ It makes the metrics exist; the object that scrapes them is not built — see conformance.yaml § owed.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>CPU and memory per ClickHouse server, either by preset or explicitly. The Keeper nodes are sized by the platform and are not affected.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Analytics uses the m1 family, which is 1 vCPU to 8 GiB.</summary>
+            /// <remarks>Defaults to "m1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public ClickHouseClusterPreset? Preset { get; set; }
+        }
+
+        /// <summary>The data volume, per ClickHouse server.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name for the ClickHouse servers and the Keeper nodes. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Data volume size per ClickHouse server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
+            /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One ClickHouse cluster, and the operations on it.</summary>
@@ -380,74 +412,106 @@ public sealed partial class ValkeyCacheData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the RedisFailover.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.</summary>
-    /// <remarks>Defaults to "noeviction" when left unset.</remarks>
-    [JsonPropertyName("maxmemoryPolicy")]
-    public ValkeyCacheMaxmemoryPolicy? MaxmemoryPolicy { get; set; }
-
-    /// <summary>Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "Sentinel" when left unset.</remarks>
-    [JsonPropertyName("mode")]
-    public ValkeyCacheMode? Mode { get; set; }
-
-    /// <summary>Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>StorageClass name. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.</summary>
-    /// <remarks>Defaults to "everysec" when left unset.</remarks>
-    [JsonPropertyName("fsync")]
-    public ValkeyCacheFsync? Fsync { get; set; }
-
-    /// <summary>None keeps nothing, RDB snapshots periodically, AOF appends every write.</summary>
-    /// <remarks>Defaults to "AOF" when left unset.</remarks>
-    [JsonPropertyName("mode")]
-    public ValkeyCachePersistenceMode? PersistenceMode { get; set; }
-
-    /// <summary>Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.</summary>
-    /// <remarks>Defaults to "8Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public string? Size { get; set; }
-
-    /// <summary>Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("replicas")]
-    public required long Replicas { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.</summary>
-    /// <remarks>Defaults to "m1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public ValkeyCachePreset? Preset { get; set; }
-
-    /// <summary>Major Valkey version. Minor upgrades are applied automatically in the maintenance window.</summary>
-    /// <remarks>Required on a create. Defaults to "8" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required ValkeyCacheVersion Version { get; set; }
+    /// <summary>The cache's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The cache's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the RedisFailover.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.</summary>
+        /// <remarks>Defaults to "noeviction" when left unset.</remarks>
+        [JsonPropertyName("maxmemoryPolicy")]
+        public ValkeyCacheMaxmemoryPolicy? MaxmemoryPolicy { get; set; }
+
+        /// <summary>Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.</summary>
+        /// <remarks>⚠ Cannot change after create. Defaults to "Sentinel" when left unset.</remarks>
+        [JsonPropertyName("mode")]
+        public ValkeyCacheMode? Mode { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>What survives a restart. None of the three settings makes a cache a database.</summary>
+        [JsonPropertyName("persistence")]
+        public PersistenceData? Persistence { get; set; }
+
+        /// <summary>Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("replicas")]
+        public required long Replicas { get; set; }
+
+        /// <summary>CPU and memory, either by preset or explicitly.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>Major Valkey version. Minor upgrades are applied automatically in the maintenance window.</summary>
+        /// <remarks>Required on a create. Defaults to "8" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required ValkeyCacheVersion Version { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>What survives a restart. None of the three settings makes a cache a database.</summary>
+        public sealed partial class PersistenceData {
+
+            /// <summary>StorageClass name. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.</summary>
+            /// <remarks>Defaults to "everysec" when left unset.</remarks>
+            [JsonPropertyName("fsync")]
+            public ValkeyCacheFsync? Fsync { get; set; }
+
+            /// <summary>None keeps nothing, RDB snapshots periodically, AOF appends every write.</summary>
+            /// <remarks>Defaults to "AOF" when left unset.</remarks>
+            [JsonPropertyName("mode")]
+            public ValkeyCachePersistenceMode? Mode { get; set; }
+
+            /// <summary>Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.</summary>
+            /// <remarks>Defaults to "8Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public string? Size { get; set; }
+        }
+
+        /// <summary>CPU and memory, either by preset or explicitly.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.</summary>
+            /// <remarks>Defaults to "m1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public ValkeyCachePreset? Preset { get; set; }
+        }
+    }
 }
 
 /// <summary>One Valkey cache, and the operations on it.</summary>
@@ -595,59 +659,91 @@ public sealed partial class ContainerRegistryData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the registry.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>Whether this registry may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the registry's life, and a purge is refused while it is set — a flag whose holder can clear it and then purge is one round-trip of protection.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("purgeProtection")]
-    public bool? PurgeProtection { get; set; }
-
-    /// <summary>How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.</summary>
-    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("replicas")]
-    public required long Replicas { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.</summary>
-    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public ContainerRegistryPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name for the image volume. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.</summary>
-    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.</summary>
-    /// <remarks>Required on a create. Defaults to "2.15" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required ContainerRegistryVersion Version { get; set; }
+    /// <summary>The registry's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The registry's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the registry.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>Whether this registry may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the registry's life, and a purge is refused while it is set — a flag whose holder can clear it and then purge is one round-trip of protection.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("purgeProtection")]
+        public bool? PurgeProtection { get; set; }
+
+        /// <summary>How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.</summary>
+        /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+        [JsonPropertyName("replicas")]
+        public required long Replicas { get; set; }
+
+        /// <summary>CPU and memory for the registry pod, either by preset or explicitly. The other five components are sized by the platform and are not affected.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>Where the image layers live.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.</summary>
+        /// <remarks>Required on a create. Defaults to "2.15" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required ContainerRegistryVersion Version { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>CPU and memory for the registry pod, either by preset or explicitly. The other five components are sized by the platform and are not affected.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.</summary>
+            /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public ContainerRegistryPreset? Preset { get; set; }
+        }
+
+        /// <summary>Where the image layers live.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name for the image volume. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.</summary>
+            /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One Container registry, and the operations on it.</summary>
@@ -767,39 +863,71 @@ public sealed partial class ManagedKubernetesClusterData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The management cluster the control plane runs in. ⚠ This is not the cluster being created: it is the cluster whose API server accepts the Cluster API objects that create one.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>How many copies of the API server, controller manager and scheduler to run. Two survives a node failure; one is offered for development. ⚠ Unlike an etcd quorum this is a plain replica count — the datastore is separate and is shared — so an even number is not the mistake it would be on a Raft member set.</summary>
-    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("replicas")]
-    public required long Replicas { get; set; }
-
-    /// <summary>Whether the control plane's own metrics endpoints are scraped. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ It covers the control plane, which runs in the management cluster. Nothing scrapes inside the cluster being created; that needs an agent in the bundle.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>The CIDR block pods are addressed from. ⚠ It must not overlap the management cluster's own pod or service range, and nothing checks that — an overlap produces a cluster whose nodes route the platform's addresses to themselves.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.244.0.0/16" when left unset.</remarks>
-    [JsonPropertyName("podCidr")]
-    public required string PodCidr { get; set; }
-
-    /// <summary>The CIDR block Service cluster IPs are allocated from. The same overlap warning applies.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.96.0.0/12" when left unset.</remarks>
-    [JsonPropertyName("serviceCidr")]
-    public required string ServiceCidr { get; set; }
-
-    /// <summary>The Kubernetes minor version of the control plane. The patch level is the platform's. ⚠ Upgrade the control plane before the node pools and by at most one minor at a time; a node pool may run up to three minors behind and may never run ahead. Neither rule is enforced by this API today — an illegal pair is refused by the cluster's own admission, after the create was accepted.</summary>
-    /// <remarks>Required on a create. Defaults to "1.33" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required ManagedKubernetesClusterVersion Version { get; set; }
+    /// <summary>The cluster's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The cluster's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The management cluster the control plane runs in. ⚠ This is not the cluster being created: it is the cluster whose API server accepts the Cluster API objects that create one.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The control plane, which runs as pods in the management cluster.</summary>
+        [JsonPropertyName("controlPlane")]
+        public ControlPlaneData? ControlPlane { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>The address space of the cluster being created.</summary>
+        [JsonPropertyName("network")]
+        public NetworkData? Network { get; set; }
+
+        /// <summary>The Kubernetes minor version of the control plane. The patch level is the platform's. ⚠ Upgrade the control plane before the node pools and by at most one minor at a time; a node pool may run up to three minors behind and may never run ahead. Neither rule is enforced by this API today — an illegal pair is refused by the cluster's own admission, after the create was accepted.</summary>
+        /// <remarks>Required on a create. Defaults to "1.33" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required ManagedKubernetesClusterVersion Version { get; set; }
+
+        /// <summary>The control plane, which runs as pods in the management cluster.</summary>
+        public sealed partial class ControlPlaneData {
+
+            /// <summary>How many copies of the API server, controller manager and scheduler to run. Two survives a node failure; one is offered for development. ⚠ Unlike an etcd quorum this is a plain replica count — the datastore is separate and is shared — so an even number is not the mistake it would be on a Raft member set.</summary>
+            /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+            [JsonPropertyName("replicas")]
+            public required long Replicas { get; set; }
+        }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether the control plane's own metrics endpoints are scraped. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ It covers the control plane, which runs in the management cluster. Nothing scrapes inside the cluster being created; that needs an agent in the bundle.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>The address space of the cluster being created.</summary>
+        public sealed partial class NetworkData {
+
+            /// <summary>The CIDR block pods are addressed from. ⚠ It must not overlap the management cluster's own pod or service range, and nothing checks that — an overlap produces a cluster whose nodes route the platform's addresses to themselves.</summary>
+            /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.244.0.0/16" when left unset.</remarks>
+            [JsonPropertyName("podCidr")]
+            public required string PodCidr { get; set; }
+
+            /// <summary>The CIDR block Service cluster IPs are allocated from. The same overlap warning applies.</summary>
+            /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.96.0.0/12" when left unset.</remarks>
+            [JsonPropertyName("serviceCidr")]
+            public required string ServiceCidr { get; set; }
+        }
+    }
 }
 
 /// <summary>One Managed Kubernetes cluster, and the operations on it.</summary>
@@ -943,59 +1071,83 @@ public sealed partial class NodePoolData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>Whether the pool carries autoscaler bounds. Off by default. ⚠ Turning it on changes what the pool costs: quota is then reserved against maxCount, because a pool that may grow to twenty machines has to have twenty machines' worth of headroom to grow into.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>The largest the autoscaler may grow the pool to, and what quota is reserved against while autoscaling is on. ⚠ Nothing checks that it is at least minCount — that is a relation between two properties of one body, which the schema validates nothing about.</summary>
-    /// <remarks>Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("maxCount")]
-    public long? MaxCount { get; set; }
-
-    /// <summary>The smallest the autoscaler may shrink the pool to. Ignored when autoscaling is off.</summary>
-    /// <remarks>Defaults to 1 when left unset.</remarks>
-    [JsonPropertyName("minCount")]
-    public long? MinCount { get; set; }
-
-    /// <summary>The management cluster the machine objects are applied to. Must be the one the cluster is in — nothing checks that, and a pool placed elsewhere produces a MachineDeployment naming a Cluster that is not there, which Cluster API accepts and never reconciles.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>How many worker VMs the pool runs. ⚠ When autoscaling is on this is the starting size and the autoscaler moves it; quota is reserved against the maximum in that case, not against this.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("count")]
-    public required long Count { get; set; }
-
-    /// <summary>The root volume of each VM, in Kubernetes quantity form. It holds the operating system, the container images and every writable layer, so a pool running large images needs more of it than a pool running small ones.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "60Gi" when left unset.</remarks>
-    [JsonPropertyName("osDiskSize")]
-    public required string OsDiskSize { get; set; }
-
-    /// <summary>The VM size, from the platform's sizing catalogue. Kubernetes nodes use the s1 family, which is 1 vCPU to 4 GiB. ⚠ Immutable: a Cluster API machine template cannot be resized in place, so changing this would mean replacing every VM in the pool, which is a different operation from the one a PUT looks like.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "s1.small" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required NodePoolSize Size { get; set; }
-
-    /// <summary>How many extra machines may exist during a rolling replacement. One means a new VM boots and joins before an old one is removed, which is why it is the default: it costs one machine's capacity and loses none.</summary>
-    /// <remarks>Defaults to 1 when left unset.</remarks>
-    [JsonPropertyName("maxSurge")]
-    public long? MaxSurge { get; set; }
-
-    /// <summary>How many machines may be missing during a rolling replacement. Zero with a surge of one is the safe pair; raising it is faster and reduces the pool's capacity while it runs. ⚠ Both being zero would make an upgrade unable to start, and nothing refuses that pair.</summary>
-    /// <remarks>Defaults to 0 when left unset.</remarks>
-    [JsonPropertyName("maxUnavailable")]
-    public long? MaxUnavailable { get; set; }
-
-    /// <summary>The Kubernetes minor version the nodes run. ⚠ It may be up to three minors behind the cluster's control plane and may never be ahead of it. This API does not check that — the cluster's version is a different resource — so an illegal pair is accepted here and produces nodes that join and then misbehave.</summary>
-    /// <remarks>Required on a create. Defaults to "1.33" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required NodePoolVersion Version { get; set; }
+    /// <summary>The pool's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The pool's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Whether a cluster-autoscaler may resize the pool.</summary>
+        [JsonPropertyName("autoscale")]
+        public AutoscaleData? Autoscale { get; set; }
+
+        /// <summary>The management cluster the machine objects are applied to. Must be the one the cluster is in — nothing checks that, and a pool placed elsewhere produces a MachineDeployment naming a Cluster that is not there, which Cluster API accepts and never reconciles.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>How many worker VMs the pool runs. ⚠ When autoscaling is on this is the starting size and the autoscaler moves it; quota is reserved against the maximum in that case, not against this.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>The root volume of each VM, in Kubernetes quantity form. It holds the operating system, the container images and every writable layer, so a pool running large images needs more of it than a pool running small ones.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "60Gi" when left unset.</remarks>
+        [JsonPropertyName("osDiskSize")]
+        public required string OsDiskSize { get; set; }
+
+        /// <summary>The VM size, from the platform's sizing catalogue. Kubernetes nodes use the s1 family, which is 1 vCPU to 4 GiB. ⚠ Immutable: a Cluster API machine template cannot be resized in place, so changing this would mean replacing every VM in the pool, which is a different operation from the one a PUT looks like.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "s1.small" when left unset.</remarks>
+        [JsonPropertyName("size")]
+        public required NodePoolSize Size { get; set; }
+
+        /// <summary>How machines are replaced when the pool changes.</summary>
+        [JsonPropertyName("upgrade")]
+        public UpgradeData? Upgrade { get; set; }
+
+        /// <summary>The Kubernetes minor version the nodes run. ⚠ It may be up to three minors behind the cluster's control plane and may never be ahead of it. This API does not check that — the cluster's version is a different resource — so an illegal pair is accepted here and produces nodes that join and then misbehave.</summary>
+        /// <remarks>Required on a create. Defaults to "1.33" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required NodePoolVersion Version { get; set; }
+
+        /// <summary>Whether a cluster-autoscaler may resize the pool.</summary>
+        public sealed partial class AutoscaleData {
+
+            /// <summary>Whether the pool carries autoscaler bounds. Off by default. ⚠ Turning it on changes what the pool costs: quota is then reserved against maxCount, because a pool that may grow to twenty machines has to have twenty machines' worth of headroom to grow into.</summary>
+            /// <remarks>Defaults to false when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+
+            /// <summary>The largest the autoscaler may grow the pool to, and what quota is reserved against while autoscaling is on. ⚠ Nothing checks that it is at least minCount — that is a relation between two properties of one body, which the schema validates nothing about.</summary>
+            /// <remarks>Defaults to 3 when left unset.</remarks>
+            [JsonPropertyName("maxCount")]
+            public long? MaxCount { get; set; }
+
+            /// <summary>The smallest the autoscaler may shrink the pool to. Ignored when autoscaling is off.</summary>
+            /// <remarks>Defaults to 1 when left unset.</remarks>
+            [JsonPropertyName("minCount")]
+            public long? MinCount { get; set; }
+        }
+
+        /// <summary>How machines are replaced when the pool changes.</summary>
+        public sealed partial class UpgradeData {
+
+            /// <summary>How many extra machines may exist during a rolling replacement. One means a new VM boots and joins before an old one is removed, which is why it is the default: it costs one machine's capacity and loses none.</summary>
+            /// <remarks>Defaults to 1 when left unset.</remarks>
+            [JsonPropertyName("maxSurge")]
+            public long? MaxSurge { get; set; }
+
+            /// <summary>How many machines may be missing during a rolling replacement. Zero with a surge of one is the safe pair; raising it is faster and reduces the pool's capacity while it runs. ⚠ Both being zero would make an upgrade unable to start, and nothing refuses that pair.</summary>
+            /// <remarks>Defaults to 0 when left unset.</remarks>
+            [JsonPropertyName("maxUnavailable")]
+            public long? MaxUnavailable { get; set; }
+        }
+    }
 }
 
 /// <summary>One Node pool, and the operations on it.</summary>
@@ -1146,64 +1298,104 @@ public sealed partial class MariaDBServerData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>Name of the application database created on first start. Lower case only, because on Linux a database is a directory and its name is therefore case-sensitive.</summary>
-    /// <remarks>Defaults to "app" when left unset.</remarks>
-    [JsonPropertyName("database")]
-    public string? Database { get; set; }
-
-    /// <summary>Account granted every privilege on the application database. Capped at MySQL's 32 characters rather than MariaDB's longer limit, because this row is sold as MySQL-compatible.</summary>
-    /// <remarks>Defaults to "app" when left unset.</remarks>
-    [JsonPropertyName("username")]
-    public string? Username { get; set; }
-
-    /// <summary>The cluster whose namespace holds the MariaDB objects.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Replication topology. Galera is three synchronous instances; None is a single instance and a single point of failure, offered for development only.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "Galera" when left unset.</remarks>
-    [JsonPropertyName("highAvailability")]
-    public MariaDBServerHighAvailability? HighAvailability { get; set; }
-
-    /// <summary>Whether the operator runs a mysqld-exporter beside the server.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
-    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public MariaDBServerPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Data volume size in Kubernetes quantity form. Grows online; never shrinks.</summary>
-    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>Major MariaDB version, by LTS series. Minor upgrades are applied automatically in the maintenance window.</summary>
-    /// <remarks>Required on a create. Defaults to "11.4" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required MariaDBServerVersion Version { get; set; }
+    /// <summary>The server's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The server's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>What exists in the database the moment it comes up.</summary>
+        [JsonPropertyName("bootstrap")]
+        public BootstrapData? Bootstrap { get; set; }
+
+        /// <summary>The cluster whose namespace holds the MariaDB objects.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Replication topology. Galera is three synchronous instances; None is a single instance and a single point of failure, offered for development only.</summary>
+        /// <remarks>⚠ Cannot change after create. Defaults to "Galera" when left unset.</remarks>
+        [JsonPropertyName("highAvailability")]
+        public MariaDBServerHighAvailability? HighAvailability { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>CPU and memory, either by preset or explicitly.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The data volume. Every instance gets its own.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>Major MariaDB version, by LTS series. Minor upgrades are applied automatically in the maintenance window.</summary>
+        /// <remarks>Required on a create. Defaults to "11.4" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required MariaDBServerVersion Version { get; set; }
+
+        /// <summary>What exists in the database the moment it comes up.</summary>
+        public sealed partial class BootstrapData {
+
+            /// <summary>Name of the application database created on first start. Lower case only, because on Linux a database is a directory and its name is therefore case-sensitive.</summary>
+            /// <remarks>Defaults to "app" when left unset.</remarks>
+            [JsonPropertyName("database")]
+            public string? Database { get; set; }
+
+            /// <summary>Account granted every privilege on the application database. Capped at MySQL's 32 characters rather than MariaDB's longer limit, because this row is sold as MySQL-compatible.</summary>
+            /// <remarks>Defaults to "app" when left unset.</remarks>
+            [JsonPropertyName("username")]
+            public string? Username { get; set; }
+        }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether the operator runs a mysqld-exporter beside the server.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>CPU and memory, either by preset or explicitly.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
+            /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public MariaDBServerPreset? Preset { get; set; }
+        }
+
+        /// <summary>The data volume. Every instance gets its own.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Data volume size in Kubernetes quantity form. Grows online; never shrinks.</summary>
+            /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One MariaDB server, and the operations on it.</summary>
@@ -1413,109 +1605,165 @@ public sealed partial class PostgreSQLServerData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("destinationPath")]
-    public string? DestinationPath { get; set; }
-
-    /// <summary>Whether continuous backup and WAL archiving run.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? BackupEnabled { get; set; }
-
-    /// <summary>How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.</summary>
-    /// <remarks>Defaults to 14 when left unset.</remarks>
-    [JsonPropertyName("retentionDays")]
-    public long? RetentionDays { get; set; }
-
-    /// <summary>Name of the application database created on first start.</summary>
-    /// <remarks>Defaults to "app" when left unset.</remarks>
-    [JsonPropertyName("database")]
-    public string? Database { get; set; }
-
-    /// <summary>Role that owns the application database.</summary>
-    /// <remarks>Defaults to "app" when left unset.</remarks>
-    [JsonPropertyName("owner")]
-    public string? Owner { get; set; }
-
-    /// <summary>The cluster whose namespace holds the CloudNativePG objects.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.</summary>
-    /// <remarks>Defaults to [] when left unset.</remarks>
-    [JsonPropertyName("extensions")]
-    public IList<PostgreSQLServerExtensions> Extensions { get; set; } = new List<PostgreSQLServerExtensions>();
-
-    /// <summary>Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? MonitoringEnabled { get; set; }
-
-    /// <summary>Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? PoolingEnabled { get; set; }
-
-    /// <summary>Number of pooler pods.</summary>
-    /// <remarks>Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("instances")]
-    public long? Instances { get; set; }
-
-    /// <summary>PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.</summary>
-    /// <remarks>Defaults to "transaction" when left unset.</remarks>
-    [JsonPropertyName("mode")]
-    public PostgreSQLServerMode? Mode { get; set; }
-
-    /// <summary>Number of instances, including the primary. One is a single point of failure and is offered for development only.</summary>
-    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("replicas")]
-    public required long Replicas { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
-    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public PostgreSQLServerPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Data volume size in Kubernetes quantity form. Grows online; never shrinks.</summary>
-    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("walSize")]
-    public string? WalSize { get; set; }
-
-    /// <summary>Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("synchronousReplication")]
-    public bool? SynchronousReplication { get; set; }
-
-    /// <summary>Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.</summary>
-    /// <remarks>Required on a create. Defaults to "17" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required PostgreSQLServerVersion Version { get; set; }
+    /// <summary>The server's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The server's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Backup to the tenant's object store, using CloudNativePG's barman-cloud.</summary>
+        [JsonPropertyName("backup")]
+        public BackupData? Backup { get; set; }
+
+        /// <summary>What exists in the database the moment it comes up.</summary>
+        [JsonPropertyName("bootstrap")]
+        public BootstrapData? Bootstrap { get; set; }
+
+        /// <summary>The cluster whose namespace holds the CloudNativePG objects.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("extensions")]
+        public IList<PostgreSQLServerExtensions> Extensions { get; set; } = new List<PostgreSQLServerExtensions>();
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>PgBouncer in front of the cluster.</summary>
+        [JsonPropertyName("pooling")]
+        public PoolingData? Pooling { get; set; }
+
+        /// <summary>Number of instances, including the primary. One is a single point of failure and is offered for development only.</summary>
+        /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+        [JsonPropertyName("replicas")]
+        public required long Replicas { get; set; }
+
+        /// <summary>CPU and memory, either by preset or explicitly.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The data volume.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("synchronousReplication")]
+        public bool? SynchronousReplication { get; set; }
+
+        /// <summary>Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.</summary>
+        /// <remarks>Required on a create. Defaults to "17" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required PostgreSQLServerVersion Version { get; set; }
+
+        /// <summary>Backup to the tenant's object store, using CloudNativePG's barman-cloud.</summary>
+        public sealed partial class BackupData {
+
+            /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("destinationPath")]
+            public string? DestinationPath { get; set; }
+
+            /// <summary>Whether continuous backup and WAL archiving run.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+
+            /// <summary>How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.</summary>
+            /// <remarks>Defaults to 14 when left unset.</remarks>
+            [JsonPropertyName("retentionDays")]
+            public long? RetentionDays { get; set; }
+        }
+
+        /// <summary>What exists in the database the moment it comes up.</summary>
+        public sealed partial class BootstrapData {
+
+            /// <summary>Name of the application database created on first start.</summary>
+            /// <remarks>Defaults to "app" when left unset.</remarks>
+            [JsonPropertyName("database")]
+            public string? Database { get; set; }
+
+            /// <summary>Role that owns the application database.</summary>
+            /// <remarks>Defaults to "app" when left unset.</remarks>
+            [JsonPropertyName("owner")]
+            public string? Owner { get; set; }
+        }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>PgBouncer in front of the cluster.</summary>
+        public sealed partial class PoolingData {
+
+            /// <summary>Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+
+            /// <summary>Number of pooler pods.</summary>
+            /// <remarks>Defaults to 2 when left unset.</remarks>
+            [JsonPropertyName("instances")]
+            public long? Instances { get; set; }
+
+            /// <summary>PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.</summary>
+            /// <remarks>Defaults to "transaction" when left unset.</remarks>
+            [JsonPropertyName("mode")]
+            public PostgreSQLServerMode? Mode { get; set; }
+        }
+
+        /// <summary>CPU and memory, either by preset or explicitly.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
+            /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public PostgreSQLServerPreset? Preset { get; set; }
+        }
+
+        /// <summary>The data volume.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Data volume size in Kubernetes quantity form. Grows online; never shrinks.</summary>
+            /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+
+            /// <summary>Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("walSize")]
+            public string? WalSize { get; set; }
+        }
+    }
 }
 
 /// <summary>One PostgreSQL server, and the operations on it.</summary>
@@ -1677,74 +1925,130 @@ public sealed partial class DocumentDatabaseAccountData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/documentdb. Empty means no backup configuration is rendered, whatever enabled says.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("destinationPath")]
-    public string? DestinationPath { get; set; }
-
-    /// <summary>Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? BackupEnabled { get; set; }
-
-    /// <summary>How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.</summary>
-    /// <remarks>Defaults to 14 when left unset.</remarks>
-    [JsonPropertyName("retentionDays")]
-    public long? RetentionDays { get; set; }
-
-    /// <summary>The cluster whose namespace holds the PostgreSQL cluster and the FerretDB gateway.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Number of FerretDB pods. The gateway is stateless — it translates and forwards, and every byte is in PostgreSQL — so this is a throughput and availability setting rather than a topology one.</summary>
-    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("replicas")]
-    public required long Replicas { get; set; }
-
-    /// <summary>Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production".</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? MonitoringEnabled { get; set; }
-
-    /// <summary>Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.</summary>
-    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("instances")]
-    public required long Instances { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
-    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public DocumentDatabaseAccountPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name for the PostgreSQL volumes. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Data volume size per PostgreSQL instance, in Kubernetes quantity form. Every instance carries a full copy, so raw consumption is this times the instance count. Grows online; never shrinks.</summary>
-    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>FerretDB minor version. ⚠ One property moves two images: the DocumentDB PostgreSQL extension and the FerretDB gateway are released as a matched pair and a mismatched pair is a proxy talking to an extension it does not know. FerretDB maintains no long-term branch, so the two values here are the two most recent releases and a third is a new api-version.</summary>
-    /// <remarks>Required on a create. Defaults to "2.7" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required DocumentDatabaseAccountVersion Version { get; set; }
+    /// <summary>The account's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The account's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Backup to an object store, using CloudNativePG's barman-cloud. docs/plan/12: because it is PostgreSQL underneath, backup and point-in-time recovery are the operator's.</summary>
+        [JsonPropertyName("backup")]
+        public BackupData? Backup { get; set; }
+
+        /// <summary>The cluster whose namespace holds the PostgreSQL cluster and the FerretDB gateway.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The FerretDB gateway — what speaks the MongoDB wire protocol.</summary>
+        [JsonPropertyName("gateway")]
+        public GatewayData? Gateway { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>The CloudNativePG cluster the documents actually live in.</summary>
+        [JsonPropertyName("postgres")]
+        public PostgresData? Postgres { get; set; }
+
+        /// <summary>CPU and memory per PostgreSQL instance, either by preset or explicitly. The FerretDB gateway pods are sized by the platform and are not affected.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The data volume, per PostgreSQL instance.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>FerretDB minor version. ⚠ One property moves two images: the DocumentDB PostgreSQL extension and the FerretDB gateway are released as a matched pair and a mismatched pair is a proxy talking to an extension it does not know. FerretDB maintains no long-term branch, so the two values here are the two most recent releases and a third is a new api-version.</summary>
+        /// <remarks>Required on a create. Defaults to "2.7" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required DocumentDatabaseAccountVersion Version { get; set; }
+
+        /// <summary>Backup to an object store, using CloudNativePG's barman-cloud. docs/plan/12: because it is PostgreSQL underneath, backup and point-in-time recovery are the operator's.</summary>
+        public sealed partial class BackupData {
+
+            /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/documentdb. Empty means no backup configuration is rendered, whatever enabled says.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("destinationPath")]
+            public string? DestinationPath { get; set; }
+
+            /// <summary>Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.</summary>
+            /// <remarks>Defaults to false when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+
+            /// <summary>How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.</summary>
+            /// <remarks>Defaults to 14 when left unset.</remarks>
+            [JsonPropertyName("retentionDays")]
+            public long? RetentionDays { get; set; }
+        }
+
+        /// <summary>The FerretDB gateway — what speaks the MongoDB wire protocol.</summary>
+        public sealed partial class GatewayData {
+
+            /// <summary>Number of FerretDB pods. The gateway is stateless — it translates and forwards, and every byte is in PostgreSQL — so this is a throughput and availability setting rather than a topology one.</summary>
+            /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+            [JsonPropertyName("replicas")]
+            public required long Replicas { get; set; }
+        }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production".</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>The CloudNativePG cluster the documents actually live in.</summary>
+        public sealed partial class PostgresData {
+
+            /// <summary>Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.</summary>
+            /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+            [JsonPropertyName("instances")]
+            public required long Instances { get; set; }
+        }
+
+        /// <summary>CPU and memory per PostgreSQL instance, either by preset or explicitly. The FerretDB gateway pods are sized by the platform and are not affected.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
+            /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public DocumentDatabaseAccountPreset? Preset { get; set; }
+        }
+
+        /// <summary>The data volume, per PostgreSQL instance.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name for the PostgreSQL volumes. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Data volume size per PostgreSQL instance, in Kubernetes quantity form. Every instance carries a full copy, so raw consumption is this times the instance count. Grows online; never shrinks.</summary>
+            /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One Document database account, and the operations on it.</summary>
@@ -1884,79 +2188,111 @@ public sealed partial class MailDomainData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("catchAll")]
-    public string? CatchAll { get; set; }
-
-    /// <summary>The cluster whose namespace holds the mail back end.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("dedicatedIp")]
-    public bool? DedicatedIp { get; set; }
-
-    /// <summary>The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "example.com" when left unset.</remarks>
-    [JsonPropertyName("domain")]
-    public required string Domain { get; set; }
-
-    /// <summary>Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("antivirus")]
-    public bool? Antivirus { get; set; }
-
-    /// <summary>The Rspamd score at or above which a message is rejected outright rather than filed as junk.</summary>
-    /// <remarks>Defaults to 15 when left unset.</remarks>
-    [JsonPropertyName("rejectThreshold")]
-    public long? RejectThreshold { get; set; }
-
-    /// <summary>Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool.</summary>
-    /// <remarks>Defaults to [] when left unset.</remarks>
-    [JsonPropertyName("relayHosts")]
-    public IList<string> RelayHosts { get; set; } = new List<string>();
-
-    /// <summary>Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("sieve")]
-    public bool? Sieve { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
-    /// <remarks>Defaults to "c1.micro" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public MailDomainPreset? Preset { get; set; }
-
-    /// <summary>The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume.</summary>
-    /// <remarks>Defaults to "1Gi" when left unset.</remarks>
-    [JsonPropertyName("mailboxQuota")]
-    public string? MailboxQuota { get; set; }
-
-    /// <summary>The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks.</summary>
-    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
-    /// <remarks>Required on a create. Defaults to "2.4" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required MailDomainVersion Version { get; set; }
+    /// <summary>The domain's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The domain's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The local part that receives mail addressed to no known mailbox. Empty means unrouted mail is rejected at RCPT TO, which is the default and the better answer for deliverability: a catch-all accepts every dictionary attack and turns the domain into a backscatter source.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("catchAll")]
+        public string? CatchAll { get; set; }
+
+        /// <summary>The cluster whose namespace holds the mail back end.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Request a dedicated outbound IP with a warm-up schedule, rather than sharing the platform's warmed pool. Subject to a volume threshold and to approval; requesting it here does not by itself allocate one.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("dedicatedIp")]
+        public bool? DedicatedIp { get; set; }
+
+        /// <summary>The mail domain this resource hosts, for example example.com. Immutable: the DKIM record, the SPF record and the MX all name it, so changing it would invalidate every record the tenant has published.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "example.com" when left unset.</remarks>
+        [JsonPropertyName("domain")]
+        public required string Domain { get; set; }
+
+        /// <summary>Spam and virus filtering.</summary>
+        [JsonPropertyName("filtering")]
+        public FilteringData? Filtering { get; set; }
+
+        /// <summary>Smart hosts to relay outbound mail through instead of delivering it directly. Empty means the platform's own outbound pool.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("relayHosts")]
+        public IList<string> RelayHosts { get; set; } = new List<string>();
+
+        /// <summary>Server-side rules through Dovecot's Pigeonhole, editable over ManageSieve.</summary>
+        /// <remarks>Defaults to true when left unset.</remarks>
+        [JsonPropertyName("sieve")]
+        public bool? Sieve { get; set; }
+
+        /// <summary>CPU and memory for the back end, either by preset or explicitly.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The mail store.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>Dovecot version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
+        /// <remarks>Required on a create. Defaults to "2.4" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required MailDomainVersion Version { get; set; }
+
+        /// <summary>Spam and virus filtering.</summary>
+        public sealed partial class FilteringData {
+
+            /// <summary>Scan attachments with ClamAV through Rspamd. Adds roughly 1 GiB of resident memory for the signature database.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("antivirus")]
+            public bool? Antivirus { get; set; }
+
+            /// <summary>The Rspamd score at or above which a message is rejected outright rather than filed as junk.</summary>
+            /// <remarks>Defaults to 15 when left unset.</remarks>
+            [JsonPropertyName("rejectThreshold")]
+            public long? RejectThreshold { get; set; }
+        }
+
+        /// <summary>CPU and memory for the back end, either by preset or explicitly.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Mail back ends use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
+            /// <remarks>Defaults to "c1.micro" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public MailDomainPreset? Preset { get; set; }
+        }
+
+        /// <summary>The mail store.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>The default per-mailbox quota, in Kubernetes quantity form. A mailbox may override it. Enforced by Dovecot, not by the volume.</summary>
+            /// <remarks>Defaults to "1Gi" when left unset.</remarks>
+            [JsonPropertyName("mailboxQuota")]
+            public string? MailboxQuota { get; set; }
+
+            /// <summary>The mail volume size, in Kubernetes quantity form. Holds every mailbox in the domain. Grows online; never shrinks.</summary>
+            /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One Mail domain, and the operations on it.</summary>
@@ -1965,7 +2301,7 @@ public sealed partial class MailDomainResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public MailDomainData Data { get; init; } = new();
+    public required MailDomainData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<MailDomainResource>> GetAsync(CancellationToken cancellationToken = default);
@@ -2080,104 +2416,176 @@ public sealed partial class KafkaClusterData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the Strimzi objects.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? CruiseControlEnabled { get; set; }
-
-    /// <summary>Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.</summary>
-    /// <remarks>Defaults to [] when left unset.</remarks>
-    [JsonPropertyName("allowedCidrs")]
-    public IList<string> AllowedCidrs { get; set; } = new List<string>();
-
-    /// <summary>Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? ExternalEnabled { get; set; }
-
-    /// <summary>Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("tls")]
-    public bool? Tls { get; set; }
-
-    /// <summary>Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? MonitoringEnabled { get; set; }
-
-    /// <summary>Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("nodes")]
-    public required long Nodes { get; set; }
-
-    /// <summary>Default retention in hours. A week by default.</summary>
-    /// <remarks>Defaults to 168 when left unset.</remarks>
-    [JsonPropertyName("hours")]
-    public long? Hours { get; set; }
-
-    /// <summary>Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public string? RetentionSize { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
-    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public KafkaClusterPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("deleteClaim")]
-    public bool? DeleteClaim { get; set; }
-
-    /// <summary>Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.</summary>
-    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string StorageSize { get; set; }
-
-    /// <summary>How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.</summary>
-    /// <remarks>Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("minInSyncReplicas")]
-    public long? MinInSyncReplicas { get; set; }
-
-    /// <summary>Default partition count for a new topic.</summary>
-    /// <remarks>Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("partitions")]
-    public long? Partitions { get; set; }
-
-    /// <summary>Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.</summary>
-    /// <remarks>Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("replicationFactor")]
-    public long? ReplicationFactor { get; set; }
-
-    /// <summary>Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
-    /// <remarks>Required on a create. Defaults to "3.9" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required KafkaClusterVersion Version { get; set; }
+    /// <summary>The cluster's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The cluster's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the Strimzi objects.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Cruise Control — partition rebalancing and broker-load reporting.</summary>
+        [JsonPropertyName("cruiseControl")]
+        public CruiseControlData? CruiseControl { get; set; }
+
+        /// <summary>Exposure outside the cluster, via a load balancer and a firewall allow-list.</summary>
+        [JsonPropertyName("external")]
+        public ExternalData? External { get; set; }
+
+        /// <summary>The in-cluster listener every client reaches.</summary>
+        [JsonPropertyName("listener")]
+        public ListenerData? Listener { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("nodes")]
+        public required long Nodes { get; set; }
+
+        /// <summary>How long the cluster keeps messages by default. docs/plan/12 calls retention sizing an ongoing operational concern rather than a one-time setting.</summary>
+        [JsonPropertyName("retention")]
+        public RetentionData? Retention { get; set; }
+
+        /// <summary>CPU and memory per node, either by preset or explicitly.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The log volume, per node.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>Defaults applied to topics the cluster creates automatically. A topic created explicitly overrides them.</summary>
+        [JsonPropertyName("topics")]
+        public TopicsData? Topics { get; set; }
+
+        /// <summary>Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
+        /// <remarks>Required on a create. Defaults to "3.9" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required KafkaClusterVersion Version { get; set; }
+
+        /// <summary>Cruise Control — partition rebalancing and broker-load reporting.</summary>
+        public sealed partial class CruiseControlData {
+
+            /// <summary>Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>Exposure outside the cluster, via a load balancer and a firewall allow-list.</summary>
+        public sealed partial class ExternalData {
+
+            /// <summary>Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.</summary>
+            /// <remarks>Defaults to [] when left unset.</remarks>
+            [JsonPropertyName("allowedCidrs")]
+            public IList<string> AllowedCidrs { get; set; } = new List<string>();
+
+            /// <summary>Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.</summary>
+            /// <remarks>Defaults to false when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>The in-cluster listener every client reaches.</summary>
+        public sealed partial class ListenerData {
+
+            /// <summary>Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("tls")]
+            public bool? Tls { get; set; }
+        }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>How long the cluster keeps messages by default. docs/plan/12 calls retention sizing an ongoing operational concern rather than a one-time setting.</summary>
+        public sealed partial class RetentionData {
+
+            /// <summary>Default retention in hours. A week by default.</summary>
+            /// <remarks>Defaults to 168 when left unset.</remarks>
+            [JsonPropertyName("hours")]
+            public long? Hours { get; set; }
+
+            /// <summary>Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public string? Size { get; set; }
+        }
+
+        /// <summary>CPU and memory per node, either by preset or explicitly.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
+            /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public KafkaClusterPreset? Preset { get; set; }
+        }
+
+        /// <summary>The log volume, per node.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.</summary>
+            /// <remarks>Defaults to false when left unset.</remarks>
+            [JsonPropertyName("deleteClaim")]
+            public bool? DeleteClaim { get; set; }
+
+            /// <summary>Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.</summary>
+            /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+
+        /// <summary>Defaults applied to topics the cluster creates automatically. A topic created explicitly overrides them.</summary>
+        public sealed partial class TopicsData {
+
+            /// <summary>How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.</summary>
+            /// <remarks>Defaults to 2 when left unset.</remarks>
+            [JsonPropertyName("minInSyncReplicas")]
+            public long? MinInSyncReplicas { get; set; }
+
+            /// <summary>Default partition count for a new topic.</summary>
+            /// <remarks>Defaults to 3 when left unset.</remarks>
+            [JsonPropertyName("partitions")]
+            public long? Partitions { get; set; }
+
+            /// <summary>Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.</summary>
+            /// <remarks>Defaults to 3 when left unset.</remarks>
+            [JsonPropertyName("replicationFactor")]
+            public long? ReplicationFactor { get; set; }
+        }
+    }
 }
 
 /// <summary>One Kafka cluster, and the operations on it.</summary>
@@ -2339,84 +2747,148 @@ public sealed partial class NATSClusterData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the NATS servers.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.</summary>
-    /// <remarks>Defaults to [] when left unset.</remarks>
-    [JsonPropertyName("allowedCidrs")]
-    public IList<string> AllowedCidrs { get; set; } = new List<string>();
-
-    /// <summary>Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? ExternalEnabled { get; set; }
-
-    /// <summary>Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("maxMemoryStore")]
-    public string? MaxMemoryStore { get; set; }
-
-    /// <summary>Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? LeafNodesEnabled { get; set; }
-
-    /// <summary>Largest number of client connections one server accepts.</summary>
-    /// <remarks>Defaults to 65536 when left unset.</remarks>
-    [JsonPropertyName("maxConnections")]
-    public long? MaxConnections { get; set; }
-
-    /// <summary>Largest message a client may publish, in bytes. Raising it costs memory on every server, because a server buffers a whole message before routing it.</summary>
-    /// <remarks>Defaults to 1048576 when left unset.</remarks>
-    [JsonPropertyName("maxPayload")]
-    public long? MaxPayload { get; set; }
-
-    /// <summary>Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". The endpoint itself is always served; this decides whether anything scrapes it.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? MonitoringEnabled { get; set; }
-
-    /// <summary>Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("servers")]
-    public required long Servers { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
-    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public NATSClusterPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>JetStream file-store volume size per server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
-    /// <remarks>Required on a create. Defaults to "10Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>NATS server version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
-    /// <remarks>Required on a create. Defaults to "2.11" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required NATSClusterVersion Version { get; set; }
+    /// <summary>The cluster's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The cluster's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the NATS servers.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Exposure outside the cluster, via a load balancer and a firewall allow-list.</summary>
+        [JsonPropertyName("external")]
+        public ExternalData? External { get; set; }
+
+        /// <summary>JetStream — the persistence layer streams and consumers live in. docs/plan/12 has it on unconditionally, so there is no switch to turn it off.</summary>
+        [JsonPropertyName("jetstream")]
+        public JetstreamData? Jetstream { get; set; }
+
+        /// <summary>Leaf-node connectivity — docs/plan/12: "so a tenant's edge can attach".</summary>
+        [JsonPropertyName("leafNodes")]
+        public LeafNodesData? LeafNodes { get; set; }
+
+        /// <summary>Server limits a client can run into.</summary>
+        [JsonPropertyName("limits")]
+        public LimitsData? Limits { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("servers")]
+        public required long Servers { get; set; }
+
+        /// <summary>CPU and memory per server, either by preset or explicitly.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The JetStream file store, per server.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>NATS server version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
+        /// <remarks>Required on a create. Defaults to "2.11" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required NATSClusterVersion Version { get; set; }
+
+        /// <summary>Exposure outside the cluster, via a load balancer and a firewall allow-list.</summary>
+        public sealed partial class ExternalData {
+
+            /// <summary>Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.</summary>
+            /// <remarks>Defaults to [] when left unset.</remarks>
+            [JsonPropertyName("allowedCidrs")]
+            public IList<string> AllowedCidrs { get; set; } = new List<string>();
+
+            /// <summary>Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.</summary>
+            /// <remarks>Defaults to false when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>JetStream — the persistence layer streams and consumers live in. docs/plan/12 has it on unconditionally, so there is no switch to turn it off.</summary>
+        public sealed partial class JetstreamData {
+
+            /// <summary>Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("maxMemoryStore")]
+            public string? MaxMemoryStore { get; set; }
+        }
+
+        /// <summary>Leaf-node connectivity — docs/plan/12: "so a tenant's edge can attach".</summary>
+        public sealed partial class LeafNodesData {
+
+            /// <summary>Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.</summary>
+            /// <remarks>Defaults to false when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>Server limits a client can run into.</summary>
+        public sealed partial class LimitsData {
+
+            /// <summary>Largest number of client connections one server accepts.</summary>
+            /// <remarks>Defaults to 65536 when left unset.</remarks>
+            [JsonPropertyName("maxConnections")]
+            public long? MaxConnections { get; set; }
+
+            /// <summary>Largest message a client may publish, in bytes. Raising it costs memory on every server, because a server buffers a whole message before routing it.</summary>
+            /// <remarks>Defaults to 1048576 when left unset.</remarks>
+            [JsonPropertyName("maxPayload")]
+            public long? MaxPayload { get; set; }
+        }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". The endpoint itself is always served; this decides whether anything scrapes it.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>CPU and memory per server, either by preset or explicitly.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
+            /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public NATSClusterPreset? Preset { get; set; }
+        }
+
+        /// <summary>The JetStream file store, per server.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>JetStream file-store volume size per server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
+            /// <remarks>Required on a create. Defaults to "10Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One NATS cluster, and the operations on it.</summary>
@@ -2616,64 +3088,112 @@ public sealed partial class RabbitMQClusterData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the RabbitmqCluster.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Largest message a client may publish, in bytes. Raising it costs memory on every node that holds a copy, which for a quorum queue is all of them.</summary>
-    /// <remarks>Defaults to 134217728 when left unset.</remarks>
-    [JsonPropertyName("maxMessageSize")]
-    public long? MaxMessageSize { get; set; }
-
-    /// <summary>Number of RabbitMQ nodes. Use an odd number of at least three: a quorum queue is a Raft group, so a group of two tolerates no failures and an even count buys nothing over the odd count below it. One is offered for development only and replicates nothing.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("nodes")]
-    public required long Nodes { get; set; }
-
-    /// <summary>Plugins to enable on top of the three the operator always enables — peer discovery, the management UI and the Prometheus endpoint. Each recognised plugin adds its own port to the cluster's in-cluster Service.</summary>
-    /// <remarks>Defaults to [] when left unset.</remarks>
-    [JsonPropertyName("additional")]
-    public IList<RabbitMQClusterAdditional> Additional { get; set; } = new List<RabbitMQClusterAdditional>();
-
-    /// <summary>The queue type a client gets when it declares a queue without asking for one. Quorum by default — docs/plan/12: a quorum queue is replicated through Raft across the nodes above, and on 4.x a classic queue is not replicated at all, so leaving this unset would put a single-node queue on a cluster the tenant paid three nodes for. This is a node-wide fallback: a vhost created with its own default queue type overrides it.</summary>
-    /// <remarks>Defaults to "quorum" when left unset.</remarks>
-    [JsonPropertyName("defaultType")]
-    public RabbitMQClusterDefaultType? DefaultType { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
-    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public RabbitMQClusterPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Message-store volume size per node, in Kubernetes quantity form. Grows online; never shrinks. A quorum queue keeps its whole Raft log on every member, so this is the same figure on every node rather than a share of one.</summary>
-    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>RabbitMQ version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. Only 4.x is offered: classic queue mirroring was removed in 4.0, so on every version here the replicated queue type is the quorum queue.</summary>
-    /// <remarks>Required on a create. Defaults to "4.1" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required RabbitMQClusterVersion Version { get; set; }
+    /// <summary>The cluster's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The cluster's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the RabbitmqCluster.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Broker limits a client can run into.</summary>
+        [JsonPropertyName("limits")]
+        public LimitsData? Limits { get; set; }
+
+        /// <summary>Number of RabbitMQ nodes. Use an odd number of at least three: a quorum queue is a Raft group, so a group of two tolerates no failures and an even count buys nothing over the odd count below it. One is offered for development only and replicates nothing.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("nodes")]
+        public required long Nodes { get; set; }
+
+        /// <summary>Protocols and features beyond AMQP.</summary>
+        [JsonPropertyName("plugins")]
+        public PluginsData? Plugins { get; set; }
+
+        /// <summary>How queues behave when a client does not say.</summary>
+        [JsonPropertyName("queues")]
+        public QueuesData? Queues { get; set; }
+
+        /// <summary>CPU and memory per node, either by preset or explicitly.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The message store, per node.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>RabbitMQ version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. Only 4.x is offered: classic queue mirroring was removed in 4.0, so on every version here the replicated queue type is the quorum queue.</summary>
+        /// <remarks>Required on a create. Defaults to "4.1" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required RabbitMQClusterVersion Version { get; set; }
+
+        /// <summary>Broker limits a client can run into.</summary>
+        public sealed partial class LimitsData {
+
+            /// <summary>Largest message a client may publish, in bytes. Raising it costs memory on every node that holds a copy, which for a quorum queue is all of them.</summary>
+            /// <remarks>Defaults to 134217728 when left unset.</remarks>
+            [JsonPropertyName("maxMessageSize")]
+            public long? MaxMessageSize { get; set; }
+        }
+
+        /// <summary>Protocols and features beyond AMQP.</summary>
+        public sealed partial class PluginsData {
+
+            /// <summary>Plugins to enable on top of the three the operator always enables — peer discovery, the management UI and the Prometheus endpoint. Each recognised plugin adds its own port to the cluster's in-cluster Service.</summary>
+            /// <remarks>Defaults to [] when left unset.</remarks>
+            [JsonPropertyName("additional")]
+            public IList<RabbitMQClusterAdditional> Additional { get; set; } = new List<RabbitMQClusterAdditional>();
+        }
+
+        /// <summary>How queues behave when a client does not say.</summary>
+        public sealed partial class QueuesData {
+
+            /// <summary>The queue type a client gets when it declares a queue without asking for one. Quorum by default — docs/plan/12: a quorum queue is replicated through Raft across the nodes above, and on 4.x a classic queue is not replicated at all, so leaving this unset would put a single-node queue on a cluster the tenant paid three nodes for. This is a node-wide fallback: a vhost created with its own default queue type overrides it.</summary>
+            /// <remarks>Defaults to "quorum" when left unset.</remarks>
+            [JsonPropertyName("defaultType")]
+            public RabbitMQClusterDefaultType? DefaultType { get; set; }
+        }
+
+        /// <summary>CPU and memory per node, either by preset or explicitly.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
+            /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public RabbitMQClusterPreset? Preset { get; set; }
+        }
+
+        /// <summary>The message store, per node.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Message-store volume size per node, in Kubernetes quantity form. Grows online; never shrinks. A quorum queue keeps its whole Raft log on every member, so this is the same figure on every node rather than a share of one.</summary>
+            /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One RabbitMQ cluster, and the operations on it.</summary>
@@ -2823,64 +3343,88 @@ public sealed partial class MonitorWorkspaceData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The regional cluster whose telemetry data plane serves this workspace. ⚠ Nothing is deployed into it: a workspace is a tenancy in stores the platform already runs, and this is where its ingest routing is published.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.</summary>
-    /// <remarks>Required on a create. Defaults to false when left unset.</remarks>
-    [JsonPropertyName("purgeProtection")]
-    public required bool PurgeProtection { get; set; }
-
-    /// <summary>Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.</summary>
-    /// <remarks>Required on a create. Defaults to 20000 when left unset.</remarks>
-    [JsonPropertyName("cardinalityCap")]
-    public required long CardinalityCap { get; set; }
-
-    /// <summary>Log lines accepted per day, in gibibytes.</summary>
-    /// <remarks>Required on a create. Defaults to 10 when left unset.</remarks>
-    [JsonPropertyName("logsGbPerDay")]
-    public required long LogsGbPerDay { get; set; }
-
-    /// <summary>Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.</summary>
-    /// <remarks>Required on a create. Defaults to 5 when left unset.</remarks>
-    [JsonPropertyName("metricsGbPerDay")]
-    public required long MetricsGbPerDay { get; set; }
-
-    /// <summary>The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.</summary>
-    /// <remarks>Required on a create. Defaults to 10 when left unset.</remarks>
-    [JsonPropertyName("overQuotaSampleRate")]
-    public required long OverQuotaSampleRate { get; set; }
-
-    /// <summary>Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.</summary>
-    /// <remarks>Required on a create. Defaults to 1000000 when left unset.</remarks>
-    [JsonPropertyName("seriesCap")]
-    public required long SeriesCap { get; set; }
-
-    /// <summary>Spans accepted per day, in gibibytes.</summary>
-    /// <remarks>Required on a create. Defaults to 5 when left unset.</remarks>
-    [JsonPropertyName("tracesGbPerDay")]
-    public required long TracesGbPerDay { get; set; }
-
-    /// <summary>Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
-    /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
-    [JsonPropertyName("logs")]
-    public required MonitorWorkspaceLogs Logs { get; set; }
-
-    /// <summary>Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
-    /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
-    [JsonPropertyName("metrics")]
-    public required MonitorWorkspaceMetrics Metrics { get; set; }
-
-    /// <summary>Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
-    /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
-    [JsonPropertyName("traces")]
-    public required MonitorWorkspaceTraces Traces { get; set; }
+    /// <summary>The workspace's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The workspace's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The regional cluster whose telemetry data plane serves this workspace. ⚠ Nothing is deployed into it: a workspace is a tenancy in stores the platform already runs, and this is where its ingest routing is published.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.</summary>
+        /// <remarks>Required on a create. Defaults to false when left unset.</remarks>
+        [JsonPropertyName("purgeProtection")]
+        public required bool PurgeProtection { get; set; }
+
+        /// <summary>What the workspace may take in per day, and what happens when it takes in more.</summary>
+        [JsonPropertyName("quota")]
+        public QuotaData? Quota { get; set; }
+
+        /// <summary>How long each signal is kept. Priced per tier — docs/plan/16 § Cost and retention honesty.</summary>
+        [JsonPropertyName("retention")]
+        public RetentionData? Retention { get; set; }
+
+        /// <summary>What the workspace may take in per day, and what happens when it takes in more.</summary>
+        public sealed partial class QuotaData {
+
+            /// <summary>Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.</summary>
+            /// <remarks>Required on a create. Defaults to 20000 when left unset.</remarks>
+            [JsonPropertyName("cardinalityCap")]
+            public required long CardinalityCap { get; set; }
+
+            /// <summary>Log lines accepted per day, in gibibytes.</summary>
+            /// <remarks>Required on a create. Defaults to 10 when left unset.</remarks>
+            [JsonPropertyName("logsGbPerDay")]
+            public required long LogsGbPerDay { get; set; }
+
+            /// <summary>Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.</summary>
+            /// <remarks>Required on a create. Defaults to 5 when left unset.</remarks>
+            [JsonPropertyName("metricsGbPerDay")]
+            public required long MetricsGbPerDay { get; set; }
+
+            /// <summary>The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.</summary>
+            /// <remarks>Required on a create. Defaults to 10 when left unset.</remarks>
+            [JsonPropertyName("overQuotaSampleRate")]
+            public required long OverQuotaSampleRate { get; set; }
+
+            /// <summary>Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.</summary>
+            /// <remarks>Required on a create. Defaults to 1000000 when left unset.</remarks>
+            [JsonPropertyName("seriesCap")]
+            public required long SeriesCap { get; set; }
+
+            /// <summary>Spans accepted per day, in gibibytes.</summary>
+            /// <remarks>Required on a create. Defaults to 5 when left unset.</remarks>
+            [JsonPropertyName("tracesGbPerDay")]
+            public required long TracesGbPerDay { get; set; }
+        }
+
+        /// <summary>How long each signal is kept. Priced per tier — docs/plan/16 § Cost and retention honesty.</summary>
+        public sealed partial class RetentionData {
+
+            /// <summary>Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
+            /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
+            [JsonPropertyName("logs")]
+            public required MonitorWorkspaceLogs Logs { get; set; }
+
+            /// <summary>Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
+            /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
+            [JsonPropertyName("metrics")]
+            public required MonitorWorkspaceMetrics Metrics { get; set; }
+
+            /// <summary>Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
+            /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
+            [JsonPropertyName("traces")]
+            public required MonitorWorkspaceTraces Traces { get; set; }
+        }
+    }
 }
 
 /// <summary>One Monitor workspace, and the operations on it.</summary>
@@ -2998,24 +3542,40 @@ public sealed partial class PublicIPAddressData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The IPv4 address to reclaim, or empty to be given whichever one is free. ⚠ A bare address and not a prefix — 10.100.0.7, never 10.100.0.7/32. An address that is already taken is refused by the fabric rather than by the API.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("v4")]
-    public string? V4 { get; set; }
-
-    /// <summary>The IPv6 address to reclaim, or empty to be given whichever one is free. ⚠ Lower case only — the fabric refuses an address with an upper-case letter in it. Whether an address has a v6 half at all is decided by the pool it comes from, not here.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("v6")]
-    public string? V6 { get; set; }
-
-    /// <summary>The cluster whose external pool the address is allocated from. ⚠ An address is only reachable from the fabric that announces it, so a load balancer in another cluster cannot use it.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
+    /// <summary>The address's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The address's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>A particular address to ask for, rather than whichever one is free.</summary>
+        [JsonPropertyName("address")]
+        public AddressData? Address { get; set; }
+
+        /// <summary>The cluster whose external pool the address is allocated from. ⚠ An address is only reachable from the fabric that announces it, so a load balancer in another cluster cannot use it.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>A particular address to ask for, rather than whichever one is free.</summary>
+        public sealed partial class AddressData {
+
+            /// <summary>The IPv4 address to reclaim, or empty to be given whichever one is free. ⚠ A bare address and not a prefix — 10.100.0.7, never 10.100.0.7/32. An address that is already taken is refused by the fabric rather than by the API.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("v4")]
+            public string? V4 { get; set; }
+
+            /// <summary>The IPv6 address to reclaim, or empty to be given whichever one is free. ⚠ Lower case only — the fabric refuses an address with an upper-case letter in it. Whether an address has a v6 half at all is decided by the pool it comes from, not here.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("v6")]
+            public string? V6 { get; set; }
+        }
+    }
 }
 
 /// <summary>One Public IP address, and the operations on it.</summary>
@@ -3119,29 +3679,45 @@ public sealed partial class VirtualNetworkData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The IPv4 range the network plans for, in CIDR form. It may overlap another of your own virtual networks — that is what a VPC is for — and it may not overlap a range the platform reserves, which is refused with the conflicting range named.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.0.0/16" when left unset.</remarks>
-    [JsonPropertyName("v4")]
-    public required string V4 { get; set; }
-
-    /// <summary>The IPv6 range the network plans for, or empty for an IPv4-only network. ⚠ docs/plan/14 § IPv6 asks for dual-stack from day one rather than as a retrofit, which is why this is here at the first api-version even though a v4-only network is the ordinary case.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("v6")]
-    public string? V6 { get; set; }
-
-    /// <summary>The cluster whose fabric carries the network.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("enableExternal")]
-    public bool? EnableExternal { get; set; }
+    /// <summary>The virtual network's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The virtual network's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The address range the network plans for. ⚠ Declarative: it is checked against the region's reserved ranges and is not rendered into the fabric, because a Kube-OVN Vpc carries no CIDR — the subnets do.</summary>
+        [JsonPropertyName("addressSpace")]
+        public AddressSpaceData? AddressSpace { get; set; }
+
+        /// <summary>The cluster whose fabric carries the network.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("enableExternal")]
+        public bool? EnableExternal { get; set; }
+
+        /// <summary>The address range the network plans for. ⚠ Declarative: it is checked against the region's reserved ranges and is not rendered into the fabric, because a Kube-OVN Vpc carries no CIDR — the subnets do.</summary>
+        public sealed partial class AddressSpaceData {
+
+            /// <summary>The IPv4 range the network plans for, in CIDR form. It may overlap another of your own virtual networks — that is what a VPC is for — and it may not overlap a range the platform reserves, which is refused with the conflicting range named.</summary>
+            /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.0.0/16" when left unset.</remarks>
+            [JsonPropertyName("v4")]
+            public required string V4 { get; set; }
+
+            /// <summary>The IPv6 range the network plans for, or empty for an IPv4-only network. ⚠ docs/plan/14 § IPv6 asks for dual-stack from day one rather than as a retrofit, which is why this is here at the first api-version even though a v4-only network is the ordinary case.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("v6")]
+            public string? V6 { get; set; }
+        }
+    }
 }
 
 /// <summary>One Virtual network, and the operations on it.</summary>
@@ -3265,74 +3841,122 @@ public sealed partial class LoadBalancerData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The workload addresses to balance across, comma separated — for example 10.20.1.11,10.20.1.12. ⚠ Addresses and not resource ids: there is no service discovery and no DNS inside a virtual network, so an address is what a tenant has for their own workloads. At most 32.</summary>
-    /// <remarks>Required on a create. Defaults to "10.20.1.11" when left unset.</remarks>
-    [JsonPropertyName("addresses")]
-    public required string Addresses { get; set; }
-
-    /// <summary>The TCP port every backend address is reached on. ⚠ One port for the whole pool: a pool whose members listen on different ports is two pools.</summary>
-    /// <remarks>Required on a create. Defaults to 8080 when left unset.</remarks>
-    [JsonPropertyName("port")]
-    public required long BackendPort { get; set; }
-
-    /// <summary>The cluster the proxy runs in. ⚠ It must be the cluster the virtual network was created in: a proxy in another cluster has no route into this network at all.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>The TCP port the proxy listens on. ⚠ There is no protocol setting: HAProxy does not proxy UDP in any version, so every rule here is TCP.</summary>
-    /// <remarks>Required on a create. Defaults to 80 when left unset.</remarks>
-    [JsonPropertyName("port")]
-    public required long FrontendPort { get; set; }
-
-    /// <summary>The IPv4 address the proxy answers on, inside the subnet's range. ⚠ Required, and it is the one thing about this resource a tenant must choose: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. A bare address and never a prefix.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.1.10" when left unset.</remarks>
-    [JsonPropertyName("v4")]
-    public required string V4 { get; set; }
-
-    /// <summary>The IPv6 address the proxy also answers on, or empty. ⚠ Lower case only, for the fabric's reason. It must be inside the subnet's IPv6 range, which means the subnet has to have one.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("v6")]
-    public string? V6 { get; set; }
-
-    /// <summary>How many successful probes put a backend back into the pool.</summary>
-    /// <remarks>Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("healthyAfter")]
-    public long? HealthyAfter { get; set; }
-
-    /// <summary>How often each backend is probed with a TCP connection.</summary>
-    /// <remarks>Defaults to 5 when left unset.</remarks>
-    [JsonPropertyName("intervalSeconds")]
-    public long? IntervalSeconds { get; set; }
-
-    /// <summary>How many failed probes take a backend out of the pool.</summary>
-    /// <remarks>Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("unhealthyAfter")]
-    public long? UnhealthyAfter { get; set; }
-
-    /// <summary>How many connections the frontend accepts at once. ⚠ Further connections wait in the kernel's accept queue rather than being refused, so this is a back-pressure setting rather than a firewall. It is also applied per backend server.</summary>
-    /// <remarks>Defaults to 2000 when left unset.</remarks>
-    [JsonPropertyName("maxConnections")]
-    public long? MaxConnections { get; set; }
-
-    /// <summary>How much the proxy pod gets. An L4 proxy is mostly kernel work, so the small row carries far more than its size suggests; the larger rows are for many long-lived connections.</summary>
-    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public LoadBalancerPreset? Preset { get; set; }
-
-    /// <summary>The subnet of this virtual network the proxy sits on. ⚠ The proxy gets an address from it, so the frontend address below must be inside its range. A name that is not a subnet of this network is refused by the fabric rather than by the API, and the proxy pod never schedules.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "web" when left unset.</remarks>
-    [JsonPropertyName("subnet")]
-    public required string Subnet { get; set; }
-
-    /// <summary>Which HAProxy line to run. 3.2 is the long-term-support line and is the default; 3.4 is the current one. ⚠ A change here restarts the proxy and drops open connections.</summary>
-    /// <remarks>Defaults to "3.2" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public LoadBalancerVersion? Version { get; set; }
+    /// <summary>The load balancer's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The load balancer's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Where the connections go.</summary>
+        [JsonPropertyName("backend")]
+        public BackendData? Backend { get; set; }
+
+        /// <summary>The cluster the proxy runs in. ⚠ It must be the cluster the virtual network was created in: a proxy in another cluster has no route into this network at all.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The address and port workloads connect to.</summary>
+        [JsonPropertyName("frontend")]
+        public FrontendData? Frontend { get; set; }
+
+        /// <summary>How a backend is decided to be up. ⚠ Checking cannot be turned off — a proxy that sends connections to a dead server is worse than no proxy.</summary>
+        [JsonPropertyName("health")]
+        public HealthData? Health { get; set; }
+
+        /// <summary>What the proxy refuses rather than passes on.</summary>
+        [JsonPropertyName("limits")]
+        public LimitsData? Limits { get; set; }
+
+        /// <summary>CPU and memory for the proxy.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The subnet of this virtual network the proxy sits on. ⚠ The proxy gets an address from it, so the frontend address below must be inside its range. A name that is not a subnet of this network is refused by the fabric rather than by the API, and the proxy pod never schedules.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "web" when left unset.</remarks>
+        [JsonPropertyName("subnet")]
+        public required string Subnet { get; set; }
+
+        /// <summary>Which HAProxy line to run. 3.2 is the long-term-support line and is the default; 3.4 is the current one. ⚠ A change here restarts the proxy and drops open connections.</summary>
+        /// <remarks>Defaults to "3.2" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public LoadBalancerVersion? Version { get; set; }
+
+        /// <summary>Where the connections go.</summary>
+        public sealed partial class BackendData {
+
+            /// <summary>The workload addresses to balance across, comma separated — for example 10.20.1.11,10.20.1.12. ⚠ Addresses and not resource ids: there is no service discovery and no DNS inside a virtual network, so an address is what a tenant has for their own workloads. At most 32.</summary>
+            /// <remarks>Required on a create. Defaults to "10.20.1.11" when left unset.</remarks>
+            [JsonPropertyName("addresses")]
+            public required string Addresses { get; set; }
+
+            /// <summary>The TCP port every backend address is reached on. ⚠ One port for the whole pool: a pool whose members listen on different ports is two pools.</summary>
+            /// <remarks>Required on a create. Defaults to 8080 when left unset.</remarks>
+            [JsonPropertyName("port")]
+            public required long Port { get; set; }
+        }
+
+        /// <summary>The address and port workloads connect to.</summary>
+        public sealed partial class FrontendData {
+
+            /// <summary>The TCP port the proxy listens on. ⚠ There is no protocol setting: HAProxy does not proxy UDP in any version, so every rule here is TCP.</summary>
+            /// <remarks>Required on a create. Defaults to 80 when left unset.</remarks>
+            [JsonPropertyName("port")]
+            public required long Port { get; set; }
+
+            /// <summary>The IPv4 address the proxy answers on, inside the subnet's range. ⚠ Required, and it is the one thing about this resource a tenant must choose: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. A bare address and never a prefix.</summary>
+            /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.1.10" when left unset.</remarks>
+            [JsonPropertyName("v4")]
+            public required string V4 { get; set; }
+
+            /// <summary>The IPv6 address the proxy also answers on, or empty. ⚠ Lower case only, for the fabric's reason. It must be inside the subnet's IPv6 range, which means the subnet has to have one.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("v6")]
+            public string? V6 { get; set; }
+        }
+
+        /// <summary>How a backend is decided to be up. ⚠ Checking cannot be turned off — a proxy that sends connections to a dead server is worse than no proxy.</summary>
+        public sealed partial class HealthData {
+
+            /// <summary>How many successful probes put a backend back into the pool.</summary>
+            /// <remarks>Defaults to 2 when left unset.</remarks>
+            [JsonPropertyName("healthyAfter")]
+            public long? HealthyAfter { get; set; }
+
+            /// <summary>How often each backend is probed with a TCP connection.</summary>
+            /// <remarks>Defaults to 5 when left unset.</remarks>
+            [JsonPropertyName("intervalSeconds")]
+            public long? IntervalSeconds { get; set; }
+
+            /// <summary>How many failed probes take a backend out of the pool.</summary>
+            /// <remarks>Defaults to 3 when left unset.</remarks>
+            [JsonPropertyName("unhealthyAfter")]
+            public long? UnhealthyAfter { get; set; }
+        }
+
+        /// <summary>What the proxy refuses rather than passes on.</summary>
+        public sealed partial class LimitsData {
+
+            /// <summary>How many connections the frontend accepts at once. ⚠ Further connections wait in the kernel's accept queue rather than being refused, so this is a back-pressure setting rather than a firewall. It is also applied per backend server.</summary>
+            /// <remarks>Defaults to 2000 when left unset.</remarks>
+            [JsonPropertyName("maxConnections")]
+            public long? MaxConnections { get; set; }
+        }
+
+        /// <summary>CPU and memory for the proxy.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>How much the proxy pod gets. An L4 proxy is mostly kernel work, so the small row carries far more than its size suggests; the larger rows are for many long-lived connections.</summary>
+            /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public LoadBalancerPreset? Preset { get; set; }
+        }
+    }
 }
 
 /// <summary>One Load balancer, and the operations on it.</summary>
@@ -3440,69 +4064,93 @@ public sealed partial class SecurityGroupData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>Whether workloads that carry this same security group may reach each other without a rule. Off by default: it is the one setting here that permits traffic nobody wrote a rule for.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("allowSameGroupTraffic")]
-    public bool? AllowSameGroupTraffic { get; set; }
-
-    /// <summary>The cluster whose fabric carries the security group. Must be the cluster the network is in — nothing checks that.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Whether outbound ICMP is allowed to the remotes above. Off by default.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("allowIcmp")]
-    public bool? EgressAllowIcmp { get; set; }
-
-    /// <summary>The IPv4 range outbound traffic may reach, or empty for no IPv4 rules at all.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("remoteV4")]
-    public string? EgressRemoteV4 { get; set; }
-
-    /// <summary>The IPv6 range outbound traffic may reach, or empty for no IPv6 rules at all.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("remoteV6")]
-    public string? EgressRemoteV6 { get; set; }
-
-    /// <summary>TCP ports outbound traffic may reach, in the same form as the inbound list. Empty means no outbound TCP.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("tcpPorts")]
-    public string? EgressTcpPorts { get; set; }
-
-    /// <summary>UDP ports outbound traffic may reach. Empty means no outbound UDP — which includes DNS on port 53.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("udpPorts")]
-    public string? EgressUdpPorts { get; set; }
-
-    /// <summary>Whether inbound ICMP is allowed from the remotes above. Off by default. ⚠ With this off, a workload in this group does not answer ping and does not receive path-MTU messages.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("allowIcmp")]
-    public bool? IngressAllowIcmp { get; set; }
-
-    /// <summary>The IPv4 range inbound traffic may come from, in CIDR form, or empty for no IPv4 rules at all. Use 0.0.0.0/0 for the whole internet.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("remoteV4")]
-    public string? IngressRemoteV4 { get; set; }
-
-    /// <summary>The IPv6 range inbound traffic may come from, or empty for no IPv6 rules at all. ⚠ A group with only an IPv4 remote silently permits nothing over IPv6, which on a dual-stack subnet is not the same as permitting nothing.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("remoteV6")]
-    public string? IngressRemoteV6 { get; set; }
-
-    /// <summary>TCP ports inbound traffic may reach, as a comma-separated list of ports and ranges — for example 80,443,8000-8100. Empty means no TCP is allowed inbound. ⚠ There is no way to say 'every protocol'; 1-65535 says 'every TCP port'.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("tcpPorts")]
-    public string? IngressTcpPorts { get; set; }
-
-    /// <summary>UDP ports inbound traffic may reach, in the same form as tcpPorts. Empty means no UDP is allowed inbound.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("udpPorts")]
-    public string? IngressUdpPorts { get; set; }
+    /// <summary>The security group's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The security group's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Whether workloads that carry this same security group may reach each other without a rule. Off by default: it is the one setting here that permits traffic nobody wrote a rule for.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("allowSameGroupTraffic")]
+        public bool? AllowSameGroupTraffic { get; set; }
+
+        /// <summary>The cluster whose fabric carries the security group. Must be the cluster the network is in — nothing checks that.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>What workloads carrying this group may reach. ⚠ Same default-deny: an empty section permits no outbound traffic at all, which for most workloads means no DNS and no package downloads.</summary>
+        [JsonPropertyName("egress")]
+        public EgressData? Egress { get; set; }
+
+        /// <summary>What may reach workloads carrying this group. ⚠ Anything not allowed here is dropped — the fabric installs a default-deny for every port in a security group, so an empty section permits nothing.</summary>
+        [JsonPropertyName("ingress")]
+        public IngressData? Ingress { get; set; }
+
+        /// <summary>What workloads carrying this group may reach. ⚠ Same default-deny: an empty section permits no outbound traffic at all, which for most workloads means no DNS and no package downloads.</summary>
+        public sealed partial class EgressData {
+
+            /// <summary>Whether outbound ICMP is allowed to the remotes above. Off by default.</summary>
+            /// <remarks>Defaults to false when left unset.</remarks>
+            [JsonPropertyName("allowIcmp")]
+            public bool? AllowIcmp { get; set; }
+
+            /// <summary>The IPv4 range outbound traffic may reach, or empty for no IPv4 rules at all.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("remoteV4")]
+            public string? RemoteV4 { get; set; }
+
+            /// <summary>The IPv6 range outbound traffic may reach, or empty for no IPv6 rules at all.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("remoteV6")]
+            public string? RemoteV6 { get; set; }
+
+            /// <summary>TCP ports outbound traffic may reach, in the same form as the inbound list. Empty means no outbound TCP.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("tcpPorts")]
+            public string? TcpPorts { get; set; }
+
+            /// <summary>UDP ports outbound traffic may reach. Empty means no outbound UDP — which includes DNS on port 53.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("udpPorts")]
+            public string? UdpPorts { get; set; }
+        }
+
+        /// <summary>What may reach workloads carrying this group. ⚠ Anything not allowed here is dropped — the fabric installs a default-deny for every port in a security group, so an empty section permits nothing.</summary>
+        public sealed partial class IngressData {
+
+            /// <summary>Whether inbound ICMP is allowed from the remotes above. Off by default. ⚠ With this off, a workload in this group does not answer ping and does not receive path-MTU messages.</summary>
+            /// <remarks>Defaults to false when left unset.</remarks>
+            [JsonPropertyName("allowIcmp")]
+            public bool? AllowIcmp { get; set; }
+
+            /// <summary>The IPv4 range inbound traffic may come from, in CIDR form, or empty for no IPv4 rules at all. Use 0.0.0.0/0 for the whole internet.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("remoteV4")]
+            public string? RemoteV4 { get; set; }
+
+            /// <summary>The IPv6 range inbound traffic may come from, or empty for no IPv6 rules at all. ⚠ A group with only an IPv4 remote silently permits nothing over IPv6, which on a dual-stack subnet is not the same as permitting nothing.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("remoteV6")]
+            public string? RemoteV6 { get; set; }
+
+            /// <summary>TCP ports inbound traffic may reach, as a comma-separated list of ports and ranges — for example 80,443,8000-8100. Empty means no TCP is allowed inbound. ⚠ There is no way to say 'every protocol'; 1-65535 says 'every TCP port'.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("tcpPorts")]
+            public string? TcpPorts { get; set; }
+
+            /// <summary>UDP ports inbound traffic may reach, in the same form as tcpPorts. Empty means no UDP is allowed inbound.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("udpPorts")]
+            public string? UdpPorts { get; set; }
+        }
+    }
 }
 
 /// <summary>One Security group, and the operations on it.</summary>
@@ -3606,39 +4254,55 @@ public sealed partial class SubnetData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The IPv4 prefix, in CIDR form. ⚠ Host bits are cleared by the fabric, so 10.20.1.7/24 is stored as 10.20.1.0/24 and both name the same network. It may not overlap a range the platform reserves, which is refused with the conflicting range named.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.1.0/24" when left unset.</remarks>
-    [JsonPropertyName("v4")]
-    public required string V4 { get; set; }
-
-    /// <summary>The IPv6 prefix, or empty for an IPv4-only subnet. Setting both makes the subnet dual-stack — docs/plan/14 § IPv6.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("v6")]
-    public string? V6 { get; set; }
-
-    /// <summary>The cluster whose fabric carries the subnet. Must be the cluster the network is in — nothing checks that, and a subnet placed elsewhere binds to a Vpc that does not exist there.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("enableDhcp")]
-    public bool? EnableDhcp { get; set; }
-
-    /// <summary>Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("natOutgoing")]
-    public bool? NatOutgoing { get; set; }
-
-    /// <summary>Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("private")]
-    public bool? Private { get; set; }
+    /// <summary>The subnet's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The subnet's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The range addresses are allocated from.</summary>
+        [JsonPropertyName("addressPrefix")]
+        public AddressPrefixData? AddressPrefix { get; set; }
+
+        /// <summary>The cluster whose fabric carries the subnet. Must be the cluster the network is in — nothing checks that, and a subnet placed elsewhere binds to a Vpc that does not exist there.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("enableDhcp")]
+        public bool? EnableDhcp { get; set; }
+
+        /// <summary>Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("natOutgoing")]
+        public bool? NatOutgoing { get; set; }
+
+        /// <summary>Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("private")]
+        public bool? Private { get; set; }
+
+        /// <summary>The range addresses are allocated from.</summary>
+        public sealed partial class AddressPrefixData {
+
+            /// <summary>The IPv4 prefix, in CIDR form. ⚠ Host bits are cleared by the fabric, so 10.20.1.7/24 is stored as 10.20.1.0/24 and both name the same network. It may not overlap a range the platform reserves, which is refused with the conflicting range named.</summary>
+            /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.1.0/24" when left unset.</remarks>
+            [JsonPropertyName("v4")]
+            public required string V4 { get; set; }
+
+            /// <summary>The IPv6 prefix, or empty for an IPv4-only subnet. Setting both makes the subnet dual-stack — docs/plan/14 § IPv6.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("v6")]
+            public string? V6 { get; set; }
+        }
+    }
 }
 
 /// <summary>One Subnet, and the operations on it.</summary>
@@ -3670,25 +4334,41 @@ public sealed partial class SubnetResource {
         [JsonPropertyName("sampledAt")]
         public required DateTimeOffset SampledAt { get; set; }
 
-        /// <summary>How many IPv4 addresses remain. ⚠ Zero here is the answer to 'why will nothing schedule in this subnet'.</summary>
-        [JsonPropertyName("available")]
-        public required long V4Available { get; set; }
+        /// <summary>IPv4 address usage.</summary>
+        [JsonPropertyName("v4")]
+        public V4Data? V4 { get; set; }
 
-        /// <summary>How many IPv4 addresses the prefix contains that may be allocated, excluding the network address, the broadcast address and the gateway.</summary>
-        [JsonPropertyName("total")]
-        public required long V4Total { get; set; }
+        /// <summary>IPv6 address usage.</summary>
+        [JsonPropertyName("v6")]
+        public V6Data? V6 { get; set; }
 
-        /// <summary>How many IPv4 addresses are currently allocated to ports.</summary>
-        [JsonPropertyName("used")]
-        public required long Used { get; set; }
+        /// <summary>IPv4 address usage.</summary>
+        public sealed partial class V4Data {
 
-        /// <summary>How many IPv6 addresses remain, as a decimal string, or empty for an IPv4-only subnet.</summary>
-        [JsonPropertyName("available")]
-        public string? V6Available { get; set; }
+            /// <summary>How many IPv4 addresses remain. ⚠ Zero here is the answer to 'why will nothing schedule in this subnet'.</summary>
+            [JsonPropertyName("available")]
+            public required long Available { get; set; }
 
-        /// <summary>How many IPv6 addresses the prefix contains, as a decimal string, or empty for an IPv4-only subnet. ⚠ A string because a /64 does not fit in the signed 64-bit integer SchemaKind.WholeNumber validates through.</summary>
-        [JsonPropertyName("total")]
-        public string? V6Total { get; set; }
+            /// <summary>How many IPv4 addresses the prefix contains that may be allocated, excluding the network address, the broadcast address and the gateway.</summary>
+            [JsonPropertyName("total")]
+            public required long Total { get; set; }
+
+            /// <summary>How many IPv4 addresses are currently allocated to ports.</summary>
+            [JsonPropertyName("used")]
+            public required long Used { get; set; }
+        }
+
+        /// <summary>IPv6 address usage.</summary>
+        public sealed partial class V6Data {
+
+            /// <summary>How many IPv6 addresses remain, as a decimal string, or empty for an IPv4-only subnet.</summary>
+            [JsonPropertyName("available")]
+            public string? Available { get; set; }
+
+            /// <summary>How many IPv6 addresses the prefix contains, as a decimal string, or empty for an IPv4-only subnet. ⚠ A string because a /64 does not fit in the signed 64-bit integer SchemaKind.WholeNumber validates through.</summary>
+            [JsonPropertyName("total")]
+            public string? Total { get; set; }
+        }
     }
 
     /// <summary>ListAddressUsage. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
@@ -3768,42 +4448,50 @@ public sealed partial class WidgetData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The ranges the widget claims to serve. Shape only; nothing enforces it.</summary>
-    [JsonPropertyName("allowedCidrs")]
-    public IList<string> AllowedCidrs { get; set; } = new List<string>();
-
-    /// <summary>The cluster whose namespace holds the widget's ConfigMap.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Whether the widget is switched on. Defaults to off when absent.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>What the ConfigMap's 'message' key says.</summary>
-    /// <remarks>Required on a create.</remarks>
-    [JsonPropertyName("message")]
-    public required string Message { get; set; }
-
-    /// <summary>How many copies of the ConfigMap's message the widget claims to hold.</summary>
-    /// <remarks>Defaults to 1 when left unset.</remarks>
-    [JsonPropertyName("replicas")]
-    public long? Replicas { get; set; }
-
-    /// <summary>When the widget was retired, or null while it is live.</summary>
-    [JsonPropertyName("retiredOn")]
-    public DateTimeOffset? RetiredOn { get; set; }
-
-    /// <summary>How much the widget's ConfigMap is allowed to say.</summary>
-    /// <remarks>Defaults to "free" when left unset.</remarks>
-    [JsonPropertyName("tier")]
-    public WidgetTier? Tier { get; set; }
+    /// <summary>The widget's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The widget's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The ranges the widget claims to serve. Shape only; nothing enforces it.</summary>
+        [JsonPropertyName("allowedCidrs")]
+        public IList<string> AllowedCidrs { get; set; } = new List<string>();
+
+        /// <summary>The cluster whose namespace holds the widget's ConfigMap.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Whether the widget is switched on. Defaults to off when absent.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>What the ConfigMap's 'message' key says.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("message")]
+        public required string Message { get; set; }
+
+        /// <summary>How many copies of the ConfigMap's message the widget claims to hold.</summary>
+        /// <remarks>Defaults to 1 when left unset.</remarks>
+        [JsonPropertyName("replicas")]
+        public long? Replicas { get; set; }
+
+        /// <summary>When the widget was retired, or null while it is live.</summary>
+        [JsonPropertyName("retiredOn")]
+        public DateTimeOffset? RetiredOn { get; set; }
+
+        /// <summary>How much the widget's ConfigMap is allowed to say.</summary>
+        /// <remarks>Defaults to "free" when left unset.</remarks>
+        [JsonPropertyName("tier")]
+        public WidgetTier? Tier { get; set; }
+    }
 }
 
 /// <summary>One Widget, and the operations on it.</summary>
@@ -3944,64 +4632,96 @@ public sealed partial class OpenSearchServiceData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the search service.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Number of coordinating-only nodes — nodes that hold no data and no cluster state and exist to fan a search out and merge the results. Zero is the default and is right until a query pattern makes one data node the bottleneck for every search. They are sized by the same preset as the data nodes.</summary>
-    /// <remarks>Required on a create. Defaults to 0 when left unset.</remarks>
-    [JsonPropertyName("coordinatingNodes")]
-    public required long CoordinatingNodes { get; set; }
-
-    /// <summary>Number of data nodes. This is the capacity axis: total raw capacity is this count times the disk size below, before replicas. Every data node also carries the ingest role, so an indexing pipeline needs no separate pool.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("dataNodes")]
-    public required long DataNodes { get; set; }
-
-    /// <summary>Number of dedicated cluster-manager nodes. They hold the cluster state in a quorum, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all. An even count is worse than the odd count below it and the API cannot say so — see the service's own documentation.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("masterNodes")]
-    public required long MasterNodes { get; set; }
-
-    /// <summary>Whether the operator is asked for a ServiceMonitor. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ The metrics themselves come from the prometheus-exporter plugin, which the operator installs into every node on the first reconcile after this is turned on — so turning it on restarts the pods and turning it off does not remove the plugin.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Search nodes use the m1 family, which is 1 vCPU to 8 GiB, because OpenSearch is bound by heap and by the filesystem cache rather than by CPU. The m1 rungs below m1.small are deliberately not offered: OpenSearch derives its JVM heap from the container limit and a node under 4 GiB fails a bootstrap check after passing its readiness probe.</summary>
-    /// <remarks>Defaults to "m1.medium" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public OpenSearchServicePreset? Preset { get; set; }
-
-    /// <summary>StorageClass name for every node pool. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Disk size per data node, in Kubernetes quantity form. Grows online; never shrinks. The cluster-manager and coordinating nodes get a fixed 10Gi that is not configurable and is counted against the storage quota anyway.</summary>
-    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>OpenSearch version. ⚠ OpenSearch is a fork of Elasticsearch 7.10 (ADR-011 — Elasticsearch is SSPL and is not available to us) and the two have diverged since, so an Elasticsearch 8 client is not promised anything here. Upgrades between the values below are online and in the maintenance window; a third value is a new api-version.</summary>
-    /// <remarks>Required on a create. Defaults to "3.1.0" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required OpenSearchServiceVersion Version { get; set; }
+    /// <summary>The service's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The service's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the search service.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Number of coordinating-only nodes — nodes that hold no data and no cluster state and exist to fan a search out and merge the results. Zero is the default and is right until a query pattern makes one data node the bottleneck for every search. They are sized by the same preset as the data nodes.</summary>
+        /// <remarks>Required on a create. Defaults to 0 when left unset.</remarks>
+        [JsonPropertyName("coordinatingNodes")]
+        public required long CoordinatingNodes { get; set; }
+
+        /// <summary>Number of data nodes. This is the capacity axis: total raw capacity is this count times the disk size below, before replicas. Every data node also carries the ingest role, so an indexing pipeline needs no separate pool.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("dataNodes")]
+        public required long DataNodes { get; set; }
+
+        /// <summary>Number of dedicated cluster-manager nodes. They hold the cluster state in a quorum, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all. An even count is worse than the odd count below it and the API cannot say so — see the service's own documentation.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("masterNodes")]
+        public required long MasterNodes { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>CPU and memory per data node and per coordinating node, either by preset or explicitly. The cluster-manager nodes are sized by the platform and are not affected.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The data volume, per data node.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>OpenSearch version. ⚠ OpenSearch is a fork of Elasticsearch 7.10 (ADR-011 — Elasticsearch is SSPL and is not available to us) and the two have diverged since, so an Elasticsearch 8 client is not promised anything here. Upgrades between the values below are online and in the maintenance window; a third value is a new api-version.</summary>
+        /// <remarks>Required on a create. Defaults to "3.1.0" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required OpenSearchServiceVersion Version { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether the operator is asked for a ServiceMonitor. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ The metrics themselves come from the prometheus-exporter plugin, which the operator installs into every node on the first reconcile after this is turned on — so turning it on restarts the pods and turning it off does not remove the plugin.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>CPU and memory per data node and per coordinating node, either by preset or explicitly. The cluster-manager nodes are sized by the platform and are not affected.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Search nodes use the m1 family, which is 1 vCPU to 8 GiB, because OpenSearch is bound by heap and by the filesystem cache rather than by CPU. The m1 rungs below m1.small are deliberately not offered: OpenSearch derives its JVM heap from the container limit and a node under 4 GiB fails a bootstrap check after passing its readiness probe.</summary>
+            /// <remarks>Defaults to "m1.medium" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public OpenSearchServicePreset? Preset { get; set; }
+        }
+
+        /// <summary>The data volume, per data node.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name for every node pool. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Disk size per data node, in Kubernetes quantity form. Grows online; never shrinks. The cluster-manager and coordinating nodes get a fixed 10Gi that is not configurable and is counted against the storage quota anyway.</summary>
+            /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One OpenSearch service, and the operations on it.</summary>
@@ -4167,69 +4887,109 @@ public sealed partial class StorageAccountData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the object store.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>Number of S3 gateway pods. The gateway is stateless, so this is a throughput and availability setting rather than a topology one.</summary>
-    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
-    [JsonPropertyName("replicas")]
-    public required long Replicas { get; set; }
-
-    /// <summary>Number of master servers. The masters hold the volume topology in a Raft group, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("masters")]
-    public required long Masters { get; set; }
-
-    /// <summary>Whether the operator is asked for a ServiceMonitor per component. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, which is the operator's own behaviour rather than this provider's.</summary>
-    /// <remarks>Defaults to true when left unset.</remarks>
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; set; }
-
-    /// <summary>Where the second copy of every object is placed. None keeps one copy and is for scratch data only. A placement the cluster's topology cannot satisfy leaves volumes read-only rather than failing the create. Immutable, because SeaweedFS applies this to volumes as they are created and never rewrites the ones that already exist — a change would split the account into two durability promises with no way to tell which object got which.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "SameRack" when left unset.</remarks>
-    [JsonPropertyName("replication")]
-    public required StorageAccountReplication Replication { get; set; }
-
-    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("cpu")]
-    public string? Cpu { get; set; }
-
-    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("memory")]
-    public string? Memory { get; set; }
-
-    /// <summary>A sizing preset from docs/plan/12. Volume servers use the s1 family, which is 1 vCPU to 4 GiB.</summary>
-    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public StorageAccountPreset? Preset { get; set; }
-
-    /// <summary>StorageClass name for the volume servers. Empty means the cluster default.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("class")]
-    public string? Class { get; set; }
-
-    /// <summary>Data volume size per volume server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
-    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>SeaweedFS version. ⚠ SeaweedFS ships a release roughly weekly and maintains no long-term branch, so docs/plan/12's "supported major versions" is a shape this project does not have; the two values here are the two most recent releases and a new api-version is what adds a third.</summary>
-    /// <remarks>Required on a create. Defaults to "4.41" when left unset.</remarks>
-    [JsonPropertyName("version")]
-    public required StorageAccountVersion Version { get; set; }
-
-    /// <summary>Number of volume servers. This is the capacity axis: total raw capacity is this count times the volume size below, before replication.</summary>
-    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
-    [JsonPropertyName("volumeServers")]
-    public required long VolumeServers { get; set; }
+    /// <summary>The account's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The account's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the object store.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The S3 gateway — docs/plan/15's ADR-008: "the API is S3".</summary>
+        [JsonPropertyName("gateway")]
+        public GatewayData? Gateway { get; set; }
+
+        /// <summary>Number of master servers. The masters hold the volume topology in a Raft group, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("masters")]
+        public required long Masters { get; set; }
+
+        /// <summary>What the platform scrapes.</summary>
+        [JsonPropertyName("monitoring")]
+        public MonitoringData? Monitoring { get; set; }
+
+        /// <summary>Where the second copy of every object is placed. None keeps one copy and is for scratch data only. A placement the cluster's topology cannot satisfy leaves volumes read-only rather than failing the create. Immutable, because SeaweedFS applies this to volumes as they are created and never rewrites the ones that already exist — a change would split the account into two durability promises with no way to tell which object got which.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "SameRack" when left unset.</remarks>
+        [JsonPropertyName("replication")]
+        public required StorageAccountReplication Replication { get; set; }
+
+        /// <summary>CPU and memory per volume server, either by preset or explicitly. The masters, the filer and the S3 gateway are sized by the platform and are not affected.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>The data volume, per volume server.</summary>
+        [JsonPropertyName("storage")]
+        public StorageData? Storage { get; set; }
+
+        /// <summary>SeaweedFS version. ⚠ SeaweedFS ships a release roughly weekly and maintains no long-term branch, so docs/plan/12's "supported major versions" is a shape this project does not have; the two values here are the two most recent releases and a new api-version is what adds a third.</summary>
+        /// <remarks>Required on a create. Defaults to "4.41" when left unset.</remarks>
+        [JsonPropertyName("version")]
+        public required StorageAccountVersion Version { get; set; }
+
+        /// <summary>Number of volume servers. This is the capacity axis: total raw capacity is this count times the volume size below, before replication.</summary>
+        /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+        [JsonPropertyName("volumeServers")]
+        public required long VolumeServers { get; set; }
+
+        /// <summary>The S3 gateway — docs/plan/15's ADR-008: "the API is S3".</summary>
+        public sealed partial class GatewayData {
+
+            /// <summary>Number of S3 gateway pods. The gateway is stateless, so this is a throughput and availability setting rather than a topology one.</summary>
+            /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+            [JsonPropertyName("replicas")]
+            public required long Replicas { get; set; }
+        }
+
+        /// <summary>What the platform scrapes.</summary>
+        public sealed partial class MonitoringData {
+
+            /// <summary>Whether the operator is asked for a ServiceMonitor per component. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, which is the operator's own behaviour rather than this provider's.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("enabled")]
+            public bool? Enabled { get; set; }
+        }
+
+        /// <summary>CPU and memory per volume server, either by preset or explicitly. The masters, the filer and the S3 gateway are sized by the platform and are not affected.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("cpu")]
+            public string? Cpu { get; set; }
+
+            /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("memory")]
+            public string? Memory { get; set; }
+
+            /// <summary>A sizing preset from docs/plan/12. Volume servers use the s1 family, which is 1 vCPU to 4 GiB.</summary>
+            /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public StorageAccountPreset? Preset { get; set; }
+        }
+
+        /// <summary>The data volume, per volume server.</summary>
+        public sealed partial class StorageData {
+
+            /// <summary>StorageClass name for the volume servers. Empty means the cluster default.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("class")]
+            public string? Class { get; set; }
+
+            /// <summary>Data volume size per volume server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
+            /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One Storage account, and the operations on it.</summary>
@@ -4335,24 +5095,40 @@ public sealed partial class BucketData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>The cluster whose namespace holds the bucket. Must be the cluster the account is in — nothing checks that, and a bucket placed elsewhere is applied into a namespace with no object store in it.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>The bucket's size limit, in Kubernetes quantity form. Empty means no limit other than the account's own provisioned capacity. ⚠ This is a limit inside capacity the account already reserved; it does not add any, and it is not what the bucket is billed on.</summary>
-    /// <remarks>Defaults to "" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public string? Size { get; set; }
-
-    /// <summary>Whether the bucket keeps previous versions of an overwritten object. Off by default. ⚠ docs/plan/15 § Object storage: SeaweedFS' S3 implementation is "good but not complete" and names object versioning as one of the partial areas, so the supported-operations table for the deployed version — not this property — is what says how completely it behaves.</summary>
-    /// <remarks>Defaults to false when left unset.</remarks>
-    [JsonPropertyName("versioning")]
-    public bool? Versioning { get; set; }
+    /// <summary>The bucket's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The bucket's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the bucket. Must be the cluster the account is in — nothing checks that, and a bucket placed elsewhere is applied into a namespace with no object store in it.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>How much the bucket may hold.</summary>
+        [JsonPropertyName("quota")]
+        public QuotaData? Quota { get; set; }
+
+        /// <summary>Whether the bucket keeps previous versions of an overwritten object. Off by default. ⚠ docs/plan/15 § Object storage: SeaweedFS' S3 implementation is "good but not complete" and names object versioning as one of the partial areas, so the supported-operations table for the deployed version — not this property — is what says how completely it behaves.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("versioning")]
+        public bool? Versioning { get; set; }
+
+        /// <summary>How much the bucket may hold.</summary>
+        public sealed partial class QuotaData {
+
+            /// <summary>The bucket's size limit, in Kubernetes quantity form. Empty means no limit other than the account's own provisioned capacity. ⚠ This is a limit inside capacity the account already reserved; it does not add any, and it is not what the bucket is billed on.</summary>
+            /// <remarks>Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public string? Size { get; set; }
+        }
+    }
 }
 
 /// <summary>One Bucket, and the operations on it.</summary>
@@ -4494,59 +5270,123 @@ public sealed partial class CloudTerminalData {
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 
-    /// <summary>Whether everything typed into and printed by this shell is recorded. ⚠ Off by default and immutable afterwards: a shell contains secrets, a keystroke log is a liability, and a recording that could be switched off mid-life would be worth nothing to the compliance requirement it exists for.</summary>
-    /// <remarks>⚠ Cannot change after create. Defaults to false when left unset.</remarks>
-    [JsonPropertyName("sessionRecording")]
-    public bool? SessionRecording { get; set; }
-
-    /// <summary>The cluster whose namespace holds the shell and its home volume.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("clusterId")]
-    public required Guid ClusterId { get; set; }
-
-    /// <summary>How long $HOME is kept after the console was last attached to. ⚠ Nothing sweeps on it yet — it is carried so that a console created today is swept correctly by whatever does.</summary>
-    /// <remarks>Defaults to 90 when left unset.</remarks>
-    [JsonPropertyName("retentionDays")]
-    public long? RetentionDays { get; set; }
-
-    /// <summary>The size of $HOME. It grows and never shrinks: a PersistentVolumeClaim refuses a decrease at the API.</summary>
-    /// <remarks>Required on a create. Defaults to "5Gi" when left unset.</remarks>
-    [JsonPropertyName("size")]
-    public required string Size { get; set; }
-
-    /// <summary>The managed identity every command in this shell acts as. It may not be changed: a console whose identity moved would have an audit trail describing a shell that no longer exists.</summary>
-    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
-    [JsonPropertyName("principalId")]
-    public required Guid PrincipalId { get; set; }
-
-    /// <summary>default carries every tool in docs/plan/19's table and takes about 40 seconds to pull cold; minimal carries shells, editors, cyc and kubectl and starts in about 8. The repository and the digest are the platform's.</summary>
-    /// <remarks>Defaults to "default" when left unset.</remarks>
-    [JsonPropertyName("variant")]
-    public CloudTerminalVariant? Variant { get; set; }
-
-    /// <summary>Internet lets the shell reach public addresses as well as this subscription's own workloads and DNS — a shell that cannot git clone is not a shell. TenantOnly removes the public half and leaves the rest.</summary>
-    /// <remarks>Defaults to "Internet" when left unset.</remarks>
-    [JsonPropertyName("egress")]
-    public CloudTerminalEgress? Egress { get; set; }
-
-    /// <summary>How long a shell may sit with nobody typing into it before it is reclaimed. The home volume survives; the pod does not. ⚠ There is no value meaning never — an idle terminal is a tenant paying for something they closed.</summary>
-    /// <remarks>Defaults to 20 when left unset.</remarks>
-    [JsonPropertyName("idleTimeoutMinutes")]
-    public long? IdleTimeoutMinutes { get; set; }
-
-    /// <summary>The longest a single shell may run, busy or not. Enforced by the kubelet through the pod's own deadline, so it holds even when nothing of this platform is running.</summary>
-    /// <remarks>Defaults to 8 when left unset.</remarks>
-    [JsonPropertyName("maxDurationHours")]
-    public long? MaxDurationHours { get; set; }
-
-    /// <summary>How much a shell gets. The ladder stops at 2 vCPU and 4 GiB, which is docs/plan/19's ceiling for this row — a workload that needs more needs a cluster and a job rather than a terminal.</summary>
-    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
-    [JsonPropertyName("preset")]
-    public CloudTerminalPreset? Preset { get; set; }
+    /// <summary>The console's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
 
     /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
     [JsonPropertyName("tags")]
     public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The console's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>docs/plan/19 § Auditing. Who, when, from where, which subscription and for how long is always recorded and is not a setting.</summary>
+        [JsonPropertyName("audit")]
+        public AuditData? Audit { get; set; }
+
+        /// <summary>The cluster whose namespace holds the shell and its home volume.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The persistent home directory. The only part of a console that survives an idle reclaim.</summary>
+        [JsonPropertyName("home")]
+        public HomeData? Home { get; set; }
+
+        /// <summary>Who the shell runs as.</summary>
+        [JsonPropertyName("identity")]
+        public IdentityData? Identity { get; set; }
+
+        /// <summary>Which shell image to run.</summary>
+        [JsonPropertyName("image")]
+        public ImageData? Image { get; set; }
+
+        /// <summary>What the shell may reach. Nothing may ever reach the shell.</summary>
+        [JsonPropertyName("network")]
+        public NetworkData? Network { get; set; }
+
+        /// <summary>When a shell stops. Both numbers are ceilings a tenant may lower and neither may be turned off.</summary>
+        [JsonPropertyName("session")]
+        public SessionData? Session { get; set; }
+
+        /// <summary>CPU and memory for the shell.</summary>
+        [JsonPropertyName("sizing")]
+        public SizingData? Sizing { get; set; }
+
+        /// <summary>docs/plan/19 § Auditing. Who, when, from where, which subscription and for how long is always recorded and is not a setting.</summary>
+        public sealed partial class AuditData {
+
+            /// <summary>Whether everything typed into and printed by this shell is recorded. ⚠ Off by default and immutable afterwards: a shell contains secrets, a keystroke log is a liability, and a recording that could be switched off mid-life would be worth nothing to the compliance requirement it exists for.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to false when left unset.</remarks>
+            [JsonPropertyName("sessionRecording")]
+            public bool? SessionRecording { get; set; }
+        }
+
+        /// <summary>The persistent home directory. The only part of a console that survives an idle reclaim.</summary>
+        public sealed partial class HomeData {
+
+            /// <summary>How long $HOME is kept after the console was last attached to. ⚠ Nothing sweeps on it yet — it is carried so that a console created today is swept correctly by whatever does.</summary>
+            /// <remarks>Defaults to 90 when left unset.</remarks>
+            [JsonPropertyName("retentionDays")]
+            public long? RetentionDays { get; set; }
+
+            /// <summary>The size of $HOME. It grows and never shrinks: a PersistentVolumeClaim refuses a decrease at the API.</summary>
+            /// <remarks>Required on a create. Defaults to "5Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+
+        /// <summary>Who the shell runs as.</summary>
+        public sealed partial class IdentityData {
+
+            /// <summary>The managed identity every command in this shell acts as. It may not be changed: a console whose identity moved would have an audit trail describing a shell that no longer exists.</summary>
+            /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+            [JsonPropertyName("principalId")]
+            public required Guid PrincipalId { get; set; }
+        }
+
+        /// <summary>Which shell image to run.</summary>
+        public sealed partial class ImageData {
+
+            /// <summary>default carries every tool in docs/plan/19's table and takes about 40 seconds to pull cold; minimal carries shells, editors, cyc and kubectl and starts in about 8. The repository and the digest are the platform's.</summary>
+            /// <remarks>Defaults to "default" when left unset.</remarks>
+            [JsonPropertyName("variant")]
+            public CloudTerminalVariant? Variant { get; set; }
+        }
+
+        /// <summary>What the shell may reach. Nothing may ever reach the shell.</summary>
+        public sealed partial class NetworkData {
+
+            /// <summary>Internet lets the shell reach public addresses as well as this subscription's own workloads and DNS — a shell that cannot git clone is not a shell. TenantOnly removes the public half and leaves the rest.</summary>
+            /// <remarks>Defaults to "Internet" when left unset.</remarks>
+            [JsonPropertyName("egress")]
+            public CloudTerminalEgress? Egress { get; set; }
+        }
+
+        /// <summary>When a shell stops. Both numbers are ceilings a tenant may lower and neither may be turned off.</summary>
+        public sealed partial class SessionData {
+
+            /// <summary>How long a shell may sit with nobody typing into it before it is reclaimed. The home volume survives; the pod does not. ⚠ There is no value meaning never — an idle terminal is a tenant paying for something they closed.</summary>
+            /// <remarks>Defaults to 20 when left unset.</remarks>
+            [JsonPropertyName("idleTimeoutMinutes")]
+            public long? IdleTimeoutMinutes { get; set; }
+
+            /// <summary>The longest a single shell may run, busy or not. Enforced by the kubelet through the pod's own deadline, so it holds even when nothing of this platform is running.</summary>
+            /// <remarks>Defaults to 8 when left unset.</remarks>
+            [JsonPropertyName("maxDurationHours")]
+            public long? MaxDurationHours { get; set; }
+        }
+
+        /// <summary>CPU and memory for the shell.</summary>
+        public sealed partial class SizingData {
+
+            /// <summary>How much a shell gets. The ladder stops at 2 vCPU and 4 GiB, which is docs/plan/19's ceiling for this row — a workload that needs more needs a cluster and a job rather than a terminal.</summary>
+            /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+            [JsonPropertyName("preset")]
+            public CloudTerminalPreset? Preset { get; set; }
+        }
+    }
 }
 
 /// <summary>One Cloud terminal, and the operations on it.</summary>
@@ -4698,6 +5538,7 @@ public sealed partial class ScopeResource {
 public sealed partial class SubscriptionCreateContent {
 
     /// <summary>The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list.</summary>
+    /// <remarks>Required on a create.</remarks>
     [JsonPropertyName("displayName")]
     public required string DisplayName { get; set; }
 }
@@ -4706,6 +5547,7 @@ public sealed partial class SubscriptionCreateContent {
 public sealed partial class ResourceGroupCreateContent {
 
     /// <summary>The region the group's resources default to. Required, and there is no platform-wide default to fall back on: a group whose region were guessed would place a tenant's data somewhere nobody chose.</summary>
+    /// <remarks>Required on a create.</remarks>
     [JsonPropertyName("location")]
     public required string Location { get; set; }
 }

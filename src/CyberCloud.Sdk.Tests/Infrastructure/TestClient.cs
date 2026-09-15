@@ -70,7 +70,7 @@ public static class TestClient {
     public static WidgetCollection Widgets(this CyberCloudClient client) => new(client.Context, Scope);
 
     public static WidgetData SampleData() =>
-        new("eu-central") { Properties = new WidgetProperties { ClusterId = "cluster-1", Message = "hello" } };
+        new("eu-central") { Properties = new WidgetData.PropertiesData { ClusterId = "cluster-1", Message = "hello" } };
 
     public const string OperationUri = "https://api.cybercloud.test/operations/op-1?api-version=2026-08-01";
 
