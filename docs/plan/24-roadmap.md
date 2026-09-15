@@ -130,7 +130,7 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Monitor workspaces + ingest + platform self-monitoring | 2.5 | [16](16-observability.md) | ◐ `Monitor/workspaces` published. ⚠ Only the first of this row's three nouns is a resource type; ingest and platform self-monitoring are not, so the type list is silent on 2.5 EM's other two thirds rather than confirming them |
 | Metering + quota (no invoicing) | 1.8 | [22](22-billing-metering-and-quota.md) | — no resource type |
 | Cloud terminal | 1.5 | [19](19-cloud-terminal-and-virtual-desktop.md) | ✅ `Terminal/consoles` |
-| Portal M1 subset | 5.0 | [20](20-portal.md) | — no resource type. #22: nine of the ten bespoke pages are absent |
+| Portal M1 subset | 5.0 | [20](20-portal.md) | ◐ no resource type. #22: the generated form renderer, create/edit, the resource blade and list, the operation view, and the subscription and resource-group pages exist over the generated client. ⚠ Quota/usage, role assignments and the cloud-shell surface wait on endpoints (docs/plan/22, #70, an `xterm.js` host); the region/cluster/storage-class/subnet pickers wait on list endpoints |
 | `cyc` + .NET SDK + TypeScript packaging | 3.2 | [21](21-cli-and-sdks.md) | ◐ all three surfaces are generated and byte-compared by the **Generated surfaces** gate, the SDK compiles (#73), the TypeScript client exists (#21) and `cyc list` pages (#64). ⚠ Generated is not packaged, and #79 is open against fourteen duplicate wire names |
 | Platform hardening: supply chain, admission, isolation, log canary | 1.0 | [18](18-security-vault-and-malware-scan.md) | — no resource type. #15 (no admission policy — the third control in doc 18's Secrets row) and #17 (the licence scan does not exist) are open |
 

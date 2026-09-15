@@ -11,3 +11,6 @@ dist/
 .angular/
 coverage/
 pnpm-lock.yaml
+
+# Staged from ../generated/forms by scripts/sync-forms.mjs; the generator owns it.
+apps/portal/public/forms/

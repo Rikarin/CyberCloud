@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, RouterOutlet, withComponentInputBinding } from '@angular/router';
@@ -45,11 +47,36 @@ const WCAG_22_AA = {
 })
 class A11yHost {}
 
+/**
+ * A value for every parameter the route table names, so each route is visited with a concrete
+ * address. ⚠ A parameter added to a route without a row here fails the suite by name, which is
+ * the point: a route this table cannot instantiate is a route nothing has walked.
+ */
+const SAMPLE_PARAMS: Readonly<Record<string, string>> = {
+  subscriptionId: '0f9a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43',
+  resourceGroup: 'example-rg',
+  provider: 'CyberCloud.Sample',
+  type: 'widgets',
+  name: 'example',
+  parent: 'parent',
+  childType: 'children',
+  operationId: '9c1d2b6f-8a7e-5d43-0f9a-1c2e4b7d4e3a'
+};
+
 /** Every path in the route table that can be reached without a wildcard match. */
 const routePaths = appRoutes
   .map(r => r.path ?? '')
   .filter(p => p !== '**')
-  .map(p => `/${p}`.replace('/:provider/:type/:name', '/net/vpc/example').replace(/^\/\//, '/'));
+  .map(p =>
+    `/${p}`
+      .replaceAll(/:([A-Za-z]+)/g, (_, name: string) => {
+        const sample = SAMPLE_PARAMS[name];
+        if (sample === undefined)
+          throw new Error(`No sample value for route parameter :${name} — add one to SAMPLE_PARAMS.`);
+        return sample;
+      })
+      .replace(/^\/\//, '/')
+  );
 
 describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () => {
   beforeEach(() => {
@@ -59,7 +86,13 @@ describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () =>
         // `withComponentInputBinding()` mirrors `appConfig`. Without it a route whose component
         // takes required inputs from the URL throws NG0950 here but works in the app, which would
         // make this suite fail for a reason that has nothing to do with accessibility.
-        provideRouter(appRoutes, withComponentInputBinding())
+        provideRouter(appRoutes, withComponentInputBinding()),
+        // The resource pages fetch the form document as they open. Under jsdom there is no
+        // `fetch`, so the testing backend holds every request unanswered and each page is
+        // audited in the state it shows before the platform replies — which is a state every
+        // page has, and one this suite would otherwise never see.
+        provideHttpClient(),
+        provideHttpClientTesting()
       ]
     });
   });

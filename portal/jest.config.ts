@@ -17,13 +17,16 @@ const config: Config = {
   // self-contained if the two ever need to diverge. Listing both here would install the localize
   // runtime twice, which throws.
   setupFilesAfterEnv: ['<rootDir>/apps/portal/src/test-setup.ts'],
-  testMatch: [
-    '<rootDir>/apps/portal/src/**/*.spec.ts',
-    '<rootDir>/apps/identity/src/**/*.spec.ts',
-    '<rootDir>/libs/**/*.spec.ts'
-  ],
+  // ⚠ No `<rootDir>` in these globs, and that is a workaround for a jest defect on Windows.
+  // jest-util's `replacePathSepForGlob` turns `\` into `/` except before `$()+.?^{}`, so a
+  // checkout whose path has a directory starting with a dot — `.claude\worktrees\…`, which is where
+  // this repository's agent worktrees live — keeps one backslash in the expanded glob and matches
+  // nothing: "82 files checked, 0 matches". Anchoring on `**/` sidesteps the expansion; the
+  // ignore list below is what keeps `node_modules` and `dist` out, exactly as before.
+  testMatch: ['**/apps/portal/src/**/*.spec.ts', '**/apps/identity/src/**/*.spec.ts', '**/libs/**/*.spec.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   moduleNameMapper: {
+    '^@cybercloud/api$': '<rootDir>/libs/api/src/index.ts',
     '^@cybercloud/shell$': '<rootDir>/libs/shell/src/index.ts',
     '^@cybercloud/charts$': '<rootDir>/libs/charts/src/index.ts',
     '^@cybercloud/resource-forms$': '<rootDir>/libs/resource-forms/src/index.ts',

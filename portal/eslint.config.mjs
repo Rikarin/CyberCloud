@@ -160,6 +160,10 @@ export default tseslint.config(
             'aria-live',
             'aria-atomic',
             'role',
+            // ⚠ An id reference, not prose — the text it points at is what carries the i18n
+            // marker. Added with the resource pages, whose tables and create sections are named
+            // by a heading already on screen.
+            'aria-labelledby',
             // xUI component configuration.
             'color',
             'hotkey',
@@ -169,7 +173,9 @@ export default tseslint.config(
             'variant',
             'xuiButton',
             'xuiDockContent',
-            'xuiPopover'
+            'xuiPopover',
+            // The form renderer's own configuration: `create` or `edit`, a keyword.
+            'mode'
           ]
         }
       ]

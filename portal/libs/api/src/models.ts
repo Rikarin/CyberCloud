@@ -40,6 +40,34 @@ export interface CyberCloudError {
   readonly details?: readonly CyberCloudError[];
 }
 
+/** Azure's status vocabulary. ⚠ Terminal means Succeeded, Failed or Canceled; poll until then. */
+export type OperationState =
+  | 'Canceled'
+  | 'Failed'
+  | 'NotStarted'
+  | 'Running'
+  | 'Succeeded';
+
+/** One progress entry. The array is this platform's addition to Azure's pattern and is what makes a nine-minute cluster creation tolerable — docs/plan/10. */
+export interface OperationProgress {
+  at: string;
+  /** What happened, naming the actual numbers. */
+  message?: string;
+  percentComplete?: number;
+  /** The phase a reconciler reported — applying, waiting-for-ready. */
+  step: string;
+}
+
+/** An operation's current state. ⚠ The members are docs/plan/10 § Long-running operations, over HTTP's, which is a subset of the OperationStatus wire type — no HTTP projection of that record is declared anywhere in the tree. */
+export interface OperationStatus {
+  /** Present once the status is Failed, and the reason the portal shows. */
+  readonly error?: CyberCloudError;
+  readonly percentComplete?: number;
+  /** Oldest first. What makes a nine-minute cluster creation tolerable — docs/plan/10. */
+  readonly progress?: readonly OperationProgress[];
+  readonly status: OperationState;
+}
+
 /** The body of a PUT that creates a subscription. */
 export interface SubscriptionCreateContent {
   /** The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list. */

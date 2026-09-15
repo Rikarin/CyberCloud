@@ -210,6 +210,52 @@ public sealed class TypeScriptSurfaceTests {
     }
 
     /// <summary>
+    ///     ⚠ <b>Every long-running verb's 202 can be followed, on this surface as on the CLI's.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The document has carried <c>/operations/{operationId}</c> since
+    ///         <see cref="OpenApiEmitter" /> was written, and the client's <c>createOrUpdate</c>
+    ///         comments have said "a 202 carrying operationUrl" for as long as they have existed —
+    ///         and until the portal's operation view asked, nothing in the client could read what
+    ///         that URL answers. A client that hands out a URL it cannot follow makes its caller
+    ///         write the poll by hand, which is the exact call issue #21 exists to prevent.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The three shapes are read from the document rather than hand-written, unlike the
+    ///         .NET SDK's — <c>CyberCloud.Sdk.EmitterContract</c> § 2 says why that surface differs
+    ///         (its poller is hand-written and parses them). The state union is asserted against the
+    ///         document's own enum, so a fifth state would reach the portal without an emitter
+    ///         change.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void ALongRunningOperationCanBePolledThroughTheClient() {
+        var files = Client;
+        var states = DocumentReader.EnumOf(
+            Document["components"]?["schemas"]?[OpenApiEmitter.OperationStateSchema] as JsonObject ?? []
+        );
+
+        states.ShouldNotBeEmpty();
+
+        foreach (var state in states) {
+            files["src/models.ts"].ShouldContain("  | '" + state + "'");
+        }
+
+        files["src/models.ts"].ShouldContain("export type OperationState =");
+        files["src/models.ts"].ShouldContain("export interface OperationProgress {");
+        files["src/models.ts"].ShouldContain("export interface OperationStatus {");
+        files["src/models.ts"].ShouldContain("readonly status: OperationState;");
+        files["src/models.ts"].ShouldContain("readonly error?: CyberCloudError;");
+
+        files["src/client.ts"].ShouldContain("getOperation(operationId: string): Promise<ApiResponse<OperationStatus>>");
+        files["src/client.ts"].ShouldContain("path: `/operations/${CyberCloudApi.segment(operationId)}`");
+
+        // …and the id is one encoded segment, never a URL the server chose.
+        TypeScriptEmitter.Problems(files).ShouldBeEmpty();
+    }
+
+    /// <summary>
     ///     ⚠ <b>The transport is a seam and never an implementation.</b>
     /// </summary>
     /// <remarks>

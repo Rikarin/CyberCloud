@@ -1965,7 +1965,7 @@ public sealed partial class MailDomainResource {
     public string Id { get; init; } = string.Empty;
 
     /// <summary>The body, projected at this api-version.</summary>
-    public MailDomainData Data { get; init; } = new();
+    public required MailDomainData Data { get; init; }
 
     /// <summary>Re-reads the resource.</summary>
     public partial Task<Response<MailDomainResource>> GetAsync(CancellationToken cancellationToken = default);
