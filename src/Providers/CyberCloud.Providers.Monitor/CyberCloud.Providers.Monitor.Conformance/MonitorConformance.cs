@@ -4,6 +4,7 @@ using CyberCloud.Conformance.Harness;
 // without it because ProviderConformanceCase's own members carry the address; this one needs to build
 // one, for the reason MonitorCase.HarnessAddress records.
 using CyberCloud.Core.Resources;
+using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.Providers.Monitor.Contracts;
 // ⚠ For OperationState and Shouldly, which only the soft-delete experiment below needs. Every other
 // provider's conformance project is two class declarations and a case, and needs neither.
@@ -127,6 +128,19 @@ public sealed class MonitorCase : IProviderCaseSource {
                 return MonitorWorkspaces.MatchesShape(match.ObjectJson, desired.RootElement);
             }
         };
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>The seam a SIBLING type's handler holds, and the reason
+    ///     <c>IProviderCaseSource.ConfigureSilo</c> exists.</b> The harness registers every handler of
+    ///     this provider into the silo container by type, and the silo's host validates the container
+    ///     on build; <c>MonitorAlertRuleListInstancesHandler</c> takes <c>IAlertControlPlane</c>, so
+    ///     without this line the workspace suite — which never invokes that handler — failed at
+    ///     fixture start, all 31 assertions at once, naming a sibling. The same registration
+    ///     <c>MonitorApplicationModule</c> makes in both hosts.
+    /// </remarks>
+    public static void ConfigureSilo(ISiloBuilder silo) =>
+        silo.ConfigureServices(services => services.AddCyberCloudMonitorAlerting());
 
     /// <summary>A valid body whose over-quota sample rate is zero.</summary>
     /// <param name="body">A valid body.</param>

@@ -1,8 +1,3 @@
-// ⚠ For `Result<string>`, which EnsureIngestKeyAsync returns. `CyberCloud.Core.Resources` is global
-// here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
-// `Orleans.ErrorCode` this import would otherwise put back in play.
-
-using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Globalization;
 using System.Text.Json.Nodes;

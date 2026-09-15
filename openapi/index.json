@@ -486,6 +486,19 @@
       }
     },
     {
+      "type": "CyberCloud.Monitor/workspaces/alertRules",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Alert rule",
+        "plural": "Alert rules",
+        "alias": "alert",
+        "summary": "A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Network/publicIpAddresses",
       "apiVersions": [
         "2026-08-01"

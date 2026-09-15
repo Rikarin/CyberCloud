@@ -3,12 +3,24 @@
     <!--
       docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
 
-      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's, because a provider's
-      lifecycle is the SHARED suite's assertion, and the k3s half is
-      CyberCloud.Providers.Monitor.Cluster.Conformance's. What is left is what only THIS provider can
-      be wrong about: its schema's casing against the emitted document, the nine retention numbers
-      against docs/plan/16, the three-object tenancy projection, the accountID derivation, and the
-      two properties of a reconciler that a shared suite driving one tenant cannot see.
+      ⚠ A TestCluster SINCE #32, AND STILL NO k3s. The lifecycle half of every type is
+      test/CyberCloud.Conformance's, and the k3s half is CyberCloud.Providers.Monitor.Cluster.Conformance's.
+      What is left is what only THIS provider can be wrong about: the workspace's schema casing against
+      the emitted document, the nine retention numbers against docs/plan/16, the three-object tenancy
+      projection, the accountID derivation — and, for the alert rules, the one thing the shared suite
+      never does: EVALUATE. The shared suite converges a rule onto its evaluator and never ticks it.
+      AlertEvaluatorTests ticks it, against a real silo with the sending module wired as production
+      wires it, a scripted store in place of VictoriaMetrics, and an in-memory carrier standing in for
+      the one that would page somebody — and asserts what reached the carrier, what the suppression
+      list kept from it, and what a store that did not answer left alone.
+
+      ⚠ IT REFERENCES CyberCloud.Communication's IMPLEMENTATION, for the reason the sending module's own
+      provider tests do: the evaluator delivers through IMessageSender, and the module that implements
+      it has to be hosted in the harness silo the way the silo host hosts it (AddCyberCloudCommunication).
+      Test projects are outside the assembly-graph rules by construction (docs/plan/03 § test/).
+
+      ⚠ IN-MEMORY STORAGE, the same deviation from ADR-018 every TestCluster in this tree makes, for
+      the same reason and with the same cost — see test/CyberCloud.Conformance's .csproj.
 
       ⚠ IT EMBEDS ONE FILE FROM charts/managed/monitor-workspace/, AND NOT TWO. Earlier providers
       embedded their chart's values.schema.json as well, from a time when nothing compared the chart
@@ -21,6 +33,8 @@
     <ItemGroup>
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">
@@ -34,6 +48,8 @@
 
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.csproj"/>
+        <!-- The sending module the evaluator delivers through, hosted here the way the silo host hosts it. -->
+        <ProjectReference Include="../../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
         <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
         <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
     </ItemGroup>

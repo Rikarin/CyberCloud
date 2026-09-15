@@ -928,6 +928,14 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                 }
             );
 
+            // ⚠ THE SAME HOOK ProviderTestCluster CALLS, FOR THE SAME REASON, AND HERE FOR THE
+            // REASON THIS FILE'S Handlers() REMARKS GIVE: the two harnesses are fixed together. Every
+            // handler above is registered by concrete type and the host validates the container on
+            // build, so CyberCloud.Monitor/workspaces' Docker-backed suite would fail at fixture
+            // start on its sibling's IAlertControlPlane exactly as the Docker-free one did. See
+            // IProviderCaseSource.ConfigureSilo.
+            TSource.ConfigureSilo(silo);
+
             silo.AddCyberCloudResourceManager();
         }
     }

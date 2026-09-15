@@ -1436,17 +1436,98 @@ declare it again once the platform closed what the measurement found.
   `values.schema.json` had to be generated.
 
 - **Four module edges, six projects, one `ProviderConformanceCase`** — a twelfth family with identical
-  columns, over a resource that provisions nothing. ⚠ It is also the family most obviously *owed* a
-  fifth line and taking none, and `module-layering.txt` records why **both** directions are refused:
-  nothing may reach this family to emit telemetry (that is the dependency cycle), and this family
-  reaches nothing to bill (that is a `MeterDerivation` the manager already reads).
+  columns, over a resource that provisions nothing. ⚠ It was also the family most obviously *owed* a
+  fifth line and took none, and `module-layering.txt` records why **both** of the lines the naive
+  reading wants are refused: nothing may reach this family to emit telemetry (that is the dependency
+  cycle), and this family reaches nothing to bill (that is a `MeterDerivation` the manager already
+  reads). ⚠ It takes a *different* fifth line since #32 — see below — and both refusals stand.
 
-**What landed: `workspaces`.** `collectors` and `alertRules` are M2 and out of scope;
-`workspaces/ingestKeys` is **owed** with the reason — docs/plan/16 wants rotation *"with a grace
+### What the alert rules measured (#32, 2026-09-15)
+
+`CyberCloud.Monitor/workspaces/alertRules` — a condition over the workspace's metrics or logs, a
+severity, an action group naming a `CyberCloud.Communication/services` resource, evaluated by one grain
+per workspace on a reminder and delivered through the sending module —
+[16 § Alerts](../../docs/plan/16-observability.md). The alerts half of #32; `collectors` and managed
+Grafana are the other half.
+
+- **⚠ THE FIRST GRAIN IN ANY PROVIDER'S IMPLEMENTATION ASSEMBLY, AND IT IS THE SECOND LOOK
+  `CyberCloud.Providers.Sample`'S `.csproj` ASKED FOR.** That file: *"If a future provider needs
+  Orleans in its implementation assembly, that is worth a second look before the package goes in."*
+  Fifteen families needed none, because a reconciler is called when a body changes and clause 2
+  forbids it remembering anything. An alert rule has to be *evaluated on a schedule* and has to
+  *remember what it found*, and neither is a function of anything a reconciler is handed. The
+  platform's only scheduler is an Orleans reminder (docs/plan/04 § Reminders, now five uses); a
+  reminder is registered by a grain; so `AlertEvaluatorGrain` lives in `CyberCloud.Providers.Monitor`
+  with `Microsoft.Orleans.Server`, which is where docs/plan/03 § Providers put a provider's grains in
+  the first place. ⚠ Why here and not a platform module, which is where the sending module's grains
+  went: those stayed in `CyberCloud.Communication` because identity reaches them and rule 2 forbids
+  identity reaching a provider. Nothing reaches an evaluator but this family.
+- **⚠ ONE GRAIN PER WORKSPACE, NOT PER RULE — AND THAT ONE KEY ANSWERS docs/plan/16'S CONCURRENCY CAP
+  AND docs/plan/04'S REMINDER ARITHMETIC AT ONCE.** doc 16 makes *"a per-workspace
+  concurrent-evaluation cap"* mandatory from day one; an activation is single-threaded, so a grain per
+  workspace evaluates its rules one at a time by construction, with nothing to configure. doc 04 warns
+  one reminder per resource is *"a real scaling number"*; one per workspace is the mitigation that
+  document applies to drift. The key is derived from the **workspace's address**, because a child's
+  reconcile pass never learns its parent's GUID — the fact that keyed the sending module's grains —
+  and it borrows `GrainKeys.Resource`'s shape for something that is not a resource, which is now a
+  debt two families carry (`conformance.yaml § owed`, `alert-rules-evaluator-key-borrows-the-resource-shape`).
+- **⚠ THE FIRST PROVIDER LINE ON `durable-grains.txt`, AND THE QUESTION THAT FILE SAYS TO ASK FIRST
+  HAS AN ANSWER THAT IS NOT "THE MANAGER".** The manager holds one desired body and one observed state
+  per resource. An alert's memory is a *sequence* — pending since, fired at, told or refused per
+  recipient, resolved at — and a manager holding a history per resource would hold it for every type
+  that has none. The samples that fired an alert age out of the store in days; whether a page was
+  *sent* was never in any store but this one. The open instance's id is also half of every
+  idempotency key sent about it, which is what makes a re-drive after a silo move not page twice.
+- **⚠ THE FIRST CLUSTERLESS TYPE IN A CLUSTER-BACKED FAMILY, AND `test/CyberCloud.Conformance` NEEDED
+  ONE HOOK IT DID NOT HAVE — FOR THE PARENT'S SUITE, NOT THE CHILD'S.** The child's suite composed
+  cleanly: the sending module taught the harness the `IConvergedModule` half, the ancestor machinery
+  created the workspace against the fake cluster, and the two ran together with no change. What went
+  **31 of 31 red at fixture start was the workspace's suite**: the harness registers every handler of
+  the case's provider into the silo container by concrete type, the host validates that container on
+  build, and `listInstances` takes `IAlertControlPlane` — so a cluster-backed case, refused a module
+  by name, failed on a sibling's constructor it never invokes. `IProviderCaseSource.ConfigureSilo` is
+  the hook, a `static virtual` with an empty default, and omitting it is not silent: it is exactly
+  that failure. Wiring only; nothing on it decides whether a provider passed.
+- **⚠ THE FIRST PROPERTY IN THE CATALOGUE WITH `SchemaFormat.ResourceId`, AND IT IS RULE 2 TAKEN
+  LITERALLY.** Three families record wanting a line to another provider and being refused;
+  docs/plan/03's sanctioned route is *"through CyberCloud.ResourceManager by resource id"*. The action
+  group names its sending service by resource id path, and the sending module keys that service's
+  grain on a GUID derived from that very path — so the evaluator reaches the tenant's service with no
+  index read and no line to `CyberCloud.Providers.Communication`. What the schema cannot check and the
+  reconciler does: the path is this tenant's, and it names that one type. The line the family takes
+  is to `CyberCloud.Communication` — the platform module, `.Contracts` only — for `ChannelKind`,
+  `IMessageSender` and the key derivation; `module-layering.txt` carries the argument and the refusal
+  of the reverse edge.
+- **⚠ SUPPRESSION IS THE SENDING MODULE'S AND IS NOT RE-IMPLEMENTED, AND THAT IS THE POINT OF GOING
+  THROUGH `IMessageSender`.** A recipient on the service's list comes back as a refusal before any
+  carrier is resolved, per recipient, and the instance records the sentence. `AlertEvaluatorTests`
+  drives a real rule through the real reconciler onto the real grain, with a scripted store and an
+  in-memory carrier, and was sabotage-tested: the failure branch of `AlertEvaluation.Decide` made to
+  fall through to "not met" turned
+  `AlertEvaluatorTests.AStoreThatDoesNotAnswerLeavesAFiringRuleFiringAndSendsNothing` red on
+  `report.Resolved` (1, should be 0) and two rows of
+  `AlertEvaluationTests.AStoreThatDidNotAnswerMovesNothing` with it. Restored before the commit.
+- **⚠ NOT `vmalert`, WHICH IS WHAT docs/plan/16 § The stack NAMES.** Wiring it means a `VMRule` per
+  workspace, an Alertmanager-webhook receiver and NATS between them — three things that do not exist —
+  in front of the one that carries the product. The evaluator asks a question on a schedule and sends
+  on the answer; what that leaves open is `IAlertQuerySeam`, and the seam is the largest gap on the
+  type: **no host registers a real one**, every evaluation runs against the refusing default, records
+  its sentence and moves nothing. A store that does not answer neither fires nor resolves, by design.
+  `conformance.yaml § owed`, `alert-rules-query-seam-is-refusing`, says what a real one owes and that
+  only a real VictoriaMetrics can prove the accountID isolation of the query half.
+- **⚠ THREE SCHEMA-FORCED DECISIONS, EACH RECORDED WHERE IT SITS.** An action group is one channel and
+  a list of recipients rather than a list of receivers, because the schema has no array of objects; a
+  rule is one instance however many series offend, for the same reason; and the instances collection
+  is an action (`listInstances`) rather than a child type, because an instance is an event and a
+  resource for one would have a PUT nothing could apply.
+
+**What landed: `workspaces` and `workspaces/alertRules`.** `collectors` is M2 and the other half of
+#32; `workspaces/ingestKeys` is **owed** with the reason — docs/plan/16 wants rotation *"with a grace
 period"*, which is two live credentials at once, and `ISecretWriter` mints once. ⚠ **The largest
-single gap is that nothing consumes the ingest row**, because `CyberCloud.Ingest.Host` does not exist;
-the `VMUser` half is enforced by vmauth the moment it is applied and everything else is a promise with
-a schema. Every gap is at `charts/managed/monitor-workspace/conformance.yaml § owed`.
+single gap on the workspace is that nothing consumes the ingest row**, because `CyberCloud.Ingest.Host`
+does not exist; the `VMUser` half is enforced by vmauth the moment it is applied and everything else
+is a promise with a schema. ⚠ **The largest on the rule is that nothing answers its query.** Every gap
+is at `charts/managed/monitor-workspace/conformance.yaml § owed`.
 
 `CyberCloud.Providers.ContainerRegistry` — `CyberCloud.ContainerRegistry/registries` on Harbor,
 [13 § Container Registry](../../docs/plan/13-compute-vm-containers.md), **M1 · 1.5 EM**. **The family
@@ -2233,13 +2314,16 @@ authorization, quota and audit sit. `Build.Architecture` fails the build on a vi
 
 What a provider *may* reference is `module-layering.txt`, which is rule 7: `CyberCloud.Core`,
 `CyberCloud.Kubernetes`, `CyberCloud.ResourceManager` and `CyberCloud.Tenancy`, and nothing else. A
-line between two providers cannot be added there — rule 2 refuses what rule 7 would grant. ⚠ **One
-family has a fifth line, and it is the exception that says what the rule is for.**
+line between two providers cannot be added there — rule 2 refuses what rule 7 would grant. ⚠ **Two
+families have a fifth line, and each is an exception that says what the rule is for.**
 `CyberCloud.Providers.Communication -> CyberCloud.Communication` exists because that family's four
 resource types *are* the sending module's grains; the grains could not move into the provider, because
 `CyberCloud.Identity` reaches them for every OTP and rule 2 forbids identity reaching a provider.
-`module-layering.txt` carries the argument beside the line. It is not a precedent for a provider
-reaching a platform module because it is convenient — it is the shape a tenant-facing surface over an
-already-built module has to take, and the next one should be argued the same way in the same file.
+`CyberCloud.Providers.Monitor -> CyberCloud.Communication` exists because an alert rule's action group
+names a channel and its evaluator delivers through `IMessageSender` — this family is the sending
+module's *customer*, the way identity is. `module-layering.txt` carries both arguments beside the
+lines. Neither is a precedent for a provider reaching a platform module because it is convenient —
+one is the shape a tenant-facing surface over an already-built module has to take, the other the shape
+a consumer of a platform seam takes — and the next one should be argued the same way in the same file.
 
 A provider is not registered in the platform bundle until it passes the conformance suite.

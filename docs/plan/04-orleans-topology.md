@@ -234,7 +234,8 @@ consumer can drop what it has already seen. Anything requiring global order does
 
 ## Reminders
 
-Redis reminder service, sharded with the hot tier. Reminders are used for exactly four things:
+Redis reminder service, sharded with the hot tier. Reminders are used for exactly five things — four
+as first written, and a fifth since 2026-09-15 (#32):
 
 ⚠ **This is wired in `OrleansApplication.CreateSilo`, beside the two storage tiers, and it was not
 wired at all until the resource manager was composed.** It reads the hot tier's own connection string —
@@ -259,6 +260,17 @@ key cluster-wide, so one operation grain drives one resource however many silos 
    re-reads observed state and re-applies if it diverges.
 3. **Lease renewal** — cluster connections and terminal sessions.
 4. **Rollups** — metering aggregation windows.
+5. **Alert evaluation** — one reminder per `CyberCloud.Monitor/workspaces` that carries an enabled
+   alert rule, ticking every minute and evaluating that workspace's rules one at a time
+   ([16 § Alerts](16-observability.md)). ⚠ Per *workspace* and not per rule, for the reason the
+   paragraph below gives about drift: a workspace's rules — fifty at most, the grain's own cap — are
+   one row in the reminder table, so the count that scales is workspaces with an enabled rule and not
+   rules, and the single-threaded activation is the per-workspace concurrency cap doc 16 makes
+   mandatory. ⚠ That cap is also a queue (2026-09-15, #32 review): a pass holds the activation, and
+   the reads a reconcile pass makes interleave while the pass itself stops asking at a budget under
+   Orleans' response timeout — `IAlertEvaluatorGrain`'s remarks carry the arithmetic. The rules are
+   armed off the grain's own durable state, the way the orphan reaper is, and disarmed when the last
+   enabled rule goes.
 
 ⚠ **Reminder count is a real scaling number and it is easy to get wrong.** One reminder per resource
 at hourly drift detection, with 5 000 000 resources, is ~1 400 reminder firings per second across the

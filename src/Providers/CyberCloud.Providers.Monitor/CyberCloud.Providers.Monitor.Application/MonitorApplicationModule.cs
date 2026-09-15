@@ -1,4 +1,5 @@
 using CyberCloud.Core.Contracts;
+using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.ResourceManager;
 using Volo.Abp.Application;
 using Volo.Abp.Modularity;
@@ -51,5 +52,13 @@ public sealed class MonitorApplicationModule : AbpModule {
         ArgumentNullException.ThrowIfNull(context);
 
         context.Services.AddCyberCloudProvider(new MonitorProvider());
+
+        // ⚠ THE TWO SEAMS THE ALERT RULES HOLD, IN BOTH HOSTS. AddCyberCloudProvider registers the
+        // reconciler and the handler by concrete type; it cannot register what their constructors
+        // ask for. MonitorAlertRuleReconciler and MonitorAlertRuleListInstancesHandler both take
+        // IAlertControlPlane, and the handler runs on the request path — the gateway's process — so
+        // the gateway needs it as much as the silo does. The query seam is the refusing default
+        // until a host registers a real one; TryAdd keeps a real one registered first.
+        context.Services.AddCyberCloudMonitorAlerting();
     }
 }

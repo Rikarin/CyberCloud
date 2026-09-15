@@ -132,6 +132,39 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     ⚠ Both hosts hold the seam <c>CyberCloud.Monitor/workspaces/alertRules</c>' reconciler
+    ///     and its <c>listInstances</c> handler take, and the silo holds the one the evaluator grain
+    ///     needs beyond it.
+    /// </summary>
+    /// <remarks>
+    ///     The first provider whose handler reaches a grain from its own family's implementation
+    ///     assembly, so the registration is the family's application module's rather than a platform
+    ///     module's — <c>MonitorApplicationModule</c> calls <c>AddCyberCloudMonitorAlerting</c> in
+    ///     both hosts. The query seam is asserted as the <i>refusing</i> one: no host in this tree
+    ///     registers a real VictoriaMetrics client, and a test that only checked for presence would
+    ///     pass over a stub that answered "no samples" and paged nobody.
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsResolveTheSeamsTheAlertRulesHold() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        foreach (var host in new[] { gateway.Services, silo.Services }) {
+            host.GetService<CyberCloud.Providers.Monitor.Contracts.IAlertControlPlane>()
+                .ShouldNotBeNull("a host with no IAlertControlPlane cannot converge an alert rule or serve `listInstances`");
+            host.GetService<CyberCloud.Providers.Monitor.Contracts.IAlertQuerySeam>()
+                .ShouldBeOfType<CyberCloud.Providers.Monitor.Alerting.UnavailableAlertQuerySeam>(
+                    "a host registered a query seam this tree does not ship; if it is real, charts/managed/monitor-workspace/conformance.yaml § owed's alert-rules-query-seam-is-refusing closes"
+                );
+        }
+
+        // The evaluator delivers through the sending module, which the silo hosts and the
+        // gateway reaches as a client — the grain activates on the silo only.
+        silo.Services.GetService<CyberCloud.Communication.Contracts.IMessageSender>()
+            .ShouldNotBeNull("the silo has no IMessageSender, so an alert evaluator cannot be activated");
+    }
+
+    /// <summary>
     ///     ⚠ The gateway routes from a registry with the same namespaces in it.
     /// </summary>
     [Fact]

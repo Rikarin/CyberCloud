@@ -4748,6 +4748,297 @@ public sealed partial class MonitorWorkspaceCollection {
     public partial AsyncPageable<MonitorWorkspaceResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum AlertRuleChannel {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>sms</summary>
+    [JsonStringEnumMemberName("sms")]
+    Sms = 1,
+
+    /// <summary>whatsapp</summary>
+    [JsonStringEnumMemberName("whatsapp")]
+    Whatsapp = 2,
+
+    /// <summary>email</summary>
+    [JsonStringEnumMemberName("email")]
+    Email = 3,
+
+    /// <summary>push</summary>
+    [JsonStringEnumMemberName("push")]
+    Push = 4,
+
+    /// <summary>voice</summary>
+    [JsonStringEnumMemberName("voice")]
+    Voice = 5
+}
+
+/// <summary>The values /properties/condition/operator accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum AlertRuleOperator {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>greaterThan</summary>
+    [JsonStringEnumMemberName("greaterThan")]
+    GreaterThan = 1,
+
+    /// <summary>greaterOrEqual</summary>
+    [JsonStringEnumMemberName("greaterOrEqual")]
+    GreaterOrEqual = 2,
+
+    /// <summary>lessThan</summary>
+    [JsonStringEnumMemberName("lessThan")]
+    LessThan = 3,
+
+    /// <summary>lessOrEqual</summary>
+    [JsonStringEnumMemberName("lessOrEqual")]
+    LessOrEqual = 4,
+
+    /// <summary>equal</summary>
+    [JsonStringEnumMemberName("equal")]
+    Equal = 5,
+
+    /// <summary>notEqual</summary>
+    [JsonStringEnumMemberName("notEqual")]
+    NotEqual = 6
+}
+
+/// <summary>The values /properties/condition/signal accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum AlertRuleSignal {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>metrics</summary>
+    [JsonStringEnumMemberName("metrics")]
+    Metrics = 1,
+
+    /// <summary>logs</summary>
+    [JsonStringEnumMemberName("logs")]
+    Logs = 2
+}
+
+/// <summary>The values /properties/severity accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum AlertRuleSeverity {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>critical</summary>
+    [JsonStringEnumMemberName("critical")]
+    Critical = 1,
+
+    /// <summary>error</summary>
+    [JsonStringEnumMemberName("error")]
+    Error = 2,
+
+    /// <summary>warning</summary>
+    [JsonStringEnumMemberName("warning")]
+    Warning = 3,
+
+    /// <summary>informational</summary>
+    [JsonStringEnumMemberName("informational")]
+    Informational = 4
+}
+
+/// <summary>The body of a CyberCloud.Monitor/workspaces/alertRules.</summary>
+/// <remarks>A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.</remarks>
+public sealed partial class AlertRuleData {
+
+    /// <summary>The region the rule is evaluated in — the workspace's.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The rule's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The rule's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Who is told, and how.</summary>
+        [JsonPropertyName("actionGroup")]
+        public ActionGroupData? ActionGroup { get; set; }
+
+        /// <summary>What is asked, and what answer counts.</summary>
+        [JsonPropertyName("condition")]
+        public ConditionData? Condition { get; set; }
+
+        /// <summary>Whether the rule is evaluated. Off keeps the rule and its history and stops the clock; an open alert is resolved without a notification.</summary>
+        /// <remarks>Defaults to true when left unset.</remarks>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>How often, and how long before it counts.</summary>
+        [JsonPropertyName("evaluation")]
+        public EvaluationData? Evaluation { get; set; }
+
+        /// <summary>How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("severity")]
+        public required AlertRuleSeverity Severity { get; set; }
+
+        /// <summary>Who is told, and how.</summary>
+        public sealed partial class ActionGroupData {
+
+            /// <summary>Which of that service's channels carries it. The service must have the channel configured and enabled, or every notification is refused by name.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("channel")]
+            public required AlertRuleChannel Channel { get; set; }
+
+            /// <summary>Whether the recipients are told when the condition stops holding, as well as when it starts.</summary>
+            /// <remarks>Defaults to true when left unset.</remarks>
+            [JsonPropertyName("notifyOnResolve")]
+            public bool? NotifyOnResolve { get; set; }
+
+            /// <summary>Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. At least one and at most 20; a list outside that is refused when the rule is reconciled.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("recipients")]
+            public IList<string> Recipients { get; set; } = new List<string>();
+
+            /// <summary>The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("service")]
+            public required string Service { get; set; }
+        }
+
+        /// <summary>What is asked, and what answer counts.</summary>
+        public sealed partial class ConditionData {
+
+            /// <summary>How far back the query may read, in seconds. Capped at a day: the look-back is the query's cost, and the cap is the platform's, not the tenant's.</summary>
+            /// <remarks>Defaults to 300 when left unset.</remarks>
+            [JsonPropertyName("lookbackSeconds")]
+            public long? LookbackSeconds { get; set; }
+
+            /// <summary>How a value is compared with the threshold.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("operator")]
+            public required AlertRuleOperator Operator { get; set; }
+
+            /// <summary>The query, verbatim. It must produce numbers; the rule fires when any of them satisfies the operator against the threshold.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("query")]
+            public required string Query { get; set; }
+
+            /// <summary>Which store the query runs against: metrics is MetricsQL over the workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("signal")]
+            public required AlertRuleSignal Signal { get; set; }
+
+            /// <summary>The number the value is compared with.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("threshold")]
+            public required double Threshold { get; set; }
+        }
+
+        /// <summary>How often, and how long before it counts.</summary>
+        public sealed partial class EvaluationData {
+
+            /// <summary>How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes.</summary>
+            /// <remarks>Defaults to 0 when left unset.</remarks>
+            [JsonPropertyName("forSeconds")]
+            public long? ForSeconds { get; set; }
+
+            /// <summary>How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. Anything else is refused when the rule is reconciled.</summary>
+            /// <remarks>Defaults to 60 when left unset.</remarks>
+            [JsonPropertyName("intervalSeconds")]
+            public long? IntervalSeconds { get; set; }
+        }
+    }
+}
+
+/// <summary>One Alert rule, and the operations on it.</summary>
+public sealed partial class AlertRuleResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required AlertRuleData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<AlertRuleResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<AlertRuleResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        AlertRuleData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listInstances returns.</summary>
+    public sealed partial class ListInstancesResult {
+
+        /// <summary>How many firings the rule keeps.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>Every firing, oldest first, one line each: '{state} {severity} fired {firedAt} resolved {resolvedAt} value {value}: {summary} | {notification}'.</summary>
+        [JsonPropertyName("instances")]
+        public IList<string> Instances { get; set; } = new List<string>();
+
+        /// <summary>How many of them are still firing.</summary>
+        [JsonPropertyName("open")]
+        public required long Open { get; set; }
+
+        /// <summary>Where the rule is now: ok, pending or firing.</summary>
+        [JsonPropertyName("state")]
+        public required string State { get; set; }
+    }
+
+    /// <summary>ListInstances. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListInstancesResult>> ListInstancesAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Alert rules in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class AlertRuleCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Monitor/workspaces/alertRules";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Alert rule.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<AlertRuleResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string workspacesName, string name,
+        AlertRuleData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Alert rule by name.</summary>
+    public partial Task<Response<AlertRuleResource>> GetAsync(string workspacesName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Alert rules in one parent, paged.</summary>
+    public partial AsyncPageable<AlertRuleResource> GetAllAsync(string workspacesName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The body of a CyberCloud.Network/publicIpAddresses.</summary>
 /// <remarks>A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.</remarks>
 public sealed partial class PublicIPAddressData {
