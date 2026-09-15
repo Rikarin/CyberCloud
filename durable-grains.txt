@@ -43,6 +43,13 @@ CyberCloud.Tenancy.EmailIndexGrain
 CyberCloud.Authorization.Grains.TupleStoreGrain
 CyberCloud.Authorization.Grains.ObjectRelationsGrain
 CyberCloud.Authorization.Grains.SubjectRelationsGrain
+#
+# ⚠ CyberCloud.Authorization.Grains.MembershipIndexGrain — the Leopard index of
+# docs/plan/07 § The Leopard index — binds Durable and is deliberately NOT a line here. It is a
+# closure derived from the two indexes above and recomputed from them by RebuildAsync, so its loss
+# tolerance is not zero. It carries [DurableStateRationale] saying why it is Durable rather than Hot
+# regardless: the store writes it under its journal, before the relation version moves, and a Redis
+# flush would leave it behind every outstanding token with nothing to replay.
 
 # ── Kubernetes — docs/plan/09 ──────────────────────────────────────────────────────────────────
 # How to reach a tenant's cluster. The informer cursors on this grain are the cheap thing kept so

@@ -27,11 +27,13 @@ namespace CyberCloud.Authorization.Contracts;
 ///         document's own trade.</b> docs/plan/07 § Storage: the reverse index "is written together"
 ///         with the forward one, "object first, then subject", and "a subject index missing an entry
 ///         costs a <c>ListObjects</c> a miss, not a <c>Check</c> an incorrect answer". The window is
-///         exact: between step 2 and step 4 of <c>TupleStoreGrain.ApplyAsync</c> a tuple is visible
+///         exact: between step 3 and step 5 of <c>TupleStoreGrain.ApplyAsync</c> a tuple is visible
 ///         to <c>Check</c> and not yet to this grain, and a write that dies there stays that way
 ///         until <c>ITupleStoreGrain.SweepAsync</c> replays it. A miss hides an object the caller
 ///         may see; nothing this grain reads can show one they may not, because a reverse entry
-///         exists only after its forward tuple does.
+///         exists only after its forward tuple does. The Leopard index it also reads
+///         (<see cref="IMembershipIndexGrain" />) is written a step later still, so the same
+///         sentence holds for a userset the closure has not yet reached.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Answers are never cached here.</b> The check cache is keyed by object; a listing's

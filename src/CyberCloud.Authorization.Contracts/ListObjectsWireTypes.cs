@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace CyberCloud.Authorization.Contracts;
 
 /// <summary>
-///     What a <c>ListObjects</c> concluded, beyond the objects it returned. ⚠ <b>Three outcomes,
+///     What a <c>ListObjects</c> concluded, beyond the objects it returned. ⚠ <b>Four outcomes,
 ///     not one, for the reason <see cref="CheckOutcome" /> has four.</b>
 /// </summary>
 /// <remarks>
@@ -34,7 +34,16 @@ public enum ListObjectsOutcome {
     ///     returned</b>, because an object past the cap is one <c>Check</c> would deny and the ones
     ///     before it may depend on it.
     /// </summary>
-    DepthCapExceeded = 3
+    DepthCapExceeded = 3,
+
+    /// <summary>
+    ///     One userset the walk passed through has been granted on more objects than
+    ///     <c>AuthorizationLimits.MaxBreadth</c> allows the walk to expand. <b>No objects are
+    ///     returned.</b> The bound is the walk's own fan-out per level — the mirror of the cap
+    ///     <c>Check</c> puts on the usersets it expands at one node — and usersets the Leopard index
+    ///     answers are not counted against it, because an index read is not an expansion.
+    /// </summary>
+    BreadthCapExceeded = 4
 }
 
 /// <summary>
@@ -195,6 +204,14 @@ public sealed record ListObjectsPage {
     /// </summary>
     [Id(8)]
     public bool Verified { get; init; }
+
+    /// <summary>
+    ///     How many Leopard-index reads the walk made — one for the subject's closed usersets, and
+    ///     one more for each direct-only userset the walk reached by computation rather than
+    ///     through the index. docs/plan/07 § The Leopard index.
+    /// </summary>
+    [Id(9)]
+    public int IndexReads { get; init; }
 
     /// <summary>Whether there is another page.</summary>
     public bool HasMore => Continuation.Length > 0;

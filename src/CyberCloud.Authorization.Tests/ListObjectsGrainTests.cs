@@ -13,7 +13,7 @@ namespace CyberCloud.Authorization.Tests;
 ///     <para>
 ///         <c>ListObjectsEvaluatorTests</c> pins the algorithm over an in-memory tuple set; this
 ///         file pins what the in-memory reader cannot — that the entries the walk reads are the
-///         ones <c>TupleStoreGrain</c>'s step 4 wrote, that a delete through the store removes them
+///         ones <c>TupleStoreGrain</c>'s step 5 wrote, that a delete through the store removes them
 ///         (<c>TwoGrainWriteTests</c> is what proves the two halves stay together), that the page's
 ///         token is the store's version, and that paging is stable across calls to an activation
 ///         that holds no state.

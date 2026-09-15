@@ -22,10 +22,10 @@ public class GrainKeysTests {
         Resource
     );
 
-    // ── The five ReBAC shapes — docs/plan/07 § Storage and § ListObjects ───────────────────────
+    // ── The six ReBAC shapes — docs/plan/07 § Storage, § ListObjects and § The Leopard index ───
 
     /// <summary>
-    ///     The five <c>rel/</c> shapes, each with the kind it must decode to.
+    ///     The six <c>rel/</c> shapes, each with the kind it must decode to.
     /// </summary>
     /// <remarks>
     ///     Kept as a member rather than inline so that adding a shape means adding a row here, which
@@ -37,8 +37,27 @@ public class GrainKeysTests {
             { GrainKeys.SubjectRelations("user", "alice"), GrainKeyKind.SubjectRelations },
             { GrainKeys.CheckCache("resourceGroup", "prod"), GrainKeyKind.CheckCache },
             { GrainKeys.TupleStore(Tenant), GrainKeyKind.TupleStore },
-            { GrainKeys.ListObjects("user", "alice"), GrainKeyKind.ListObjects }
+            { GrainKeys.ListObjects("user", "alice"), GrainKeyKind.ListObjects },
+            { GrainKeys.MembershipIndex("group", "eng"), GrainKeyKind.MembershipIndex }
         };
+
+    [Fact]
+    public void TheMembershipIndexShapeIsKeyedByTheSubjectObjectAndNotByAUserset() {
+        // docs/plan/07 § Storage's row says rel/idx/{usersetType}/{usersetId}; the grain that landed
+        // holds both directions for one subject OBJECT, so group:eng#member is rel/idx/group/eng with
+        // `member` looked up inside — GrainKeys.MembershipIndex's remarks. The same tail as the
+        // reverse index and the walk, and a third activation rather than either of theirs.
+        GrainKeys.MembershipIndex("group", "eng").ShouldBe("rel/idx/group/eng");
+        GrainKeys.MembershipIndex("group", "eng").ShouldNotBe(GrainKeys.SubjectRelations("group", "eng"));
+        GrainKeys.MembershipIndex("group", "eng").ShouldNotBe(GrainKeys.ListObjects("group", "eng"));
+
+        var parsed = GrainKeys.Parse("rel/idx/group/eng").GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.MembershipIndex);
+        parsed.ObjectType.ShouldBe("group");
+        parsed.ObjectId.ShouldBe("eng");
+        parsed.ToString().ShouldBe("rel/idx/group/eng");
+    }
 
     [Fact]
     public void TheListObjectsShapeSharesTheReverseIndexTailAndIsStillADifferentKey() {
@@ -932,7 +951,7 @@ public class GrainKeysTests {
     [Theory]
     [InlineData("rel/obj/resourceGroup", "three segments is not an object-relations key")]
     [InlineData("rel/obj/resourceGroup/prod/extra", "trailing junk")]
-    [InlineData("rel/idx/group/eng", "the Leopard index shape is M2 and must not parse yet")]
+    [InlineData("rel/idx/group", "three segments is not a membership-index key")]
     [InlineData("rel/store/not-a-guid", "the tenant id must be the N form")]
     [InlineData("rel/store", "the store key needs a tenant")]
     [InlineData("rel/store/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f", "the D form is not the N form")]
@@ -953,7 +972,8 @@ public class GrainKeysTests {
             foreach (var id in new[] { "prod", "rg", "path", "email", "store", "obj", "check", "list" }) {
                 foreach (var key in new[] {
                              GrainKeys.ObjectRelations(type, id), GrainKeys.SubjectRelations(type, id),
-                             GrainKeys.CheckCache(type, id), GrainKeys.ListObjects(type, id)
+                             GrainKeys.CheckCache(type, id), GrainKeys.ListObjects(type, id),
+                             GrainKeys.MembershipIndex(type, id)
                          }) {
                     var kind = GrainKeys.Parse(key).GetValueOrThrow().Kind;
 

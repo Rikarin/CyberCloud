@@ -40,12 +40,18 @@ public sealed class AuthorizationStateContractTests {
         ("CheckCacheEntry", 1, "Version"),
         ("CheckCacheEntry", 2, "SchemaVersion"),
 
-        ("CheckCacheState", 0, "Entries")
+        ("CheckCacheState", 0, "Entries"),
+
+        // The Leopard index, issue #37 — one slice per subject object, both directions.
+        ("MembershipIndexState", 0, "SchemaVersion"),
+        ("MembershipIndexState", 1, "Members"),
+        ("MembershipIndexState", 2, "Usersets")
     ];
 
     static readonly (string Type, string Alias)[] Aliases = [
         ("CheckCacheEntry", "CyberCloud.Authorization.State.CheckCacheEntry"),
         ("CheckCacheState", "CyberCloud.Authorization.State.CheckCache"),
+        ("MembershipIndexState", "CyberCloud.Authorization.State.MembershipIndex"),
         ("ObjectRelationsState", "CyberCloud.Authorization.State.ObjectRelations"),
         ("PendingWrite", "CyberCloud.Authorization.State.PendingWrite"),
         ("SubjectRelationsState", "CyberCloud.Authorization.State.SubjectRelations"),

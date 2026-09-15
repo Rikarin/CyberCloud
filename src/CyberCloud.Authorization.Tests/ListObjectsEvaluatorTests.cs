@@ -297,7 +297,7 @@ public sealed class ListObjectsEvaluatorTests {
         var page = await Evaluate(
             schema,
             InMemoryRelationReader.Parse(tuples),
-            InMemoryReverseRelationReader.Parse(tuples),
+            InMemoryReverseRelationReader.Parse(schema, tuples),
             Alice,
             new() { ObjectType = "doc", Permission = "both" }
         );
@@ -340,6 +340,125 @@ public sealed class ListObjectsEvaluatorTests {
         page.Objects.Count.ShouldBe(13, "the twelve within the cap and the top, and not the leaf");
         page.Outcome.ShouldBe(ListObjectsOutcome.Complete, "past the depth cap is a deny Check would also make, not a cap on the answer");
         page.DepthCapHit.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task PastTheBreadthCapTheWalkAnswersNothingAndSaysWhich() {
+        // One userset granted on four groups, and a cap of three: the mirror of Check's cap on
+        // the usersets one node expands, from the other side. The index reaches the group at
+        // depth 0 and is not counted; the four grants are, and the fourth is one too many.
+        List<string> tuples = [
+            .. TwoGroups,
+            "resourceGroup:sub1-gamma#parent@subscription:sub1",
+            "resourceGroup:sub1-delta#parent@subscription:sub1",
+            "group:eng#member@user:alice",
+            $"{GroupA}#reader@group:eng#member",
+            $"{GroupB}#reader@group:eng#member",
+            "resourceGroup:sub1-gamma#reader@group:eng#member",
+            "resourceGroup:sub1-delta#reader@group:eng#member"
+        ];
+
+        var page = await Evaluate(
+            InMemoryRelationReader.Parse([.. tuples]),
+            InMemoryReverseRelationReader.Parse([.. tuples]),
+            Alice,
+            new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read },
+            new() { MaxBreadth = 3 }
+        );
+
+        page.Outcome.ShouldBe(ListObjectsOutcome.BreadthCapExceeded);
+        page.Objects.ShouldBeEmpty("a capped walk hands back nothing rather than the part it found — ListObjectsOutcome");
+        page.CapDetail.ShouldBe("group:eng#member is granted on more than 3 objects");
+
+        var within = await Evaluate(
+            InMemoryRelationReader.Parse([.. tuples]),
+            InMemoryReverseRelationReader.Parse([.. tuples]),
+            Alice,
+            new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read },
+            new() { MaxBreadth = 4 }
+        );
+
+        within.Outcome.ShouldBe(ListObjectsOutcome.Complete, "exactly the cap is within it — the same reading as Check's");
+        Ids(within).ShouldBe(["a1", "a2", "b1", "b2"]);
+    }
+
+    // ── The Leopard index ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ANestedGroupChainIsFoundInOneIndexReadAndNotOneHopPerLevel() {
+        // alice ∈ g1 ⊂ g2 ⊂ g3 ⊂ g4 ⊂ g5, and g5 is the reader. Before the index the walk paid a
+        // reverse read per level to FIND g5; now alice's slice names every group in one read and
+        // the reverse reads that remain are the ones that carry grants.
+        List<string> tuples = [.. TwoGroups, "group:g1#member@user:alice", $"{GroupA}#reader@group:g5#member"];
+        for (var i = 1; i < 5; i++) {
+            tuples.Add($"group:g{i + 1}#member@group:g{i}#member");
+        }
+
+        var reverse = InMemoryReverseRelationReader.Parse([.. tuples]);
+
+        var page = await Evaluate(
+            InMemoryRelationReader.Parse([.. tuples]),
+            reverse,
+            Alice,
+            new() { ObjectType = ObjectTypes.Resource, Permission = Permissions.Read }
+        );
+
+        Ids(page).ShouldBe(["a1", "a2"]);
+        page.IndexReads.ShouldBe(1, "alice's closure names g1 through g5; none of them is read for its own closure, because a closure is transitive");
+        page.DepthCapHit.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ATwentyDeepGroupChainIsListedThroughTheIndexWhereTheHopsAloneWouldHaveCutIt() {
+        // Twenty nested groups is eight past the depth cap. The closure is not a hop —
+        // ListObjectsEvaluator reaches every group at depth 0 — and the check side answers the
+        // same membership from the same slice, so the two evaluators agree past the cap here,
+        // which they could not while both walked.
+        List<string> tuples = [.. TwoGroups, "group:g1#member@user:alice", $"{GroupA}#reader@group:g20#member"];
+        for (var i = 1; i < 20; i++) {
+            tuples.Add($"group:g{i + 1}#member@group:g{i}#member");
+        }
+
+        var page = await List(Alice, ObjectTypes.Resource, Permissions.Read, [.. tuples]);
+
+        Ids(page).ShouldBe(["a1", "a2"]);
+        page.DepthCapHit.ShouldBeFalse("the index is not a hop, so twenty groups are zero hops");
+        page.IndexReads.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task AGroupTheSubjectWasRemovedFromIsNotListedAfterTheIndexRecomputes() {
+        // The delete path, in memory: alice leaves g1, and the closure that reached g2 through g1
+        // has to be recomputed rather than merely shortened. The walk then finds nothing, because
+        // alice's slice no longer names any group and no tuple names her.
+        List<string> tuples = [
+            .. TwoGroups,
+            "group:g1#member@user:alice",
+            "group:g2#member@group:g1#member",
+            $"{GroupA}#reader@group:g2#member"
+        ];
+
+        var reverse = InMemoryReverseRelationReader.Parse([.. tuples]);
+        var leaving = RelationTuple.Parse("group:g1#member@user:alice").GetValueOrThrow();
+
+        var maintainer = new MembershipIndexMaintainer(
+            CyberCloudSchema.Instance,
+            InMemoryRelationReader.Parse([.. tuples]),
+            reverse,
+            reverse.Store
+        );
+
+        (await maintainer.ApplyDeleteAsync(leaving, TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+
+        // The slices as the maintainer left them.
+        var alice = reverse.Store.Snapshot(ObjectRef.Of(ObjectTypes.User, "alice"));
+        alice.UsersetsOf(string.Empty).ShouldBeEmpty("alice is in no group once she has left g1, nested or not");
+
+        var g2 = reverse.Store.Snapshot(ObjectRef.Of(ObjectTypes.Group, "g2"));
+        g2.MembersOf(Relations.Member).ShouldBe([SubjectRef.Userset(ObjectTypes.Group, "g1", Relations.Member)]);
+
+        var page = await List(Alice, ObjectTypes.Resource, Permissions.Read, [.. tuples.Where(x => x != "group:g1#member@user:alice")]);
+        Ids(page).ShouldBeEmpty();
     }
 
     // ── Refusals ──────────────────────────────────────────────────────────────────────────────
@@ -404,7 +523,7 @@ public sealed class ListObjectsEvaluatorTests {
         ListObjectsRequest request,
         AuthorizationLimits? limits = null
     ) {
-        var evaluator = new ListObjectsEvaluator(schema, forward, reverse, limits);
+        var evaluator = new ListObjectsEvaluator(schema, forward, reverse, limits, reverse.Index);
         var result = await evaluator.EvaluateAsync(subject, request, TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);

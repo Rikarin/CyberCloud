@@ -111,6 +111,80 @@ public sealed class CheckPropertyTests {
         );
     }
 
+    /// <summary>
+    ///     The same comparison, with the Leopard index answering every userset it can — docs/plan/07
+    ///     § Testing's "index equivalence" bullet, held on the check side.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Every graph, not a sample, and the index has to have done something.</b> The
+    ///         reader's index is built by the shipping maintainer over the graph's tuples, and
+    ///         <c>AuthorizationMetrics.IndexAnswers</c> is read before and after so the run can
+    ///         demand that the index answered a real share of the userset tests — a
+    ///         <c>TryTestMembershipAsync</c> that declined everything would pass the comparison and
+    ///         test nothing. The generated relations are direct-only about half the time and most
+    ///         queries never reach a userset at all, so the floor is a twentieth of the queries
+    ///         rather than a half — measured at 7.5% over the twenty thousand graphs.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The closure ignores the depth cap on purpose and the reference evaluator has none,
+    ///         so <see cref="Unbounded" /> is the right limit here as it is above: what is being
+    ///         compared is the answer, and an indexed userset deep in a cycle is exactly where the
+    ///         two would part if the closure were wrong.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task CheckAgreesWithTheReferenceEvaluatorThroughTheLeopardIndex() {
+        var comparisons = 0;
+        var allowed = 0;
+        var answersBefore = AuthorizationMetrics.IndexAnswers;
+
+        for (var seed = 0; seed < Graphs; seed++) {
+            var graph = RandomGraphs.Generate(seed);
+            var reader = new InMemoryRelationReader(graph.Tuples);
+            var reverse = new InMemoryReverseRelationReader(graph.Schema, graph.Tuples);
+
+            foreach (var (target, name, subject) in graph.Queries) {
+                var evaluator = new CheckEvaluator(graph.Schema, reader, Unbounded, reverse.Index);
+
+                var actual = await evaluator.EvaluateAsync(
+                    target,
+                    name,
+                    subject,
+                    TestContext.Current.CancellationToken
+                );
+
+                actual.IsSuccess.ShouldBeTrue(actual.Error?.Message);
+
+                var expected = ReferenceEvaluator.Evaluate(graph.Schema, graph.Tuples, target, name, subject);
+                var evaluation = actual.GetValueOrThrow();
+
+                evaluation.Outcome.ShouldBeOneOf(CheckOutcome.Allowed, CheckOutcome.Denied);
+
+                evaluation.Allowed.ShouldBe(
+                    expected,
+                    $"Check through the Leopard index and the reference evaluator disagree on {target}#{name}@{subject}."
+                    + Environment.NewLine
+                    + graph.Describe()
+                );
+
+                comparisons++;
+                if (expected) {
+                    allowed++;
+                }
+            }
+        }
+
+        comparisons.ShouldBe(Graphs * 4);
+        allowed.ShouldBeGreaterThan(comparisons / 20, "fewer than 5% of comparisons were allows");
+
+        (AuthorizationMetrics.IndexAnswers - answersBefore).ShouldBeGreaterThan(
+            comparisons / 20,
+            "the index answered fewer than a twentieth of the queries' userset tests — it is declining "
+            + "everything and this comparison is testing the walk twice"
+        );
+    }
+
     [Fact]
     public void MostGeneratedGraphsContainACycle() {
         // A "cycles" property test over acyclic graphs is the classic way to test nothing. This

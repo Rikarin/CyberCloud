@@ -149,9 +149,10 @@ fixed rather than only that it was.** [11 § The object model](11-identity.md) n
 grains and this table carried a row for one of them. `GrainKeys` added `group/`, `app/`, `sp/` and
 `session/` when those grains were built and deliberately left `mi/` out, on the argument that a key
 shape with no grain behind it is a shape nothing can hold to its meaning — the same argument that
-keeps the Leopard membership index of [07 § Storage](07-rebac-authorization.md) out of it. That was
-right while [11 § Managed identity](11-identity.md) was a seam. The row is here now because the
-grain is, which is the order this ⚠ asks for: the shape and the thing it addresses land together.
+kept the Leopard membership index of [07 § Storage](07-rebac-authorization.md) out of it until issue
+#37 put `IMembershipIndexGrain` behind `rel/idx/`. That was right while
+[11 § Managed identity](11-identity.md) was a seam. The row is here now because the grain is, which
+is the order this ⚠ asks for: the shape and the thing it addresses land together.
 
 ⚠ **`IManagedIdentityGrain` is keyed by its GUID and not by `(cluster, namespace, serviceAccount)`.**
 The binding is what a token exchange arrives holding, so keying by it looks like the shape that

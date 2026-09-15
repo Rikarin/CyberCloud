@@ -170,6 +170,10 @@ public sealed class AuthorizationCluster : IAsyncLifetime {
     public ICheckGrain Check(Guid tenant, ObjectRef target) =>
         For(tenant).GetGrain<ICheckGrain>(GrainKeys.CheckCache(target.Type, target.Id));
 
+    /// <summary>A subject object's slice of the Leopard index.</summary>
+    public IMembershipIndexGrain Index(Guid tenant, ObjectRef subjectObject) =>
+        For(tenant).GetGrain<IMembershipIndexGrain>(GrainKeys.MembershipIndex(subjectObject.Type, subjectObject.Id));
+
     /// <summary>Writes a tuple through the store and returns the token.</summary>
     /// <param name="tenant">The tenant.</param>
     /// <param name="tuple">The tuple, in the <c>object#relation@subject</c> grammar.</param>

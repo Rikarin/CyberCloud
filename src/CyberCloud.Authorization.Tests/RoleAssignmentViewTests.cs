@@ -109,9 +109,11 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
     }
 
     [Fact]
-    public async Task NestedGroupMembershipIsWalkedBecauseThereIsNoIndexInM1() {
-        // docs/plan/07 § The Leopard index is M2. Until then the walk is the answer, and it is
-        // correct — but not fast at ten thousand members. This asserts the correctness half.
+    public async Task NestedGroupMembershipIsWalkedWhenTheCheckIsFullyConsistent() {
+        // docs/plan/07 § The Leopard index answers nested membership for the other two modes;
+        // FullyConsistent never reads it (CheckGrain's remarks), so the walk has to stay correct on
+        // its own — not fast at ten thousand members, but right. This asserts the correctness half;
+        // MembershipIndexGrainTests asserts the indexed modes agree with it.
         var tenant = AuthorizationCluster.Tenant(404);
         var scope = ObjectRef.Of(ObjectTypes.ResourceGroup, "rge");
 

@@ -263,6 +263,120 @@ public sealed class CheckEvaluatorTests {
         result.Outcome.ShouldBe(CheckOutcome.Allowed);
     }
 
+    // ── The Leopard index — docs/plan/07 § Check, step 3 ──────────────────────────────────────
+
+    [Fact]
+    public async Task AnIndexedUsersetIsNotChargedAgainstTheBreadthCapSoTheThousandAndFirstGroupGrants() {
+        // The same 1 001 usersets that are past the cap above, with alice in the LAST one — and
+        // the index answering every one of them. An index read is a set test, not an expansion
+        // (AuthorizationLimits), so the walk never reaches its budget and the grant is found.
+        List<string> tuples = [.. UsersetFanOut(1_001), "group:g1000#member@user:alice"];
+        var indexed = InMemoryReverseRelationReader.Parse(Hierarchy, [.. tuples]);
+        var forward = new InMemoryRelationReader(tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow()));
+        var answersBefore = AuthorizationMetrics.IndexAnswers;
+        var evaluator = new CheckEvaluator(Hierarchy, forward, null, indexed.Index);
+
+        var result = (await evaluator.EvaluateAsync(ObjectRef.Parse("doc:one").GetValueOrThrow(), "read", Alice, TestContext.Current.CancellationToken))
+            .GetValueOrThrow();
+
+        result.Allowed.ShouldBeTrue("the index answered the 1 001st userset without a walk");
+        result.Outcome.ShouldBe(CheckOutcome.Allowed);
+        forward.Reads.ShouldBe(1, "doc:one and no group — a thousand noes and one yes, none of them walked");
+        (AuthorizationMetrics.IndexAnswers - answersBefore).ShouldBeGreaterThanOrEqualTo(1_001);
+
+        // ⚠ A "no" costs the userset's own slice, because only a complete closure can say no —
+        // alice's slice says which groups she is in, not which groups are finished. So the reads
+        // are alice's plus one per group she is NOT in, which is the count the walk would have
+        // paid in grains; the yes came from alice's slice. The gain on this shape is the cap, not
+        // the count. MembershipIndexReader's remarks.
+        indexed.Index.Reads.ShouldBe(1_001);
+    }
+
+    [Fact]
+    public async Task ANestedGroupFiveDeepIsOneIndexReadAndVisitsNoGroup() {
+        // docs/plan/07 § The Leopard index: "nested five deep … that is thousands of grain calls"
+        // is the walk this index exists to remove. The chain is alice ∈ g1 ⊂ g2 ⊂ … ⊂ g5, the
+        // grant is to g5, and the check reads alice's slice and nothing else.
+        List<string> tuples = ["doc:one#owner@group:g5#member", "group:g1#member@user:alice"];
+        for (var i = 1; i < 5; i++) {
+            tuples.Add(string.Create(CultureInfo.InvariantCulture, $"group:g{i + 1}#member@group:g{i}#member"));
+        }
+
+        var indexed = InMemoryReverseRelationReader.Parse(Hierarchy, [.. tuples]);
+        var forward = new InMemoryRelationReader(tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow()));
+        var evaluator = new CheckEvaluator(Hierarchy, forward, null, indexed.Index);
+
+        var result = await evaluator.EvaluateAsync(ObjectRef.Parse("doc:one").GetValueOrThrow(), "read", Alice, TestContext.Current.CancellationToken);
+
+        result.GetValueOrThrow().Allowed.ShouldBeTrue();
+        forward.Reads.ShouldBe(1, "doc:one, and no group — the chain was answered from the index");
+        indexed.Index.Reads.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task AUsersetTheIndexCannotCompleteIsWalkedRatherThanDenied() {
+        // ⚠ THE RULE THAT MAKES A FALSE FROM THE INDEX SAFE. `doc:two#owner` is `This | From`, so
+        // a userset formed on it is recorded in g1's closure and never expanded; bob inherits
+        // membership through it, by a parent edge no closure over tuples can see. A complete
+        // closure would say false here; an incomplete one must say "walk it", and the walk allows.
+        List<string> tuples = [
+            "doc:one#owner@group:g1#member",
+            "group:g1#member@doc:two#owner",
+            "doc:two#parent@doc:three",
+            "doc:three#owner@user:bob"
+        ];
+
+        var indexed = InMemoryReverseRelationReader.Parse(Hierarchy, [.. tuples]);
+        var bob = SubjectRef.Of("user", "bob");
+
+        (await indexed.Index.TryTestMembershipAsync(SubjectRef.Userset("group", "g1", "member"), bob, TestContext.Current.CancellationToken))
+            .ShouldBeNull("g1's closure holds doc:two#owner unexpanded, so it cannot say no");
+
+        var result = await Evaluate(Hierarchy, "doc:one", "read", bob, indexed.Index, [.. tuples]);
+
+        result.Allowed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task AUsersetOnARelationThatIsNotDirectOnlyIsNeverAskedOfTheIndex() {
+        // `doc#owner` is `This | From("parent", "owner")`: what doc:two#owner contains is a parent
+        // edge away from any closure over tuples, so the index declines without a read and the
+        // walk answers as it always did.
+        List<string> tuples = ["doc:one#owner@doc:two#owner", "doc:two#parent@doc:three", "doc:three#owner@user:alice"];
+        var indexed = InMemoryReverseRelationReader.Parse(Hierarchy, [.. tuples]);
+
+        var result = await Evaluate(Hierarchy, "doc:one", "read", Alice, indexed.Index, [.. tuples]);
+
+        result.Allowed.ShouldBeTrue();
+        indexed.Index.Reads.ShouldBe(0, "a userset the schema does not index costs no slice read");
+    }
+
+    [Fact]
+    public async Task AStaleSliceIsWalkedNotTrusted() {
+        // A slice stamped with another schema version was closed under other rules — which
+        // relations were direct-only may have changed — so the reader treats it as absent.
+        List<string> tuples = ["doc:one#owner@group:g1#member", "group:g1#member@user:alice"];
+        var store = new InMemoryMembershipIndexStore();
+        var g1 = ObjectRef.Of("group", "g1");
+
+        await store.ApplyAsync(
+            g1,
+            new() {
+                SchemaVersion = Hierarchy.Version + 1,
+                AddMembers = new Dictionary<string, IReadOnlyList<SubjectRef>> { ["member"] = [SubjectRef.Of("user", "carol")] }
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        var reader = new MembershipIndexReader(Hierarchy, store);
+
+        (await reader.TryTestMembershipAsync(SubjectRef.Userset("group", "g1", "member"), SubjectRef.Of("user", "carol"), TestContext.Current.CancellationToken))
+            .ShouldBeNull("a stale slice must not answer, in either direction");
+
+        var result = await Evaluate(Hierarchy, "doc:one", "read", Alice, reader, [.. tuples]);
+        result.Allowed.ShouldBeTrue("the walk still finds alice through the tuples");
+    }
+
     // ── ⚠ A cap must never GRANT through a negation ────────────────────────────────────────────
 
     [Fact]
@@ -361,16 +475,28 @@ public sealed class CheckEvaluatorTests {
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
-    static async Task<CheckEvaluation> Evaluate(
+    static Task<CheckEvaluation> Evaluate(
         AuthorizationSchema schema,
         string @object,
         string permission,
         SubjectRef subject,
         params string[] tuples
+    ) =>
+        Evaluate(schema, @object, permission, subject, null, tuples);
+
+    static async Task<CheckEvaluation> Evaluate(
+        AuthorizationSchema schema,
+        string @object,
+        string permission,
+        SubjectRef subject,
+        IMembershipIndex? index,
+        params string[] tuples
     ) {
         var evaluator = new CheckEvaluator(
             schema,
-            new InMemoryRelationReader(tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow()))
+            new InMemoryRelationReader(tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow())),
+            null,
+            index
         );
 
         var result = await evaluator.EvaluateAsync(

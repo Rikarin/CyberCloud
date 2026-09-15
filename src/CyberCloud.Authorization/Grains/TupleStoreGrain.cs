@@ -1,4 +1,5 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Authorization.Evaluation;
 using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
@@ -13,35 +14,59 @@ namespace CyberCloud.Authorization.Grains;
 /// <remarks>
 ///     <para>
 ///         <b>
-///             The write, in the order docs/plan/07 § Storage requires, with the one addition that
-///             makes the sweeper possible:
+///             The write, in the order docs/plan/07 § Storage requires, with the two additions that
+///             make the sweeper possible and the Leopard index a step rather than a stream:
 ///         </b>
 ///     </para>
 ///     <list type="number">
 ///         <item>journal the tuple durably, here;</item>
+///         <item>
+///             <b>for a delete only</b>, update <c>IMembershipIndexGrain</c> — every slice the
+///             edge could have reached, recomputed as if the tuple were already gone;
+///         </item>
 ///         <item>write <c>IObjectRelationsGrain</c> — <b>the half <c>Check</c> reads</b>;</item>
 ///         <item>
 ///             <see cref="IRelationWriteInterceptor" /> — the seam a test uses to kill the write
 ///             exactly here;
 ///         </item>
 ///         <item>write <c>ISubjectRelationsGrain</c> — the half only <c>ListObjects</c> reads;</item>
+///         <item>
+///             <b>for a write only</b>, update <c>IMembershipIndexGrain</c> — the two unions of
+///             <see cref="MembershipIndexMaintainer" />;
+///         </item>
 ///         <item>clear the journal entry and bump the tenant relation version, durably.</item>
 ///     </list>
 ///     <para>
 ///         ⚠ <b>The version is bumped last, and that ordering is the point of the token.</b> A crash
-///         anywhere before step 5 means no token was ever handed out, so nothing can be waiting on
+///         anywhere before step 7 means no token was ever handed out, so nothing can be waiting on
 ///         a version that covers a write which did not finish. A token, once returned, always
-///         covers a write that landed in both grains.
+///         covers a write that landed in every grain, the index included — which is why the index
+///         needs no version of its own for docs/plan/07 § The Leopard index's staleness rule.
+///     </para>
+///     <para>
+///         ⚠ <b>The index lands last on a write and first on a delete, and the asymmetry is the
+///         whole safety argument for letting <c>Check</c> read it.</b> docs/plan/07 § Storage lets
+///         the reverse index be stale because nothing on the check path reads it; the Leopard index
+///         <i>is</i> read on the check path, and a <c>false</c> from it is taken without a walk. So
+///         at every point a crash can leave the tenant, the index must be no more permissive than
+///         the forward half. A write that dies before step 6 leaves a grant the walk sees and the
+///         index does not — a deny, until <see cref="SweepAsync" /> replays it. A delete that dies
+///         after step 2 leaves a revoke the index honours and the forward half has not applied —
+///         also a deny. The order that would break it, forward delete before index update, is the
+///         one crash that could leave a revoked membership answering <c>true</c>.
 ///     </para>
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Four durable writes per tuple, and that is affordable exactly because docs/plan/07
-///             § Caching across requests says so:
+///             Four durable writes per tuple, plus one per index slice the tuple reaches, and that
+///             is affordable exactly because docs/plan/07 § Caching across requests says so:
 ///         </b>
 ///         "tuple writes are rare (role assignments), checks
 ///         are constant". If that ever stops being true, the fix is batching here, not dropping the
 ///         journal — without it the sweeper has nothing to sweep, because grains cannot be scanned.
+///         The index's share is the fan-out docs/plan/07 § The Leopard index's threshold paragraph
+///         exists to cap: a group-to-group edge writes one slice per userset above it and one per
+///         member below it, and <c>AuthorizationMetrics.IndexWrites</c> is how big that has been.
 ///     </para>
 /// </remarks>
 public sealed class TupleStoreGrain(
@@ -127,7 +152,7 @@ public sealed class TupleStoreGrain(
             return Result<ConsistencyToken>.Failure(error);
         }
 
-        // Step 1 — journal, durably, BEFORE either half. A crash between here and step 5 leaves an
+        // Step 1 — journal, durably, BEFORE either half. A crash between here and step 7 leaves an
         // entry the sweeper can replay; a crash before here left nothing behind to replay.
         var sequence = state.State.NextSequence++;
         state.State.Pending.Add(new() { Tuple = tuple, IsDelete = isDelete, Sequence = sequence });
@@ -139,7 +164,7 @@ public sealed class TupleStoreGrain(
             return Result<ConsistencyToken>.Failure(applyError);
         }
 
-        // Step 5 — the journal entry goes and the version moves, in one durable write.
+        // Step 7 — the journal entry goes and the version moves, in one durable write.
         state.State.Pending.RemoveAll(x => x.Sequence == sequence);
         state.State.Version++;
         await state.WriteStateAsync();
@@ -149,8 +174,18 @@ public sealed class TupleStoreGrain(
 
     async Task<Result> ApplyBothHalvesAsync(RelationTuple tuple, bool isDelete, bool useInterceptor) {
         var tenant = tenantId.ToString("D", CultureInfo.InvariantCulture);
+        var index = Maintainer();
 
-        // Step 2 — the object half. THE ONE CHECK READS.
+        // Step 2 — a delete's index update, BEFORE the forward half, so that no crash leaves the
+        // index granting a membership the tuples no longer do. See the remarks on this class.
+        if (isDelete) {
+            var revoked = await index.ApplyDeleteAsync(tuple, CancellationToken.None);
+            if (revoked.TryGetError(out var revokeError)) {
+                return Result.Failure(revokeError);
+            }
+        }
+
+        // Step 3 — the object half. THE ONE CHECK READS.
         var objects = GrainFactory.ForTenant(tenant)
             .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(tuple.Object.Type, tuple.Object.Id));
 
@@ -162,12 +197,12 @@ public sealed class TupleStoreGrain(
             return Result.Failure(forwardError);
         }
 
-        // Step 3 — the seam. See IRelationWriteInterceptor.
+        // Step 4 — the seam. See IRelationWriteInterceptor.
         if (useInterceptor) {
             await interceptor.AfterObjectWriteAsync(tuple, isDelete);
         }
 
-        // Step 4 — the reverse half. Nothing on the check path reads it.
+        // Step 5 — the reverse half. Nothing on the check path reads it.
         var subjects = GrainFactory.ForTenant(tenant)
             .GetGrain<ISubjectRelationsGrain>(GrainKeys.SubjectRelations(tuple.Subject.Type, tuple.Subject.Id));
 
@@ -179,7 +214,35 @@ public sealed class TupleStoreGrain(
             ? await subjects.RemoveAsync(entry)
             : await subjects.AddAsync(entry);
 
-        return reverse.TryGetError(out var reverseError) ? Result.Failure(reverseError) : Result.Success;
+        if (reverse.TryGetError(out var reverseError)) {
+            return Result.Failure(reverseError);
+        }
+
+        // Step 6 — a write's index update, AFTER both halves, so that no crash leaves the index
+        // granting a membership the forward half has not recorded.
+        if (!isDelete) {
+            var granted = await index.ApplyWriteAsync(tuple, CancellationToken.None);
+            if (granted.TryGetError(out var grantError)) {
+                return Result.Failure(grantError);
+            }
+        }
+
+        return Result.Success;
+    }
+
+    /// <summary>
+    ///     The closure maintainer over this tenant's grains. Built per write because the readers
+    ///     are: the forward reader it recomputes from is the same one <c>Check</c> walks.
+    /// </summary>
+    MembershipIndexMaintainer Maintainer() {
+        var store = new GrainMembershipIndexStore(GrainFactory, tenantId);
+
+        return new(
+            schema,
+            new GrainRelationReader(GrainFactory, tenantId, false),
+            new GrainReverseRelationReader(GrainFactory, tenantId, new MembershipIndexReader(schema, store)),
+            store
+        );
     }
 
     Result Validate(RelationTuple tuple) {
