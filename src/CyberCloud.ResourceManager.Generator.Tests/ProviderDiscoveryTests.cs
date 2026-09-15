@@ -47,12 +47,25 @@ public sealed class ProviderDiscoveryTests {
 
         TemporaryTree.FilesUnder(tree.OpenApiDirectory).ShouldBe([DocumentFile, IndexFile]);
 
-        // ADR-012's other three, from the document rather than from the registry.
+        // ADR-012's other three, from the document rather than from the registry — and the Python
+        // and Go SDKs beside them (issue #40), a package per api-version each plus the files written
+        // once for all of them.
         TemporaryTree.FilesUnder(tree.DerivedDirectory)
             .ShouldBe(
                 [
                     "cli/" + SampleWidgets.V2026 + ".json",
                     "forms/" + SampleWidgets.V2026 + ".json",
+                    "sdk-go/api" + SampleWidgets.V2026.Replace("-", "") + "/client.go",
+                    "sdk-go/api" + SampleWidgets.V2026.Replace("-", "") + "/models.go",
+                    "sdk-go/api" + SampleWidgets.V2026.Replace("-", "") + "/runtime.go",
+                    "sdk-go/go.mod",
+                    "sdk-python/cybercloud/__init__.py",
+                    "sdk-python/cybercloud/py.typed",
+                    "sdk-python/cybercloud/v" + SampleWidgets.V2026.Replace('-', '_') + "/__init__.py",
+                    "sdk-python/cybercloud/v" + SampleWidgets.V2026.Replace('-', '_') + "/_runtime.py",
+                    "sdk-python/cybercloud/v" + SampleWidgets.V2026.Replace('-', '_') + "/client.py",
+                    "sdk-python/cybercloud/v" + SampleWidgets.V2026.Replace('-', '_') + "/models.py",
+                    "sdk-python/pyproject.toml",
                     "sdk/" + SampleWidgets.V2026 + ".cs"
                 ]
             );

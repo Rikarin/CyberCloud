@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 namespace CyberCloud.ResourceManager.Contracts.Generation;
 
 /// <summary>What one derived file did.</summary>
-/// <param name="Surface">Which of the three — <c>cli</c>, <c>sdk</c> or <c>forms</c>.</param>
+/// <param name="Surface">Which of the five — <c>cli</c>, <c>sdk</c>, <c>forms</c>, <c>sdk-python</c> or <c>sdk-go</c>.</param>
 /// <param name="FileName">The file, relative to the generated root. ⚠ Never an absolute path.</param>
 /// <param name="ApiVersion">The api-version it describes.</param>
 /// <param name="Published">Whether a file of that name was already checked in.</param>
@@ -33,9 +33,17 @@ public sealed record DerivedReport(
 }
 
 /// <summary>
-///     Writes ADR-012's other three surfaces and says what changed.
+///     Writes ADR-012's other three surfaces, and the Python and Go SDKs beside them, and says what
+///     changed.
 /// </summary>
 /// <remarks>
+///     <para>
+///         ⚠ <b>Five directories under one root since issue #40, and two of them are packages
+///         rather than one file per api-version.</b> <c>sdk-python/</c> and <c>sdk-go/</c> each
+///         hold a subpackage per api-version and a few files written once for all of them; every
+///         file is its own row here, byte-compared exactly as the single-file surfaces are, so a
+///         drift in any one of them is a named file in the report.
+///     </para>
 ///     <para>
 ///         ⚠ <b>Checked in, not under <c>artifacts/</c>, and the reason is the gate.</b>
 ///         docs/plan/23 § The architecture gates asks that "OpenAPI/CLI/SDK/forms regenerate
@@ -43,11 +51,11 @@ public sealed record DerivedReport(
 ///         compare against. <c>artifacts/</c> is gitignored, so a file written there has no previous
 ///         copy on a fresh clone and every run would report "new" — a gate that can only ever pass.
 ///         <see cref="OpenApiArtifacts.DirectoryName" /> is tracked for exactly this reason and these
-///         three follow it.
+///         five follow it.
 ///     </para>
 ///     <para>
 ///         <b>A separate root from <c>openapi/</c>, though.</b> docs/plan/10 § Shape makes the gateway
-///         serve <c>openapi/</c> as files; the CLI tree, the SDK source and the form schemas are not
+///         serve <c>openapi/</c> as files; the CLI tree, the three SDK sources and the form schemas are not
 ///         served to anyone over HTTP, and putting them in the directory the gateway publishes would
 ///         make the platform's public surface depend on which files a build step happened to leave
 ///         there.
@@ -70,11 +78,11 @@ public sealed record DerivedReport(
 ///     </para>
 /// </remarks>
 public static class DerivedSurfaces {
-    /// <summary>The directory, relative to the repository root, the three surfaces are checked in at.</summary>
+    /// <summary>The directory, relative to the repository root, the five surfaces are checked in at.</summary>
     public const string DirectoryName = "generated";
 
     /// <summary>
-    ///     Emits all three surfaces for every document, compares against what is checked in, and
+    ///     Emits all five surfaces for every document, compares against what is checked in, and
     ///     optionally writes.
     /// </summary>
     /// <param name="documents">The emitted per-version OpenAPI documents, keyed by api-version.</param>
@@ -140,6 +148,29 @@ public static class DerivedSurfaces {
                     expected
                 )
             );
+
+            // ⚠ THE PYTHON AND GO SDKS — issue #40 — read the same document the three above do, and
+            // are written under generated/ beside them: they are served to nobody, and unlike the
+            // TypeScript client no rule 6 gives them a directory of their own. Each is several
+            // files per api-version, so each file is its own row and the surface's self-check is
+            // reported once, on the client file, rather than repeated on every row.
+            AppendPackage(produced, PythonSdkEmitter.DirectoryName, version, PythonSdkEmitter.Emit(document), PythonSdkEmitter.Problems, directory, write, expected);
+            AppendPackage(produced, GoSdkEmitter.DirectoryName, version, GoSdkEmitter.Emit(document), GoSdkEmitter.Problems, directory, write, expected);
+        }
+
+        // The files a package writes once for every api-version — the Python manifest and root
+        // package, the Go module file. Attributed to the newest api-version, which is the run that
+        // decided their content, and only when there was one: an empty registry has no package.
+        if (documents.Count > 0) {
+            var newest = documents.Keys.OrderBy(x => x, StringComparer.Ordinal).Last();
+
+            foreach (var file in PythonSdkEmitter.Root(documents.Keys)) {
+                produced.Add(Write(PythonSdkEmitter.DirectoryName, file.Key, newest, Text(file.Value), [], directory, write, expected));
+            }
+
+            foreach (var file in GoSdkEmitter.Root()) {
+                produced.Add(Write(GoSdkEmitter.DirectoryName, file.Key, newest, Text(file.Value), [], directory, write, expected));
+            }
         }
 
         var root = new DirectoryInfo(directory);
@@ -192,16 +223,41 @@ public static class DerivedSurfaces {
         var relative = surface + "/" + fileName;
         expected.Add(relative);
 
-        var path = Path.Combine(directory, surface, fileName);
+        var path = Path.Combine(directory, surface, fileName.Replace('/', Path.DirectorySeparatorChar));
         var published = File.Exists(path) ? File.ReadAllBytes(path) : null;
         var drifted = published is null || !published.AsSpan().SequenceEqual(bytes);
 
         if (write && drifted) {
-            Directory.CreateDirectory(Path.Combine(directory, surface));
+            // The file's own parent rather than the surface's root: a package surface nests its
+            // files one directory per api-version.
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, bytes);
         }
 
         return new(surface, relative, apiVersion, published is not null, drifted, problems);
+    }
+
+    /// <summary>
+    ///     One api-version of a multi-file package — the Python subpackage, the Go package — as
+    ///     one row per file, with the package's self-check on its client file.
+    /// </summary>
+    static void AppendPackage(
+        List<DerivedDocument> produced,
+        string surface,
+        string version,
+        ImmutableSortedDictionary<string, string> files,
+        Func<ImmutableSortedDictionary<string, string>, ImmutableArray<string>> check,
+        string directory,
+        bool write,
+        HashSet<string> expected
+    ) {
+        var problems = check(files);
+
+        foreach (var file in files) {
+            var isClient = Path.GetFileNameWithoutExtension(file.Key) == "client";
+
+            produced.Add(Write(surface, file.Key, version, Text(file.Value), isClient ? problems : [], directory, write, expected));
+        }
     }
 
     /// <summary>The one way generated source text becomes bytes.</summary>

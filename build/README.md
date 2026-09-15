@@ -21,11 +21,12 @@ build/
 ├── CodeSurface.cs            # ⚠ likewise: every type and member this repository compiles
 ├── WireContract.cs           # ⚠ likewise: the [Id(n)] manifests under build/wire
 ├── GeneratedSdkSurface.cs    # ⚠ likewise: generated/sdk/*.cs through Roslyn (issue #73), and its wire names (#79)
+├── GeneratedPackageSurface.cs # ⚠ likewise: generated/sdk-python and sdk-go through their own toolchains, when installed (#40)
 ├── CoverageReport.cs         # ⚠ likewise: Cobertura in, per-assembly line rates out
 └── TargetPreconditions.cs    # ⚠ likewise: "blocked here, and here is what to install"
 ```
 
-The six files above that are **not** partials of `Build` are a deliberate exception. `Architecture`
+The seven files above that are **not** partials of `Build` are a deliberate exception. `Architecture`
 reads compiled assemblies through `System.Reflection.Metadata`; the record
 and the `ICustomAttributeTypeProvider` that does it are ordinary types with their own lifetime, and
 folding them into the target's partial would mix "what the gates read" with "what the gates decide"
@@ -35,7 +36,10 @@ newest and the only one that reads **source** rather than metadata — it hands 
 `generated/sdk/{api-version}.cs` to Roslyn, because "is this valid C#" is a question only a C#
 compiler answers and the `Generated surfaces` row had been answering "are the bytes the same"
 instead. It also reads what the compiler only parses: every `[JsonPropertyName]`, refused when one
-type declares a name twice, because a file that compiles is not a file that serialises (#79). The rule that still holds is the one
+type declares a name twice, because a file that compiles is not a file that serialises (#79).
+`GeneratedPackageSurface.cs` is the same seam for the Python and Go SDKs (#40), with one difference
+that is the whole point of it: the toolchain it hands a package to may not be installed, and it
+returns that as a fact the gate reports as ○ rather than as a tick. The rule that still holds is the one
 that matters: **one partial per target, named after it** — no target's logic lives anywhere but its
 own `Build.<Target>.cs`.
 

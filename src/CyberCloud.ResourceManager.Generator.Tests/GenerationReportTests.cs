@@ -129,8 +129,13 @@ public sealed class GenerationReportTests {
 
         var derived = report["derived"]!.AsArray();
 
-        // Three surfaces from one api-version: the cyc verb tree, the portal forms and the .NET SDK.
-        derived.Count.ShouldBe(3);
+        // Fourteen rows from one api-version: the cyc verb tree, the portal forms and the .NET SDK
+        // — one file each — then the Python SDK's four files per version and three written once,
+        // and the Go SDK's three per version and one written once (issue #40). Each file is its own
+        // row because each is byte-compared on its own.
+        derived.Count.ShouldBe(14);
+        derived.Count(x => x!["surface"]!.GetValue<string>() == "sdk-python").ShouldBe(7);
+        derived.Count(x => x!["surface"]!.GetValue<string>() == "sdk-go").ShouldBe(4);
 
         foreach (var surface in derived) {
             KeysOf(surface!.AsObject()).ShouldBe([.. DerivedKeys.OrderBy(x => x, StringComparer.Ordinal)]);
@@ -215,8 +220,9 @@ public sealed class GenerationReportTests {
             }
         );
 
-        // 5 root values + 2 documents × 4 scalars + 3 derived surfaces × 5 scalars + 1 action × 5.
-        read.Count.ShouldBe(33);
+        // 5 root values + 2 documents × 4 scalars + 14 derived rows × 5 scalars + 1 action × 5. The
+        // 14 is 3 single-file surfaces plus the Python SDK's 7 files and the Go SDK's 4 (issue #40).
+        read.Count.ShouldBe(88);
     }
 
     [Fact]

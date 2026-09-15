@@ -33,8 +33,9 @@ partial class Build {
     AbsolutePath OpenApiDirectory => RootDirectory / "openapi";
 
     /// <summary>
-    ///     Where ADR-012's other three surfaces are checked in — the <c>cyc</c> verb tree, the .NET
-    ///     SDK and the portal form schemas.
+    ///     Where the derived surfaces are checked in — ADR-012's <c>cyc</c> verb tree, .NET SDK and
+    ///     portal form schemas, and since issue #40 the Python and Go SDKs beside them: five
+    ///     directories, each file its own row of the <c>Generated surfaces</c> gate.
     ///     <para>
     ///         ⚠ Tracked, for the same reason <c>openapi/</c> is: docs/plan/23 § The architecture
     ///         gates asks that all four "regenerate byte-identically", and a byte comparison needs a
@@ -44,7 +45,7 @@ partial class Build {
     ///     </para>
     ///     <para>
     ///         A separate root from <c>openapi/</c> because docs/plan/10 § Shape makes the gateway
-    ///         serve that directory as files, and these three are not served to anyone.
+    ///         serve that directory as files, and none of these five is served to anyone.
     ///     </para>
     /// </summary>
     AbsolutePath DerivedSurfacesDirectory => RootDirectory / "generated";
@@ -355,13 +356,18 @@ partial class Build {
                 "Generate: {Count} document(s) regenerate byte-identically and break nothing published; "
                 + "{Client} TypeScript client file(s) for the portal; {Sdk} .NET SDK api-version "
                 + "file(s) declaring {Types} type(s), each compiled on its own against {Assembly}, "
-                + "with {WireNames} [JsonPropertyName] member(s) and none declared twice by one type",
+                + "with {WireNames} [JsonPropertyName] member(s) and none declared twice by one type; "
+                + "{Python} Python SDK file(s) and {Go} Go SDK file(s) written under {Directory}/ and "
+                + "compared byte-for-byte — issue #40; `Architecture` hands each to its own toolchain",
                 report.Documents.Count,
                 report.TypeScript.Count,
                 compiledSdk.Count,
                 compiledSdk.Sum(x => x.Types),
                 SdkAssemblyName,
-                compiledSdk.Sum(x => x.WireNames)
+                compiledSdk.Sum(x => x.WireNames),
+                report.Derived.Count(x => x.Surface == PythonSdkDirectory),
+                report.Derived.Count(x => x.Surface == GoSdkDirectory),
+                DerivedSurfacesDirectory.Name
             );
 
             // ⚠ Zero files is news rather than silence, the same distinction Build.Charts.cs draws:

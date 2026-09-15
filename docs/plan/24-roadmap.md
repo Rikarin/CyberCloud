@@ -91,18 +91,22 @@ Architecture`'s **Generated surfaces** gate regenerates every surface from the p
 compares bytes, which is what makes "and drift fails the build" a fact rather than an intention:
 
 ```text
-✔ Generated surfaces  Enforced  22 resource type(s) over 2 OpenAPI document(s), 3 derived file(s) —
-  the cyc verb tree, the .NET SDK and the portal forms — and 6 file(s) of the portal's TypeScript
-  client, all regenerated and compared byte-for-byte
-✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 140 type(s), each compiled on its
-  own against CyberCloud.Sdk — 170 partial member(s) accepted as declared-but-not-implemented
+✔ Generated surfaces  Enforced  23 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
+  the cyc verb tree, the .NET SDK, the portal forms, and the Python and Go SDKs (#40) — and 6 file(s)
+  of the portal's TypeScript client, all regenerated and compared byte-for-byte
+✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 251 type(s), each compiled on its
+  own against CyberCloud.Sdk — 176 partial member(s) accepted as declared-but-not-implemented
 ```
 
 ⚠ **The second gate is younger than the first and exists because the first was not enough** (#73): a
 byte-comparison proves the emitter is deterministic and proves nothing about whether what it emitted is
-valid C#. ⚠ And "compiles" is still short of "packaged" — #79 is open against fourteen duplicate wire
-names in that same SDK, and the 170 partial members are the hand-written half that does not exist yet
-([21 § Generation](21-cli-and-sdks.md)).
+valid C#. ⚠ And "compiles" is still short of "packaged" — the 176 partial members are the hand-written
+half that does not exist yet ([21 § Generation](21-cli-and-sdks.md)); #79's fourteen duplicate wire
+names closed 2026-09-15. The same day added two more rows of the same kind, **Generated Python SDK
+compiles** and **Generated Go SDK compiles** (#40), which hand the other two generated SDKs to their
+own toolchains and report ○ rather than ✔ when a toolchain is not installed — the quoted lines above
+were re-read from a run on that day, when the derived count had grown from 3 to 14 with the two
+packages.
 
 ⚠ **Criteria 1, 2, 3 and 5 are not marked here, and the reason is the reason for the whole `Landed`
 convention:** the published type list can say that `CyberCloud.Sample/widgets` exists, and it cannot say
@@ -182,7 +186,7 @@ target scale.
 | ReBAC | `ListObjects`, Leopard index | 2.2 | #37 | ◐ `ListObjects` landed 2026-09-15 as `IListObjectsGrain` — a scoped reverse walk the resource list now intersects with instead of a `Check` per member. ⚠ **The Leopard index is not built**; the walk reads the store's reverse index one hop at a time, and `IReverseRelationReader` is the seam it will fill. [07 § The Leopard index](07-rebac-authorization.md) says what it needs |
 | Billing | Rating, invoicing, PSP, tax service, cost views, budgets | 3.6 | #38 | |
 | Platform | Management groups, deployments (templates), shard pinning | 1.5 | #39 | |
-| SDKs | Python, Go | 1.0 | #40 | |
+| SDKs | Python, Go | 1.0 | #40 | ◐ both generated from the published document 2026-09-15 into `generated/sdk-python` and `generated/sdk-go`, byte-compared by **Generated surfaces** and each handed to its own toolchain by a gate that reports ○ when that toolchain is absent. ⚠ Generated is not packaged, and neither has a credential type or a retry — [21 § Python and Go](21-cli-and-sdks.md) lists what is owed |
 | Portal | Cost analysis, metrics explorer, log search, identity admin | 2.3 | #41 | |
 
 ⚠ **The `Issue` column is a check on the row above it and it found the same thing twice.** Fourteen

@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Registry;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json.Nodes;
@@ -198,17 +199,35 @@ public sealed record DocumentQueryParameter(string Name, string Type, string Des
 /// <param name="LongRunning">Whether it answers <c>202</c>.</param>
 /// <param name="Request">The request schema, or <see langword="null" />.</param>
 /// <param name="Response">The response schema, or <see langword="null" />.</param>
+/// <param name="RemovesResource">
+///     Whether a successful run leaves no resource at the address — the platform's <c>purge</c>,
+///     which ends a parked resource's recovery window. docs/plan/08 § The write path, end to end:
+///     "A converged delete or purge removes it".
+///     <para>
+///         ⚠ <b>A poller that reads the resource after this succeeds gets a <c>404</c> for its
+///         success.</b> The Python and Go SDKs' <c>wait()</c> follows a long-running verb's
+///         <c>202</c> to the resource — docs/plan/10 § Long-running operations, over HTTP: "then GET
+///         the resource" — and until this member existed both did so after a purge and raised
+///         <c>ResourceNotFound</c> from a purge that had worked. It is the document's fact, read once
+///         here, for the reason <see cref="DocumentType.Body" /> is split once here: the .NET SDK's
+///         hand-written poller has the same seam (<c>OperationPoller</c>'s
+///         <c>fetchResourceOnSuccess</c>), and an emitter deciding it from the action's name would be a
+///         second copy of what soft delete is.
+///     </para>
+/// </param>
 public sealed record DocumentAction(
     string Name,
     string Permission,
     bool Secret,
     bool LongRunning,
     JsonObject? Request,
-    JsonObject? Response
+    JsonObject? Response,
+    bool RemovesResource
 );
 
 /// <summary>
-///     Reads an emitted OpenAPI document back into the shape the three derived emitters walk.
+///     Reads an emitted OpenAPI document back into the shape the derived emitters walk — the
+///     <c>cyc</c> verb tree, the .NET, Python and Go SDKs, and the portal forms.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -289,7 +308,7 @@ public static class DocumentReader {
                     Number(item["x-cybercloud-soft-delete-days"]),
                     Text(item["x-cybercloud-purge-permission"]),
                     Text(item["x-cybercloud-purge-protection-pointer"]),
-                    ActionsOf(paths, schemas, path.Key, resourceType),
+                    ActionsOf(paths, schemas, path.Key, resourceType, Text(item["x-cybercloud-purge-permission"])),
                     Flag(item["get"]?["deprecated"]),
                     collection.Path,
                     collection.Query
@@ -443,11 +462,23 @@ public static class DocumentReader {
         return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
     }
 
+    /// <summary>The actions declared under one resource path, ordered by name.</summary>
+    /// <param name="paths">The document's <c>paths</c>.</param>
+    /// <param name="schemas">The document's components, for the request and response references.</param>
+    /// <param name="resourcePath">The type's own path; an action's path is one segment under it.</param>
+    /// <param name="resourceType">The type each action item must name in <c>x-cybercloud-resource-type</c>.</param>
+    /// <param name="purgePermission">
+    ///     The type's <c>x-cybercloud-purge-permission</c>. ⚠ Empty for a type with no window, which
+    ///     <see cref="OpenApiEmitter" /> makes the one question "does this type have a purge" — so the
+    ///     reserved name alone does not make an action a purge; the type has to declare the window the
+    ///     purge ends.
+    /// </param>
     static ImmutableArray<DocumentAction> ActionsOf(
         JsonObject paths,
         JsonObject? schemas,
         string resourcePath,
-        string resourceType
+        string resourceType,
+        string purgePermission
     ) {
         var found = new List<DocumentAction>();
 
@@ -467,7 +498,13 @@ public static class DocumentReader {
                     Flag(post["x-cybercloud-secret"]),
                     Flag(post["x-cybercloud-long-running"]),
                     Resolve(schemas, post["requestBody"]?["content"]?["application/json"]?["schema"]),
-                    Resolve(schemas, post["responses"]?["200"]?["content"]?["application/json"]?["schema"])
+                    Resolve(schemas, post["responses"]?["200"]?["content"]?["application/json"]?["schema"]),
+                    // ⚠ Case-insensitive, as SoftDeletePolicy.IsReserved is, because an action is
+                    // matched as a URL segment is. The name is the identity: ProviderBuilder refuses a
+                    // provider that declares `purge` on any type, so the only purge a document can
+                    // carry is the one the platform synthesised.
+                    RemovesResource: purgePermission.Length > 0
+                    && string.Equals(name, SoftDeletePolicy.PurgeAction, StringComparison.OrdinalIgnoreCase)
                 )
             );
         }

@@ -94,9 +94,9 @@ static class Program {
                 Console.WriteLine(line);
             }
 
-            // ⚠ The other three read the documents this process just emitted, not the files on disk —
-            // docs/plan/21 § Generation's one hop. See OpenApiArtifacts.Documents for why reading the
-            // checked-in file back would let one drifted document seed three more.
+            // ⚠ The five derived surfaces read the documents this process just emitted, never the files on
+            // disk — docs/plan/21 § Generation's one hop. See OpenApiArtifacts.Documents for why reading the
+            // checked-in file back would let one drifted document seed five more.
             var surfaces = derived is { Length: > 0 }
                 ? DerivedSurfaces.Generate(OpenApiArtifacts.Documents(registry), derived, write)
                 : new DerivedReport([], []);
@@ -134,11 +134,12 @@ static class Program {
             Console.WriteLine(
                 derived is { Length: > 0 }
                     ? "Four of ADR-012's five surfaces: the OpenAPI document, the cyc verb tree, the "
-                    + ".NET SDK and the portal forms. The last three are generated from the first — "
-                    + "docs/plan/21 § Generation. ⚠ The Python and Go SDKs and the Terraform "
-                    + "provider are docs/plan/21 § Other SDKs and are not written."
-                    : "OpenAPI only: no --derived-output was given, so the cyc verb tree, the .NET SDK "
-                    + "and the portal forms were not written."
+                    + ".NET SDK and the portal forms, and beside them the Python and Go SDKs (#40). "
+                    + "Everything after the first is generated from the first — docs/plan/21 "
+                    + "§ Generation. ⚠ The Terraform provider is docs/plan/21 § Other SDKs and is "
+                    + "not written."
+                    : "OpenAPI only: no --derived-output was given, so the cyc verb tree, the .NET SDK, "
+                    + "the portal forms and the Python and Go SDKs were not written."
             );
 
             Console.WriteLine(
