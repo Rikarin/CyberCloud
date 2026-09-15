@@ -503,3 +503,88 @@ sealed class RecordingScopeManager : IScopeManager {
         return Task.FromResult(answer(request));
     }
 }
+
+/// <summary>
+///     A role assignment manager that records every path it was asked about and answers from a
+///     script.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>The same substitution <see cref="RecordingScopeManager" /> is, with the same warning.</b>
+///     A role assignment route proven against this fake proves that stage 6 admits the address —
+///     ahead of the resource grammar it overlaps — and that stage 8 hands it to this manager with
+///     the token's tenant. Whether <c>assignRole</c> is checked and whether a tuple is written is
+///     <c>RoleAssignmentService</c>'s, driven through the real engine in
+///     <c>test/CyberCloud.Isolation</c>.
+/// </remarks>
+sealed class RecordingRoleAssignmentManager : IRoleAssignmentManager {
+    readonly ConcurrentQueue<string> paths = new();
+    readonly ConcurrentQueue<CallerContext> callers = new();
+
+    /// <summary>Every role assignment path this manager was asked about, in order.</summary>
+    public IReadOnlyCollection<string> Paths => paths;
+
+    /// <summary>The caller the gateway built for each of those requests, in order.</summary>
+    public IReadOnlyCollection<CallerContext> Callers => callers;
+
+    /// <summary>The body the gateway handed over for each request, in order.</summary>
+    public ConcurrentQueue<string> Bodies { get; } = new();
+
+    /// <summary>What <see cref="AssignAsync" /> answers. Default: a grant that was written.</summary>
+    public Func<RoleAssignmentRequest, Result<RoleAssignmentSnapshot>> OnAssign { get; set; } =
+        request => Result<RoleAssignmentSnapshot>.Success(Snapshot(request, true));
+
+    /// <summary>What <see cref="ReadAsync" /> answers. Default: a grant that exists.</summary>
+    public Func<RoleAssignmentRequest, Result<RoleAssignmentSnapshot>> OnRead { get; set; } =
+        request => Result<RoleAssignmentSnapshot>.Success(Snapshot(request, false));
+
+    /// <summary>What <see cref="RevokeAsync" /> answers. Default: the grant went.</summary>
+    public Func<RoleAssignmentRequest, Result> OnRevoke { get; set; } = _ => Result.Success;
+
+    /// <inheritdoc />
+    public Task<Result<RoleAssignmentSnapshot>> AssignAsync(
+        RoleAssignmentRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
+        Record(request, OnAssign);
+
+    /// <inheritdoc />
+    public Task<Result<RoleAssignmentSnapshot>> ReadAsync(
+        RoleAssignmentRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
+        Record(request, OnRead);
+
+    /// <inheritdoc />
+    public Task<Result> RevokeAsync(RoleAssignmentRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        paths.Enqueue(request.Path);
+        callers.Enqueue(request.Caller);
+        Bodies.Enqueue(request.Body);
+        return Task.FromResult(OnRevoke(request));
+    }
+
+    static RoleAssignmentSnapshot Snapshot(RoleAssignmentRequest request, bool created) {
+        var parsed = RoleAssignmentId.ParsePath(request.Path).GetValueOrThrow();
+
+        return new() {
+            Path = parsed.Path,
+            Name = parsed.Name.Render(),
+            Scope = parsed.ScopePath,
+            RoleDefinitionId = parsed.Name.Role,
+            PrincipalType = parsed.Name.PrincipalType,
+            PrincipalId = parsed.Name.PrincipalId,
+            Created = created
+        };
+    }
+
+    Task<Result<RoleAssignmentSnapshot>> Record(
+        RoleAssignmentRequest request,
+        Func<RoleAssignmentRequest, Result<RoleAssignmentSnapshot>> answer
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+        paths.Enqueue(request.Path);
+        callers.Enqueue(request.Caller);
+        Bodies.Enqueue(request.Body);
+        return Task.FromResult(answer(request));
+    }
+}

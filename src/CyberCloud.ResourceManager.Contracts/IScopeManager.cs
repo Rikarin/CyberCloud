@@ -35,7 +35,9 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What that costs, stated so it can be paid rather than discovered.</b> There are now
-///         two components a caller's intent can enter through, and docs/plan/08's
+///         two components a caller's intent can enter through — three, counting
+///         <see cref="IRoleAssignmentManager" />, which makes the same trade for the same reasons —
+///         and docs/plan/08's
 ///         <i>"everything a tenant does passes through it exactly once"</i> is a sentence about
 ///         resources that a reader may take as a sentence about the platform. The mitigations are
 ///         that both live in one assembly, both take the same <see cref="CallerContext" />, both
@@ -347,7 +349,10 @@ public interface IScopeRelationWriter {
     ///     parent to get this far — can already see what they made, and a direct tuple would be the
     ///     per-scope role row docs/plan/07 § The model's whole argument is against. A <c>tenant</c>
     ///     has no <c>parent</c> relation, so there is nothing to inherit through and a direct tuple is
-    ///     the only thing that can make a new tenant visible to anyone.
+    ///     the only thing that can make a new tenant visible to anyone. A role a tenant chooses to
+    ///     grant, on any scope, is <see cref="IRoleAssignmentManager" />'s and goes through the
+    ///     <c>assignRole</c> check; this bypasses that check because at the moment it runs there is
+    ///     nobody who could pass it.
     /// </remarks>
     Task<Result> GrantOwnerAsync(
         ScopeId scope,

@@ -117,6 +117,27 @@ public sealed class ProviderRegistry : IProviderRegistry {
                 );
             }
 
+            // ⚠ RESERVED TOO, AND FOR A ROUTING REASON RATHER THAN A LABELLING ONE. A role assignment
+            // is addressed as {scope}/providers/CyberCloud.Authorization/roleAssignments/{name}
+            // (RoleAssignmentId), and on a resource group that address is a well-formed resource id
+            // of type CyberCloud.Authorization/roleAssignments. The gateway tries the assignment
+            // grammar first, so a provider that registered this namespace would have every one of
+            // its types shadowed by an address the router had already claimed — and the symptom
+            // would be a 400 naming a role assignment for a PUT that never mentioned one.
+            if (string.Equals(
+                    provider.ProviderNamespace,
+                    RoleAssignmentId.ProviderNamespace,
+                    StringComparison.OrdinalIgnoreCase
+                )) {
+                throw new InvalidOperationException(
+                    $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
+                    + $"'{RoleAssignmentId.ProviderNamespace}'. Every address under it is a role "
+                    + "assignment — docs/plan/07 § Azure RBAC, expressed in it — and the gateway "
+                    + "routes those before it looks at the registry, so no type this provider "
+                    + "declared could ever be reached. See RoleAssignmentId.ProviderNamespace."
+                );
+            }
+
             if (!seenNamespaces.Add(provider.ProviderNamespace)) {
                 throw new InvalidOperationException(
                     $"Two providers declare the namespace '{provider.ProviderNamespace}'. A namespace names "

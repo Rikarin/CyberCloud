@@ -1,0 +1,431 @@
+using CyberCloud.Authorization.Contracts;
+using Microsoft.Extensions.Logging;
+using Orleans.Multitenant;
+using System.Collections.Frozen;
+using System.Globalization;
+using System.Text.Json;
+
+namespace CyberCloud.ResourceManager;
+
+/// <summary>
+///     Role assignment — the three steps a grant has, in the order a scope create has its four.
+///     <see cref="IRoleAssignmentManager" />'s remarks carry the argument for why this is a third
+///     entry point rather than a member of the second.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>The order:</b>
+///     </para>
+///     <list type="number">
+///         <item>
+///             <description>
+///                 <b>Resolve.</b> Parse the address; the tenant in it must be the caller's; the role
+///                 must be one of the three the schema calls a role and the principal type one the
+///                 tuple store spells; the scope must exist — and for a resource, exist <i>as a
+///                 confirmed index binding</i>, because that read is also what supplies the GUID the
+///                 tuple is written on. Every refusal that could leak is the canonical <c>404</c>.
+///             </description>
+///         </item>
+///         <item>
+///             <description>
+///                 <b>Check.</b> <c>assignRole</c> on the scope itself for a write, <c>read</c> for
+///                 a read, through the same two seams every other verb uses —
+///                 <see cref="IScopeAuthorizer" /> for a scope and
+///                 <see cref="IResourceAuthorizer" /> for a resource. The object is the scope and
+///                 never its parent: an assignment is <i>about</i> a scope that exists, so it has a
+///                 ReBAC object of its own, and a suspended owner of that object must be refused by
+///                 that object's own <c>#suspended</c>.
+///             </description>
+///         </item>
+///         <item>
+///             <description>
+///                 <b>Write.</b> The tuple, through <see cref="IRoleAssignmentStore" />. Nothing after
+///                 it: no lock (a grant changes none of a scope's contents), no parent edge (the
+///                 object already has one), no change event (nothing a reconciler acts on moved), no
+///                 <c>202</c> (one tuple write converges before the call returns).
+///             </description>
+///         </item>
+///     </list>
+///     <para>
+///         ⚠ <b>The write and the revoke are checked <c>FullyConsistent</c>; the read is not.</b>
+///         docs/plan/07 § Consistency wants the cache bypassed for
+///         <i>"anything where a stale allow is a real incident"</i>, and an owner whose ownership
+///         was revoked a second ago granting themselves <c>owner</c> one scope down is the incident.
+///         This is asked once per grant, which § Caching across requests calls rare.
+///     </para>
+///     <para>
+///         ⚠ <b>The principal is not looked up in the directory.</b> Azure refuses an assignment to
+///         a principal AAD does not know; this writes the tuple for any well-formed subject. The
+///         cost is a typo that grants to nobody, which the caller sees on the next <c>GET</c>; the
+///         alternative is a dependency from this seam on <c>CyberCloud.Identity</c>, which no other
+///         authorization path has. Owed to docs/plan/11 if it turns out to matter.
+///     </para>
+///     <para>
+///         ⚠ <b>Every grain reference goes through <c>ForTenant</c>.</b> Held by the gateway, which
+///         is an Orleans <i>client</i>; <c>CC1006</c> keeps that true after the next edit.
+///     </para>
+/// </remarks>
+public sealed class RoleAssignmentService(
+    IScopeAuthorizer scopes,
+    IResourceAuthorizer resources,
+    IRoleAssignmentStore store,
+    IGrainFactory grains,
+    ILogger<RoleAssignmentService> logger
+)
+    : IRoleAssignmentManager {
+    /// <summary>
+    ///     The three relations a tenant may grant — docs/plan/07 § Azure RBAC, expressed in it's
+    ///     <c>Owner</c>, <c>Contributor</c> and <c>Reader</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A closed set here, over and above the schema's own check.</b> <c>TupleStoreGrain</c>
+    ///     refuses a relation the type does not declare, but it accepts every relation it does —
+    ///     <c>parent</c>, <c>suspended</c>, <c>member</c> — and each of those written through this
+    ///     path would be something other than a role assignment wearing its address. A deny
+    ///     assignment is Azure's <c>denyAssignments</c>, a different resource type, and it is not
+    ///     built; a parent edge is the scope path's and nobody else's.
+    /// </remarks>
+    public static FrozenSet<string> GrantableRoles { get; } =
+        new[] { Relations.Owner, Relations.Contributor, Relations.Reader }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     The principal types an assignment may name: the three subject types plus <c>group</c>,
+    ///     which is granted through its <c>member</c> userset.
+    /// </summary>
+    public static FrozenSet<string> PrincipalTypes { get; } =
+        SubjectTypes.All.Append(ObjectTypes.Group).ToFrozenSet(StringComparer.Ordinal);
+
+    /// <inheritdoc />
+    public async Task<Result<RoleAssignmentSnapshot>> AssignAsync(
+        RoleAssignmentRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var resolved = await ResolveAsync(request);
+        if (resolved.TryGetError(out var resolveError)) {
+            return Result<RoleAssignmentSnapshot>.Failure(resolveError);
+        }
+
+        var assignment = resolved.GetValueOrThrow();
+
+        var agreed = BodyAgrees(request.Body, assignment);
+        if (agreed.TryGetError(out var bodyError)) {
+            return Result<RoleAssignmentSnapshot>.Failure(bodyError);
+        }
+
+        var permitted = await AuthorizeAsync(
+            assignment,
+            Permissions.AssignRole,
+            request.Caller,
+            true,
+            cancellationToken
+        );
+
+        if (permitted.TryGetError(out var denied)) {
+            return Result<RoleAssignmentSnapshot>.Failure(denied);
+        }
+
+        var existed = await store.IsGrantedAsync(assignment, cancellationToken);
+        if (existed.TryGetError(out var readError)) {
+            return Result<RoleAssignmentSnapshot>.Failure(readError);
+        }
+
+        var granted = await store.GrantAsync(assignment, cancellationToken);
+        if (granted.TryGetError(out var grantError)) {
+            return Result<RoleAssignmentSnapshot>.Failure(grantError);
+        }
+
+        logger.LogInformation(
+            "{Caller} granted '{Role}' on '{Scope}' to {PrincipalType}:{PrincipalId}.",
+            request.Caller,
+            assignment.Name.Role,
+            assignment.ScopePath,
+            assignment.Name.PrincipalType,
+            assignment.Name.PrincipalId
+        );
+
+        return Result<RoleAssignmentSnapshot>.Success(Snapshot(assignment, !existed.GetValueOrThrow()));
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<RoleAssignmentSnapshot>> ReadAsync(
+        RoleAssignmentRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var resolved = await ResolveAsync(request);
+        if (resolved.TryGetError(out var resolveError)) {
+            return Result<RoleAssignmentSnapshot>.Failure(resolveError);
+        }
+
+        var assignment = resolved.GetValueOrThrow();
+
+        var allowed = await AuthorizeAsync(assignment, Permissions.Read, request.Caller, false, cancellationToken);
+        if (allowed.TryGetError(out var denied)) {
+            return Result<RoleAssignmentSnapshot>.Failure(denied);
+        }
+
+        var granted = await store.IsGrantedAsync(assignment, cancellationToken);
+        if (granted.TryGetError(out var readError)) {
+            return Result<RoleAssignmentSnapshot>.Failure(readError);
+        }
+
+        return granted.GetValueOrThrow()
+            ? Result<RoleAssignmentSnapshot>.Success(Snapshot(assignment, false))
+            : NotFound<RoleAssignmentSnapshot>(assignment.Path);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> RevokeAsync(
+        RoleAssignmentRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var resolved = await ResolveAsync(request);
+        if (resolved.TryGetError(out var resolveError)) {
+            return Result.Failure(resolveError);
+        }
+
+        var assignment = resolved.GetValueOrThrow();
+
+        var permitted = await AuthorizeAsync(
+            assignment,
+            Permissions.AssignRole,
+            request.Caller,
+            true,
+            cancellationToken
+        );
+
+        if (permitted.TryGetError(out var denied)) {
+            return Result.Failure(denied);
+        }
+
+        var revoked = await store.RevokeAsync(assignment, cancellationToken);
+        if (revoked.TryGetError(out var revokeError)) {
+            return Result.Failure(revokeError);
+        }
+
+        logger.LogInformation(
+            "{Caller} revoked '{Role}' on '{Scope}' from {PrincipalType}:{PrincipalId}.",
+            request.Caller,
+            assignment.Name.Role,
+            assignment.ScopePath,
+            assignment.Name.PrincipalType,
+            assignment.Name.PrincipalId
+        );
+
+        return Result.Success;
+    }
+
+    // ── Step 1: resolve ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Parses the address, checks what the caller supplied, and confirms the scope exists —
+    ///     resolving a resource's GUID on the way, because the same index read answers both.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The tenant comparison is here as well as at the gateway's stage 3</b>, for the
+    ///         reason <c>ScopeManagerService.Resolve</c> gives: it is the defence that still holds if
+    ///         somebody deletes that one. <c>404</c> and never <c>403</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The role and the principal type are refused here as a <c>400</c>, before any
+    ///         grain is touched.</b> Both are the caller's own URL and neither is a secret, so the
+    ///         enumeration argument does not apply; and refusing them after the check would let a
+    ///         caller with no grant at all learn which relation names exist from the difference
+    ///         between two <c>404</c> messages.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Existence is read from the scope's own grain and not inferred from the check.</b>
+    ///         A check on a scope that does not exist fails closed — no tuple, no parent edge, no
+    ///         answer but <c>false</c> — so the inference would usually hold. It would not hold for
+    ///         the residue <see cref="IScopeRelationWriter.LinkToParentAsync" />'s remarks describe:
+    ///         a <c>parent</c> edge aimed at a scope whose create then failed. The edge is inert for
+    ///         every other purpose; through this path it would let the tenant's owner write role
+    ///         tuples on a subscription that was never created.
+    ///     </para>
+    /// </remarks>
+    async Task<Result<RoleAssignmentId>> ResolveAsync(RoleAssignmentRequest request) {
+        var parsed = RoleAssignmentId.ParsePath(request.Path);
+        if (parsed.TryGetError(out var pathError)) {
+            return Result<RoleAssignmentId>.Failure(pathError);
+        }
+
+        var assignment = parsed.GetValueOrThrow();
+
+        if (assignment.TenantId != request.Caller.TenantId) {
+            return NotFound<RoleAssignmentId>(assignment.ScopePath);
+        }
+
+        if (!GrantableRoles.Contains(assignment.Name.Role)) {
+            return Result<RoleAssignmentId>.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{assignment.Name.Role}' is not a role that can be assigned. The roles are "
+                + $"[{string.Join(", ", GrantableRoles.Order(StringComparer.Ordinal))}] — "
+                + "docs/plan/07 § Azure RBAC, expressed in it. A deny assignment is a different "
+                + "resource type and is not served by this address."
+            );
+        }
+
+        if (!PrincipalTypes.Contains(assignment.Name.PrincipalType)) {
+            return Result<RoleAssignmentId>.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{assignment.Name.PrincipalType}' is not a principal type. The set is closed and "
+                + $"is [{string.Join(", ", PrincipalTypes.Order(StringComparer.Ordinal))}], spelled "
+                + "exactly so — it is a ReBAC subject type and the tuple store matches it ordinally."
+            );
+        }
+
+        var tenant = grains.ForTenant(assignment.TenantId.ToString("D", CultureInfo.InvariantCulture));
+
+        if (assignment.IsResourceScoped) {
+            // docs/plan/06 § Identifiers: a parsed path yields Guid.Empty, and only a CONFIRMED
+            // binding resolves — a name under an unexpired claim reads as "does not exist", which
+            // is what it is, and a parked resource is not addressable here either.
+            var bound = await tenant
+                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(assignment.Resource))
+                .ResolveAsync();
+
+            return bound.IsFailure
+                ? NotFound<RoleAssignmentId>(assignment.ScopePath)
+                : Result<RoleAssignmentId>.Success(
+                    assignment with { Resource = assignment.Resource.WithId(bound.GetValueOrThrow()) }
+                );
+        }
+
+        var scope = assignment.Scope;
+
+        var exists = scope.Kind switch {
+            ScopeKind.Tenant => (await tenant
+                .GetGrain<ITenantGrain>(GrainKeys.Tenant(scope.TenantId))
+                .GetAsync()).IsSuccess,
+            ScopeKind.Subscription => (await tenant
+                .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(scope.SubscriptionId))
+                .GetAsync()).IsSuccess,
+            ScopeKind.ResourceGroup => (await tenant
+                .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(scope.SubscriptionId, scope.ResourceGroup))
+                .GetAsync()).IsSuccess,
+            _ => false
+        };
+
+        return exists ? Result<RoleAssignmentId>.Success(assignment) : NotFound<RoleAssignmentId>(assignment.ScopePath);
+    }
+
+    // ── Step 2: check ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     The check, on whichever seam the scope's kind selects. <c>read</c> is always the
+    ///     permission that decides between <c>404</c> and <c>403</c>.
+    /// </summary>
+    Task<Result> AuthorizeAsync(
+        RoleAssignmentId assignment,
+        string permission,
+        CallerContext caller,
+        bool fullyConsistent,
+        CancellationToken cancellationToken
+    ) =>
+        assignment.IsResourceScoped
+            ? resources.AuthorizeAsync(
+                assignment.Resource,
+                permission,
+                Permissions.Read,
+                caller,
+                fullyConsistent,
+                cancellationToken
+            )
+            : scopes.AuthorizeAsync(
+                assignment.Scope,
+                permission,
+                Permissions.Read,
+                caller,
+                fullyConsistent,
+                cancellationToken
+            );
+
+    // ── Shared ─────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Whether the body, when it says anything, says what the address says.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Every property is optional and a present one must agree — see
+    ///     <see cref="RoleAssignmentBodyProperties" />. The comparison is ordinal on all three,
+    ///     because all three are matched ordinally by the tuple store, and a body that said
+    ///     <c>Reader</c> for an address that said <c>reader</c> is a client that has two spellings
+    ///     of one thing and is about to have a worse day elsewhere.
+    /// </remarks>
+    static Result BodyAgrees(string body, RoleAssignmentId assignment) {
+        JsonDocument document;
+
+        try {
+            document = JsonDocument.Parse(body.Length == 0 ? "{}" : body);
+        } catch (JsonException exception) {
+            // The parser's message describes the caller's own input, not our stack —
+            // docs/plan/08 § Errors bans exception detail, and this is not any.
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The request body is not valid JSON: {exception.Message}"
+            );
+        }
+
+        using (document) {
+            if (document.RootElement.ValueKind != JsonValueKind.Object) {
+                return Result.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"The request body is a JSON {document.RootElement.ValueKind.ToString().ToLowerInvariant()}. "
+                    + "A role assignment body is a JSON object, and '{}' is a complete one — the "
+                    + "address already names the role and the principal."
+                );
+            }
+
+            var name = assignment.Name;
+
+            return Agree(document.RootElement, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role)
+                ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalType, name.PrincipalType)
+                ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId)
+                ?? Result.Success;
+        }
+    }
+
+    static Result? Agree(JsonElement body, string property, string expected) {
+        if (!body.TryGetProperty(property, out var value)) {
+            return null;
+        }
+
+        var actual = value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+        return string.Equals(actual, expected, StringComparison.Ordinal)
+            ? null
+            : Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body's '{property}' is '{actual ?? value.ValueKind.ToString().ToLowerInvariant()}' and "
+                + $"the address says '{expected}'. The address is the assignment — "
+                + "'{role}-{principalType}-{principalId}' — so a body property is optional and, when "
+                + "present, must agree with it; trusting either one silently would grant something "
+                + "the caller did not spell."
+            );
+    }
+
+    static RoleAssignmentSnapshot Snapshot(RoleAssignmentId assignment, bool created) =>
+        new() {
+            Path = assignment.Path,
+            Name = assignment.Name.Render(),
+            Scope = assignment.ScopePath,
+            RoleDefinitionId = assignment.Name.Role,
+            PrincipalType = assignment.Name.PrincipalType,
+            PrincipalId = assignment.Name.PrincipalId,
+            Created = created
+        };
+
+    static Result<T> NotFound<T>(string path) where T : notnull =>
+        Result<T>.Failure(
+            ErrorCode.ResourceNotFound,
+            // ⚠ Byte-identical to the sentence both authorizers produce for an object the caller may
+            // not see. Two different messages would be the oracle the shared status code closed.
+            $"'{path}' does not exist."
+        );
+}

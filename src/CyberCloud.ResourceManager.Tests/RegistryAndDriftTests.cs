@@ -138,6 +138,21 @@ public sealed class ProviderRegistryTests {
             .Message.ShouldContain(KubeLabels.ReservedNamespace);
     }
 
+    [Theory]
+    [InlineData(RoleAssignmentId.ProviderNamespace)]
+    [InlineData("cybercloud.authorization")]
+    public void AProviderMayNotDeclareTheRoleAssignmentNamespace(string spelling) {
+        // ⚠ THE SECOND RESERVATION, AND IT IS A ROUTING FACT RATHER THAN A LABELLING ONE. A role
+        // assignment on a resource group is a well-formed ten-segment resource path, so the gateway
+        // routes everything under /providers/CyberCloud.Authorization/ as an assignment BEFORE it
+        // looks at the registry — RoleAssignmentId's remarks. A provider registered here would have
+        // every one of its types shadowed by that route, and the symptom would be a 400 naming a role
+        // assignment for a PUT that never mentioned one. Case-insensitive, as every structural
+        // literal of a path is matched.
+        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new NamespacedProvider(spelling)]))
+            .Message.ShouldContain(RoleAssignmentId.ProviderNamespace);
+    }
+
     [Fact]
     public void AProviderThatDeclaresNothingIsABuildFailure() {
         Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new SilentProvider()]))
@@ -174,6 +189,13 @@ public sealed class ProviderRegistryTests {
         public string ProviderNamespace => KubeLabels.ReservedNamespace;
 
         public void Describe(IProviderBuilder builder) => builder.ResourceType("resourceGroups");
+    }
+
+    sealed class NamespacedProvider(string ns) : IResourceProvider {
+        public string ProviderNamespace => ns;
+
+        public void Describe(IProviderBuilder builder) =>
+            builder.ResourceType("things").ApiVersion("2026-08-01", ResourceSchema.Empty);
     }
 
     sealed class SilentProvider : IResourceProvider {

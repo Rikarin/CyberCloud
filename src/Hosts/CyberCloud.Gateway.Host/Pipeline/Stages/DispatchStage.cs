@@ -34,6 +34,7 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 sealed class DispatchStage(
     IResourceManager manager,
     IScopeManager scopes,
+    IRoleAssignmentManager roles,
     IOperationReader operations,
     GatewayOptions options
 )
@@ -54,6 +55,7 @@ sealed class DispatchStage(
             RouteKind.Operation => await OperationAsync(context, path, cancellationToken),
             RouteKind.Resource => await ResourceAsync(context, path, cancellationToken),
             RouteKind.Scope => await ScopeAsync(context, path, cancellationToken),
+            RouteKind.RoleAssignment => await RoleAssignmentAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
@@ -210,6 +212,89 @@ sealed class DispatchStage(
         return new() {
             StatusCode = snapshot.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
             Json = ResponseBodies.Scope(snapshot)
+        };
+    }
+
+    /// <summary>
+    ///     A role assignment — docs/plan/07 § Azure RBAC, expressed in it, the write half.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             <c>201</c> on a grant, <c>200</c> on a repeat, <c>204</c> on a revoke, and no
+    ///             <c>202</c> anywhere.
+    ///         </b> A role assignment is one tuple write and it converges before
+    ///         the call returns, so there is nothing to poll — the same argument
+    ///         <see cref="ScopeAsync" /> makes for a scope, one grain call shorter.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No authorization here, exactly as for a scope and a resource.</b> The
+    ///         <c>assignRole</c> check is <c>IRoleAssignmentManager</c>'s, against the same engine
+    ///         behind the same seam — and this is the one verb where the temptation to check at the
+    ///         gateway is worth naming, because "only an owner may grant" reads like a routing rule.
+    ///         It is not: whether the caller is an owner is a walk over tuples, and
+    ///         <c>GatewayIsolationTests</c> reads this project's source to keep that walk out of it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>PATCH</c> and <c>POST</c> are <c>405</c>.</b> An assignment has no mutable
+    ///         property — its address is its whole content — so a merge patch would have nothing to
+    ///         merge, and there is no action on one.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> RoleAssignmentAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var method = context.Http.Request.Method;
+
+        var request = new RoleAssignmentRequest {
+            // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+            Path = context.Route.ResourcePath, Body = context.Body, Caller = context.Caller
+        };
+
+        if (HttpMethods.IsGet(method)) {
+            var read = await roles.ReadAsync(request, cancellationToken);
+
+            return read.TryGetError(out var readError)
+                ? ResultShaper.Shape(readError, path)
+                : new() {
+                    StatusCode = StatusCodes.Status200OK, Json = ResponseBodies.RoleAssignment(read.GetValueOrThrow())
+                };
+        }
+
+        if (HttpMethods.IsDelete(method)) {
+            var revoked = await roles.RevokeAsync(request, cancellationToken);
+
+            return revoked.TryGetError(out var revokeError)
+                ? ResultShaper.Shape(revokeError, path)
+                : new GatewayOutcome { StatusCode = StatusCodes.Status204NoContent };
+        }
+
+        if (!HttpMethods.IsPut(method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{method} is not supported on a role assignment. It is read with GET, granted "
+                    + "with PUT and revoked with DELETE; it has no mutable property to PATCH and no "
+                    + "action to POST — docs/plan/07 § Azure RBAC, expressed in it."
+                )
+            }.WithHeader(GatewayHeaders.Allow, "GET, PUT, DELETE");
+        }
+
+        var assigned = await roles.AssignAsync(request, cancellationToken);
+
+        if (assigned.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var snapshot = assigned.GetValueOrThrow();
+
+        return new() {
+            StatusCode = snapshot.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
+            Json = ResponseBodies.RoleAssignment(snapshot)
         };
     }
 

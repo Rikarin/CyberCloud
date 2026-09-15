@@ -281,6 +281,20 @@ public sealed class IsolationCluster : IAsyncLifetime {
     public IScopeManager Scopes { get; private set; } = null!;
 
     /// <summary>
+    ///     The role assignment path, held the way a gateway holds it, over the real authorization
+    ///     engine and the real tuple store.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Real on every side, and this suite is the only one that drives it at all.</b> A
+    ///     role assignment's whole job is to write one tuple that <c>CyberCloudSchema</c> then
+    ///     rewrites through — a doubled store would let the suite pass with a tuple the schema cannot
+    ///     follow, which is precisely the class of defect this project exists to catch.
+    ///     <c>RoleAssignmentTests</c> asserts the grant by asking <c>ICheckGrain</c> about a
+    ///     <i>resource</i> two hops below the scope the tuple was written on.
+    /// </remarks>
+    public IRoleAssignmentManager Roles { get; private set; } = null!;
+
+    /// <summary>
     ///     The test vault both halves share — the silo mints into it, the client reads out of it.
     /// </summary>
     /// <remarks>
@@ -553,6 +567,17 @@ public sealed class IsolationCluster : IAsyncLifetime {
                 NullLogger<ResourceGroupReclaimer>.Instance
             ),
             NullLogger<ScopeManagerService>.Instance
+        );
+
+        Roles = new RoleAssignmentService(
+            // ⚠ The SAME two seams the scope path and the resource path check through, constructed
+            // the same way. A third authorizer would be a third thing to keep in step with the
+            // schema, and the manager's remarks say it reuses these two on purpose.
+            new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
+            new ReBacResourceAuthorizer(cluster.GrainFactory, NullLogger<ReBacResourceAuthorizer>.Instance),
+            new ReBacRoleAssignmentStore(cluster.GrainFactory, NullLogger<ReBacRoleAssignmentStore>.Instance),
+            cluster.GrainFactory,
+            NullLogger<RoleAssignmentService>.Instance
         );
 
         // ⚠ The subscriptions and their groups are real records now, because step 1 of the write path

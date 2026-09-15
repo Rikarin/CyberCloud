@@ -183,6 +183,17 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<ResourceGroupReclaimer>();
         services.TryAddSingleton<IScopeManager, ScopeManagerService>();
 
+        // ── The role assignment path. docs/plan/07 § Azure RBAC, expressed in it — the write half. ──
+        //
+        // ⚠ THE THIRD ENTRY POINT, REGISTERED BESIDE THE OTHER TWO FOR THE REASON THE SECOND IS
+        // BESIDE THE FIRST: any host that composes the resource manager composes all three, and a
+        // gateway holding IRoleAssignmentManager with no IRoleAssignmentStore would not start rather
+        // than answer 404 to every grant. It reuses both authorizers above — the scope seam for a
+        // tenant, a subscription or a group, the resource seam for a resource — so there is no third
+        // check to keep in step with the first two.
+        services.TryAddSingleton<IRoleAssignmentStore, ReBacRoleAssignmentStore>();
+        services.TryAddSingleton<IRoleAssignmentManager, RoleAssignmentService>();
+
         // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────
         //
         // ⚠ IN THIS LIST BECAUSE THE GRAIN IS IN THIS ASSEMBLY, AND IT IS IN THIS ASSEMBLY BECAUSE

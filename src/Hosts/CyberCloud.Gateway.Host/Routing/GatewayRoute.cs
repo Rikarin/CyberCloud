@@ -37,6 +37,28 @@ enum RouteKind {
     /// </remarks>
     Scope,
 
+    /// <summary>
+    ///     A role assignment — <c>{scope}/providers/CyberCloud.Authorization/roleAssignments/{name}</c>,
+    ///     on a tenant, a subscription, a resource group or a resource. <c>GET</c>, <c>PUT</c> and
+    ///     <c>DELETE</c>. docs/plan/07 § Azure RBAC, expressed in it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The eighth kind, and it is tried before every other grammar.</b> On a resource group
+    ///     the address is a well-formed ten-segment resource path — a resource of type
+    ///     <c>CyberCloud.Authorization/roleAssignments</c> — so tried after <see cref="Resource" />
+    ///     it would reach the resource manager and be refused as a type no provider serves.
+    ///     <c>RoleAssignmentId</c>'s remarks carry the disjointness argument; the short form is that
+    ///     the namespace is reserved and <c>ProviderRegistry.Build</c> refuses a provider that
+    ///     claims it. <c>RoleAssignmentRoutingTests</c> pins the precedence and the shapes that
+    ///     still answer <c>400</c>.
+    ///     <para>
+    ///         ⚠ <b>Separate from <see cref="Scope" /> for the reason that one is separate from
+    ///         <see cref="Resource" />: the dispatch target differs.</b> An assignment goes to
+    ///         <c>IRoleAssignmentManager</c>, which owns the <c>assignRole</c> check and the tuple.
+    ///     </para>
+    /// </remarks>
+    RoleAssignment,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -85,6 +107,11 @@ enum RouteKind {
 ///     The collection, for <see cref="RouteKind.Collection" />. ⚠ Its tenant is the <i>token's</i>
 ///     too, rebuilt for the reason <see cref="Resource" />'s is.
 /// </param>
+/// <param name="RoleAssignment">
+///     The assignment, for <see cref="RouteKind.RoleAssignment" />. ⚠ Its tenant is the
+///     <i>token's</i> too — <c>RoleAssignmentId.WithTenant</c> rebuilds whichever of its two scope
+///     members is set.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -92,7 +119,8 @@ readonly record struct GatewayRoute(
     Guid OperationId,
     string HubName,
     ScopeId Scope = default,
-    ResourceCollectionId Collection = default
+    ResourceCollectionId Collection = default,
+    RoleAssignmentId RoleAssignment = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -108,6 +136,7 @@ readonly record struct GatewayRoute(
         Kind switch {
             RouteKind.Resource or RouteKind.Action => Resource.Path,
             RouteKind.Scope => Scope.Path,
+            RouteKind.RoleAssignment => RoleAssignment.Path,
             _ => ""
         };
 
@@ -168,6 +197,42 @@ static class GatewayRouter {
 
         if (string.Equals(path, OpenApiPath, StringComparison.Ordinal)) {
             return Result<GatewayRoute>.Success(new(RouteKind.OpenApi, default, "", Guid.Empty, ""));
+        }
+
+        // ── A role assignment, before everything else that has a tenant prefix. ─────────────────
+        //
+        // ⚠ FIRST, AND THE ORDER IS NOT FREE HERE — which is the one difference from the scope
+        // grammar below. On a resource group, {scope}/providers/CyberCloud.Authorization/
+        // roleAssignments/{name} is a well-formed ten-segment resource path, so tried after
+        // ResolveResource it would be a resource of a type no provider serves and the resource
+        // manager would refuse it. What keeps this from being a precedence rule nobody wrote down is
+        // that the overlap is exactly one reserved namespace, ProviderRegistry.Build refuses a
+        // provider that claims it, and RoleAssignmentIdTests sweeps the other direction: no
+        // assignment path parses as a scope, and no scope or resource path parses as an assignment.
+        //
+        // ⚠ AND UNDER THAT NAMESPACE THE ASSIGNMENT GRAMMAR IS THE ONLY ONE ASKED. A path that names
+        // the namespace and fails to parse — `…/roleAssignments/reader`, a trailing segment, the
+        // bare collection — is a 400 that names the grammar, never a fall-through into the resource
+        // or collection grammars. Both of those accept it as a type no provider serves and answer
+        // the canonical 404, which sends a client looking for a missing assignment when their URL is
+        // wrong. RoleAssignmentId.IsUnderNamespace's remarks carry the argument.
+        if (RoleAssignmentId.IsUnderNamespace(path)) {
+            var assignment = RoleAssignmentId.ParsePath(path);
+
+            return assignment.TryGetError(out var assignmentError)
+                ? Result<GatewayRoute>.Failure(assignmentError)
+                : Result<GatewayRoute>.Success(
+                    new(
+                        RouteKind.RoleAssignment,
+                        default,
+                        "",
+                        Guid.Empty,
+                        "",
+                        // ⚠ NAMED, for the reason Collection is below — three optional address kinds
+                        // now, and the positional form would put an assignment into Scope and compile.
+                        RoleAssignment: assignment.GetValueOrThrow().WithTenant(tenantId)
+                    )
+                );
         }
 
         // ── A scope, before the resource/action split. docs/plan/06 § The hierarchy. ────────────

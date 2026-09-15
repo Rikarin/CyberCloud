@@ -164,15 +164,18 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             The second half is the gap rather than the feature, and it is asserted so that
-    ///             closing it is loud.
+    ///             The second half is a decision rather than the feature, and it is asserted so that
+    ///             re-taking it is loud.
     ///         </b> <c>contributor</c> holds neither verb and <c>owner</c> holds
     ///         both, so the two permissions have <i>identical grant sets</i> and the deny is the only
     ///         separation there is. That is less than docs/plan/08 § Soft delete asks for — Azure's
     ///         Contributor holds <c>delete</c> and is refused <c>purge</c> — and it is why a
-    ///         grantable <c>purger</c> relation would not fix it on its own: the missing piece is
-    ///         that <c>delete</c> is <c>Rel(owner)</c> here, so there is no role beneath owner for a
-    ///         <c>notActions</c> row to be subtracted from.
+    ///         grantable <c>purger</c> relation would not fix it on its own: <c>delete</c> is
+    ///         <c>Rel(owner)</c> here, so there is no role beneath owner for a <c>notActions</c> row
+    ///         to be subtracted from. docs/plan/07 § Azure RBAC decides to keep it that way (issue
+    ///         #70): owner-only <c>delete</c> is what keeps <c>purge</c> unreachable to a contributor.
+    ///         <c>RoleAssignmentTests.AContributorCanWriteButNotDeleteByDecision</c> pins the same
+    ///         fact through a real Contributor grant.
     ///     </para>
     /// </remarks>
     [Fact]
@@ -211,9 +214,11 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
         (await Ask(tenant, undenied, Permissions.Write)).Allowed.ShouldBeTrue("a contributor may write");
 
         (await Ask(tenant, undenied, Permissions.Delete)).Allowed.ShouldBeFalse(
-            "⚠ IF THIS FAILS, `delete` HAS BEEN WIDENED TO Rel(contributor) AND docs/plan/07 § Azure "
-            + "RBAC's paragraph on why purge and delete cannot be separated by a grant is now stale — "
-            + "update it rather than this line. Azure's Contributor CAN delete; this schema's cannot, "
+            "⚠ IF THIS FAILS, `delete` HAS BEEN WIDENED TO Rel(contributor). docs/plan/07 § Azure "
+            + "RBAC records that as DECIDED THE OTHER WAY (issue #70): owner-only delete is what keeps "
+            + "purge unreachable to a contributor. Update that paragraph — and "
+            + "RoleAssignmentTests.AContributorCanWriteButNotDeleteByDecision, which pins it through a "
+            + "real grant — rather than this line. Azure's Contributor CAN delete; this schema's cannot, "
             + "and that is exactly why there is no role that holds 'may delete' without 'may destroy'."
         );
 
