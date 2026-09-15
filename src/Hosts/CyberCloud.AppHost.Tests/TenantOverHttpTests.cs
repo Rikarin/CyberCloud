@@ -504,8 +504,12 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     ///     <para>
     ///         ⚠ <b>What is still owed.</b> This does not call <c>CreateTenantAsync</c> itself, which
     ///         would drive the shard assignment and this ordering through the platform rather than
-    ///         beside it; that needs a <c>platform:root#operator</c> grant in the platform tenant and
-    ///         a shard map this topology does not seed.
+    ///         beside it. The two things that used to make that impossible — a
+    ///         <c>platform:root#operator</c> grant in the platform tenant and a seeded shard map —
+    ///         are now the silo's <c>PlatformBootstrapTask</c>'s, run at start when
+    ///         <c>CyberCloud:Identity:SelfServeSignUp</c> is on, which this topology sets; the
+    ///         person half — sign-up through <c>/api/signup/*</c>, then the code and the token — is
+    ///         what drives it, and lands with the Integrate run rather than here.
     ///     </para>
     /// </remarks>
     async Task BootstrapTenantAsync(CancellationToken cancellationToken) {

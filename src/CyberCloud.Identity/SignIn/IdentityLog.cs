@@ -149,23 +149,6 @@ public static partial class IdentityLog {
     )]
     public static partial void UnknownAddressProbed(ILogger logger, Guid tenantId, string identifierDigest);
 
-    /// <summary>A self-serve sign-up was requested. ⚠ No address, and no answer about one.</summary>
-    /// <param name="logger">The sink.</param>
-    /// <param name="tenantId">Which tenant.</param>
-    /// <remarks>
-    ///     Deliberately carries neither the address nor whether it was free.
-    ///     <see cref="UnknownAddressProbed" /> is the line that records the distinction, and it
-    ///     records it as a digest — so the two together let an operator see enumeration pressure
-    ///     without either line holding an address.
-    /// </remarks>
-    [LoggerMessage(
-        EventId = 1106,
-        Level = LogLevel.Information,
-        Message =
-        "A self-serve sign-up was requested in tenant {TenantId}. The caller was told nothing about the address."
-    )]
-    public static partial void SignUpRequested(ILogger logger, Guid tenantId);
-
     /// <summary>A passkey assertion challenge could not be built.</summary>
     /// <param name="logger">The sink.</param>
     /// <param name="tenantId">Which tenant.</param>
@@ -285,6 +268,98 @@ public static partial class IdentityLog {
         Message = "A one-time code was not sent to user {UserId} in tenant {TenantId}: {Reason}"
     )]
     public static partial void OtpNotSent(ILogger logger, Guid tenantId, Guid userId, string reason);
+
+    /// <summary>
+    ///     A one-time code was written to the log instead of being sent — the Development-only
+    ///     delivery seam. ⚠ The code is in the message on purpose; the address is not.
+    /// </summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="code">The six digits. ⚠ A credential, in a log line, and only Development can produce it.</param>
+    /// <param name="userId">Who it is for.</param>
+    /// <param name="purpose">Why.</param>
+    /// <param name="kind">Which channel it would have gone out on.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The one template in this file that renders a credential, and the constructor of
+    ///             the only caller refuses to run outside Development
+    ///         </b> — <c>DevelopmentOtpDelivery</c>. There is no MTA on a development run (#93), and
+    ///         the person reading the code off the Aspire dashboard is the person who typed the
+    ///         address ten seconds earlier. Warning rather than Information so it stands out in a
+    ///         console, and the message starts with a marker a dashboard filter can find.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The address is not a parameter, and it must not become one.</b> It reaches the
+    ///         sink as a <c>Destination</c> property in a log scope the caller opens around this
+    ///         call — a structured field the retention and redaction policy can reach, and one no
+    ///         rendered message carries. Adding a <c>{Destination}</c> placeholder here would put
+    ///         it in the line, which is the thing docs/plan/11 § Auditing forbids;
+    ///         <c>DevelopmentOtpDeliveryTests.TheAddressIsAStructuredPropertyAndNeverInTheMessage</c>
+    ///         pins both halves.
+    ///     </para>
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1113,
+        Level = LogLevel.Warning,
+        Message =
+        "⚠ DEVELOPMENT OTP DELIVERY (no MTA, #93): code {Code} for user {UserId}, {Purpose} via {Kind}. This seam refuses to load outside Development."
+    )]
+    public static partial void DevelopmentOtpDelivered(
+        ILogger logger,
+        string code,
+        Guid userId,
+        OtpPurpose purpose,
+        CredentialKind kind
+    );
+
+    /// <summary>A self-serve sign-up began and allocated its ids. ⚠ No address.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="signupId">The sign-up.</param>
+    /// <param name="tenantId">The tenant it will create.</param>
+    /// <param name="userId">The user that will own it.</param>
+    [LoggerMessage(
+        EventId = 1114,
+        Level = LogLevel.Information,
+        Message = "Sign-up {SignupId} began: it will create tenant {TenantId} owned by user {UserId}."
+    )]
+    public static partial void SignUpBegun(ILogger logger, Guid signupId, Guid tenantId, Guid userId);
+
+    /// <summary>A sign-up's create step completed and was recorded.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="signupId">The sign-up.</param>
+    /// <param name="tenantId">The tenant being created.</param>
+    /// <param name="step">Which step.</param>
+    [LoggerMessage(
+        EventId = 1115,
+        Level = LogLevel.Information,
+        Message = "Sign-up {SignupId} completed step {Step} for tenant {TenantId}."
+    )]
+    public static partial void SignUpStepCompleted(ILogger logger, Guid signupId, Guid tenantId, SignUpStep step);
+
+    /// <summary>A sign-up's create step failed. The sign-up stays re-drivable.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="signupId">The sign-up.</param>
+    /// <param name="tenantId">The tenant being created.</param>
+    /// <param name="step">Which step failed.</param>
+    /// <param name="reason">
+    ///     The internal reason, which reaches the caller only as one of the fixed sentences
+    ///     <c>SignUpOrchestrator</c> maps it to. ⚠ Never an address: the scope manager's and the
+    ///     grains' messages name ids and slugs, and a slug is a name the person chose for their
+    ///     organisation rather than a fact about them.
+    /// </param>
+    [LoggerMessage(
+        EventId = 1116,
+        Level = LogLevel.Warning,
+        Message = "Sign-up {SignupId} failed at step {Step} for tenant {TenantId}: {Reason}"
+    )]
+    public static partial void SignUpFailed(
+        ILogger logger,
+        Guid signupId,
+        Guid tenantId,
+        SignUpStep step,
+        string reason
+    );
 
     /// <summary>A token request's client could not be authenticated.</summary>
     /// <param name="logger">The sink.</param>

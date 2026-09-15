@@ -223,28 +223,6 @@ public sealed class SignInEndpointContractTests {
         }
     }
 
-    [Fact]
-    public async Task SignUpAnswersUniformFailuresSignUpVerbatim() {
-        var api = SignInApiHarness.Build();
-
-        // ⚠ Both of these must produce the identical body. docs/plan/11 § Sign-up and tenant
-        // creation: the response is the same "whether or not the address was free — the mail that
-        // follows is what differs, and it goes to the address either way".
-        var free = await api.SignUpAsync(new("not-an-address", "/"), Ct);
-        var malformed = await api.SignUpAsync(new("", "/"), Ct);
-
-        free.Response.ShouldBe(malformed.Response);
-
-        free.Response.Message.ShouldBe(UniformFailures.SignUp);
-        free.Response.Message.ShouldNotBe(
-            UniformFailures.SignIn,
-            "Sign-up and sign-in have different uniform answers, and swapping them leaks which "
-            + "endpoint was reached."
-        );
-
-        free.Principal.ShouldBeNull("sign-up authenticates nobody");
-    }
-
     // ── The second factor ──────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -305,11 +283,11 @@ public sealed class SignInEndpointContractTests {
 
         // ⚠ Each of these takes a path that answers before touching a grain — a malformed address, a
         // passkey completion with no issued challenge, a second factor with no session. That is what
-        // lets the harness refuse to hand out grain references.
+        // lets the harness refuse to hand out grain references. The sign-up surface has its own
+        // shapes and its own suite — SignUpApiTests — and its return URL is asserted there.
         return [
             ("/api/signin/password",
                 (await api.SignInWithPasswordAsync(new("not-an-address", "hunter2", candidate), new(), Ct)).Response),
-            ("/api/signup", (await api.SignUpAsync(new("not-an-address", candidate), Ct)).Response),
             ("/api/signin/passkey/complete",
                 (await api.CompletePasskeyAsync(new("{}", candidate), null, new(), Ct)).Response),
             ("/api/signin/totp", (await api.VerifyTotpAsync(new("000000", candidate), anonymous, Ct)).Response),

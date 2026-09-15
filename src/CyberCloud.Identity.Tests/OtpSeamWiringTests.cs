@@ -4,6 +4,10 @@ using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Seams;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CyberCloud.Identity.Tests;
 
@@ -114,6 +118,53 @@ public sealed class OtpSeamWiringTests {
     }
 
     [Fact]
+    public void ADevelopmentSiloWithNoRouteLogsItsCodes() {
+        // ⚠ The line CyberCloud.Silo.Host makes when CyberCloud:Identity:OtpDelivery is unset in
+        // Development — SiloIdentityComposition.AddSiloIdentity. There is no MTA on a laptop (#93),
+        // and an enrolment code that goes to UnavailableOtpDelivery is a sign-up nobody can finish.
+        var services = Compose(silo => silo.AddCyberCloudIdentity()
+            .AddDevelopmentOtpDelivery(new FixedEnvironment(Environments.Development))
+        );
+
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+
+        services.BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>().ShouldBeOfType<DevelopmentOtpDelivery>();
+
+        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam))
+            .ShouldBe(1, "Replace, for the descriptor-count reason OptingInLeavesNoRefusingSeamBehindIt gives");
+    }
+
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public void AProductionSiloWithNoRouteKeepsTheRefusingSeam(string environmentName) {
+        // ⚠ THE ROW THAT WOULD CATCH THE TEMPTING FIX: a developer who "just" registers the logging
+        // seam unconditionally. Outside Development the call is a no-op and the refusing default
+        // stays — and DevelopmentOtpDelivery's own constructor would refuse a second time if it were
+        // ever registered anyway (DevelopmentOtpDeliveryTests.RefusesToConstructOutsideDevelopment).
+        var seam = Seam(silo => silo.AddCyberCloudIdentity()
+            .AddDevelopmentOtpDelivery(new FixedEnvironment(environmentName))
+        );
+
+        seam.ShouldBeOfType<UnavailableOtpDelivery>(
+            $"a {environmentName} silo with no configured route must refuse to send, not write codes to its log"
+        );
+    }
+
+    [Fact]
+    public void AConfiguredRouteWinsOverTheDevelopmentSeam() {
+        // The composition calls one or the other, never both; this pins that the real seam is what a
+        // developer who wired a communication service gets even if both calls were made.
+        var services = Compose(silo => silo.AddCyberCloudIdentity()
+            .AddDevelopmentOtpDelivery(new FixedEnvironment(Environments.Development))
+            .AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid())
+        );
+
+        services.BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>().ShouldBeOfType<CommunicationOtpDelivery>();
+    }
+
+    [Fact]
     public void AnUnwiredSiloResolvesItsSeamWithNoCommunicationModuleInTheContainerAtAll() {
         // ⚠ NO IMessageSender HERE, AND THE ABSENCE IS THE ASSERTION. Every other row in this class
         // goes through Compose(), which supplies a double so the WIRED cases can construct. This one
@@ -189,6 +240,17 @@ public sealed class OtpSeamWiringTests {
         public IServiceCollection Services { get; } = new ServiceCollection();
 
         public IConfiguration Configuration { get; } = new ConfigurationBuilder().Build();
+    }
+
+    /// <summary>An <see cref="IHostEnvironment" /> with one name and nothing else.</summary>
+    sealed class FixedEnvironment(string name) : IHostEnvironment {
+        public string EnvironmentName { get; set; } = name;
+
+        public string ApplicationName { get; set; } = "tests";
+
+        public string ContentRootPath { get; set; } = ".";
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     /// <summary>An <see cref="IMessageSender" /> that exists to be constructed and never called.</summary>

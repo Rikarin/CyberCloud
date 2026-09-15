@@ -150,6 +150,29 @@ Two paths, and they are different products.
 group → seed ReBAC (`tenant:X#owner@user:Y`) → optionally provision an in-house cluster. A long-running
 operation with a step list ([06](06-tenancy-and-resource-model.md)).
 
+⚠ **What shipped for M1 is a synchronous, re-drivable step list, and the long-running operation is
+still owed.** The chicken and the egg the sentence above hides: a one-time code is minted and
+delivered by a *user's* grain, which lives in a *tenant's* shard, and a self-serve sign-up has
+neither yet. So the pre-tenant state — the address, the pre-allocated tenant, user and subscription
+ids, the enrolment code's keyed digest, and which create steps have run — lives in a platform-tenant,
+hot-tier `ISignUpGrain` keyed `signup/{id:N}` by a random id the identity host hands the browser in
+a data-protected `__Host-cyc-signup` cookie. Never by the address: a sign-up reachable by address is
+the global email index this section refuses. The identity host's `SignUpOrchestrator` then drives
+the create steps in order — tenant (through `IScopeManager.CreateTenantAsync`, as the seeded
+sign-up operator `servicePrincipal:00000000-0000-0000-0000-00000000c1c0`, owned by the new user),
+user and email-index claim, credential, default subscription and default resource group (both
+through `IScopeManager.CreateAsync` *as the new user*, which exercises the owner tuple the way the
+portal would) — recording each in the grain so a retried `complete` resumes rather than duplicates.
+The orchestrator is in the host rather than in the grain because `PlatformCrossTenantAuthorizer`
+denies a platform grain reaching into a tenant, and the host is an Orleans client outside that
+filter. Two things make it possible on a fresh run at all: the silo's `PlatformBootstrapTask` seeds
+the shard map from the configured durable shards and writes `platform:root#operator` for the sign-up
+operator when `CyberCloud:Identity:SelfServeSignUp` is on, and — there being no MTA (#93) — a
+Development-only `DevelopmentOtpDelivery` writes the enrolment code to the silo's log, where the
+Aspire dashboard shows it. The progress UI, the welcome mail and the optional cluster are the part
+of [06 § Tenant lifecycle](06-tenancy-and-resource-model.md)'s operation still owed; the step record
+in the grain is its seed.
+
 **Invited.** An existing tenant owner invites an email into their tenant with a role. The invitee
 either signs in (if they already have a user in *another* tenant — see below) or signs up.
 

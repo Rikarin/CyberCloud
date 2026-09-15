@@ -93,6 +93,73 @@ function decode(value: string): ArrayBuffer {
 }
 
 /**
+ * Runs the WebAuthn registration ceremony — sign-up's passkey — and returns the attestation as JSON
+ * for the server.
+ *
+ * ⚠ **The same three rules as `assertPasskey`, for the same reasons.** The options are the
+ * server's and are consumed rather than rebuilt: `challenge`, `user.id` and
+ * `excludeCredentials[].id` are the only fields decoded from base64url, because they are the only
+ * ones `navigator.credentials.create()` takes as `BufferSource`. A cancelled prompt answers `null`
+ * and is not an error. And the challenge the attestation answers lives in the server's cookie, so
+ * this page cannot substitute one.
+ *
+ * @param optionsJson The `optionsJson` from `POST /api/signup/passkey/begin`, verbatim.
+ * @returns The attestation, serialized for `POST /api/signup/complete`, or `null`.
+ */
+export async function registerPasskey(optionsJson: string): Promise<string | null> {
+  if (!canUsePasskey() || optionsJson.length === 0) {
+    return null;
+  }
+
+  const options = JSON.parse(optionsJson) as Omit<PublicKeyCredentialCreationOptions, 'challenge' | 'user'> & {
+    challenge: unknown;
+    user: { id: unknown; name: string; displayName: string };
+    excludeCredentials?: { id: unknown; type: string; transports?: string[] }[];
+  };
+
+  const request: PublicKeyCredentialCreationOptions = {
+    ...options,
+    challenge: decode(String(options.challenge)),
+    user: { ...options.user, id: decode(String(options.user.id)) },
+    ...(options.excludeCredentials === undefined
+      ? {}
+      : {
+          excludeCredentials: options.excludeCredentials.map(credential => ({
+            ...credential,
+            id: decode(String(credential.id)),
+            type: 'public-key' as const
+          }))
+        })
+  };
+
+  let credential: Credential | null;
+  try {
+    credential = await navigator.credentials.create({ publicKey: request });
+  } catch {
+    return null;
+  }
+
+  if (credential === null) {
+    return null;
+  }
+
+  const created = credential as PublicKeyCredential;
+  const response = created.response as AuthenticatorAttestationResponse;
+
+  return JSON.stringify({
+    id: created.id,
+    rawId: encode(created.rawId),
+    type: created.type,
+    extensions: created.getClientExtensionResults(),
+    response: {
+      attestationObject: encode(response.attestationObject),
+      clientDataJSON: encode(response.clientDataJSON),
+      transports: typeof response.getTransports === 'function' ? response.getTransports() : []
+    }
+  });
+}
+
+/**
  * Runs the WebAuthn assertion ceremony and returns the result as JSON for the server.
  *
  * ⚠ **The options are the server's and are consumed rather than rebuilt.** What this does is the

@@ -20,13 +20,20 @@
 
       What this suite does NOT do: build a silo. The opt-in half is a claim about a composed host, so
       it is asserted in CyberCloud.Hosts.Tests against the real SiloComposition.BuildAsync, next to
-      every other claim about what these two hosts compose. Nothing here starts a process, a
-      container or a cluster.
+      every other claim about what these two hosts compose. Nothing here starts a process or a
+      container.
+
+      ⚠ It DOES start an in-process TestCluster, since PlatformBootstrapTaskTests: the claims about
+      the silo's startup task — the shard map is configured once and a second run changes nothing,
+      the sign-up operator's grant is written only when sign-up is open — are claims about the real
+      ShardMapGrain's and TupleStoreGrain's idempotency, which a double cannot carry. In-memory
+      storage under the production grain types, the same shape CyberCloud.Identity.Tests uses.
     -->
 
     <ItemGroup>
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">

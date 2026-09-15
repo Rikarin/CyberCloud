@@ -134,6 +134,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IManagedIdentityGrain` | `mi/{managedIdentityId:N}` — [11 § Managed identity](11-identity.md) |
 | `IEmailIndexGrain` | `idx/email/{sha256(tenantId + normalizedEmail)[..16]}` |
 | `IClientIndexGrain` | `idx/client/{sha256(tenantId + clientId)[..16]}` — [11 § Protocol](11-identity.md) |
+| `ISignUpGrain` | `signup/{signupId:N}` — **hot tier, qualified by the platform tenant**, [11 § Sign-up and tenant creation](11-identity.md) |
 | `IOperationGrain` | `op/{operationId:N}` |
 | `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
 | `ITenantDirectoryGrain` | *(null tenant)* `platform/tenant-directory` |
@@ -247,6 +248,9 @@ Tenant creation is itself a long-running operation with a progress model, becaus
 shards, create the identity realm, create the default subscription, create the default resource group,
 optionally provision an in-house cluster (minutes, per ADR-009), seed ReBAC relations, emit the welcome
 mail. Every step is idempotent and re-drivable, and the portal shows the steps rather than a spinner.
+⚠ Self-serve sign-up runs the first five of those today as a synchronous, re-drivable step list
+recorded in a platform-tenant `ISignUpGrain` — [11 § Sign-up and tenant creation](11-identity.md)
+says what shipped and what the operation above still owes.
 
 ## Platform administration
 

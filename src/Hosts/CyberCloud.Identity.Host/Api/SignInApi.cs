@@ -173,66 +173,6 @@ public sealed class SignInApi(
     }
 
     /// <summary>
-    ///     <c>POST /api/signup</c> — self-serve sign-up.
-    /// </summary>
-    /// <param name="request">The address and where to go afterwards.</param>
-    /// <param name="cancellationToken">Cancels the lookup, including its timing pad.</param>
-    /// <returns>
-    ///     Always <see cref="UniformFailures.SignUp" />, with <c>succeeded: false</c> — the page
-    ///     renders the message and ignores the flag.
-    /// </returns>
-    /// <remarks>
-    ///     <para>
-    ///         ⚠ <b>THIS DOES NOT CREATE ANYTHING, AND THE RESPONSE IS STILL THE RIGHT ONE.</b>
-    ///         docs/plan/11 § Sign-up and tenant creation makes self-serve sign-up "email + passkey →
-    ///         verify → create tenant → create default subscription and resource group → seed ReBAC →
-    ///         optionally provision an in-house cluster", explicitly "a long-running operation with a
-    ///         step list". None of that is built.
-    ///     </para>
-    ///     <para>
-    ///         ⚠
-    ///         <b>
-    ///             The step that gates all of it — mailing the address to verify it — is no longer
-    ///             the blocker, and this paragraph used to say it was.
-    ///         </b> It read that nothing in the
-    ///         tree called <c>IOtpDeliverySeam.DeliverAsync</c> and that no host registered an
-    ///         implementation. Both were true and neither is now: <c>IUserGrain.IssueOtpAsync</c>
-    ///         mints, records and delivers a code, and <see cref="OtpPurpose.Enrolment" /> is the
-    ///         purpose for proving control of an address. What is missing is the <b>user</b> — a
-    ///         code is issued <i>by a user's grain</i>, to an address that grain already holds as
-    ///         verified, and a self-serve sign-up has neither yet. So the verification step needs
-    ///         the two-phase create of docs/plan/06 § Two-phase create in front of it, which is the
-    ///         long-running operation above rather than a mail. <see cref="OtpPolicy" /> is where
-    ///         the destination rule is argued.
-    ///     </para>
-    ///     <para>
-    ///         What <i>is</i> built here is the shape, and the shape is the part with a security
-    ///         property attached: the answer and its timing are identical for a free address and a
-    ///         taken one, because "the mail that follows is what differs, and it goes to the address
-    ///         either way". <c>RequestPasswordResetAsync</c> is the same arrangement for the same
-    ///         reason. Wiring the long-running operation later must not change what this returns.
-    ///     </para>
-    /// </remarks>
-    public async Task<SignInApiResult> SignUpAsync(
-        SignUpRequest? request,
-        CancellationToken cancellationToken = default
-    ) {
-        var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
-
-        // Resolves the address and records an unknown-address probe, on the uniform timing floor.
-        // ⚠ The result is deliberately not branched on.
-        _ = await signIn.RequestPasswordResetAsync(
-            options.TenantId,
-            request?.Email ?? string.Empty,
-            cancellationToken
-        );
-
-        IdentityLog.SignUpRequested(logger, options.TenantId);
-
-        return new(new(false, false, returnUrl, UniformFailures.SignUp));
-    }
-
-    /// <summary>
     ///     <c>POST /api/signin/passkey/begin</c> — the WebAuthn assertion challenge.
     /// </summary>
     /// <param name="request">The address typed.</param>
@@ -294,7 +234,12 @@ public sealed class SignInApi(
     ) {
         var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
 
-        if (ticket is null || ticket.Email.Length == 0 || string.IsNullOrEmpty(request?.AssertionJson)) {
+        // ⚠ A registration ticket is "no challenge" here. PasskeyChallengeKind says why the two
+        // ceremonies must not answer each other's cookie.
+        if (ticket is null
+            || ticket.Kind != PasskeyChallengeKind.Assertion
+            || ticket.Email.Length == 0
+            || string.IsNullOrEmpty(request?.AssertionJson)) {
             IdentityLog.PasskeyAssertionRefused(logger, options.TenantId, "no-challenge");
             return Reject(returnUrl);
         }

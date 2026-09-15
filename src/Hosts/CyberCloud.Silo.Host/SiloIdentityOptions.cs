@@ -1,6 +1,7 @@
 using CyberCloud.Identity;
 using CyberCloud.Identity.Contracts;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace CyberCloud.Silo.Host;
 
@@ -72,6 +73,7 @@ public static class SiloIdentityComposition {
     ///     <c>IOtpDeliverySeam</c> at <c>CyberCloud.Communication</c>.
     /// </summary>
     /// <param name="silo">The silo being composed.</param>
+    /// <param name="environment">The host's environment — the one input the Development branch reads.</param>
     /// <returns>The same builder, for chaining.</returns>
     /// <remarks>
     ///     <para>
@@ -93,16 +95,31 @@ public static class SiloIdentityComposition {
     ///         ⚠
     ///         <b>
     ///             An unconfigured <c>CyberCloud:Identity:OtpDelivery</c> leaves
-    ///             <c>UnavailableOtpDelivery</c> in place, which is the point rather than an oversight.
+    ///             <c>UnavailableOtpDelivery</c> in place outside Development, which is the point
+    ///             rather than an oversight.
     ///         </b>
     ///         That type's message names the missing call and the section, and it is the sentence an
     ///         operator meets on the first code this silo is asked to send. Defaulting to a route
     ///         nobody chose would send a tenant's authentication traffic through whatever service id
     ///         happened to be first.
     ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             In Development, and only there, an unconfigured route logs the code instead —
+    ///             <c>DevelopmentOtpDelivery</c>.
+    ///         </b> There is no MTA on a developer's laptop (#93), and a sign-up whose enrolment
+    ///         code goes nowhere is a sign-up nobody can finish. Keyed on
+    ///         <paramref name="environment" /> rather than on a setting, for the reason that type
+    ///         gives; a configured route still wins, so a developer who wires a real communication
+    ///         service gets real delivery. The person reads the code off the silo's console in the
+    ///         Aspire dashboard — the silo, because <c>OtpPolicy</c>'s fourth property keeps the
+    ///         plaintext in the process that ran the grain.
+    ///     </para>
     /// </remarks>
-    public static ISiloBuilder AddSiloIdentity(this ISiloBuilder silo) {
+    public static ISiloBuilder AddSiloIdentity(this ISiloBuilder silo, IHostEnvironment environment) {
         ArgumentNullException.ThrowIfNull(silo);
+        ArgumentNullException.ThrowIfNull(environment);
 
         silo.AddCyberCloudIdentity();
 
@@ -111,6 +128,8 @@ public static class SiloIdentityComposition {
 
         if (options.IsConfigured) {
             silo.AddCommunicationOtpDelivery(options.TenantId, options.ServiceId, options.TemplateName);
+        } else {
+            silo.AddDevelopmentOtpDelivery(environment);
         }
 
         return silo;
