@@ -7,7 +7,7 @@ portal/
 ├── apps/portal/                     # the tenant-facing portal — Angular 22, zoneless, SSR
 ├── apps/admin/                      # platform admin — NOT BUILT, see § What is not here
 ├── libs/api/                        # GENERATED TypeScript client from OpenAPI — never hand-edited
-├── libs/resource-forms/             # the schema → xUI form renderer (ADR-012) — stub, interface only
+├── libs/resource-forms/             # the schema → xUI form renderer (ADR-012), over generated/forms
 ├── libs/resource-forms-overrides/   # hand-written forms that replace the generated one, by type+version
 ├── libs/shell/                      # navigation, breadcrumbs, resource blades, the omnibar
 └── libs/charts/                     # metric/log views over @xui/echarts — stub
@@ -146,6 +146,34 @@ The build tooling (`@angular/cli`, `@angular/build`, `@angular/ssr`) is pinned t
 It versions independently of the framework — the tooling head is 22.1.8 — but keeping the two in
 step means one number to reason about.
 
+## The pages, and what each one calls
+
+Issue #22's M1 pages, each a lazy route over the generated client (`libs/api`) and the generated
+form document (`generated/forms/{apiVersion}.json`, staged into `/forms/` by `scripts/sync-forms.mjs`
+before every build and serve):
+
+| Route                                               | Page                  | Calls                                                                                           |
+| --------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
+| `/subscriptions`                                    | list + create         | `createSubscription` — the list is `TenantContextStore`, because the API has no list endpoint   |
+| `/subscriptions/{s}`                                | subscription blade    | `getSubscription`                                                                               |
+| `…/resourceGroups`                                  | create + open by name | `createResourceGroup` — no list endpoint, and the empty state says so                           |
+| `…/resourceGroups/{g}`                              | resource group blade  | `getResourceGroup`, plus a create and a list link per top-level type from the form document     |
+| `…/resourceGroups/{g}/resources?type=`              | resource list         | `list{Type}` (#10), paged by `$skipToken`                                                       |
+| `…/resourceGroups/{g}/create/{ns}/{type}[/{child}]` | create blade          | the generated form, then `createOrUpdate{Type}` → the operation view                            |
+| `…/providers/{ns}/{type}/{name}`                    | resource blade        | `get{Type}`; delete is `delete{Type}` after the name is typed back → the operation view         |
+| `…/providers/{ns}/{type}/{name}/edit`               | edit blade            | `get{Type}`, then a full `createOrUpdate{Type}` with the immutable fields locked and still sent |
+| `/operations/{id}?then=`                            | operation view        | `getOperation`, polled until terminal; every poll feeds `NotificationsStore`                    |
+
+⚠ **The verb names are derived from the form's `title`**, exactly as `TypeScriptEmitter` derives
+them from the type's display name, and `apps/portal/src/app/api/resource-verbs.spec.ts` asserts the
+four verbs exist on `CyberCloudApi` for every type in the document. A hand-written table would be a
+third copy of what two generated surfaces already say.
+
+⚠ **Every page renders a "no tenant" state on a fresh portal.** Nothing populates
+`TenantContextStore` until the token exchange lands (docs/plan/11's M2 work), so the pages say so
+rather than calling the API with no tenant. `apps/portal/src/pages/pages.spec.ts` signs a tenant in
+and drives each page against a recorded platform.
+
 ## Gates
 
 Every one of these fails the build rather than warning. `pnpm gates` runs them in order, and
@@ -157,7 +185,7 @@ which is `gates` without the Node wall; see § Node above for why that asymmetry
 | -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Node           | `pnpm node:gate` | The pin above, in CI only                                                                                                             |
 | Lint           | `pnpm lint`      | `ChangeDetectorRef` and web storage are **banned identifiers**; `OnPush` is mandatory; every template string carries an `i18n` marker |
-| Tests          | `pnpm test`      | Components, stores, axe on every route, and the conventions suite                                                                     |
+| Tests          | `pnpm test`      | Components, stores, axe on every route and on every generated form, the pages against a recorded platform, and the conventions suite  |
 | Build + budget | `pnpm build`     | The production build, then `scripts/bundle-budget.mjs`                                                                                |
 | SSR isolation  | `pnpm test:ssr`  | `scripts/ssr-isolation.test.mjs`, run by `pnpm build` once the bundle exists                                                          |
 
@@ -195,14 +223,16 @@ deployed process's bytes and response headers, not about an Angular API call.
 
 M1 is the shell. Everything below is named in docs/plan/20 and deliberately absent.
 
-| Not built             | What it needs before it can be                                                                                                                                                                                                                              | Where it is specified                                             |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| **The form renderer** | The schema emitter's output contract — see the header of `libs/resource-forms/src/index.ts` for the six things it needs, of which the load-bearing one is that schemas are **fetched at runtime, never imported**, or 100 resource types land in the bundle | docs/plan/20 § The shape that makes 100 resource types affordable |
-| **Cost analysis**     | The billing aggregates from docs/plan/22, plus forecast and budget models                                                                                                                                                                                   | docs/plan/20 § The pages that are not generated, 0.6 EM           |
-| **Metrics explorer**  | A query builder over the hot-tier pre-aggregates (docs/plan/16), and dashboards to pin to                                                                                                                                                                   | 0.6 EM                                                            |
-| **Log search**        | ClickHouse, and ⚠ a **server-side query cost preview** — docs/plan/20: "Needs a query cost preview or someone will run a 400-day scan". The portal cannot estimate this itself                                                                              | 0.6 EM                                                            |
-| **Network topology**  | The VPC/subnet/peering graph from docs/plan/14. `@xui/node-graph` is the easy half; the data shape is the work                                                                                                                                              | 0.5 EM                                                            |
-| **`apps/admin`**      | The platform-scope API from docs/plan/06, and a separate auth scope. It is a **separate app on purpose** — "so that a bug in tenant-facing code cannot reach admin functionality and vice versa" — so it is not a route away                                | docs/plan/20 § Admin app                                          |
-| **Webmail**           | docs/plan/17, and counted there rather than here                                                                                                                                                                                                            | docs/plan/20 § The pages that are not generated                   |
+| Not built                                                         | What it needs before it can be                                                                                                                                                                                                                                                                        | Where it is specified                                             |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Region, cluster, storage-class and subnet pickers**             | Endpoints that list them. The form renderer exists (`libs/resource-forms`, over `generated/forms/{apiVersion}.json`, fetched at runtime and never imported) and renders those four widgets as inputs carrying the schema's own pattern and example until the API can answer what a picker would offer | docs/plan/20 § The shape that makes 100 resource types affordable |
+| **A subscription or resource-group list**                         | A collection route at tenant or subscription scope. #63 gave the scope API a `GET` and a `PUT` by id and nothing that enumerates, so the subscriptions page lists what the sign-in grants and the resource-groups page says "no list endpoint yet" and opens one by name                              | docs/plan/10 § Shape                                              |
+| **Quota and usage, role assignments, the cloud-terminal surface** | Endpoints. Nothing in `openapi/{apiVersion}.json` serves quota or usage (docs/plan/22 is M2), #70 records that nothing can write a role tuple, and `Terminal/consoles`' `connect` answers a WebSocket address the portal has no `xterm.js` host for yet                                               | #22                                                               |
+| **Cost analysis**                                                 | The billing aggregates from docs/plan/22, plus forecast and budget models                                                                                                                                                                                                                             | docs/plan/20 § The pages that are not generated, 0.6 EM           |
+| **Metrics explorer**                                              | A query builder over the hot-tier pre-aggregates (docs/plan/16), and dashboards to pin to                                                                                                                                                                                                             | 0.6 EM                                                            |
+| **Log search**                                                    | ClickHouse, and ⚠ a **server-side query cost preview** — docs/plan/20: "Needs a query cost preview or someone will run a 400-day scan". The portal cannot estimate this itself                                                                                                                        | 0.6 EM                                                            |
+| **Network topology**                                              | The VPC/subnet/peering graph from docs/plan/14. `@xui/node-graph` is the easy half; the data shape is the work                                                                                                                                                                                        | 0.5 EM                                                            |
+| **`apps/admin`**                                                  | The platform-scope API from docs/plan/06, and a separate auth scope. It is a **separate app on purpose** — "so that a bug in tenant-facing code cannot reach admin functionality and vice versa" — so it is not a route away                                                                          | docs/plan/20 § Admin app                                          |
+| **Webmail**                                                       | docs/plan/17, and counted there rather than here                                                                                                                                                                                                                                                      | docs/plan/20 § The pages that are not generated                   |
 
 See [docs/plan/20](../docs/plan/20-portal.md) and [docs/plan/03 § portal](../docs/plan/03-repository-layout.md).

@@ -1,43 +1,36 @@
 /**
- * `libs/resource-forms` — the JSON Schema → xUI form renderer. **A stub at M1.**
+ * `libs/resource-forms` — the JSON Schema → xUI form renderer.
  *
  * docs/plan/20 § The shape that makes 100 resource types affordable: "Almost every screen is
- * generated (ADR-012). A resource type contributes a JSON Schema; the portal renders it." That
- * renderer is a separate 1.2 EM of work and the schemas it consumes are being emitted right now by
- * the generator; building a renderer against a schema shape that is still moving would produce a
- * renderer that has to be rewritten.
+ * generated (ADR-012). A resource type contributes a JSON Schema; the portal renders it." The
+ * renderer reads `generated/forms/{apiVersion}.json` — `FormsEmitter`'s output, one form per
+ * resource type plus the two scope forms — and renders every field it lists with the xUI control
+ * the emitter chose.
  *
- * What is here instead is the *interface* — the contract between the emitter and the renderer,
- * stated so both sides can be built against it. Nothing in it is implemented.
+ * ## What the emitter promised, and what became of each point
  *
- * ## What this library needs from the form-schema emitter
+ * The stub that stood here listed six things the renderer needed from the emitter. What the
+ * document delivers:
  *
- * 1. **One JSON Schema per `(resourceType, apiVersion)`, fetched at runtime, not imported.**
- *    docs/plan/20 § Performance budget: "Schemas are fetched per type, cached, and versioned by the
- *    api-version — which is also what lets the portal support an old api-version without shipping
- *    two apps." A schema that arrives as a TypeScript module would be a module in the bundle graph,
- *    and a hundred of them would blow the 120 KB route-chunk budget on the first resource route.
- *    So the emitter must publish schemas to an endpoint, and the build must not be able to import
- *    them.
- * 2. **The `x-cybercloud-widget` vocabulary, closed and enumerated.** docs/plan/20 lists
- *    `region`, `cluster`, `storageclass`, `subnet`, `sku`, `secret-ref`, `cron`, `cidr`,
- *    `duration`. The renderer needs the emitter to guarantee that set is exhaustive for a given
- *    schema version, so an unknown hint is a build failure in the emitter rather than a silently
- *    degraded control in the portal.
- * 3. **`@section` annotations for layout**, mapping to the tabs and groups in
- *    docs/plan/20's `layout/` box.
- * 4. **`x-immutable`, `x-secret` and `x-cozy-preset` on the fields that need them.** Two of these
- *    are correctness-critical rather than cosmetic: `x-secret` must never render a plain value
- *    (docs/plan/20 § The shape that makes 100 resource types affordable maps
- *    `format: password`/`x-secret` to "`@xui/input` + a Vault `SecretRef` picker — **never a plain
- *    value**"), and `x-immutable` must be known before the create form is rendered, not discovered
- *    from a rejected update.
- * 5. **A stable error shape from server-side validation** that can be merged with client-side
- *    schema validation — docs/plan/20's `validation/` box asks for "schema + async server
- *    validation, one message shape". The renderer cannot produce one message shape out of two
- *    different ones.
- * 6. **A machine-readable schema-version stamp**, so the cache in point 1 can be keyed and
- *    invalidated without a portal deploy.
+ * 1. **Fetched at runtime, never imported.** `ResourceFormSource` fetches `/forms/{apiVersion}.json`
+ *    over `HttpClient` and caches it per injector. `angular.json` copies the document in as a
+ *    static asset; nothing in the bundle graph can import it. The 120 KB route-chunk budget is what
+ *    `scripts/bundle-budget.mjs` would fail on if that ever changed.
+ * 2. **The widget vocabulary, closed.** Fourteen `control` names — `FieldControl` in `schema.ts` —
+ *    and `FormFieldNode` maps each. ⚠ Four of them (`region`, `cluster`, `storageclass`,
+ *    `subnet`) are pickers over lists the API does not serve yet, so they render as inputs
+ *    carrying the schema's own pattern and example; see `FormFieldNode`'s header.
+ * 3. **Layout.** The emitter writes `section`, and the renderer does not use it: two groups at
+ *    different depths can share a section name, so the tree is built from the JSON Pointers
+ *    instead (`treeOf`), and a group is a `<fieldset>`.
+ * 4. **`x-immutable`** arrives as `disabledAfterCreate` + `disabledReason` and is honoured in
+ *    `edit`. **`x-secret`** is not in this api-version's document — no type declares one — and the
+ *    renderer's `format: password` branch is there for the first that does. **`x-cozy-preset`**
+ *    is a closed set like any other and renders as a select.
+ * 5. **One message shape.** Schema validators and the platform's `target`-bearing errors both land
+ *    on the control and both read through `messageFor` — `validation.ts`.
+ * 6. **A version stamp.** The document carries `apiVersion` and `format`, and the cache is keyed by
+ *    the former.
  *
  * ## The override contract
  *
@@ -47,30 +40,42 @@
  * something the API rejects is worse than the generated form."
  */
 
-/** A JSON Schema document as fetched, deliberately opaque — the renderer walks it, nothing else does. */
+export {
+  buildForm,
+  controlsByPointer,
+  hintOf,
+  isGroup,
+  isList,
+  isTagBag,
+  messageFor,
+  toBody,
+  treeOf,
+  typeOf
+} from './lib/form-model';
+export type { FieldNode, FormMode } from './lib/form-model';
+export { FORMS_BASE_PATH, ResourceFormSource } from './lib/form-source';
+export type { ResourceSchemaKey } from './lib/form-source';
+export { FormFieldNode } from './lib/renderer/form-field-node';
+export { ResourceFormRenderer } from './lib/renderer/resource-form';
+export type {
+  AnyForm,
+  FieldChoice,
+  FieldControl,
+  FieldType,
+  FormAction,
+  FormField,
+  FormsDocument,
+  ResourceForm,
+  ScopeForm
+} from './lib/schema';
+export { applyServerErrors, messagesOf } from './lib/validation';
+export type { FormValidationMessage, PlatformError } from './lib/validation';
+
+import type { ResourceSchemaKey } from './lib/form-source';
+import type { FormValidationMessage } from './lib/validation';
+
+/** A form document as fetched, for an override that walks it itself. */
 export type ResourceSchema = Readonly<Record<string, unknown>>;
-
-/** Identifies which schema a form is for. Both halves are required; a type without a version is ambiguous. */
-export interface ResourceSchemaKey {
-  readonly resourceType: string;
-  readonly apiVersion: string;
-}
-
-/**
- * Fetches and caches schemas. ⚠ Deliberately async and deliberately not an import: see point 1
- * above.
- */
-export interface ResourceSchemaSource {
-  load(key: ResourceSchemaKey): Promise<ResourceSchema>;
-}
-
-/** One validation message, from either the schema or the server. One shape, per docs/plan/20's `validation/` box. */
-export interface FormValidationMessage {
-  /** JSON Pointer into the form value. Empty string for a form-level message. */
-  readonly pointer: string;
-  readonly message: string;
-  readonly severity: 'error' | 'warning';
-}
 
 /**
  * What a hand-written override must implement — `libs/resource-forms-overrides`.

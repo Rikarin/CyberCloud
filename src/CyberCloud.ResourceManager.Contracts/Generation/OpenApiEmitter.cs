@@ -81,9 +81,18 @@ public static class OpenApiEmitter {
     const string ErrorResponseSchema = "ErrorResponse";
     const string ErrorSchema = "Error";
     const string ErrorCodeSchema = "ErrorCode";
-    const string OperationStatusSchema = "OperationStatus";
-    const string OperationProgressSchema = "OperationProgress";
-    const string OperationStateSchema = "OperationState";
+    /// <summary>The three components <c>GET /operations/{operationId}</c> answers with.</summary>
+    /// <remarks>
+    ///     ⚠ Public for the same reason <see cref="ScopeSchema" /> is: <see cref="TypeScriptEmitter" />
+    ///     reads them back by name, and a <c>$ref</c> is an unchecked string in both directions.
+    /// </remarks>
+    public const string OperationStatusSchema = "OperationStatus";
+
+    /// <inheritdoc cref="OperationStatusSchema" />
+    public const string OperationProgressSchema = "OperationProgress";
+
+    /// <inheritdoc cref="OperationStatusSchema" />
+    public const string OperationStateSchema = "OperationState";
 
     /// <summary>
     ///     The component every scope's <c>200</c> body points at.

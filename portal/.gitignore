@@ -4,3 +4,7 @@ out-tsc/
 .angular/
 coverage/
 *.tsbuildinfo
+
+# Staged by scripts/sync-forms.mjs from ../generated/forms before every build; the source is the
+# checked-in, byte-checked document and this copy is never edited.
+apps/portal/public/forms/

@@ -95,7 +95,7 @@ public static class TypeScriptEmitter {
                 ["src/index.ts"] = Index(),
                 ["src/transport.ts"] = Transport(version),
                 ["src/models.ts"] = Models(document, types, scopes),
-                ["src/client.ts"] = Client(version, types, scopes)
+                ["src/client.ts"] = Client(version, document, types, scopes)
             }
         );
     }
@@ -308,6 +308,8 @@ public static class TypeScriptEmitter {
             .Append("  readonly details?: readonly CyberCloudError[];\n")
             .Append("}\n");
 
+        AppendOperationModels(built, document);
+
         foreach (var scope in scopes) {
             AppendScopeModels(built, scope);
         }
@@ -322,6 +324,75 @@ public static class TypeScriptEmitter {
         }
 
         return built.ToString();
+    }
+
+    /// <summary>
+    ///     The poll half of docs/plan/10 § Long-running operations, over HTTP, as three models.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Emitted from the document, where the .NET SDK hand-writes the same three.</b>
+    ///         <c>CyberCloud.Sdk.EmitterContract</c> § 2 keeps <c>OperationStatus</c> out of the C#
+    ///         emitter because <c>OperationPoller</c> is hand-written and parses it, so a generated
+    ///         copy would be a second declaration that drifts. The portal has no hand-written poller
+    ///         to protect — it has a transport and nothing else — and this emitter already types the
+    ///         error body from the document for the same reason, so the operation goes the same way.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This was the gap the portal's operation view found.</b> The document has carried
+    ///         <c>/operations/{operationId}</c> since <see cref="OpenApiEmitter" /> was written and
+    ///         every <c>createOrUpdate</c> comment here says "a 202 carrying operationUrl", and
+    ///         nothing in the client could read what that URL answers. A client that hands out a
+    ///         URL it cannot follow is a client whose caller writes the poll by hand, which is the
+    ///         hand-rolled call issue #21 exists to prevent.
+    ///     </para>
+    /// </remarks>
+    static void AppendOperationModels(StringBuilder built, JsonObject document) {
+        var schemas = document["components"]?["schemas"] as JsonObject;
+
+        if (schemas?[OpenApiEmitter.OperationStatusSchema] is not JsonObject status) {
+            return;
+        }
+
+        var states = DocumentReader.EnumOf(schemas[OpenApiEmitter.OperationStateSchema] as JsonObject ?? []);
+
+        built.Append("\n/** Azure's status vocabulary. ⚠ Terminal means Succeeded, Failed or Canceled; poll until then. */\n")
+            .Append("export type OperationState =\n");
+
+        if (states.IsEmpty) {
+            built.Append("  string;\n");
+        } else {
+            for (var i = 0; i < states.Length; i++) {
+                built.Append("  | ").Append(Quote(states[i])).Append(i == states.Length - 1 ? ";\n" : "\n");
+            }
+        }
+
+        if (schemas[OpenApiEmitter.OperationProgressSchema] is JsonObject progress) {
+            built.Append("\n/** ")
+                .Append(Comment(DocumentReader.Text(progress["description"])))
+                .Append(" */\n")
+                .Append("export interface OperationProgress {\n");
+
+            foreach (var leaf in DocumentReader.LeavesOf(progress)) {
+                AppendMember(built, "  ", leaf);
+            }
+
+            built.Append("}\n");
+        }
+
+        // ⚠ Written out rather than walked: two of the four members are $refs, which LeavesOf
+        // reads as an untyped object, and a status typed `unknown` is a poll nothing can act on.
+        built.Append("\n/** ")
+            .Append(Comment(DocumentReader.Text(status["description"])))
+            .Append(" */\n")
+            .Append("export interface OperationStatus {\n")
+            .Append("  /** Present once the status is Failed, and the reason the portal shows. */\n")
+            .Append("  readonly error?: CyberCloudError;\n")
+            .Append("  readonly percentComplete?: number;\n")
+            .Append("  /** Oldest first. What makes a nine-minute cluster creation tolerable — docs/plan/10. */\n")
+            .Append("  readonly progress?: readonly OperationProgress[];\n")
+            .Append("  readonly status: OperationState;\n")
+            .Append("}\n");
     }
 
     static void AppendScopeResource(
@@ -680,6 +751,7 @@ public static class TypeScriptEmitter {
 
     static string Client(
         string version,
+        JsonObject document,
         ImmutableArray<DocumentType> types,
         ImmutableArray<DocumentScope> scopes
     ) {
@@ -689,6 +761,11 @@ public static class TypeScriptEmitter {
             .Append("import type {\n");
 
         var imported = new SortedSet<string>(StringComparer.Ordinal) { "ScopeResource" };
+        var polls = document["paths"]?[OperationPath] is JsonObject;
+
+        if (polls) {
+            imported.Add("OperationStatus");
+        }
 
         foreach (var scope in scopes.Where(x => x.Creatable)) {
             imported.Add(ScopeInterface(scope));
@@ -737,6 +814,10 @@ public static class TypeScriptEmitter {
             """
         );
 
+        if (polls) {
+            AppendOperationMethod(built);
+        }
+
         foreach (var scope in scopes) {
             AppendScopeMethods(built, scope);
         }
@@ -779,6 +860,26 @@ public static class TypeScriptEmitter {
 
         return built.ToString();
     }
+
+    /// <summary>The path item every 202's <c>Azure-AsyncOperation</c> header points into.</summary>
+    /// <remarks>
+    ///     ⚠ <c>OpenApiEmitter</c>'s literal, read back here as one: the header carries an absolute
+    ///     URL ending in this path, so the portal takes the last segment as the id and nothing
+    ///     else — a client that sent the whole URL to the transport would be putting a
+    ///     server-supplied origin in front of its own bearer token.
+    /// </remarks>
+    const string OperationPath = "/operations/{operationId}";
+
+    static void AppendOperationMethod(StringBuilder built) =>
+        built.Append("  /**\n")
+            .Append("   * Polls one long-running operation — the target of the Azure-AsyncOperation header a 202 returns.\n")
+            .Append("   * Poll until status is terminal, then GET the resource — docs/plan/10 § Long-running operations, over HTTP.\n")
+            .Append("   * ⚠ The header is an absolute URL; `operationId` is its last path segment, never the URL itself.\n")
+            .Append("   */\n")
+            .Append("  getOperation(operationId: string): Promise<ApiResponse<OperationStatus>> {\n")
+            .Append("    return this.transport.send<OperationStatus>({ method: 'GET', path: ")
+            .Append(PathExpression(OperationPath))
+            .Append(" });\n  }\n\n");
 
     static void AppendScopeMethods(StringBuilder built, DocumentScope scope) {
         var name = Pascal(scope.Kind);

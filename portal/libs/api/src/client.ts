@@ -57,6 +57,7 @@ import type {
   NetworkVirtualNetworksSubnetsData,
   NetworkVirtualNetworksSubnetsListAddressUsageResult,
   NetworkVirtualNetworksSubnetsResource,
+  OperationStatus,
   ResourceGroupCreateContent,
   SampleWidgetsData,
   SampleWidgetsPingContent,
@@ -92,6 +93,15 @@ export const generatedApiVersion = '2026-08-01' as const;
  */
 export class CyberCloudApi {
   constructor(private readonly transport: ApiTransport) {}
+  /**
+   * Polls one long-running operation — the target of the Azure-AsyncOperation header a 202 returns.
+   * Poll until status is terminal, then GET the resource — docs/plan/10 § Long-running operations, over HTTP.
+   * ⚠ The header is an absolute URL; `operationId` is its last path segment, never the URL itself.
+   */
+  getOperation(operationId: string): Promise<ApiResponse<OperationStatus>> {
+    return this.transport.send<OperationStatus>({ method: 'GET', path: `/operations/${CyberCloudApi.segment(operationId)}` });
+  }
+
   /** Reads one tenant. */
   getTenant(tenantId: string): Promise<ApiResponse<ScopeResource>> {
     return this.transport.send<ScopeResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}` });
