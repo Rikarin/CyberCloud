@@ -27,9 +27,10 @@ namespace CyberCloud.Authorization.Grains;
 ///         <see cref="IListObjectsGrain" />'s remarks say why there is no cache here.
 ///     </para>
 ///     <para>
-///         <b>The token is read before the walk, so it is a floor.</b> The reverse index the walk
-///         reads may already contain writes past that version; it cannot lack one at or before it,
-///         because the version is bumped after both halves land (<c>TupleStoreGrain</c>, step 5).
+///         <b>The token is read before the walk, so it is a floor.</b> The reverse index and the
+///         Leopard index the walk reads may already contain writes past that version; they cannot
+///         lack one at or before it, because the version is bumped after every grain has landed
+///         (<c>TupleStoreGrain</c>, step 7).
 ///         A caller that wants to know a revoke is reflected compares
 ///         <see cref="ListObjectsPage.Token" /> to the one the revoke returned.
 ///     </para>
@@ -63,11 +64,15 @@ public sealed class ListObjectsGrain(AuthorizationSchema schema, AuthorizationLi
             return Result<ListObjectsPage>.Failure(tokenError);
         }
 
+        // One index reader for the walk and for its verifying check, so a slice is read once.
+        var index = new MembershipIndexReader(schema, new GrainMembershipIndexStore(GrainFactory, tenantId));
+
         var evaluator = new ListObjectsEvaluator(
             schema,
             new GrainRelationReader(GrainFactory, tenantId, false),
-            new GrainReverseRelationReader(GrainFactory, tenantId),
-            limits
+            new GrainReverseRelationReader(GrainFactory, tenantId, index),
+            limits,
+            index
         );
 
         var evaluated = await evaluator.EvaluateAsync(subject.GetValueOrThrow(), request, CancellationToken.None);
@@ -88,6 +93,7 @@ public sealed class ListObjectsGrain(AuthorizationSchema schema, AuthorizationLi
                 PairsReached = evaluation.PairsReached,
                 ReverseReads = evaluation.ReverseReads,
                 ForwardReads = evaluation.ForwardReads,
+                IndexReads = evaluation.IndexReads,
                 Verified = evaluation.Verified
             }
         );

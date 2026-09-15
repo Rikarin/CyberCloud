@@ -121,3 +121,37 @@ public sealed class CheckCacheState {
     [Id(0)]
     public Dictionary<string, CheckCacheEntry> Entries { get; set; } = [];
 }
+
+/// <summary>
+///     <c>IMembershipIndexGrain</c>'s durable record — one subject object's slice of the Leopard
+///     index, both directions. docs/plan/07 § The Leopard index.
+/// </summary>
+/// <remarks>
+///     Plain lists rather than the document's roaring bitmaps over a per-tenant subject dictionary:
+///     the closure of a group with ten thousand members is ten thousand <see cref="SubjectRef" />s
+///     in one row, which is what the durable tier's JSON can hold and is far from what it can
+///     hold well. The bitmap, and the dictionary it needs, are recorded as owed in docs/plan/07
+///     § The Leopard index rather than built here, because the first thing to learn is whether
+///     the closure is right and the second is how big it gets.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Authorization.State.MembershipIndex")]
+public sealed class MembershipIndexState {
+    /// <summary>
+    ///     The schema version both closures were computed under; <c>0</c> until the first write.
+    ///     See <see cref="MembershipIndexSnapshot.SchemaVersion" />.
+    /// </summary>
+    [Id(0)]
+    public int SchemaVersion { get; set; }
+
+    /// <summary>Relation → the closed members of the userset <c>{self}#{relation}</c>.</summary>
+    [Id(1)]
+    public Dictionary<string, List<SubjectRef>> Members { get; set; } = [];
+
+    /// <summary>
+    ///     Subject relation (empty for the concrete object) → every userset that subject is
+    ///     closed into.
+    /// </summary>
+    [Id(2)]
+    public Dictionary<string, List<SubjectRef>> Usersets { get; set; } = [];
+}

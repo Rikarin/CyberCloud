@@ -183,7 +183,8 @@ public static class RegressionCorpus {
 
         new(
             "nested-group-membership-resolves-without-an-index",
-            "docs/plan/07 § The Leopard index is M2, and M1 has to be correct without it. Three "
+            "docs/plan/07 § The Leopard index answers nested membership in two of the three "
+            + "consistency modes; FullyConsistent walks, and so does every check in memory. Three "
             + "levels of group nesting must resolve by walking. The wrong answer is a deny, which "
             + "is what a one-level membership test produces.",
             [

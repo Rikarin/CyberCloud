@@ -38,27 +38,28 @@ public interface IRelationReader {
 }
 
 /// <summary>
-///     The M2 seam for the Leopard membership index — docs/plan/07 § The Leopard index.
+///     The Leopard membership index, as <c>Check</c> consults it — docs/plan/07 § Check, step 3:
+///     "test membership via <c>IMembershipIndexGrain</c> if the userset is indexed, otherwise
+///     recurse".
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>STUBBED IN M1, deliberately and completely.</b> docs/plan/07 § Effort and sequencing
-///         puts <c>IMembershipIndexGrain</c> and its rebuilder at M2, and says M1 is viable without
-///         it "because M1 tenants are small: a walk at depth ≤ 4 over ≤ 100 members is single-digit
-///         milliseconds".
+///         <see cref="MembershipIndexReader" /> is the implementation a silo runs, over the slices
+///         <c>IMembershipIndexGrain</c> holds; <see cref="NoMembershipIndex" /> is what an
+///         evaluator gets when nobody hands it one, and what <c>CheckGrain</c> hands it for a
+///         <c>FullyConsistent</c> check, whose contract is the durable rows and nothing derived
+///         from them.
 ///     </para>
 ///     <para>
-///         The seam is declared now because § Check step 3 branches on it — "test membership via
-///         <c>IMembershipIndexGrain</c> if the userset is indexed, otherwise recurse" — and a branch
-///         that does not exist is a branch nobody remembers to add. <see cref="NoMembershipIndex" />
-///         answers "not indexed" for every userset, so the walk is always taken and the answer is
-///         always the authoritative one.
-///     </para>
-///     <para>
-///         ⚠ When the real index lands it must obey § Staleness: it is "a fast path that is always
-///         verifiable, never an authority", so <see cref="TryTestMembershipAsync" /> must return
-///         <see langword="null" /> — meaning "walk it" — whenever the index's version is behind the
-///         token a check was given. Nothing in M1 can test that, because nothing in M1 has a version.
+///         ⚠ <b>A <c>false</c> from this interface is taken without a walk, so it must be a
+///         <c>false</c> the walk would have reached.</b> § Staleness's "always verifiable, never an
+///         authority" is met differently from the way the document sketches: the index is not
+///         behind a token, because the store writes it before the version moves, so there is no
+///         version to compare. What is compared instead is completeness — a closure that recorded
+///         a userset it could not expand answers <see langword="null" /> rather than
+///         <c>false</c>. See <see cref="MembershipIndexReader" /> for the rule, and
+///         <c>CheckPropertyTests.CheckAgreesWithTheReferenceEvaluatorThroughTheLeopardIndex</c>
+///         for the twenty thousand graphs that hold the indexed evaluator to the reference one.
 ///     </para>
 /// </remarks>
 public interface IMembershipIndex {
@@ -76,7 +77,10 @@ public interface IMembershipIndex {
     );
 }
 
-/// <summary>The M1 membership index: there isn't one. Always answers "walk it".</summary>
+/// <summary>
+///     No index: always answers "walk it". The evaluator's default, and what a
+///     <c>FullyConsistent</c> check runs with. Until issue #37 it was also what every silo ran.
+/// </summary>
 public sealed class NoMembershipIndex : IMembershipIndex {
     /// <summary>The single instance.</summary>
     public static NoMembershipIndex Instance { get; } = new();

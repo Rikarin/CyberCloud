@@ -126,7 +126,15 @@ public enum GrainKeyKind {
     ///     by the <b>subject</b> whose objects are being listed; see <see cref="GrainKeys.ListObjects" />
     ///     for why it is not a method on the reverse index that shares its key shape.
     /// </summary>
-    ListObjects
+    ListObjects,
+
+    /// <summary>
+    ///     <c>IMembershipIndexGrain</c> — <c>rel/idx/{type}/{id}</c>, docs/plan/07 § The Leopard
+    ///     index. Keyed by the <b>subject object</b> whose closures it holds, not by a userset; see
+    ///     <see cref="GrainKeys.MembershipIndex" /> for why the document's
+    ///     <c>{usersetType}/{usersetId}</c> is not the key that shipped.
+    /// </summary>
+    MembershipIndex
 }
 
 /// <summary>
@@ -224,12 +232,12 @@ public readonly record struct GrainKey {
 
     /// <summary>
     ///     The ReBAC object type, for <see cref="GrainKeyKind.ObjectRelations" />,
-    ///     <see cref="GrainKeyKind.SubjectRelations" />, <see cref="GrainKeyKind.CheckCache" /> and
-    ///     <see cref="GrainKeyKind.ListObjects" />.
+    ///     <see cref="GrainKeyKind.SubjectRelations" />, <see cref="GrainKeyKind.CheckCache" />,
+    ///     <see cref="GrainKeyKind.ListObjects" /> and <see cref="GrainKeyKind.MembershipIndex" />.
     /// </summary>
     public string ObjectType => objectType ?? string.Empty;
 
-    /// <summary>The ReBAC object id, for the same three shapes.</summary>
+    /// <summary>The ReBAC object id, for the same five shapes.</summary>
     public string ObjectId => objectId ?? string.Empty;
 
     internal GrainKey(GrainKeyKind kind, Guid id, string? name, string? digest) {
@@ -279,6 +287,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.ParkedResourceRegistry => GrainKeys.ParkedResourceRegistry(Id, Name),
             GrainKeyKind.ExpirySweeper => GrainKeys.ExpirySweeper(Id, Name),
             GrainKeyKind.ListObjects => GrainKeys.ListObjects(ObjectType, ObjectId),
+            GrainKeyKind.MembershipIndex => GrainKeys.MembershipIndex(ObjectType, ObjectId),
             _ => string.Empty
         };
 }
@@ -295,7 +304,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-two shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The twenty-three shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -309,7 +318,9 @@ public readonly record struct GrainKey {
 ///         <see cref="ExpirySweeper" />, the thing that reads that registry on a clock, which
 ///         docs/plan/07 § Azure RBAC left owed as <i>"the caller of the mechanism"</i>; and the
 ///         twenty-second is <see cref="ListObjects" />, docs/plan/07 § ListObjects' grain, which
-///         that document declares as a method and never gives a key to.
+///         that document declares as a method and never gives a key to; and the twenty-third is
+///         <see cref="MembershipIndex" />, docs/plan/07 § Storage's third row, which this type
+///         kept out until issue #37 put a grain behind it.
 ///         See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
@@ -318,15 +329,15 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-two was twenty-one, was twenty, was nineteen, and was eight before that, and
-///             the count is re-derived rather than incremented.
+///             Twenty-three was twenty-two, was twenty-one, was twenty, was nineteen, and was eight
+///             before that, and the count is re-derived rather than incremented.
 ///         </b> Counted on 2026-09-15 off
 ///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-two members, of which <see cref="ListObjects" /> is the one added
-///         that day. It goes stale the moment a
+///         is not a key — twenty-three members, of which <see cref="ListObjects" /> and
+///         <see cref="MembershipIndex" /> are the two added that day. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
-///         docs/plan/06's <i>table</i>, and it stopped being the size of this type eleven shapes ago.
+///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twelve shapes ago.
 ///     </para>
 ///     <list type="table">
 ///         <item>
@@ -435,6 +446,12 @@ public readonly record struct GrainKey {
 ///         </item>
 ///         <item>
 ///             <term>
+///                 <see cref="MembershipIndex" />
+///             </term>
+///             <description><c>rel/idx/{type}/{id}</c> — docs/plan/07 § Storage, row 3</description>
+///         </item>
+///         <item>
+///             <term>
 ///                 <see cref="Group" />
 ///             </term>
 ///             <description><c>group/{groupId:N}</c> — not in docs/plan/06's table</description>
@@ -481,12 +498,15 @@ public readonly record struct GrainKey {
 ///         </item>
 ///     </list>
 ///     <para>
-///         The five <c>rel/</c> shapes are docs/plan/07 § Storage's two indexes, plus the three that
-///         document names a mechanism for and never gives a key to. See each factory for which is
-///         which.
-///         ⚠ <c>rel/idx/{usersetType}/{usersetId}</c> — the Leopard membership index — is
-///         deliberately <b>absent</b>: it is M2 (docs/plan/07 § Effort and sequencing) and a key
-///         shape with no grain behind it is a shape nothing can hold to its meaning.
+///         The six <c>rel/</c> shapes are docs/plan/07 § Storage's three indexes, plus the three
+///         that document names a mechanism for and never gives a key to. See each factory for
+///         which is which.
+///         ⚠ <c>rel/idx/</c> was deliberately <b>absent</b> from this type while the Leopard index
+///         was M2 (docs/plan/07 § Effort and sequencing), because a key shape with no grain behind
+///         it is a shape nothing can hold to its meaning. The grain exists now, and the shape
+///         landed with it — docs/plan/06 § Grain keys' rule that the two land together — keyed by
+///         the subject object rather than the document's <c>{usersetType}/{usersetId}</c>; see
+///         <see cref="MembershipIndex" />.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Resource" /> is keyed by the resource GUID alone</b> — docs/plan/06 § Grain keys.
@@ -612,6 +632,9 @@ public static class GrainKeys {
 
     /// <summary><c>rel/list/</c> — <c>IListObjectsGrain</c>. Not a row in docs/plan/07's table.</summary>
     public const string ListObjectsPrefix = "rel/list/";
+
+    /// <summary><c>rel/idx/</c> — <c>IMembershipIndexGrain</c>, docs/plan/07 § Storage, row 3.</summary>
+    public const string MembershipIndexPrefix = "rel/idx/";
 
     /// <summary>The <c>rel</c> head shared by every authorization key shape.</summary>
     public const string RelationSegment = "rel";
@@ -1004,6 +1027,38 @@ public static class GrainKeys {
     /// <exception cref="ArgumentException">Either component breaks <see cref="RelationNaming" />.</exception>
     public static string ListObjects(string type, string id) => ListObjectsPrefix + EnsureObject(type, id);
 
+    /// <summary>
+    ///     <c>rel/idx/{type}/{id}</c> — <c>IMembershipIndexGrain</c>, the Leopard index for one
+    ///     <b>subject object</b>: the closed members of every userset formed on it, and every
+    ///     userset it is closed into (docs/plan/07 § Storage, row 3, and § The Leopard index).
+    /// </summary>
+    /// <param name="type">The subject's object type.</param>
+    /// <param name="id">The subject's object id.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The document's row says <c>rel/idx/{usersetType}/{usersetId}</c>, one per
+    ///         userset, and this is one per object, deliberately.</b> docs/plan/07 § The Leopard
+    ///         index's status paragraph found that maintaining the closure incrementally needs both
+    ///         directions — a write against a userset must find the subjects it reaches through
+    ///         the members set, and a subject's listing wants the usersets it is in — and the two
+    ///         directions of one object belong in one activation for the reason the reverse index
+    ///         keeps <c>group:eng</c> and <c>group:eng#member</c> in one grain: a subject's userset
+    ///         relation is an entry inside the slice, not a segment of the key. <c>group:eng#member</c>
+    ///         is therefore <c>rel/idx/group/eng</c> with <c>member</c> looked up inside.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The same <c>{type}/{id}</c> tail as <see cref="SubjectRelations" /> and
+    ///         <see cref="ListObjects" />, and a third activation rather than a field on either.</b>
+    ///         The reverse index is the record of tuples; this is a closure over them, rebuildable
+    ///         from them, and written to many more grains per tuple than the reverse half is — a
+    ///         group-to-group edge touches every userset above it and every member below it. Folding
+    ///         it into the reverse index would make every one of those writes wait behind, and hold
+    ///         up, the grain a listing starts from.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">Either component breaks <see cref="RelationNaming" />.</exception>
+    public static string MembershipIndex(string type, string id) => MembershipIndexPrefix + EnsureObject(type, id);
+
     /// <summary><c>user/{userId:N}</c> — <c>IUserGrain</c>, docs/plan/06 § Grain keys.</summary>
     public static string User(Guid userId) => UserPrefix + N(userId);
 
@@ -1385,7 +1440,8 @@ public static class GrainKeys {
                 + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', "
                 + "'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
-                + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}' or 'rel/list/{type}/{id}' — see "
+                + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}', 'rel/list/{type}/{id}' or "
+                + "'rel/idx/{type}/{id}' — see "
                 + "docs/plan/06 § Grain keys, "
                 + "docs/plan/07 § Storage, docs/plan/08 § Soft delete and docs/plan/11 § The object "
                 + "model."
@@ -1505,7 +1561,7 @@ public static class GrainKeys {
                 return Invalid(
                     $"'{key}' is not a grain key: the only three-segment 'rel' shape is "
                     + "'rel/store/{tenantId}' — docs/plan/07 § Consistency. 'rel/obj', 'rel/sub', "
-                    + "'rel/check' and 'rel/list' take four segments."
+                    + "'rel/check', 'rel/list' and 'rel/idx' take four segments."
                 );
             }
 
@@ -1573,7 +1629,7 @@ public static class GrainKeys {
                 + "'sub/{subscriptionId}/rg/{name}' (docs/plan/06 § Grain keys), "
                 + "'parked/{subscriptionId}/rg/{name}' (docs/plan/08 § Soft delete), "
                 + "'sweep/{subscriptionId}/rg/{name}' (docs/plan/07 § Azure RBAC) and "
-                + "'rel/{obj|sub|check|list}/{type}/{id}' (docs/plan/07 § Storage)."
+                + "'rel/{obj|sub|check|list|idx}/{type}/{id}' (docs/plan/07 § Storage)."
             );
         }
 
@@ -1596,6 +1652,7 @@ public static class GrainKeys {
             "sub" => GrainKeyKind.SubjectRelations,
             "check" => GrainKeyKind.CheckCache,
             "list" => GrainKeyKind.ListObjects,
+            "idx" => GrainKeyKind.MembershipIndex,
             _ => GrainKeyKind.None
         };
 
@@ -1603,8 +1660,9 @@ public static class GrainKeys {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[1]}' is not an authorization shape. The "
                 + "four-segment 'rel' shapes are 'rel/obj' (the tuples whose object this is), "
-                + "'rel/sub' (the reverse index), 'rel/check' (the check cache) and 'rel/list' (the "
-                + "reverse walk for one subject) — docs/plan/07 § Storage and § ListObjects."
+                + "'rel/sub' (the reverse index), 'rel/check' (the check cache), 'rel/list' (the "
+                + "reverse walk for one subject) and 'rel/idx' (the Leopard index for one subject) "
+                + "— docs/plan/07 § Storage, § ListObjects and § The Leopard index."
             );
         }
 

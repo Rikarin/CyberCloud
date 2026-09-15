@@ -283,7 +283,7 @@ is the one that makes it fast.
 |---|---|---|---|
 | `IObjectRelationsGrain` | `rel/obj/{type}/{id}` | Every tuple **whose object is this** | One per object |
 | `ISubjectRelationsGrain` | `rel/sub/{type}/{id}` | Every tuple **whose subject is this** (reverse index) | One per subject |
-| `IMembershipIndexGrain` | `rel/idx/{usersetType}/{usersetId}` | Flattened, transitively-closed membership | One per userset |
+| `IMembershipIndexGrain` | `rel/idx/{type}/{id}` | Flattened, transitively-closed membership, **both directions** — every userset this subject is in, and the members of every userset formed on it | One per subject object |
 
 The first two are written together on every tuple write — the write is to two grains and is *not*
 transactional, so it is ordered (object first, then subject) and reconciled by a sweeper. A subject
@@ -291,7 +291,14 @@ index missing an entry costs a `ListObjects` a miss, not a `Check` an incorrect 
 `Check` walks forward from the object. **That asymmetry is deliberate: the direction that can be
 stale is the one where staleness is a performance bug, not a security bug.**
 
-The third is the Leopard index and it is discussed below.
+The third is the Leopard index and it is discussed below. ⚠ **Its row used to read
+`rel/idx/{usersetType}/{usersetId}`, one per userset, and what shipped (issue #37) is one per subject
+object holding both directions** — because a write against a userset has to find the subjects it
+reaches through the members set, and a listing has to find the usersets a subject is in, and the two
+directions of one object belong in one activation for the reason the reverse index keeps `group:eng`
+and `group:eng#member` in one grain. It is written by the same store, under the same journal, as a
+step of the same write — and, unlike the reverse index, `Check` reads it, so the store orders it so
+that no crash can leave it more permissive than the tuples. § The Leopard index says how.
 
 ## Check
 
@@ -367,23 +374,95 @@ costs more than it saves. `group#member` and `role#assignee` are indexed; a user
 only once it exceeds 64 members or 2 levels of nesting, and it is dropped back when it shrinks. That
 threshold is a tuned constant with a metric on it, not a guess frozen in code.
 
-⚠ **STATUS (issue #37): not built, and what stands in its place is stated so the next attempt starts
-from it.** `ListObjects` landed without this index. What it reads instead is the reverse index of
-§ Storage's second row — `ISubjectRelationsGrain`, per subject, one hop — which the tuple store already
-writes on every tuple write and delete, journalled and swept, so it cannot drift from the forward half
-by more than the window `TupleStoreGrain`'s remarks describe. The walk closes membership itself, one
-grain read per userset it passes through, which for a user in a handful of groups nested a level or two
-deep is a handful of reads and is why M1's argument for shipping without the index still holds.
-Two things were found on the way that the paragraphs above do not say. First, the index this section
-describes — per userset, its members, closed — is the *other* direction from what `ListObjects`
-starts from; the walk wants *per subject, every userset it is in, closed*, and maintaining that
-incrementally needs both directions, because a write against a userset has to find the subjects it
-reaches through the members set. Second, "incremental" has to survive a **delete**, and a delete of a
-nested-group edge can only be applied by recomputing the closure of every subject that had a path
-through it — bounded by the member set, which is the fan-out the threshold above exists to cap. The
-seam the index will stand behind is `IReverseRelationReader`; the rebuilder, the stream, the version
-comparison § Staleness requires and `IMembershipIndex`'s `TryTestMembershipAsync` on the `Check` side
-are all still owed, and `NoMembershipIndex` is still what a silo runs.
+⚠ **BUILT (issue #37), and four of the paragraphs above describe a different index from the one
+that shipped. Each difference is a decision, and the reasons are here.**
+
+- **Keyed by the subject object, holding both directions.** `IMembershipIndexGrain`, key
+  `rel/idx/{type}/{id}` — the twenty-third `GrainKeyKind` — holds for one subject object every
+  userset it is transitively in (`Usersets`, per subject relation, what `ListObjects` starts from)
+  and the transitively closed members of every userset formed on it (`Members`, per relation, what
+  `Check` tests against). The first attempt at this section found the walk wants the direction the
+  section did not describe, and that maintaining either direction incrementally needs the other: a
+  write against a userset finds the subjects it reaches through the members set, and finds the
+  usersets it reaches them *for* through the usersets set.
+- **Maintained by the tuple store in the write path, not by a stream consumer.** There is no
+  `cc.{tenant}.rebac.userset.{id}` and no rebuilder process. `TupleStoreGrain` runs
+  `MembershipIndexMaintainer` as a step of every write and every delete, under the same journal that
+  makes the reverse index reconcilable, **before** the tenant relation version moves — so a token
+  covers the index the way it covers the reverse half, and the version comparison the § Staleness
+  paragraph requires has nothing to compare. The index cannot be behind a token. It can be behind a
+  write that crashed, by exactly the sweep window the reverse index is, and the sweeper replays it.
+  What the store does that the stream design did not have to decide is **order**: a write lands the
+  index last, a delete lands it first, so at every point a crash can leave a tenant the index is no
+  more permissive than the forward half. That is the whole argument for letting `Check` take a
+  `false` from it without walking, and `MembershipIndexGrainTests` drives a write and a delete
+  through a real interruption on each side of the index to hold it.
+- **The closure is over direct-only relations, and "verifiable, never an authority" is met by
+  completeness rather than by version.** The graph's edges are tuples on relations computed from
+  `This` and nothing else — `group#member` here — followed onward only through usersets on such
+  relations. A userset on `This | From("parent", "owner")` is recorded as a member and never
+  expanded, because what it contains is a `From` away from anything a closure over tuples can say;
+  a closure that holds one is *incomplete*, and `MembershipIndexReader` answers "walk it" for it
+  rather than `false`. `CheckPropertyTests.CheckAgreesWithTheReferenceEvaluatorThroughTheLeopardIndex`
+  holds the indexed evaluator to the reference one on the same twenty thousand graphs the walk is
+  held to, and `MembershipIndexPropertyTests` holds the index itself to a brute-force closure after
+  every one of a random sequence of writes, deletes and replays on two thousand more.
+- **A write is two unions; a delete recomputes, bounded exactly as the previous status paragraph
+  predicted.** Adding `U → S` puts `{S} ∪ Members(S)` into the members of `U` and everything above
+  it, and `{U} ∪ Usersets(U)` into the usersets of `S` and everything below it — one slice write per
+  userset above plus one per member below, which is the fan-out the threshold paragraph exists to
+  cap and `AuthorizationMetrics.IndexWrites` now measures. Removing `U → S` recomputes the members of
+  `U` and everything above it from the tuples, and subtracts from the usersets of `S` and everything
+  below it whatever those recomputations no longer reach. Both are idempotent, which is what lets the
+  sweeper replay a half-applied change.
+- **`Check` counts an index-answered userset against no cap, and the walk mirrors the cap where it
+  crosses the node `Check` caps.** § Check step 5's "breadth 1 000 per level" counts expansions, and
+  an index read is a set test; so a subject granted through the 1 001st indexed group on one object
+  is allowed. The reverse walk, reaching an object through a userset, asks the same index the same
+  question `Check` asks at that node — and only when the index declines does it read the object's
+  tuples and count, in `Check`'s order, the unanswered usersets before this one. A derivation
+  `Check` would cut is not reached, the answer stays exact, and `ListObjectsEvaluation.BreadthCapHit`
+  says a pair was left out — the reading `DepthCapHit` already has. ⚠ The first cut at this (the
+  branch as reviewed) capped the transpose — the objects one userset is granted on — so a group
+  granted on more than 1 000 objects anywhere in the tenant made every scoped listing by its members
+  fall back to the per-member check; that outcome value is gone from `ListObjectsOutcome`, which is
+  back to three. On `CyberCloudSchema` every userset the platform writes is indexed, so a listing
+  over a written index pays nothing for the mirror.
+- **An unwritten slice is not an empty closure, and the backfill is lazy.** A slice's
+  `SchemaVersion` is `0` until a write touches it, and the tuples it should close over may predate
+  the index — every tuple in a tenant upgraded to it, or restored without its index rows. The
+  review of issue #37 found the reader taking such a slice as complete and answering an
+  authoritative `false` for every pre-existing group membership, and the maintainer closing a new
+  nesting edge over it into a slice, stamped current, that omitted the group's existing members for
+  good. Now `MembershipIndexReader` refuses an unwritten slice the way it refuses a stale one —
+  "walk it", and nothing on the listing side, whose walk still hops the groups — and every path
+  that would derive from or add to such a slice rebuilds it from the two indexes first:
+  `MembershipIndexMaintainer` for the two ends of an edge, `MembershipIndexGrain.ApplyAsync` for
+  every other slice a change lands on. So the first write that touches an object backfills its
+  slice, and until then the index says nothing about it.
+- **`FullyConsistent` never reads the index.** Its contract is the durable rows themselves, and a
+  closure derived from them by a write that may not have seen a restore or a repair is what that mode
+  exists to bypass; it walks with `NoMembershipIndex`, which is now that mode's and the in-memory
+  tests' rather than the silo's.
+
+⚠ **What is owed, precisely.** The **threshold** — "materialized only once it exceeds 64 members or
+2 levels" — is not built: every direct-only userset is closed, and the cost of a group-to-group edge
+is one slice write per subject below it, in the write path, with `IndexWrites` as the number to
+watch before deciding where the threshold goes. The **roaring bitmap** and the per-tenant subject
+dictionary are not built: a slice is a JSON list of `SubjectRef`s, so a ten-thousand-member group is
+a ten-thousand-entry row. A **tenant-wide rebuild** is not built: `IMembershipIndexGrain.RebuildAsync`
+recomputes one slice from the two other indexes, the maintainer and the grain rebuild a slice they
+find unwritten or stamped with another `SchemaVersion` before deriving from it or adding to it, and
+readers refuse such a slice — but nothing enumerates a tenant's subject objects, so both an upgrade
+that brings the index to a tenant with tuples and a schema bump that changes which relations are
+direct-only leave untouched slices unindexed, and walked, until a write reaches them. A **rolling
+upgrade that bumps the schema version** has a window the check cache does not: `MembershipIndexGrain`
+refuses a change computed under another version, so a tuple write whose store runs version N and
+whose index grain runs N+1 fails at step 6, after both halves landed; the journal keeps the entry,
+the index is behind the forward half for that tuple — the deny direction — and the sweeper applies
+it once the fleet converges. The check cache keys on the schema version and rides the window; the
+index has no per-version copy to key on. And the **resource-graph access column** § ListObjects says
+the walk maintains is still maintained by nothing.
 
 ## ListObjects — the expensive one
 
@@ -440,13 +519,18 @@ assumptions, both recorded on the request type, both failing in the direction th
 shows: the chain is a chain, and no userset is formed on an object the pruned walk never expands. The
 platform writes one `parent` per resource and forms usersets on groups only, so both hold here.
 
-⚠ **What is still not built is the Leopard side of this section, and the seam for it is one
-interface.** The walk reads `ISubjectRelationsGrain` through `IReverseRelationReader`, one grain per
-subject object it visits; a reader that answered a subject's transitively closed userset membership in
-one read would satisfy that interface unchanged and make the userset hop unnecessary. Nothing
-implements it, no key shape is declared for it — `rel/idx/…` stays absent from `GrainKeys` for the
-reason given there — and the resource-graph access column this section says `ListObjects` maintains
-is not maintained by anything yet. See § The Leopard index below.
+⚠ **The Leopard side of this section is built, and the seam took two methods rather than the one
+this paragraph used to promise.** The walk still reads `ISubjectRelationsGrain` through
+`IReverseRelationReader.ReadAsync`, one grain per subject object it visits, because a group's grants
+live in its reverse index and nowhere else. What it no longer pays is the hop per level that *found*
+the groups: `IReverseRelationReader.ReadUsersetsAsync` answers the subject's transitively closed
+userset membership from one `IMembershipIndexGrain` read, and the walk reaches every group in it at
+depth 0 — the index is not a hop, so a chain of twenty nested groups is listed where thirteen hops
+used to be cut. "Would satisfy that interface unchanged" was wrong: a reverse entry carries no
+subject, so a closed entry `c#parent@group:platform#member` handed back for `group:eng` would have
+read as `eng` being `c`'s parent, and the tupleset rule needs the record verbatim. The
+resource-graph access column this section says `ListObjects` maintains is still maintained by
+nothing. See § The Leopard index below.
 
 ## The enforcement seam
 
@@ -473,7 +557,10 @@ scattered across twenty providers is twenty places to get it wrong and one place
 
 - **Property tests** over generated schemas and tuple sets: `Check` agrees with a slow, obviously-correct
   reference evaluator on 100 000 random graphs including cycles, deep nesting, and negation.
-- **Index equivalence**: for every generated graph, the Leopard index's answer equals the walk's.
+- **Index equivalence**: for every generated graph, the Leopard index's answer equals the walk's —
+  built as `CheckPropertyTests.CheckAgreesWithTheReferenceEvaluatorThroughTheLeopardIndex` on the
+  check side and `MembershipIndexPropertyTests` on the index itself, the latter after every mutation
+  of a random write-and-delete sequence rather than once per graph.
 - **Consistency**: write a tuple, immediately check with the returned token, assert the new state —
   run against a cluster with an artificially lagging index.
 - **The isolation suite** ([03](03-repository-layout.md)) drives the public API with tenant B's ids as

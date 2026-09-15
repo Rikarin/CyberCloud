@@ -210,8 +210,9 @@ public static class CyberCloudSchema {
                 .DefineType(ObjectTypes.Group)
                 // Direct only, and nested groups work because a tuple's SUBJECT may itself be the
                 // userset `group:platform#member` — docs/plan/07 § The model's fourth example.
-                // That nesting is walked by the evaluator, which is exactly the cost the Leopard
-                // index removes in M2.
+                // Direct-only is also what makes this the relation the Leopard index closes
+                // (MembershipIndexMaintainer): the nesting is answered from the index, and walked
+                // only by a FullyConsistent check.
                 .Relation(Relations.Member)
                 .Role(Relations.Owner, This)
                 .Permission(Permissions.Read, Rel(Relations.Member))

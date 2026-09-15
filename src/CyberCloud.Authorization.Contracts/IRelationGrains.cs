@@ -92,11 +92,12 @@ public interface IObjectRelationsGrain : IGrainWithStringKey {
 ///         reads it is the walk.</b> docs/plan/07 § Effort and sequencing put <c>ListObjects</c> at
 ///         M2 and this grain was built in M1 because the write path was two-grain from the start —
 ///         retrofitting a reverse index over tuples written without one means a backfill.
-///         <see cref="IListObjectsGrain" /> starts from <see cref="ListAsync" /> for the subject and
-///         hops through the same method for every userset and every parent it reaches. So an entry
-///         missing here is exactly the miss the paragraph above describes: the object is hidden
-///         from a listing until the sweeper replays the write, and never shown to a caller who may
-///         not see it.
+///         <see cref="IListObjectsGrain" /> starts from <see cref="ListAsync" /> for the subject —
+///         and, since issue #37, from the subject's closed usersets in
+///         <see cref="IMembershipIndexGrain" /> — and reads the same method for every userset and
+///         every parent it reaches. So an entry missing here is exactly the miss the paragraph
+///         above describes: the object is hidden from a listing until the sweeper replays the
+///         write, and never shown to a caller who may not see it.
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Authorization.ISubjectRelationsGrain")]

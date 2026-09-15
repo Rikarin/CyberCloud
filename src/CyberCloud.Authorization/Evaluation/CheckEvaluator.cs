@@ -93,7 +93,8 @@ public sealed class CheckEvaluator {
     /// <param name="reader">Where tuples come from.</param>
     /// <param name="limits">The caps. <c>null</c> means <see cref="AuthorizationLimits.Default" />.</param>
     /// <param name="membershipIndex">
-    ///     The Leopard fast path. <c>null</c> means <see cref="NoMembershipIndex" /> — M1.
+    ///     The Leopard fast path. <c>null</c> means <see cref="NoMembershipIndex" /> — every
+    ///     userset is walked.
     /// </param>
     public CheckEvaluator(
         AuthorizationSchema schema,
@@ -373,6 +374,24 @@ public sealed class CheckEvaluator {
                 continue;
             }
 
+            // docs/plan/07 § Check, step 3: the index first, the walk only when it declines. An
+            // answered userset is not charged against the breadth cap — AuthorizationLimits says
+            // the cap counts "recursive expansions", and an index read is a set test, not a walk.
+            // That is what lets a subject granted through the 1 001st group on one object be
+            // allowed here and listed by ListObjects alike, which the walk's remarks record as the
+            // one place the two evaluators used to disagree.
+            var indexed = await membershipIndex
+                .TryTestMembershipAsync(candidate, subject, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (indexed is not null) {
+                if (indexed.Value) {
+                    return flags.WithValue(true);
+                }
+
+                continue;
+            }
+
             if (expansions == limits.MaxBreadth) {
                 RecordCap(
                     CheckOutcome.BreadthCapExceeded,
@@ -385,18 +404,6 @@ public sealed class CheckEvaluator {
             }
 
             expansions++;
-
-            var indexed = await membershipIndex
-                .TryTestMembershipAsync(candidate, subject, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (indexed is not null) {
-                if (indexed.Value) {
-                    return flags.WithValue(true);
-                }
-
-                continue;
-            }
 
             var nested = await EvaluateNameAsync(
                 candidate.Object,

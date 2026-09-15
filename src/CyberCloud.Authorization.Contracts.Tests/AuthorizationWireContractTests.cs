@@ -46,6 +46,7 @@ public sealed class AuthorizationWireContractTests {
         ("ListObjectsPage", 6, "ReverseReads"),
         ("ListObjectsPage", 7, "ForwardReads"),
         ("ListObjectsPage", 8, "Verified"),
+        ("ListObjectsPage", 9, "IndexReads"),
 
         ("ListObjectsRequest", 0, "ObjectType"),
         ("ListObjectsRequest", 1, "Permission"),
@@ -54,6 +55,20 @@ public sealed class AuthorizationWireContractTests {
         ("ListObjectsRequest", 4, "WithinDepth"),
         ("ListObjectsRequest", 5, "PageSize"),
         ("ListObjectsRequest", 6, "Continuation"),
+
+        // The Leopard index, issue #37 — a slice crosses silos on every read the check and the
+        // walk make, and a change on every tuple write.
+        ("MembershipIndexSnapshot", 0, "Object"),
+        ("MembershipIndexSnapshot", 1, "SchemaVersion"),
+        ("MembershipIndexSnapshot", 2, "Members"),
+        ("MembershipIndexSnapshot", 3, "Usersets"),
+
+        ("MembershipIndexChange", 0, "SchemaVersion"),
+        ("MembershipIndexChange", 1, "AddMembers"),
+        ("MembershipIndexChange", 2, "ReplaceMembers"),
+        ("MembershipIndexChange", 3, "AddUsersets"),
+        ("MembershipIndexChange", 4, "RemoveUsersets"),
+        ("MembershipIndexChange", 5, "Reset"),
 
         ("Consistency", 0, "Mode"),
         ("Consistency", 1, "Token"),
@@ -91,6 +106,8 @@ public sealed class AuthorizationWireContractTests {
         ("ConsistencyToken", "CyberCloud.Authorization.ConsistencyToken"),
         ("ListObjectsPage", "CyberCloud.Authorization.ListObjectsPage"),
         ("ListObjectsRequest", "CyberCloud.Authorization.ListObjectsRequest"),
+        ("MembershipIndexChange", "CyberCloud.Authorization.MembershipIndexChange"),
+        ("MembershipIndexSnapshot", "CyberCloud.Authorization.MembershipIndexSnapshot"),
         ("ObjectRef", "CyberCloud.Authorization.ObjectRef"),
         ("ObjectRelationsSnapshot", "CyberCloud.Authorization.ObjectRelationsSnapshot"),
         ("RelationTuple", "CyberCloud.Authorization.RelationTuple"),

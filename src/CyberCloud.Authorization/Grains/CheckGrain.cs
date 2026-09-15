@@ -44,10 +44,21 @@ namespace CyberCloud.Authorization.Grains;
 ///                 <c>FullyConsistent</c>
 ///             </term>
 ///             <description>
-///                 never reads the cache, and the walk re-reads every object's durable row.
+///                 never reads the cache, never reads the Leopard index, and the walk re-reads
+///                 every object's durable row.
 ///             </description>
 ///         </item>
 ///     </list>
+///     <para>
+///         ⚠ <b>The Leopard index is read in the first two modes and not the third, and that is
+///         the contract of each.</b> <c>MinimizeLatency</c> and <c>AtLeastAsFresh</c> accept what
+///         the store has written, and the store writes the index before the version a token
+///         carries moves, so every token covers the index (<c>TupleStoreGrain</c>'s remarks).
+///         <c>FullyConsistent</c>'s promise is the durable rows themselves — the case where
+///         something that is not this platform changed one — and a closure derived from those
+///         rows by a write that may not have seen the change is exactly what that mode exists to
+///         bypass. It walks with <see cref="NoMembershipIndex" />.
+///     </para>
 ///     <para>
 ///         ⚠ <b>A truncated result is never cached.</b> See <c>CheckEvaluation.IsCacheable</c>: a
 ///         walk that hit a cap did not compute an answer, and writing "I gave up" into a cache makes
@@ -65,8 +76,7 @@ public sealed class CheckGrain(
     [PersistentState("check", StorageTiers.Hot)]
     IPersistentState<CheckCacheState> cache,
     AuthorizationSchema schema,
-    AuthorizationLimits limits,
-    IMembershipIndex membershipIndex
+    AuthorizationLimits limits
 )
     : Grain, ICheckGrain {
     Guid tenantId;
@@ -139,11 +149,15 @@ public sealed class CheckGrain(
 
         var current = token.GetValueOrThrow();
 
+        var fullyConsistent = mode.Mode == ConsistencyMode.FullyConsistent;
+
         var evaluator = new CheckEvaluator(
             schema,
-            new GrainRelationReader(GrainFactory, tenantId, mode.Mode == ConsistencyMode.FullyConsistent),
+            new GrainRelationReader(GrainFactory, tenantId, fullyConsistent),
             limits,
-            membershipIndex
+            fullyConsistent
+                ? NoMembershipIndex.Instance
+                : new MembershipIndexReader(schema, new GrainMembershipIndexStore(GrainFactory, tenantId))
         );
 
         var evaluated = await evaluator.EvaluateAsync(self, permission, subject, CancellationToken.None);

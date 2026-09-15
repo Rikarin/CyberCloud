@@ -59,12 +59,37 @@ public static class AuthorizationMetrics {
             + "caller whose listing fell back to a Check per member, or to nothing."
         );
 
+    static readonly Counter<long> IndexAnswersCounter =
+        Source.CreateCounter<long>(
+            "cybercloud.authz.index_answers",
+            "{membership}",
+            "Userset memberships the Leopard index answered without a walk — docs/plan/07 § The Leopard index."
+        );
+
+    static readonly Counter<long> IndexWritesCounter =
+        Source.CreateCounter<long>(
+            "cybercloud.authz.index_writes",
+            "{slice}",
+            "Leopard index slices written by tuple writes and deletes. The fan-out the threshold "
+            + "paragraph of docs/plan/07 § The Leopard index exists to cap, measured before it is."
+        );
+
+    static readonly Counter<long> IndexRebuildsCounter =
+        Source.CreateCounter<long>(
+            "cybercloud.authz.index_rebuilds",
+            "{slice}",
+            "Leopard index slices recomputed from the tuples because they were stamped with another schema version."
+        );
+
     static long checks;
     static long cacheHits;
     static long depthCapExceeded;
     static long breadthCapExceeded;
     static long listObjects;
     static long listObjectsCapExceeded;
+    static long indexAnswers;
+    static long indexWrites;
+    static long indexRebuilds;
 
     /// <summary>How many checks have been evaluated in this process.</summary>
     public static long Checks => Interlocked.Read(ref checks);
@@ -90,6 +115,36 @@ public static class AuthorizationMetrics {
     ///     ⚠ A rising one is a subject the projection should be serving — docs/plan/07 § ListObjects.
     /// </summary>
     public static long ListObjectsCapExceeded => Interlocked.Read(ref listObjectsCapExceeded);
+
+    /// <summary>
+    ///     How many userset memberships the Leopard index answered in place of a walk. The number
+    ///     that says the index is doing the work docs/plan/07 § The Leopard index gives it.
+    /// </summary>
+    public static long IndexAnswers => Interlocked.Read(ref indexAnswers);
+
+    /// <summary>
+    ///     How many index slices tuple writes and deletes have written. Divided by the writes, it is
+    ///     the fan-out per tuple, which is the cost the document's threshold exists to bound.
+    /// </summary>
+    public static long IndexWrites => Interlocked.Read(ref indexWrites);
+
+    /// <summary>How many slices were recomputed because their schema version was behind.</summary>
+    public static long IndexRebuilds => Interlocked.Read(ref indexRebuilds);
+
+    internal static void RecordIndexAnswer() {
+        Interlocked.Increment(ref indexAnswers);
+        IndexAnswersCounter.Add(1);
+    }
+
+    internal static void RecordIndexWrites(int slices) {
+        Interlocked.Add(ref indexWrites, slices);
+        IndexWritesCounter.Add(slices);
+    }
+
+    internal static void RecordIndexRebuild() {
+        Interlocked.Increment(ref indexRebuilds);
+        IndexRebuildsCounter.Add(1);
+    }
 
     internal static void RecordListObjects() {
         Interlocked.Increment(ref listObjects);

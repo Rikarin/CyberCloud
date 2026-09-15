@@ -57,7 +57,7 @@ public sealed class ListObjectsPropertyTests {
         for (var seed = 0; seed < Graphs; seed++) {
             var graph = RandomGraphs.Generate(seed);
             var forward = new InMemoryRelationReader(graph.Tuples);
-            var reverse = new InMemoryReverseRelationReader(graph.Tuples);
+            var reverse = new InMemoryReverseRelationReader(graph.Schema, graph.Tuples);
             var objects = Universe(graph);
 
             foreach (var subject in Subjects) {
@@ -70,7 +70,7 @@ public sealed class ListObjectsPropertyTests {
                             .Order(StringComparer.Ordinal)
                             .ToArray();
 
-                        var evaluator = new ListObjectsEvaluator(graph.Schema, forward, reverse, Unbounded);
+                        var evaluator = new ListObjectsEvaluator(graph.Schema, forward, reverse, Unbounded, reverse.Index);
 
                         var actual = await evaluator.EvaluateAsync(
                             subject,
@@ -129,7 +129,7 @@ public sealed class ListObjectsPropertyTests {
         for (var seed = 0; seed < Graphs; seed++) {
             var graph = RandomGraphs.Generate(seed);
             var forward = new InMemoryRelationReader(graph.Tuples);
-            var reverse = new InMemoryReverseRelationReader(graph.Tuples);
+            var reverse = new InMemoryReverseRelationReader(graph.Schema, graph.Tuples);
             var objects = Universe(graph);
             var parents = Parents(graph, objects);
             var isChain = parents.Values.All(x => x.Count <= 1);
@@ -169,7 +169,7 @@ public sealed class ListObjectsPropertyTests {
                                 .Order(StringComparer.Ordinal)
                                 .ToArray();
 
-                            var evaluator = new ListObjectsEvaluator(graph.Schema, forward, reverse, Unbounded);
+                            var evaluator = new ListObjectsEvaluator(graph.Schema, forward, reverse, Unbounded, reverse.Index);
 
                             var actual = await evaluator.EvaluateAsync(
                                 subject,
