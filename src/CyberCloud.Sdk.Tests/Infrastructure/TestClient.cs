@@ -74,6 +74,26 @@ public static class TestClient {
 
     public const string OperationUri = "https://api.cybercloud.test/operations/op-1?api-version=2026-08-01";
 
-    public const string WidgetBody =
-        """{"location":"eu-central","properties":{"clusterId":"cluster-1","message":"hello"}}""";
+    /// <summary>The path of the widget every scripted read serves.</summary>
+    public const string WidgetPath = Scope + "/providers/CyberCloud.Sample/widgets/main";
+
+    /// <summary>
+    ///     One widget, member for member as <c>ResponseBodies.Resource</c> serves it: the five
+    ///     envelope members the server owns, <c>location</c>, the body, <c>tags</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ It carried the body alone — <c>location</c> and <c>properties</c> — until the
+    ///     2026-09-15 review of issue #85, which is why nothing noticed that the stand-in dropped
+    ///     the envelope on every read: no scripted response had one to drop.
+    /// </remarks>
+    public static string WidgetBody => WidgetNamed("main");
+
+    /// <summary>A served widget with the given name, in the same shape as <see cref="WidgetBody" />.</summary>
+    /// <param name="name">The last path segment; the id is built from it under <see cref="Scope" />.</param>
+    /// <param name="location">The <c>location</c> served, in the envelope and nowhere else — issue #72.</param>
+    /// <param name="state">The <c>provisioningState</c> served, as the wire spells it.</param>
+    public static string WidgetNamed(string name, string location = "eu-central", string state = "Succeeded") =>
+        $$$"""
+           {"id":"{{{Scope}}}/providers/CyberCloud.Sample/widgets/{{{name}}}","name":"{{{name}}}","type":"CyberCloud.Sample/widgets","location":"{{{location}}}","provisioningState":"{{{state}}}","etag":"etag-7","properties":{"clusterId":"cluster-1","message":"hello"},"tags":{}}
+           """;
 }

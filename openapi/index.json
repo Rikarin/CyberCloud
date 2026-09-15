@@ -149,10 +149,20 @@
       },
       "OperationStatus": {
         "type": "object",
-        "description": "An operation's current state. ⚠ The members are docs/plan/10 § Long-running operations, over HTTP's, which is a subset of the OperationStatus wire type — no HTTP projection of that record is declared anywhere in the tree.",
+        "description": "An operation's current state. ⚠ The members are docs/plan/10 § Long-running operations, over HTTP's, which is a subset of the OperationStatus wire type — no HTTP projection of that record is declared anywhere in the tree. id, status, startTime, percentComplete and progress are always present; endTime once the status is terminal; error once it is Failed.",
         "properties": {
+          "endTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the operation reached a terminal status. Absent until it does."
+          },
           "error": {
             "$ref": "#/components/schemas/Error"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The operation id — the last segment of the URL this was polled from."
           },
           "percentComplete": {
             "type": "integer",
@@ -165,6 +175,11 @@
               "$ref": "#/components/schemas/OperationProgress"
             }
           },
+          "startTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the write was accepted."
+          },
           "status": {
             "$ref": "#/components/schemas/OperationState"
           }
@@ -172,7 +187,61 @@
         "required": [
           "status"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "x-cybercloud-read-required": [
+          "id",
+          "percentComplete",
+          "progress",
+          "startTime",
+          "status"
+        ]
+      },
+      "Resource": {
+        "type": "object",
+        "title": "Resource",
+        "description": "The envelope every resource is read in — docs/plan/10 § Request pipeline, step 9. Every type's schema is allOf this: a GET, a list element and a 202 all carry these five members beside the body the type declares, in this order, then tags. ⚠ All five are readOnly and none is required, although a read always carries every one — the same schema validates a PUT, and this platform refuses a read-only member on a write rather than ignoring it (docs/plan/08 § The write path, end to end). x-cybercloud-read-required lists what a read guarantees.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
+          },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          }
+        },
+        "x-cybercloud-read-required": [
+          "etag",
+          "id",
+          "name",
+          "provisioningState",
+          "type"
+        ]
       }
     }
   },

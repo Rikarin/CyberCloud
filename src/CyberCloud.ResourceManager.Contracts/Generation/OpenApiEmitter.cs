@@ -107,6 +107,80 @@ public static class OpenApiEmitter {
     const string SubscriptionCreateSchema = "Scope.SubscriptionCreate";
     const string ResourceGroupCreateSchema = "Scope.ResourceGroupCreate";
 
+    /// <summary>
+    ///     The envelope every resource is read in: <c>id</c>, <c>name</c>, <c>type</c>,
+    ///     <c>provisioningState</c> and <c>etag</c>, beside the body the type declares.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Every type's schema <c>allOf</c>s this and repeats its five members, and both
+    ///         halves are needed — issue #85.</b> Until that issue the document referenced the write
+    ///         body as every <c>GET</c> <c>200</c> and every list element, and the write body said
+    ///         <c>additionalProperties: false</c> over <c>location</c>, <c>properties</c> and
+    ///         <c>tags</c>, so a client validating what <c>ResponseBodies.Resource</c> serves rejected
+    ///         every resource it read. The <c>allOf</c> says "a resource is one of these" in the way
+    ///         a client generator turns into inheritance; the repeated members are what make the
+    ///         schema's own <c>additionalProperties: false</c> admit them, because that keyword sees
+    ///         only the <c>properties</c> beside it and never a subschema's.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>One schema in both directions, with <c>readOnly</c> on the five, rather than a
+    ///         read schema per type — and the compatibility gate is why.</b> A separate
+    ///         <c>{Type}.Resource</c> pointed at from the <c>200</c> would move the <c>$ref</c> the
+    ///         published document already carries there, and <see cref="OpenApiCompatibility" />
+    ///         reports a changed scalar as breaking whatever it was changed to. Adding properties,
+    ///         an <c>allOf</c> and a component is what that gate calls an addition, so this is the
+    ///         shape a published api-version can take. It is also Azure's: a resource-manager
+    ///         schema is one <c>allOf</c> of a shared <c>Resource</c> whose <c>id</c>, <c>name</c> and
+    ///         <c>type</c> are <c>readOnly</c>, used for the <c>PUT</c> body and the <c>200</c> alike.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>None of the five is <c>required</c>, although a read always carries all five,
+    ///         and <c>x-cybercloud-read-required</c> is where that fact goes instead.</b> The same
+    ///         schema validates a <c>PUT</c>, and this platform refuses a read-only member on a write
+    ///         rather than ignoring it — docs/plan/08 § The write path, end to end — whereas
+    ///         OpenAPI 3.1.1 § Validating readOnly and writeOnly makes "required and read-only" work
+    ///         only by having the server ignore it. Declaring them required would describe a
+    ///         <c>PUT</c> no caller can make. The extension carries the read-side promise in a form
+    ///         <see cref="TypeScriptEmitter" /> and <see cref="SdkEmitter" /> read, so neither has to
+    ///         know the five by heart.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And the promise is guarded, which an <c>x-</c> key is not by default.</b>
+    ///         <see cref="OpenApiCompatibility" /> reads every extension as prose — a hint a
+    ///         generator may change freely — and this one is the exception: a name dropped from
+    ///         <see cref="ReadRequiredExtension" /> narrows a member both clients type as present,
+    ///         which is what docs/plan/21 § OpenAPI forbids, so the gate reports it as
+    ///         <see cref="OpenApiCompatibility.ReadRequiredRemoved" />. Until the 2026-09-15 review
+    ///         of issue #85 it did not, and a regeneration that emptied the list passed.
+    ///         <c>OpenApiEmitterTests.DroppingAReadPromiseIsABreakingChangeAndAddingOneIsNot</c> is
+    ///         the pin.
+    ///     </para>
+    ///     <para>
+    ///         Public for the reason <see cref="ScopeSchema" /> is: the two client emitters read the
+    ///         component back by name.
+    ///     </para>
+    /// </remarks>
+    public const string ResourceEnvelopeSchema = "Resource";
+
+    /// <summary>
+    ///     The extension on <see cref="ResourceEnvelopeSchema" /> listing the members every read
+    ///     carries — the read side's <c>required</c>, kept out of the keyword because the same
+    ///     schema validates a write.
+    /// </summary>
+    public const string ReadRequiredExtension = "x-cybercloud-read-required";
+
+    /// <summary>
+    ///     The envelope's members, in the order <c>ResponseBodies.Resource</c> writes them.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>location</c> and <c>tags</c> are served in the envelope too and are deliberately
+    ///     not here: both are body properties a caller writes, so the type's own schema already
+    ///     declares them and a copy here would be the same member twice. The five are the ones the
+    ///     server owns outright.
+    /// </remarks>
+    static readonly ImmutableArray<string> EnvelopeMembers = ["id", "name", "type", "provisioningState", "etag"];
+
     // ── The scope addresses, which every resource path is built on top of ──────────────────────
 
     /// <summary>The tenant scope's path template.</summary>
@@ -504,7 +578,9 @@ public static class OpenApiEmitter {
                     + "version drops what that version did not declare.",
                 ["responses"] = new JsonObject {
                     ["200"] = new JsonObject {
-                        ["description"] = "The resource.",
+                        ["description"] =
+                            "The resource: the Resource envelope's five members, then the body, then "
+                            + "tags.",
                         ["content"] = new JsonObject {
                             ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", component) }
                         }
@@ -520,7 +596,7 @@ public static class OpenApiEmitter {
                     + "read-only property is refused rather than ignored — docs/plan/08 § The write "
                     + "path, end to end.",
                 ["requestBody"] = body.DeepClone(),
-                ["responses"] = Accepted(),
+                ["responses"] = Accepted(component),
                 ["x-cybercloud-permission"] = type.WritePermission
             },
             ["patch"] = new JsonObject {
@@ -530,7 +606,7 @@ public static class OpenApiEmitter {
                     "A merge patch. The patch itself may omit required properties; the merged result "
                     + "is what is validated — see ResourceSchema.Validate.",
                 ["requestBody"] = body,
-                ["responses"] = Accepted(),
+                ["responses"] = Accepted(component),
                 ["x-cybercloud-permission"] = type.WritePermission
             },
             ["delete"] = new JsonObject {
@@ -576,7 +652,7 @@ public static class OpenApiEmitter {
                     + type.DeletePermission
                     + "'."
                     : "The delete is permanent: this type declares no soft-delete window.",
-                ["responses"] = Accepted(),
+                ["responses"] = Accepted(component),
                 ["x-cybercloud-permission"] = type.DeletePermission,
                 ["x-cybercloud-soft-delete-days"] = type.SoftDeleteDays,
                 // ⚠ Empty for a type with no window, which is what makes "does this type have a purge"
@@ -770,7 +846,9 @@ public static class OpenApiEmitter {
                 },
                 ["value"] = new JsonObject {
                     ["type"] = "array",
-                    ["description"] = "The resources on this page, ordered by id.",
+                    ["description"] =
+                        "The resources on this page, ordered by id. Each element is exactly what a GET "
+                        + "of that resource returns, member for member.",
                     ["items"] = Ref("schemas", component)
                 }
             },
@@ -921,7 +999,7 @@ public static class OpenApiEmitter {
         // ⚠ Long-running actions answer 202 and nothing else, exactly as a PUT does — there is one
         // long-running shape in this platform and an action that does work is not a second one.
         post["responses"] = action.LongRunning
-            ? Accepted()
+            ? Accepted(ComponentNameOf(type.Type))
             : new JsonObject {
                 ["200"] = new JsonObject {
                     ["description"] = responseComponent is null
@@ -1311,19 +1389,50 @@ public static class OpenApiEmitter {
     }
 
     /// <summary>
-    ///     The <c>202</c> every write returns, with the two headers docs/plan/10 requires.
+    ///     The <c>202</c> every write returns, with the two headers docs/plan/10 requires and the
+    ///     resource as accepted.
     /// </summary>
+    /// <param name="component">The resource's schema — the body the <c>202</c> carries.</param>
     /// <remarks>
-    ///     ⚠ <b>202 and nothing else.</b> docs/plan/08 § The write path, end to end ends in a
-    ///     <c>WriteAccepted</c> for every verb, so there is no synchronous success to declare. A
-    ///     document that also offered <c>200</c> would make every generated SDK branch on a status it
-    ///     will never see.
+    ///     <para>
+    ///         ⚠ <b>202 and nothing else.</b> docs/plan/08 § The write path, end to end ends in a
+    ///         <c>WriteAccepted</c> for every verb, so there is no synchronous success to declare. A
+    ///         document that also offered <c>200</c> would make every generated SDK branch on a
+    ///         status it will never see.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The <c>202</c> has a body, and until issue #85 the document declared none.</b>
+    ///         <c>DispatchStage.Accepted</c> writes <c>ResponseBodies.Resource</c> for every verb —
+    ///         a <c>DELETE</c> and a long-running action included — so the resource comes back as
+    ///         the manager holds it once the write is accepted: <c>Creating</c> after a <c>PUT</c>
+    ///         that made it, <c>Updating</c> after one that changed it or a <c>PATCH</c>,
+    ///         <c>Deleting</c> after a <c>DELETE</c>. A client that wants the etag of what it just
+    ///         wrote does not have to poll to learn it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A long-running action's <c>202</c> carries whatever the read after the start
+    ///         returned, and that read can fail.</b> <c>ResourceManagerService.ActionAsync</c>
+    ///         starts the operation, then reads the resource, and serves an empty snapshot when the
+    ///         read does not succeed — a body with no <c>location</c>, which this schema requires,
+    ///         and a <c>provisioningState</c> of <c>Unknown</c>, which its enum omits. The
+    ///         description below therefore does not promise a state for an action, and the empty
+    ///         snapshot is a manager gap the 2026-09-15 review of issue #85 recorded rather than
+    ///         one this document can describe: the fix is on the manager's side, not a looser
+    ///         schema.
+    ///     </para>
     /// </remarks>
-    static JsonObject Accepted() =>
+    static JsonObject Accepted(string component) =>
         new JsonObject {
             ["202"] = new JsonObject {
                 ["description"] =
-                    "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+                    "Accepted. The body is the resource as the manager holds it now that the write is "
+                    + "accepted — provisioningState says which write is in flight: Creating, Updating "
+                    + "or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, "
+                    + "which serves the read that followed its start. Poll the Azure-AsyncOperation "
+                    + "target until the status is terminal.",
+                ["content"] = new JsonObject {
+                    ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", component) }
+                },
                 ["headers"] = new JsonObject {
                     ["Azure-AsyncOperation"] = new JsonObject {
                         ["description"] = "The absolute URL of the operation to poll.",
@@ -1355,7 +1464,14 @@ public static class OpenApiEmitter {
     ///         <c>writeOnly</c> is currently a wish: no runtime read strips a secret, for the reasons
     ///         the remarks on <see cref="SchemaProperty" /> lay out. Emitting a request schema and a
     ///         response schema instead would double every component and make the compatibility diff
-    ///         compare four things where two would do.
+    ///         compare four things where two would do — and, since issue #85, would move a published
+    ///         <c>$ref</c>, which that diff refuses; the remarks on
+    ///         <see cref="ResourceEnvelopeSchema" /> carry the argument.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The read envelope is added after the body is built</b> — <see cref="Enveloped" />
+    ///         — so that the five members the server owns go through none of the registry checks
+    ///         below, which are about what a provider declared.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Three shapes are refused rather than emitted</b>, because each is a body no caller
@@ -1381,17 +1497,118 @@ public static class OpenApiEmitter {
     ///         </item>
     ///     </list>
     /// </remarks>
-    static JsonObject SchemaOf(ResourceTypeRegistration type, ResourceSchema schema) =>
-        BodySchema(
+    static JsonObject SchemaOf(ResourceTypeRegistration type, ResourceSchema schema) {
+        var body = BodySchema(
             type.Type.ToString(),
             schema,
             type.SupportsTags,
             type.Type.ToString(),
-            "The body of a "
+            "A "
             + type.Type
-            + ". Generated from the provider registry's schema, which is "
-            + "the same object the write path validates against — docs/plan/08 § The provider registry."
+            + ": the envelope every resource is read in (allOf Resource, whose five members are "
+            + "readOnly and refused on a write) plus the body a caller writes — location, properties "
+            + "and tags. The body is generated from the provider registry's schema, which is the same "
+            + "object the write path validates against — docs/plan/08 § The provider registry."
         );
+
+        return Enveloped(type.Type.ToString(), body);
+    }
+
+    /// <summary>
+    ///     Adds the read envelope to a resource body: <c>allOf</c> <see cref="ResourceEnvelopeSchema" />
+    ///     and the five members repeated beside the body's own.
+    /// </summary>
+    /// <param name="owner">The type, for the refusal's message.</param>
+    /// <param name="body">The body <see cref="BodySchema" /> built. ⚠ Mutated and returned.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     The registry declares a top-level property named like one of the five. The envelope's
+    ///     copy is the one served — <c>ResponseBodies.WriteBodyMembers</c> skips a body member with
+    ///     an envelope name — so the provider's value would be accepted on a write and never come
+    ///     back, which is a document that lies in both directions.
+    /// </exception>
+    /// <remarks>
+    ///     The remarks on <see cref="ResourceEnvelopeSchema" /> say why both the <c>allOf</c> and the
+    ///     repetition are there. The repeated members are the envelope's own nodes, cloned, so the
+    ///     two cannot drift.
+    /// </remarks>
+    static JsonObject Enveloped(string owner, JsonObject body) {
+        var envelope = EnvelopeProperties();
+        var members = body["properties"] as JsonObject ?? [];
+
+        foreach (var name in EnvelopeMembers) {
+            if (members.ContainsKey(name)) {
+                throw new InvalidOperationException(
+                    $"'{owner}' declares '/{name}', which is a member of the read envelope every "
+                    + "resource is served in. The envelope's value is the one served — the gateway "
+                    + "skips a body member with that name — so a caller could write the property and "
+                    + "never read it back. Declare it under /properties instead."
+                );
+            }
+
+            members[name] = envelope[name]!.DeepClone();
+        }
+
+        body["properties"] = Sorted(members);
+        body["allOf"] = new JsonArray { Ref("schemas", ResourceEnvelopeSchema) };
+
+        return Sorted(body);
+    }
+
+    /// <summary>The five envelope members, each <c>readOnly</c>, keyed by wire name.</summary>
+    /// <remarks>
+    ///     ⚠ <c>provisioningState</c> carries its closed set inline rather than as a <c>$ref</c>,
+    ///     because <see cref="DocumentReader.LeavesOf" /> reads a leaf's <c>enum</c> off the leaf
+    ///     and every derived surface types the member from that. The values are
+    ///     <c>ProvisioningState</c>'s, read off the enum, with <c>Unknown</c> left out for the reason
+    ///     <c>OperationState</c> leaves its out: it is the never-assigned member and no read serves it.
+    /// </remarks>
+    static JsonObject EnvelopeProperties() {
+        var states = new JsonArray();
+        foreach (var state in Enum.GetValues<ProvisioningState>()
+                     .Where(x => x is not ProvisioningState.Unknown)
+                     .Select(x => x.ToString())
+                     .OrderBy(x => x, StringComparer.Ordinal)) {
+            states.Add(state);
+        }
+
+        return new JsonObject {
+            ["id"] = new JsonObject {
+                ["type"] = "string",
+                ["description"] =
+                    "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it "
+                    + "was read from.",
+                ["readOnly"] = true
+            },
+            ["name"] = new JsonObject {
+                ["type"] = "string",
+                ["description"] = "The last segment of the path: the name the caller chose on the PUT.",
+                ["readOnly"] = true
+            },
+            ["type"] = new JsonObject {
+                ["type"] = "string",
+                ["description"] =
+                    "The fully qualified resource type — the same string this path item's "
+                    + "x-cybercloud-resource-type carries.",
+                ["readOnly"] = true
+            },
+            ["provisioningState"] = new JsonObject {
+                ["type"] = "string",
+                ["description"] =
+                    "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a "
+                    + "state a listing still shows: a resource whose teardown has not converged keeps "
+                    + "running and keeps being metered.",
+                ["enum"] = states,
+                ["readOnly"] = true
+            },
+            ["etag"] = new JsonObject {
+                ["type"] = "string",
+                ["description"] =
+                    "The concurrency token. Send it back as If-Match on a write to refuse a lost "
+                    + "update — docs/plan/08 § The write path, end to end.",
+                ["readOnly"] = true
+            }
+        };
+    }
 
     /// <summary>
     ///     One <see cref="ResourceSchema" /> as a JSON Schema object — a resource body, or an action's
@@ -1888,9 +2105,15 @@ public static class OpenApiEmitter {
         };
 
     /// <summary>
-    ///     The schemas every document carries: the one error body and the operation-status resource.
+    ///     The schemas every document carries: the one error body, the operation-status resource,
+    ///     and the envelope every resource is read in.
     /// </summary>
     static JsonObject EnvelopeSchemas() {
+        var readRequired = new JsonArray();
+        foreach (var member in EnvelopeMembers.OrderBy(x => x, StringComparer.Ordinal)) {
+            readRequired.Add(member);
+        }
+
         var codes = new JsonArray();
         foreach (var code in ErrorCode.All.Select(x => x.Value).OrderBy(x => x, StringComparer.Ordinal)) {
             codes.Add(code);
@@ -1990,17 +2213,56 @@ public static class OpenApiEmitter {
                 ["description"] =
                     "An operation's current state. ⚠ The members are docs/plan/10 § Long-running "
                     + "operations, over HTTP's, which is a subset of the OperationStatus wire type — no "
-                    + "HTTP projection of that record is declared anywhere in the tree.",
+                    + "HTTP projection of that record is declared anywhere in the tree. id, status, "
+                    + "startTime, percentComplete and progress are always present; endTime once the "
+                    + "status is terminal; error once it is Failed.",
                 ["properties"] = new JsonObject {
+                    // ⚠ id, startTime and endTime were served from the first day and declared by
+                    // nobody — issue #85 — over a schema that says additionalProperties: false, so a
+                    // poller validating what it was handed refused every operation it polled. Read
+                    // off ResponseBodies.Operation, member for member.
+                    ["endTime"] = new JsonObject {
+                        ["type"] = "string",
+                        ["format"] = "date-time",
+                        ["description"] = "When the operation reached a terminal status. Absent until it does."
+                    },
                     ["error"] = Ref("schemas", ErrorSchema),
+                    ["id"] = new JsonObject {
+                        ["type"] = "string",
+                        ["format"] = "uuid",
+                        ["description"] = "The operation id — the last segment of the URL this was polled from."
+                    },
                     ["percentComplete"] = Percent(),
                     ["progress"] = new JsonObject {
                         ["type"] = "array", ["items"] = Ref("schemas", OperationProgressSchema)
                     },
+                    ["startTime"] = new JsonObject {
+                        ["type"] = "string", ["format"] = "date-time", ["description"] = "When the write was accepted."
+                    },
                     ["status"] = Ref("schemas", OperationStateSchema)
                 },
                 ["required"] = new JsonArray { "status" },
-                ["additionalProperties"] = false
+                ["additionalProperties"] = false,
+                // ⚠ The four that are always served and were never `required`, in the extension
+                // rather than the keyword for the compatibility diff's reason: a name added to a
+                // published `required` is what that diff calls required-added, whatever the truth
+                // of it. See ResourceEnvelopeSchema's remarks.
+                [ReadRequiredExtension] = new JsonArray { "id", "percentComplete", "progress", "startTime", "status" }
+            },
+            [ResourceEnvelopeSchema] = new JsonObject {
+                ["type"] = "object",
+                ["title"] = ResourceEnvelopeSchema,
+                ["description"] =
+                    "The envelope every resource is read in — docs/plan/10 § Request pipeline, step 9. Every type's schema "
+                    + "is allOf this: a GET, a list element and a 202 all carry these five members "
+                    + "beside the body the type declares, in this order, then tags. ⚠ All five are "
+                    + "readOnly and none is required, although a read always carries every one — the "
+                    + "same schema validates a PUT, and this platform refuses a read-only member on a "
+                    + "write rather than ignoring it (docs/plan/08 § The write path, end to end). "
+                    + ReadRequiredExtension
+                    + " lists what a read guarantees.",
+                ["properties"] = EnvelopeProperties(),
+                [ReadRequiredExtension] = readRequired
             }
         };
     }

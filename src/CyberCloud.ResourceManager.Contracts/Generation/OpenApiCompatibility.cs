@@ -60,6 +60,19 @@ public readonly record struct BreakingChange(string JsonPointer, string Rule, st
 ///         contract and a typo fix should not need a new api-version.
 ///     </para>
 ///     <para>
+///         ⚠ <b>One <c>x-</c> extension is a contract, and it is the exception to the exception.</b>
+///         <c>x-cybercloud-read-required</c> — <see cref="OpenApiEmitter.ReadRequiredExtension" />
+///         — is the read side's <c>required</c>, kept out of the keyword because the same schema
+///         validates a write (the remarks on <see cref="OpenApiEmitter.ResourceEnvelopeSchema" />
+///         say why). Both client emitters type a member as always present because its name is in
+///         that list, so a name dropped from it turns a TypeScript <c>readonly etag: string</c>
+///         into an optional for every consumer, which is the narrowing docs/plan/21 § OpenAPI
+///         forbids. Until the 2026-09-15 review of issue #85 the list was prose to this gate, and a
+///         regeneration that emptied it passed with zero breaking changes.
+///         <see cref="CheckReadRequired" /> reports a dropped name as
+///         <see cref="ReadRequiredRemoved" />; a name added is a promise widened and is fine.
+///     </para>
+///     <para>
 ///         ⚠ <b>This compares two documents. It cannot see a change that is not in either.</b> If a
 ///         published version's file is deleted rather than edited, the diff has nothing to compare and
 ///         reports nothing — that case belongs to the 12-month retirement gate
@@ -84,6 +97,9 @@ public static class OpenApiCompatibility {
 
     /// <summary>A value an enumeration accepted is gone.</summary>
     public const string EnumValueRemoved = "enum-value-removed";
+
+    /// <summary>A member every read was promised to carry is no longer promised.</summary>
+    public const string ReadRequiredRemoved = "read-required-removed";
 
     /// <summary>An object that accepted unknown members no longer does.</summary>
     public const string AdditionalPropertiesTightened = "additional-properties-tightened";
@@ -200,6 +216,7 @@ public static class OpenApiCompatibility {
         }
 
         CheckRequired(before, after, pointer, found);
+        CheckReadRequired(before, after, pointer, found);
         CheckAdditionalProperties(before, after, pointer, found);
     }
 
@@ -222,6 +239,36 @@ public static class OpenApiCompatibility {
                     RequiredAdded,
                     $"'{name}' was optional and is now required. Every request that was valid and omitted it "
                     + "is now invalid — the sanctioned way to add a required property is a new api-version."
+                )
+            );
+        }
+    }
+
+    /// <summary>
+    ///     A name in the old <c>x-cybercloud-read-required</c> and not the new one narrows every
+    ///     read — the mirror image of <see cref="CheckRequired" />, in the other direction.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A set, like <c>required</c>, and for the same reason handled here rather than by the
+    ///     array walk — which never sees it anyway, because the member loop skips every <c>x-</c>
+    ///     key as prose. The direction is opposite: a <c>required</c> gained refuses a request that
+    ///     was valid, a read-required lost makes a response member a client typed as present into
+    ///     one it must null-check. An extension that disappears altogether reports every name it
+    ///     carried, so that the gate's output names what the clients lose rather than the key.
+    /// </remarks>
+    static void CheckReadRequired(JsonObject before, JsonObject after, string pointer, List<BreakingChange> found) {
+        var was = Strings(before[OpenApiEmitter.ReadRequiredExtension]);
+        var now = Strings(after[OpenApiEmitter.ReadRequiredExtension]);
+
+        foreach (var name in was.Except(now, StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)) {
+            found.Add(
+                new(
+                    pointer + "/" + OpenApiEmitter.ReadRequiredExtension,
+                    ReadRequiredRemoved,
+                    $"'{name}' was promised on every read and no longer is. Both generated clients type "
+                    + "it as always present because of this list, so every consumer that reads it without "
+                    + "a null check breaks — narrowing a published type needs a new api-version, "
+                    + "docs/plan/21 § OpenAPI."
                 )
             );
         }
@@ -366,8 +413,11 @@ public static class OpenApiCompatibility {
             ];
 
     /// <summary>
-    ///     Whether a member's value is prose rather than contract. Every <c>x-</c> extension counts:
-    ///     an extension is a hint for a generator, and a hint changing does not break a caller.
+    ///     Whether a member's value is prose rather than contract. Every <c>x-</c> extension counts
+    ///     here: an extension is a hint for a generator, and a hint changing does not break a
+    ///     caller. ⚠ <c>x-cybercloud-read-required</c> is skipped by this walk too, and is then
+    ///     compared as the set it is by <see cref="CheckReadRequired" /> — the class remarks say why
+    ///     that one is a contract.
     /// </summary>
     static bool IsDocumentation(string key) =>
         Documentation.Contains(key) || key.StartsWith("x-", StringComparison.Ordinal);

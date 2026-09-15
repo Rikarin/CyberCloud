@@ -318,12 +318,60 @@ public static class TypeScriptEmitter {
         // three. A type per kind would be three identical interfaces whose only difference is the
         // value of one string literal.
         AppendScopeResource(built, document, scopes);
+        AppendResourceEnvelope(built, document);
 
         foreach (var type in types) {
             AppendTypeModels(built, type);
         }
 
         return built.ToString();
+    }
+
+    /// <summary>
+    ///     The read envelope every resource shares — <c>ProvisioningState</c> and
+    ///     <c>Resource</c> — once for the file, from the document's own component.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Until issue #85 the envelope was a literal in <see cref="AppendTypeModels" />:
+    ///         <c>id</c>, <c>name</c>, <c>type</c> and <c>properties</c>, and nothing else.</b> The
+    ///         gateway served <c>location</c>, <c>provisioningState</c>, <c>etag</c> and
+    ///         <c>tags</c> too, the portal typed those by hand in <c>resource-verbs.ts</c>, and the
+    ///         document described none of it. The members below are the <c>Resource</c> component's
+    ///         leaves, present or optional as <see cref="DocumentReader.ReadRequiredOf" /> says, so
+    ///         the interface is as true as the document and no truer.
+    ///     </para>
+    ///     <para>
+    ///         The union is named with no model prefix — <c>ProvisioningState</c>, not
+    ///         <c>ResourceProvisioningState</c> — because one envelope is shared by every type, and
+    ///         the empty model handed to <see cref="EnumNaming.For" /> is what spells that.
+    ///     </para>
+    /// </remarks>
+    static void AppendResourceEnvelope(StringBuilder built, JsonObject document) {
+        if (document["components"]?["schemas"]?[OpenApiEmitter.ResourceEnvelopeSchema] is not JsonObject envelope) {
+            return;
+        }
+
+        var served = DocumentReader.ReadRequiredOf(envelope);
+        var leaves = DocumentReader.LeavesOf(envelope);
+        var naming = EnumNaming.For(string.Empty, leaves);
+
+        AppendUnions(built, string.Empty, leaves);
+
+        built.Append("\n/** ")
+            .Append(Comment(DocumentReader.Text(envelope["description"])))
+            .Append(" */\n")
+            .Append("export interface Resource {\n");
+
+        foreach (var leaf in leaves) {
+            if (leaf.IsObject) {
+                continue;
+            }
+
+            AppendMember(built, "  ", leaf with { Required = served.Contains(leaf.Name) }, naming);
+        }
+
+        built.Append("}\n");
     }
 
     /// <summary>
@@ -380,19 +428,57 @@ public static class TypeScriptEmitter {
             built.Append("}\n");
         }
 
-        // ⚠ Written out rather than walked: two of the four members are $refs, which LeavesOf
-        // reads as an untyped object, and a status typed `unknown` is a poll nothing can act on.
+        // ⚠ Walked, with the three $ref members written out: LeavesOf reads a $ref as an untyped
+        // object, and a status typed `unknown` is a poll nothing can act on. The scalars — id,
+        // percentComplete, startTime, endTime — come from the document, so a member the emitter adds
+        // to the schema reaches this interface without a second edit here. Until issue #85 the whole
+        // interface was written out, and the document declared four members over a body that served
+        // seven.
         built.Append("\n/** ")
             .Append(Comment(DocumentReader.Text(status["description"])))
             .Append(" */\n")
-            .Append("export interface OperationStatus {\n")
-            .Append("  /** Present once the status is Failed, and the reason the portal shows. */\n")
-            .Append("  readonly error?: CyberCloudError;\n")
-            .Append("  readonly percentComplete?: number;\n")
-            .Append("  /** Oldest first. What makes a nine-minute cluster creation tolerable — docs/plan/10. */\n")
-            .Append("  readonly progress?: readonly OperationProgress[];\n")
-            .Append("  readonly status: OperationState;\n")
-            .Append("}\n");
+            .Append("export interface OperationStatus {\n");
+
+        // Present or optional as the schema's x-cybercloud-read-required says — the read side's
+        // `required`, which the keyword cannot carry on a published schema. See
+        // DocumentReader.ReadRequiredOf.
+        var served = DocumentReader.ReadRequiredOf(status);
+
+        foreach (var leaf in DocumentReader.LeavesOf(status)) {
+            switch (leaf.Name) {
+                case "error":
+                    built.Append("  /** Present once the status is Failed, and the reason the portal shows. */\n")
+                        .Append("  readonly error?: CyberCloudError;\n");
+                    break;
+
+                case "progress":
+                    built.Append("  /** Oldest first. What makes a nine-minute cluster creation tolerable — docs/plan/10. */\n")
+                        .Append("  readonly progress")
+                        .Append(served.Contains(leaf.Name) ? "" : "?")
+                        .Append(": readonly OperationProgress[];\n");
+                    break;
+
+                case "status":
+                    built.Append("  readonly status: OperationState;\n");
+                    break;
+
+                default:
+                    // `readonly` on every member, whatever the schema says: an operation is polled and
+                    // never written, so the keyword is a fact about the endpoint rather than a leaf.
+                    AppendDoc(built, "  ", leaf.Schema);
+
+                    built.Append("  readonly ")
+                        .Append(Member(leaf.Name))
+                        .Append(leaf.Required || served.Contains(leaf.Name) ? "" : "?")
+                        .Append(": ")
+                        .Append(TsType(leaf, default))
+                        .Append(";\n");
+
+                    break;
+            }
+        }
+
+        built.Append("}\n");
     }
 
     static void AppendScopeResource(
@@ -461,23 +547,32 @@ public static class TypeScriptEmitter {
 
         AppendObject(built, "  ", EnumNaming.For(model, leaves), type.Body);
 
-        built.Append("}\n")
-            .Append("\n/** One ")
+        built.Append("}\n");
+
+        // ⚠ THE READ SHAPE IS THE ENVELOPE PLUS THE WRITE BODY, AND BOTH HALVES COME FROM THE
+        // DOCUMENT — issue #85. `extends Resource, {Model}Data` is what the document's allOf says in
+        // TypeScript: every member a GET, a list element or a 202 carries is one the caller wrote or
+        // one the envelope owns. `type` is narrowed to the literal because the envelope's own
+        // description says it equals x-cybercloud-resource-type, and only when the envelope declares
+        // a `type` at all — an interface that added a member the document does not have would be the
+        // convention this method used to be.
+        var envelope = DocumentReader.LeavesOf(type.Envelope);
+
+        built.Append("\n/** One ")
             .Append(Comment(type.DisplayName))
-            .Append(", as the API returns it. */\n")
+            .Append(", as the API returns it: the Resource envelope, then the body, then tags. */\n")
             .Append("export interface ")
             .Append(model)
-            .Append("Resource {\n")
-            .Append("  /** The resource's fully qualified id. */\n")
-            .Append("  readonly id: string;\n")
-            .Append("  readonly name: string;\n")
-            .Append("  readonly type: ")
-            .Append(Quote(type.ResourceType))
-            .Append(";\n")
-            .Append("  readonly properties?: ")
+            .Append("Resource extends ")
+            .Append(envelope.IsEmpty ? string.Empty : "Resource, ")
             .Append(model)
-            .Append("Data['properties'];\n")
-            .Append("}\n");
+            .Append("Data {");
+
+        if (envelope.Any(x => string.Equals(x.Name, "type", StringComparison.Ordinal))) {
+            built.Append("\n  readonly type: ").Append(Quote(type.ResourceType)).Append(";\n");
+        }
+
+        built.Append("}\n");
 
         foreach (var action in type.Actions) {
             AppendActionModels(built, model, action);
@@ -549,7 +644,13 @@ public static class TypeScriptEmitter {
 
             built.Append("\n/** The values ")
                 .Append(leaf.JsonPointer)
-                .Append(" accepts. ⚠ Closed: the write path refuses anything else. */\n")
+                // A read-only set is the server's vocabulary, not a caller's choice — the same
+                // wording SdkEmitter.AppendEnums uses.
+                .Append(
+                    DocumentReader.Flag(leaf.Schema["readOnly"])
+                        ? " carries. ⚠ Read-only: the server sets it, and a write that carries it is refused. */\n"
+                        : " accepts. ⚠ Closed: the write path refuses anything else. */\n"
+                )
                 .Append("export type ")
                 .Append(naming.NameOf(leaf))
                 .Append(" =\n");
@@ -719,7 +820,7 @@ public static class TypeScriptEmitter {
         var values = DocumentReader.EnumOf(schema);
         var nullable = DocumentReader.IsNullable(schema);
 
-        var bare = !values.IsEmpty && naming.Model is { Length: > 0 } && DocumentReader.TypeOf(schema) != "array"
+        var bare = !values.IsEmpty && naming.Model is not null && DocumentReader.TypeOf(schema) != "array"
             ? naming.NameOf(leaf)
             : DocumentReader.TypeOf(schema) switch {
                 "array" => Scalar(schema["items"] as JsonObject ?? [], naming, leaf) + "[]",
@@ -733,7 +834,7 @@ public static class TypeScriptEmitter {
     static string Scalar(JsonObject schema, EnumNaming naming, SchemaLeaf leaf, string? declared = null) {
         var values = DocumentReader.EnumOf(schema);
 
-        if (!values.IsEmpty && naming.Model is { Length: > 0 } && DocumentReader.TypeOf(leaf.Schema) == "array") {
+        if (!values.IsEmpty && naming.Model is not null && DocumentReader.TypeOf(leaf.Schema) == "array") {
             return naming.NameOf(leaf);
         }
 
@@ -1208,7 +1309,7 @@ public static class TypeScriptEmitter {
     ///     construction — the registry keys on it — so there is no collision to resolve and no
     ///     second-pass rule that could disagree with the first.
     /// </remarks>
-    static string ModelOf(DocumentType type) => Pascal(type.ProviderNamespace.Split('.')[^1]) + Pascal(type.TypePath);
+    internal static string ModelOf(DocumentType type) => Pascal(type.ProviderNamespace.Split('.')[^1]) + Pascal(type.TypePath);
 
     static string Member(string name) =>
         name.Length > 0

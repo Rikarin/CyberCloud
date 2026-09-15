@@ -9,8 +9,27 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 /// </summary>
 /// <param name="ResourceType">The fully qualified type, from <c>x-cybercloud-resource-type</c>.</param>
 /// <param name="Path">The URL template.</param>
-/// <param name="Component">The component key of the body schema.</param>
-/// <param name="Body">The body schema itself.</param>
+/// <param name="Component">The component key of the type's schema.</param>
+/// <param name="Body">
+///     The write body: the type's schema with the members its <c>allOf</c> inherits taken out.
+///     <para>
+///         ⚠ <b>Not the component verbatim, since issue #85.</b> The component is one schema for
+///         both directions — the read envelope's five <c>readOnly</c> members repeated beside
+///         <c>location</c>, <c>properties</c> and <c>tags</c>, and an <c>allOf</c> naming where they
+///         came from. Every surface that walks this member is building the thing a caller writes:
+///         a flag, a form field, a <c>{Model}Data</c> property. Handing them the envelope would
+///         put <c>--etag</c> on <c>cyc create</c>, an <c>id</c> control on every form and an
+///         <c>Id</c> that <c>System.Text.Json</c> serialises as <c>null</c> into every
+///         <c>PUT</c>, which the write path refuses. The split is made once, here, from what the
+///         document says the schema inherits, rather than by each of four emitters knowing five
+///         names.
+///     </para>
+/// </param>
+/// <param name="Envelope">
+///     What the type's schema inherits through <c>allOf</c>, merged: the read envelope's
+///     <c>properties</c> and its <c>x-cybercloud-read-required</c> list. Empty when the schema
+///     inherits nothing — a document from before issue #85, or an action's body.
+/// </param>
 /// <param name="Display">The <c>x-cybercloud-display</c> object.</param>
 /// <param name="SupportsTags">Whether the body carries the platform's tag bag.</param>
 /// <param name="RequiresCluster">Whether the type is placed into a cluster.</param>
@@ -49,6 +68,7 @@ public sealed record DocumentType(
     string Path,
     string Component,
     JsonObject Body,
+    JsonObject Envelope,
     JsonObject Display,
     bool SupportsTags,
     bool RequiresCluster,
@@ -253,13 +273,15 @@ public static class DocumentReader {
 
             var component = ComponentOf(item);
             var collection = CollectionOf(paths, document, resourceType);
+            var (body, envelope) = Split(schemas, (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? []);
 
             found.Add(
                 new(
                     resourceType,
                     path.Key,
                     component,
-                    (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? [],
+                    body,
+                    envelope,
                     item["x-cybercloud-display"] as JsonObject ?? [],
                     Flag(item["x-cybercloud-supports-tags"]),
                     Flag(item["x-cybercloud-requires-cluster"]),
@@ -452,6 +474,88 @@ public static class DocumentReader {
 
         return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
     }
+
+    /// <summary>
+    ///     Splits a type's schema into the write body and what it inherits through <c>allOf</c> —
+    ///     <see cref="DocumentType.Body" /> and <see cref="DocumentType.Envelope" />.
+    /// </summary>
+    /// <param name="schemas">The document's components, for the <c>allOf</c> references.</param>
+    /// <param name="schema">The type's schema, as the component holds it. Not modified.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Driven by the schema's own <c>allOf</c>, never by a list of names.</b> A member
+    ///         is the envelope's because a schema the type inherits declares it, so a sixth envelope
+    ///         member reaches every surface the day the emitter adds it, and a document with no
+    ///         <c>allOf</c> — one from before issue #85 — reads exactly as it did. A reader that knew
+    ///         "the five" would be the fifth copy of a fact the emitter is the only owner of.
+    ///     </para>
+    ///     <para>
+    ///         The write body keeps everything else: its <c>required</c>, its
+    ///         <c>additionalProperties</c>, its title and description. Only the inherited members and
+    ///         the <c>allOf</c> itself come out, because the body is what a caller sends and those
+    ///         are the parts of the schema that say what a caller receives.
+    ///     </para>
+    /// </remarks>
+    static (JsonObject Body, JsonObject Envelope) Split(JsonObject? schemas, JsonObject schema) {
+        if (schema["allOf"] is not JsonArray inherits || inherits.Count == 0) {
+            return (schema, []);
+        }
+
+        var members = new JsonObject();
+        var readRequired = new JsonArray();
+
+        foreach (var entry in inherits) {
+            if (Resolve(schemas, entry) is not { } inherited) {
+                continue;
+            }
+
+            if (inherited["properties"] is JsonObject declared) {
+                foreach (var member in declared) {
+                    members[member.Key] = member.Value?.DeepClone();
+                }
+            }
+
+            foreach (var name in Strings(inherited[OpenApiEmitter.ReadRequiredExtension])) {
+                readRequired.Add(name);
+            }
+        }
+
+        var body = (JsonObject)schema.DeepClone();
+        body.Remove("allOf");
+
+        if (body["properties"] is JsonObject own) {
+            foreach (var name in members.Select(x => x.Key).ToList()) {
+                own.Remove(name);
+            }
+        }
+
+        var envelope = new JsonObject { ["type"] = "object", ["properties"] = members };
+
+        if (readRequired.Count > 0) {
+            envelope[OpenApiEmitter.ReadRequiredExtension] = readRequired;
+        }
+
+        return (body, envelope);
+    }
+
+    /// <summary>
+    ///     The members a read always carries — <c>x-cybercloud-read-required</c> on an envelope.
+    /// </summary>
+    /// <param name="envelope">A <see cref="DocumentType.Envelope" />, or the component itself.</param>
+    /// <remarks>
+    ///     ⚠ Read from the extension and not from <c>required</c>, which the envelope deliberately
+    ///     leaves empty — the remarks on <c>OpenApiEmitter.ResourceEnvelopeSchema</c> say why. A
+    ///     surface that typed the five as optional because <c>required</c> was empty would make a
+    ///     caller null-check an id that is never absent.
+    /// </remarks>
+    public static ImmutableHashSet<string> ReadRequiredOf(JsonObject envelope) {
+        ArgumentNullException.ThrowIfNull(envelope);
+
+        return [.. Strings(envelope[OpenApiEmitter.ReadRequiredExtension])];
+    }
+
+    static IEnumerable<string> Strings(JsonNode? node) =>
+        node is JsonArray array ? array.Select(Text).Where(x => x.Length > 0) : [];
 
     /// <summary>The component key a path item's <c>200</c> body points at, or <c>""</c>.</summary>
     static string ComponentOf(JsonObject item) =>

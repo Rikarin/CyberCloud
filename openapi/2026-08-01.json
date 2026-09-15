@@ -472,7 +472,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -524,7 +524,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Analytics.clickhouseClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -587,7 +594,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Analytics.clickhouseClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -640,7 +654,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Analytics.clickhouseClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -919,7 +940,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -971,7 +992,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Cache.redis"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -1034,7 +1062,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Cache.redis"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -1087,7 +1122,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Cache.redis"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -1328,7 +1370,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1380,7 +1422,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -1443,7 +1492,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -1496,7 +1552,14 @@
         "description": "A deleted CyberCloud.ContainerRegistry/registries is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -1689,7 +1752,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -1765,7 +1835,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2023,7 +2100,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2075,7 +2152,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.agentPools"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2138,7 +2222,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.agentPools"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2191,7 +2282,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.agentPools"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2336,7 +2434,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.agentPools"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2412,7 +2517,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2464,7 +2569,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2527,7 +2639,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2580,7 +2699,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2846,7 +2972,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2898,7 +3024,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -2961,7 +3094,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -3014,7 +3154,14 @@
         "description": "A deleted CyberCloud.DBforMySQL/servers is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -3208,7 +3355,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -3284,7 +3438,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -3439,7 +3600,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3491,7 +3652,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -3554,7 +3722,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -3607,7 +3782,14 @@
         "description": "A deleted CyberCloud.DBforPostgreSQL/servers is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -3802,7 +3984,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -3878,7 +4067,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -4033,7 +4229,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4085,7 +4281,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DocumentDB.accounts"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -4148,7 +4351,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DocumentDB.accounts"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -4201,7 +4411,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DocumentDB.accounts"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -4476,7 +4693,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4528,7 +4745,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -4591,7 +4815,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -4644,7 +4875,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Mail.domains"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -4849,7 +5087,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4901,7 +5139,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.kafkaClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -4964,7 +5209,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.kafkaClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -5017,7 +5269,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.kafkaClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -5258,7 +5517,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5310,7 +5569,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.natsClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -5373,7 +5639,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.natsClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -5426,7 +5699,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.natsClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -5699,7 +5979,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5751,7 +6031,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.rabbitmqClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -5814,7 +6101,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.rabbitmqClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -5867,7 +6161,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.rabbitmqClusters"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -6140,7 +6441,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6192,7 +6493,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -6255,7 +6563,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -6308,7 +6623,14 @@
         "description": "A deleted CyberCloud.Monitor/workspaces is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -6484,7 +6806,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -6560,7 +6889,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -6715,7 +7051,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6767,7 +7103,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.publicIpAddresses"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -6830,7 +7173,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.publicIpAddresses"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -6883,7 +7233,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.publicIpAddresses"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -7131,7 +7488,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7183,7 +7540,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -7246,7 +7610,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -7299,7 +7670,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -7564,7 +7942,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7616,7 +7994,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.loadBalancers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -7679,7 +8064,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.loadBalancers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -7732,7 +8124,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.loadBalancers"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -8027,7 +8426,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8079,7 +8478,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.securityGroups"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -8142,7 +8548,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.securityGroups"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -8195,7 +8608,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.securityGroups"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -8472,7 +8892,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8524,7 +8944,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.subnets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -8587,7 +9014,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.subnets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -8640,7 +9074,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.subnets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -8893,7 +9334,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8945,7 +9386,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Sample.widgets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -9008,7 +9456,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Sample.widgets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -9061,7 +9516,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Sample.widgets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -9312,7 +9774,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9364,7 +9826,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Search.services"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -9427,7 +9896,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Search.services"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -9480,7 +9956,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Search.services"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -9862,7 +10345,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9914,7 +10397,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts.buckets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -9977,7 +10467,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts.buckets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10030,7 +10527,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts.buckets"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10204,7 +10708,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10256,7 +10760,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10319,7 +10830,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10372,7 +10890,14 @@
         "description": "A deleted CyberCloud.Storage/accounts is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10570,7 +11095,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10646,7 +11178,14 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10801,7 +11340,7 @@
         "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
         "responses": {
           "200": {
-            "description": "The resource.",
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10853,7 +11392,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Terminal.consoles"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10916,7 +11462,14 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Terminal.consoles"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -10969,7 +11522,14 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Terminal.consoles"
+                }
+              }
+            },
             "headers": {
               "Azure-AsyncOperation": {
                 "description": "The absolute URL of the operation to poll.",
@@ -11365,8 +11925,23 @@
     "schemas": {
       "CyberCloud.Analytics.clickhouseClusters": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Analytics/clickhouseClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Analytics/clickhouseClusters: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the cluster is billed in.",
             "example": "eu-central",
@@ -11374,6 +11949,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -11497,6 +12077,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -11505,6 +12098,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -11524,7 +12122,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Analytics.clickhouseClusters"
             }
@@ -11575,8 +12173,23 @@
       },
       "CyberCloud.Cache.redis": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Cache/redis. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Cache/redis: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the cache is billed in.",
             "example": "eu-central",
@@ -11584,6 +12197,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -11732,6 +12350,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -11740,6 +12371,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -11759,7 +12395,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Cache.redis"
             }
@@ -11807,8 +12443,23 @@
       },
       "CyberCloud.ContainerRegistry.registries": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.ContainerRegistry/registries. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.ContainerRegistry/registries: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the registry is billed in.",
             "example": "eu-central",
@@ -11816,6 +12467,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -11928,6 +12584,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -11936,6 +12605,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -11955,7 +12629,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
             }
@@ -12001,8 +12675,23 @@
       },
       "CyberCloud.ContainerService.managedClusters": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.ContainerService/managedClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.ContainerService/managedClusters: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the cluster is billed in.",
             "example": "eu-central",
@@ -12010,6 +12699,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -12096,6 +12790,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -12104,6 +12811,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -12123,7 +12835,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters"
             }
@@ -12166,8 +12878,23 @@
       },
       "CyberCloud.ContainerService.managedClusters.agentPools": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.ContainerService/managedClusters/agentPools. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.ContainerService/managedClusters/agentPools: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the pool is billed in.",
             "example": "eu-central",
@@ -12175,6 +12902,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -12285,6 +13017,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -12293,6 +13038,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -12312,7 +13062,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.agentPools"
             }
@@ -12325,8 +13075,23 @@
       },
       "CyberCloud.DBforMySQL.servers": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.DBforMySQL/servers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.DBforMySQL/servers: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the server is billed in.",
             "example": "eu-central",
@@ -12334,6 +13099,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -12467,6 +13237,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -12475,6 +13258,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -12494,7 +13282,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
             }
@@ -12552,8 +13340,23 @@
       },
       "CyberCloud.DBforPostgreSQL.servers": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.DBforPostgreSQL/servers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.DBforPostgreSQL/servers: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the server is billed in.",
             "example": "eu-central",
@@ -12561,6 +13364,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -12775,6 +13583,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -12783,6 +13604,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -12802,7 +13628,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
             }
@@ -12855,8 +13681,23 @@
       },
       "CyberCloud.DocumentDB.accounts": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.DocumentDB/accounts. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.DocumentDB/accounts: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the account is billed in.",
             "example": "eu-central",
@@ -12864,6 +13705,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -13023,6 +13869,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -13031,6 +13890,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -13050,7 +13914,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.DocumentDB.accounts"
             }
@@ -13096,8 +13960,23 @@
       },
       "CyberCloud.Mail.domains": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Mail/domains. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Mail/domains: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the mail domain is billed in.",
             "example": "eu-central",
@@ -13105,6 +13984,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -13241,6 +14125,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -13249,6 +14146,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -13268,7 +14170,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Mail.domains"
             }
@@ -13281,8 +14183,23 @@
       },
       "CyberCloud.Messaging.kafkaClusters": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Messaging/kafkaClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Messaging/kafkaClusters: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the cluster is billed in.",
             "example": "eu-central",
@@ -13290,6 +14207,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -13498,6 +14420,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -13506,6 +14441,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -13525,7 +14465,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Messaging.kafkaClusters"
             }
@@ -13575,8 +14515,23 @@
       },
       "CyberCloud.Messaging.natsClusters": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Messaging/natsClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Messaging/natsClusters: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the cluster is billed in.",
             "example": "eu-central",
@@ -13584,6 +14539,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -13761,6 +14721,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -13769,6 +14742,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -13788,7 +14766,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Messaging.natsClusters"
             }
@@ -13834,8 +14812,23 @@
       },
       "CyberCloud.Messaging.rabbitmqClusters": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Messaging/rabbitmqClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Messaging/rabbitmqClusters: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the cluster is billed in.",
             "example": "eu-central",
@@ -13843,6 +14836,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -13996,6 +14994,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -14004,6 +15015,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -14023,7 +15039,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Messaging.rabbitmqClusters"
             }
@@ -14069,8 +15085,23 @@
       },
       "CyberCloud.Monitor.workspaces": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Monitor/workspaces. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Monitor/workspaces: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the workspace is billed in, and the region whose telemetry stores hold its data.",
             "example": "eu-central",
@@ -14078,6 +15109,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -14204,6 +15240,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -14212,6 +15261,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -14231,7 +15285,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
             }
@@ -14292,8 +15346,23 @@
       },
       "CyberCloud.Network.publicIpAddresses": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Network/publicIpAddresses. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Network/publicIpAddresses: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the address is allocated in. ⚠ It must be a region whose operator has an external pool — nothing checks that, and an address in a region with none never becomes ready.",
             "example": "eu-central",
@@ -14301,6 +15370,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -14342,6 +15416,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -14350,6 +15437,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -14369,7 +15461,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Network.publicIpAddresses"
             }
@@ -14420,8 +15512,23 @@
       },
       "CyberCloud.Network.virtualNetworks": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Network/virtualNetworks. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Network/virtualNetworks: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the virtual network lives in. ⚠ It selects which reserved ranges the address space is checked against — a region's underlay is part of that list.",
             "example": "eu-central",
@@ -14429,6 +15536,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -14478,6 +15590,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -14486,6 +15611,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -14505,7 +15635,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks"
             }
@@ -14547,8 +15677,23 @@
       },
       "CyberCloud.Network.virtualNetworks.loadBalancers": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Network/virtualNetworks/loadBalancers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Network/virtualNetworks/loadBalancers: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the load balancer is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here.",
             "example": "eu-central",
@@ -14556,6 +15701,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -14716,6 +15866,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -14724,6 +15887,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -14743,7 +15911,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.loadBalancers"
             }
@@ -14800,8 +15968,23 @@
       },
       "CyberCloud.Network.virtualNetworks.securityGroups": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Network/virtualNetworks/securityGroups. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Network/virtualNetworks/securityGroups: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the security group lives in. It must be the network's own region — nothing checks that.",
             "example": "eu-central",
@@ -14809,6 +15992,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -14916,6 +16104,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -14924,6 +16125,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -14943,7 +16149,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.securityGroups"
             }
@@ -14994,8 +16200,23 @@
       },
       "CyberCloud.Network.virtualNetworks.subnets": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Network/virtualNetworks/subnets. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Network/virtualNetworks/subnets: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the subnet lives in. ⚠ It selects which reserved ranges the prefix is checked against, and it must be the network's own region — nothing checks that.",
             "example": "eu-central",
@@ -15003,6 +16224,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -15062,6 +16288,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -15070,6 +16309,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -15089,7 +16333,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.subnets"
             }
@@ -15157,8 +16401,23 @@
       },
       "CyberCloud.Sample.widgets": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Sample/widgets. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Sample/widgets: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the widget is billed in.",
             "example": "eu-central",
@@ -15166,6 +16425,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -15236,6 +16500,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -15244,6 +16521,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -15263,7 +16545,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Sample.widgets"
             }
@@ -15311,8 +16593,23 @@
       },
       "CyberCloud.Search.services": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Search/services. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Search/services: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the service is billed in.",
             "example": "eu-central",
@@ -15320,6 +16617,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -15441,6 +16743,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -15449,6 +16764,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -15468,7 +16788,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Search.services"
             }
@@ -15509,8 +16829,23 @@
       },
       "CyberCloud.Storage.accounts": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Storage/accounts. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Storage/accounts: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the account is billed in.",
             "example": "eu-central",
@@ -15518,6 +16853,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -15663,6 +17003,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -15671,6 +17024,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -15690,7 +17048,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
             }
@@ -15736,8 +17094,23 @@
       },
       "CyberCloud.Storage.accounts.buckets": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Storage/accounts/buckets. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Storage/accounts/buckets: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the bucket is billed in.",
             "example": "eu-central",
@@ -15745,6 +17118,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -15782,6 +17160,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -15790,6 +17181,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -15809,7 +17205,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Storage.accounts.buckets"
             }
@@ -15848,8 +17244,23 @@
       },
       "CyberCloud.Terminal.consoles": {
         "additionalProperties": false,
-        "description": "The body of a CyberCloud.Terminal/consoles. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Terminal/consoles: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
         "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
           "location": {
             "description": "The region the console is billed in.",
             "example": "eu-central",
@@ -15857,6 +17268,11 @@
             "type": "string",
             "x-cybercloud-immutable": true,
             "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
           },
           "properties": {
             "additionalProperties": false,
@@ -15999,6 +17415,19 @@
             ],
             "type": "object"
           },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
           "tags": {
             "type": "object",
             "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
@@ -16007,6 +17436,11 @@
             },
             "maxProperties": 50,
             "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
           }
         },
         "required": [
@@ -16066,7 +17500,7 @@
           },
           "value": {
             "type": "array",
-            "description": "The resources on this page, ordered by id.",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
             "items": {
               "$ref": "#/components/schemas/CyberCloud.Terminal.consoles"
             }
@@ -16233,10 +17667,20 @@
       },
       "OperationStatus": {
         "type": "object",
-        "description": "An operation's current state. ⚠ The members are docs/plan/10 § Long-running operations, over HTTP's, which is a subset of the OperationStatus wire type — no HTTP projection of that record is declared anywhere in the tree.",
+        "description": "An operation's current state. ⚠ The members are docs/plan/10 § Long-running operations, over HTTP's, which is a subset of the OperationStatus wire type — no HTTP projection of that record is declared anywhere in the tree. id, status, startTime, percentComplete and progress are always present; endTime once the status is terminal; error once it is Failed.",
         "properties": {
+          "endTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the operation reached a terminal status. Absent until it does."
+          },
           "error": {
             "$ref": "#/components/schemas/Error"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The operation id — the last segment of the URL this was polled from."
           },
           "percentComplete": {
             "type": "integer",
@@ -16249,6 +17693,11 @@
               "$ref": "#/components/schemas/OperationProgress"
             }
           },
+          "startTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the write was accepted."
+          },
           "status": {
             "$ref": "#/components/schemas/OperationState"
           }
@@ -16256,7 +17705,61 @@
         "required": [
           "status"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "x-cybercloud-read-required": [
+          "id",
+          "percentComplete",
+          "progress",
+          "startTime",
+          "status"
+        ]
+      },
+      "Resource": {
+        "type": "object",
+        "title": "Resource",
+        "description": "The envelope every resource is read in — docs/plan/10 § Request pipeline, step 9. Every type's schema is allOf this: a GET, a list element and a 202 all carry these five members beside the body the type declares, in this order, then tags. ⚠ All five are readOnly and none is required, although a read always carries every one — the same schema validates a PUT, and this platform refuses a read-only member on a write rather than ignoring it (docs/plan/08 § The write path, end to end). x-cybercloud-read-required lists what a read guarantees.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
+          },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          }
+        },
+        "x-cybercloud-read-required": [
+          "etag",
+          "id",
+          "name",
+          "provisioningState",
+          "type"
+        ]
       },
       "Scope": {
         "type": "object",

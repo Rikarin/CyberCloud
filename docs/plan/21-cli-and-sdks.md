@@ -272,6 +272,51 @@ the one way its medium allows, keeping the document's own member name as the wir
 | **`cyc`** | Nothing — a command line has no nesting | `--mode`, and `--persistence-mode` only when a flat name collides | The flag carries the JSON pointer and writes it |
 | **Portal forms** | Nothing — one field per property | One field, keyed on the pointer | The field carries the JSON pointer |
 
+**The read envelope is in the document too, and every surface reads it from there** (#85). A
+resource is read in Azure's envelope — `id`, `name`, `type`, `location`, `provisioningState`,
+`etag`, then the body's `properties`, then `tags` — and until #85 the document described none of the
+five the server owns: every `GET` `200` and list element referenced the write body, which said
+`additionalProperties: false` over three members, so a client validating a response rejected every
+resource it read. Now every type's schema is `allOf` a shared `Resource` component and repeats its
+five members as `readOnly` — the shape Azure's own resource-manager specs have — and the `202` every
+write returns declares the body it always carried. `DocumentReader` splits the schema once, into the
+write body (`Body`) and what it inherits (`Envelope`), and:
+
+| Surface | The write body | The read envelope |
+|---|---|---|
+| **.NET SDK** | `{Model}Data`, as above | `{Model}Resource` — `Id`, `Name`, `Type`, `ProvisioningState`, `Etag` with their wire names, plus `Data`; `ProvisioningState` is a file-level enum from the same component |
+| **TypeScript** | `{Model}Data`, as above | `{Model}Resource extends Resource, {Model}Data`, with `type` narrowed to the literal; `Resource` and `ProvisioningState` emitted once |
+| **`cyc`** | The flags | Nothing — no `--etag` on `create`, and that absence is asserted |
+| **Portal forms** | The fields | Nothing — no `id` control, likewise asserted |
+
+⚠ **Why one schema with `readOnly` rather than a `{Type}.Resource` the `200` points at.** The
+[§ OpenAPI](#openapi) gate treats every changed scalar in a published document as breaking, and the
+`$ref` a `200` already carries is a scalar; adding an `allOf`, five properties, a component and a
+`202` body is what it calls an addition. The other shape would have needed a new api-version for a
+document that was wrong from its first day. What the shape costs: none of the five can be
+`required`, because the same schema validates a `PUT` and this platform *refuses* a read-only member
+on a write rather than ignoring it (OpenAPI 3.1.1 § Validating readOnly and writeOnly assumes the
+opposite). `x-cybercloud-read-required` on `Resource` and on `OperationStatus` carries the read-side
+promise instead, and both client emitters type the members as present because of it.
+`ServedShapesMatchTheDocumentTests` in the gateway suite validates every served body — a read, a list,
+the three `202`s, a running and a failed operation, a scope — against the document emitted from the
+same registry.
+
+⚠ **The promise in the extension is guarded by the [§ OpenAPI](#openapi) gate, and for one day it was
+not.** That gate treats every `x-` key as prose, and a name dropped from `x-cybercloud-read-required`
+is not prose: it turns a TypeScript `readonly etag: string` into an optional for every consumer,
+which is a narrowed type. `OpenApiCompatibility` now compares that list as the set it is and reports
+a lost name as `read-required-removed`; a name added widens the read and is fine. The review that
+found the gap also found the .NET half of the promise undelivered — the stand-in declared the five
+members and populated none, so `Id` was empty on every resource it produced. The hand-written half
+now reads the same bytes twice, once as `ResourceEnvelope<TProvisioningState>` and once as the body,
+and `EnvelopeTests` reads all five back off a `GET`, a list element and an operation's value.
+
+⚠ **The .NET `{Model}Resource` said `Id` and nothing else until #85**, and the TypeScript one said
+`id`, `name`, `type` and `properties`; both were literals in the emitter, and the portal typed
+`provisioningState`, `location`, `etag` and `tags` by hand in `resource-verbs.ts`. The hand-written
+`ResourceEnvelope` there now extends the generated `Resource`.
+
 ⚠ **The .NET row said something else until 2026-09-15, and the difference was a defect.** The SDK
 flattened every leaf onto one class, so `/properties/persistence/mode` was `PersistenceMode` with
 `[JsonPropertyName("mode")]` — the same wire name as the top-level `mode`, on one type.
@@ -284,8 +329,9 @@ the check a compiler cannot make.
 
 ⚠ **The worked example in § The .NET SDK is the brief's sketch, not the emitted shape.** A generated
 body is `new PostgresServerData { Location = "eu-central", Properties = new() { … } }` — the
-`properties` envelope is a container like any other, because the document says it is, and #72 is the
-open question of what the server puts inside it.
+`properties` envelope is a container like any other, because the document says it is. #72 settled
+what the server puts inside it — the projected document, member for member, spliced into the read
+envelope — and #85 put that envelope into the document.
 
 ## Other SDKs
 

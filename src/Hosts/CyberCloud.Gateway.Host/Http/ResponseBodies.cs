@@ -42,7 +42,17 @@ static class ResponseBodies {
     ///     placement and the resource-graph projection read, and it is what the Azure envelope puts
     ///     beside <c>id</c>, <c>name</c> and <c>type</c>. The other five are here so that the rule is
     ///     a rule rather than a special case, and so a schema that ever declared <c>/etag</c> could
-    ///     not make the response carry two.
+    ///     not make the response carry two — <c>OpenApiEmitter</c> refuses such a schema at
+    ///     generation since issue #85, for the same reason from the other side: the provider's value
+    ///     would be accepted on a write and never served.
+    ///     <para>
+    ///         ⚠ Since issue #85 the published document declares these members too — every type's
+    ///         schema <c>allOf</c>s a shared <c>Resource</c> component and repeats the five the
+    ///         server owns as <c>readOnly</c> — and
+    ///         <c>ServedShapesMatchTheDocumentTests.AReadValidatesAgainstTheGet200</c> validates
+    ///         what this writer produces against it. Until then the document forbade five of the
+    ///         eight members this class writes.
+    ///     </para>
     /// </remarks>
     static readonly HashSet<string> EnvelopeMembers = new(StringComparer.Ordinal) {
         "id", "name", "type", "location", "provisioningState", "etag", "tags"

@@ -127,6 +127,8 @@ public static class SdkEmitter {
             .Append(Quote(version))
             .Append(";\n}\n");
 
+        AppendEnvelopeEnums(built, document);
+
         foreach (var type in types) {
             AppendType(built, type, names[type.ResourceType], version);
         }
@@ -134,6 +136,26 @@ public static class SdkEmitter {
         AppendScopes(built, document, version);
 
         return built.ToString();
+    }
+
+    /// <summary>
+    ///     The closed sets of the read envelope — <c>ProvisioningState</c> — declared once for the
+    ///     file, before the first <c>{Model}Resource</c> that types a member with one.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Named with no model prefix, on purpose: the envelope is one schema shared by every
+    ///     type, so its enum is <c>ProvisioningState</c> rather than twenty-three copies of
+    ///     <c>{Model}ProvisioningState</c>. <see cref="AppendResource" /> names the member's type
+    ///     through the same <see cref="EnumNaming" /> with the same empty model, which is what keeps
+    ///     the declaration and the use one identifier.
+    /// </remarks>
+    static void AppendEnvelopeEnums(StringBuilder built, JsonObject document) {
+        if (document["components"]?["schemas"]?[OpenApiEmitter.ResourceEnvelopeSchema] is not JsonObject envelope) {
+            return;
+        }
+
+        var leaves = DocumentReader.LeavesOf(envelope);
+        AppendEnums(built, EnumNaming.For(string.Empty, leaves), leaves);
     }
 
     /// <summary>The file one api-version's SDK is written to.</summary>
@@ -178,7 +200,7 @@ public static class SdkEmitter {
     ///         on it — and throwing is the last resort for the case where even that collides.
     ///     </para>
     /// </remarks>
-    static ImmutableDictionary<string, string> ModelNames(ImmutableArray<DocumentType> types) {
+    internal static ImmutableDictionary<string, string> ModelNames(ImmutableArray<DocumentType> types) {
         var bare = new Dictionary<string, string>(StringComparer.Ordinal);
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
 
@@ -262,7 +284,13 @@ public static class SdkEmitter {
                 .Append(indent)
                 .Append("/// <summary>The values ")
                 .Append(Escape(leaf.JsonPointer))
-                .Append(" accepts. ⚠ Closed: the write path refuses anything else.</summary>\n")
+                // A read-only set is the server's vocabulary, not a caller's choice, so "accepts"
+                // would describe a write that is refused.
+                .Append(
+                    DocumentReader.Flag(leaf.Schema["readOnly"])
+                        ? " carries. ⚠ Read-only: the server sets it, and a write that carries it is refused.</summary>\n"
+                        : " accepts. ⚠ Closed: the write path refuses anything else.</summary>\n"
+                )
                 .Append(indent)
                 .Append("public enum ")
                 .Append(naming.NameOf(leaf))
@@ -798,15 +826,74 @@ public static class SdkEmitter {
                 _ => string.Empty
             };
 
+    /// <summary>
+    ///     The <c>{Model}Resource</c>: the read envelope's members, then the body, then the
+    ///     operations.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The envelope members come from the document, not from a list in this method —
+    ///     issue #85.</b> Until that issue this class declared <c>Id</c> and nothing else, from a
+    ///     string literal here, while the gateway served <c>id</c>, <c>name</c>, <c>type</c>,
+    ///     <c>provisioningState</c> and <c>etag</c> and the document described none of them. Every
+    ///     member below is a leaf of <see cref="DocumentType.Envelope" />, typed by the same
+    ///     <see cref="ClrType" /> every body member is, and always present because
+    ///     <see cref="DocumentReader.ReadRequiredOf" /> says so — not <c>required</c> in C#, because
+    ///     the hand-written half constructs a resource from a response and sets them after the
+    ///     fact, and initialised because CS8618 is a warning the <c>Generated SDK compiles</c> gate
+    ///     does not see.
+    ///     <para>
+    ///         ⚠ <b>Declaring the five is half of the promise, and the 2026-09-15 review found the
+    ///         other half missing.</b> The <c>[JsonPropertyName]</c> emitted on each member reaches
+    ///         no serializer — this emitter writes no <c>JsonSerializerContext</c> — so the members
+    ///         are populated only if the hand-written half reads the envelope off the response and
+    ///         assigns them. It does so through <c>ResourceEnvelope&lt;TProvisioningState&gt;</c> in
+    ///         <c>CyberCloud.Sdk</c>, and <c>CyberCloud.Sdk.Tests/StandIn/WidgetStandIn.cs</c> is
+    ///         the instance: <c>WidgetResource.Read</c> deserialises the same bytes once as the
+    ///         envelope and once as the body. EmitterContract.cs § 1's <c>{Type}Resource</c> row
+    ///         states the duty.
+    ///     </para>
+    /// </remarks>
     static void AppendResource(StringBuilder built, DocumentType type, string model) {
+        var envelope = DocumentReader.LeavesOf(type.Envelope);
+        var served = DocumentReader.ReadRequiredOf(type.Envelope);
+        var naming = EnumNaming.For(string.Empty, envelope);
+        var members = MemberNaming.For(model + "Resource", envelope);
+
         built.Append("\n/// <summary>One ")
             .Append(Escape(type.DisplayName))
-            .Append(", and the operations on it.</summary>\n")
+            .Append(", as the API returns it, and the operations on it.</summary>\n")
             .Append("public sealed partial class ")
             .Append(model)
-            .Append("Resource {\n")
-            .Append("    /// <summary>The resource's fully qualified id.</summary>\n")
-            .Append("    public string Id { get; init; } = string.Empty;\n")
+            .Append("Resource {\n");
+
+        foreach (var leaf in envelope) {
+            var always = served.Contains(leaf.Name);
+            var clr = ClrType(naming, members, leaf with { Required = always });
+
+            built.Append("    /// <summary>")
+                .Append(Escape(Description(leaf)))
+                .Append(always ? " Always present on a read." : string.Empty)
+                .Append("</summary>\n")
+                .Append("    [JsonPropertyName(")
+                .Append(Quote(leaf.Name))
+                .Append(")]\n")
+                .Append("    public ")
+                .Append(clr)
+                .Append(' ')
+                .Append(members.NameOf(leaf))
+                .Append(" { get; init; }")
+                // A non-nullable string with no initialiser is CS8618 in the consuming project; an
+                // enum's default is its Unknown member, which is the honest value before a response
+                // has been read.
+                .Append(clr == "string" ? " = string.Empty;" : string.Empty)
+                .Append('\n');
+
+            if (leaf.JsonPointer != envelope[^1].JsonPointer) {
+                built.Append('\n');
+            }
+        }
+
+        built
             // ⚠ `required`, NOT `= new()`, AND THE INITIALISER WAS CS9035 IN EVERY RESOURCE THAT HAS
             // A REQUIRED BODY MEMBER — 110 of them across 22 {Model}Resource types, found by the
             // `Generated SDK compiles` gate on the day it was added (issue #73). ⚠ 110, and the way
