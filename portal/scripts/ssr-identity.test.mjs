@@ -77,6 +77,13 @@ const base = `http://127.0.0.1:${server.address().port}`;
  *
  * ⚠ The point is that NONE of it may influence the render or appear in it. A page that echoed any
  * of these into the document would be handing them to the next thing that reads the HTML.
+ *
+ * ⚠ `x-forwarded-for` makes @angular/ssr 22.1 print `Received "x-forwarded-for" header but
+ * "trustProxyHeaders" was not set up to allow it` on stderr. Since 22.1 the engine strips every
+ * `Forwarded` and `X-Forwarded-*` header it was not told to trust, and warns as it does, so the
+ * line is the engine agreeing with this file — neither server.ts sets `trustProxyHeaders`. If one
+ * ever does, this header stops being stripped and the checks below are what catch it reaching
+ * the document.
  */
 const hostileHeaders = {
   cookie: '__Host-cyc-session=SESSIONVALUE9f3a; other=OTHERVALUE7b21',

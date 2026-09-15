@@ -18,8 +18,8 @@
  * head, even though nothing in the M1 shell imports `@xui/echarts` yet: discovering the pin when
  * the first chart lands would have meant moving the CDK underneath a working shell. At
  * `@xui/echarts@3.0.0` that peer is `"22"` (measured 2026-09-15), so the CDK pin is no longer
- * forced by this package; it stays at 22.0.6 for the reason portal/README.md § The Angular pin
- * gives, and the first chart no longer has to move anything.
+ * forced by this package; it moved to 22.1.4 with the rest of the framework (#87) for the reason
+ * portal/README.md § The Angular pin gives, and the first chart no longer has to move anything.
  *
  * `echarts` itself is deliberately *not* a dependency yet. It is ~350 KB and would have to be
  * lazily loaded from a route chunk anyway to stay inside the 120 KB route budget in docs/plan/20
