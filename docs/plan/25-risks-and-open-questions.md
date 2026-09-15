@@ -186,9 +186,11 @@ Six, all settled, kept here because each changed what gets built.
    version on publish and does not reflect it back into the repository, so the working tree
    understates what is released. The published truth as of 2026-08-11 is `@xui/* 2.2.0`, whose
    peer range is `@angular/*: 22` — a **major** range, not an exact pin — and which does not peer
-   on `tailwindcss` at all. The portal therefore depends on `@xui/* ^2.2.0` from the registry and is
-   free within Angular 22.x. ADR-017's substance stands; its version numbers were a snapshot of the
-   wrong source. [20](20-portal.md).
+   on `tailwindcss` at all. The portal therefore depends on `@xui/*` from the registry and is
+   free within Angular 22.x. ⚠ That last clause was false at 2.2.x — five packages peered
+   `@angular/common: 22.0.8` exactly — and is true again at 3.0.0, taken 2026-09-15; ADR-017
+   carries both corrections and portal/README.md § The Angular pin the measured table. ADR-017's
+   substance stands; its version numbers were a snapshot of the wrong source. [20](20-portal.md).
 
 Plus one thing the brief did not raise and that the audit made unavoidable: **the licence review**
 (ADR-011). Redis, Vault, MongoDB, Elasticsearch and Terraform have all changed licences in ways that

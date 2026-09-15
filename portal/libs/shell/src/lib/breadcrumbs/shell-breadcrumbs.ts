@@ -18,19 +18,21 @@ import { TenantContextStore } from '../context/tenant-context';
  * back to it rather than navigating forward to a fresh copy, which is what keeps the back-and-forth
  * between a resource and its resource group from growing the stack without bound.
  *
- * ⚠ **Known upstream defect — `@xui/overflow-list` is not SSR-safe at 2.2.0.** `xui-breadcrumbs`
- * composes `xui-overflow-list`, whose width measurement does `[...ruler.nativeElement.children]`.
- * A spread needs an iterator, and the DOM implementation Angular renders with on the server returns
- * a plain array-like for `children`, so every server render logs
- * `TypeError: this.ruler.nativeElement.children is not iterable`.
+ * ⚠ **Upstream defect, fixed in xUI at 2.2.1 — `@xui/overflow-list` was not SSR-safe at 2.2.0.**
+ * `xui-breadcrumbs` composes `xui-overflow-list`, whose width measurement did
+ * `[...ruler.nativeElement.children]` on every platform. A spread needs an iterator, and the DOM
+ * implementation Angular renders with on the server returns a plain array-like for `children`, so
+ * every server render logged `TypeError: this.ruler.nativeElement.children is not iterable` — not
+ * fatal (the measurement bailed, the trail rendered uncollapsed, the document was correct), but an
+ * error per request in production logs.
  *
- * It is **not fatal** — the measurement bails, the trail renders uncollapsed, and the document is
- * correct — but it is an error per request in production logs. The fix is one call in xUI:
- * `Array.from(...)` instead of `[...]`, which accepts an array-like and needs no iterator. Per
- * docs/plan/02 § ADR-017 ("Where the portal needs a component xUI does not have, it is built in
- * xUI and released there") this is xUI's to fix, and no workaround is applied here: the available
- * ones all mean patching DOM semantics process-wide on the server to paper over one library's
- * spread, which is a worse trade than a logged error.
+ * No workaround was applied here, per docs/plan/02 § ADR-017 ("Where the portal needs a component
+ * xUI does not have, it is built in xUI and released there"): the available ones all meant patching
+ * DOM semantics process-wide on the server to paper over one library's spread. The fix that shipped
+ * is not `Array.from` but not measuring on the server at all — the effect returns before the spread
+ * unless `isPlatformBrowser`, leaving every item visible until the client measures (checked in the
+ * 3.0.0 bundle on 2026-09-15). The note stays because it is the shape of every SSR defect this
+ * shell has met since: a browser API reached from an effect that also runs on the server.
  */
 @Component({
   selector: 'cc-breadcrumbs',

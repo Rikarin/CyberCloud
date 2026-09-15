@@ -12,11 +12,14 @@
  * | Log search | `@xui/code-block` and a results grid over ClickHouse. ⚠ docs/plan/20: "Needs a query cost preview or someone will run a 400-day scan" — the preview is a server-side estimate this library cannot fake | 0.6 |
  * | Network topology | `@xui/node-graph` over the VPC/subnet/peering graph from docs/plan/14. Not a chart library problem; the data shape is the work | 0.5 |
  *
- * ⚠ One dependency note that is a decision, not a detail. `@xui/echarts@2.2.0` peers
+ * ⚠ One dependency note that is a decision, not a detail. `@xui/echarts@2.2.x` peered
  * `"@angular/cdk": "22.0.6"` — an exact version, where most `@xui/*` packages peer the `22` major
- * range. That is why `portal/package.json` pins `@angular/cdk` to `22.0.6` rather than the 22.x
+ * range. That is why `portal/package.json` pinned `@angular/cdk` to `22.0.6` rather than the 22.x
  * head, even though nothing in the M1 shell imports `@xui/echarts` yet: discovering the pin when
- * the first chart lands would mean moving the CDK underneath a working shell.
+ * the first chart lands would have meant moving the CDK underneath a working shell. At
+ * `@xui/echarts@3.0.0` that peer is `"22"` (measured 2026-09-15), so the CDK pin is no longer
+ * forced by this package; it stays at 22.0.6 for the reason portal/README.md § The Angular pin
+ * gives, and the first chart no longer has to move anything.
  *
  * `echarts` itself is deliberately *not* a dependency yet. It is ~350 KB and would have to be
  * lazily loaded from a route chunk anyway to stay inside the 120 KB route budget in docs/plan/20
