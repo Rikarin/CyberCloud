@@ -405,17 +405,28 @@ public sealed record WriteAccepted {
 ///     A resource as the API renders it, at one api-version.
 /// </summary>
 /// <remarks>
-///     ⚠
-///     <b>
-///         <see cref="Properties" /> is <i>projected</i> to <see cref="ApiVersion" /> and is not the
-///         grain's whole state.
-///     </b> docs/plan/08 § The provider registry:
-///     <i>
-///         "the grain's state is a
-///         <b>superset</b> and a read at an old version projects down"
-///     </i>. A snapshot that leaked a
-///     newer version's field would break the SDK that was generated against the older one, which is
-///     the failure the immutable-date rule exists to prevent.
+///     <para>
+///         ⚠
+///         <b>
+///             <see cref="Body" /> is <i>projected</i> to <see cref="ApiVersion" /> and is not the
+///             grain's whole state.
+///         </b> docs/plan/08 § The provider registry:
+///         <i>
+///             "the grain's state is a
+///             <b>superset</b> and a read at an old version projects down"
+///         </i>. A snapshot that leaked a
+///         newer version's field would break the SDK that was generated against the older one, which
+///         is the failure the immutable-date rule exists to prevent.
+///     </para>
+///     <para>
+///         ⚠ <b><see cref="Location" /> is the manager's own record and the one the API serves.</b>
+///         The registry declares <c>/location</c> as a body property — that is how a caller states it
+///         on a write, and why it is required and immutable in every published type — and the write
+///         path copies it here at step 9. So the same value stands in two places, and only this one
+///         reaches the wire: the gateway renders <c>location</c> from this field and skips the body's
+///         copy, because a body that carried it a second time is how issue #72 came to serve
+///         <c>location</c> twice.
+///     </para>
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.ResourceManager.ResourceSnapshot")]
@@ -444,9 +455,23 @@ public sealed record ResourceSnapshot {
     [Id(5)]
     public ProvisioningState ProvisioningState { get; init; } = ProvisioningState.Unknown;
 
-    /// <summary>The projected body, as JSON text.</summary>
+    /// <summary>
+    ///     The projected body, as JSON text — the whole document the api-version declares, in the
+    ///     shape the published OpenAPI document gives the type.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not the inner <c>properties</c> slice, and it was named <c>Properties</c> until that
+    ///     name did exactly the damage a name can do.</b> For a type declaring <c>/location</c> and
+    ///     <c>/properties/message</c> this holds <c>{"location":…,"properties":{"message":…}}</c>:
+    ///     every declared pointer at its full path, which is what <c>ResourceProjection.Project</c>
+    ///     produces, what the quota and purge-protection readers resolve their <c>/properties/…</c>
+    ///     pointers against, and what every provider's conformance run compares to the body it wrote.
+    ///     The gateway splices these members into the response envelope; a writer that nested this
+    ///     under a <c>properties</c> member of its own served <c>properties.properties</c> — issue
+    ///     #72.
+    /// </remarks>
     [Id(6)]
-    public string Properties { get; init; } = "{}";
+    public string Body { get; init; } = "{}";
 
     /// <summary>Key/value tags, at most 50 pairs. docs/plan/06 § Tags, locks.</summary>
     [Id(7)]

@@ -59,7 +59,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         // ⚠ A BODY WHOSE EVERY PROPERTY IS SECRET HAS NO READABLE PROJECTION, AND THAT LEAKS.
         //
         // ResourceManagerService.ReadablePointers withholds the Secret pointers by handing the grain
-        // the others, and ResourceGrain.Project reads an empty list as "project the whole superset" —
+        // the others, and ResourceProjection.Project reads an empty list as "project the whole superset" —
         // the escape hatch the delete path and the reconcile driver need. So a body like this would
         // project everything it meant to withhold, and do it silently.
         //

@@ -72,6 +72,19 @@ Steps 5 and 8 are the load-bearing ones. Rate limiting before dispatch means a f
 the gateway cannot be bypassed by a future internal caller, and there is exactly one enforcement seam
 ([07](07-rebac-authorization.md)).
 
+⚠ **Step 9's resource body is the envelope around the api-version's projected body, and `location`
+is served once, from the manager's own record.** The grain projects a resource to
+`{ "location": …, "properties": { … } }` — the body `openapi/{version}.json` publishes for the type,
+and what every provider's conformance run compares to the body it wrote — and the gateway writes
+`id`, `name`, `type`, `location`, `provisioningState` and `etag` around it, then the body's own
+members, then `tags`. Every published type declares `/location` as a required, immutable body
+property, so the value arrives in the body and the write path copies it onto the resource at step 9
+of [08](08-resource-manager.md) § The write path; that copy is the one served, and the body's stays
+off the wire. Issue #72 is what happens when the writer takes the projected document for the inner
+`properties` slice — `properties.properties.*` and `location` twice — and it went unseen because the
+gateway suite's substitute manager hand-wrote the shape the writer expected. The substitute now
+builds its snapshot through the grain's own projection, so the two cannot drift apart on one commit.
+
 ⚠ **Step 3 is a security boundary, not a routing convenience, and this was not obvious.** The
 gateway is an Orleans **client**, and `Orleans.Multitenant`'s call filter skips clients entirely
 ([00 § The tenant-separation row, corrected](00-vision-and-principles.md) has the decompiled proof).

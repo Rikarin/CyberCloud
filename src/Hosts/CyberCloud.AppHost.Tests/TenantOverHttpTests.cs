@@ -282,40 +282,37 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
 
         resource.GetProperty("name").GetString().ShouldBe(Widget);
 
-        // ⚠⚠ THE SHAPE BELOW IS THE ONE THE PLATFORM SERVES AND IT IS ALMOST CERTAINLY WRONG.
-        // ⚠⚠ https://github.com/Rikarin/CyberCloud/issues/69 — do not "tidy" this assertion.
+        // ⚠ THE SHAPE BELOW IS THE PUBLISHED ONE, AND THIS FILE IS WHAT FOUND IT WAS NOT SERVED.
         //
-        // The rendered body nests `properties` inside `properties` and repeats `location`:
+        // The first run of this test — the first HTTP request ever driven to the real manager —
+        // read back `properties.properties.message` with `location` twice (issue #72).
+        // ResourceGrain projected each declared pointer at its FULL path, so `/location` and
+        // `/properties/message` came back as a whole document; ResponseBodies.WriteResource then
+        // wrote that document raw under a `properties` member of its own, on the assumption that a
+        // field named `Properties` held the inner slice. Both halves were self-consistent and they
+        // disagreed, and CyberCloud.Gateway.Host.Tests — which renders this body constantly — saw
+        // nothing, because its substituted IResourceManager hand-wrote a snapshot in the shape the
+        // writer expected. A double and the real thing with two shapes under one name: this file's
+        // own thesis, one layer down.
         //
-        //   { "id":…, "name":…, "location":"eu-central", "provisioningState":"Succeeded",
-        //     "properties": { "location":"eu-central",
-        //                     "properties": { "clusterId":…, "message":"hello", … } } }
-        //
-        // ResourceGrain.Project writes each declared pointer at its FULL path, so a type declaring
-        // `/location` and `/properties/message` projects a whole document; ResponseBodies
-        // .WriteResource then writes that document raw under a `properties` member, on the stated
-        // assumption that it is already the inner slice. Both halves are self-consistent and they
-        // disagree, which is docs/plan/08's projection and docs/plan/10's Azure shape meeting at
-        // ResourceSnapshot.Properties with nothing covering the join.
-        //
-        // ⚠ WHY NOTHING SAW IT, AND IT IS THIS FILE'S OWN THESIS ARRIVING ONE LAYER DOWN.
-        // CyberCloud.Gateway.Host.Tests renders this body constantly — against a SUBSTITUTED
-        // IResourceManager whose snapshots carry a hand-written inner object, so the substitute's
-        // Properties and the real grain's Properties are different shapes with one name and every
-        // assertion about the rendered body was made against the wrong one. The first HTTP request
-        // ever driven to the real manager found it, which is the whole argument for this file.
-        //
-        // ⚠ NOT FIXED HERE ON PURPOSE. The wire shape is the API contract: changing it moves the
-        // published OpenAPI document, the generated SDK, the cyc verb tree and the portal forms, all
-        // four of which are byte-compared by the Generated surfaces gate, and the OpenAPI
-        // compatibility gate diffs the published version against its predecessor. That is an owner's
-        // decision, not a passing repair. Asserted as-served so the suite is honest about what ships;
-        // when #72 lands this assertion fails and this comment says why.
-        resource.GetProperty("properties")
-            .GetProperty("properties")
-            .GetProperty("message")
-            .GetString()
-            .ShouldBe("hello");
+        // The grain was right — its projection IS the body openapi/2026-08-01.json publishes, and
+        // every provider's conformance run compares it to the body that was written — so the writer
+        // now splices that document into the envelope, the field is named Body, and the gateway
+        // suite's substitute builds its snapshot through the same ResourceProjection.Project the
+        // grain uses (ResourceBodyShapeTests). `location` is served once, from the manager's own
+        // ResourceSnapshot.Location; the body's copy of it is the caller's spelling of the same
+        // fact and stays off the wire. This assertion reads the body the way the generated SDK does.
+        resource.GetProperty("properties").GetProperty("message").GetString().ShouldBe("hello");
+        resource.GetProperty("location").GetString().ShouldBe("eu-central");
+
+        resource.GetProperty("properties").TryGetProperty("properties", out _)
+            .ShouldBeFalse("the body is nested inside its own envelope again — issue #72");
+        resource.GetProperty("properties").TryGetProperty("location", out _)
+            .ShouldBeFalse("`location` reached the wire inside `properties` as well as beside it — issue #72");
+
+        // ⚠ Counted rather than looked up. JsonDocument resolves a duplicated name to one of its
+        // values, so GetProperty("location") passes over a body that carries it twice.
+        resource.EnumerateObject().Count(x => x.Name == "location").ShouldBe(1);
 
         // ── Step 6: list it. ────────────────────────────────────────────────────────────────────
         //

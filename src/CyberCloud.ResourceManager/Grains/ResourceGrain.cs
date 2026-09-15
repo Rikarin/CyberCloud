@@ -389,9 +389,17 @@ public sealed class ResourceGrain(
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>The resource as the API renders it, projected to one api-version.</summary>
+    /// <remarks>
+    ///     ⚠ <see cref="ResourceSnapshot.Body" /> is <see cref="ResourceProjection.Project" /> over
+    ///     the stored superset and nothing else — the whole projected document, <c>location</c> and
+    ///     <c>properties</c> included. The gateway's writer splices that document into the response
+    ///     envelope; the projection is shared rather than private so the gateway suite's substitute
+    ///     manager can produce the same shape from the same function.
+    /// </remarks>
     ResourceSnapshot Snapshot(string apiVersion, ImmutableArray<string> declaredPointers) {
         var superset = Parse(state.State.Superset).GetValueOrThrow();
-        var projected = Project(superset, declaredPointers);
+        var projected = ResourceProjection.Project(superset, declaredPointers);
 
         var type = ResourceTypeName.TryParse(TypeOf(state.State.Path), out var parsedType) ? parsedType : default;
 
@@ -402,7 +410,7 @@ public sealed class ResourceGrain(
             Name = NameOf(state.State.Path),
             ApiVersion = apiVersion,
             ProvisioningState = state.State.ProvisioningState,
-            Properties = projected.ToJsonString(),
+            Body = projected.ToJsonString(),
             Tags = state.State.Tags.ToImmutableDictionary(StringComparer.Ordinal),
             Etag = state.State.Etag,
             Location = state.State.Location,
@@ -415,40 +423,6 @@ public sealed class ResourceGrain(
             OperationId = state.State.OperationId,
             Lock = state.State.Lock
         };
-    }
-
-    /// <summary>
-    ///     Keeps only the pointers an api-version declares — the "projects down" of
-    ///     docs/plan/08 § The provider registry.
-    /// </summary>
-    /// <remarks>
-    ///     ⚠ <b>An empty pointer list projects the whole superset, not nothing.</b> That is a
-    ///     deliberate escape hatch for the paths that have no registry to consult — the delete path,
-    ///     which reports a snapshot of a resource whose api-version may already be retired, and the
-    ///     reconcile driver, which needs the state as stored. Every path that <i>does</i> have a
-    ///     registry passes the real list, and
-    ///     <c>WritePathTests.AReadAtAnOldVersionKeepsGettingTheShapeItWasWrittenAgainst</c> asserts an
-    ///     old version never sees a newer one's field.
-    /// </remarks>
-    static JsonObject Project(JsonObject superset, ImmutableArray<string> declaredPointers) {
-        if (declaredPointers.IsDefaultOrEmpty) {
-            return (JsonObject)superset.DeepClone();
-        }
-
-        var projected = new JsonObject();
-
-        foreach (var pointer in declaredPointers) {
-            var node = JsonPointer.Read(superset, pointer);
-            if (node is null or JsonObject) {
-                // A container is rebuilt by whichever of its leaves lands first; projecting it whole
-                // would carry the undeclared members inside it straight through the filter.
-                continue;
-            }
-
-            JsonPointer.Write(projected, pointer, node.DeepClone());
-        }
-
-        return projected;
     }
 
     /// <summary>

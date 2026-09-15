@@ -234,7 +234,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         );
 
         replaced.IsSuccess.ShouldBeTrue(replaced.Error?.Message);
-        replaced.GetValueOrThrow().Resource.Properties.ShouldNotContain("keep-me");
+        replaced.GetValueOrThrow().Resource.Body.ShouldNotContain("keep-me");
     }
 
     [Fact]
@@ -258,8 +258,8 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         );
 
         patched.IsSuccess.ShouldBeTrue(patched.Error?.Message);
-        patched.GetValueOrThrow().Resource.Properties.ShouldContain("keep-me");
-        patched.GetValueOrThrow().Resource.Properties.ShouldContain("9");
+        patched.GetValueOrThrow().Resource.Body.ShouldContain("keep-me");
+        patched.GetValueOrThrow().Resource.Body.ShouldContain("9");
     }
 
     [Fact]
@@ -340,11 +340,11 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         );
 
         atOld.IsSuccess.ShouldBeTrue(atOld.Error?.Message);
-        atOld.GetValueOrThrow().Properties.ShouldNotContain("premium");
-        atOld.GetValueOrThrow().Properties.ShouldNotContain("tier");
-        atOld.GetValueOrThrow().Properties.ShouldContain("eu-central");
+        atOld.GetValueOrThrow().Body.ShouldNotContain("premium");
+        atOld.GetValueOrThrow().Body.ShouldNotContain("tier");
+        atOld.GetValueOrThrow().Body.ShouldContain("eu-central");
 
-        atNew.GetValueOrThrow().Properties.ShouldContain("premium");
+        atNew.GetValueOrThrow().Body.ShouldContain("premium");
     }
 
     [Fact]
@@ -375,8 +375,8 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
             TestContext.Current.CancellationToken
         );
 
-        atNew.GetValueOrThrow().Properties.ShouldContain("premium");
-        atNew.GetValueOrThrow().Properties.ShouldContain("5");
+        atNew.GetValueOrThrow().Body.ShouldContain("premium");
+        atNew.GetValueOrThrow().Body.ShouldContain("5");
     }
 
     [Fact]
@@ -396,8 +396,8 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         var created = await Write(address, body);
 
         created.IsSuccess.ShouldBeTrue(created.Error?.Message);
-        created.GetValueOrThrow().Resource.Properties.ShouldNotContain("hunter2");
-        created.GetValueOrThrow().Resource.Properties.ShouldNotContain("adminPassword");
+        created.GetValueOrThrow().Resource.Body.ShouldNotContain("hunter2");
+        created.GetValueOrThrow().Resource.Body.ShouldNotContain("adminPassword");
 
         var read = await cluster.Manager.ReadAsync(
             new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
@@ -405,8 +405,8 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         );
 
         read.IsSuccess.ShouldBeTrue(read.Error?.Message);
-        read.GetValueOrThrow().Properties.ShouldNotContain("hunter2");
-        read.GetValueOrThrow().Properties.ShouldContain("eu-central");
+        read.GetValueOrThrow().Body.ShouldNotContain("hunter2");
+        read.GetValueOrThrow().Body.ShouldContain("eu-central");
 
         // The no-op branch answers from the grain's own snapshot rather than from a re-read, so it is
         // its own surface and it needs its own assertion.
@@ -415,7 +415,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
 
         repeated.IsSuccess.ShouldBeTrue(repeated.Error?.Message);
         repeated.GetValueOrThrow().NoOp.ShouldBeTrue();
-        repeated.GetValueOrThrow().Resource.Properties.ShouldNotContain("hunter2");
+        repeated.GetValueOrThrow().Resource.Body.ShouldNotContain("hunter2");
 
         // ⚠ And here is the half that is NOT closed: the plaintext is in durable state. The grain is
         // asked with the unfiltered pointer list, which is what the write path itself uses.
@@ -423,7 +423,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
             .Resource(ResourceManagerCluster.Tenant, created.GetValueOrThrow().Resource.Id)
             .GetAsync(TestingProvider.V2026, TestingProvider.Pointers2026);
 
-        stored.GetValueOrThrow().Properties.ShouldContain("hunter2");
+        stored.GetValueOrThrow().Body.ShouldContain("hunter2");
     }
 
     [Fact]

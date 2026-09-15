@@ -705,7 +705,7 @@ public readonly record struct SchemaProperty(
 ///         </b> The grain's state is a superset of every version's properties; a read at an old
 ///         version keeps exactly the properties that version declared and drops the rest, which is what
 ///         stops an SDK generated against <c>2026-08-01</c> from receiving a field it has no member
-///         for. <c>ResourceGrain.Project</c> runs it, over the pointer list
+///         for. <c>ResourceProjection.Project</c> runs it, from the grain, over the pointer list
 ///         <c>ResourceManagerService</c> hands down — this type supplies
 ///         <see cref="Properties" /> and <see cref="Declares" /> and nothing that walks a document.
 ///     </para>
@@ -912,11 +912,13 @@ public sealed record ResourceSchema {
     // ⚠ THERE IS NO Project HERE, AND THAT IS THE DECISION RATHER THAN AN OMISSION.
     //
     // A schema-shaped Project(JsonObject) lived here and nothing but its own tests ever called it: the
-    // projection a real GET runs is ResourceGrain.Project, which takes a flat pointer list because the
-    // grain must not depend on the registry (see ResourceWriteSubmission.DeclaredPointers). Two
-    // implementations of one rule is how the secret drop came to exist in the one nobody reached, so
-    // the reachable one is now the only one. ResourceManagerService.ReadablePointers is what decides
-    // which pointers it gets, and WritePathTests is where the behaviour is asserted.
+    // projection a real GET runs is ResourceProjection.Project, called from the grain, which takes a
+    // flat pointer list because the grain must not depend on the registry (see
+    // ResourceWriteSubmission.DeclaredPointers). Two implementations of one rule is how the secret
+    // drop came to exist in the one nobody reached, so the reachable one is now the only one — public,
+    // so the gateway suite's substitute manager runs it too rather than growing a third.
+    // ResourceManagerService.ReadablePointers is what decides which pointers it gets, and
+    // WritePathTests is where the behaviour is asserted.
 
     /// <summary>Whether this schema declares <paramref name="jsonPointer" />.</summary>
     /// <param name="jsonPointer">An RFC 6901 pointer.</param>

@@ -1,9 +1,11 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Operations;
+using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.Gateway.Host.Tests.Infrastructure;
 
@@ -27,13 +29,37 @@ sealed class OneTypeRegistry : IProviderRegistry {
     /// <summary>A version that is registered but older, to prove an old client keeps working.</summary>
     public const string OlderVersion = "2025-11-01";
 
+    /// <summary>
+    ///     The body shape the type declares — a <c>location</c> and one leaf under <c>properties</c>,
+    ///     which is the smallest schema that has both halves of a published body.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A real schema rather than <see cref="ResourceSchema.Empty" />, because the snapshot
+    ///     this suite renders is projected through it.</b> <see cref="ProjectedSnapshot" /> runs the
+    ///     real <c>ResourceProjection.Project</c> over these pointers, and an empty list would make
+    ///     that projection the whole-superset escape hatch — a passthrough, which is the shape the
+    ///     hand-written snapshot had and the reason issue #72 went unseen here. The gateway itself
+    ///     never reads the schema: <c>ValidateStage</c>'s remarks say the JSON Schema check is the
+    ///     manager's, so no request body in this suite is validated against it.
+    /// </remarks>
+    public static ResourceSchema Schema { get; } = ResourceSchema.Of(
+        [
+            new("/location", SchemaKind.Text, Required: true),
+            new("/properties", SchemaKind.Nested),
+            new("/properties/sku", SchemaKind.Text)
+        ]
+    );
+
+    /// <summary>The pointers <see cref="Schema" /> declares, as the manager hands them to a grain.</summary>
+    public static ImmutableArray<string> Pointers { get; } = [.. Schema.Properties.Select(x => x.JsonPointer)];
+
     /// <inheritdoc />
     public ImmutableArray<ResourceTypeRegistration> Types { get; } = [
         new() {
             Type = new("CyberCloud.DBforPostgreSQL", "servers"),
             ApiVersions = [
-                new(ApiVersion.Parse(OlderVersion), ResourceSchema.Empty),
-                new(ApiVersion.Parse(TheVersion), ResourceSchema.Empty)
+                new(ApiVersion.Parse(OlderVersion), Schema),
+                new(ApiVersion.Parse(TheVersion), Schema)
             ],
             Actions = [
                 new("restart", ActionKind.Post, "write", false),
@@ -75,7 +101,70 @@ sealed class OneTypeRegistry : IProviderRegistry {
         }
 
         var version = ApiVersion.Parse(apiVersion is { Length: > 0 } supplied ? supplied : TheVersion);
-        return Result<TypeResolution>.Success(new(Types[0], version, ResourceSchema.Empty));
+        return Result<TypeResolution>.Success(new(Types[0], version, Schema));
+    }
+}
+
+/// <summary>
+///     A <see cref="ResourceSnapshot" /> in the shape the real grain produces, built by the real
+///     projection.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>THIS IS THE FIX FOR THE DOUBLE THAT ANSWERED A DIFFERENT QUESTION.</b> Issue #72:
+///         <c>ResponseBodies.WriteResource</c> nested the body it was handed under a second
+///         <c>properties</c> member and served <c>location</c> twice, and this suite — which renders
+///         that body constantly — saw nothing, because the snapshot its substitute manager handed
+///         back was hand-written in the shape the writer expected rather than the shape the grain
+///         produces. A substitute and the real thing with two shapes under one name is the failure
+///         class this repository keeps finding, and the only repair that holds is to stop
+///         hand-writing the shape.
+///     </para>
+///     <para>
+///         So this does what <c>ResourceGrain.Snapshot</c> does, with the same function: parse the
+///         superset, project it through the type's declared pointers with
+///         <c>ResourceProjection.Project</c>, and carry the body's <c>location</c> into
+///         <see cref="ResourceSnapshot.Location" /> the way the write path's step 9 does. The
+///         projection is the grain's own code, shared rather than copied, so a change to what the
+///         grain projects changes what this suite renders on the same commit.
+///     </para>
+///     <para>
+///         ⚠ <see cref="Superset" /> deliberately carries a member no version declares.
+///         <c>ResourceBodyShapeTests</c> asserts it never reaches the wire, which is what proves this
+///         class projects rather than passes the text through.
+///     </para>
+/// </remarks>
+static class ProjectedSnapshot {
+    /// <summary>
+    ///     The superset every default snapshot is projected from: the declared <c>location</c> and
+    ///     <c>sku</c>, plus a leaf no api-version declares.
+    /// </summary>
+    public const string Superset =
+        """{"location":"eu-central","properties":{"sku":"gp1","onlyInANewerVersion":true}}""";
+
+    /// <summary>Builds a snapshot for a path, projected from <paramref name="superset" />.</summary>
+    /// <param name="path">The resource's address; also where its name is read from.</param>
+    /// <param name="superset">The stored document, as the grain would hold it.</param>
+    /// <param name="provisioningState">The state to report.</param>
+    public static ResourceSnapshot Of(
+        string path,
+        string superset = Superset,
+        ProvisioningState provisioningState = ProvisioningState.Succeeded
+    ) {
+        var stored = (JsonObject)JsonNode.Parse(superset)!;
+        var projected = ResourceProjection.Project(stored, OneTypeRegistry.Pointers);
+
+        return new() {
+            Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
+            Path = path,
+            Type = OneTypeRegistry.TheType.ToString(),
+            Name = path[(path.LastIndexOf('/') + 1)..],
+            ApiVersion = OneTypeRegistry.TheVersion,
+            ProvisioningState = provisioningState,
+            Body = projected.ToJsonString(),
+            Etag = "etag-1",
+            Location = stored["location"]?.GetValue<string>() ?? ""
+        };
     }
 }
 
@@ -108,7 +197,7 @@ sealed class RecordingResourceManager : IResourceManager {
 
     /// <summary>What <see cref="ReadAsync" /> answers. Default: a resource that exists.</summary>
     public Func<WriteRequest, Result<ResourceSnapshot>> OnRead { get; set; } =
-        request => Result<ResourceSnapshot>.Success(new() { Path = request.Path, Name = "main" });
+        request => Result<ResourceSnapshot>.Success(ProjectedSnapshot.Of(request.Path));
 
     /// <summary>What the three write paths answer. Default: a <c>202</c>.</summary>
     public Func<WriteRequest, Result<WriteAccepted>> OnWrite { get; set; } =
@@ -116,7 +205,7 @@ sealed class RecordingResourceManager : IResourceManager {
             new() {
                 OperationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
                 RetryAfterSeconds = 10,
-                Resource = new() { Path = request.Path, Name = "main" }
+                Resource = ProjectedSnapshot.Of(request.Path, provisioningState: ProvisioningState.Creating)
             }
         );
 
@@ -153,7 +242,7 @@ sealed class RecordingResourceManager : IResourceManager {
     /// <summary>What <see cref="ListAsync" /> answers. Default: one resource.</summary>
     public Func<ListRequest, Result<ResourceListPage>> OnList { get; set; } =
         request => Result<ResourceListPage>.Success(
-            new() { Resources = [new() { Path = request.Path + "/main", Name = "main" }] }
+            new() { Resources = [ProjectedSnapshot.Of(request.Path + "/main")] }
         );
 
     /// <inheritdoc />

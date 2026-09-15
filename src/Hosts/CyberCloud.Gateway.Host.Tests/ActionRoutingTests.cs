@@ -107,7 +107,7 @@ public sealed class ActionRoutingTests {
             new() {
                 Completed = true,
                 ActionResponse = """{"accessKeyId":"AKIA","secretAccessKey":"shh"}""",
-                Resource = new() { Path = request.Path, Name = "main" }
+                Resource = ProjectedSnapshot.Of(request.Path)
             }
         );
 
@@ -136,7 +136,7 @@ public sealed class ActionRoutingTests {
             new() {
                 Completed = true,
                 ActionResponse = """{"accessKeyId":"AKIA","secretAccessKey":"shh"}""",
-                Resource = new() { Path = request.Path, Name = "main" }
+                Resource = ProjectedSnapshot.Of(request.Path)
             }
         );
 

@@ -645,7 +645,7 @@ public sealed class ResourceManagerService(
                     // operation returning them on convergence. docs/plan/08 § Soft delete: a resource
                     // in its recovery window "consumes plenty, because handing the data back is the
                     // entire feature: the volumes, the PVCs and the memory are all still allocated".
-                    CommittedQuota = CommittedBy(target.Registration, snapshot.Properties),
+                    CommittedQuota = CommittedBy(target.Registration, snapshot.Body),
                     IndexClaimed = false,
                     ParentResourceId = parentResourceId,
                     SoftDelete = softDelete,
@@ -1226,7 +1226,7 @@ public sealed class ResourceManagerService(
         // request that changes the answer. That is not an opt-in anybody chose. The condition is now
         // the flag AND a window that has not ended, asked of the grain that owns the deadline, so
         // the two sentences are true.
-        if (IsPurgeProtected(addressed.Registration, snapshot.Properties)
+        if (IsPurgeProtected(addressed.Registration, snapshot.Body)
             && (await Index(addressed).ResolveExpiredAsync()).IsFailure) {
             return Result<WriteAccepted>.Failure(
                 ErrorCode.Conflict,
@@ -1294,7 +1294,7 @@ public sealed class ResourceManagerService(
                     // copied off the delete's spec: that is a different grain which may be long gone,
                     // and the resource's stored body is still exactly what the create wrote, so the
                     // same AmountFor over the same JSON gives the same numbers.
-                    CommittedQuota = CommittedBy(addressed.Registration, snapshot.Properties),
+                    CommittedQuota = CommittedBy(addressed.Registration, snapshot.Body),
                     IndexClaimed = false,
                     ParentResourceId = await ParentIdOf(addressed),
                     Caller = caller
@@ -1506,7 +1506,7 @@ public sealed class ResourceManagerService(
     async Task<Error?> PurgeProtectionRefusalAsync(WriteRequest request, WriteTarget target, JsonElement body) {
         var stored = await Resource(target).GetAsync(target.ApiVersion.Value, []);
 
-        if (stored.IsFailure || !IsPurgeProtected(target.Registration, stored.GetValueOrThrow().Properties)) {
+        if (stored.IsFailure || !IsPurgeProtected(target.Registration, stored.GetValueOrThrow().Body)) {
             return null;
         }
 
@@ -2876,7 +2876,7 @@ public sealed class ResourceManagerService(
                 Tags = snapshot.Tags,
                 CreatedAt = snapshot.CreatedAt,
                 ModifiedAt = snapshot.ModifiedAt,
-                DesiredHash = DesiredHash.Of(snapshot.Properties),
+                DesiredHash = DesiredHash.Of(snapshot.Body),
                 Version = 0
             },
             cancellationToken

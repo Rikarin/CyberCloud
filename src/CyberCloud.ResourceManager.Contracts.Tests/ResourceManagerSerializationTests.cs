@@ -56,7 +56,7 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
             Name = "main",
             ApiVersion = "2026-08-01",
             ProvisioningState = ProvisioningState.Deleting,
-            Properties = """{"location":"eu-central"}""",
+            Body = """{"location":"eu-central"}""",
             Tags = ImmutableDictionary<string, string>.Empty.Add("cost-centre", "eng"),
             Etag = "abc",
             Location = "eu-central",
@@ -83,7 +83,7 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         round.Id.ShouldBe(value.Id);
         round.Path.ShouldBe(value.Path);
         round.ProvisioningState.ShouldBe(value.ProvisioningState);
-        round.Properties.ShouldBe(value.Properties);
+        round.Body.ShouldBe(value.Body);
         round.Tags["cost-centre"].ShouldBe("eng");
         round.Etag.ShouldBe(value.Etag);
         round.ClusterId.ShouldBe(value.ClusterId);

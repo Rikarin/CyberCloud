@@ -187,10 +187,10 @@ public sealed class ResourceSchemaTests {
     //
     // ⚠ THE PROJECTION IS NOT TESTED HERE, BECAUSE IT NO LONGER LIVES HERE. ResourceSchema used to
     // carry a Project(JsonObject) that only these tests ever called; the projection a real GET runs is
-    // ResourceGrain.Project, over the pointer list ResourceManagerService hands down. Testing the
-    // unreachable copy is how its secret drop came to look like a platform guarantee for as long as it
-    // did. The three cases that were here — a read at an old version, a container not carrying its
-    // undeclared members, and a Secret property withheld — are now
+    // ResourceProjection.Project, from the grain, over the pointer list ResourceManagerService hands
+    // down. Testing the unreachable copy is how its secret drop came to look like a platform guarantee
+    // for as long as it did. The three cases that were here — a read at an old version, a container
+    // not carrying its undeclared members, and a Secret property withheld — are now
     // CyberCloud.ResourceManager.Tests.WritePathTests.AReadAtAnOldVersionKeepsGettingTheShapeItWasWrittenAgainst
     // and .ASecretPropertyIsNeverProjectedBackToTheCaller, against the code a request reaches.
     //
