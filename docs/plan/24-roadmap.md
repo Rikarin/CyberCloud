@@ -132,7 +132,7 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Cloud terminal | 1.5 | [19](19-cloud-terminal-and-virtual-desktop.md) | ✅ `Terminal/consoles` |
 | Portal M1 subset | 5.0 | [20](20-portal.md) | — no resource type. #22: nine of the ten bespoke pages are absent |
 | `cyc` + .NET SDK + TypeScript packaging | 3.2 | [21](21-cli-and-sdks.md) | ◐ all three surfaces are generated and byte-compared by the **Generated surfaces** gate, the SDK compiles (#73), the TypeScript client exists (#21) and `cyc list` pages (#64). ⚠ Generated is not packaged, and #79 is open against fourteen duplicate wire names |
-| Platform hardening: supply chain, admission, isolation, log canary | 1.0 | [18](18-security-vault-and-malware-scan.md) | — no resource type. #15 (no admission policy — the third control in doc 18's Secrets row) and #17 (the licence scan does not exist) are open |
+| Platform hardening: supply chain, admission, isolation, log canary | 1.0 | [18](18-security-vault-and-malware-scan.md) | — no resource type. #15 (the admission policy — the third control in doc 18's Secrets row) landed 2026-09-15 as `charts/bundle/cybercloud-admission`, admitted by a real API server by hand and by no test yet; #17 (the licence scan does not exist) is open |
 
 *(Sums to ~44; ~18 of it runs in parallel with phase 1's tail and with itself. The 26 is the critical
 path, not the total.)*

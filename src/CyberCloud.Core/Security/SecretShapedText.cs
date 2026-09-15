@@ -19,7 +19,9 @@ namespace CyberCloud.Core.Security;
 ///         field called <c>AdminPassword</c> and cannot see
 ///         <c>logger.LogInformation("upstream said {Body}", body)</c>. This type is what the third
 ///         clause is made of; <c>CyberCloud.ServiceDefaults.Logging.SecretScrubbingSink</c> is where
-///         it attaches.
+///         it attaches. The second clause is the same rule set again, spelled for the API server:
+///         <c>charts/bundle/cybercloud-admission/policies.yaml</c> carries every rule in
+///         <see cref="Rules" /> as RE2 and refuses the manifest instead of redacting the line.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -57,48 +59,47 @@ public static class SecretShapedText {
     /// </summary>
     public const string RedactionPrefix = "[redacted:";
 
-    /// <summary>The name of the group a rule may use to redact part of a match instead of all of it.</summary>
-    const string SecretGroup = "secret";
-
-    /// <summary>
-    ///     One rule: a name that reaches the operator, and the shape it recognises.
-    /// </summary>
-    /// <remarks>
-    ///     The name is the alert's dimension. "A secret reached a log" is not actionable; "an
-    ///     <c>AwsAccessKey</c> reached a log" names the credential to rotate and the integration to
-    ///     go and read.
-    /// </remarks>
-    sealed record Rule(string Name, Regex Pattern);
-
     // ⚠ ORDER MATTERS, AND IT RUNS SPECIFIC BEFORE STRUCTURAL. `Bearer eyJhbGci…` matches both
     // JsonWebToken and BearerToken; running the issuer-shaped rule first means the alert names the
     // credential rather than the header it arrived in. Each rule sees the output of the ones before
     // it, so a later rule cannot re-match text that is already a marker — the marker contains no
     // '=', no '://' and no run long enough to look like a token.
-    static readonly Rule[] Rules = [
+    //
+    // ⚠ THIS TABLE IS COPIED INTO charts/bundle/cybercloud-admission/policies.yaml, AND A TEST HOLDS
+    // THE COPY TO IT. The admission policy is docs/plan/18 § Platform security's third control over
+    // the same shapes, in CEL, which cannot reference this assembly. Every pattern here has an RE2
+    // spelling (SecretShapedRule.Re2Pattern) and SecretShapedAdmissionPolicyTests asserts the YAML
+    // carries exactly those, in this order, under these names. Editing a rule here without editing
+    // the YAML is a red Test run that prints the block to paste, not a silent divergence.
+    static readonly SecretShapedRule[] RuleSet = [
         // -----BEGIN OPENSSH PRIVATE KEY-----, RSA, EC, PGP … . Greedy to the end of the string on
         // purpose: a PEM body split across lines has no reliable terminator inside one log event,
         // and half a private key in a log is still a private key in a log.
-        new("PrivateKey", Pattern("-----BEGIN[ A-Z]*PRIVATE KEY[ A-Z]*-----[\\s\\S]*")),
+        new("PrivateKey", "-----BEGIN[ A-Z]*PRIVATE KEY[ A-Z]*-----[\\s\\S]*", ignoreCase: false),
 
         // A JWT. This is the single most common real leak on a platform with token exchange
         // (docs/plan/11 § Managed identity): an access token quoted into a diagnostic. The third
         // segment may be empty — an unsigned JWT is still a bearer credential to something.
-        new("JsonWebToken", Pattern("eyJ[A-Za-z0-9_=-]{8,}\\.[A-Za-z0-9_=-]{8,}\\.[A-Za-z0-9_=-]*")),
+        new(
+            "JsonWebToken",
+            "eyJ[A-Za-z0-9_=-]{8,}\\.[A-Za-z0-9_=-]{8,}\\.[A-Za-z0-9_=-]*",
+            ignoreCase: false
+        ),
 
         // OpenBao and Vault service (hvs.) and batch (hvb.) tokens, and the legacy s.XXXX form the
         // root token still uses. docs/plan/18 § Shape: the platform holds a broad token per
         // namespace, so this one is ours and not a tenant's.
-        new("VaultToken", Pattern("\\bhv[sb]\\.[A-Za-z0-9_-]{20,}")),
-        new("VaultLegacyToken", Pattern("\\bs\\.[A-Za-z0-9]{24}\\b")),
+        new("VaultToken", "\\bhv[sb]\\.[A-Za-z0-9_-]{20,}", ignoreCase: false),
+        new("VaultLegacyToken", "\\bs\\.[A-Za-z0-9]{24}\\b", ignoreCase: false),
 
         new(
             "AwsAccessKey",
-            Pattern("\\b(?:AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|APKA|AROA|ASCA)[0-9A-Z]{16}\\b")
+            "\\b(?:AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|APKA|AROA|ASCA)[0-9A-Z]{16}\\b",
+            ignoreCase: false
         ),
-        new("GitHubToken", Pattern("\\bgh[pousr]_[A-Za-z0-9]{36,}\\b")),
-        new("GitHubPersonalAccessToken", Pattern("\\bgithub_pat_[A-Za-z0-9_]{22,}\\b")),
-        new("SlackToken", Pattern("\\bxox[abeprs]-[A-Za-z0-9-]{10,}")),
+        new("GitHubToken", "\\bgh[pousr]_[A-Za-z0-9]{36,}\\b", ignoreCase: false),
+        new("GitHubPersonalAccessToken", "\\bgithub_pat_[A-Za-z0-9_]{22,}\\b", ignoreCase: false),
+        new("SlackToken", "\\bxox[abeprs]-[A-Za-z0-9-]{10,}", ignoreCase: false),
 
         // ⚠ THE ONE MOST LIKELY TO FIRE IN THIS TREE. ConfiguredShardConnections composes the
         // durable tier's connection string through NpgsqlConnectionStringBuilder
@@ -107,26 +108,31 @@ public static class SecretShapedText {
         // "which setting was it" is the whole diagnostic value of the line.
         new(
             "ConnectionStringPassword",
-            Pattern("(?:password|pwd)\\s*=\\s*(?<secret>[^;,\\s\"']{3,})", ignoreCase: true)
+            "(?:password|pwd)\\s*=\\s*(?<secret>[^;,\\s\"']{3,})",
+            ignoreCase: true
         ),
 
         // scheme://user:password@host — how a Redis, Postgres or AMQP endpoint is usually written
         // down, and how one usually reaches a log.
-        new("UriCredentials", Pattern("[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/:@]+:(?<secret>[^\\s/@]+)@")),
+        new(
+            "UriCredentials",
+            "[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/:@]+:(?<secret>[^\\s/@]+)@",
+            ignoreCase: false
+        ),
 
         // An opaque bearer credential — the case the JsonWebToken rule cannot see, such as an
         // OpenBao wrapping token or a third-party engine's licence key on an Authorization header.
-        new("BearerToken", Pattern("\\bbearer\\s+(?<secret>[A-Za-z0-9._~+/=-]{16,})", ignoreCase: true))
+        new("BearerToken", "\\bbearer\\s+(?<secret>[A-Za-z0-9._~+/=-]{16,})", ignoreCase: true)
     ];
 
-    static Regex Pattern(string pattern, bool ignoreCase = false) =>
-        new(
-            pattern,
-            RegexOptions.NonBacktracking | (ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None)
-        );
+    /// <summary>
+    ///     Every rule, in the order they run. This is the single source the admission policy's CEL
+    ///     is derived from and held to — see <see cref="SecretShapedRule.Re2Pattern" />.
+    /// </summary>
+    public static IReadOnlyList<SecretShapedRule> Rules => RuleSet;
 
     /// <summary>Every rule name, for a test or a dashboard that enumerates the dimension.</summary>
-    public static IReadOnlyList<string> RuleNames { get; } = Rules.Select(x => x.Name).ToArray();
+    public static IReadOnlyList<string> RuleNames { get; } = RuleSet.Select(x => x.Name).ToArray();
 
     /// <summary>
     ///     Replaces every credential-shaped run in <paramref name="text" /> with a marker.
@@ -159,14 +165,14 @@ public static class SecretShapedText {
         List<string>? fired = null;
         var current = text;
 
-        foreach (var rule in Rules) {
+        foreach (var rule in RuleSet) {
             // The cheap gate, and the only work done for the overwhelming majority of log lines.
-            if (!rule.Pattern.IsMatch(current)) {
+            if (!rule.Regex.IsMatch(current)) {
                 continue;
             }
 
             var replaced = false;
-            var next = rule.Pattern.Replace(
+            var next = rule.Regex.Replace(
                 current,
                 match => {
                     if (AlreadyRedacted(match)) {
@@ -204,7 +210,7 @@ public static class SecretShapedText {
 
     /// <summary>Whether what this match would replace is a marker this method already wrote.</summary>
     static bool AlreadyRedacted(Match match) {
-        var secret = match.Groups[SecretGroup];
+        var secret = match.Groups[SecretShapedRule.SecretGroup];
         var value = secret.Success ? secret.Value : match.Value;
         return value.StartsWith(RedactionPrefix, StringComparison.Ordinal);
     }
@@ -224,7 +230,7 @@ public static class SecretShapedText {
     /// </remarks>
     static string Replace(Match match, string rule) {
         var marker = RedactionPrefix + rule + "]";
-        var secret = match.Groups[SecretGroup];
+        var secret = match.Groups[SecretShapedRule.SecretGroup];
 
         if (!secret.Success) {
             return marker;

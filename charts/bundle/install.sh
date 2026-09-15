@@ -214,6 +214,38 @@ verify_component() {
                 verify_url manifestExtra "$extra" || return 1
             fi
             ;;
+        file)
+            # ⚠ A first-party document has no registry to resolve against, so "does the pin still
+            # resolve" reduces to "is the file beside the manifest, and is every document in it an
+            # object". The second half is the same narrow awk this script reads component.yaml with:
+            # a document is the text between `---` lines, and an object names an `apiVersion:` and
+            # a `kind:` at column 0. ⚠ NOT `kubectl apply --dry-run=client`, WHICH WAS THE FIRST
+            # SPELLING AND FAILED ON THE FIRST RUN: even with `--validate=false`, kubectl resolves
+            # every kind against a server's discovery before it will dry-run anything, so on a
+            # machine with no cluster it reports "couldn't get current server API group list" —
+            # which reads as a broken file — and `--verify` is the half of this script that must
+            # need no cluster at all. The schema check is the API server's, at apply.
+            local path count
+            path=$(key "$file" file)
+            if [[ ! -s "$dir/$path" ]]; then
+                printf '  ✘ %-14s %s is missing or empty beside component.yaml\n' file "$path"
+                return 1
+            fi
+            count=$(awk '
+                BEGIN { docs = 0; bad = 0 }
+                /^---[ \t]*$/ { if (seen) { docs++; if (!(api && kind)) bad++ } api = kind = 0; seen = 0; next }
+                /^apiVersion:/ { api = 1 }
+                /^kind:/ { kind = 1 }
+                /^[^#[:space:]]/ { seen = 1 }
+                END { if (seen) { docs++; if (!(api && kind)) bad++ } print docs, bad }
+            ' "$dir/$path")
+            if [[ "${count#* }" != 0 || "${count% *}" == 0 ]]; then
+                printf '  ✘ %-14s %s: %s document(s), %s without an apiVersion and a kind\n' \
+                    file "$path" "${count% *}" "${count#* }"
+                return 1
+            fi
+            printf '  ✔ %-14s %s (%s object(s))\n' file "$path" "${count% *}"
+            ;;
         *)
             printf '  ✘ %-14s unknown install kind "%s"\n' install "$install"
             return 1
@@ -391,6 +423,22 @@ install_component() {
             # obvious spelling is wrong — the six components put EIGHT Deployments in EIGHT
             # namespaces and not one namespace is the `${name}${namespace_suffix}` this script
             # computes. bundle.yaml § owed, `the-manifest-path-waits-for-nothing`, lists all eight.
+            ;;
+        file)
+            # A document this repository owns, applied from beside its component.yaml. The only kind
+            # whose pin is a path rather than a version, because the artefact is in the same commit
+            # as the manifest and has nothing to resolve — charts/bundle/README.md § What a component
+            # owes, and cybercloud-admission/component.yaml for why the first one exists.
+            #
+            # ⚠ NO WAIT, AND THAT IS ARGUED RATHER THAN FORGOTTEN. The one file here is a pair of
+            # ValidatingAdmissionPolicies and their bindings. A policy is served from the API
+            # server's own informer within seconds of being stored, it defines no kind for a later
+            # component to be admitted against, and `kubectl wait` has no condition that names
+            # "this policy now refuses". Nothing in the roster depends on it — both bindings select
+            # namespaces only the platform creates — so there is no barrier for a wait to hold.
+            local path
+            path=$(key "$file" file)
+            run kubectl ${kubectl_args[@]+"${kubectl_args[@]}"} apply --server-side -f "$dir/$path"
             ;;
     esac
 }

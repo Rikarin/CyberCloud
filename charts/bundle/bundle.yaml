@@ -21,6 +21,18 @@
 # gives that for a chart and nothing gives it here. `owed:` § `the-manifest-path-waits-for-nothing`
 # is that remainder, and it names the eight Deployments a wait would have to name.
 phases:
+  - phase: 5
+    name: admission
+    why: >
+      The two ValidatingAdmissionPolicies of charts/bundle/cybercloud-admission — docs/plan/18
+      § Platform security's "never in env vars in a manifest", and ADR-013's belt over the seven
+      labels. First because it needs nothing: no pod, no image, no definition another component
+      establishes. A policy is stored by the API server and served from its own informer, so it is
+      in place before the first object anything writes. ⚠ It is the only `install: file` component
+      and the only first-party one; its component.yaml says what that kind may not carry and why.
+      Both bindings select namespaces carrying `cybercloud.io/managed-by=cybercloud`, which the
+      platform stamps and this bundle never does — so no later phase is admitted against them and
+      the order here is a statement about dependencies, not a barrier.
   - phase: 10
     name: fabric
     why: >
@@ -91,6 +103,8 @@ phases:
       workspace that cannot be created is a missing feature, and a missing CNI is a dead cluster.
 
 components:
+  - name: cybercloud-admission
+    phase: 5
   - name: kube-ovn
     phase: 10
   - name: cert-manager
@@ -586,3 +600,62 @@ owed:
       match what a cluster pulls means `helm template --kube-version` inside images.sh, which changes
       what EVERY component renders; it belongs with a re-record of all thirty-two and not with the
       edit that found it.
+  - id: the-admission-policies-are-admitted-by-nothing-that-re-runs
+    says: >
+      charts/bundle/cybercloud-admission is the twentieth component and the first this repository
+      wrote rather than pinned: two ValidatingAdmissionPolicies and their bindings — #15's Secrets
+      row control and ADR-013's belt over the seven labels. It was ADMITTED BY HAND ON 2026-09-15
+      and BY NO TEST, and this row is the distance between those two.
+      WHAT THE HAND RUN SETTLED, against one `rancher/k3s:v1.35.7-k3s1` started `--disable-agent` on
+      a Cgroup-v1 host, the same fixture `the-manifest-path-waits-for-nothing` used: all four objects
+      admitted with an empty `status.typeChecking`; and then, in a namespace labelled
+      `cybercloud.io/managed-by=cybercloud`, every one of the eleven credential fixtures from
+      SecretShapedTextTests in a ConfigMap REFUSED with its own rule named — "a value in this object
+      is credential-shaped (AwsAccessKey)" and ten more — while all eight lines that suite says the
+      platform logs on purpose were ADMITTED; a Pod env value, a Deployment arg, a CronJob command and
+      a StatefulSet initContainer env each refused naming the rule that saw them; a Secret carrying a
+      JWT admitted, because a Secret is not scanned; the same JWT ConfigMap in an unlabelled
+      namespace admitted, because the binding does not reach it; an unlabelled ConfigMap from
+      `system:admin` refused, six of seven labels refused, all seven admitted; a `managed-by` claim
+      with no resource-id refused, `managed-by=someone-else` refused; an UPDATE changing tenant-id
+      refused, one changing api-version admitted, one removing managed-by refused; and the ReplicaSet
+      controller — a kube-system ServiceAccount, because k3s runs
+      `--use-service-account-credentials=true` — created a ReplicaSet and a Pod carrying only
+      `app` and `pod-template-hash` under the policy, which is the controller exemption doing the one
+      thing it exists to do. 37 readings, none contrary.
+      WHAT IT MEASURED, AND IT CHANGED THE FILE'S SHAPE: the CEL cost budget. Eleven rules in one
+      expression refused an innocent 100,000-character ConfigMap value; every rule in one alternation
+      refused 80,000; one validation per rule admits 450,000 and refuses 500,000. policies.yaml
+      carries the numbers beside the shape they chose, and an object over that ceiling is REFUSED
+      with a "cost budget" message rather than admitted unscanned.
+      WHAT IT DID NOT SETTLE, AND WHY EACH IS OWED RATHER THAN CLOSED:
+      ⚠ NOTHING RE-RUNS IT. A reading taken once by a person is not a gate — the sentence this file
+      already applies to the six manifest components applies here in full. The suite this needs is
+      the one test/CyberCloud.Bundle.Cluster.Conformance already has the shape of: a fresh k3s,
+      `install.sh --component cybercloud-admission`, a labelled namespace, and the two fixture sets
+      pushed through the real evaluator. It is not written because on this host a k3s with an agent
+      does not start (`the-manifest-path-waits-for-nothing` has the reading) and a suite that was
+      never seen green is a suite that ships its own bugs. It goes in the same lane as the other
+      installing classes, and it is the first that would exercise the `file` arm of install.sh under
+      test.
+      ⚠ THE TWO RULE TABLES ARE COPIES, AND THE GATE OVER THEM IS A UNIT TEST, NOT THE EVALUATOR.
+      SecretShapedAdmissionPolicyTests holds the eleven patterns to SecretShapedText.Rules byte for
+      byte, and SecretShapedTextTests runs every fixture through the RE2 spelling on .NET's
+      non-backtracking engine — the nearest thing to Go's this repository can run without a cluster,
+      and it agrees on ASCII. Where the two engines could disagree — `\b` and `\s` are ASCII in RE2
+      and Unicode in .NET — no fixture reaches, and the only proof that the API server agrees with
+      the log scrubber over a real object is the hand run above.
+      ⚠ NO OPERATOR HAS RENDERED A CHILD INTO A CYBER CLOUD NAMESPACE UNDER THESE POLICIES. The
+      secret-shaped policy holds every writer, controllers included, and every operator in this
+      bundle creates Pods and ConfigMaps in the namespace of the resource it reconciles. Read rather
+      than run: Kamaji's `DataStore` here is etcd, so no tenant control plane carries a
+      `postgres://user:password@` in its args, but a kine-backed DataStore would; a ConfigMap
+      template with `password = ${PLACEHOLDER}` is refused by ConnectionStringPassword exactly as
+      the log scrubber would redact it. Whether any pinned operator does either is the question the
+      suite above answers and this row cannot.
+      ⚠ THE CONTROLLER EXEMPTION IS AN IDENTITY LIST, AND IT IS WIDER THAN "THIS PLATFORM". Any
+      ServiceAccount — a tenant's own controller included — may create an unlabelled object in a
+      Cyber Cloud namespace, because CloudNativePG, Strimzi and the token controller must. The other
+      two rules hold everyone. policies.yaml states the list and why it is closed rather than
+      prefix-matched; a narrower exemption is a design change that needs the suite above to be
+      tested against.

@@ -381,9 +381,54 @@ public sealed class BundleInstallSelection {
                         + segment
                     );
                 }
-            } else {
+            } else if (kind == "file") {
+                // ⚠ The one first-party kind: a document beside its component.yaml, applied by
+                // kubectl and followed by NO wait. install.sh argues the absence at the branch — a
+                // ValidatingAdmissionPolicy defines no kind a later component is admitted against
+                // and `kubectl wait` has no condition that names "now refusing" — so a wait
+                // appearing here is a barrier nobody argued for, exactly as one in the helm arm is.
+                var path = BundleInstaller.Pin(component, "file");
+
+                path.ShouldNotBeNullOrEmpty(
+                    $"charts/bundle/{component}/component.yaml declares `install: file` and no "
+                    + "`file:` path, which the Bundle gate rejects and this assertion refuses to pass over."
+                );
+
+                segment.ShouldContain(
+                    "kubectl apply --server-side -f ",
+                    Case.Sensitive,
+                    $"charts/bundle/install.sh never applied `{component}`'s own `file:` "
+                    + $"{path}. What it emitted for this component was:\n"
+                    + segment
+                );
+
+                segment.ShouldContain(
+                    "/" + component + "/" + path,
+                    Case.Sensitive,
+                    $"charts/bundle/install.sh applied something other than "
+                    + $"charts/bundle/{component}/{path} for `{component}`. The pin of a `file` "
+                    + "component is a path beside its manifest and nothing else. What it emitted "
+                    + "was:\n" + segment
+                );
+
                 segment.ShouldNotContain(
-                    "kubectl",
+                    "kubectl wait",
+                    Case.Sensitive,
+                    $"charts/bundle/install.sh waited after applying `{component}`, a `file` "
+                    + "component. Nothing in the roster is admitted against what it applies, so the "
+                    + "wait holds a barrier that has nothing behind it. What it emitted was:\n"
+                    + segment
+                );
+            } else {
+                // ⚠ THE COMMAND, NOT THE WORD. This asserted `ShouldNotContain("kubectl")` until
+                // #15, and had been red since #75 for a reason nothing to do with a barrier:
+                // clickhouse-operator's helm line carries `--set crdHook.image.repository=clastix/kubectl`
+                // — the very values override #75 added to get off `bitnami/kubectl:latest`. The suite
+                // skips wherever `bash` is not a file on PATH, which is every Windows checkout, so
+                // the red run was waiting for a Linux runner. A dry run prints every command as
+                // `would run: <argv>`, so the verb at the head of that line is the claim.
+                segment.ShouldNotContain(
+                    "would run: kubectl",
                     Case.Sensitive,
                     $"charts/bundle/install.sh ran kubectl for `{component}`, whose "
                     + $"component.yaml declares `install: {kind}`. A helm component's barrier is "

@@ -63,8 +63,10 @@ public static class KubeLabels {
     /// <summary><c>cybercloud.io/managed-by</c> — always <see cref="ManagedByValue" />.</summary>
     /// <remarks>
     ///     This is the one with a constant value, and it is the selector every informer filters on
-    ///     (docs/plan/09 § Observing) and the one a validating admission policy keys off. It exists so
-    ///     that "objects we manage" is a label selector rather than a list.
+    ///     (docs/plan/09 § Observing) and the one a validating admission policy keys off — both
+    ///     bindings in <c>charts/bundle/cybercloud-admission/policies.yaml</c> select namespaces by
+    ///     it, and <c>MandatoryLabelAdmissionPolicyTests</c> holds the file to this constant. It
+    ///     exists so that "objects we manage" is a label selector rather than a list.
     /// </remarks>
     public const string ManagedBy = Prefix + "/managed-by";
 
