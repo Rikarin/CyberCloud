@@ -54,9 +54,14 @@ public sealed class KubernetesOptions {
     public TimeSpan TunnelRequestTimeout { get; set; } = TimeSpan.FromSeconds(20);
 
     /// <summary>
-    ///     How often a connected cluster's agent is told to heartbeat. Fifteen seconds, so that the
-    ///     ninety-second staleness window holds six of them and one lost packet is not a
-    ///     <c>Degraded</c> cluster.
+    ///     How often a connected cluster's agent is told to heartbeat when the resource did not say.
+    ///     Fifteen seconds, so that the ninety-second staleness window holds six of them and one
+    ///     lost packet is not a <c>Degraded</c> cluster.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ A fallback, not the value. The resource's own <c>heartbeatSeconds</c> reaches the tunnel
+    ///     grain through <c>AgentArmRequest.HeartbeatInterval</c> at <c>listInstallCommand</c> and is
+    ///     what the welcome carries; this applies only to a tunnel armed with none.
+    /// </remarks>
     public TimeSpan AgentHeartbeatInterval { get; set; } = TimeSpan.FromSeconds(15);
 }

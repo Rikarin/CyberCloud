@@ -28,7 +28,10 @@ public sealed record AgentEnrollment {
     /// <summary>The agent image the chart is told to run, by digest where the deployment has one.</summary>
     public string AgentImage { get; init; } = string.Empty;
 
-    /// <summary>The heartbeat interval the install command passes to the chart.</summary>
+    /// <summary>
+    ///     The heartbeat interval the install command passes to the chart — the resource's own, and
+    ///     the same value the tunnel grain was armed with, so the welcome agrees with the chart.
+    /// </summary>
     public TimeSpan HeartbeatInterval { get; init; }
 }
 
@@ -57,10 +60,15 @@ public interface IAgentTunnels {
     /// <summary>Mints a one-time enrollment token and arms the cluster's tunnel with its hash.</summary>
     /// <param name="clusterId">The connected-cluster resource's id.</param>
     /// <param name="owningTenantId">The tenant the resource belongs to — a fact from the manager, never from a body.</param>
+    /// <param name="heartbeatInterval">
+    ///     The resource's <c>heartbeatSeconds</c>. Armed into the grain so every welcome carries it,
+    ///     and returned in the enrollment so the install command passes the same value to the chart.
+    /// </param>
     /// <param name="cancellationToken">The caller's budget.</param>
     Task<Result<AgentEnrollment>> EnrollAsync(
         Guid clusterId,
         Guid owningTenantId,
+        TimeSpan heartbeatInterval,
         CancellationToken cancellationToken = default
     );
 
@@ -90,6 +98,7 @@ public sealed class UnavailableAgentTunnels : IAgentTunnels {
     public Task<Result<AgentEnrollment>> EnrollAsync(
         Guid clusterId,
         Guid owningTenantId,
+        TimeSpan heartbeatInterval,
         CancellationToken cancellationToken = default
     ) =>
         Task.FromResult(Result<AgentEnrollment>.Failure(Unavailable(clusterId, "enroll an agent for")));

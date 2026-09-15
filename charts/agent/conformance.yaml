@@ -129,6 +129,36 @@ assertions:
       A heartbeat carrying the agent's version and the API server's version arrives without any
       request having been sent, and the interval the welcome names is adopted.
       TunnelEndToEndTests.TheAgentHeartbeatsWithoutBeingAskedAndAdoptsTheWelcomedInterval.
+  - id: the-resources-heartbeat-interval-is-what-the-welcome-carries
+    says: >
+      The body's heartbeatSeconds goes two ways out of listInstallCommand — into the chart through
+      the command and into the tunnel grain through the arm — and the welcome carries the armed
+      value, so the number the agent adopts is the resource's and not the platform-wide default.
+      ⚠ The first cut did only the first half: the welcome always said fifteen, and because the
+      agent adopts the welcome, a resource asking for thirty heartbeated at fifteen.
+      ConnectedClusterConformance.TheBodysHeartbeatIntervalReachesBothTheChartAndTheArm and
+      AgentTunnelGrainTests.TheWelcomeCarriesTheHeartbeatIntervalTheClusterWasArmedWith.
+  - id: a-refused-credential-write-does-not-brick-the-enrollment
+    says: >
+      The welcome that hands over the credential is the platform saying the token is spent. A
+      Secret write that fails at that moment — a 403 from the Role, a transient API server error —
+      leaves the session up, is retried every CredentialStoreRetrySeconds until it lands, and the
+      agent redials presenting the credential from memory rather than the spent token meanwhile.
+      ⚠ The first cut let the throw escape TunnelAgent.RunAsync, through the host's session loop,
+      out of ExecuteAsync — a pod restart with no credential stored and the token already spent,
+      which is the one state the agent cannot recover from without a fresh listInstallCommand.
+      TunnelEndToEndTests.AWelcomeHandlerThatThrowsDoesNotEndTheSession and
+      AgentServiceTests.ACredentialTheSecretRefusesIsPresentedFromMemoryAndStoredWhenTheWriteRecovers.
+  - id: the-credential-secret-name-the-role-scopes-to-is-the-one-the-agent-writes
+    says: >
+      cluster.credentialSecretName is passed to the agent as CyberCloud__Agent__CredentialSecretName
+      and is the name InClusterAgent's Secret store writes, so the Role in rbac.yaml — get, update
+      and patch on exactly that resourceName — and the store agree. ⚠ The first cut exposed the
+      value, scoped the Role to it, and never passed it in: a tenant who overrode it got an agent
+      that created a Secret (create is unscoped) it could never read again, a lockout on the first
+      pod restart. AgentTunnelCompositionTests.TheAgentHostComposesWithoutAPodAndBindsTheChartsSettings
+      pins the binding; the Role itself is still the owed
+      `the-credential-secret-store-is-untested-against-an-api-server`.
   - id: delete-revokes-and-the-credential-stops-working
     says: >
       Deleting the resource revokes the tunnel: the agent's session is closed with a goodbye that
@@ -196,13 +226,47 @@ owed:
       enrollment.
   - id: informers-do-not-cross-the-tunnel
     says: >
-      TunnelKubeApiClient.WatchAsync refuses by name. The tunnel carries one response per request
-      and a watch is a stream, so docs/plan/09 § Observing's informers cannot be established on a
-      connected cluster: IClusterConnectionGrain.WatchAsync fails to establish, and drift detection
-      on this cluster falls back to what a reconcile pass reads. Closing it is a streaming frame kind
-      — a request whose responses carry `more: true` until the watch ends — on the in-process
-      protocol, plus an Orleans IAsyncEnumerable route from the tunnel grain to the connection
-      grain. Neither half is built.
+      The tunnel carries one response per request and a watch is a stream, so docs/plan/09
+      § Observing's informers cannot be established on a connected cluster:
+      IClusterConnectionGrain.WatchAsync refuses an AgentInitiated connection with InvalidRequestBody
+      before anything is sent, and drift detection on this cluster falls back to what a reconcile
+      pass reads. ⚠ The refusal is the CONNECTION GRAIN'S, and it was not at first: establishing an
+      informer is a list (SharedInformer.EstablishAsync lists; the watch is PumpAsync, which nothing
+      in production calls yet), a list crosses the tunnel fine, and the first cut's refusal in
+      TunnelKubeApiClient.WatchAsync was never reached — the grain handed out a lease and persisted a
+      cursor for a watch nothing could pump. AgentTunnelGrainTests
+      .AWatchOnAConnectedClusterIsRefusedBeforeAnyListCrossesTheTunnel pins the refusal, that the
+      agent saw no list, and that health is untouched; the client's own throw is the backstop
+      TunnelEndToEndTests.WatchIsRefusedByNameOnTheTunnelClient pins. Closing it is a streaming
+      frame kind — a request whose responses carry `more: true` until the watch ends — on the
+      in-process protocol, plus an Orleans IAsyncEnumerable route from the tunnel grain to the
+      connection grain. Neither half is built.
+  - id: the-chart-is-not-published
+    says: >
+      Build.Charts packages every chart into artifacts/charts/ and pushes nowhere — no `helm push`,
+      no `oci://` anywhere in build/. The first cut's install command therefore named
+      oci://ghcr.io/rikarin/cybercloud/charts/cybercloud-agent, a reference no build produces under
+      a name this chart does not have (`helm package` names the tarball after Chart.yaml's `name`,
+      which is `agent`), and a tenant pasting it got a pull error — docs/plan/24's M2 exit criterion
+      was unreachable from the shipped defaults. AgentTunnelOptions.ChartReference now defaults to
+      charts/agent, the path in a checkout, and the response's /chart says so; a deployment that
+      publishes the chart sets CyberCloud:Agent:ChartReference to its own oci://…/agent. A push step
+      in Build.Charts, behind registry credentials, is what closes this.
+  - id: the-chart-has-not-been-linted-or-packaged
+    says: >
+      ⚠ helm is not on PATH on the machine this chart was written on. values.schema.json was
+      emitted by Build.Charts' own generator behind a stub helm that exits 0, so `helm lint
+      --strict` and `helm package` have NOT run over charts/agent, and the templates have been read
+      but never rendered by Helm. The first `./build.sh Charts` with a real helm is the check; a
+      template error would surface there, or at the tenant's `helm upgrade --install`, whichever
+      comes first.
+  - id: the-agent-image-has-not-been-built
+    says: >
+      Build.Images has never been run for CyberCloud.Agent.Host. image.reference defaults to a
+      `:latest` tag nothing has pushed, and AgentTunnelOptions.AgentImage — the digest the install
+      command would pin — is empty until a deployment sets it. An install from the shipped defaults
+      pulls an image that does not exist yet; docs/plan/18 § Platform security's "a pinned digest,
+      never a tag" is the rule the empty default is waiting to obey.
   - id: the-role-is-cluster-wide
     says: >
       rbac.yaml grants the agent every verb on every resource in every namespace, and its header

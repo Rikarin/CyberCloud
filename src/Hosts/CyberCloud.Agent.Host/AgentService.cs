@@ -34,11 +34,29 @@ namespace CyberCloud.Agent.Host;
 ///         agent that exited on it would be a pod in <c>CrashLoopBackOff</c>, which reads as the
 ///         agent being broken rather than the credential.
 ///     </para>
+///     <para>
+///         ⚠ <b>A credential the Secret write refused is kept in memory and the write is
+///         retried, because by then the token is spent.</b> The welcome that carries the credential
+///         is the platform saying the enrollment token has been used; a <c>403</c> from the
+///         <c>Role</c> on the Secret write, or a transient API server error, at that moment used
+///         to escape the session, end the process, and restart a pod that had neither a stored
+///         credential nor a working token. Now the write's failure is logged, the credential stays
+///         in <see cref="unstoredCredential" />, every redial presents it from there, and
+///         <see cref="RetryStoreAsync" /> keeps writing every
+///         <see cref="AgentOptions.CredentialStoreRetrySeconds" /> until the Secret holds it. What
+///         a pod restart before that costs is a fresh <c>listInstallCommand</c>; what it used to
+///         cost was the same, on every failure, immediately.
+///         <c>AgentServiceTests.ACredentialTheSecretRefusesIsPresentedFromMemoryAndStoredWhenTheWriteRecovers</c>
+///         pins both halves.
+///     </para>
 /// </remarks>
 public sealed class AgentService : BackgroundService {
     readonly IOptions<AgentOptions> options;
     readonly IAgentEndpoints endpoints;
     readonly ILogger<AgentService> logger;
+    readonly SemaphoreSlim storeGate = new(1, 1);
+    string? unstoredCredential;
+    Task? storeRetry;
 
     /// <summary>Creates the service.</summary>
     /// <param name="options">The chart's settings.</param>
@@ -48,6 +66,12 @@ public sealed class AgentService : BackgroundService {
         this.options = options;
         this.endpoints = endpoints;
         this.logger = logger;
+    }
+
+    /// <inheritdoc />
+    public override void Dispose() {
+        storeGate.Dispose();
+        base.Dispose();
     }
 
     /// <summary>The version reported in every heartbeat — the assembly's informational version.</summary>
@@ -147,10 +171,9 @@ public sealed class AgentService : BackgroundService {
             new() {
                 HeartbeatInterval = TimeSpan.FromSeconds(Math.Max(1, settings.HeartbeatSeconds)),
                 AgentVersion = Version,
-                OnWelcome = async (welcome, cancellationToken) => {
+                OnWelcome = async (welcome, _) => {
                     if (welcome.Credential is { Length: > 0 } issued) {
-                        await endpoints.Credentials.WriteAsync(issued, cancellationToken);
-                        logger.LogInformation("Enrolled: the credential is stored and the install token is spent.");
+                        await StoreCredentialAsync(issued, settings, stoppingToken);
                     }
                 }
             },
@@ -165,6 +188,72 @@ public sealed class AgentService : BackgroundService {
         return SessionOutcome.Ended;
     }
 
+    /// <summary>
+    ///     Stores the credential the welcome handed over, and keeps it in memory with a retry
+    ///     running when the Secret write fails.
+    /// </summary>
+    async Task StoreCredentialAsync(string issued, AgentOptions settings, CancellationToken stoppingToken) {
+        // Remembered before the write is attempted: from here on, whatever the Secret does, this
+        // process presents the credential and not the spent token.
+        unstoredCredential = issued;
+
+        if (await TryWriteAsync(issued, stoppingToken)) {
+            return;
+        }
+
+        await storeGate.WaitAsync(stoppingToken);
+
+        try {
+            if (storeRetry is null || storeRetry.IsCompleted) {
+                storeRetry = RetryStoreAsync(settings, stoppingToken);
+            }
+        } finally {
+            storeGate.Release();
+        }
+    }
+
+    async Task<bool> TryWriteAsync(string issued, CancellationToken cancellationToken) {
+        try {
+            await endpoints.Credentials.WriteAsync(issued, cancellationToken);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            // ⚠ The one line an operator reads when the Role is wrong. A 403 here is rbac.yaml's
+            // credential Role not matching cluster.credentialSecretName, or not applied at all.
+            logger.LogError(
+                ex,
+                "The credential could not be stored in the Secret; it is held in memory and the write "
+                + "will be retried every {Seconds} s. The install token is already spent, so if this pod "
+                + "restarts before the write succeeds, run listInstallCommand again and re-install. A "
+                + "403 means the agent's Role does not grant the Secret named by "
+                + "cluster.credentialSecretName.",
+                options.Value.CredentialStoreRetrySeconds
+            );
+
+            return false;
+        }
+
+        unstoredCredential = null;
+        logger.LogInformation("Enrolled: the credential is stored and the install token is spent.");
+        return true;
+    }
+
+    async Task RetryStoreAsync(AgentOptions settings, CancellationToken stoppingToken) {
+        var interval = TimeSpan.FromSeconds(Math.Max(1, settings.CredentialStoreRetrySeconds));
+
+        try {
+            while (!stoppingToken.IsCancellationRequested && unstoredCredential is { } pending) {
+                await Task.Delay(interval, stoppingToken);
+
+                if (await TryWriteAsync(pending, stoppingToken)) {
+                    logger.LogInformation("The credential Secret write recovered.");
+                    return;
+                }
+            }
+        } catch (OperationCanceledException) {
+            // The host is stopping; the credential dies with the process, which the error line
+            // that started this loop already said.
+        }
+    }
+
     async Task<string?> CredentialAsync(AgentOptions settings, CancellationToken cancellationToken) {
         try {
             var stored = await endpoints.Credentials.ReadAsync(cancellationToken);
@@ -174,6 +263,13 @@ public sealed class AgentService : BackgroundService {
             }
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             logger.LogWarning(ex, "The credential Secret could not be read; falling back to the enrollment token.");
+        }
+
+        if (unstoredCredential is { Length: > 0 } held) {
+            // ⚠ Ahead of the token, which is spent: the platform issued this credential and the only
+            // thing that failed was writing it down.
+            logger.LogWarning("Presenting the credential from memory; the Secret does not hold it yet.");
+            return held;
         }
 
         if (File.Exists(settings.EnrollmentTokenFile)) {

@@ -20,20 +20,30 @@ public sealed class AgentTunnelOptions {
     public string TunnelEndpoint { get; set; } = string.Empty;
 
     /// <summary>
-    ///     The chart reference the install command names. An OCI reference once <c>Build.Charts</c>
-    ///     has pushed one; the in-tree path until then.
+    ///     The chart reference the install command names. <c>charts/agent</c> — the path in a
+    ///     checkout of this repository — until a deployment publishes the chart and sets this to
+    ///     where.
     /// </summary>
-    public string ChartReference { get; set; } = "oci://ghcr.io/rikarin/cybercloud/charts/cybercloud-agent";
+    /// <remarks>
+    ///     ⚠ <b>Not an OCI reference by default, because nothing publishes one.</b> <c>Build.Charts</c>
+    ///     packages into <c>artifacts/charts/</c> and pushes nowhere, and the first cut defaulted to
+    ///     <c>oci://ghcr.io/rikarin/cybercloud/charts/cybercloud-agent</c> — a reference no build
+    ///     produces, under a name the chart does not have (<c>helm package</c> names the tarball
+    ///     after <c>Chart.yaml</c>'s <c>name</c>, which is <c>agent</c>). A tenant pasting that
+    ///     command got a pull error. A deployment that publishes the chart sets this to its own
+    ///     <c>oci://…/agent</c>; until then the command is runnable from a checkout, which the
+    ///     response's <c>/chart</c> says. <c>charts/agent/conformance.yaml § owed</c>,
+    ///     <c>the-chart-is-not-published</c>.
+    /// </remarks>
+    public string ChartReference { get; set; } = "charts/agent";
 
     /// <summary>
     ///     The agent image the chart is told to run. ⚠ By digest in any real deployment —
     ///     docs/plan/18 § Platform security, "a pinned digest, never a tag" — which is what
-    ///     <c>Build.Images</c> prints for <c>cybercloud-agent-host</c>.
+    ///     <c>Build.Images</c> prints for <c>cybercloud-agent-host</c>. Empty leaves the chart's own
+    ///     default, a tag, which is what a development install pulls.
     /// </summary>
     public string AgentImage { get; set; } = string.Empty;
-
-    /// <summary>How often the install command tells the agent to heartbeat.</summary>
-    public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(15);
 }
 
 /// <summary>
@@ -65,6 +75,7 @@ public sealed class GrainAgentTunnels(IGrainFactory grains, IOptions<AgentTunnel
     public async Task<Result<AgentEnrollment>> EnrollAsync(
         Guid clusterId,
         Guid owningTenantId,
+        TimeSpan heartbeatInterval,
         CancellationToken cancellationToken = default
     ) {
         cancellationToken.ThrowIfCancellationRequested();
@@ -84,7 +95,14 @@ public sealed class GrainAgentTunnels(IGrainFactory grains, IOptions<AgentTunnel
         var expiresAt = clock.UtcNow + AgentCredentials.EnrollmentLifetime;
 
         var armed = await Grain(clusterId)
-            .ArmAsync(new() { OwningTenantId = owningTenantId, EnrollmentHash = minted.Hash, ExpiresAt = expiresAt });
+            .ArmAsync(
+                new() {
+                    OwningTenantId = owningTenantId,
+                    EnrollmentHash = minted.Hash,
+                    ExpiresAt = expiresAt,
+                    HeartbeatInterval = heartbeatInterval
+                }
+            );
 
         if (armed.TryGetError(out var error)) {
             return Result<AgentEnrollment>.Failure(error);
@@ -98,7 +116,7 @@ public sealed class GrainAgentTunnels(IGrainFactory grains, IOptions<AgentTunnel
                 TunnelEndpoint = settings.TunnelEndpoint,
                 ChartReference = settings.ChartReference,
                 AgentImage = settings.AgentImage,
-                HeartbeatInterval = settings.HeartbeatInterval
+                HeartbeatInterval = heartbeatInterval
             }
         );
     }

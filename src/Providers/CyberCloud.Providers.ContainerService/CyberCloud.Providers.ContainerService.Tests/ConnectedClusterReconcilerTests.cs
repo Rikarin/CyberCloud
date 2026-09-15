@@ -147,10 +147,11 @@ public sealed class ConnectedClusterReconcilerTests {
             EnrollmentToken = "cca-enroll-abc'def",
             TunnelEndpoint = "wss://api.example/agent/v1/tunnel",
             ChartReference = "oci://ghcr.io/x/cybercloud-agent",
-            AgentImage = "ghcr.io/x/cybercloud-agent-host@sha256:abc"
+            AgentImage = "ghcr.io/x/cybercloud-agent-host@sha256:abc",
+            HeartbeatInterval = TimeSpan.FromSeconds(20)
         };
 
-        var command = ConnectedClusters.InstallCommand(enrollment, 20);
+        var command = ConnectedClusters.InstallCommand(enrollment);
 
         command.ShouldStartWith("helm upgrade --install cybercloud-agent 'oci://ghcr.io/x/cybercloud-agent'");
         command.ShouldContain("--namespace cybercloud-system --create-namespace");
@@ -198,7 +199,12 @@ public sealed class ConnectedClusterReconcilerTests {
 
         public int Revocations { get; private set; }
 
-        public Task<Result<AgentEnrollment>> EnrollAsync(Guid clusterId, Guid owningTenantId, CancellationToken cancellationToken = default) =>
+        public Task<Result<AgentEnrollment>> EnrollAsync(
+            Guid clusterId,
+            Guid owningTenantId,
+            TimeSpan heartbeatInterval,
+            CancellationToken cancellationToken = default
+        ) =>
             throw new NotSupportedException("a reconcile pass never mints");
 
         public Task<Result<AgentTunnelStatus>> GetStatusAsync(Guid clusterId, CancellationToken cancellationToken = default) =>

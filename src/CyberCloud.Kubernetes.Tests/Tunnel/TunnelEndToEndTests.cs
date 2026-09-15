@@ -207,14 +207,44 @@ public sealed class TunnelEndToEndTests {
         tunnel.Exchange.Pending.ShouldBe(1);
 
         await tunnel.KillAgentAsync();
-        tunnel.Exchange.FailAll("the socket closed");
 
+        // ⚠ Nothing here calls FailAll. The platform's pump sees the transport go and fails what
+        // was pending, the way AgentSession → DisconnectedAsync → DropSession does in production;
+        // the first cut of this test called FailAll itself and so pinned FailAll, not the death.
         var outcome = await pending.WaitAsync(TimeSpan.FromSeconds(5), Ct);
         outcome.IsFailure.ShouldBeTrue();
         outcome.Error!.Code.ShouldBe(ErrorCode.ProvisioningFailed);
-        outcome.Error.Message.ShouldContain("the socket closed");
+        KubeFailures.MeansTheClusterAnswered(outcome.Error.Code).ShouldBeFalse();
+        tunnel.PumpEnded.ShouldNotBeNull("the pump, not the test, ended the requests");
+        outcome.Error.Message.ShouldContain(tunnel.PumpEnded);
 
         never.SetResult();
+    }
+
+    [Fact]
+    public async Task AWelcomeHandlerThatThrowsDoesNotEndTheSession() {
+        // ⚠ By the time the welcome arrives the enrollment token is spent. A handler that threw —
+        // the host's Secret write refused by the Role — used to propagate out of the agent's
+        // RunAsync and take the host down with nothing stored, so the session outliving the throw
+        // is what gives the host a chance to retry.
+        await using var tunnel = new InProcessTunnel(
+            onWelcome: (_, _) => throw new InvalidOperationException("secrets is forbidden: the Role does not grant it")
+        );
+        tunnel.Start();
+
+        await tunnel.WelcomeAsync(new() { SessionId = Guid.NewGuid(), HeartbeatSeconds = 1, Credential = "cca-cred-x" }, Ct);
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (tunnel.Agent.Welcome is null && DateTime.UtcNow < deadline) {
+            await Task.Delay(20, Ct);
+        }
+
+        tunnel.Agent.Welcome.ShouldNotBeNull("the welcome was received before the handler threw");
+
+        // Still answering, on the same session.
+        var pinged = await tunnel.Client.PingAsync(Ct);
+        pinged.IsSuccess.ShouldBeTrue(pinged.Error?.Message);
+        tunnel.PumpEnded.ShouldBeNull("the platform's pump is still running: the agent did not close");
     }
 
     [Fact]

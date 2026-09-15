@@ -34,6 +34,13 @@ public sealed class AgentTunnelState {
     /// <summary>When the enrollment token stops being accepted.</summary>
     public DateTimeOffset EnrollmentExpiresAt { get; set; }
 
+    /// <summary>
+    ///     How often the agent is told to heartbeat, from the resource's <c>heartbeatSeconds</c> at
+    ///     the last arm. Zero when the arm named none, and the welcome then carries
+    ///     <c>KubernetesOptions.AgentHeartbeatInterval</c>.
+    /// </summary>
+    public TimeSpan HeartbeatInterval { get; set; }
+
     /// <summary>The hash of the long-lived credential the agent holds, or empty before enrollment.</summary>
     public string CredentialHash { get; set; } = string.Empty;
 

@@ -485,6 +485,25 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
             return Refused<InformerLease>(allowed);
         }
 
+        if (state.State.Descriptor!.Kind == ClusterConnectionKind.AgentInitiated) {
+            // ⚠ REFUSED HERE, BEFORE THE LIST, AND NOT LEFT TO THE CLIENT. Establishing an informer
+            // is a list (SharedInformer.EstablishAsync lists and nothing else; the watch is
+            // PumpAsync, which nothing in production calls yet), and a list crosses the tunnel
+            // fine — so without this check an agent-initiated cluster would hand out a lease and
+            // persist a cursor for a watch that can never be pumped, and the caller would believe
+            // it was observing a quiet cluster. TunnelKubeApiClient.WatchAsync throws for the same
+            // reason, but nothing reaches it on this path. Not a health event either: the cluster
+            // did not fail to answer, it was never asked. charts/agent/conformance.yaml § owed,
+            // informers-do-not-cross-the-tunnel.
+            return Result<InformerLease>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"Cluster {clusterId:D} is reached through an agent tunnel, and an informer for {kind} "
+                + "cannot be established over it: the tunnel carries one response per request and a "
+                + "watch is a stream. Drift on this cluster is what a reconcile pass reads. "
+                + "charts/agent/conformance.yaml § owed, informers-do-not-cross-the-tunnel."
+            );
+        }
+
         var client = await ClientAsync(CancellationToken.None);
         if (client.TryGetError(out var connectError)) {
             return Result<InformerLease>.Failure(connectError);

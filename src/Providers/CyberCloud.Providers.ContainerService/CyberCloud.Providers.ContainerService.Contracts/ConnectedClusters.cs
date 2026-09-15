@@ -76,9 +76,6 @@ public static class ConnectedClusters {
     /// <summary>The namespace the install command creates the agent in.</summary>
     public const string AgentNamespace = "cybercloud-system";
 
-    /// <summary>The distributions a tenant may name, for the portal's benefit. Free text is accepted too.</summary>
-    public static ImmutableArray<string> KnownDistributions { get; } = ["k3s", "k0s", "kubeadm", "rke2", "openshift", "eks", "aks", "gke", "other"];
-
     /// <summary>The default heartbeat interval, seconds. Six per staleness window.</summary>
     public const int DefaultHeartbeatSeconds = 15;
 
@@ -118,10 +115,13 @@ public static class ConnectedClusters {
                 new(
                     "/properties/heartbeatSeconds",
                     SchemaKind.WholeNumber,
-                    Description: "How often the agent reports in. The install command passes it to the "
-                    + "chart. ⚠ The platform calls a cluster Degraded after ninety seconds without one "
-                    + "(docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than "
-                    + "three chances for a packet to arrive."
+                    Description: "How often the agent reports in. Read when listInstallCommand is "
+                    + "called: the command passes it to the chart and the platform repeats it in the "
+                    + "welcome the agent adopts on every connection. A change after that takes effect "
+                    + "on the next listInstallCommand — no re-install; the running agent adopts it on "
+                    + "its next connection. ⚠ The platform calls a cluster Degraded after ninety "
+                    + "seconds without a heartbeat (docs/plan/09 § Cluster connections), so a value "
+                    + "above thirty leaves fewer than three chances for a packet to arrive."
                 ) { Minimum = 5, Maximum = 60, DefaultJson = "15" }
             ]
         );
@@ -170,7 +170,10 @@ public static class ConnectedClusters {
                     "/chart",
                     SchemaKind.Text,
                     Required: true,
-                    Description: "The chart reference the command installs — charts/agent in this tree."
+                    Description: "The chart reference the command installs: the OCI reference this "
+                    + "deployment publishes the agent chart under, or charts/agent — the path in a "
+                    + "checkout of the CyberCloud repository — when it has not published one, in "
+                    + "which case run the command from that checkout."
                 )
             ]
         );
@@ -191,35 +194,31 @@ public static class ConnectedClusters {
             ? seconds
             : DefaultHeartbeatSeconds;
 
-    /// <summary>The distribution a body names, or <c>other</c>.</summary>
-    public static string Distribution(JsonElement desired) =>
-        desired.ValueKind is JsonValueKind.Object
-        && desired.TryGetProperty("properties", out var properties)
-        && properties.ValueKind is JsonValueKind.Object
-        && properties.TryGetProperty("distribution", out var value)
-        && value.ValueKind is JsonValueKind.String
-            ? value.GetString() ?? "other"
-            : "other";
-
     // ── The install command ───────────────────────────────────────────────────────────────────
 
     /// <summary>
     ///     The <c>helm upgrade --install</c> a tenant runs — one line, quoted for a POSIX shell.
     /// </summary>
-    /// <param name="enrollment">What the tunnel seam minted.</param>
-    /// <param name="heartbeatSeconds">The body's heartbeat interval.</param>
+    /// <param name="enrollment">
+    ///     What the tunnel seam minted. Its <see cref="AgentEnrollment.HeartbeatInterval" /> is the
+    ///     value the grain was armed with, so the chart and the welcome say the same number.
+    /// </param>
     /// <remarks>
     ///     ⚠ <b><c>--set-string</c> for the token and the cluster id, never <c>--set</c>.</b> Helm's
     ///     <c>--set</c> parses its value: a token that happened to be all digits would become a
     ///     number, and a value with a comma would become a list. <c>--set-string</c> is the one
     ///     spelling that carries an opaque string through unchanged.
     /// </remarks>
-    public static string InstallCommand(AgentEnrollment enrollment, int heartbeatSeconds) {
+    public static string InstallCommand(AgentEnrollment enrollment) {
         ArgumentNullException.ThrowIfNull(enrollment);
 
         var image = enrollment.AgentImage.Length > 0
             ? " --set-string image.reference=" + Quote(enrollment.AgentImage)
             : string.Empty;
+
+        var heartbeatSeconds = enrollment.HeartbeatInterval > TimeSpan.Zero
+            ? (int)enrollment.HeartbeatInterval.TotalSeconds
+            : DefaultHeartbeatSeconds;
 
         return "helm upgrade --install " + ReleaseName + " " + Quote(enrollment.ChartReference)
             + " --namespace " + AgentNamespace + " --create-namespace"

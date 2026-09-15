@@ -165,6 +165,7 @@ public sealed class AgentTunnelGrain : Grain, IAgentTunnelGrain {
         state.State.Revoked = false;
         state.State.EnrollmentHash = request.EnrollmentHash;
         state.State.EnrollmentExpiresAt = request.ExpiresAt;
+        state.State.HeartbeatInterval = request.HeartbeatInterval > TimeSpan.Zero ? request.HeartbeatInterval : TimeSpan.Zero;
 
         await state.WriteStateAsync();
 
@@ -237,11 +238,18 @@ public sealed class AgentTunnelGrain : Grain, IAgentTunnelGrain {
             consumed
         );
 
+        // ⚠ The interval the resource asked for, not the platform-wide default. The install command
+        // put the same number in the chart, but the agent adopts the welcome —
+        // TunnelEndToEndTests.TheAgentHeartbeatsWithoutBeingAskedAndAdoptsTheWelcomedInterval —
+        // so a welcome that ignored the arm made the resource's heartbeatSeconds dead after the
+        // first frame. The default is for a grain armed before the arm carried one.
         return Result<AgentAcceptance>.Success(
             new() {
                 SessionId = sessionId,
                 EnrollmentConsumed = consumed,
-                HeartbeatInterval = options.AgentHeartbeatInterval
+                HeartbeatInterval = state.State.HeartbeatInterval > TimeSpan.Zero
+                    ? state.State.HeartbeatInterval
+                    : options.AgentHeartbeatInterval
             }
         );
     }

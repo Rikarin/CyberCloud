@@ -10,7 +10,7 @@
       "properties": {
         "heartbeatSeconds": {
           "default": 15,
-          "description": "How often the agent reports in. The platform calls a cluster Degraded after ninety seconds without a heartbeat, so a value above thirty leaves fewer than three chances for a packet to arrive. The install command sets it from the resource's own heartbeatSeconds.",
+          "description": "How often the agent reports in until the platform's welcome says — the welcome carries the resource's own heartbeatSeconds, the same value the install command sets here, and the agent adopts it on every connection. The platform calls a cluster Degraded after ninety seconds without a heartbeat, so a value above thirty leaves fewer than three chances for a packet to arrive.",
           "maximum": 60,
           "minimum": 5,
           "type": "integer",
@@ -162,6 +162,6 @@
   "type": "object",
   "x-cybercloud-api-version": "2026-08-01",
   "x-cybercloud-chart": "agent",
-  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-chart-version": "0.1.1",
   "x-cybercloud-resource-type": "CyberCloud.ContainerService/connectedClusters"
 }

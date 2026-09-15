@@ -59,6 +59,44 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
     }
 
     [Fact]
+    public async Task AWatchOnAConnectedClusterIsRefusedBeforeAnyListCrossesTheTunnel() {
+        // ⚠ The refusal has to be the connection grain's. Establishing an informer is a LIST, and
+        // a list crosses the tunnel fine — so a refusal left to TunnelKubeApiClient.WatchAsync is
+        // never reached, and the grain hands out a lease and persists a cursor for a watch nothing
+        // can pump. That is what the first cut did, and this is the test that was missing.
+        var owner = Guid.NewGuid();
+        var clusterId = Guid.NewGuid();
+        var enrollment = await ArmAsync(clusterId, owner);
+
+        await using var agent = await ConnectAgentAsync(clusterId, enrollment.Plaintext);
+        await AttachAsync(clusterId, owner);
+
+        // Healthy first, so the refusal can be shown not to touch health.
+        (await cluster.Reacher(owner).ReachPingAsync(clusterId)).ShouldBe(nameof(ClusterHealthState.Healthy));
+
+        (await cluster.Reacher(owner).ReachWatchAsync(clusterId))
+            .ShouldBe($"<{ErrorCode.InvalidRequestBody}>", "an informer cannot be established over the tunnel");
+
+        agent.Api.Lists.ShouldBeEmpty("the refusal comes before the list, not after it");
+        (await cluster.Reacher(owner).ReachHealthAsync(clusterId))
+            .ShouldBe(nameof(ClusterHealthState.Healthy), "a refused watch is not the cluster failing to answer");
+    }
+
+    [Fact]
+    public async Task TheWelcomeCarriesTheHeartbeatIntervalTheClusterWasArmedWith() {
+        // The resource's heartbeatSeconds reaches the chart through the install command and the
+        // agent through the welcome; the agent adopts the welcome. Before this was pinned the
+        // welcome always carried the platform-wide default, and a resource asking for 30 got 15.
+        var owner = Guid.NewGuid();
+        var clusterId = Guid.NewGuid();
+        var enrollment = await ArmAsync(clusterId, owner, heartbeat: TimeSpan.FromSeconds(30));
+
+        await using var agent = await ConnectAgentAsync(clusterId, enrollment.Plaintext);
+
+        (await agent.WelcomeAsync()).HeartbeatSeconds.ShouldBe(30);
+    }
+
+    [Fact]
     public async Task TheFirstHeartbeatIsRecordedAndReadableByTheOwner() {
         var owner = Guid.NewGuid();
         var clusterId = Guid.NewGuid();
@@ -228,14 +266,15 @@ public sealed class AgentTunnelGrainTests(KubeTestCluster cluster) {
     IAgentTunnelGrain Tunnel(Guid clusterId) =>
         cluster.Grains.GetGrain<IAgentTunnelGrain>(GrainKeys.ClusterConnection(clusterId));
 
-    async Task<MintedCredential> ArmAsync(Guid clusterId, Guid owner) {
+    async Task<MintedCredential> ArmAsync(Guid clusterId, Guid owner, TimeSpan? heartbeat = null) {
         var minted = AgentCredentials.MintEnrollment();
 
         var armed = await Tunnel(clusterId).ArmAsync(
             new() {
                 OwningTenantId = owner,
                 EnrollmentHash = minted.Hash,
-                ExpiresAt = SharedTestClock.Instance.UtcNow + AgentCredentials.EnrollmentLifetime
+                ExpiresAt = SharedTestClock.Instance.UtcNow + AgentCredentials.EnrollmentLifetime,
+                HeartbeatInterval = heartbeat ?? TimeSpan.Zero
             }
         );
 

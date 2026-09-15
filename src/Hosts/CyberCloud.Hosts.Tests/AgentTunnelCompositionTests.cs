@@ -95,7 +95,8 @@ public sealed class AgentTunnelCompositionTests {
                 "--urls", "http://127.0.0.1:0",
                 $"--{AgentOptions.SectionName}:TunnelEndpoint=wss://api.example.test/agent/v1/tunnel",
                 $"--{AgentOptions.SectionName}:ClusterId={clusterId:D}",
-                $"--{AgentOptions.SectionName}:HeartbeatSeconds=20"
+                $"--{AgentOptions.SectionName}:HeartbeatSeconds=20",
+                $"--{AgentOptions.SectionName}:CredentialSecretName=tenant-named-credential"
             ],
             services => services.AddSingleton<IAgentEndpoints>(new NoPod())
         );
@@ -104,6 +105,10 @@ public sealed class AgentTunnelCompositionTests {
         options.IsConfigured.ShouldBeTrue();
         options.ParsedClusterId.ShouldBe(clusterId);
         options.HeartbeatSeconds.ShouldBe(20);
+
+        // ⚠ The chart's cluster.credentialSecretName, which rbac.yaml scopes the Role to. Until it
+        // bound, an overridden name was a Secret the agent could create and never read back.
+        options.CredentialSecretName.ShouldBe("tenant-named-credential");
 
         app.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>().ShouldContain(x => x is AgentService);
     }

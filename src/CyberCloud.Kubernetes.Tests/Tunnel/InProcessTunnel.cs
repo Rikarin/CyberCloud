@@ -47,10 +47,18 @@ public sealed class InProcessTunnel : IAsyncDisposable {
     /// <summary>The <see cref="IKubeApiClient" /> a connection grain would hold.</summary>
     public TunnelKubeApiClient Client { get; }
 
+    /// <summary>Why the platform pump stopped, once it has. <see langword="null" /> while it runs.</summary>
+    public string? PumpEnded { get; private set; }
+
     /// <summary>Creates the pair. Nothing runs until <see cref="Start" />.</summary>
     /// <param name="requestTimeout">The exchange's timeout.</param>
     /// <param name="heartbeat">The agent's heartbeat interval.</param>
-    public InProcessTunnel(TimeSpan? requestTimeout = null, TimeSpan? heartbeat = null) {
+    /// <param name="onWelcome">What the agent does with a welcome — the host's credential store, in production.</param>
+    public InProcessTunnel(
+        TimeSpan? requestTimeout = null,
+        TimeSpan? heartbeat = null,
+        Func<WelcomeBody, CancellationToken, Task>? onWelcome = null
+    ) {
         agentReads = new(PipeDirection.In, platformToAgent.ClientSafePipeHandle);
         platformReads = new(PipeDirection.In, agentToPlatform.ClientSafePipeHandle);
 
@@ -61,7 +69,11 @@ public sealed class InProcessTunnel : IAsyncDisposable {
         Agent = new(
             AgentTransport,
             Api,
-            new() { HeartbeatInterval = heartbeat ?? TimeSpan.FromMilliseconds(200), AgentVersion = "test-agent" }
+            new() {
+                HeartbeatInterval = heartbeat ?? TimeSpan.FromMilliseconds(200),
+                AgentVersion = "test-agent",
+                OnWelcome = onWelcome
+            }
         );
 
         Client = new(Guid.NewGuid(), Exchange);
@@ -69,7 +81,22 @@ public sealed class InProcessTunnel : IAsyncDisposable {
 
     /// <summary>Starts the platform pump and the agent.</summary>
     public void Start() {
-        pump = TunnelPump.RunAsync(
+        pump = PumpAsync();
+        agentRun = Agent.RunAsync(stop.Token);
+    }
+
+    /// <summary>
+    ///     The platform's pump, and what production does when it ends.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Pending requests are failed here when the transport goes, not by the test.</b> In
+    ///     production the relay's pump ending is <c>AgentSession.RunAsync</c> →
+    ///     <c>IAgentTunnelGrain.DisconnectedAsync</c> → <c>DropSession</c> → <c>FailAll</c>; a test
+    ///     that called <c>FailAll</c> itself after killing the agent was pinning <c>FailAll</c>, not
+    ///     that a killed agent fails requests. This is the same step, in the same place.
+    /// </remarks>
+    async Task<string> PumpAsync() {
+        var reason = await TunnelPump.RunAsync(
             PlatformTransport,
             frame => {
                 if (frame.Kind == TunnelFrameKind.Response) {
@@ -85,7 +112,9 @@ public sealed class InProcessTunnel : IAsyncDisposable {
             stop.Token
         );
 
-        agentRun = Agent.RunAsync(stop.Token);
+        PumpEnded = reason;
+        Exchange.FailAll(reason);
+        return reason;
     }
 
     /// <summary>Sends the welcome the gateway would, so the agent picks up its heartbeat interval.</summary>

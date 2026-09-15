@@ -20,6 +20,20 @@ public sealed record AgentArmRequest {
     /// <summary>When the enrollment token stops being accepted.</summary>
     [Id(2)]
     public DateTimeOffset ExpiresAt { get; init; }
+
+    /// <summary>
+    ///     How often the agent is told to heartbeat, in every welcome from now on. Zero means the
+    ///     platform's default.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The resource's <c>heartbeatSeconds</c> travels two ways from <c>listInstallCommand</c>:
+    ///     into the chart through the command, and into the grain through this — and the agent
+    ///     adopts the <i>welcome</i>. Before this member existed the welcome carried
+    ///     <c>KubernetesOptions.AgentHeartbeatInterval</c> regardless, and a resource asking for
+    ///     thirty seconds got fifteen.
+    /// </remarks>
+    [Id(3)]
+    public TimeSpan HeartbeatInterval { get; init; }
 }
 
 /// <summary>What an agent presented on the upgrade request, already hashed by the gateway.</summary>
@@ -176,11 +190,12 @@ public interface IAgentTunnelGrain : IGrainWithStringKey {
     ///     Arms the tunnel with a fresh enrollment token's hash. Called by <c>listInstallCommand</c>,
     ///     through <see cref="IAgentTunnels" />.
     /// </summary>
-    /// <param name="request">The owner and the hash.</param>
+    /// <param name="request">The owner, the hash, and the heartbeat interval the welcome will carry.</param>
     /// <remarks>
     ///     ⚠ Re-arming replaces the previous enrollment token — the tenant asked for a new install
     ///     command, so the old one must stop working — and leaves a connected agent's credential
-    ///     alone, because a re-issued command is not a revocation.
+    ///     alone, because a re-issued command is not a revocation. It does replace the heartbeat
+    ///     interval, which a connected agent adopts on its next session.
     /// </remarks>
     [Alias("Arm")]
     Task<Result> ArmAsync(AgentArmRequest request);

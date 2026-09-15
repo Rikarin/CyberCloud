@@ -66,7 +66,13 @@ serves seven typed operations — ping, get, apply, delete, set-owner, discover,
 anything else by name, so a compromised platform, or a platform bug, cannot send a connected cluster a
 request a reconciler could not have expressed. What it costs is the watch: a tunnel frame has one
 answer and an informer is a stream, so **informers do not cross the tunnel yet** and
-`IClusterConnectionGrain.WatchAsync` fails to establish on a connected cluster. The connection grain's
+`IClusterConnectionGrain.WatchAsync` refuses an `AgentInitiated` connection before anything is sent
+down it. ⚠ It has to refuse *there*, not in the client: establishing an informer is a list (the
+watch is `SharedInformer.PumpAsync`, which nothing in production calls yet), and a list crosses the
+tunnel like any other request — the first cut left the refusal in `TunnelKubeApiClient.WatchAsync`,
+and a connected cluster handed out a lease and persisted a cursor for a watch nothing could pump.
+`AgentTunnelGrainTests.AWatchOnAConnectedClusterIsRefusedBeforeAnyListCrossesTheTunnel` pins the
+refusal and that the agent saw no list. The connection grain's
 own tenancy check runs unchanged above the tunnel — an `AgentInitiated` descriptor gets a
 `TunnelKubeApiClient` from the same factory a kubeconfig would — and the tunnel grain admits
 `ExchangeAsync` from a null-tenant caller only, which in production is the connection grain after that

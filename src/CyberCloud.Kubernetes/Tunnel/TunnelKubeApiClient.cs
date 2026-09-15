@@ -125,10 +125,24 @@ public sealed class TunnelKubeApiClient(Guid clusterId, ITunnelRoute route) : IK
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ <b>Refuses, by name, on the first move.</b> A watch is a stream and the tunnel's frames
-    ///     have one answer each. Yielding nothing would let <c>SharedInformer</c> believe a cluster
-    ///     is quiet; throwing here makes it record a failed establishment, which is the honest state.
-    ///     <c>charts/agent/conformance.yaml § owed</c>, <c>informers-do-not-cross-the-tunnel</c>.
+    ///     <para>
+    ///         ⚠ <b>Refuses, by name, on the first move.</b> A watch is a stream and the tunnel's
+    ///         frames have one answer each. Yielding nothing would let <c>SharedInformer</c> believe
+    ///         a cluster is quiet, so a caller that gets this far is told why instead.
+    ///         <c>charts/agent/conformance.yaml § owed</c>, <c>informers-do-not-cross-the-tunnel</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Nothing in production reaches this throw, and the refusal that matters is the
+    ///         connection grain's.</b> Establishing an informer is a <i>list</i> —
+    ///         <c>SharedInformer.EstablishAsync</c> lists and holds the cursor; the watch is
+    ///         <c>SharedInformer.PumpAsync</c>, which only its own tests call — and a list crosses
+    ///         the tunnel like any other request. So <c>ClusterConnectionGrain.WatchAsync</c> refuses
+    ///         an <see cref="ClusterConnectionKind.AgentInitiated" /> descriptor before the list is
+    ///         sent, which
+    ///         <c>AgentTunnelGrainTests.AWatchOnAConnectedClusterIsRefusedBeforeAnyListCrossesTheTunnel</c>
+    ///         pins; this throw is the backstop for a caller holding the client directly, which
+    ///         <c>TunnelEndToEndTests.WatchIsRefusedByNameOnTheTunnelClient</c> pins.
+    ///     </para>
     /// </remarks>
     public IAsyncEnumerable<KubeWatchEvent> WatchAsync(
         GroupVersionKind kind,

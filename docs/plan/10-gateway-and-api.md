@@ -17,8 +17,18 @@ Internet
           ├─ /hubs/*      SignalR — portal live updates, terminal, operation progress
           ├─ /.well-known OIDC discovery (proxied from Identity — not built), and
           │               security.txt (RFC 9116, served from an embedded file — built)
-          └─ /openapi     the generated document, per api-version
+          ├─ /openapi     the generated document, per api-version
+          └─ /agent/v1/tunnel  WebSocket — a connected cluster's agent dialling in (#36);
+                          no JWT and no api-version, a per-cluster credential the tunnel
+                          grain checks — 09 § Cluster connections, the AgentInitiated row
 ```
+
+`/agent/v1/tunnel` is the third route that reaches stage 5 without a tenant, beside `/openapi` and
+`/.well-known`: it is anonymous *to stage 2 only*, and `AgentTunnelEndpoint` refuses the upgrade
+itself when the bearer value's hash does not admit an agent to exactly the cluster id in the request
+header. It is also the one route on this host that is not REST and not SignalR — a frame protocol
+over a WebSocket the gateway relays without reading, which is why it carries no `api-version` and
+appears in no OpenAPI document.
 
 `/.well-known/security.txt` is the one path on this host that answers `text/plain`, and it is served
 through the same nine stages and the same writer as everything else: no token required, no

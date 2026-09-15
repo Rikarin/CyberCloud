@@ -61,9 +61,11 @@ sealed class ResolveTenantStage(
         ArgumentNullException.ThrowIfNull(context);
 
         if (context.Http.Items[AuthenticateStage.ClaimsItemKey] is not TokenClaims claims) {
-            // An anonymous route — docs/plan/10 § Shape's /openapi and /.well-known. There is no
-            // tenant to establish and, crucially, no way for one to be inferred from the request:
-            // the caller stays empty all the way to dispatch, so nothing tenant-scoped is reachable.
+            // An anonymous route — docs/plan/10 § Shape's /openapi, /.well-known and
+            // /agent/v1/tunnel. There is no tenant to establish and, crucially, no way for one to
+            // be inferred from the request: the caller stays empty all the way to dispatch, so
+            // nothing tenant-scoped is reachable. (The agent route authenticates at its endpoint,
+            // against a per-cluster credential, and a cluster id is not a tenant.)
             return null;
         }
 

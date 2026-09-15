@@ -24,6 +24,13 @@ public sealed record TunnelAgentOptions {
     ///     Called once with the welcome the platform sends — the host's chance to store the
     ///     credential an enrollment was exchanged for before the enrollment token stops working.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ A throw here is logged and the session goes on; it does not end the pump. By the time
+    ///     the welcome arrives the enrollment token is spent, so a session that died on a failed
+    ///     Secret write would leave the host redialling with a token the platform no longer admits.
+    ///     Keeping the session up is what gives the host time to retry the write — see
+    ///     <c>AgentService</c>, which does, and holds the credential in memory meanwhile.
+    /// </remarks>
     public Func<WelcomeBody, CancellationToken, Task>? OnWelcome { get; init; }
 }
 
@@ -137,7 +144,7 @@ public sealed class TunnelAgent : IDisposable {
 
                 // ⚠ Awaited inline, before the next frame is read: a credential that is not yet
                 // stored when the pod dies is an enrollment token spent for nothing.
-                return options.OnWelcome is { } onWelcome ? onWelcome(Welcome, CancellationToken.None) : Task.CompletedTask;
+                return options.OnWelcome is { } onWelcome ? WelcomedAsync(onWelcome, Welcome) : Task.CompletedTask;
 
             case TunnelFrameKind.Request:
                 var work = ServeAsync(frame);
@@ -158,6 +165,26 @@ public sealed class TunnelAgent : IDisposable {
             default:
                 logger.LogWarning("The platform sent a {Kind} frame, which an agent does not serve. Dropped.", frame.Kind);
                 return Task.CompletedTask;
+        }
+    }
+
+    async Task WelcomedAsync(Func<WelcomeBody, CancellationToken, Task> onWelcome, WelcomeBody welcome) {
+        try {
+            await onWelcome(welcome, CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            // ⚠ CAUGHT, AND THE SESSION GOES ON. TunnelPump.RunAsync catches transport faults only,
+            // so a throw from here — a 403 from the Role on the Secret write, a transient API
+            // server error — used to propagate out of RunAsync, through the host's session loop,
+            // and take the process down: a pod restart with the enrollment token already spent and
+            // no credential stored, which is the one state the agent cannot recover from. The
+            // session is worth more than the write; the host retries the write while it lives.
+            logger.LogError(
+                ex,
+                "The welcome handler faulted for session {Session}; the session continues. If this was "
+                + "the credential store, the enrollment token is already spent — the host retries the "
+                + "write and presents the credential from memory until it lands.",
+                welcome.SessionId
+            );
         }
     }
 

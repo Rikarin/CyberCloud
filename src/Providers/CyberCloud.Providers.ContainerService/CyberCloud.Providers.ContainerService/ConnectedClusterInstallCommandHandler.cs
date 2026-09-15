@@ -46,21 +46,28 @@ public sealed class ConnectedClusterInstallCommandHandler : IResourceActionHandl
         ActionContext context,
         CancellationToken cancellationToken = default
     ) {
-        var enrolled = await context.Agents.EnrollAsync(context.Id.Id, context.Id.TenantId, cancellationToken);
+        // ⚠ The body's heartbeatSeconds goes to the grain here and comes back in the enrollment for
+        // the chart, so the welcome the agent adopts and the value the chart starts with are the
+        // same number. Read once, sent once.
+        var enrolled = await context.Agents.EnrollAsync(
+            context.Id.Id,
+            context.Id.TenantId,
+            TimeSpan.FromSeconds(ConnectedClusters.HeartbeatSeconds(context.Desired)),
+            cancellationToken
+        );
 
         if (enrolled.TryGetError(out var error)) {
             return Result<string>.Failure(error);
         }
 
         var enrollment = enrolled.GetValueOrThrow();
-        var heartbeat = ConnectedClusters.HeartbeatSeconds(context.Desired);
 
         // ⚠ The property names are the response schema's pointers with the slash removed, and the
         // dispatcher checks that rather than trusting it — ConnectedClusters.ListInstallCommandResponse
         // is what the OpenAPI document, the SDK and the portal form are generated from.
         return Result<string>.Success(
             new JsonObject {
-                ["command"] = ConnectedClusters.InstallCommand(enrollment, heartbeat),
+                ["command"] = ConnectedClusters.InstallCommand(enrollment),
                 ["token"] = enrollment.EnrollmentToken,
                 ["expiresAt"] = enrollment.ExpiresAt.ToString("O"),
                 ["tunnelEndpoint"] = enrollment.TunnelEndpoint,

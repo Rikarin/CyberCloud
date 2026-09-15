@@ -29,7 +29,7 @@ cluster:
 
 ## @param agent {object} How the agent behaves.
 agent:
-  ## @param heartbeatSeconds {integer} How often the agent reports in. The platform calls a cluster Degraded after ninety seconds without a heartbeat, so a value above thirty leaves fewer than three chances for a packet to arrive. The install command sets it from the resource's own heartbeatSeconds.
+  ## @param heartbeatSeconds {integer} How often the agent reports in until the platform's welcome says — the welcome carries the resource's own heartbeatSeconds, the same value the install command sets here, and the agent adopts it on every connection. The platform calls a cluster Degraded after ninety seconds without a heartbeat, so a value above thirty leaves fewer than three chances for a packet to arrive.
   ## @range 5..60
   heartbeatSeconds: 15
   ## @param maxReconnectSeconds {integer} The longest the agent waits between dial attempts. It starts at one second and doubles up to this.

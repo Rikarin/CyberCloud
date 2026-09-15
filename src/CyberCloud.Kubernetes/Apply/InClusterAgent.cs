@@ -55,11 +55,18 @@ public static class InClusterAgent {
     /// <param name="clusterId">The connected-cluster resource's id, for messages.</param>
     /// <param name="clock">The clock a drift event's timestamp comes from.</param>
     /// <param name="logger">Where the API server's refusals are written in full.</param>
+    /// <param name="credentialSecretName">
+    ///     The Secret the credential is kept in. ⚠ Must be the name the chart's <c>Role</c> scopes
+    ///     to — <c>cluster.credentialSecretName</c> in <c>charts/agent/templates/rbac.yaml</c> —
+    ///     which is why the chart passes it in rather than trusting a default to agree. Empty means
+    ///     <see cref="DefaultSecretName" />.
+    /// </param>
     /// <returns>The client, and the namespace the pod runs in.</returns>
     public static (IKubeApiClient Api, IAgentCredentialStore Credentials, string Namespace) FromPod(
         Guid clusterId,
         IClock clock,
-        ILogger? logger = null
+        ILogger? logger = null,
+        string? credentialSecretName = null
     ) {
         var config = KubernetesClientConfiguration.InClusterConfig();
         var client = new k8s.Kubernetes(config);
@@ -67,12 +74,20 @@ public static class InClusterAgent {
 
         return (
             new KubeApiClient(client, clusterId, clock, ownsClient: false, logger: logger),
-            new SecretAgentCredentialStore(client, ns, DefaultSecretName),
+            new SecretAgentCredentialStore(
+                client,
+                ns,
+                string.IsNullOrWhiteSpace(credentialSecretName) ? DefaultSecretName : credentialSecretName
+            ),
             ns
         );
     }
 
-    /// <summary>The Secret the chart lets the agent write — <c>charts/agent/templates/role.yaml</c> names it too.</summary>
+    /// <summary>
+    ///     The Secret the chart lets the agent write when nothing says otherwise — the default of
+    ///     <c>cluster.credentialSecretName</c> in <c>charts/agent/values.yaml</c>, which
+    ///     <c>templates/rbac.yaml</c> scopes the agent's <c>Role</c> to.
+    /// </summary>
     public const string DefaultSecretName = "cybercloud-agent-credential";
 
     /// <summary>An <see cref="IAgentCredentialStore" /> over one Secret.</summary>

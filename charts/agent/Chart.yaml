@@ -22,7 +22,7 @@ description: The Cyber Cloud agent — dials the platform's gateway from inside 
 type: application
 
 # The chart's own version. Bumped on every change to this directory.
-version: 0.1.0
+version: 0.1.1
 
 # The agent host's version, which is the platform's. ⚠ The IMAGE is pinned by digest at install time
 # through image.reference; this is a label, not a pin.

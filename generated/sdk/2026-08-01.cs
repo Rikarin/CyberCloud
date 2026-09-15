@@ -865,7 +865,7 @@ public sealed partial class ConnectedKubernetesClusterData {
         [JsonPropertyName("distribution")]
         public string? Distribution { get; set; }
 
-        /// <summary>How often the agent reports in. The install command passes it to the chart. ⚠ The platform calls a cluster Degraded after ninety seconds without one (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.</summary>
+        /// <summary>How often the agent reports in. Read when listInstallCommand is called: the command passes it to the chart and the platform repeats it in the welcome the agent adopts on every connection. A change after that takes effect on the next listInstallCommand — no re-install; the running agent adopts it on its next connection. ⚠ The platform calls a cluster Degraded after ninety seconds without a heartbeat (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.</summary>
         /// <remarks>Defaults to 15 when left unset.</remarks>
         [JsonPropertyName("heartbeatSeconds")]
         public long? HeartbeatSeconds { get; set; }
@@ -897,7 +897,7 @@ public sealed partial class ConnectedKubernetesClusterResource {
     /// <summary>What listInstallCommand returns. ⚠ Secret material: never log or cache this.</summary>
     public sealed partial class ListInstallCommandResult {
 
-        /// <summary>The chart reference the command installs — charts/agent in this tree.</summary>
+        /// <summary>The chart reference the command installs: the OCI reference this deployment publishes the agent chart under, or charts/agent — the path in a checkout of the CyberCloud repository — when it has not published one, in which case run the command from that checkout.</summary>
         [JsonPropertyName("chart")]
         public required string Chart { get; set; }
 

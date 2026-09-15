@@ -68,6 +68,10 @@ spec:
               value: {{ .Values.cluster.id | quote }}
             - name: CyberCloud__Agent__EnrollmentTokenFile
               value: {{ include "agent.enrollmentTokenPath" . | quote }}
+            # ⚠ The same value rbac.yaml scopes the Role to. An agent told a different name could
+            # create its Secret (create is unscoped) and never get it back on the next restart.
+            - name: CyberCloud__Agent__CredentialSecretName
+              value: {{ .Values.cluster.credentialSecretName | quote }}
             - name: CyberCloud__Agent__HeartbeatSeconds
               value: {{ .Values.agent.heartbeatSeconds | quote }}
             - name: CyberCloud__Agent__MaxReconnectSeconds

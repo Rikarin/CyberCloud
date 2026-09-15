@@ -139,6 +139,21 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
     }
 
     [Fact]
+    public async Task TheBodysHeartbeatIntervalReachesBothTheChartAndTheArm() {
+        // ⚠ Two ways out of one number. The install command passes heartbeatSeconds to the chart,
+        // and the arm carries it to the grain so the welcome — which the agent adopts — says the
+        // same. The first cut did only the first, and a resource asking for 30 heartbeated at 15.
+        ProviderTestCluster<ConnectedClusterCase>.Reset();
+
+        var accepted = (await CreateAsync("byo-heartbeat", heartbeatSeconds: 30)).GetValueOrThrow();
+
+        var command = await InstallCommandAsync("byo-heartbeat");
+
+        command["command"]!.GetValue<string>().ShouldContain("--set agent.heartbeatSeconds=30");
+        Agents.ArmedHeartbeats[accepted.Resource.Id].ShouldBe(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
     public async Task TheInstallCommandIsMintedForTheResourcesOwnTenantAndNotForACallerFromAnother() {
         ProviderTestCluster<ConnectedClusterCase>.Reset();
 
@@ -243,13 +258,13 @@ public sealed class ConnectedClusterConformance(ProviderTestCluster<ConnectedClu
 
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
-    async Task<Result<WriteAccepted>> CreateAsync(string name) {
+    async Task<Result<WriteAccepted>> CreateAsync(string name, int heartbeatSeconds = ConnectedClusters.DefaultHeartbeatSeconds) {
         var accepted = await cluster.Manager.WriteAsync(
             new() {
                 Path = ProviderTestCluster<ConnectedClusterCase>.Address(name).Path,
                 ApiVersion = ConnectedClusters.V2026,
                 Verb = WriteVerb.Put,
-                Body = ConnectedClusters.Body(),
+                Body = ConnectedClusters.Body(heartbeatSeconds: heartbeatSeconds),
                 Caller = ProviderTestCluster<ConnectedClusterCase>.Caller()
             },
             Ct

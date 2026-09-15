@@ -12441,7 +12441,7 @@
               },
               "heartbeatSeconds": {
                 "default": 15,
-                "description": "How often the agent reports in. The install command passes it to the chart. ⚠ The platform calls a cluster Degraded after ninety seconds without one (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.",
+                "description": "How often the agent reports in. Read when listInstallCommand is called: the command passes it to the chart and the platform repeats it in the welcome the agent adopts on every connection. A change after that takes effect on the next listInstallCommand — no re-install; the running agent adopts it on its next connection. ⚠ The platform calls a cluster Degraded after ninety seconds without a heartbeat (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.",
                 "maximum": 60,
                 "minimum": 5,
                 "type": "integer"
@@ -12492,7 +12492,7 @@
         "description": "What CyberCloud.ContainerService/connectedClusters/listInstallCommand returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
         "properties": {
           "chart": {
-            "description": "The chart reference the command installs — charts/agent in this tree.",
+            "description": "The chart reference the command installs: the OCI reference this deployment publishes the agent chart under, or charts/agent — the path in a checkout of the CyberCloud repository — when it has not published one, in which case run the command from that checkout.",
             "type": "string"
           },
           "command": {

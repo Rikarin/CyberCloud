@@ -1033,7 +1033,7 @@
           "type": "integer",
           "required": false,
           "section": "general",
-          "hint": "How often the agent reports in. The install command passes it to the chart. ⚠ The platform calls a cluster Degraded after ninety seconds without one (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.",
+          "hint": "How often the agent reports in. Read when listInstallCommand is called: the command passes it to the chart and the platform repeats it in the welcome the agent adopts on every connection. A change after that takes effect on the next listInstallCommand — no re-install; the running agent adopts it on its next connection. ⚠ The platform calls a cluster Degraded after ninety seconds without a heartbeat (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.",
           "minimum": 5,
           "maximum": 60,
           "default": 15

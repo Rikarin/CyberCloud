@@ -369,7 +369,7 @@ export interface ContainerServiceConnectedClustersData {
   properties?: {
     /** What the cluster runs — k3s, kubeadm, OpenShift, a hosted service. Informational: the agent works against any conformant API server and nothing here changes what it does. */
     distribution?: string;
-    /** How often the agent reports in. The install command passes it to the chart. ⚠ The platform calls a cluster Degraded after ninety seconds without one (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive. */
+    /** How often the agent reports in. Read when listInstallCommand is called: the command passes it to the chart and the platform repeats it in the welcome the agent adopts on every connection. A change after that takes effect on the next listInstallCommand — no re-install; the running agent adopts it on its next connection. ⚠ The platform calls a cluster Degraded after ninety seconds without a heartbeat (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive. */
     heartbeatSeconds?: number;
   };
   /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
@@ -387,7 +387,7 @@ export interface ContainerServiceConnectedClustersResource {
 
 /** What listInstallCommand returns. ⚠ Secret material — never log or persist this. */
 export interface ContainerServiceConnectedClustersListInstallCommandResult {
-  /** The chart reference the command installs — charts/agent in this tree. */
+  /** The chart reference the command installs: the OCI reference this deployment publishes the agent chart under, or charts/agent — the path in a checkout of the CyberCloud repository — when it has not published one, in which case run the command from that checkout. */
   chart: string;
   /** The helm command to run against the cluster being connected, with the one-time token inline. Run it from a workstation with cluster-admin on that cluster; the platform needs nothing from the cluster's side. */
   command: string;

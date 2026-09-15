@@ -29,9 +29,10 @@ namespace CyberCloud.Hosts.Tests;
 ///         WebSocket carrier on both sides, the agent's dispatcher and heartbeat, and the platform's
 ///         multiplexer. What is substituted: the gateway's pipeline and the tunnel grain — the
 ///         endpoint here admits by comparing the bearer value against what it expects and speaks the
-///         platform side of the protocol directly, so this is the WebSocket half of
-///         <c>charts/agent/conformance.yaml § owed</c>'s <c>the-websocket-transport-is-untested-against-a-real-socket</c>
-///         and <c>the-agent-host-reconnect-loop-is-untested</c>, and not the NAT half.
+///         platform side of the protocol directly, so this is the WebSocket half of what
+///         <c>charts/agent/conformance.yaml § owed</c>'s <c>the-gateway-endpoint-is-not-driven-over-http</c>
+///         still owes — the gateway's pipeline and the tunnel grain behind a real socket — and
+///         not the NAT half of <c>no-suite-crosses-a-real-nat</c>.
 ///     </para>
 /// </remarks>
 public sealed class AgentServiceTests {
@@ -92,6 +93,70 @@ public sealed class AgentServiceTests {
 
             var again = await second.Exchange.ExchangeAsync(TunnelFrame.Request(0, TunnelOperations.Ping, "{}"), Ct);
             again.IsSuccess.ShouldBeTrue(again.Error?.Message);
+        } finally {
+            await agent.StopAsync(Ct);
+            File.Delete(tokenFile);
+        }
+    }
+
+    [Fact]
+    public async Task ACredentialTheSecretRefusesIsPresentedFromMemoryAndStoredWhenTheWriteRecovers() {
+        // ⚠ THE BRICKED-ENROLLMENT PATH. The welcome that carries the credential is the platform
+        // saying the token is spent. A Secret write that fails at that moment — a 403 from the
+        // Role, a transient API server error — used to escape the session, end the process, and
+        // restart a pod holding neither a credential nor a working token. What is pinned: the
+        // session survives the failed write, the redial presents the credential from memory and
+        // not the spent token, and the write is retried until the Secret holds it.
+        var clusterId = Guid.NewGuid();
+        var enrollment = AgentCredentials.MintEnrollment();
+        var credential = AgentCredentials.MintCredential();
+
+        await using var platform = new FakePlatform(clusterId, enrollment.Plaintext, credential.Plaintext);
+        await platform.StartAsync();
+
+        var tokenFile = Path.Combine(Path.GetTempPath(), "cc-agent-" + Guid.NewGuid().ToString("N"));
+        await File.WriteAllTextAsync(tokenFile, enrollment.Plaintext, Ct);
+
+        var endpoints = new FakeEndpoints();
+        endpoints.Credentials.RefuseWrites(2);
+
+        using var agent = AgentComposition.Build(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{AgentOptions.SectionName}:TunnelEndpoint={platform.TunnelUrl}",
+                $"--{AgentOptions.SectionName}:ClusterId={clusterId:D}",
+                $"--{AgentOptions.SectionName}:EnrollmentTokenFile={tokenFile}",
+                $"--{AgentOptions.SectionName}:HeartbeatSeconds=1",
+                $"--{AgentOptions.SectionName}:MaxReconnectSeconds=1",
+                $"--{AgentOptions.SectionName}:CredentialStoreRetrySeconds=1"
+            ],
+            services => services.AddSingleton<IAgentEndpoints>(endpoints)
+        );
+
+        try {
+            await agent.StartAsync(Ct);
+
+            // The first dial enrolls; the Secret write is refused; the session is still up and
+            // answering — the process did not die on the write.
+            var first = await platform.NextSessionAsync();
+            first.Bearer.ShouldBe(enrollment.Plaintext);
+            await endpoints.Credentials.RefusedAsync(1);
+            endpoints.Credentials.Value.ShouldBeNull("the first write was refused");
+
+            var ping = await first.Exchange.ExchangeAsync(TunnelFrame.Request(0, TunnelOperations.Ping, "{}"), Ct);
+            ping.IsSuccess.ShouldBeTrue(ping.Error?.Message);
+
+            // The platform drops the socket before the write has recovered: the redial presents the
+            // credential — from memory — and NOT the token, which is spent.
+            await first.CloseAsync();
+
+            var second = await platform.NextSessionAsync();
+            second.Bearer.ShouldBe(credential.Plaintext);
+
+            // And the retry lands once the store stops refusing.
+            await endpoints.Credentials.StoredAsync();
+            endpoints.Credentials.Value.ShouldBe(credential.Plaintext);
         } finally {
             await agent.StopAsync(Ct);
             File.Delete(tokenFile);
@@ -289,14 +354,34 @@ public sealed class AgentServiceTests {
 
     sealed class InMemoryCredentialStore : IAgentCredentialStore {
         readonly TaskCompletionSource stored = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int refusalsLeft;
+        int refusals;
 
         public string? Value { get; private set; }
 
         public Task StoredAsync() => stored.Task.WaitAsync(TimeSpan.FromSeconds(15), Ct);
 
+        /// <summary>Makes the next <paramref name="count" /> writes throw — the Role refusing the Secret.</summary>
+        public void RefuseWrites(int count) => refusalsLeft = count;
+
+        public async Task RefusedAsync(int count) {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+
+            while (Volatile.Read(ref refusals) < count) {
+                (DateTime.UtcNow < deadline).ShouldBeTrue($"refused write {count} never came");
+                await Task.Delay(20, Ct);
+            }
+        }
+
         public Task<string?> ReadAsync(CancellationToken cancellationToken = default) => Task.FromResult(Value);
 
         public Task WriteAsync(string credential, CancellationToken cancellationToken = default) {
+            if (refusalsLeft > 0) {
+                refusalsLeft--;
+                Interlocked.Increment(ref refusals);
+                throw new InvalidOperationException("secrets \"cybercloud-agent-credential\" is forbidden: the Role does not grant it");
+            }
+
             Value = credential;
             stored.TrySetResult();
             return Task.CompletedTask;

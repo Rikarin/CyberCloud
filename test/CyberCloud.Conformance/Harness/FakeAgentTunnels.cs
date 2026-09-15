@@ -40,6 +40,7 @@ public sealed class FakeAgentTunnels(IClock clock) : IAgentTunnels {
     public void Reset() {
         statuses.Clear();
         enrollmentHashes.Clear();
+        ArmedHeartbeats.Clear();
         Enrollments.Clear();
         Revocations.Clear();
     }
@@ -85,8 +86,16 @@ public sealed class FakeAgentTunnels(IClock clock) : IAgentTunnels {
         }
     }
 
+    /// <summary>The heartbeat interval each cluster was last armed with — what the real grain's welcome would carry.</summary>
+    public ConcurrentDictionary<Guid, TimeSpan> ArmedHeartbeats { get; } = new();
+
     /// <inheritdoc />
-    public Task<Result<AgentEnrollment>> EnrollAsync(Guid clusterId, Guid owningTenantId, CancellationToken cancellationToken = default) {
+    public Task<Result<AgentEnrollment>> EnrollAsync(
+        Guid clusterId,
+        Guid owningTenantId,
+        TimeSpan heartbeatInterval,
+        CancellationToken cancellationToken = default
+    ) {
         var minted = AgentCredentials.MintEnrollment();
         var expiresAt = clock.UtcNow + AgentCredentials.EnrollmentLifetime;
 
@@ -98,6 +107,7 @@ public sealed class FakeAgentTunnels(IClock clock) : IAgentTunnels {
 
         // ⚠ Replaced, not added: a second install command voids the first token, as the grain does.
         enrollmentHashes[clusterId] = minted.Hash;
+        ArmedHeartbeats[clusterId] = heartbeatInterval;
         Enrollments.Enqueue((clusterId, minted.Plaintext));
 
         return Task.FromResult(
@@ -107,9 +117,9 @@ public sealed class FakeAgentTunnels(IClock clock) : IAgentTunnels {
                     EnrollmentToken = minted.Plaintext,
                     ExpiresAt = expiresAt,
                     TunnelEndpoint = TunnelEndpoint,
-                    ChartReference = "oci://conformance.example/charts/cybercloud-agent",
+                    ChartReference = "oci://conformance.example/charts/agent",
                     AgentImage = string.Empty,
-                    HeartbeatInterval = TimeSpan.FromSeconds(15)
+                    HeartbeatInterval = heartbeatInterval
                 }
             )
         );

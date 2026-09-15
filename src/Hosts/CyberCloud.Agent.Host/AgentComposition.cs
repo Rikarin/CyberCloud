@@ -37,14 +37,22 @@ public static class AgentComposition {
         builder.Services.TryAddSingleton<IAgentEndpoints>(provider => {
                 var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AgentOptions>>().Value;
 
+                // ⚠ The Secret name is the chart's, not a default: rbac.yaml scopes the agent's Role
+                // to cluster.credentialSecretName, and a store writing under any other name could
+                // create its Secret and never read it back.
                 var (api, credentials, ns) = InClusterAgent.FromPod(
                     options.ParsedClusterId,
                     provider.GetRequiredService<IClock>(),
-                    provider.GetRequiredService<ILoggerFactory>().CreateLogger("CyberCloud.Agent.Host.Kubernetes")
+                    provider.GetRequiredService<ILoggerFactory>().CreateLogger("CyberCloud.Agent.Host.Kubernetes"),
+                    options.CredentialSecretName
                 );
 
                 provider.GetRequiredService<ILogger<AgentService>>()
-                    .LogInformation("Serving the API server through the service account in namespace {Namespace}.", ns);
+                    .LogInformation(
+                        "Serving the API server through the service account in namespace {Namespace}; the credential Secret is {Secret}.",
+                        ns,
+                        options.CredentialSecretName
+                    );
 
                 return new PodEndpoints(api, credentials);
             }
