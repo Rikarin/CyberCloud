@@ -34,6 +34,21 @@ requiredBy:
   - charts/bundle/kamaji-control-plane-provider
   - charts/bundle/cluster-api-provider-kubevirt
 
+# The rows install.sh must have serving before this one — read by the Bundle gate, which checks
+# the roster reaches each earlier and that its `requiredBy:` names this component back. The three
+# webhook Deployments mount Secrets only a cert-manager Certificate produces (the notes below).
+requires:
+  - charts/bundle/cert-manager
+
+# What "installed" means for this component, read by install.sh after the apply: three Deployments
+# in three namespaces, because `cluster-api-components.yaml` ships core, kubeadm-bootstrap and
+# kubeadm-control-plane as one document. None of the three namespaces is the `<component>-system`
+# install.sh computes for a helm row, which is why the names are written here and not derived.
+waitFor:
+  - "deployment/capi-controller-manager -n capi-system --for=condition=Available"
+  - "deployment/capi-kubeadm-bootstrap-controller-manager -n capi-kubeadm-bootstrap-system --for=condition=Available"
+  - "deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --for=condition=Available"
+
 # Every container image this component's pinned artefact renders, with the digest its registry served
 # on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
 #
@@ -52,6 +67,19 @@ notes: >
   cannot see and cannot diff — the same objection ADR-010 raises to a vendored chart with no
   provenance. Applying the released component document pins the same bits and leaves the version in a
   file a reviewer reads.
+  ⚠ AND THE ARGUMENT WAS HALF AN ARGUMENT UNTIL THE FIRST RUN WITH A KUBELET (issue #2, 2026-09-15),
+  BECAUSE clusterctl DOES ONE MORE THING BEFORE IT APPLIES. The released document is a TEMPLATE:
+  `cluster-api-components.yaml` v1.14.0 carries thirteen distinct `${VAR:=default}` variables in its
+  container args — `--insecure-diagnostics=${CAPI_INSECURE_DIAGNOSTICS:=false}`, a feature-gate list
+  of nine — and `kubectl apply` handed them to the binary verbatim. All three controllers went
+  CrashLoopBackOff on `strconv.ParseBool: parsing "${CAPI_INSECURE_DIAGNOSTICS:=false}": invalid
+  syntax`, and so did kamaji-control-plane-provider's on the same shape. install.sh now performs the
+  substitution clusterctl would have — charts/bundle/substitute.sh, in awk, from the document's OWN
+  defaults, with the environment able to override exactly as `CLUSTER_TOPOLOGY=true clusterctl init`
+  can — and the pinning argument survives intact: every one of the thirteen carries a default, so the
+  applied bytes are still a function of this file's `release:` and of nothing remote. A variable
+  with no default and no value is refused by name, which is also what clusterctl does. Re-applied
+  through install.sh on that day: all three Deployments Available in 1 m 17 s including the wait.
   ⚠ ONE THING THE COMPONENT DOCUMENT DOES THAT clusterctl WOULD HAVE DONE FOR YOU: it declares
   `cert-manager` annotations on its webhook configurations. Cluster API's webhooks are served with
   cert-manager-issued certificates, so this component is inert on a cluster with no cert-manager —

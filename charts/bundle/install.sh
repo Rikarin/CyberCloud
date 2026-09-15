@@ -15,28 +15,34 @@
 #
 # ⚠ WHAT HAS AND HAS NOT BEEN EXERCISED. Every URL and version below was resolved against its
 # registry on the date each component records. The APPLY path is run against a real API server by
-# test/CyberCloud.Bundle.Cluster.Conformance for THREE of the nineteen components: cert-manager
+# test/CyberCloud.Bundle.Cluster.Conformance for THREE of the twenty components: cert-manager
 # (`--phase 15`), openebs-localpv (`--phase 25`), and openebs-localpv with cloudnative-pg in one run
 # over two phases (`--component` twice), each against a fresh k3s. The phase ORDER is asserted over
-# all nineteen rows by a full `--dry-run`.
+# all twenty rows by a full `--dry-run`.
 #
-# ⚠ AND ON 2026-09-05 THE `kubectl` BRANCH BELOW RAN FOR THE FIRST TIME — BY HAND, NOT BY A TEST, AND
-# AGAINST AN API SERVER WITH NO KUBELET. All SIX `manifest:` components were applied through this
-# script, one `--component` run each, onto one `rancher/k3s:v1.35.7-k3s1` started with
-# `--disable-agent`: the host's Docker reports `Cgroup Version: 1` and 1.35's kubelet refuses to
-# start on such a host, so an agentless server was the only k3s available. What that made firsthand
-# is the apply, the two-document path, and the establishment wait below. What it could not make
-# firsthand is a running pod — NO OPERATOR THIS BRANCH INSTALLS HAS EVER STARTED, under test or by
-# hand. bundle.yaml § owed, `the-manifest-path-waits-for-nothing`, carries every reading and what
-# they leave owed.
+# ⚠ ON 2026-09-05 THE `kubectl` BRANCH BELOW RAN FOR THE FIRST TIME — BY HAND, AGAINST AN API SERVER
+# WITH NO KUBELET: the host's Docker then reported `Cgroup Version: 1`, 1.35's kubelet refuses to
+# start on such a host, and `--disable-agent` was the only k3s available. That made the apply, the
+# two-document path and the establishment wait firsthand, and left every operator unstarted.
 #
-# ⚠ THE COUNT, ON 2026-09-05, FROM THE TWO LISTS ABOVE: nineteen components, of which three are
-# applied by a test, six were applied by that hand run, and TEN have never been applied by anything —
-# kube-ovn, prometheus-operator-crds, kamaji, clickhouse-operator, mariadb-operator,
-# opensearch-operator, redis-operator, seaweedfs-operator, strimzi-kafka-operator and
-# victoria-metrics-operator. It goes stale the moment a suite or a person applies one more.
-# charts/bundle/README.md § Verification, and its honest limit. `--verify` is the half that is
-# reproducible with no cluster at all, and it is the half to run first.
+# ⚠ AND ON 2026-09-15 THE WHOLE ROSTER RAN, PHASE BY PHASE, AGAINST A `rancher/k3s:v1.35.7-k3s1`
+# WITH A REAL KUBELET — the same laptop, after its WSL2 kernel was moved to cgroup v2 (docs/plan/23
+# § The lane that needs a kubelet). Nineteen of the twenty serve; kube-ovn is the one that cannot
+# on a k3s that already has a CNI, and its component.yaml says what it needs instead. Four things
+# in this file exist because of what that run found, each recorded at the line that changed:
+# the `${VAR:=default}` substitution before every manifest apply (four controllers crashlooped
+# without it), the per-component `waitFor:` after it (three shapes, none of them derivable from a
+# rule), `--force-conflicts` on a re-apply (an operator adopts fields of its own definition), and
+# the roster's phase 30 running CDI before KubeVirt (a barrier that held for its full timeout
+# found the dependency the wait-free run had hidden). Two pins moved: opensearch-operator to the
+# chart that agrees with its operator, redis-operator to the chart helm can read. bundle.yaml
+# § owed, `the-manifest-path-waits-for-nothing`, carries the readings.
+#
+# ⚠ THE COUNT, ON 2026-09-15: twenty components, of which three are applied by a test
+# (test/CyberCloud.Bundle.Cluster.Conformance), nineteen were applied through this script by hand
+# on that day, and ONE — kube-ovn — by nothing that has succeeded. It goes stale the moment a suite
+# applies one more. charts/bundle/README.md § Verification, and its honest limit. `--verify` is
+# the half that is reproducible with no cluster at all, and it is the half to run first.
 #
 # ⚠ THE RECORDED DIGEST IS CONSUMED HERE, SINCE ISSUE #17, AND UNTIL THEN IT WAS CONSUMED NOWHERE.
 # Every component.yaml records the images its artefact renders as `repository:tag@sha256:…`, and
@@ -57,6 +63,11 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # The tag-to-digest resolver, shared with images.sh so the recorder and this refuser agree.
 # shellcheck source=oci.sh
 . "$here/oci.sh"
+# The `${VAR:=default}` pass a `manifest:` document gets before `kubectl apply` — the substitution
+# clusterctl performs, which the Cluster API family's release documents assume. Its header carries
+# the four-controller crashloop that made it necessary.
+# shellcheck source=substitute.sh
+. "$here/substitute.sh"
 dry_run=false
 verify_only=false
 only_phase=""
@@ -100,9 +111,13 @@ Usage: install.sh [options]
   -h, --help         This.
 
 Phases are barriers: every component in a phase is installed before the next phase begins, and
-"installed" means helm waited for a `helm` component and this script waited for a `manifest:`
-component's definitions to be Established. It does NOT yet mean a `manifest:` component's operator
-has a running pod — bundle.yaml § owed, `the-manifest-path-waits-for-nothing`, is that half.
+"installed" means helm waited for a `helm` component, and for a `manifest:` component this script
+waited for its definitions to be Established and then for what its component.yaml's `waitFor:`
+names — a Deployment Available, or a custom resource's phase — with the same 10 m helm gets.
+
+A `manifest:` document is downloaded and run through the `${VAR:=default}` substitution clusterctl
+performs before it is applied; a variable in the environment overrides the document's default, and
+a variable with neither ends the run naming it.
 
 --phase narrows the run to one phase and --component to one component, so --component is the flag
 for repairing a row. A phase is not a row:
@@ -186,6 +201,24 @@ recorded() {
         inside && /^  - / { line = $0; sub(/^  - /, "", line); gsub(/^"|"$/, "", line); print line }
     ' "$1"
 }
+
+# waits <file> — the `waitFor:` entries, one per line: each is the argument list of one
+# `kubectl wait`, minus the timeout this script owns. `<kind>/<name> [-n <namespace>] --for=…`.
+# The Bundle gate (build/Build.Bundle.cs § WaitForViolations) requires the block on every
+# `manifest:` component and checks each entry's shape; this reader runs it.
+waits() {
+    awk '
+        /^waitFor:/ { inside = 1; next }
+        /^[A-Za-z]/ { inside = 0 }
+        inside && /^  - / { line = $0; sub(/^  - /, "", line); gsub(/^"|"$/, "", line); print line }
+    ' "$1"
+}
+
+# Where a `manifest:` document lands between its download and its apply. One directory per run,
+# removed on exit whatever the exit is; a file per document, named for the component so that a
+# dry run reads as a recipe. Created under --dry-run too — an empty directory is not a command.
+staging="$(mktemp -d)"
+trap 'rm -rf "$staging"' EXIT
 
 # ── The digest gate ───────────────────────────────────────────────────────────────────────────
 #
@@ -349,6 +382,24 @@ verify_component() {
             if [[ -n "$extra" ]]; then
                 verify_url manifestExtra "$extra" || return 1
             fi
+            # ⚠ AND THE DOCUMENT IS FETCHED AND RUN THROUGH THE SUBSTITUTION, because "the pin
+            # resolves" said nothing about the four release documents that reached a container
+            # as `${CAPI_INSECURE_DIAGNOSTICS:=false}`. A variable with no default and no value
+            # is the one refusal substitute.sh makes, and it is answerable with no cluster, so
+            # --verify answers it: a bumped pin whose new release introduced a defaultless
+            # variable goes red here rather than at phase 40 of a real install.
+            local document
+            for document in "$manifest" $extra; do
+                if ! curl -fsSL --retry 3 --max-time 120 -o "$staging/verify.yaml" "$document"; then
+                    printf '  ✘ %-14s %s could not be downloaded for the substitution check\n' variables "$document"
+                    return 1
+                fi
+                if ! substitute_manifest "$staging/verify.yaml" /dev/null; then
+                    printf '  ✘ %-14s %s — see the refusal above\n' variables "$document"
+                    return 1
+                fi
+                printf '  ✔ %-14s %s (every ${VAR} has a default or a value)\n' variables "${document##*/}"
+            done
             ;;
         file)
             # ⚠ A first-party document has no registry to resolve against, so "does the pin still
@@ -393,7 +444,7 @@ verify_component() {
 
 install_component() {
     local dir="$1" file="$1/component.yaml"
-    local name install repo chart version archive manifest extra crds crdsVersion ns
+    local name install repo chart version archive manifest extra crds crdsVersion ns wait_entry wait_args
     name=$(key "$file" component)
     install=$(key "$file" install)
     ns="${name}${namespace_suffix}"
@@ -440,7 +491,48 @@ install_component() {
             ;;
         manifest)
             manifest=$(key "$file" manifest)
-            run kubectl ${kubectl_args[@]+"${kubectl_args[@]}"} apply --server-side -f "$manifest"
+            extra=$(key "$file" manifestExtra)
+
+            # ⚠ THE `waitFor:` BLOCK IS CHECKED BEFORE ANYTHING IS APPLIED, so a component that
+            # cannot say what "serving" means for it installs nothing rather than half of itself.
+            # The Bundle gate refuses the same file at build time; this is the same rule at the
+            # moment it matters, for a tree the gate has not seen.
+            if [[ -z "$(waits "$file")" ]]; then
+                printf '  ✘ %-14s component.yaml declares no waitFor:, so "installed" would mean "stored" for\n' waitFor
+                printf '      this component and the phase after it would be admitted against an operator that may\n'
+                printf '      not be running. Name the Deployment or the custom resource that says it serves —\n'
+                printf '      charts/bundle/README.md § What a component owes.\n'
+                exit 1
+            fi
+
+            # ⚠ FETCHED, SUBSTITUTED, THEN APPLIED FROM DISK — NOT `kubectl apply -f <url>`, WHICH IS
+            # WHAT THIS LINE WAS UNTIL 2026-09-15 AND WHICH CRASHLOOPED FOUR OF THE SIX. The Cluster
+            # API family's release documents are clusterctl templates: `${CAPI_INSECURE_DIAGNOSTICS:=false}`
+            # reaches the container verbatim and strconv.ParseBool refuses it. substitute.sh performs
+            # the pass clusterctl would have, using the document's own defaults, so the applied bytes
+            # are a function of the pin alone. It runs for every manifest component and not only the
+            # four that need it today, because "which manifests are templates" is a property of the
+            # upstream release, not of this file, and a pass over a document with no variables is the
+            # identity — measured over all six on 2026-09-15: kubevirt, containerized-data-importer,
+            # cluster-api-provider-kubevirt and rabbitmq-cluster-operator come back byte-identical.
+            #
+            # ⚠ `--retry 3 -f`: a 5xx from GitHub's release CDN mid-phase is a broken barrier, and
+            # curl exits 0 on an HTTP error unless told otherwise. `kubectl apply -f <url>` had
+            # neither, so a 503 used to be "error: unable to read URL", which at least failed. This
+            # keeps that property.
+            #
+            # ⚠ `--force-conflicts`, MEASURED RATHER THAN ADDED FOR COMFORT. The second apply of
+            # cdi-operator.yaml onto a cluster where CDI already ran — the repair case `--component`
+            # exists for — was refused: `Apply failed with 1 conflict: conflict with "cdi-operator"
+            # using apiextensions.k8s.io/v1: .spec.versions`. The operator adopts fields of its own
+            # definition after it starts, so without this flag a re-run of install.sh fails forever
+            # on a healthy cluster, which is the wrong way round: this script is the installer of
+            # the document and the operator is free to touch the fields again afterwards. The
+            # first apply onto a fresh cluster never conflicts, so the flag changes nothing there.
+            run curl -fsSL --retry 3 -o "$staging/$name.yaml" "$manifest"
+            run substitute_manifest "$staging/$name.yaml" "$staging/$name.substituted.yaml"
+            run kubectl ${kubectl_args[@]+"${kubectl_args[@]}"} apply --server-side --force-conflicts \
+                -f "$staging/$name.substituted.yaml"
 
             # ⚠ THE ESTABLISHMENT WAIT IS UNCONDITIONAL, AND UNTIL #74 IT RAN ONLY FOR A COMPONENT
             # THAT HAPPENED TO DECLARE A `manifestExtra`. `kubectl apply` returns when the API server
@@ -532,9 +624,9 @@ install_component() {
             # runs for all SIX, so one stuck definition anywhere on the cluster goes from breaking two
             # of six manifest components to breaking six of six. Under `set -e` the first failing wait
             # ends the run, so the bill is ONE 5 m timeout charged to the first manifest row the run
-            # reaches — kubevirt, phase 30, on a run with no selector — a component that is fine and
-            # is not what went wrong; and the bound on a run where
-            # every wait is slow but succeeds went from 2 × 5 m to 6 × 5 m. It is ACCEPTED rather than
+            # reaches — containerized-data-importer, phase 30, since the 2026-09-15 reorder — a
+            # component that is fine and is not what went wrong; and the bound on a run where every
+            # wait is slow but succeeds went from 2 × 5 m to 6 × 5 m. It is ACCEPTED rather than
             # fixed, because the only narrower selector is the per-component definition list the
             # paragraph above explains this file cannot spell without a key nothing checks. bundle.yaml
             # § owed, `the-manifest-path-waits-for-nothing`, carries it as owed rather than as an
@@ -550,21 +642,46 @@ install_component() {
             # the two components that have one: `kubevirt.kubevirt.io/kubevirt` and
             # `cdi.cdi.kubevirt.io/cdi` were both admitted after the wait, and the whole component
             # took under four seconds each with nothing to pull.
-            extra=$(key "$file" manifestExtra)
             if [[ -n "$extra" ]]; then
-                run kubectl ${kubectl_args[@]+"${kubectl_args[@]}"} apply --server-side -f "$extra"
+                run curl -fsSL --retry 3 -o "$staging/$name.extra.yaml" "$extra"
+                run substitute_manifest "$staging/$name.extra.yaml" "$staging/$name.extra.substituted.yaml"
+                run kubectl ${kubectl_args[@]+"${kubectl_args[@]}"} apply --server-side --force-conflicts \
+                    -f "$staging/$name.extra.substituted.yaml"
             fi
 
-            # ⚠ AND THE OTHER HALF OF THE BARRIER IS STILL NOT HERE, WHICH IS #74'S FINDING 2 AND IS
-            # NOT CLOSED BY THE LINE ABOVE. "Established" says the API server will now serve the kind.
-            # It says nothing about the operator that reconciles it, and a phase-40 provider whose
-            # controller has no running pod fails exactly like one whose CRD is missing, only later.
-            # The fix is `--for=condition=Available` on each component's own Deployments, and it is
-            # STILL a guess for the reason the issue gives: the 2026-09-05 run had no kubelet, so not
-            # one of those Deployments has ever had a pod. What that run did settle is that the
-            # obvious spelling is wrong — the six components put EIGHT Deployments in EIGHT
-            # namespaces and not one namespace is the `${name}${namespace_suffix}` this script
-            # computes. bundle.yaml § owed, `the-manifest-path-waits-for-nothing`, lists all eight.
+            # ⚠ THE OTHER HALF OF THE BARRIER — #74'S FINDING 2 — AND IT IS PER COMPONENT BECAUSE
+            # THE RUN THAT FINALLY HAD A KUBELET SAID SO. "Established" says the API server serves
+            # the kind; it says nothing about the operator that reconciles it, and a phase-40
+            # provider whose controller has no running pod fails exactly like one whose CRD is
+            # missing, only later. Until 2026-09-15 this line was owed rather than written, because
+            # no pod of any manifest component had ever run and the obvious spelling was already
+            # known to be wrong: the six components put eight Deployments in eight namespaces, none
+            # of them `${name}${namespace_suffix}`. Measured on the first run with a kubelet, the
+            # wait is THREE SHAPES and not one — a Deployment `Available` for rabbitmq-cluster-operator
+            # and the four Cluster API controllers; the `KubeVirt` custom resource's
+            # `status.phase == Deployed` for kubevirt, reached about seven minutes after apply while
+            # `virt-operator` was Available at 42 s and is NOT the barrier (it goes on to render six
+            # more workloads); and the `CDI` resource's `Deployed` for containerized-data-importer,
+            # where a Deployment wait would have gone RED during a healthy install on a transient
+            # `secret "cdi-api-signing-key" not found` that the operator resolves itself.
+            #
+            # So the wait is read out of the component's own `waitFor:` block — one `kubectl wait`
+            # argument list per entry, `<kind>/<name> [-n <namespace>] --for=…` — and this script
+            # supplies the timeout, the same 10 m helm's `--wait` gets. The record is read here, its
+            # shape is checked by the Bundle gate, and `BundleInstallSelection` asserts the dry run
+            # prints one wait per entry after the apply: all three readers exist, which is what
+            # separates this key from the `imageDigest:` that bundle.yaml § owed,
+            # `images-are-not-pinned-by-digest`, records nothing ever read.
+            #
+            # ⚠ `read -r -a` splits the entry on whitespace and nothing else, so an entry cannot
+            # carry a quoted argument with a space in it. None does; a jsonpath is written
+            # `--for=jsonpath={.status.phase}=Deployed`, braces and all, and reaches kubectl as one
+            # argument because no shell ever re-parses it.
+            while IFS= read -r wait_entry; do
+                [[ -n "$wait_entry" ]] || continue
+                read -r -a wait_args <<< "$wait_entry"
+                run kubectl ${kubectl_args[@]+"${kubectl_args[@]}"} wait --timeout=10m "${wait_args[@]}"
+            done < <(waits "$file")
             ;;
         file)
             # A document this repository owns, applied from beside its component.yaml. The only kind

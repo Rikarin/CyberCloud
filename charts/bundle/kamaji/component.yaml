@@ -25,6 +25,11 @@ requiredBy:
   - charts/bundle/kamaji-control-plane-provider
   - charts/managed/kubernetes
 
+# The rows install.sh must have serving before this one — read by the Bundle gate. The chart ships
+# its own Issuer and Certificate for its webhooks (cert-manager/component.yaml's header).
+requires:
+  - charts/bundle/cert-manager
+
 # ⚠ THE DEFAULT THAT charts/managed/kubernetes DEPENDS ON BY NAME, AND IT IS A DEFAULT RATHER THAN A
 # CONSTANT. That chart renders `dataStoreName: default` and its own template says why it matters:
 # "Kamaji's webhook refuses a name that does not resolve — '<name> DataStore does not exist', on the

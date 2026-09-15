@@ -61,6 +61,8 @@ if it ever inspects nothing.
 | `repo`, `chart`, `version` | `install: helm` | Chart repository, chart name, chart version |
 | `archive`, `chart`, `version` | `install: helm-archive` | Packaged-chart URL, chart name, chart version |
 | `manifest`, `release` | `install: manifest` | Manifest URL and the release tag it belongs to |
+| `waitFor` | `install: manifest`; **forbidden** elsewhere | What "serving" means: one `kubectl wait` argument list per entry — `<kind>/<name> [-n <namespace>] --for=condition=X` or `--for=jsonpath={.path}=value`. `install.sh` runs each after the apply with the 10 m helm gets; the gate checks the shape; `BundleInstallSelection` asserts the dry run prints it |
+| `requires` | when another component must serve first | `charts/bundle/<name>` rows the roster must reach before this one. The gate checks the order and that the other side's `requiredBy` names this component back |
 | `file` | `install: file` | A document this repository wrote, as a path beside the manifest |
 
 > ⚠ **`install: file` is the fourth kind, it is first-party, and it landed on 2026-09-15 with one
@@ -143,8 +145,26 @@ Two halves, enforced by two different things because only one of them is a prope
 ```
 
 The script reads `bundle.yaml` and each `component.yaml`; it hard-codes no version. `--verify`
-answers the two questions this directory rots on — *does every pin still resolve*, and *does every
-image tag still serve the digest that was reviewed* — without needing a cluster.
+answers the three questions this directory rots on — *does every pin still resolve*, *does every
+image tag still serve the digest that was reviewed*, and *does every `manifest:` document's
+`${VAR:=default}` have a default* — without needing a cluster.
+
+> ⚠ **A `manifest:` document is a clusterctl template, and `install.sh` substitutes it before the
+> apply — since 2026-09-15, when four controllers crashlooped without it.** `cluster-api-components.yaml`
+> and the Kamaji provider's document carry `${CAPI_INSECURE_DIAGNOSTICS:=false}` and seventeen more
+> in their container args; `kubectl apply -f <url>` handed them to the binary verbatim and
+> `strconv.ParseBool` refused. `substitute.sh` performs the pass clusterctl would have, in awk, from
+> the document's own defaults — the environment overrides, as `CLUSTER_TOPOLOGY=true clusterctl init`
+> would — and refuses, naming it, a variable with neither. Every manifest row goes through it; the
+> four with no variable come back byte-identical. `BundleManifestSubstitution` pins the forms, the
+> override, the refusal, and the `$(VAR_NAME)`, `$$` and regex-`$` that must survive untouched.
+
+> ⚠ **And after the apply it waits for what the component's `waitFor:` names.** Three shapes were
+> measured on the first run with a kubelet, and no rule could have produced them: a Deployment
+> `Available` for rabbitmq and the four Cluster API controllers; the `KubeVirt` resource's
+> `Deployed` for kubevirt, where the operator is Available seven minutes before the handler is; and
+> the `CDI` resource's `Deployed`, where a Deployment wait goes red on a transient missing Secret
+> during a healthy install. `bundle.yaml` § owed, `the-manifest-path-waits-for-nothing`.
 
 > ⚠ **The digest gate runs on every apply, not only under `--verify`, since issue #17.** Before a
 > component's first `helm` or `kubectl` line, `install.sh` resolves every image its `component.yaml`
@@ -318,8 +338,10 @@ it. `charts/README.md` § Licences are a build gate has the two halves side by s
 
 ## Verification, and its honest limit
 
-**Three of the nineteen components are installed onto a real cluster by CI. Sixteen are not, and the
-state of the tree says which in `bundle.yaml` § owed rather than implying otherwise.**
+**Three of the twenty components are installed onto a real cluster by CI. Seventeen are not, and the
+state of the tree says which in `bundle.yaml` § owed rather than implying otherwise. All twenty were
+installed by hand on 2026-09-15 onto one k3s with a kubelet, and nineteen serve — the paragraphs
+below the suite's say what that run found.**
 
 > ⚠ **The denominator here read "eighteen" until 2026-09-02 and had been wrong since
 > `openebs-localpv` landed.** `bundle.yaml`'s `components:` holds nineteen rows and this directory
@@ -381,25 +403,28 @@ Sixteen pins are still resolved-but-never-applied *by a test*.
 > on a manifest row.** Counted out of `bundle.yaml` on 2026-09-05, only phases 30 and 40 do; the
 > other six of the eight end on a `helm` or `helm-archive` component, and phase 50's single manifest
 > row is fifth of eight. Every manifest row waits right after its own apply, so no phase can end
-> holding a definition `install.sh` applied and did not wait for. What is still missing is the
-> operator: nothing waits for
-> a manifest component's Deployment to be Available, and that wait stays unwritten because no pod of
-> any of the eight it would name has ever run. `bundle.yaml` § owed,
-> `the-manifest-path-waits-for-nothing`, has every reading and the eight names.
+> holding a definition `install.sh` applied and did not wait for. **And since 2026-09-15 the
+> operator half is written too**: each manifest component's `waitFor:` names the Deployment or the
+> custom-resource phase that means "serving", and `install.sh` waits for it. `bundle.yaml` § owed,
+> `the-manifest-path-waits-for-nothing`, has the three shapes and how each was measured.
 
-> ⚠ **The `manifest:` branch has now been run — by hand, on 2026-09-05, against an API server with no
-> kubelet.** All six components were applied through `install.sh` itself onto one
-> `rancher/k3s:v1.35.7-k3s1` started `--disable-agent`, because the host's Docker reports `Cgroup
-> Version: 1` and 1.35's kubelet refuses to start on such a host. All six exit `0`; the two-document
-> path ran for the first time. **A reading taken once by a person is not a gate**, and this one is
-> recorded as what it is: nothing re-runs it, and `kubectl` has still never been invoked by this
-> script under test.
+> ⚠ **The `manifest:` branch was first run by hand on 2026-09-05, against an API server with no
+> kubelet** — this host's Docker then reported `Cgroup Version: 1`, which 1.35's kubelet refuses,
+> so `--disable-agent` was the only k3s available. All six exited `0` and no operator started.
+> **On 2026-09-15 the whole roster ran on the same laptop with a real kubelet** — WSL2 moved to
+> cgroup v2, docs/plan/23 § The lane that needs a kubelet — and that run is where the substitution,
+> the per-component wait, two repinned charts, a reordered phase 30 and `--force-conflicts` come
+> from, each recorded at the line that changed. Nineteen of twenty serve; kube-ovn needs a node this
+> lane cannot give (`bundle.yaml` § owed, `kube-ovn-needs-a-node-this-lane-cannot-give`). **A reading
+> taken once by a person is not a gate**, and it is recorded as what it is: `kubectl` has still never
+> been invoked by this script under test, and the lane that could do it now exists.
 
 **The phase *order* is exercised, the phase *barrier* is half exercised, and they are different
-claims.** A full `--dry-run` — no cluster, under a second — asserts that all nineteen components are
+claims.** A full `--dry-run` — no cluster, under a second — asserts that all twenty components are
 attempted once each, in the roster's order, under ascending phase headers, and that every `manifest:`
-component is followed by an establishment wait before the next component starts. That is the only
-assertion here that covers every row. What a dry run cannot answer is whether "installed" implies
+component is fetched, substituted, applied, waited on for its definitions and then for its
+`waitFor:` entries before the next component starts. That is the only assertion here that covers
+every row. What a dry run cannot answer is whether "installed" implies
 "serving" at a boundary, which is the paragraph above. `bundle.yaml` § owed,
 `most-of-the-roster-has-never-been-installed`, keeps the full list.
 

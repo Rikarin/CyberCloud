@@ -23,19 +23,34 @@ serves:
 requiredBy:
   - charts/managed/rabbitmq
 
+# The row install.sh must have serving before this one — read by the Bundle gate, which is the
+# check the comment below says was missing: the roster orders 15 before 50 and until 2026-09-15
+# nothing failed a commit that moved it.
+requires:
+  - charts/bundle/cert-manager
+
 # ⚠ AND THIS COMPONENT REQUIRES ONE ITSELF, WHICH WAS RECORDED NOWHERE UNTIL #74 AND WAS FOUND BY
 # INSTALLING IT RATHER THAN BY READING IT. `cluster-operator.yml` v2.22.4 carries two
 # `cert-manager.io/v1` Certificates and one Issuer, and the operator Deployment mounts
 # `cluster-operator-webhook-server-cert` — the Secret the first of those Certificates produces. So
 # this PHASE 50 row depends on charts/bundle/cert-manager in phase 15, and cert-manager's own header
-# described that dependency as belonging to phase 40 alone. The dependency is now written down in the
-# one place something already looks, cert-manager/component.yaml § requiredBy, rather than as a new
-# key here that nothing would read — which is the defect bundle.yaml § owed,
-# `images-are-not-pinned-by-digest`, records about `imageDigest:`.
+# described that dependency as belonging to phase 40 alone. On 2026-09-05 the dependency was written
+# down in the one place something already looked, cert-manager/component.yaml § requiredBy, rather
+# than as a new key here that nothing would read — which is the defect bundle.yaml § owed,
+# `images-are-not-pinned-by-digest`, records about `imageDigest:`. Since 2026-09-15 it is ALSO the
+# `requires:` key below, and that key has a reader: build/Build.Bundle.cs § DependencyViolations
+# fails the build when the roster no longer reaches cert-manager before this row, or when either
+# side's list stops naming the other.
 # ⚠ MEASURED 2026-09-05, by applying this component to a k3s with no cert-manager: `kubectl apply`
 # places THIRTEEN of the document's SIXTEEN objects, refuses the THREE with "ensure CRDs are
 # installed first", and install.sh exits 1. The roster already orders 15 before 50, so nothing is
 # broken today; what was missing is the record, and the record is what stops somebody moving this row.
+
+# What "installed" means for this component, read by install.sh after the apply — the plain
+# Deployment `Available`, which is the one shape #74's guess would have got right, and in the
+# namespace the document creates rather than the one install.sh's helm rule would compute.
+waitFor:
+  - "deployment/rabbitmq-cluster-operator -n rabbitmq-system --for=condition=Available"
 
 # Every container image this component's pinned artefact renders, with the digest its registry served
 # on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
@@ -68,6 +83,10 @@ notes: >
   barrier written from the component's name would have waited on nothing. bundle.yaml § owed,
   `the-manifest-path-waits-for-nothing`, has the same reading for all six and the eight Deployments
   they actually create.
-  ⚠ AND THE OPERATOR HAS STILL NEVER STARTED. With no kubelet the Deployment reports
-  `Available=False (MinimumReplicasUnavailable)`, which is the expected state of that fixture and not
-  a finding about this component. Nothing here has read a RabbitmqCluster.
+  ⚠ AND ON 2026-09-15 THE OPERATOR STARTED, ON A k3s WITH A KUBELET, AND "THE CHEAP ONE" WAS WRONG.
+  #74 named this row as the cheap manifest component to run first; applied to a cluster with no
+  cert-manager its pod sits in `ContainerCreating` on `secret "cluster-operator-webhook-server-cert"
+  not found` forever, because that Secret is what the document's `Certificate` produces. With
+  cert-manager serving, `rabbitmq-system/rabbitmq-cluster-operator` is 1/1 and the `waitFor:` above
+  — the plain Deployment `Available`, the one shape #74's guess would have got right — returns.
+  Nothing here has read a RabbitmqCluster; that is charts/managed/rabbitmq's conformance to prove.

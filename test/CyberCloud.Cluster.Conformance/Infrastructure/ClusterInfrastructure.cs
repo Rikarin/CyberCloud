@@ -84,8 +84,8 @@ public static class ClusterInfrastructure {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>A KUBELET AT 1.35 REFUSES TO START ON A CGROUP v1 HOST, AND DOCKER DESKTOP ON
-    ///         WINDOWS IS ONE.</b> KEP-4569 moved cgroup v1 into maintenance, and from 1.35 the
+    ///         ⚠ <b>A KUBELET AT 1.35 REFUSES TO START ON A CGROUP v1 HOST, AND A DOCKER DESKTOP ON
+    ///         WINDOWS CAN BE ONE.</b> KEP-4569 moved cgroup v1 into maintenance, and from 1.35 the
     ///         kubelet's <c>failCgroupV1</c> defaults to <c>true</c>: the container comes up, the
     ///         kubelet logs <i>"kubelet is configured to not run on a host using cgroup v1"</i>, and
     ///         k3s shuts down. Testcontainers then reports <c>ContainerNotRunningException</c>, every
@@ -101,6 +101,16 @@ public static class ClusterInfrastructure {
     ///         other suffix without a word, which cost one probe. On a cgroup v2 host the field is
     ///         simply true-by-default-and-irrelevant, so the drop-in is unconditional.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The machine that wrote the paragraph above is cgroup v2 now, and the drop-in
+    ///         stays.</b> WSL2's kernel was booting cgroup v1 (hybrid) and Docker Desktop inherited
+    ///         it; <c>kernelCommandLine = cgroup_no_v1=all</c> in <c>.wslconfig</c>, a
+    ///         <c>wsl --shutdown</c> and a Docker restart put <c>docker info</c> at
+    ///         <c>Cgroup Version: 2</c> on 2026-09-15, and the kubelet starts with the field left at
+    ///         its default — docs/plan/23 § The lane that needs a kubelet. The drop-in is kept for
+    ///         the next machine in the state this one was in, where it is the difference between a
+    ///         suite that runs and 21 skips that read as a missing daemon; it costs nothing here.
+    ///     </para>
     /// </remarks>
     public const string KubeletDropInPath = "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf";
 
@@ -109,13 +119,45 @@ public static class ClusterInfrastructure {
         "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n";
 
     /// <summary>
+    ///     The entrypoint every k3s-in-Docker here starts through: make <c>/var/run</c> a shared
+    ///     mount, then <c>exec</c> k3s with whatever command the container was given.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Without this, KubeVirt is the one bundle component the local topology can never
+    ///         run.</b> <c>Testcontainers.K3s</c> and the AppHost both start k3s with
+    ///         <c>--tmpfs /var/run</c>, which Docker mounts with private propagation, and
+    ///         <c>virt-handler</c> refuses to start on such a node: <i>path "/var/run/kubevirt" is
+    ///         mounted on "/var/run" but it is not a shared mount</i> (issue #2, 2026-09-15). A real
+    ///         node has no such problem. <c>mount --make-rshared /var/run</c> inside the container
+    ///         before k3s starts is the whole fix; measured the same day on a throwaway container:
+    ///         <c>/proc/self/mountinfo</c> shows <c>/var/run … shared:259</c>, <c>/run</c> stays
+    ///         private, and k3s logs <i>k3s is up and running</i> five seconds in.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An entrypoint wrapper and not an exec after start, so that the three recipes are
+    ///         one recipe.</b> Testcontainers could run the mount through <c>ExecAsync</c> in a
+    ///         startup callback; Aspire has no post-start exec at all — <c>WithContainerRuntimeArgs</c>
+    ///         reaches <c>docker run</c> and nothing reaches <c>docker exec</c>. A wrapper is the
+    ///         same four strings in both, and in a bare <c>docker run</c>: <c>/bin/sh -c '…' k3s</c>
+    ///         followed by the command. The image ships <c>/bin/sh</c> and <c>/bin/aux/mount</c>;
+    ///         <c>"$@"</c> is expanded by that shell from the arguments after <c>k3s</c> (its
+    ///         <c>$0</c>), so the module's own <c>server --disable=traefik …</c> command is
+    ///         untouched, and no shell on the host ever sees the string.
+    ///     </para>
+    /// </remarks>
+    public const string SharedVarRunScript = "mount --make-rshared /var/run && exec /bin/k3s \"$@\"";
+
+    /// <summary>
     ///     A k3s builder on <see cref="K3sImage" /> that comes up on a cgroup v1 host as well as a
-    ///     v2 one. Every k3s under <c>test/</c> goes through here;
-    ///     <c>CyberCloud.Kubernetes.Tests.Infrastructure.K3sFixture</c> cannot reference this assembly
-    ///     and carries the same two lines beside its own copy of the pin.
+    ///     v2 one, with <c>/var/run</c> shared so KubeVirt's handler can run on it. Every k3s under
+    ///     <c>test/</c> goes through here; <c>CyberCloud.Kubernetes.Tests.Infrastructure.K3sFixture</c>
+    ///     cannot reference this assembly and carries the same lines beside its own copy of the pin.
     /// </summary>
     public static K3sBuilder K3s() =>
-        new K3sBuilder(K3sImage).WithResourceMapping(Encoding.UTF8.GetBytes(KubeletDropIn), KubeletDropInPath);
+        new K3sBuilder(K3sImage)
+            .WithEntrypoint("/bin/sh", "-c", SharedVarRunScript, "k3s")
+            .WithResourceMapping(Encoding.UTF8.GetBytes(KubeletDropIn), KubeletDropInPath);
 
     /// <summary>The PostgreSQL image, matching <c>CyberCloud.ServiceDefaults.Tests</c>'s durable shards.</summary>
     public const string PostgresImage = "postgres:17-alpine";

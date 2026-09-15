@@ -40,15 +40,28 @@ public sealed class K3sFixture : IAsyncLifetime {
     public static readonly Guid ClusterId = Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d");
 
     /// <summary>
-    ///     The kubelet drop-in that lets 1.35 start on a cgroup v1 host — Docker Desktop on Windows is
-    ///     one. The same two lines as <c>ClusterInfrastructure.KubeletDropIn</c> in
-    ///     <c>test/CyberCloud.Cluster.Conformance</c>, whose remarks say why the flag form is refused
-    ///     and why the suffix must be <c>.conf</c>; that assembly cannot be referenced from here.
+    ///     The kubelet drop-in that lets 1.35 start on a cgroup v1 host — a Docker Desktop on
+    ///     Windows whose WSL2 kernel boots cgroup v1 is one, and this machine was one until
+    ///     2026-09-15 (<c>cgroup_no_v1=all</c> in <c>.wslconfig</c>; docs/plan/23 § The lane that
+    ///     needs a kubelet). Kept for the next machine in that state. The same two lines as
+    ///     <c>ClusterInfrastructure.KubeletDropIn</c> in <c>test/CyberCloud.Cluster.Conformance</c>,
+    ///     whose remarks say why the flag form is refused and why the suffix must be <c>.conf</c>;
+    ///     that assembly cannot be referenced from here.
     /// </summary>
     const string KubeletDropIn =
         "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n";
 
+    /// <summary>
+    ///     The same wrapper entrypoint as <c>ClusterInfrastructure.SharedVarRunScript</c>: a
+    ///     <c>--tmpfs /var/run</c> is a private mount and KubeVirt's <c>virt-handler</c> refuses to
+    ///     start on it, so every k3s-in-Docker makes it shared before k3s starts. Nothing in this
+    ///     fixture installs KubeVirt; the recipe is one recipe so that the first suite that does
+    ///     is not the first to find out.
+    /// </summary>
+    const string SharedVarRunScript = "mount --make-rshared /var/run && exec /bin/k3s \"$@\"";
+
     readonly K3sContainer container = new K3sBuilder(Image)
+        .WithEntrypoint("/bin/sh", "-c", SharedVarRunScript, "k3s")
         .WithResourceMapping(
             Encoding.UTF8.GetBytes(KubeletDropIn),
             "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf"

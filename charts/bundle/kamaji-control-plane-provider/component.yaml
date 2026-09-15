@@ -27,6 +27,21 @@ serves:
 requiredBy:
   - charts/managed/kubernetes
 
+# The rows install.sh must have serving before this one — read by the Bundle gate. Not cert-manager:
+# this document declares no cert-manager object (the notes below), and the gate would rightly refuse
+# a `requires:` that cert-manager's `requiredBy:` does not answer. cluster-api because its webhooks
+# must be serving before a KamajiControlPlane is admitted; kamaji because the provider reconciles
+# a KamajiControlPlane into Kamaji's own `TenantControlPlane`, which needs that operator's kind.
+requires:
+  - charts/bundle/cluster-api
+  - charts/bundle/kamaji
+
+# What "installed" means for this component, read by install.sh after the apply. ⚠ `kamaji-system`
+# — the same namespace charts/bundle/kamaji's chart installs into, because the provider's document
+# hard-codes it; the two are separate releases sharing one namespace.
+waitFor:
+  - "deployment/capi-kamaji-controller-manager -n kamaji-system --for=condition=Available"
+
 # Every container image this component's pinned artefact renders, with the digest its registry served
 # on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
 #

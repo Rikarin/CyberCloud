@@ -16,10 +16,16 @@
 # WHICH IS THE HALF THAT IS TRUE. "Its CRDs are established" is now enforced for every kind of
 # component: helm's `--wait` for the thirteen `helm` and `helm-archive` rows, and a
 # `kubectl wait --for=condition=Established crd --all` after every apply for the six `manifest:` ones,
-# which before #74 ran only for the two of those six that declare a `manifestExtra`. What "installed"
-# still does NOT mean for a `manifest:` row is that the operator has a running pod — helm's `--wait`
-# gives that for a chart and nothing gives it here. `owed:` § `the-manifest-path-waits-for-nothing`
-# is that remainder, and it names the eight Deployments a wait would have to name.
+# which before #74 ran only for the two of those six that declare a `manifestExtra`.
+#
+# ✅ AND SINCE 2026-09-15 THE SENTENCE IS WHOLE AGAIN, FOR EVERY KIND: a `manifest:` row's
+# component.yaml carries `waitFor:` — a Deployment `Available`, or a custom resource's phase, one
+# `kubectl wait` per entry — which install.sh runs after the apply with the same 10 m helm gets, the
+# Bundle gate requires and shape-checks, and `BundleInstallSelection` asserts on the dry run. So
+# "installed" means "serving" for all twenty, and a phase is the barrier this comment always said it
+# was. What the wait is for each of the six was MEASURED on the first run with a kubelet, not
+# derived: `owed:` § `the-manifest-path-waits-for-nothing` has the three shapes and the one row that
+# had to move because of it.
 phases:
   - phase: 5
     name: admission
@@ -82,9 +88,11 @@ phases:
   - phase: 30
     name: virtualisation
     why: >
-      KubeVirt and CDI. The Cluster API infrastructure provider in phase 40 reconciles a Machine into
-      a VirtualMachine, so it needs both groups present before its first reconcile, not merely before
-      its first cluster.
+      CDI and KubeVirt, in that order. The Cluster API infrastructure provider in phase 40 reconciles
+      a Machine into a VirtualMachine, so it needs both groups present before its first reconcile,
+      not merely before its first cluster. ⚠ CDI first because KubeVirt v1.9.0's
+      `virt-template-controller` needs the `DataVolume` kind at start — the row comment under
+      `components:` and kubevirt/component.yaml § requires have the measurement.
   - phase: 40
     name: cluster-api
     why: >
@@ -113,9 +121,16 @@ components:
     phase: 20
   - name: openebs-localpv
     phase: 25
-  - name: kubevirt
-    phase: 30
+  # ⚠ CDI BEFORE KUBEVIRT, SINCE 2026-09-15, AND THE PER-COMPONENT BARRIER IS WHAT FOUND IT. KubeVirt
+  # v1.9.0's `virt-template-controller` refuses to start without CDI's `DataVolume` kind — "no matches
+  # for kind DataVolume in version cdi.kubevirt.io/v1beta1" — so the `KubeVirt` resource never leaves
+  # `Deploying`. The other way round the first real run went green only because both were applied
+  # with no wait between them and CDI's definitions arrived while KubeVirt was still deploying; with
+  # `waitFor:` the kubevirt row held for its full 10 m and exited 1 before CDI was reached. Measured,
+  # not read. kubevirt/component.yaml § requires carries it.
   - name: containerized-data-importer
+    phase: 30
+  - name: kubevirt
     phase: 30
   - name: cluster-api
     phase: 40
@@ -197,15 +212,13 @@ owed:
       `the-manifest-path-waits-for-nothing`, which is the clause that turned out to be false for six
       of the nineteen and is now half true of them; a `serves:` line is true of the cluster
       afterwards; and two components install onto one node without fighting.
-      WHAT IT DOES NOT PROVE, AND THE DISTANCE IS STILL THE WHOLE OF THIS ROW: that the other SIXTEEN
-      pins install under a test. NO TEST runs kube-ovn, KubeVirt, CDI, Cluster API or Kamaji, which is
-      where the three virtual machines and most of the risk are. ⚠ That sentence was narrowed to "kube-ovn
-      or Kamaji" when the hand run landed and is restored on 2026-09-05, because the paragraph it sits
-      in is scoped to "under a TEST" and the hand run was not one: KubeVirt, CDI and Cluster API were
-      applied once by a person against an API server with NO KUBELET, so no pod of any of them has
-      ever started and the virtual-machine risk the clause names is entirely unretired. Dropping three
-      names from a not-proven list on the strength of a run that proves something else is how a list
-      like this stops being read.
+      WHAT IT DOES NOT PROVE, AND THE DISTANCE IS STILL THE WHOLE OF THIS ROW: that the other
+      SEVENTEEN pins install under a test. NO TEST runs kube-ovn, KubeVirt, CDI, Cluster API or Kamaji,
+      which is where the three virtual machines and most of the risk are. ⚠ That sentence was narrowed
+      to "kube-ovn or Kamaji" when the hand run landed and is restored on 2026-09-05, because the
+      paragraph it sits in is scoped to "under a TEST" and the hand run was not one. Dropping names
+      from a not-proven list on the strength of a run that proves something else is how a list like
+      this stops being read.
       ⚠ THE `manifest:` HALF OF THAT SENTENCE MOVED ON 2026-09-05 AND IT MOVED BY HAND RATHER THAN BY
       A SUITE, WHICH IS A WEAKER THING AND IS RECORDED AS ONE. All SIX `manifest:` components were
       applied through install.sh against an API server with no kubelet — see
@@ -213,10 +226,17 @@ owed:
       and the two-document apply are no longer unexercised, and `kubectl` has still NEVER been invoked
       by this script UNDER TEST: the kubectl in the cloudnative-pg suite is the test's own, applying a
       rendered chart. A reading taken once by a person is not a gate, and nothing re-runs it.
-      THE COUNT OF WHAT HAS BEEN APPLIED AT ALL, ON 2026-09-05: three by a test, six by that hand run,
-      and TEN by nothing — kube-ovn, prometheus-operator-crds, kamaji, clickhouse-operator,
-      mariadb-operator, opensearch-operator, redis-operator, seaweedfs-operator, strimzi-kafka-operator
-      and victoria-metrics-operator.
+      ✅ AND ON 2026-09-15 THE WHOLE ROSTER WAS INSTALLED BY HAND ONTO ONE k3s WITH A KUBELET — the
+      first time an operator this script installs has run at all — and NINETEEN OF TWENTY SERVE. The
+      count of what has been applied at all is now: three by a test, nineteen by that run, and ONE by
+      nothing that succeeded — kube-ovn, which is a cluster-creation component and refuses a k3s that
+      already has a CNI; `kube-ovn-needs-a-node-this-lane-cannot-give` below. What that run found is
+      the reason this file changed shape: `the-manifest-path-waits-for-nothing` (the wait is per
+      component and is now written), and the three pins and one reorder recorded in install.sh's
+      header. It is still a reading by a person: the suite in test/CyberCloud.Bundle.Cluster.Conformance
+      installs the same three helm rows it always did, and the lane that would install a `manifest:`
+      row under test now EXISTS on this machine (docs/plan/23 § The lane that needs a kubelet) and is
+      not yet used for one.
       ⚠ THE PHASE ORDER IS RUN, AND THE PHASE BARRIER IS NOW HALF RUN, AND THE TWO ARE DIFFERENT
       CLAIMS. `BundleInstallSelection` drives a full `--dry-run` and asserts that all nineteen
       components are attempted once each, in the roster's order, under ascending phase headers — the
@@ -302,22 +322,48 @@ owed:
       rabbitmq-cluster-operator went from 1.2 s to 4.7 s once the wait became unconditional, on a
       cluster holding thirty-six definitions. Those thirty-six are four k3s ships, six cert-manager's,
       and TWENTY-SIX from the six components themselves — cluster-api alone contributes seventeen.
-      ⚠ WHAT IS STILL OWED IS THE DEPLOYMENTS HALF, AND THE RUN MADE IT SHARPER RATHER THAN SMALLER.
+      ⚠ THE DEPLOYMENTS HALF WAS OWED, AND THE 2026-09-05 RUN MADE IT SHARPER RATHER THAN SMALLER.
       "Established" says the API server will serve the kind; it says nothing about the operator, and a
       phase-40 provider whose controller has no pod fails exactly like one whose CRD is missing, only
-      later. That wait is STILL a guess, for the same reason as before and now a narrower one: nothing
-      scheduled a pod, so not one of these Deployments has ever started. What the run did settle is
-      that the obvious spelling is WRONG. The six put EIGHT Deployments in EIGHT namespaces and NOT
-      ONE namespace is the `<component>-system` install.sh computes — `kubevirt/virt-operator`,
-      `cdi/cdi-operator`, `capi-system/capi-controller-manager`,
+      later. What that run settled is that the obvious spelling is WRONG. The six put EIGHT
+      Deployments in EIGHT namespaces and NOT ONE namespace is the `<component>-system` install.sh
+      computes — `kubevirt/virt-operator`, `cdi/cdi-operator`, `capi-system/capi-controller-manager`,
       `capi-kubeadm-bootstrap-system/capi-kubeadm-bootstrap-controller-manager`,
       `capi-kubeadm-control-plane-system/capi-kubeadm-control-plane-controller-manager`,
       `kamaji-system/capi-kamaji-controller-manager`, `capk-system/capk-controller-manager` and
       `rabbitmq-system/rabbitmq-cluster-operator`. cluster-api alone accounts for three of them, so
-      "its Deployment" is not even singular. Closing this is a declaration per component that
-      something reads — the shape `images:` took, and NOT the shape `imageDigest:` took, which
-      `images-are-not-pinned-by-digest` records as a key nothing ever read — plus a run on a cluster
-      that can schedule a pod.
+      "its Deployment" is not even singular.
+      ✅ CLOSED ON 2026-09-15, ON THE FIRST RUN WITH A KUBELET, AND THE WAIT IS THREE SHAPES. Every
+      `manifest:` component.yaml now carries `waitFor:` — one `kubectl wait` argument list per entry
+      — which install.sh runs after the apply (the same 10 m helm's `--wait` gets), the Bundle gate
+      requires on that kind and shape-checks, and BundleInstallSelection asserts the dry run prints
+      after the apply: the three readers `imageDigest:` never had. What the entries say was MEASURED
+      rather than derived, because no rule could have produced it: (1) the plain Deployment
+      `Available` for rabbitmq-cluster-operator and the four Cluster API controllers, which is the
+      one shape the guess would have got right; (2) the `KubeVirt` resource's `status.phase ==
+      Deployed` for kubevirt, where `virt-operator` is 2/2 Available at 42 s and is NOT the barrier —
+      it then renders nine more workloads including the `virt-handler` DaemonSet, and `Deployed`
+      arrived at about seven minutes on a cold cache, 1 m 40 s on a warm one; (3) the `CDI` resource's
+      `Deployed` for containerized-data-importer, where a Deployment wait would have gone RED during
+      a healthy install — `cdi-uploadproxy` sits in `CreateContainerConfigError` on `secret
+      "cdi-api-signing-key" not found` until the operator mints the key.
+      ⚠ AND THE BARRIER, ONCE IT EXISTED, FOUND A DEPENDENCY THE WAIT-FREE RUN HAD HIDDEN. With
+      kubevirt first in phase 30 and a real wait after it, the `KubeVirt` resource never left
+      `Deploying`: v1.9.0's `virt-template-controller` fails at start with "no matches for kind
+      DataVolume in version cdi.kubevirt.io/v1beta1", CDI's definitions were a row away, and the
+      wait burned its full 10 m and exited 1 — 10 m 36 s wall-clock, before CDI was reached. That is
+      the loud failure a barrier owes and the first real run had got lucky on: both were applied
+      with nothing between them, and CDI's definitions arrived while KubeVirt was still deploying.
+      The roster now installs containerized-data-importer first; re-run, phase 30 is 2 m 47 s with
+      both waits returning. kubevirt/component.yaml § requires records it, and the gate's new
+      DependencyViolations refuses the roster the other way round.
+      ⚠ WHAT `--force-conflicts` IS DOING ON THE APPLY LINE, FOUND THE SAME WAY. The second apply of
+      cdi-operator.yaml onto a cluster where CDI had run was refused — `conflict with "cdi-operator"
+      using apiextensions.k8s.io/v1: .spec.versions` — because the operator adopts fields of its own
+      definition after it starts. The installer owns the document; a re-run that fails forever on a
+      healthy cluster is the wrong way round, so the flag is on and the reason is beside it.
+      WHAT IS STILL A READING BY A PERSON: all of the above. The suite installs three helm rows; no
+      test has yet run a `manifest:` row, and the lane that could now exists on this machine.
       ⚠ ONE THING THE FIX CANNOT BE IS SILENTLY GREEN, AND THAT WAS MEASURED TOO — AND RE-MEASURED ON
       2026-09-05 ON THE FORM THE SCRIPT ACTUALLY RUNS, BECAUSE THE FIRST MEASUREMENT WAS OF A
       DIFFERENT INVOCATION. What was recorded was `kubectl wait --for=condition=Established crd -l <a
@@ -347,12 +393,39 @@ owed:
       `manifestExtra` — TWO of the six manifest rows, kubevirt and containerized-data-importer, the
       only two component.yaml files carrying that key — and now runs for all SIX, so one stuck
       definition breaks six of six rather than two of six. Under `set -e` the bill is one 5 m timeout
-      charged to the first manifest row, kubevirt in phase 30, which is a component that is fine; the
+      charged to the first manifest row — containerized-data-importer in phase 30 since 2026-09-15 — which is a component that is fine; the
       bound on a run whose waits are slow but succeed went from 2 × 5 m to 6 × 5 m. ACCEPTED rather
       than fixed: the only narrower selector is the per-component definition list install.sh cannot
       spell without a `crds:` key nothing would check, which is the shape `imageDigest:` took and
       `images-are-not-pinned-by-digest` records. Closing it properly means the same declaration per
       component the Deployments half above already owes, so it is owed HERE and not as a second row.
+  - id: kube-ovn-needs-a-node-this-lane-cannot-give
+    says: >
+      ⚠ THE ONE ROW OF TWENTY THE FIRST REAL RUN COULD NOT INSTALL, AND IT IS THE ROSTER'S FIRST
+      REAL PHASE. On 2026-09-15 `install.sh --component kube-ovn` against a `rancher/k3s:v1.35.7-k3s1`
+      in Docker refused at template time — `No nodes found with label 'kube-ovn/role=master'` — and
+      behind that label the chart wants a node labelled `kube-ovn/role=master`, a cluster started
+      with NO CNI of its own (k3s: `--flannel-backend=none --disable-network-policy`), ADR-019's
+      values (`ENABLE_LB=false` among them), and OVS kernel modules on a real host kernel, which
+      Docker Desktop's VM does not lend a container. kube-ovn/component.yaml § notes carries the
+      list. Its own notes already said a CNI "belongs to cluster creation rather than to platform
+      upgrade"; this row is the measurement behind that sentence and the lane it names: kube-ovn is
+      proven on a real node or a VM (the Hyper-V lane docs/plan/23 § The lane that needs a kubelet
+      describes), and every other component in this bundle has now been proven WITHOUT it, on k3s's
+      own flannel — so a run over a k3s that skips phase 10 is a real run of nineteen rows, not a
+      degraded one, and this row is the difference between the two.
+  - id: virtual-machines-need-a-node-with-kvm
+    says: >
+      ⚠ KUBEVIRT IS INSTALLED AND SERVING ON THE k3s-IN-DOCKER LANE SINCE 2026-09-15 — `Deployed`,
+      `virt-handler` Running, once `/var/run` was made a shared mount before k3s started (the three
+      k3s recipes now do; kubevirt/component.yaml § notes) — AND NO VIRTUAL MACHINE HAS BEEN CREATED
+      ON IT. Docker Desktop's VM exposes no `/dev/kvm` to a container, so a guest here would be the
+      software emulation kubevirt/component.yaml warns times out a Cluster API Machine. The
+      sentence charts/bundle/kubevirt exists for — charts/managed/kubernetes-agentpool creates a
+      Machine, cluster-api-provider-kubevirt turns it into a VirtualMachine, the guest boots and
+      joins — is the VM lane's to prove, together with the LINSTOR/DRBD stage
+      `the-replicated-stage-is-not-installed` already carries. Three things, one lane, all real
+      nodes: kube-ovn, replicated storage, and a guest with KVM.
   - id: a-selector-that-matched-nothing-reported-success
     says: >
       ✅ FIXED ON 2026-09-03, RECORDED BECAUSE THE READING IS WORTH MORE THAN THE FIX.

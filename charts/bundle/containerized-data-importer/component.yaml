@@ -24,6 +24,18 @@ serves:
 
 requiredBy:
   - charts/bundle/cluster-api-provider-kubevirt
+  # ⚠ Added 2026-09-15: KubeVirt v1.9.0's template controller needs the DataVolume kind at start.
+  # kubevirt/component.yaml § requires has the reading, and the roster now installs this row first.
+  - charts/bundle/kubevirt
+
+# What "installed" means for this component, read by install.sh after the apply. ⚠ THE `CDI`
+# RESOURCE'S PHASE AND NOT `cdi-operator`'S DEPLOYMENT — nor the four it renders. Measured on
+# 2026-09-15: `cdi-operator` is 1/1 at 37 s, and `cdi-uploadproxy` then sits in
+# `CreateContainerConfigError` on `secret "cdi-api-signing-key" not found` until the operator mints
+# the key, so a Deployment wait would have gone red during a healthy install. `Deployed` was
+# reached at about six minutes on a cold cache. The resource is cluster-scoped, so no namespace.
+waitFor:
+  - "cdi/cdi --for=jsonpath={.status.phase}=Deployed"
 
 # Every container image this component's pinned artefact renders, with the digest its registry served
 # on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
