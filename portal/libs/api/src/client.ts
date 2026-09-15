@@ -11,6 +11,24 @@ import type {
   CacheRedisData,
   CacheRedisListKeysResult,
   CacheRedisResource,
+  CommunicationServicesChannelsData,
+  CommunicationServicesChannelsResource,
+  CommunicationServicesCheckSuppressionContent,
+  CommunicationServicesCheckSuppressionResult,
+  CommunicationServicesData,
+  CommunicationServicesListSuppressionsContent,
+  CommunicationServicesListSuppressionsResult,
+  CommunicationServicesResource,
+  CommunicationServicesSendContent,
+  CommunicationServicesSendResult,
+  CommunicationServicesStatusContent,
+  CommunicationServicesStatusResult,
+  CommunicationServicesSuppressionsData,
+  CommunicationServicesSuppressionsResource,
+  CommunicationServicesTemplatesData,
+  CommunicationServicesTemplatesRenderContent,
+  CommunicationServicesTemplatesRenderResult,
+  CommunicationServicesTemplatesResource,
   ContainerRegistryRegistriesData,
   ContainerRegistryRegistriesListCredentialsResult,
   ContainerRegistryRegistriesResource,
@@ -191,6 +209,131 @@ export class CyberCloudApi {
   /** listKeys — permission 'listKeys'. ⚠ The response carries secret material. */
   listKeysValkeyCache(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<CacheRedisListKeysResult>> {
     return this.transport.send<CacheRedisListKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Cache/redis/${CyberCloudApi.segment(resourceName)}/listKeys` });
+  }
+
+  /** Reads one Communication service. */
+  getCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<CommunicationServicesResource>> {
+    return this.transport.send<CommunicationServicesResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Communication service. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: CommunicationServicesData): Promise<ApiResponse<CommunicationServicesResource>> {
+    return this.transport.send<CommunicationServicesResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Communication service. A merge patch: what is not set is not changed. */
+  updateCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<CommunicationServicesData>): Promise<ApiResponse<CommunicationServicesResource>> {
+    return this.transport.send<CommunicationServicesResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Communication service. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Communication services in a resource group. ⚠ A short page never means "that is all there is". */
+  listCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<CommunicationServicesResource>>> {
+    return this.transport.send<Page<CommunicationServicesResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** checkSuppression — permission 'read'. */
+  checkSuppressionCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: CommunicationServicesCheckSuppressionContent): Promise<ApiResponse<CommunicationServicesCheckSuppressionResult>> {
+    return this.transport.send<CommunicationServicesCheckSuppressionResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(resourceName)}/checkSuppression`, body: content });
+  }
+
+  /** listSuppressions — permission 'read'. */
+  listSuppressionsCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: CommunicationServicesListSuppressionsContent): Promise<ApiResponse<CommunicationServicesListSuppressionsResult>> {
+    return this.transport.send<CommunicationServicesListSuppressionsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(resourceName)}/listSuppressions`, body: content });
+  }
+
+  /** send — permission 'write'. */
+  sendCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: CommunicationServicesSendContent): Promise<ApiResponse<CommunicationServicesSendResult>> {
+    return this.transport.send<CommunicationServicesSendResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(resourceName)}/send`, body: content });
+  }
+
+  /** status — permission 'read'. */
+  statusCommunicationService(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: CommunicationServicesStatusContent): Promise<ApiResponse<CommunicationServicesStatusResult>> {
+    return this.transport.send<CommunicationServicesStatusResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(resourceName)}/status`, body: content });
+  }
+
+  /** Reads one Communication channel. */
+  getCommunicationChannel(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string): Promise<ApiResponse<CommunicationServicesChannelsResource>> {
+    return this.transport.send<CommunicationServicesChannelsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/channels/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Communication channel. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateCommunicationChannel(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, data: CommunicationServicesChannelsData): Promise<ApiResponse<CommunicationServicesChannelsResource>> {
+    return this.transport.send<CommunicationServicesChannelsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/channels/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Communication channel. A merge patch: what is not set is not changed. */
+  updateCommunicationChannel(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, data: Partial<CommunicationServicesChannelsData>): Promise<ApiResponse<CommunicationServicesChannelsResource>> {
+    return this.transport.send<CommunicationServicesChannelsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/channels/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Communication channel. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteCommunicationChannel(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/channels/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Communication channels in a resource group. ⚠ A short page never means "that is all there is". */
+  listCommunicationChannel(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, page: PageRequest = {}): Promise<ApiResponse<Page<CommunicationServicesChannelsResource>>> {
+    return this.transport.send<Page<CommunicationServicesChannelsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/channels`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one Suppression. */
+  getSuppression(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string): Promise<ApiResponse<CommunicationServicesSuppressionsResource>> {
+    return this.transport.send<CommunicationServicesSuppressionsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/suppressions/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Suppression. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateSuppression(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, data: CommunicationServicesSuppressionsData): Promise<ApiResponse<CommunicationServicesSuppressionsResource>> {
+    return this.transport.send<CommunicationServicesSuppressionsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/suppressions/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Suppression. A merge patch: what is not set is not changed. */
+  updateSuppression(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, data: Partial<CommunicationServicesSuppressionsData>): Promise<ApiResponse<CommunicationServicesSuppressionsResource>> {
+    return this.transport.send<CommunicationServicesSuppressionsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/suppressions/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Suppression. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteSuppression(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/suppressions/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Suppressions in a resource group. ⚠ A short page never means "that is all there is". */
+  listSuppression(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, page: PageRequest = {}): Promise<ApiResponse<Page<CommunicationServicesSuppressionsResource>>> {
+    return this.transport.send<Page<CommunicationServicesSuppressionsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/suppressions`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** Reads one Message template. */
+  getMessageTemplate(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string): Promise<ApiResponse<CommunicationServicesTemplatesResource>> {
+    return this.transport.send<CommunicationServicesTemplatesResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/templates/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Message template. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateMessageTemplate(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, data: CommunicationServicesTemplatesData): Promise<ApiResponse<CommunicationServicesTemplatesResource>> {
+    return this.transport.send<CommunicationServicesTemplatesResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/templates/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Message template. A merge patch: what is not set is not changed. */
+  updateMessageTemplate(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, data: Partial<CommunicationServicesTemplatesData>): Promise<ApiResponse<CommunicationServicesTemplatesResource>> {
+    return this.transport.send<CommunicationServicesTemplatesResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/templates/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Message template. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteMessageTemplate(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/templates/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Message templates in a resource group. ⚠ A short page never means "that is all there is". */
+  listMessageTemplate(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, page: PageRequest = {}): Promise<ApiResponse<Page<CommunicationServicesTemplatesResource>>> {
+    return this.transport.send<Page<CommunicationServicesTemplatesResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/templates`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** render — permission 'read'. */
+  renderMessageTemplate(tenantId: string, subscriptionId: string, resourceGroupName: string, servicesName: string, resourceName: string, content: CommunicationServicesTemplatesRenderContent): Promise<ApiResponse<CommunicationServicesTemplatesRenderResult>> {
+    return this.transport.send<CommunicationServicesTemplatesRenderResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Communication/services/${CyberCloudApi.segment(servicesName)}/templates/${CyberCloudApi.segment(resourceName)}/render`, body: content });
   }
 
   /** Reads one Container registry. */

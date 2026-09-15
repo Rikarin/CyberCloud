@@ -1225,6 +1225,1841 @@
       "x-cybercloud-resource-type": "CyberCloud.Cache/redis",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Communication_services_List",
+        "summary": "List the CyberCloud.Communication/services in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Communication_services_Get",
+        "summary": "Read a CyberCloud.Communication/services.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Communication_services_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Communication/services.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Communication_services_Update",
+        "summary": "Merge-patch a CyberCloud.Communication/services.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Communication_services_Delete",
+        "summary": "Delete a CyberCloud.Communication/services.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services",
+      "x-cybercloud-display": {
+        "name": "Communication service",
+        "plural": "Communication services",
+        "alias": "comms",
+        "summary": "A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}/checkSuppression": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Communication_services_CheckSuppression",
+        "summary": "checkSuppression a CyberCloud.Communication/services.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.CheckSuppressionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.CheckSuppressionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services",
+      "x-cybercloud-action": "checkSuppression"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}/listSuppressions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Communication_services_ListSuppressions",
+        "summary": "listSuppressions a CyberCloud.Communication/services.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.ListSuppressionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.ListSuppressionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services",
+      "x-cybercloud-action": "listSuppressions"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}/send": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Communication_services_Send",
+        "summary": "send a CyberCloud.Communication/services.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.SendRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.SendResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services",
+      "x-cybercloud-action": "send"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}/status": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Communication_services_Status",
+        "summary": "status a CyberCloud.Communication/services.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.StatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.StatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services",
+      "x-cybercloud-action": "status"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "servicesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Communication_services_channels_List",
+        "summary": "List the CyberCloud.Communication/services/channels in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.channels.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services/channels",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "servicesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Communication_services_channels_Get",
+        "summary": "Read a CyberCloud.Communication/services/channels.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.channels"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Communication_services_channels_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Communication/services/channels.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.channels"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Communication_services_channels_Update",
+        "summary": "Merge-patch a CyberCloud.Communication/services/channels.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.channels"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Communication_services_channels_Delete",
+        "summary": "Delete a CyberCloud.Communication/services/channels.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services/channels",
+      "x-cybercloud-display": {
+        "name": "Communication channel",
+        "plural": "Communication channels",
+        "alias": "channel",
+        "summary": "One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "servicesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Communication_services_suppressions_List",
+        "summary": "List the CyberCloud.Communication/services/suppressions in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.suppressions.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services/suppressions",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "servicesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Communication_services_suppressions_Get",
+        "summary": "Read a CyberCloud.Communication/services/suppressions.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.suppressions"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Communication_services_suppressions_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Communication/services/suppressions.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.suppressions"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Communication_services_suppressions_Update",
+        "summary": "Merge-patch a CyberCloud.Communication/services/suppressions.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.suppressions"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Communication_services_suppressions_Delete",
+        "summary": "Delete a CyberCloud.Communication/services/suppressions.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services/suppressions",
+      "x-cybercloud-display": {
+        "name": "Suppression",
+        "plural": "Suppressions",
+        "alias": "suppression",
+        "summary": "An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "servicesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Communication_services_templates_List",
+        "summary": "List the CyberCloud.Communication/services/templates in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.templates.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services/templates",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "servicesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Communication_services_templates_Get",
+        "summary": "Read a CyberCloud.Communication/services/templates.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.templates"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Communication_services_templates_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Communication/services/templates.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.templates"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Communication_services_templates_Update",
+        "summary": "Merge-patch a CyberCloud.Communication/services/templates.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.templates"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Communication_services_templates_Delete",
+        "summary": "Delete a CyberCloud.Communication/services/templates.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services/templates",
+      "x-cybercloud-display": {
+        "name": "Message template",
+        "plural": "Message templates",
+        "alias": "template",
+        "summary": "A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates/{resourceName}/render": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "servicesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Communication_services_templates_Render",
+        "summary": "render a CyberCloud.Communication/services/templates.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Communication.services.templates.RenderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Communication.services.templates.RenderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Communication/services/templates",
+      "x-cybercloud-action": "render"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries": {
       "parameters": [
         {
@@ -11805,6 +13640,844 @@
         "title": "CyberCloud.Cache.redis.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.Communication.services": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Communication/services. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the service is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The service's own settings.",
+            "properties": {
+              "defaultLocale": {
+                "default": "",
+                "description": "The locale a send is rendered in when the request names none — a BCP 47 tag such as cs-CZ. Empty falls back to en, then to whichever body the template has first.",
+                "example": "en-GB",
+                "maxLength": 35,
+                "pattern": "^(?:([a-z]{2,3}(-[A-Za-z0-9]{2,8})*)?)$",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Communication/services",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.CheckSuppressionRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Communication/services/checkSuppression.",
+        "properties": {
+          "channel": {
+            "description": "The channel the address would be sent on.",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "email",
+              "push",
+              "voice"
+            ],
+            "type": "string"
+          },
+          "destination": {
+            "description": "The address, in any spelling.",
+            "maxLength": 320,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "destination"
+        ],
+        "title": "CyberCloud.Communication.services.CheckSuppressionRequest",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.CheckSuppressionResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Communication/services/checkSuppression returns.",
+        "properties": {
+          "note": {
+            "description": "The carrier's, the recipient's or the operator's words.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why, when it is: hardBounce, complaint, optOut or manualBlock.",
+            "type": "string"
+          },
+          "suppressed": {
+            "description": "Whether a send to it would be refused.",
+            "type": "boolean"
+          },
+          "suppressedAt": {
+            "description": "When it was suppressed.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "suppressed"
+        ],
+        "title": "CyberCloud.Communication.services.CheckSuppressionResponse",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.List": {
+        "type": "object",
+        "title": "CyberCloud.Communication.services.List",
+        "description": "One page of CyberCloud.Communication/services. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Communication.services"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Communication.services.ListSuppressionsRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Communication/services/listSuppressions.",
+        "properties": {
+          "channel": {
+            "default": "",
+            "description": "One of sms, whatsapp, email, push or voice, or empty for every channel.",
+            "maxLength": 16,
+            "type": "string"
+          }
+        },
+        "title": "CyberCloud.Communication.services.ListSuppressionsRequest",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.ListSuppressionsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Communication/services/listSuppressions returns.",
+        "properties": {
+          "count": {
+            "description": "How many entries are on the list.",
+            "type": "integer"
+          },
+          "entries": {
+            "description": "Every entry, oldest first, one line each: '{channel} {destination} {reason} {suppressedAt}: {note}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "entries"
+        ],
+        "title": "CyberCloud.Communication.services.ListSuppressionsResponse",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.SendRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Communication/services/send.",
+        "properties": {
+          "arguments": {
+            "description": "The template's arguments, one name=value per element.",
+            "example": [
+              "code=482913"
+            ],
+            "items": {
+              "pattern": "^(?:[A-Za-z_][A-Za-z0-9_]*=[\\s\\S]*)$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "body": {
+            "default": "",
+            "description": "The message text, when no template is named.",
+            "maxLength": 65536,
+            "type": "string"
+          },
+          "channel": {
+            "description": "Which channel to send on.",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "email",
+              "push",
+              "voice"
+            ],
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "description": "The caller's key for this message. A retry carrying the same key returns the message already sent and calls no carrier; derive it from the thing being notified about, never from the attempt.",
+            "example": "invoice-2026-0042-issued",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "locale": {
+            "default": "",
+            "description": "The locale to render in, or empty for the service's default.",
+            "maxLength": 35,
+            "pattern": "^(?:([a-z]{2,3}(-[A-Za-z0-9]{2,8})*)?)$",
+            "type": "string"
+          },
+          "template": {
+            "default": "",
+            "description": "The name of a template under this service to render, or empty to send body as written. WhatsApp requires one.",
+            "maxLength": 63,
+            "type": "string"
+          },
+          "templateVersion": {
+            "default": 0,
+            "description": "Which version of the template, or 0 for the newest one a send may use.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "to": {
+            "description": "The recipient — an E.164 number for sms, whatsapp and voice, an address for email, a device token for push.",
+            "example": "+420777123456",
+            "maxLength": 320,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "idempotencyKey",
+          "to"
+        ],
+        "title": "CyberCloud.Communication.services.SendRequest",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.SendResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Communication/services/send returns.",
+        "properties": {
+          "channel": {
+            "description": "The channel it went on.",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "email",
+              "push",
+              "voice"
+            ],
+            "type": "string"
+          },
+          "cost": {
+            "description": "What the carrier charged, once it said.",
+            "type": "number"
+          },
+          "currency": {
+            "description": "The currency of cost.",
+            "type": "string"
+          },
+          "detail": {
+            "description": "The last thing the platform or the carrier said about it.",
+            "type": "string"
+          },
+          "dispatchedAt": {
+            "description": "When a carrier accepted it. Absent until then.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "messageId": {
+            "description": "The platform's id for the message.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "provider": {
+            "description": "Which carrier implementation served it.",
+            "type": "string"
+          },
+          "providerMessageId": {
+            "description": "The carrier's own id, once it has one.",
+            "type": "string"
+          },
+          "queuedAt": {
+            "description": "When the platform accepted it.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "receiptCount": {
+            "description": "How many delivery receipts have arrived.",
+            "type": "integer"
+          },
+          "receipts": {
+            "description": "Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "settledAt": {
+            "description": "When it was delivered, failed or refused. Absent until then.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "description": "Where the message is in its life.",
+            "enum": [
+              "queued",
+              "dispatched",
+              "delivered",
+              "failed",
+              "refused"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "description": "The recipient, normalized.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "messageId",
+          "queuedAt",
+          "receiptCount",
+          "status",
+          "to"
+        ],
+        "title": "CyberCloud.Communication.services.SendResponse",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.StatusRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Communication/services/status.",
+        "properties": {
+          "idempotencyKey": {
+            "description": "The key the message was sent under.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "idempotencyKey"
+        ],
+        "title": "CyberCloud.Communication.services.StatusRequest",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.StatusResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Communication/services/status returns.",
+        "properties": {
+          "channel": {
+            "description": "The channel it went on.",
+            "enum": [
+              "sms",
+              "whatsapp",
+              "email",
+              "push",
+              "voice"
+            ],
+            "type": "string"
+          },
+          "cost": {
+            "description": "What the carrier charged, once it said.",
+            "type": "number"
+          },
+          "currency": {
+            "description": "The currency of cost.",
+            "type": "string"
+          },
+          "detail": {
+            "description": "The last thing the platform or the carrier said about it.",
+            "type": "string"
+          },
+          "dispatchedAt": {
+            "description": "When a carrier accepted it. Absent until then.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "messageId": {
+            "description": "The platform's id for the message.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "provider": {
+            "description": "Which carrier implementation served it.",
+            "type": "string"
+          },
+          "providerMessageId": {
+            "description": "The carrier's own id, once it has one.",
+            "type": "string"
+          },
+          "queuedAt": {
+            "description": "When the platform accepted it.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "receiptCount": {
+            "description": "How many delivery receipts have arrived.",
+            "type": "integer"
+          },
+          "receipts": {
+            "description": "Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "settledAt": {
+            "description": "When it was delivered, failed or refused. Absent until then.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "description": "Where the message is in its life.",
+            "enum": [
+              "queued",
+              "dispatched",
+              "delivered",
+              "failed",
+              "refused"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "description": "The recipient, normalized.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "messageId",
+          "queuedAt",
+          "receiptCount",
+          "status",
+          "to"
+        ],
+        "title": "CyberCloud.Communication.services.StatusResponse",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.channels": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Communication/services/channels. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the channel is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The channel's own settings.",
+            "properties": {
+              "account": {
+                "default": "platform",
+                "description": "Whose carrier account pays. platform is marked up and needs no setup; tenant is the tenant's own contract, reached through accountRef and authRef.",
+                "enum": [
+                  "platform",
+                  "tenant"
+                ],
+                "type": "string"
+              },
+              "accountRef": {
+                "default": "",
+                "description": "For account: tenant — the vault handle of the account identifier (a Twilio account SID, a Meta business account id), as path#field.",
+                "maxLength": 512,
+                "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+                "type": "string",
+                "x-cybercloud-widget": "secret-ref"
+              },
+              "authRef": {
+                "default": "",
+                "description": "For account: tenant — the vault handle of the authenticating value (an auth token, a bearer, an access secret), as path#field.",
+                "maxLength": 512,
+                "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+                "type": "string",
+                "x-cybercloud-widget": "secret-ref"
+              },
+              "enabled": {
+                "default": true,
+                "description": "Whether sending on this channel is allowed at all. The kill switch: turning it off keeps the configuration and refuses every send.",
+                "type": "boolean"
+              },
+              "estimatedUnitCost": {
+                "default": 0,
+                "description": "What one message is expected to cost, in currency, reserved before dispatch. Set it to the most expensive destination the channel sends to; an estimate that is too low turns the spend limit into a suggestion.",
+                "example": 0.08,
+                "minimum": 0,
+                "type": "number"
+              },
+              "kind": {
+                "description": "Which channel this configures. One service holds one configuration per kind.",
+                "enum": [
+                  "sms",
+                  "whatsapp",
+                  "email",
+                  "push",
+                  "voice"
+                ],
+                "example": "email",
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "limits": {
+                "additionalProperties": false,
+                "description": "What the channel may send and spend per UTC day.",
+                "properties": {
+                  "currency": {
+                    "default": "EUR",
+                    "description": "ISO 4217, for the spend limit and the refusal that names it.",
+                    "pattern": "^(?:[A-Z]{3})$",
+                    "type": "string"
+                  },
+                  "maxMessagesPerDay": {
+                    "default": 0,
+                    "description": "The most messages this channel dispatches in one UTC day. Zero — the default — means none: a channel with no limit is a channel that cannot send, on purpose.",
+                    "example": 1000,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "maxSpendPerDay": {
+                    "default": 0,
+                    "description": "The most this channel spends in one UTC day, in currency. Zero means none.",
+                    "example": 50,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "provider": {
+                "default": "",
+                "description": "Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.",
+                "maxLength": 64,
+                "pattern": "^(?:([a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)?)$",
+                "type": "string"
+              },
+              "signingRef": {
+                "default": "",
+                "description": "The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet.",
+                "maxLength": 512,
+                "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+                "type": "string",
+                "x-cybercloud-widget": "secret-ref"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Communication/services/channels",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.channels.List": {
+        "type": "object",
+        "title": "CyberCloud.Communication.services.channels.List",
+        "description": "One page of CyberCloud.Communication/services/channels. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Communication.services.channels"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Communication.services.suppressions": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Communication/services/suppressions. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the suppression is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The suppression's own settings.",
+            "properties": {
+              "channel": {
+                "description": "The channel the address is blocked on. Suppression is per channel: an email bounce says nothing about a phone number.",
+                "enum": [
+                  "sms",
+                  "whatsapp",
+                  "email",
+                  "push",
+                  "voice"
+                ],
+                "example": "email",
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "destination": {
+                "description": "The address, in any spelling. Normalized before it is stored, so two spellings of one address are one entry.",
+                "example": "someone@example.com",
+                "maxLength": 320,
+                "minLength": 1,
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "note": {
+                "default": "",
+                "description": "Why, in the tenant's words. What a support case reads.",
+                "example": "Asked us to stop by phone, 2026-09-01",
+                "maxLength": 512,
+                "type": "string"
+              }
+            },
+            "required": [
+              "channel",
+              "destination"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Communication/services/suppressions",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.suppressions.List": {
+        "type": "object",
+        "title": "CyberCloud.Communication.services.suppressions.List",
+        "description": "One page of CyberCloud.Communication/services/suppressions. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Communication.services.suppressions"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Communication.services.templates": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Communication/services/templates. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the template is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The template's own settings.",
+            "properties": {
+              "body": {
+                "description": "The message text. A {name} is replaced by the argument of that name, left to right, and a substituted value is never re-scanned.",
+                "example": "Your verification code is {code}. It expires in {minutes} minutes.",
+                "maxLength": 65536,
+                "minLength": 1,
+                "type": "string"
+              },
+              "channel": {
+                "description": "Which channel the body is written for. A WhatsApp body is not an email body, and the channel decides whether carrier pre-approval is consulted at all.",
+                "enum": [
+                  "sms",
+                  "whatsapp",
+                  "email",
+                  "push",
+                  "voice"
+                ],
+                "example": "email",
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "locale": {
+                "default": "en",
+                "description": "The BCP 47 tag the body is written in. One locale per template; a second language is a second template.",
+                "maxLength": 35,
+                "pattern": "^(?:[a-z]{2,3}(-[A-Za-z0-9]{2,8})*)$",
+                "type": "string"
+              },
+              "optionalVariables": {
+                "description": "The placeholders a send may supply. An unsupplied one is left as written, so a tenant testing the template sees it.",
+                "example": [
+                  "minutes"
+                ],
+                "items": {
+                  "pattern": "^(?:[A-Za-z_][A-Za-z0-9_]*)$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "subject": {
+                "default": "",
+                "description": "The subject line, for channels that have one. Placeholders are substituted here too.",
+                "example": "Your code is {code}",
+                "maxLength": 998,
+                "type": "string"
+              },
+              "variables": {
+                "description": "The placeholders a send must supply. A send missing one is refused before any carrier is called.",
+                "example": [
+                  "code"
+                ],
+                "items": {
+                  "pattern": "^(?:[A-Za-z_][A-Za-z0-9_]*)$",
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "body",
+              "channel"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Communication/services/templates",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.templates.List": {
+        "type": "object",
+        "title": "CyberCloud.Communication.services.templates.List",
+        "description": "One page of CyberCloud.Communication/services/templates. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Communication.services.templates"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Communication.services.templates.RenderRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Communication/services/templates/render.",
+        "properties": {
+          "arguments": {
+            "description": "The arguments, one name=value per element. A missing required variable is refused, naming every missing one at once.",
+            "example": [
+              "code=482913"
+            ],
+            "items": {
+              "pattern": "^(?:[A-Za-z_][A-Za-z0-9_]*=[\\s\\S]*)$",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "title": "CyberCloud.Communication.services.templates.RenderRequest",
+        "type": "object"
+      },
+      "CyberCloud.Communication.services.templates.RenderResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Communication/services/templates/render returns.",
+        "properties": {
+          "body": {
+            "description": "The body, substituted.",
+            "type": "string"
+          },
+          "locale": {
+            "description": "The locale it was rendered in.",
+            "type": "string"
+          },
+          "subject": {
+            "description": "The subject, substituted.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "locale",
+          "subject"
+        ],
+        "title": "CyberCloud.Communication.services.templates.RenderResponse",
+        "type": "object"
+      },
       "CyberCloud.ContainerRegistry.registries": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.ContainerRegistry/registries. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -16325,5 +18998,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 23
+  "x-cybercloud-resource-type-count": 27
 }

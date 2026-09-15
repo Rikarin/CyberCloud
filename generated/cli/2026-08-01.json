@@ -1188,6 +1188,1954 @@
         }
       }
     },
+    "communication": {
+      "name": "communication",
+      "summary": "Commands for the CyberCloud.Communication provider.",
+      "commands": {
+        "services": {
+          "name": "services",
+          "resourceType": "CyberCloud.Communication/services",
+          "title": "Communication service",
+          "plural": "Communication services",
+          "summary": "A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send.",
+          "verbs": {
+            "check-suppression": {
+              "name": "check-suppression",
+              "summary": "checkSuppression a Communication service.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}/checkSuppression",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The channel the address would be sent on.",
+                  "jsonPointer": "/channel",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ]
+                },
+                {
+                  "name": "--destination",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The address, in any spelling.",
+                  "jsonPointer": "/destination"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "checkSuppression",
+              "permission": "read"
+            },
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Communication service.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--default-locale",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The locale a send is rendered in when the request names none — a BCP 47 tag such as cs-CZ. Empty falls back to en, then to whichever body the template has first.",
+                  "jsonPointer": "/properties/defaultLocale",
+                  "default": "",
+                  "example": "en-GB"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the service is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Communication service. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Communication services in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "list-suppressions": {
+              "name": "list-suppressions",
+              "summary": "listSuppressions a Communication service.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}/listSuppressions",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": false,
+                  "summary": "One of sms, whatsapp, email, push or voice, or empty for every channel.",
+                  "jsonPointer": "/channel",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listSuppressions",
+              "permission": "read"
+            },
+            "send": {
+              "name": "send",
+              "summary": "send a Communication service.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}/send",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--arguments",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The template's arguments, one name=value per element.",
+                  "jsonPointer": "/arguments",
+                  "repeated": true,
+                  "example": [
+                    "code=482913"
+                  ]
+                },
+                {
+                  "name": "--body",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The message text, when no template is named.",
+                  "jsonPointer": "/body",
+                  "default": ""
+                },
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Which channel to send on.",
+                  "jsonPointer": "/channel",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ]
+                },
+                {
+                  "name": "--idempotency-key",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The caller's key for this message. A retry carrying the same key returns the message already sent and calls no carrier; derive it from the thing being notified about, never from the attempt.",
+                  "jsonPointer": "/idempotencyKey",
+                  "example": "invoice-2026-0042-issued"
+                },
+                {
+                  "name": "--locale",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The locale to render in, or empty for the service's default.",
+                  "jsonPointer": "/locale",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--template",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The name of a template under this service to render, or empty to send body as written. WhatsApp requires one.",
+                  "jsonPointer": "/template",
+                  "default": ""
+                },
+                {
+                  "name": "--template-version",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Which version of the template, or 0 for the newest one a send may use.",
+                  "jsonPointer": "/templateVersion",
+                  "default": 0
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--to",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The recipient — an E.164 number for sms, whatsapp and voice, an address for email, a device token for push.",
+                  "jsonPointer": "/to",
+                  "example": "+420777123456"
+                }
+              ],
+              "action": "send",
+              "permission": "write"
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Communication service.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "status": {
+              "name": "status",
+              "summary": "status a Communication service.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}/status",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--idempotency-key",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The key the message was sent under.",
+                  "jsonPointer": "/idempotencyKey"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "status",
+              "permission": "read"
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Communication service. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--default-locale",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The locale a send is rendered in when the request names none — a BCP 47 tag such as cs-CZ. Empty falls back to en, then to whichever body the template has first.",
+                  "jsonPointer": "/properties/defaultLocale",
+                  "default": "",
+                  "example": "en-GB"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the service is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "comms"
+        },
+        "services-channels": {
+          "name": "services-channels",
+          "resourceType": "CyberCloud.Communication/services/channels",
+          "title": "Communication channel",
+          "plural": "Communication channels",
+          "summary": "One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Communication channel.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--account",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Whose carrier account pays. platform is marked up and needs no setup; tenant is the tenant's own contract, reached through accountRef and authRef.",
+                  "jsonPointer": "/properties/account",
+                  "choices": [
+                    "platform",
+                    "tenant"
+                  ],
+                  "default": "platform"
+                },
+                {
+                  "name": "--account-ref",
+                  "type": "string",
+                  "required": false,
+                  "summary": "For account: tenant — the vault handle of the account identifier (a Twilio account SID, a Meta business account id), as path#field.",
+                  "jsonPointer": "/properties/accountRef",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--auth-ref",
+                  "type": "string",
+                  "required": false,
+                  "summary": "For account: tenant — the vault handle of the authenticating value (an auth token, a bearer, an access secret), as path#field.",
+                  "jsonPointer": "/properties/authRef",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--currency",
+                  "type": "string",
+                  "required": false,
+                  "summary": "ISO 4217, for the spend limit and the refusal that names it.",
+                  "jsonPointer": "/properties/limits/currency",
+                  "default": "EUR"
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether sending on this channel is allowed at all. The kill switch: turning it off keeps the configuration and refuses every send.",
+                  "jsonPointer": "/properties/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--estimated-unit-cost",
+                  "type": "number",
+                  "required": false,
+                  "summary": "What one message is expected to cost, in currency, reserved before dispatch. Set it to the most expensive destination the channel sends to; an estimate that is too low turns the spend limit into a suggestion.",
+                  "jsonPointer": "/properties/estimatedUnitCost",
+                  "default": 0,
+                  "example": 0.08
+                },
+                {
+                  "name": "--kind",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Which channel this configures. One service holds one configuration per kind.",
+                  "jsonPointer": "/properties/kind",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ],
+                  "immutable": true,
+                  "example": "email"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the channel is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-messages-per-day",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The most messages this channel dispatches in one UTC day. Zero — the default — means none: a channel with no limit is a channel that cannot send, on purpose.",
+                  "jsonPointer": "/properties/limits/maxMessagesPerDay",
+                  "default": 0,
+                  "example": 1000
+                },
+                {
+                  "name": "--max-spend-per-day",
+                  "type": "number",
+                  "required": false,
+                  "summary": "The most this channel spends in one UTC day, in currency. Zero means none.",
+                  "jsonPointer": "/properties/limits/maxSpendPerDay",
+                  "default": 0,
+                  "example": 50
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--provider",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.",
+                  "jsonPointer": "/properties/provider",
+                  "default": ""
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Communication channel lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--signing-ref",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet.",
+                  "jsonPointer": "/properties/signingRef",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Communication channel. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Communication channel lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Communication channels in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Communication channel lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Communication channel.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Communication channel lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Communication channel. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--account",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Whose carrier account pays. platform is marked up and needs no setup; tenant is the tenant's own contract, reached through accountRef and authRef.",
+                  "jsonPointer": "/properties/account",
+                  "choices": [
+                    "platform",
+                    "tenant"
+                  ],
+                  "default": "platform"
+                },
+                {
+                  "name": "--account-ref",
+                  "type": "string",
+                  "required": false,
+                  "summary": "For account: tenant — the vault handle of the account identifier (a Twilio account SID, a Meta business account id), as path#field.",
+                  "jsonPointer": "/properties/accountRef",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--auth-ref",
+                  "type": "string",
+                  "required": false,
+                  "summary": "For account: tenant — the vault handle of the authenticating value (an auth token, a bearer, an access secret), as path#field.",
+                  "jsonPointer": "/properties/authRef",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--currency",
+                  "type": "string",
+                  "required": false,
+                  "summary": "ISO 4217, for the spend limit and the refusal that names it.",
+                  "jsonPointer": "/properties/limits/currency",
+                  "default": "EUR"
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether sending on this channel is allowed at all. The kill switch: turning it off keeps the configuration and refuses every send.",
+                  "jsonPointer": "/properties/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--estimated-unit-cost",
+                  "type": "number",
+                  "required": false,
+                  "summary": "What one message is expected to cost, in currency, reserved before dispatch. Set it to the most expensive destination the channel sends to; an estimate that is too low turns the spend limit into a suggestion.",
+                  "jsonPointer": "/properties/estimatedUnitCost",
+                  "default": 0,
+                  "example": 0.08
+                },
+                {
+                  "name": "--kind",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which channel this configures. One service holds one configuration per kind.",
+                  "jsonPointer": "/properties/kind",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ],
+                  "immutable": true,
+                  "example": "email"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the channel is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-messages-per-day",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The most messages this channel dispatches in one UTC day. Zero — the default — means none: a channel with no limit is a channel that cannot send, on purpose.",
+                  "jsonPointer": "/properties/limits/maxMessagesPerDay",
+                  "default": 0,
+                  "example": 1000
+                },
+                {
+                  "name": "--max-spend-per-day",
+                  "type": "number",
+                  "required": false,
+                  "summary": "The most this channel spends in one UTC day, in currency. Zero means none.",
+                  "jsonPointer": "/properties/limits/maxSpendPerDay",
+                  "default": 0,
+                  "example": 50
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--provider",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.",
+                  "jsonPointer": "/properties/provider",
+                  "default": ""
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Communication channel lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--signing-ref",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet.",
+                  "jsonPointer": "/properties/signingRef",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "channel"
+        },
+        "services-suppressions": {
+          "name": "services-suppressions",
+          "resourceType": "CyberCloud.Communication/services/suppressions",
+          "title": "Suppression",
+          "plural": "Suppressions",
+          "summary": "An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Suppression.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The channel the address is blocked on. Suppression is per channel: an email bounce says nothing about a phone number.",
+                  "jsonPointer": "/properties/channel",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ],
+                  "immutable": true,
+                  "example": "email"
+                },
+                {
+                  "name": "--destination",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The address, in any spelling. Normalized before it is stored, so two spellings of one address are one entry.",
+                  "jsonPointer": "/properties/destination",
+                  "immutable": true,
+                  "example": "someone@example.com"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the suppression is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--note",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Why, in the tenant's words. What a support case reads.",
+                  "jsonPointer": "/properties/note",
+                  "default": "",
+                  "example": "Asked us to stop by phone, 2026-09-01"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Suppression lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Suppression. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Suppression lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Suppressions in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Suppression lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Suppression.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Suppression lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Suppression. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The channel the address is blocked on. Suppression is per channel: an email bounce says nothing about a phone number.",
+                  "jsonPointer": "/properties/channel",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ],
+                  "immutable": true,
+                  "example": "email"
+                },
+                {
+                  "name": "--destination",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The address, in any spelling. Normalized before it is stored, so two spellings of one address are one entry.",
+                  "jsonPointer": "/properties/destination",
+                  "immutable": true,
+                  "example": "someone@example.com"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the suppression is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--note",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Why, in the tenant's words. What a support case reads.",
+                  "jsonPointer": "/properties/note",
+                  "default": "",
+                  "example": "Asked us to stop by phone, 2026-09-01"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Suppression lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "suppression"
+        },
+        "services-templates": {
+          "name": "services-templates",
+          "resourceType": "CyberCloud.Communication/services/templates",
+          "title": "Message template",
+          "plural": "Message templates",
+          "summary": "A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Message template.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--body",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The message text. A {name} is replaced by the argument of that name, left to right, and a substituted value is never re-scanned.",
+                  "jsonPointer": "/properties/body",
+                  "example": "Your verification code is {code}. It expires in {minutes} minutes."
+                },
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Which channel the body is written for. A WhatsApp body is not an email body, and the channel decides whether carrier pre-approval is consulted at all.",
+                  "jsonPointer": "/properties/channel",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ],
+                  "immutable": true,
+                  "example": "email"
+                },
+                {
+                  "name": "--locale",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The BCP 47 tag the body is written in. One locale per template; a second language is a second template.",
+                  "jsonPointer": "/properties/locale",
+                  "default": "en"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the template is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--optional-variables",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The placeholders a send may supply. An unsupplied one is left as written, so a tenant testing the template sees it.",
+                  "jsonPointer": "/properties/optionalVariables",
+                  "repeated": true,
+                  "example": [
+                    "minutes"
+                  ]
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Message template lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subject",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subject line, for channels that have one. Placeholders are substituted here too.",
+                  "jsonPointer": "/properties/subject",
+                  "default": "",
+                  "example": "Your code is {code}"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--variables",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The placeholders a send must supply. A send missing one is refused before any carrier is called.",
+                  "jsonPointer": "/properties/variables",
+                  "repeated": true,
+                  "example": [
+                    "code"
+                  ]
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Message template. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Message template lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Message templates in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Message template lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "render": {
+              "name": "render",
+              "summary": "render a Message template.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates/{resourceName}/render",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--arguments",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The arguments, one name=value per element. A missing required variable is refused, naming every missing one at once.",
+                  "jsonPointer": "/arguments",
+                  "repeated": true,
+                  "example": [
+                    "code=482913"
+                  ]
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Message template lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "render",
+              "permission": "read"
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Message template.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Message template lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Message template. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--body",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The message text. A {name} is replaced by the argument of that name, left to right, and a substituted value is never re-scanned.",
+                  "jsonPointer": "/properties/body",
+                  "example": "Your verification code is {code}. It expires in {minutes} minutes."
+                },
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which channel the body is written for. A WhatsApp body is not an email body, and the channel decides whether carrier pre-approval is consulted at all.",
+                  "jsonPointer": "/properties/channel",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ],
+                  "immutable": true,
+                  "example": "email"
+                },
+                {
+                  "name": "--locale",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The BCP 47 tag the body is written in. One locale per template; a second language is a second template.",
+                  "jsonPointer": "/properties/locale",
+                  "default": "en"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the template is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--optional-variables",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The placeholders a send may supply. An unsupplied one is left as written, so a tenant testing the template sees it.",
+                  "jsonPointer": "/properties/optionalVariables",
+                  "repeated": true,
+                  "example": [
+                    "minutes"
+                  ]
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--services-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Message template lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "servicesName"
+                },
+                {
+                  "name": "--subject",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subject line, for channels that have one. Placeholders are substituted here too.",
+                  "jsonPointer": "/properties/subject",
+                  "default": "",
+                  "example": "Your code is {code}"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--variables",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The placeholders a send must supply. A send missing one is refused before any carrier is called.",
+                  "jsonPointer": "/properties/variables",
+                  "repeated": true,
+                  "example": [
+                    "code"
+                  ]
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "template"
+        }
+      }
+    },
     "containerregistry": {
       "name": "containerregistry",
       "summary": "Commands for the CyberCloud.ContainerRegistry provider.",

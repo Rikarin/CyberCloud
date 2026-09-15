@@ -261,6 +261,30 @@ CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
 CyberCloud.Providers.Analytics -> CyberCloud.Tenancy
 CyberCloud.Providers.Cache -> CyberCloud.Core
+
+# ⚠ THE FIFTEENTH FAMILY IS THE FIRST WITH A LINE BEYOND THE FOUR, AND THE FIRST WITHOUT ONE OF THE
+# FOUR. CyberCloud.Providers.Communication is the tenant-facing face of CyberCloud.Communication —
+# docs/plan/17 § CyberCloud.Communication/services — and its four resource types ARE that module's
+# grains: a `channels` resource is a ChannelConfiguration on ICommunicationServiceGrain, a
+# `suppressions` resource is an entry on ISuppressionListGrain. The line to CyberCloud.Communication
+# is what lets the provider name those grains' wire types and the seam it converges through
+# (ICommunicationControlPlane, in the .Contracts assembly; the implementation assembly is never
+# bound — see the provider's .csproj headers).
+#
+# ⚠ WHY THE GRAINS DID NOT MOVE INTO THE PROVIDER INSTEAD, which would have kept this file's rule
+# that a provider reaches the four and nothing else: CyberCloud.Identity -> CyberCloud.Communication
+# is two sections up, because every OTP goes through IMessageSender, and rule 2 forbids identity —
+# or any module — reaching a Providers.* assembly. The grains stay where identity can reach them; the
+# provider reaches them the way identity does.
+#
+# ⚠ AND NO CyberCloud.Kubernetes. The family is clusterless — docs/plan/08 § What the resource
+# manager deliberately does not do's "a provider with no cluster at all" — so it names no kind and no
+# connection. The absence is checked the same way the presence would be: a line here with no edge
+# behind it is a coupling nobody reviewed.
+CyberCloud.Providers.Communication -> CyberCloud.Communication
+CyberCloud.Providers.Communication -> CyberCloud.Core
+CyberCloud.Providers.Communication -> CyberCloud.ResourceManager
+CyberCloud.Providers.Communication -> CyberCloud.Tenancy
 CyberCloud.Providers.ContainerRegistry -> CyberCloud.Core
 CyberCloud.Providers.ContainerRegistry -> CyberCloud.Kubernetes
 CyberCloud.Providers.ContainerRegistry -> CyberCloud.ResourceManager

@@ -22,8 +22,10 @@ namespace CyberCloud.Communication.Contracts;
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Every grain here is keyed <c>res/{guid:N}</c>, and four of the five guids are
-///             derived rather than allocated.
+///             Every grain here is keyed <c>res/{guid:N}</c>, and every one of the guids is
+///             derived rather than allocated — the message and the index from a service and a
+///             key, and, since the tenant-facing provider landed, the service and the template from
+///             their own addresses through <see cref="ResourceIdFor" />.
 ///         </b> <see cref="GrainKeys" /> accepts a closed set of key
 ///         shapes; adding <c>msg/{id}</c> would be a change to <see cref="GrainKeys" /> in
 ///         <c>CyberCloud.Core</c>, reviewed like a schema change, which is the same wall
@@ -60,8 +62,8 @@ public static class CommunicationGrainKeys {
     ///     one key.
     /// </summary>
     /// <param name="serviceId">
-    ///     The <c>CyberCloud.Communication/services/{name}</c> resource's GUID, as
-    ///     <c>ResourceId.Id</c> spells it.
+    ///     The <c>CyberCloud.Communication/services/{name}</c> resource's id, as
+    ///     <see cref="ResourceIdFor" /> derives it from the resource's address.
     /// </param>
     /// <remarks>
     ///     Orleans addresses an activation by (grain type, key), so the three are distinct grains
@@ -71,8 +73,56 @@ public static class CommunicationGrainKeys {
     public static string Service(Guid serviceId) => GrainKeys.Resource(serviceId);
 
     /// <summary>A template resource — <c>IMessageTemplateGrain</c>.</summary>
-    /// <param name="templateId">The <c>services/{service}/templates/{name}</c> child resource's GUID.</param>
+    /// <param name="templateId">
+    ///     The <c>services/{service}/templates/{name}</c> child resource's id, as
+    ///     <see cref="ResourceIdFor" /> derives it.
+    /// </param>
     public static string Template(Guid templateId) => GrainKeys.Resource(templateId);
+
+    /// <summary>
+    ///     The id a resource-shaped grain — a service or a template — is keyed by, derived from the
+    ///     resource's address rather than taken from the resource manager.
+    /// </summary>
+    /// <param name="tenantId">The tenant the resource belongs to.</param>
+    /// <param name="canonicalPath">
+    ///     <c>ResourceId.CanonicalPath</c> — the lower-cased address, so two spellings of one resource
+    ///     derive one grain. ⚠ The <i>canonical</i> path and not <c>ResourceId.Path</c>, which is
+    ///     case-preserving and would derive two.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Derived from the address and not taken from <c>ResourceId.Id</c>, and the
+    ///             tenant-facing provider is what forced the choice.
+    ///         </b> A child resource's reconcile pass knows its parent by <i>name</i> —
+    ///         <c>ReconcileContext.Id.ParentNames</c> — and nothing hands it the parent's GUID;
+    ///         asking the resource index for one would be a provider calling the index, which
+    ///         docs/plan/08 § The reconcile loop forbids. So a <c>channels</c> reconciler reaches its
+    ///         service's grain by computing this from the parent's address, and the service's own
+    ///         reconciler uses the same function so the two agree by construction.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What that buys, said plainly because it looks like a side effect.</b> The
+    ///         suppression list is keyed by this id too. A tenant who deletes a service and recreates
+    ///         it under the same name lands on the <i>same</i> list — every complaint and opt-out
+    ///         recorded against the old resource still stands, which is the one outcome docs/plan/17
+    ///         § The parts that are actually the work insists on. Keyed by the resource manager's
+    ///         GUID, a delete-and-recreate would have been a clean list.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="canonicalPath" /> is blank.</exception>
+    public static Guid ResourceIdFor(Guid tenantId, string canonicalPath) {
+        if (string.IsNullOrWhiteSpace(canonicalPath)) {
+            throw new ArgumentException(
+                "A resource-shaped communication grain is derived from the resource's canonical "
+                + "path, and an empty path would give every service in the tenant one grain.",
+                nameof(canonicalPath)
+            );
+        }
+
+        return Derive("resource", tenantId, canonicalPath.Trim());
+    }
 
     /// <summary>A sender resource — <c>ISenderIdentityGrain</c>.</summary>
     /// <param name="senderId">The <c>services/{service}/senders/{name}</c> child resource's GUID.</param>
@@ -144,10 +194,13 @@ public static class CommunicationGrainKeys {
     ///         tenant id in fixed-width form.
     ///     </para>
     /// </remarks>
-    static Guid Derive(string domain, Guid serviceId, string name) {
+    static Guid Derive(string domain, Guid scope, string name) {
+        // ⚠ `scope` is the SERVICE for a message or a provider-id entry and the TENANT for a
+        // resource-shaped grain. The domain string in front of it is what keeps the two readings
+        // apart, so a tenant id that happened to equal a service id cannot derive one guid twice.
         var material = string.Create(
             CultureInfo.InvariantCulture,
-            $"cybercloud.communication\n{domain.Length}\n{domain}\n{serviceId:N}\n{name}"
+            $"cybercloud.communication\n{domain.Length}\n{domain}\n{scope:N}\n{name}"
         );
 
         Span<byte> digest = stackalloc byte[32];

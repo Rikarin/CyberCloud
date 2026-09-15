@@ -674,6 +674,751 @@
         }
       ]
     },
+    "CyberCloud.Communication/services": {
+      "resourceType": "CyberCloud.Communication/services",
+      "apiVersion": "2026-08-01",
+      "title": "Communication service",
+      "plural": "Communication services",
+      "summary": "A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send.",
+      "overrideKey": "CyberCloud.Communication/services@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/defaultLocale",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the service is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Communication service to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The service's own settings."
+        },
+        {
+          "jsonPointer": "/properties/defaultLocale",
+          "name": "defaultLocale",
+          "label": "Default locale",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The locale a send is rendered in when the request names none — a BCP 47 tag such as cs-CZ. Empty falls back to en, then to whichever body the template has first.",
+          "maxLength": 35,
+          "pattern": "^(?:([a-z]{2,3}(-[A-Za-z0-9]{2,8})*)?)$",
+          "default": "",
+          "placeholder": "en-GB"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "checkSuppression",
+          "label": "Check suppression",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/channel",
+              "name": "channel",
+              "label": "Channel",
+              "control": "xui-select",
+              "required": true
+            },
+            {
+              "jsonPointer": "/destination",
+              "name": "destination",
+              "label": "Destination",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "listSuppressions",
+          "label": "List suppressions",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/channel",
+              "name": "channel",
+              "label": "Channel",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "send",
+          "label": "Send",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/arguments",
+              "name": "arguments",
+              "label": "Arguments",
+              "control": "xui-chip-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/body",
+              "name": "body",
+              "label": "Body",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/channel",
+              "name": "channel",
+              "label": "Channel",
+              "control": "xui-select",
+              "required": true
+            },
+            {
+              "jsonPointer": "/idempotencyKey",
+              "name": "idempotencyKey",
+              "label": "Idempotency key",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/locale",
+              "name": "locale",
+              "label": "Locale",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/template",
+              "name": "template",
+              "label": "Template",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/templateVersion",
+              "name": "templateVersion",
+              "label": "Template version",
+              "control": "xui-numeric-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/to",
+              "name": "to",
+              "label": "To",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "label": "Status",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/idempotencyKey",
+              "name": "idempotencyKey",
+              "label": "Idempotency key",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        }
+      ]
+    },
+    "CyberCloud.Communication/services/channels": {
+      "resourceType": "CyberCloud.Communication/services/channels",
+      "apiVersion": "2026-08-01",
+      "title": "Communication channel",
+      "plural": "Communication channels",
+      "summary": "One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day.",
+      "overrideKey": "CyberCloud.Communication/services/channels@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/account",
+        "/properties/accountRef",
+        "/properties/authRef",
+        "/properties/enabled",
+        "/properties/estimatedUnitCost",
+        "/properties/kind",
+        "/properties/limits",
+        "/properties/limits/currency",
+        "/properties/limits/maxMessagesPerDay",
+        "/properties/limits/maxSpendPerDay",
+        "/properties/provider",
+        "/properties/signingRef",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the channel is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Communication channel to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The channel's own settings."
+        },
+        {
+          "jsonPointer": "/properties/account",
+          "name": "account",
+          "label": "Account",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Whose carrier account pays. platform is marked up and needs no setup; tenant is the tenant's own contract, reached through accountRef and authRef.",
+          "choices": [
+            {
+              "value": "platform",
+              "label": "Platform"
+            },
+            {
+              "value": "tenant",
+              "label": "Tenant"
+            }
+          ],
+          "default": "platform"
+        },
+        {
+          "jsonPointer": "/properties/accountRef",
+          "name": "accountRef",
+          "label": "Account ref",
+          "control": "xui-secret-ref",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "For account: tenant — the vault handle of the account identifier (a Twilio account SID, a Meta business account id), as path#field.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/authRef",
+          "name": "authRef",
+          "label": "Auth ref",
+          "control": "xui-secret-ref",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "For account: tenant — the vault handle of the authenticating value (an auth token, a bearer, an access secret), as path#field.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether sending on this channel is allowed at all. The kill switch: turning it off keeps the configuration and refuses every send.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/estimatedUnitCost",
+          "name": "estimatedUnitCost",
+          "label": "Estimated unit cost",
+          "control": "xui-numeric-input",
+          "type": "number",
+          "required": false,
+          "section": "general",
+          "hint": "What one message is expected to cost, in currency, reserved before dispatch. Set it to the most expensive destination the channel sends to; an estimate that is too low turns the spend limit into a suggestion.",
+          "minimum": 0,
+          "default": 0,
+          "placeholder": 0.08
+        },
+        {
+          "jsonPointer": "/properties/kind",
+          "name": "kind",
+          "label": "Kind",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Which channel this configures. One service holds one configuration per kind.",
+          "choices": [
+            {
+              "value": "sms",
+              "label": "Sms"
+            },
+            {
+              "value": "whatsapp",
+              "label": "Whatsapp"
+            },
+            {
+              "value": "email",
+              "label": "Email"
+            },
+            {
+              "value": "push",
+              "label": "Push"
+            },
+            {
+              "value": "voice",
+              "label": "Voice"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Communication channel to change it.",
+          "placeholder": "email"
+        },
+        {
+          "jsonPointer": "/properties/limits",
+          "name": "limits",
+          "label": "Limits",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the channel may send and spend per UTC day."
+        },
+        {
+          "jsonPointer": "/properties/limits/currency",
+          "name": "currency",
+          "label": "Currency",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "limits",
+          "hint": "ISO 4217, for the spend limit and the refusal that names it.",
+          "pattern": "^(?:[A-Z]{3})$",
+          "default": "EUR"
+        },
+        {
+          "jsonPointer": "/properties/limits/maxMessagesPerDay",
+          "name": "maxMessagesPerDay",
+          "label": "Max messages per day",
+          "control": "xui-numeric-input",
+          "type": "integer",
+          "required": false,
+          "section": "limits",
+          "hint": "The most messages this channel dispatches in one UTC day. Zero — the default — means none: a channel with no limit is a channel that cannot send, on purpose.",
+          "minimum": 0,
+          "default": 0,
+          "placeholder": 1000
+        },
+        {
+          "jsonPointer": "/properties/limits/maxSpendPerDay",
+          "name": "maxSpendPerDay",
+          "label": "Max spend per day",
+          "control": "xui-numeric-input",
+          "type": "number",
+          "required": false,
+          "section": "limits",
+          "hint": "The most this channel spends in one UTC day, in currency. Zero means none.",
+          "minimum": 0,
+          "default": 0,
+          "placeholder": 50
+        },
+        {
+          "jsonPointer": "/properties/provider",
+          "name": "provider",
+          "label": "Provider",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.",
+          "maxLength": 64,
+          "pattern": "^(?:([a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/signingRef",
+          "name": "signingRef",
+          "label": "Signing ref",
+          "control": "xui-secret-ref",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": []
+    },
+    "CyberCloud.Communication/services/suppressions": {
+      "resourceType": "CyberCloud.Communication/services/suppressions",
+      "apiVersion": "2026-08-01",
+      "title": "Suppression",
+      "plural": "Suppressions",
+      "summary": "An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources.",
+      "overrideKey": "CyberCloud.Communication/services/suppressions@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/channel",
+        "/properties/destination",
+        "/properties/note",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the suppression is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Suppression to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The suppression's own settings."
+        },
+        {
+          "jsonPointer": "/properties/channel",
+          "name": "channel",
+          "label": "Channel",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The channel the address is blocked on. Suppression is per channel: an email bounce says nothing about a phone number.",
+          "choices": [
+            {
+              "value": "sms",
+              "label": "Sms"
+            },
+            {
+              "value": "whatsapp",
+              "label": "Whatsapp"
+            },
+            {
+              "value": "email",
+              "label": "Email"
+            },
+            {
+              "value": "push",
+              "label": "Push"
+            },
+            {
+              "value": "voice",
+              "label": "Voice"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Suppression to change it.",
+          "placeholder": "email"
+        },
+        {
+          "jsonPointer": "/properties/destination",
+          "name": "destination",
+          "label": "Destination",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The address, in any spelling. Normalized before it is stored, so two spellings of one address are one entry.",
+          "minLength": 1,
+          "maxLength": 320,
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Suppression to change it.",
+          "placeholder": "someone@example.com"
+        },
+        {
+          "jsonPointer": "/properties/note",
+          "name": "note",
+          "label": "Note",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Why, in the tenant's words. What a support case reads.",
+          "maxLength": 512,
+          "default": "",
+          "placeholder": "Asked us to stop by phone, 2026-09-01"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": []
+    },
+    "CyberCloud.Communication/services/templates": {
+      "resourceType": "CyberCloud.Communication/services/templates",
+      "apiVersion": "2026-08-01",
+      "title": "Message template",
+      "plural": "Message templates",
+      "summary": "A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants.",
+      "overrideKey": "CyberCloud.Communication/services/templates@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/body",
+        "/properties/channel",
+        "/properties/locale",
+        "/properties/optionalVariables",
+        "/properties/subject",
+        "/properties/variables",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the template is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Message template to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The template's own settings."
+        },
+        {
+          "jsonPointer": "/properties/body",
+          "name": "body",
+          "label": "Body",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The message text. A {name} is replaced by the argument of that name, left to right, and a substituted value is never re-scanned.",
+          "minLength": 1,
+          "maxLength": 65536,
+          "placeholder": "Your verification code is {code}. It expires in {minutes} minutes."
+        },
+        {
+          "jsonPointer": "/properties/channel",
+          "name": "channel",
+          "label": "Channel",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Which channel the body is written for. A WhatsApp body is not an email body, and the channel decides whether carrier pre-approval is consulted at all.",
+          "choices": [
+            {
+              "value": "sms",
+              "label": "Sms"
+            },
+            {
+              "value": "whatsapp",
+              "label": "Whatsapp"
+            },
+            {
+              "value": "email",
+              "label": "Email"
+            },
+            {
+              "value": "push",
+              "label": "Push"
+            },
+            {
+              "value": "voice",
+              "label": "Voice"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Message template to change it.",
+          "placeholder": "email"
+        },
+        {
+          "jsonPointer": "/properties/locale",
+          "name": "locale",
+          "label": "Locale",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The BCP 47 tag the body is written in. One locale per template; a second language is a second template.",
+          "maxLength": 35,
+          "pattern": "^(?:[a-z]{2,3}(-[A-Za-z0-9]{2,8})*)$",
+          "default": "en"
+        },
+        {
+          "jsonPointer": "/properties/optionalVariables",
+          "name": "optionalVariables",
+          "label": "Optional variables",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "The placeholders a send may supply. An unsupplied one is left as written, so a tenant testing the template sees it.",
+          "placeholder": [
+            "minutes"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/subject",
+          "name": "subject",
+          "label": "Subject",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The subject line, for channels that have one. Placeholders are substituted here too.",
+          "maxLength": 998,
+          "default": "",
+          "placeholder": "Your code is {code}"
+        },
+        {
+          "jsonPointer": "/properties/variables",
+          "name": "variables",
+          "label": "Variables",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "The placeholders a send must supply. A send missing one is refused before any carrier is called.",
+          "placeholder": [
+            "code"
+          ]
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "render",
+          "label": "Render",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/arguments",
+              "name": "arguments",
+              "label": "Arguments",
+              "control": "xui-chip-input",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
     "CyberCloud.ContainerRegistry/registries": {
       "resourceType": "CyberCloud.ContainerRegistry/registries",
       "apiVersion": "2026-08-01",

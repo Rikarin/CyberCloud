@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is four schemas, the four action shapes, and the pure functions that
+      turn a desired body into the wire types CyberCloud.Communication's grains hold.
+
+      ⚠ NO GRAIN INTERFACES OF ITS OWN, AND FOR A REASON NO PROVIDER BEFORE IT COULD GIVE. Every
+      provider so far said "everything a reconcile needs is in the desired body ResourceGrain already
+      stores". This one converges onto grains that ALREADY EXIST — ICommunicationServiceGrain,
+      IMessageTemplateGrain, ISuppressionListGrain in CyberCloud.Communication.Contracts, wired into
+      the silo host since before this family was written, because identity's OTPs and monitor's alerts
+      go through them. The provider is the tenant-facing face of that module, not a second copy of it.
+
+      ⚠ IT REFERENCES CyberCloud.Communication.Contracts, WHICH NO PROVIDER MAY DO WITHOUT A LINE IN
+      module-layering.txt — and the line is there, with its reason. What a provider may reference is
+      "CyberCloud.Core, CyberCloud.Kubernetes, CyberCloud.ResourceManager and CyberCloud.Tenancy, and
+      nothing else" (src/Providers/README.md § Hard rule); this family is the one exception, because
+      the resource types docs/plan/17 § CyberCloud.Communication/services describes ARE that module's
+      grains, and CyberCloud.Identity -> CyberCloud.Communication already forbids moving the grains
+      into a provider (identity may not reference one).
+
+      ⚠ NO CyberCloud.Kubernetes.Contracts. This is the first clusterless family in the catalogue —
+      docs/plan/08 § What the resource manager deliberately does not do names "a DNS zone, a mail
+      domain, a role assignment" as the shape — and nothing here renders an object, so nothing here
+      names a kind.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

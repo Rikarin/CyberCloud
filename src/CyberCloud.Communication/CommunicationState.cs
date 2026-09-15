@@ -130,6 +130,10 @@ public sealed class CommunicationServiceState {
     /// <summary>Template name to template resource id. The service is the naming authority.</summary>
     [Id(5)]
     public Dictionary<string, Guid> Templates { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>The locale a send falls back to. Empty for the renderer's own chain.</summary>
+    [Id(6)]
+    public string DefaultLocale { get; set; } = string.Empty;
 }
 
 /// <summary>What <c>MessageTemplateGrain</c> holds. Durable.</summary>

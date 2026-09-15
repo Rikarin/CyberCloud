@@ -54,6 +54,68 @@ The `SendAsync` call is a day. These are the rest:
 with the provider id and receipts. That gives per-message status, retry with backoff, and idempotency
 in one place.
 
+### Resource model — landed 2026-09-15 (#33)
+
+The module above had been wired into the silo host and carrying the platform's OTPs since before any
+provider existed; this is the tenant-facing surface over it. Four types, one api-version, and the grains
+are the ones the platform already runs:
+
+```
+CyberCloud.Communication/services/{name}
+  ├─ defaultLocale                 → the locale a send that names none is rendered in
+  ├─ channels/{name}               → kind (sms|whatsapp|email|push|voice), provider, enabled,
+  │                                  account (platform|tenant) with accountRef/authRef/signingRef
+  │                                  as SecretRef handles, limits per UTC day, estimatedUnitCost
+  ├─ templates/{name}              → channel, locale, subject, body, variables, optionalVariables;
+  │                                  action: render
+  ├─ suppressions/{name}           → channel, destination, note — a manual block
+  └─ actions: send, status, checkSuppression, listSuppressions
+```
+
+⚠ **The grains are keyed by the resource's *address*, not the resource manager's GUID** —
+`CommunicationGrainKeys.ResourceIdFor`. A child's reconcile pass knows its parent by name and nothing
+hands it the parent's GUID, so `services/{name}` and everything under it derive the service grain's id
+from the service's canonical path. The consequence worth wanting: a service deleted and recreated under
+the same name lands on the **same suppression list**. The consequence an operator has to know: the
+platform's own service — `SiloIdentityOptions.ServiceId`, the one every OTP goes through — is that
+derived id, not a GUID read off a listing.
+
+⚠ **Three decisions the schema model forced, each recorded rather than hidden.** This platform's
+schema has no array of objects (the remarks on `SchemaKind.Array` say why), which is what separates the
+table above from the interface at the top of this section:
+
+- **Channels, templates and suppressions are child types, not arrays on the service.** Each is a thing
+  a tenant adds and removes on its own, so this is the better shape anyway; the cost is that a channel
+  kind is a body property and one service holds one configuration per kind, owned by one resource, and
+  a second resource naming the same kind is refused by name.
+- **A template is one locale.** "Localised" here means one `templates` resource per language, chosen by
+  name; the grain's per-locale fallback still runs over the one body each resource gives it. Multi-locale
+  templates are owed to the api-version that grows the tree.
+- **There is no `messages` type; a send is an action and its receipts come back on `status`.** A
+  message is an event, not desired state: a `messages` resource would have a PUT whose second body the
+  grain refuses by design (`Conflict` — one key, one message) and a DELETE that cannot un-send. The
+  idempotency the resource shape would have offered is already the grain's. `status`'s receipts are
+  one text line each, for the same schema reason.
+
+⚠ **Suppression is enforced in the send path for the tenant's sends and the platform's alike, and one
+test suite pins both.** An OTP is `IOtpDeliverySeam` → `CommunicationOtpDelivery` → `IMessageSender` →
+`MessageGrain.DispatchAsync`, whose suppression check runs before a carrier is even resolved; a
+tenant's `send` action is the same `IMessageSender`. The platform's own service is a `services`
+resource like any tenant's, so its list is the same grain the `suppressions` type writes to. What the
+resource surface adds is the rule that a resource **owns a manual block and never downgrades a
+complaint**: reconciling a `suppressions` resource for an address the carrier said complained leaves
+the complaint in place, and deleting the resource leaves it in place too — the two ordinary operations
+that would otherwise have un-unsubscribed a recipient. `SuppressionEnforcementTests` in
+`CyberCloud.Providers.Communication.Tests` was sabotage-tested on both.
+
+⚠ **What ✅ on the roadmap row does not mean, said here as well as there.** No carrier client ships:
+every channel resolves to the module's refusing seam unless a host registers a real `IChannelProvider`,
+so a `send` today refuses honestly rather than sending. The sender-id registration flow has its grain
+(`ISenderIdentityGrain`) and no resource surface, so `ChannelConfiguration.SenderId` is always empty
+from this surface. Inbound `STOP` suppresses and is forwarded nowhere. And the platform's own outbound
+MTA — "our own Postfix" above — does not exist, which is the item `charts/bundle/bundle.yaml § owed`
+carries as `the-platform-has-no-mta`.
+
 ### Chat — M3
 
 The Azure Communication Services chat surface: threads, participants, read receipts, typing. Over

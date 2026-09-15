@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
+      bindings". Four reconcilers and five action handlers; no grain, and no chart binding, because
+      this family renders nothing — see the .Contracts .csproj.
+
+      ⚠ ITS ENTIRE REFERENCE SET IS ITS OWN .Contracts. IResourceReconciler, ReconcileContext and
+      ICommunicationControlPlane all arrive through it.
+
+      ⚠ NO Microsoft.Orleans.Server, NO Orleans.Multitenant, AND THIS IS THE FAMILY THAT MOST WANTED
+      THEM. Every reconciler here converges grain state, and the tempting shape is an IGrainFactory in
+      the constructor. It is not done, for the reason CyberCloud.Providers.Sample's .csproj gives — a
+      reconciler is a plain singleton, not a grain, so every GetGrain would need a hand-written
+      ForTenant (CC1006) — and the module already solved it once: ICommunicationControlPlane is the
+      seam, GrainCommunicationControlPlane in CyberCloud.Communication writes the qualification in one
+      place, and this assembly holds an interface. The same split IMessageSender has, for identity.
+
+      ⚠ NO KubernetesClient and NO CyberCloud.Kubernetes.Contracts — the first family for which rule 3
+      of docs/plan/03 § Assembly graph rules is satisfied by having nothing to say.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Communication.Contracts/CyberCloud.Providers.Communication.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

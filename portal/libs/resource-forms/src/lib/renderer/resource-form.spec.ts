@@ -29,6 +29,7 @@ function widgetFor(field: FormField): string {
     case 'boolean':
       return 'xui-switch';
     case 'integer':
+    case 'number':
       return 'xui-numeric-input';
     case 'array':
       return closed ? 'xui-multi-select' : 'xui-tag-input';

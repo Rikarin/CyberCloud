@@ -134,6 +134,10 @@ public static class ConformanceState<TSource>
         // ⚠ AFTER Cluster.Reset, and the order is the whole point: the memo describes the cluster,
         // and the cluster has just been emptied.
         Namespaces.Forget();
+
+        // A clusterless family's world is its module, and the module is what empties it — see
+        // IConvergedModule.Reset for why the suite's leftovers matter there and not in a cluster.
+        TSource.ConvergedModule?.Reset();
     }
 }
 
@@ -245,6 +249,11 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         services.AddSingleton<ISecretResolver>(Vault);
         services.AddSingleton<ISecretWriter>(Vault);
 
+        // ⚠ A clusterless family's handlers hold the module's client-side seams — the ones the
+        // gateway registers in production — and the module is what knows how to build them over
+        // this harness's client. See IConvergedModule.ConfigureHandlers.
+        Module?.ConfigureHandlers(services, Grains);
+
         foreach (var handler in Registry.Types
                      .SelectMany(x => x.Actions)
                      .Select(x => x.HandlerType)
@@ -255,6 +264,18 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
 
         return services.BuildServiceProvider();
     }
+
+    /// <summary>
+    ///     The module a clusterless case converges onto, or <see langword="null" /> for a case whose
+    ///     world is <see cref="World" />. See <see cref="IProviderCaseSource.ConvergedModule" />.
+    /// </summary>
+    public static IConvergedModule? Module => TSource.ConvergedModule;
+
+    /// <summary>
+    ///     Whether this case's world is a module rather than the fake cluster — which is what every
+    ///     world-facing assertion in the suite branches on.
+    /// </summary>
+    public static bool Clusterless => TSource.ConvergedModule is not null;
 
     /// <summary>The shared clock.</summary>
     public ConformanceClock Clock => ConformanceState<TSource>.Clock;
@@ -437,6 +458,10 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         builder.AddSiloBuilderConfigurator<Configurator>();
         cluster = builder.Build();
         await cluster.DeployAsync();
+
+        // ⚠ Before anything is written, so a case's direct-drive reconciler and the module's own
+        // readings both have a client to reach the silo through. See IConvergedModule.Attach.
+        Module?.Attach(cluster.GrainFactory);
 
         Registry = ProviderRegistry.Build([Case.CreateProvider()]);
 
@@ -671,6 +696,11 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
                 }
             );
+
+            // ⚠ A clusterless family's reconcilers converge onto a module's grains, and the module is
+            // what hosts them here — the same call the silo host makes. Before the resource manager,
+            // so the module's TryAdd registrations see the harness's clock rather than replacing it.
+            TSource.ConvergedModule?.ConfigureSilo(silo);
 
             silo.AddCyberCloudResourceManager();
         }

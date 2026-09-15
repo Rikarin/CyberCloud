@@ -253,6 +253,24 @@ public sealed record ChannelConfiguration {
     /// </summary>
     [Id(6)]
     public Guid SenderId { get; init; }
+
+    /// <summary>
+    ///     The <c>CyberCloud.Communication/services/{service}/channels/{name}</c> resource that owns
+    ///     this configuration, or empty for one written without a resource behind it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A service holds one configuration per <see cref="ChannelKind" />, and this is what
+    ///     stops two resources from fighting over it.</b> The tenant-facing provider declares the
+    ///     kind as a body property rather than as the resource's name — the shared conformance
+    ///     suite names resources itself, so a name that had to spell the kind would fail every
+    ///     provider's suite — which means two <c>channels</c> resources can both say
+    ///     <c>kind: email</c>. Without an owner the second would silently overwrite the first and the
+    ///     two reconcilers would take turns; with one, the second is refused by name before it
+    ///     writes anything. Appended as a new <c>[Id]</c>, so a configuration written before it
+    ///     existed reads back as unowned and behaves exactly as it did.
+    /// </remarks>
+    [Id(7)]
+    public Guid OwnerResourceId { get; init; }
 }
 
 /// <summary>One argument for a template parameter.</summary>
@@ -809,6 +827,18 @@ public sealed record CommunicationService {
     /// <summary>When it was created.</summary>
     [Id(4)]
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>
+    ///     The locale a send is rendered in when the request names none. Empty means the renderer's
+    ///     own chain — <c>en</c>, then whichever body is first.
+    /// </summary>
+    /// <remarks>
+    ///     A BCP 47 tag such as <c>cs-CZ</c>. <c>IMessageGrain.SendAsync</c> reads it only when
+    ///     <see cref="SendRequest.Locale" /> is blank, so a caller that says which locale it wants is
+    ///     never overridden by the service's default.
+    /// </remarks>
+    [Id(5)]
+    public string DefaultLocale { get; init; } = string.Empty;
 }
 
 /// <summary>

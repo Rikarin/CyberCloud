@@ -23,6 +23,18 @@ export function typeOf(field: FormField): FieldType {
   return field.type ?? 'string';
 }
 
+/**
+ * Whether a field holds a number — `integer` or `number`, which differ only in the whole-number
+ * validator. ⚠ `number` first reached the document with `CyberCloud.Communication/services/channels`
+ * (a spend limit in a currency); before that every numeric field was an integer, and a `number`
+ * fell through to the string branch, so its default of `0` became `"0"` and a numeric input was
+ * never offered.
+ */
+export function isNumeric(field: FormField): boolean {
+  const type = typeOf(field);
+  return type === 'integer' || type === 'number';
+}
+
 /** The helper text, from whichever member this kind of form carries it in. */
 export function hintOf(field: FormField): string {
   return field.hint ?? field.help ?? '';
@@ -69,7 +81,7 @@ export function treeOf(form: AnyForm): readonly FieldNode[] {
  * | Kind                    | Control value                    |
  * | ----------------------- | -------------------------------- |
  * | string, any widget      | `string`                         |
- * | integer                 | `number \| null`                 |
+ * | integer, number         | `number \| null`                 |
  * | boolean                 | `boolean`                        |
  * | array (chips, multi)    | `string[]`                       |
  * | tag bag                 | `string[]` of `key=value` lines  |
@@ -100,7 +112,7 @@ function addNode(parent: FormGroup, node: FieldNode, mode: FormMode, initial: un
   }
 
   const control = new FormControl(initialValueOf(field, initial), {
-    nonNullable: typeOf(field) !== 'integer' && !field.nullable,
+    nonNullable: !isNumeric(field) && !field.nullable,
     validators: validatorsOf(field)
   });
 
@@ -119,6 +131,7 @@ function initialValueOf(field: FormField, fromBody: unknown): unknown {
 
   switch (typeOf(field)) {
     case 'integer':
+    case 'number':
       return typeof source === 'number' ? source : null;
     case 'boolean':
       return source === true;
@@ -148,8 +161,9 @@ function validatorsOf(field: FormField): ValidatorFn[] {
     validators.push(type === 'array' || isTagBag(field) ? nonEmptyList : Validators.required);
   }
 
-  if (type === 'integer') {
-    validators.push(integer);
+  if (isNumeric(field)) {
+    if (type === 'integer') validators.push(integer);
+
     if (field.minimum !== undefined) validators.push(Validators.min(field.minimum));
     if (field.maximum !== undefined) validators.push(Validators.max(field.maximum));
   }
@@ -256,6 +270,7 @@ function bodyOf(node: FieldNode, raw: Record<string, unknown>): unknown {
     case 'array':
       return (value as string[]).length === 0 && !field.required ? undefined : value;
     case 'integer':
+    case 'number':
       return value === null && !field.required ? undefined : value;
     case 'boolean':
       return value;

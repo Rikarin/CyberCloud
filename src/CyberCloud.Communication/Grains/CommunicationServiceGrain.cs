@@ -168,6 +168,67 @@ public sealed class CommunicationServiceGrain(
         Task.FromResult(Result<ImmutableArray<ChannelConfiguration>>.Success([.. state.State.Channels]));
 
     /// <inheritdoc />
+    public async Task<Result> RemoveChannelAsync(ChannelKind channel) {
+        var removed = state.State.Channels.RemoveAll(x => x.Channel == channel);
+
+        if (removed > 0) {
+            await state.WriteStateAsync();
+        }
+
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<CommunicationService>> SetDefaultLocaleAsync(string locale) {
+        if (!state.State.Created) {
+            return NotFound<CommunicationService>();
+        }
+
+        var trimmed = (locale ?? string.Empty).Trim();
+
+        if (!string.Equals(state.State.DefaultLocale, trimmed, StringComparison.Ordinal)) {
+            state.State.DefaultLocale = trimmed;
+            await state.WriteStateAsync();
+        }
+
+        return Result<CommunicationService>.Success(Snapshot());
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> UnregisterTemplateAsync(string name, Guid templateId) {
+        if (string.IsNullOrWhiteSpace(name)) {
+            return Result.Failure(ErrorCode.InvalidResourceName, "A template registration has a name.");
+        }
+
+        // ⚠ Only the registration that points at THIS template is removed. A name a later resource
+        // took over — the tenant deleted `welcome`, created a new `welcome`, and the old one's
+        // teardown is still running — must survive the old one's delete.
+        if (state.State.Templates.TryGetValue(name, out var registered) && registered == templateId) {
+            state.State.Templates.Remove(name);
+            await state.WriteStateAsync();
+        }
+
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> RetireAsync() {
+        if (!state.State.Created) {
+            return Result.Success;
+        }
+
+        // ⚠ The suppression list is another grain on this key and is deliberately not reached from
+        // here — see ICommunicationServiceGrain.RetireAsync.
+        state.State.Created = false;
+        state.State.Channels.Clear();
+        state.State.Templates.Clear();
+        state.State.DefaultLocale = string.Empty;
+        await state.WriteStateAsync();
+
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
     public async Task<Result> RegisterTemplateAsync(string name, Guid templateId) {
         if (string.IsNullOrWhiteSpace(name)) {
             return Result.Failure(ErrorCode.InvalidResourceName, "A template needs a name.");
@@ -175,6 +236,18 @@ public sealed class CommunicationServiceGrain(
 
         if (templateId == Guid.Empty) {
             return Result.Failure(ErrorCode.InvalidResourceId, "A template registration needs its resource id.");
+        }
+
+        // ⚠ Not-found rather than a silent registration on a service that is not there, for the
+        // same reason ConfigureChannelAsync answers it: a name registered on a service nobody
+        // created would survive into the service's eventual creation and answer sends nobody
+        // configured. The tenant-facing reconciler reads this as "wait for the parent".
+        if (!state.State.Created) {
+            return Result.Failure(
+                ErrorCode.ResourceNotFound,
+                $"There is no communication service {serviceId:D} in tenant {owningTenant:D}, so there "
+                + "is nothing to register a template on."
+            );
         }
 
         if (state.State.Templates.TryGetValue(name, out var existing) && existing != templateId) {
@@ -216,7 +289,8 @@ public sealed class CommunicationServiceGrain(
             TenantId = state.State.TenantId,
             Name = state.State.Name,
             Channels = [.. state.State.Channels],
-            CreatedAt = state.State.CreatedAt
+            CreatedAt = state.State.CreatedAt,
+            DefaultLocale = state.State.DefaultLocale
         };
 
     Result<T> NotFound<T>()

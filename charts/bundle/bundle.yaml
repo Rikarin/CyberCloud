@@ -697,3 +697,52 @@ owed:
       two rules hold everyone. policies.yaml states the list and why it is closed rather than
       prefix-matched; a narrower exemption is a design change that needs the suite above to be
       tested against.
+  - id: the-platform-has-no-mta
+    says: >
+      CyberCloud.Communication/services and its three children shipped on 2026-09-15 (#33) as the
+      tenant-facing face of the sending module, and NOTHING IN THIS BUNDLE CAN CARRY AN EMAIL. docs/plan/17
+      § The channel abstraction names "Amazon SES/our own Postfix (email)" as the email carrier; the
+      module ships no SES client and this bundle ships no relay, so every email channel — the platform's
+      own OTPs included — resolves to CyberCloud.Communication's refusing seam and a send refuses
+      honestly with "no Email carrier is registered". Recorded HERE rather than in a chart's
+      conformance.yaml because the family is clusterless and has no chart: the outbound MTA is not a
+      per-tenant resource, it is platform infrastructure — a shared, warmed outbound pool with a PTR,
+      feedback-loop registrations and RBL monitoring, docs/plan/17 § Deliverability's table — and
+      docs/plan/25's closed row 2 adds that the platform's OWN transactional sending IPs must be
+      separate from tenant sending IPs, so that one tenant's reputation problem cannot take the
+      platform's OTPs and invoices down with it. Until it exists, the only email carrier this
+      repository can drive is the in-memory double the tests use. The SMS, WhatsApp, push and voice
+      carriers are the same shape of absence and the same seam; the MTA is listed alone because it is
+      the one this bundle would host rather than a contract somebody signs.
+  - id: communication-silo-kill-has-no-clusterless-harness
+    says: >
+      test/CyberCloud.Cluster.Conformance refuses a case with no objects by name
+      (ClusterConformanceTests.TheCaseOwnsClusterObjectsOrThisWholeSuiteWouldBeVacuous), and every
+      CyberCloud.Communication type is clusterless. Four of that half's five criteria are about a real
+      API server and do not apply; the fifth — docs/plan/24 § Phase 1's exit criterion 3, killing the
+      silo mid-create and finding the resource converged from a real PostgreSQL durable tier — does
+      apply, because a channel or a suppression is durable grain state, and has no harness that can
+      run it. The Docker-free suite's clusterless half (IConvergedModule) is what the family passes
+      today; a clusterless SiloKillConformanceTests over the same IConvergedModule is the missing
+      piece, and it is the first thing to build before a second clusterless family lands.
+  - id: communication-senders-have-no-resource-surface
+    says: >
+      docs/plan/17 § The channel abstraction makes sender-id registration, US 10DLC campaign approval
+      and WhatsApp template pre-approval "the tenant's compliance obligations with our tooling", and
+      the module has the grain for it — ISenderIdentityGrain, with its Draft → Pending → Approved
+      flow and the CheckAsync a send makes. No resource type reaches it: ChannelConfiguration.SenderId
+      is always empty from the tenant-facing surface, so every send goes out under the platform's
+      sender and no tenant can register their own. The same api-version limit that made a template one
+      locale applies — a sender's cleared countries are a list of strings, which IS expressible, so
+      this is a missing type rather than a missing schema feature, and the next pass on this family.
+      Template pre-approval (IMessageTemplateGrain.RecordApprovalAsync) has the same gap: nothing on
+      the resource surface records a carrier's decision, so a WhatsApp send refuses today for want of
+      an approval nobody can enter.
+  - id: communication-inbound-is-suppressed-and-forwarded-nowhere
+    says: >
+      docs/plan/17 § The parts that are actually the work: "Replies and STOP keywords routed to a
+      webhook or a queue." The first half is built — IWebhookRouter.HandleInboundAsync suppresses on a
+      STOP before anything else, deliberately — and the second is not: there is no forwarding
+      destination on the service, no queue, and no property to declare one. A reply that is not a
+      STOP is dropped on the floor. The property belongs on CyberCloud.Communication/services once
+      there is something to forward to.

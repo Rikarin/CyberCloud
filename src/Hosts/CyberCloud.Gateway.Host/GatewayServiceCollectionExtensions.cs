@@ -1,3 +1,4 @@
+using CyberCloud.Communication;
 using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Operations;
@@ -90,6 +91,16 @@ static class GatewayServiceCollectionExtensions {
         // engine changes. GatewayIsolationTests reads this project's source for that name.
         services.AddCyberCloudResourceManager();
         services.TryAddSingleton<IOperationReader, TenantScopedOperationReader>();
+
+        // ⚠ THE SEAMS CyberCloud.Communication/services' SYNCHRONOUS ACTIONS HOLD, AND THIS HOST IS
+        // WHERE THEY RUN. A synchronous action is served inside ResourceManagerService.ActionAsync,
+        // in this process; `send`, `status`, `checkSuppression` and `listSuppressions` reach the
+        // sending domain's grains through IMessageSender and ICommunicationControlPlane, and this
+        // is the one registration that provides them — over this host's cluster client, hosting no
+        // grain. The silo gets the same two through AddCyberCloudCommunication. HostCompositionTests
+        // resolves both here so that a host that forgot this line fails in a test rather than on the
+        // first send.
+        services.AddCyberCloudCommunicationClient();
 
         // ── SignalR. docs/plan/10 § SignalR — no backplane product, by design. ──
         //

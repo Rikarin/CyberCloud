@@ -34,6 +34,15 @@ public sealed class SiloIdentityOptions {
     public Guid TenantId { get; set; }
 
     /// <summary>The communication service resource the platform's codes are sent through.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Not the resource's GUID as a listing shows it.</b> Since the tenant-facing provider
+    ///     landed (#33), a <c>CyberCloud.Communication/services/{name}</c> resource's grain is keyed
+    ///     by an id derived from the resource's <i>address</i> —
+    ///     <c>CommunicationGrainKeys.ResourceIdFor(tenantId, canonicalPath)</c>, which
+    ///     <c>CommunicationServices.ServiceIdOf</c> computes — so this is that derived id for whatever
+    ///     <c>services</c> resource the platform tenant created for itself. The derivation is a pure
+    ///     function of the tenant and the path, so it can be computed once and written here.
+    /// </remarks>
     public Guid ServiceId { get; set; }
 
     /// <summary>

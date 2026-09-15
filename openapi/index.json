@@ -179,6 +179,7 @@
   "x-cybercloud-providers": [
     "CyberCloud.Analytics",
     "CyberCloud.Cache",
+    "CyberCloud.Communication",
     "CyberCloud.ContainerRegistry",
     "CyberCloud.ContainerService",
     "CyberCloud.DBforMySQL",
@@ -217,6 +218,58 @@
         "plural": "Valkey caches",
         "alias": "valkey",
         "summary": "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Communication/services",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Communication service",
+        "plural": "Communication services",
+        "alias": "comms",
+        "summary": "A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Communication/services/channels",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Communication channel",
+        "plural": "Communication channels",
+        "alias": "channel",
+        "summary": "One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Communication/services/suppressions",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Suppression",
+        "plural": "Suppressions",
+        "alias": "suppression",
+        "summary": "An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Communication/services/templates",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Message template",
+        "plural": "Message templates",
+        "alias": "template",
+        "summary": "A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants.",
         "declared": true
       }
     },

@@ -23,7 +23,8 @@ import { FormField } from '../schema';
  * | `xui-select`, `xui-sku`, `xui-cozy-preset` (string, closed set)       | `xui-select`                             |
  * | `xui-select` (array, closed set)                                      | `xui-multi-select`                       |
  * | `xui-chip-input`, `xui-cidr` (array)                                  | `xui-tag-input`                          |
- * | `xui-slider` (integer)                                                | `xui-numeric-input` with `min`/`max`     |
+ * | `xui-slider`, `xui-numeric-input` (integer, number)                   | `xui-numeric-input` with `min`/`max`     |
+ * | `xui-secret-ref` (string)                                             | `<input xuiInput>` for a `path#field` handle |
  * | `xui-switch` (boolean)                                                | `xui-switch`                             |
  * | `xui-tag-input` (object)                                              | `xui-tag-input` of `key=value` lines     |
  * | `xui-group` (object)                                                  | `<fieldset>` holding its members         |
@@ -91,17 +92,61 @@ import { FormField } from '../schema';
             />
           }
           @case ('integer') {
-            <xui-numeric-input
-              [id]="id()"
-              [formControl]="leaf()"
-              [min]="field().minimum"
-              [max]="field().maximum"
-              [aria-label]="field().label"
-              [placeholder]="placeholder()"
-              [attr.aria-describedby]="describedBy()"
-              [attr.aria-invalid]="invalid()"
-              [attr.title]="lockReason()"
-            />
+            <!--
+              ⚠ Four branches rather than one with [min] and [max] bound, and the difference is a
+              WCAG violation. xui-numeric-input's bounds go through numberAttribute, which turns
+              undefined into NaN, and its template then renders aria-valuemax="NaN" — an invalid
+              ARIA value axe flags as critical. Every slider before CyberCloud.Communication/services
+              /channels declared both bounds, so the first field with a minimum and no maximum (a
+              spend limit) was the first to render it. Leaving an input unbound keeps it undefined,
+              which the component's own nullish fallback then omits. That is xUI's to fix
+              (docs/plan/02 § ADR-017); until it is, the branches are the workaround.
+            -->
+            @if (field().minimum !== undefined && field().maximum !== undefined) {
+              <xui-numeric-input
+                [id]="id()"
+                [formControl]="leaf()"
+                [min]="field().minimum"
+                [max]="field().maximum"
+                [aria-label]="field().label"
+                [placeholder]="placeholder()"
+                [attr.aria-describedby]="describedBy()"
+                [attr.aria-invalid]="invalid()"
+                [attr.title]="lockReason()"
+              />
+            } @else if (field().maximum !== undefined) {
+              <xui-numeric-input
+                [id]="id()"
+                [formControl]="leaf()"
+                [max]="field().maximum"
+                [aria-label]="field().label"
+                [placeholder]="placeholder()"
+                [attr.aria-describedby]="describedBy()"
+                [attr.aria-invalid]="invalid()"
+                [attr.title]="lockReason()"
+              />
+            } @else if (field().minimum !== undefined) {
+              <xui-numeric-input
+                [id]="id()"
+                [formControl]="leaf()"
+                [min]="field().minimum"
+                [aria-label]="field().label"
+                [placeholder]="placeholder()"
+                [attr.aria-describedby]="describedBy()"
+                [attr.aria-invalid]="invalid()"
+                [attr.title]="lockReason()"
+              />
+            } @else {
+              <xui-numeric-input
+                [id]="id()"
+                [formControl]="leaf()"
+                [aria-label]="field().label"
+                [placeholder]="placeholder()"
+                [attr.aria-describedby]="describedBy()"
+                [attr.aria-invalid]="invalid()"
+                [attr.title]="lockReason()"
+              />
+            }
           }
           @case ('choice') {
             <xui-select
@@ -202,7 +247,7 @@ export class FormFieldNode {
     const closed = field.choices !== undefined && field.choices.length > 0;
 
     if (type === 'boolean') return 'boolean';
-    if (type === 'integer') return 'integer';
+    if (type === 'integer' || type === 'number') return 'integer';
     if (type === 'array') return closed ? 'choices' : 'list';
     if (type === 'object') return 'tags';
     return closed ? 'choice' : 'text';

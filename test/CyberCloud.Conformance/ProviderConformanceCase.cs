@@ -429,4 +429,28 @@ public interface IProviderCaseSource {
     ///     </para>
     /// </remarks>
     static virtual ImmutableArray<ProviderConformanceCase> Ancestors => [];
+
+    /// <summary>
+    ///     The module a <b>clusterless</b> type converges onto, or <see langword="null" /> for a type
+    ///     that converges Kubernetes objects — which is every type before
+    ///     <c>CyberCloud.Communication/services</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A <c>static virtual</c> with a default, for the reason <see cref="Ancestors" />
+    ///         is one: omitting it is not silent.</b> A case whose type declares no
+    ///         <c>RequiresCluster</c> and supplies no module does not run a smaller suite — it is
+    ///         refused by name before its first assertion, because a clusterless run with nothing
+    ///         to read would be green over a reconciler that wrote nowhere. And a case that supplies
+    ///         a module for a type that <i>does</i> declare <c>RequiresCluster</c> is refused too:
+    ///         one world per type, and the registration says which.
+    ///         <c>ProviderConformanceTests.AClusterlessTypeSuppliesTheModuleItConvergesOnto</c> is
+    ///         the calibration.
+    ///     </para>
+    ///     <para>
+    ///         See <see cref="IConvergedModule" /> for what the module answers and what a clusterless
+    ///         run still cannot say.
+    ///     </para>
+    /// </remarks>
+    static virtual IConvergedModule? ConvergedModule => null;
 }
