@@ -15,9 +15,17 @@ Internet
       └─ CyberCloud.Gateway.Host  (N pods)
           ├─ /            REST  — the resource API, and the scope API below it
           ├─ /hubs/*      SignalR — portal live updates, terminal, operation progress
-          ├─ /.well-known OIDC discovery (proxied from Identity)
+          ├─ /.well-known OIDC discovery (proxied from Identity — not built), and
+          │               security.txt (RFC 9116, served from an embedded file — built)
           └─ /openapi     the generated document, per api-version
 ```
+
+`/.well-known/security.txt` is the one path on this host that answers `text/plain`, and it is served
+through the same nine stages and the same writer as everything else: no token required, no
+`api-version` (the file's shape is RFC 9116's, not this platform's), the per-IP unauthenticated
+bucket at stage 5, and both correlation ids on the response. `GatewayOutcome` grew a third body
+kind for it rather than a content-type member — [18](18-security-vault-and-malware-scan.md)
+§ Disclosure records why that distinction is the whole point.
 
 **The scope API is the first four and six segments of the resource path, and it is a different
 component behind the same door.** `GET` and `PUT` on `/tenants/{t}/subscriptions/{s}` and on that plus

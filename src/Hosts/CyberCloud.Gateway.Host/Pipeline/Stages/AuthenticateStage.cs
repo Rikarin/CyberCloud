@@ -33,7 +33,8 @@ sealed class AuthenticateStage(ICallerContextResolver resolver) : IGatewayStage 
     ///         unauthenticated
     ///     </i> bucket reachable at all — see the defect note in
     ///     <c>GatewayRateLimiter</c>. Both are public documents by design: the OpenAPI document is
-    ///     the generated API surface and the discovery document is OIDC's, and neither says anything
+    ///     the generated API surface, and <c>/.well-known</c> holds the RFC 9116 <c>security.txt</c>
+    ///     today and the OIDC discovery document once it is proxied — none of them says anything
     ///     about a tenant.
     /// </remarks>
     public static bool IsAnonymous(PathString path) =>

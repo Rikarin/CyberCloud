@@ -27,12 +27,31 @@ namespace CyberCloud.Gateway.Host.Pipeline;
 ///             exception details, ever"
 ///         </i>.
 ///     </para>
+///     <para>
+///         ⚠ <b>Three body kinds, each with a fixed content type, and an outcome that sets two is
+///         refused rather than resolved.</b> Error is <see cref="ErrorBody.ContentType" />, JSON is
+///         the same, and <see cref="GatewayOutcome.Text" /> is <c>text/plain; charset=utf-8</c> —
+///         the media type is decided here, by kind, and no stage can name one. Choosing a
+///         precedence for a two-bodied outcome would make the mistake invisible; throwing makes it
+///         an unhandled exception on the first request that hits it — the server's <c>500</c>,
+///         not this writer's, because a stage that built two bodies is a defect in the stage and
+///         not an outcome to shape. <c>SecurityTxtTests.AnOutcomeWithTwoBodiesIsRefusedNotResolved</c>
+///         pins it.
+///     </para>
 /// </remarks>
 static class ResponseWriter {
+    /// <summary>The media type of a <see cref="GatewayOutcome.Text" /> body. RFC 9116 § 3's, and nothing else's.</summary>
+    public const string TextContentType = "text/plain; charset=utf-8";
+
     /// <summary>Writes the outcome.</summary>
     /// <param name="context">The request, for the ids and the rate-limit headers.</param>
     /// <param name="outcome">What to write.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     The outcome sets more than one of <see cref="GatewayOutcome.Error" />,
+    ///     <see cref="GatewayOutcome.Json" />, and <see cref="GatewayOutcome.Text" />. A stage built
+    ///     an outcome with two bodies, and there is no right one to pick.
+    /// </exception>
     public static async Task WriteAsync(
         GatewayRequestContext context,
         GatewayOutcome outcome,
@@ -40,6 +59,16 @@ static class ResponseWriter {
     ) {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(outcome);
+
+        var kinds = (outcome.Error is null ? 0 : 1) + (outcome.Json is null ? 0 : 1) + (outcome.Text is null ? 0 : 1);
+        if (kinds > 1) {
+            throw new InvalidOperationException(
+                $"The outcome for request {context.RequestId} sets {kinds} body kinds (error: "
+                + $"{outcome.Error is not null}, json: {outcome.Json is not null}, text: {outcome.Text is not null}) "
+                + "and a response has one body. GatewayOutcome is a closed set of kinds and a stage "
+                + "chooses exactly one; see its remarks."
+            );
+        }
 
         context.Trace.Enter(GatewayStage.ShapeResponse);
 
@@ -73,13 +102,21 @@ static class ResponseWriter {
             return;
         }
 
-        if (outcome.Json is not { Length: > 0 } json) {
+        if (outcome.Json is { Length: > 0 } json) {
+            var bytes = Encoding.UTF8.GetBytes(json);
+            response.ContentType = ErrorBody.ContentType;
+            response.ContentLength = bytes.Length;
+            await response.Body.WriteAsync(bytes, cancellationToken);
             return;
         }
 
-        var bytes = Encoding.UTF8.GetBytes(json);
-        response.ContentType = ErrorBody.ContentType;
-        response.ContentLength = bytes.Length;
-        await response.Body.WriteAsync(bytes, cancellationToken);
+        if (outcome.Text is { Length: > 0 } text) {
+            // The one non-JSON body this gateway writes, and the type is fixed here rather than
+            // carried on the outcome — see GatewayOutcome's remarks on why that is the invariant.
+            var bytes = Encoding.UTF8.GetBytes(text);
+            response.ContentType = TextContentType;
+            response.ContentLength = bytes.Length;
+            await response.Body.WriteAsync(bytes, cancellationToken);
+        }
     }
 }

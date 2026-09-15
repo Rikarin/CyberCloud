@@ -1,0 +1,8 @@
+# Cyber Cloud — RFC 9116 security.txt. How to report a vulnerability, and what happens next,
+# is at the Policy URL below.
+
+Contact: mailto:security@cybercloud.io
+Expires: 2027-08-15T00:00:00.000Z
+Preferred-Languages: en
+Policy: https://github.com/Rikarin/CyberCloud/blob/master/docs/security/disclosure-policy.md
+Canonical: https://api.cybercloud.io/.well-known/security.txt

@@ -1,5 +1,6 @@
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.Hubs;
+using CyberCloud.Gateway.Host.WellKnown;
 
 namespace CyberCloud.Gateway.Host.Routing;
 
@@ -58,7 +59,22 @@ enum RouteKind {
     Hub,
 
     /// <summary>The generated document, per api-version.</summary>
-    OpenApi
+    OpenApi,
+
+    /// <summary>
+    ///     The RFC 9116 <c>security.txt</c> — <c>GET</c> on exactly <c>/.well-known/security.txt</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One of two routes with no <c>api-version</c> — <see cref="Hub" /> is the other — and
+    ///     it is not an exception to docs/plan/10 § API versioning.</b> That section versions
+    ///     <i>this platform's</i> API surface. The file is RFC 9116's: its shape is the RFC's, a
+    ///     scanner fetches it with no query string, and a <c>400</c> naming a date would be answered
+    ///     to every one of them. Stage 6 skips the parameter for this kind for the reason it does for
+    ///     a hub — the endpoint is not a versioned surface. It also carries no tenant: stage 2 lets
+    ///     <c>/.well-known</c> through without a token and stage 3 leaves the caller empty, so this
+    ///     is a route dispatch can serve from a constant and from nothing else.
+    /// </remarks>
+    SecurityTxt
 }
 
 /// <summary>
@@ -128,6 +144,15 @@ static class GatewayRouter {
     /// <summary>The generated OpenAPI document.</summary>
     public const string OpenApiPath = "/openapi";
 
+    /// <summary>The RFC 9116 file. <see cref="SecurityTxt.Path" />, and the only <c>/.well-known</c> path routed.</summary>
+    /// <remarks>
+    ///     ⚠ Stage 2 exempts the whole <c>/.well-known</c> prefix from authentication — docs/plan/10
+    ///     § Shape reserves it for the OIDC discovery proxy, which is not built — but exemption is
+    ///     not routing. Every other path under the prefix still arrives here, matches nothing, and
+    ///     falls through to the resource parser exactly as it did before this constant existed.
+    /// </remarks>
+    public const string SecurityTxtPath = SecurityTxt.Path;
+
     /// <summary>
     ///     Resolves a path against a tenant that has already been established from the token.
     /// </summary>
@@ -168,6 +193,15 @@ static class GatewayRouter {
 
         if (string.Equals(path, OpenApiPath, StringComparison.Ordinal)) {
             return Result<GatewayRoute>.Success(new(RouteKind.OpenApi, default, "", Guid.Empty, ""));
+        }
+
+        if (string.Equals(path, SecurityTxtPath, StringComparison.Ordinal)) {
+            // GET only. Anything else on this path is the canonical 404 rather than a 405: RFC 9116
+            // § 3 defines one method for the file, and every unsupported shape in this API that is
+            // not a scope answers 404 — GatewayHeaders.Allow's remarks keep that list at one.
+            return HttpMethods.IsGet(method)
+                ? Result<GatewayRoute>.Success(new(RouteKind.SecurityTxt, default, "", Guid.Empty, ""))
+                : Result<GatewayRoute>.Failure(GatewayErrors.NotFound(path));
         }
 
         // ── A scope, before the resource/action split. docs/plan/06 § The hierarchy. ────────────
