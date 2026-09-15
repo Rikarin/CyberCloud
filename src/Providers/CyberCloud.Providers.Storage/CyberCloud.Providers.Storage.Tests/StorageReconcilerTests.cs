@@ -739,6 +739,63 @@ sealed class RecordingConnection : IKubeClusterConnection {
     }
 
     /// <summary>
+    ///     Whether the selected listing refuses — the default every <c>IKubeClusterConnection</c>
+    ///     double inherits, and the case a file share's delete must fail closed on.
+    /// </summary>
+    public bool RefuseListing { get; init; }
+
+    /// <summary>Every selector a listing was asked with, in order.</summary>
+    public List<string> Listed { get; } = [];
+
+    /// <summary>
+    ///     One kind under one selector, the way <c>FakeKubeCluster.ListAsync</c> answers it: every
+    ///     pair must match a label on the stored document exactly.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Added by the file share, whose delete asks the cluster whether the account's CSI driver
+    ///     still has a claim behind it. Labels are read off the stored JSON — which is the command's
+    ///     body with the seven mandatory labels and the account label injected — so a reconciler that
+    ///     forgot <c>WithLabels</c> would list nothing here, exactly as it would in a real cluster.
+    /// </remarks>
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(kind);
+        Listed.Add(labelSelector);
+
+        if (RefuseListing) {
+            return Task.FromResult(
+                Result<IReadOnlyList<KubeObjectSummary>>.Failure(ErrorCode.InternalError, "this connection cannot list.")
+            );
+        }
+
+        var wanted = labelSelector.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2))
+            .ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
+
+        var found = new List<KubeObjectSummary>();
+
+        foreach (var (key, json) in Objects) {
+            if (!key.StartsWith(kind.Kind + "/" + ns + "/", StringComparison.Ordinal)) {
+                continue;
+            }
+
+            var labels = ((JsonNode.Parse(json) as JsonObject)?["metadata"] as JsonObject)?["labels"] as JsonObject;
+            var held = labels?.ToDictionary(x => x.Key, x => x.Value?.GetValue<string>() ?? string.Empty, StringComparer.Ordinal)
+                ?? new Dictionary<string, string>(StringComparer.Ordinal);
+
+            if (wanted.All(pair => held.TryGetValue(pair.Key, out var value) && value == pair.Value)) {
+                found.Add(new() { Kind = kind, Namespace = ns, Name = key[(key.LastIndexOf('/') + 1)..], Labels = held });
+            }
+        }
+
+        return Task.FromResult(Result<IReadOnlyList<KubeObjectSummary>>.Success(found));
+    }
+
+    /// <summary>
     ///     ⚠ Keyed by kind, namespace AND name. The namespace is in it because the cross-tenant test
     ///     puts the same resource name in two tenants, which is the only shape in which one singleton
     ///     reconciler serving both can be caught mixing them.

@@ -1,0 +1,84 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/seaweedfs/seaweedfs-operator
+
+# The upstream API this chart's templates target. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin. The claim is core/v1 and needs no pin.
+upstream-api: seaweed.seaweedfs.com/v1
+
+engine: https://github.com/seaweedfs/seaweedfs
+
+# The driver the SeaweedCSIDriver deploys — a third repository, and the one whose source decides most
+# of what this chart is.
+driver: https://github.com/seaweedfs/seaweedfs-csi-driver
+
+# Reviewed against upstream sources on this date — the operator at the tag the bundle pins, the CSI
+# driver at the tag the operator defaults to, and SeaweedFS' own command list at the release
+# charts/managed/seaweedfs pins. A tag rather than a SHA is a weaker claim and is labelled as one.
+#
+# ⚠ WHAT THIS REVIEW ESTABLISHED, because every one of these decided a line in a template or ruled a
+# property out:
+#
+#   * `weed/command/command.go` at seaweedfs 4.41 — the Commands slice is cmdMount, cmdFuse, cmdS3,
+#     cmdWebDav, cmdSftp, cmdIam, cmdFiler … and NO NFS COMMAND OF ANY KIND. docs/plan/15's "SeaweedFS
+#     FUSE/NFS" is half true: the FUSE half is `weed mount`, the NFS half does not exist in the engine.
+#     No `protocol` property is declared; conformance.yaml § owed, `nfs-is-not-served`.
+#
+#   * `api/v1/seaweedcsidriver_types.go` at seaweedfs-operator-0.1.38 — `SeaweedCSIDriver` is
+#     NAMESPACED; exactly one of `seaweedRef {name, namespace}` or `filerAddress`; `driverName`
+#     immutable, `^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`, max 63, default `seaweedfs-csi-driver`;
+#     `storageClass {name, isDefaultClass, reclaimPolicy (Delete|Retain, default Delete),
+#     volumeBindingMode, allowVolumeExpansion (default true), parameters, mountOptions}`;
+#     `mountService.enabled` default true. Default images `chrislusf/seaweedfs-csi-driver:v1.4.20` and
+#     `chrislusf/seaweedfs-mount:v1.4.20`.
+#
+#   * `internal/controller/seaweedcsidriver_controller.go` and `_objects.go` — the controller creates a
+#     Deployment `{name}-controller`, DaemonSets `{name}-node` and `{name}-mount`, ServiceAccounts, a
+#     Role/RoleBinding in the driver's namespace, and CLUSTER-SCOPED ClusterRoles, a `CSIDriver` named
+#     `spec.driverName`, and a `StorageClass` named `spec.storageClass.name` or, when empty, the
+#     driverName, with `provisioner = driverName`. `storageClass: nil` DELETES the class. A second
+#     SeaweedCSIDriver claiming a driverName loses to the older one (`DriverNameConflict`). Finalizer
+#     `seaweed.seaweedfs.com/csidriver-protection`; deletion removes the cluster-scoped objects it
+#     created and garbage-collects the namespaced ones through owner references. ⚠ ONE DRIVER PER
+#     FILER: `--filer=` is a plugin ARGUMENT (`fmt.Sprintf("--filer=%s", filerAddress)`), so a driver
+#     serves one account and the driverName must be unique per account per cluster — which is why
+#     StorageFileShares.DriverNameOf folds the namespace into it through a digest.
+#
+#   * `internal/controller/referencegrant.go` — `if from.Namespace == to.Namespace { return true, nil }`:
+#     a same-namespace seaweedRef needs no ResourceReferenceGrant. The driver and the Seaweed share the
+#     resource group's namespace, so none is rendered.
+#
+#   * seaweedfs-csi-driver `pkg/driver/driver.go` at v1.4.20 — the driver advertises
+#     MULTI_NODE_MULTI_WRITER beside the three single-node modes, and CREATE_DELETE_VOLUME,
+#     EXPAND_VOLUME and SINGLE_NODE_MULTI_WRITER. So a ReadWriteMany claim binds and grows online.
+#
+#   * `pkg/driver/controllerserver.go` — CreateVolume creates `{parentDir}/{name}` in the filer, with
+#     `parentDir` defaulting to `/buckets` and the name sanitised for S3 when it lands there. THAT IS
+#     THE S3 BUCKET DIRECTORY: a share left at the default is listable and deletable through the
+#     account's S3 API as a bucket called `pvc-…`. `parentDir: /fileshares` is rendered as a
+#     StorageClass parameter for that reason. `VolumeId = volumePath`, and the capacity is carried in
+#     the volume context.
+#
+#   * `pkg/driver/mounter.go` — `weed mount` is started with `collection: path.Base(filerPath)` and
+#     `collectionQuotaMB: initialCollectionQuotaMB(volumeContext[capacity])`. So every share is its own
+#     SeaweedFS collection with a master-enforced quota equal to the claim's request: the size is a
+#     REAL ceiling, and a VM's `weed mount` that omits `-collection=` writes outside it, which is why
+#     listMountTargets returns the collection by name.
+#
+#   * `internal/controller/controller_filer_service.go` and `api/v1/seaweed_types.go` — the filer
+#     Service is `{name}-filer`, `filer-http` on FilerHTTPPort 8888. StorageFileShares.FilerAddress.
+#
+# ⚠ WHAT WAS NOT REVIEWED, stated so nobody reads silence as coverage: the operator's `resolveSeaweedFiler`
+# helper's exact host:port, whose file the review did not locate — the driver takes `seaweedRef` and
+# resolves it itself, so this chart never renders the address the helper builds.
+reviewed: 2026-09-15
+
+# ⚠ THE MUTATING WEBHOOK, which applies to every kind in the group — see charts/managed/seaweedfs/SOURCE.
+# StorageFileShares.Matches is containment for that reason and for a second the claim adds on its own:
+# the API server writes spec.volumeName, spec.volumeMode and status onto a bound claim.
+upstream-webhook: mutating, defaulter unimplemented as of 2026-08-12

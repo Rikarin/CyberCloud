@@ -177,10 +177,25 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             InvalidBodyTarget = StorageBuckets.ClusterIdPointer,
             ActionName = StorageBuckets.StatsAction,
             Objects = (id, ns) => [StorageBuckets.BucketRef(ns, id)],
-            // This platform mints or computes everything this type's actions hand back, so no operator
-            // writes an object any action reads. Stated rather than defaulted — see
-            // ProviderConformanceCase.OperatorWritten.
-            OperatorWritten = static (_, _) => [],
+            // ⚠ THE OPERATOR WRITES ONTO THE OBJECT THE RECONCILER APPLIED, AND THAT IS THE ONE SHAPE
+            // THIS MEMBER HAD NOT MET. Every earlier use places a SEPARATE object — CloudNativePG's
+            // `{cluster}-app` Secret — beside what the reconciler rendered. bucket_usage.go patches
+            // `status.usage` onto the Bucket itself, so what is placed here is the Bucket, carrying
+            // the status subresource an operator would have written. The fake replaces the document
+            // wholesale, which is more than a status patch; what the action assertion then proves is
+            // that StorageBucketStatsHandler reads `status.usage` off the object it addresses, and
+            // StorageActionHandlerTests proves the projection against a full document.
+            OperatorWritten = (id, ns) => [
+                (
+                    StorageBuckets.BucketRef(ns, id),
+                    StorageBuckets.WithSampledUsage(
+                        StorageBuckets.BucketJson(id, JsonDocument.Parse(StorageBuckets.Body(Guid.Empty)).RootElement),
+                        objectCount: 12,
+                        sizeBytes: 4096,
+                        sampledAt: "2026-09-15T12:00:00Z"
+                    )
+                )
+            ],
             // ⚠ THE WHOLE PREDICATE, WHICH IT WAS NOT UNTIL `MatchContext` CARRIED AN ADDRESS. This
             // used to be `StorageBuckets.MatchesBody` — the body half — because
             // `ObjectMatchesDesired` was `(objectJson, desiredJson) => bool` and a bucket's
@@ -208,6 +223,88 @@ public sealed class StorageBucketCase : IProviderCaseSource {
     static string WithoutClusterId(string body) {
         var node = JsonNode.Parse(body)!.AsObject();
         node["properties"]!.AsObject().Remove("clusterId");
+        return node.ToJsonString();
+    }
+}
+
+/// <summary>
+///     <c>CyberCloud.Storage/accounts/fileShares</c> — the RWX shape, registered into the same shared
+///     suite as the account and the bucket.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>TWO OBJECTS, AND THE FIRST IS SHARED WITH EVERY OTHER SHARE OF THE ACCOUNT.</b> The
+///         <c>SeaweedCSIDriver</c> is one per filer; every share applies it and the last one out
+///         removes it. It is listed under <see cref="ProviderConformanceCase.Objects" /> because the
+///         suite's delete assertion proves only what is listed is gone, and with one share per run
+///         "last one out" is this one — so the driver <i>must</i> be gone, and a reconciler that left
+///         it standing on the account's last share would fail here. What one share per run cannot
+///         reach is a sibling holding the driver open, and <c>StorageFileShareReconcilerTests</c>
+///         asserts that half.
+///     </para>
+///     <para>
+///         ⚠ <b><see cref="ProviderConformanceCase.OperatorWritten" /> plants the claim BOUND, and it
+///         is the second shape that member has carried.</b> The action reads <c>spec.volumeName</c>,
+///         which the CSI external-provisioner writes and the fake never does. The planted claim names
+///         no owner, because nothing owns a dynamically provisioned claim, and the shared claims case
+///         follows an unowned planted claim through the teardown without asking it for a controller.
+///     </para>
+/// </remarks>
+public sealed class StorageFileShareCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.Storage/accounts/fileShares",
+            CreateProvider = () => new StorageProvider(),
+            ReconcilerType = typeof(StorageFileShareReconciler),
+            CreateReconciler = clock => new StorageFileShareReconciler(clock),
+            Type = StorageFileShares.Type,
+            ApiVersion = StorageFileShares.V2026,
+            // ⚠ A NON-CANONICAL SIZE ON PURPOSE. 102400Mi is 100Gi, and a real API server stores a
+            // PersistentVolumeClaim's request in canonical form — it reads back as `100Gi`. The fake
+            // stores what it was sent, so only the cluster-backed lifecycle meets the rewrite; there,
+            // MatchesDesired against this body is what proves the reconciler converges on a claim the
+            // API server respelled, which a byte compare never did. Every other case in this provider
+            // uses a canonical size, and that is exactly why nothing noticed.
+            Body = cluster => StorageFileShares.Body(cluster, quotaSize: "102400Mi"),
+            // ⚠ Changes `quota.size`, which is the ONLY tenant-facing leaf and the one the claim
+            // carries as `spec.resources.requests.storage`. Larger, not smaller: a shrink is refused
+            // by the API server (a claim's request may not decrease) and the update test would then
+            // be asserting a refusal rather than an update.
+            ChangedBody = cluster => StorageFileShares.Body(cluster, quotaSize: "200Gi"),
+            // Drops the required `/properties/quota/size`.
+            InvalidBody = cluster => WithoutQuotaSize(StorageFileShares.Body(cluster)),
+            InvalidBodyTarget = "/properties/quota/size",
+            ActionName = StorageFileShares.ListMountTargetsAction,
+            // ⚠ IN APPLY ORDER: the driver, then the claim. A claim against a class that does not exist
+            // yet stays Pending with no event naming why.
+            Objects = (id, ns) => [
+                StorageFileShares.DriverRef(ns, id),
+                StorageFileShares.ClaimRef(ns, id)
+            ],
+            OperatorWritten = (id, ns) => [
+                (
+                    StorageFileShares.ClaimRef(ns, id),
+                    StorageFileShares.WithBoundVolume(
+                        StorageFileShares.ClaimJson(ns, id, JsonDocument.Parse(StorageFileShares.Body(Guid.Empty)).RootElement),
+                        "pvc-0f7d2c1e-conformance"
+                    )
+                )
+            ],
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return StorageFileShares.Matches(match.ObjectJson, match.Id, match.Namespace, desired.RootElement);
+            }
+        };
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [StorageCase.ProviderCase];
+
+    /// <summary>A valid body with the required size removed.</summary>
+    /// <param name="body">A valid body.</param>
+    static string WithoutQuotaSize(string body) {
+        var node = JsonNode.Parse(body)!.AsObject();
+        node["properties"]!.AsObject()["quota"]!.AsObject().Remove("size");
         return node.ToJsonString();
     }
 }
@@ -240,6 +337,16 @@ public sealed class StorageClusterBackedConformance() : ClusterBackedConformance
 public sealed class StorageBucketClusterBackedConformance()
     : ClusterBackedConformanceTests(StorageBucketCase.ProviderCase);
 
+/// <summary>The <b>same</b> suite, run against the file-share child type.</summary>
+/// <param name="cluster">The harness.</param>
+public sealed class StorageFileShareConformance(ProviderTestCluster<StorageFileShareCase> cluster)
+    : ProviderConformanceTests<StorageFileShareCase>(cluster),
+    IClassFixture<ProviderTestCluster<StorageFileShareCase>>;
+
+/// <summary>The container-backed half, skipped loudly, against the file-share child type.</summary>
+public sealed class StorageFileShareClusterBackedConformance()
+    : ClusterBackedConformanceTests(StorageFileShareCase.ProviderCase);
+
 /// <summary>
 ///     What this provider's two registrations into the shared suite are <b>shaped</b> like.
 /// </summary>
@@ -259,6 +366,7 @@ public sealed class StorageSuiteShapeTests {
         // types, which is what xUnit itself enumerates.
         var parent = RunnableFactsOf(typeof(StorageAccountConformance));
         var child = RunnableFactsOf(typeof(StorageBucketConformance));
+        var share = RunnableFactsOf(typeof(StorageFileShareConformance));
 
         child.ShouldBe(
             parent,
@@ -266,6 +374,8 @@ public sealed class StorageSuiteShapeTests {
             + "of the suite is free to assert less, and nothing but this test would say which "
             + "assertions it had dropped."
         );
+
+        share.ShouldBe(parent, "the file share runs a different set of assertions than the account does.");
 
         parent.Length.ShouldBeGreaterThan(20);
     }
@@ -295,6 +405,11 @@ public sealed class StorageSuiteShapeTests {
         );
 
         ancestors[0].Type.ShouldBe(StorageAccounts.Type);
+
+        // ⚠ And the share's is the SAME object — not a second child describing the account its own
+        // way. Two children of one parent citing two case objects would be two accounts to keep in
+        // step with one schema.
+        AncestorsOf<StorageFileShareCase>().Single().ShouldBeSameAs(StorageCase.ProviderCase);
     }
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()

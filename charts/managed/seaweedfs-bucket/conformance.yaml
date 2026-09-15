@@ -253,3 +253,28 @@ owed:
       a component, so per-bucket figures come from the same usage pipeline `meters: []` above is
       waiting on. THIRD SIGHTING of charts/managed/nats' item of the same name, and at three of six it
       is now firmly a property of the pattern rather than of any service.
+      ⚠ REVISED 2026-09-15: the per-bucket FIGURES do exist without the pipeline — the operator's
+      bucket_usage.go samples collection.list every five minutes into every Bucket's status.usage,
+      and the `stats` action hands them back now. What the pipeline still owns is billing on them.
+  - id: versioning-cannot-be-turned-off
+    says: >
+      FOUND 2026-09-15 by re-reading api/v1/bucket_types.go at the pinned tag, in the same pass that
+      found `clusterRef`, `versioning` and `quota` all rendered in the wrong SHAPE for a month (see
+      SOURCE). BucketSpec.versioning is Off | Enabled | Suspended with an XValidation that it cannot
+      return to Off — S3's own rule, versioning can be suspended and never undone. This type's
+      `versioning` is a boolean on a published, immutable api-version, so a body that turns it off
+      after turning it on is accepted here and refused by the API server, per object, with its
+      message on the operation. Rendering Suspended for `false` would need to know whether the bucket
+      was ever Enabled, which a pure function of the body cannot. Closing it is a three-state
+      property on a new api-version, or Immutable on the flag at the same new date.
+  - id: rendered-shape-was-never-checked-against-the-real-crd
+    says: >
+      ⚠ THE FINDING BEHIND THE THREE CORRECTIONS OF 2026-09-15, AND IT IS THE HARNESS'S RATHER THAN
+      THIS TYPE'S. ProviderConformanceCase's remarks say it in as many words — a derived stub "does
+      NOT prove the rendered spec satisfies the operator's schema. Nothing in this repository checks
+      that today" — and this chart is the first in the tree for which that gap held a live defect:
+      every Bucket rendered between 2026-08-12 and 2026-09-15 would have been refused by the real
+      CRD on three fields, and 28 green assertions per run said nothing about it. Closing it is the
+      SUPPLEMENT that remark describes: a case may carry the operator's real CRD beside the derived
+      stub, and the cluster suite applies against it. Until then a chart's SOURCE `reviewed:` date
+      against the Go types is the only evidence, and this file now has one.

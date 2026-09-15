@@ -92,6 +92,9 @@ import type {
   StorageAccountsBucketsResource,
   StorageAccountsBucketsStatsResult,
   StorageAccountsData,
+  StorageAccountsFileSharesData,
+  StorageAccountsFileSharesListMountTargetsResult,
+  StorageAccountsFileSharesResource,
   StorageAccountsListKeysResult,
   StorageAccountsResource,
   SubscriptionCreateContent,
@@ -1012,6 +1015,36 @@ export class CyberCloudApi {
   /** stats — permission 'read'. */
   statsBucket(tenantId: string, subscriptionId: string, resourceGroupName: string, accountsName: string, resourceName: string): Promise<ApiResponse<StorageAccountsBucketsStatsResult>> {
     return this.transport.send<StorageAccountsBucketsStatsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Storage/accounts/${CyberCloudApi.segment(accountsName)}/buckets/${CyberCloudApi.segment(resourceName)}/stats` });
+  }
+
+  /** Reads one File share. */
+  getFileShare(tenantId: string, subscriptionId: string, resourceGroupName: string, accountsName: string, resourceName: string): Promise<ApiResponse<StorageAccountsFileSharesResource>> {
+    return this.transport.send<StorageAccountsFileSharesResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Storage/accounts/${CyberCloudApi.segment(accountsName)}/fileShares/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one File share. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateFileShare(tenantId: string, subscriptionId: string, resourceGroupName: string, accountsName: string, resourceName: string, data: StorageAccountsFileSharesData): Promise<ApiResponse<StorageAccountsFileSharesResource>> {
+    return this.transport.send<StorageAccountsFileSharesResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Storage/accounts/${CyberCloudApi.segment(accountsName)}/fileShares/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one File share. A merge patch: what is not set is not changed. */
+  updateFileShare(tenantId: string, subscriptionId: string, resourceGroupName: string, accountsName: string, resourceName: string, data: Partial<StorageAccountsFileSharesData>): Promise<ApiResponse<StorageAccountsFileSharesResource>> {
+    return this.transport.send<StorageAccountsFileSharesResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Storage/accounts/${CyberCloudApi.segment(accountsName)}/fileShares/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one File share. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteFileShare(tenantId: string, subscriptionId: string, resourceGroupName: string, accountsName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Storage/accounts/${CyberCloudApi.segment(accountsName)}/fileShares/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the File shares in a resource group. ⚠ A short page never means "that is all there is". */
+  listFileShare(tenantId: string, subscriptionId: string, resourceGroupName: string, accountsName: string, page: PageRequest = {}): Promise<ApiResponse<Page<StorageAccountsFileSharesResource>>> {
+    return this.transport.send<Page<StorageAccountsFileSharesResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Storage/accounts/${CyberCloudApi.segment(accountsName)}/fileShares`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** listMountTargets — permission 'read'. */
+  listMountTargetsFileShare(tenantId: string, subscriptionId: string, resourceGroupName: string, accountsName: string, resourceName: string): Promise<ApiResponse<StorageAccountsFileSharesListMountTargetsResult>> {
+    return this.transport.send<StorageAccountsFileSharesListMountTargetsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Storage/accounts/${CyberCloudApi.segment(accountsName)}/fileShares/${CyberCloudApi.segment(resourceName)}/listMountTargets` });
   }
 
   /** Reads one Cloud terminal. */

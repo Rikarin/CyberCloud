@@ -136,7 +136,7 @@ wholesale. Details, versions and per-service topology in [12](12-managed-data-se
 | Azure | Cyber Cloud | Verdict | How | EM |
 |---|---|---|---|---|
 | Blob Storage | `CyberCloud.Storage/accounts` + `/blobServices` | **M1** | SeaweedFS with the S3 gateway. ⚠ **The API we expose is S3**, not the Azure Blob API — every client library, CLI and tool in existence speaks S3, and inventing a second dialect buys nothing | 2.0 |
-| Azure Files (SMB/NFS) | `CyberCloud.Storage/fileShares` | **M2** | SeaweedFS FUSE/NFS, or a `ReadWriteMany` LINSTOR volume exposed by an NFS server pod. ⚠ SMB is a separate, worse problem — NFS first, SMB only if asked | 1.2 |
+| Azure Files (SMB/NFS) | ~~`CyberCloud.Storage/fileShares`~~ `CyberCloud.Storage/accounts/fileShares` | **M2** | ~~SeaweedFS FUSE/NFS~~ SeaweedFS CSI (a `ReadWriteMany` claim, FUSE-mounted from the account's filer), or a `ReadWriteMany` LINSTOR volume exposed by an NFS server pod. ⚠ SMB is a separate, worse problem — NFS first, SMB only if asked. ⚠ **CORRECTED 2026-09-15 by #30:** SeaweedFS has no NFS server, so the pod half shipped and NFS is owed — [15 § File storage](15-storage-blob-file.md) | 1.2 |
 | Disk Storage | `CyberCloud.Compute/disks` | **M2** | LINSTOR/DRBD PVC, attached to a KubeVirt VM | ⊂ VM |
 | Archive tier | ⊂ accounts | **M3** | Lifecycle rules to a cold SeaweedFS volume set |
 | Data Lake Storage Gen2 | — | **✗** | Hierarchical namespace on top of blobs — a real feature, and nobody has asked |

@@ -22,13 +22,17 @@ checked: 2026-08-19
 
 # Read off templates/crd-seaweed.yaml in chart 0.1.38: thirteen kinds, all `seaweed.seaweedfs.com`,
 # all at v1. charts/managed/seaweedfs renders Seaweed; charts/managed/seaweedfs-bucket renders
-# Bucket.
+# Bucket; charts/managed/seaweedfs-fileshare renders SeaweedCSIDriver, which this operator expands
+# into the seaweedfs-csi-driver's controller and node workloads — so the CSI driver is NOT a bundle
+# component of its own, and docs/plan/15's "a CSI driver in the cluster bundle" is per account
+# instead. See that chart's SOURCE for why (one driver per filer).
 serves:
   - seaweed.seaweedfs.com/v1
 
 requiredBy:
   - charts/managed/seaweedfs
   - charts/managed/seaweedfs-bucket
+  - charts/managed/seaweedfs-fileshare
 
 # Every container image this component's pinned artefact renders, with the digest its registry served
 # on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
@@ -51,3 +55,10 @@ notes: >
   services and names this one as the harder case: "there the credential does not exist at all and the
   resource never converges". That is a provider gap and not this component's — the operator installs
   and reconciles regardless of it.
+  ⚠ THE CSI DRIVER'S IMAGES ARE NOT IN `images:` ABOVE, AND THAT IS THE LIST'S DEFINITION RATHER THAN
+  A GAP IN IT. `images:` is what the pinned ARTEFACT renders; `chrislusf/seaweedfs-csi-driver:v1.4.20`,
+  `chrislusf/seaweedfs-mount:v1.4.20` and the registry.k8s.io sidecars are pulled when the operator
+  expands a tenant's SeaweedCSIDriver at run time — defaults compiled into
+  api/v1/seaweedcsidriver_types.go, not lines in any template images.sh renders. So they are
+  tag-pinned by the operator's code and digest-recorded by nothing; the day images.sh learns to
+  render a sample CR they belong here.

@@ -1,0 +1,41 @@
+{{/*
+The share — a core/v1 PersistentVolumeClaim the account's CSI driver binds.
+
+⚠ THE CLAIM IS THE SHARE. Every other object this provider renders is a custom resource an operator
+expands; this one is a built-in kind the CSI external-provisioner binds, and it is what a tenant's
+pod names under volumes[].persistentVolumeClaim.claimName. docs/plan/15 § File storage: "a CSI
+driver in the cluster bundle does the pod half" — the driver is per account rather than in the
+bundle (see csidriver.yaml), and the pod half is what ships. The VM half is NFS, which nothing behind
+this chart serves: conformance.yaml § owed, `nfs-is-not-served`.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "seaweedfs-fileshare.claimName" . }}
+  labels:
+    {{- include "seaweedfs-fileshare.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ THE WHOLE POINT OF THE TYPE, and checked in the driver's source rather than assumed:
+    pkg/driver/driver.go advertises MULTI_NODE_MULTI_WRITER. Not a property — a share that is not RWX
+    is a disk, and disks are CyberCloud.Compute/disks.
+  */}}
+  accessModes:
+    - ReadWriteMany
+
+  {{/*
+    ⚠ The class the account's driver creates, which is the driver's name. A claim whose class is
+    rewritten is a share provisioned on another account's filer under this share's resource id,
+    which is why StorageFileShares.Matches compares this field before any other.
+  */}}
+  storageClassName: {{ include "seaweedfs-fileshare.driverName" . | quote }}
+
+  resources:
+    requests:
+      {{/*
+        ⚠ ENFORCED, and by the mount rather than by Kubernetes: the CSI mounter passes the claim's
+        capacity to `weed mount` as `-collectionQuotaMB` on a collection named for the volume, so the
+        master stops allocating at the ceiling. Grows online (EXPAND_VOLUME is advertised); a decrease
+        is refused by the API server, per object — conformance.yaml § owed, `shrink-is-refused-late`.
+      */}}
+      storage: {{ .Values.quota.size | quote }}

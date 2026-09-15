@@ -283,6 +283,42 @@ public abstract class SiloKillConformanceTests<TSource>
                     resourceId,
                     "the successor cluster created a NEW resource rather than reading the old one back."
                 );
+
+            // ⚠ AND THE RESOURCE IS TORN DOWN, ON THE SUCCESSOR. The lifecycle suite runs in the same
+            // k3s namespace under the same account, and a type whose objects are shared between
+            // siblings cannot pass "delete → gone" with this one left standing —
+            // ClusterConformanceTests.TearDownAsync says how CyberCloud.Storage/accounts/fileShares
+            // found that. The delete is the successor's, which is one more thing a recovered cluster
+            // has to be able to do with a resource it never created.
+            var deleted = await successor.Manager.DeleteAsync(
+                new() {
+                    Path = ClusterConformanceHarness<TSource>.Address(name).Path,
+                    ApiVersion = Case.ApiVersion,
+                    Caller = ClusterConformanceHarness<TSource>.Caller()
+                },
+                token
+            );
+
+            deleted.IsSuccess.ShouldBeTrue($"the successor could not delete '{name}': {deleted.Error?.Message}");
+
+            var teardown = successor.Operation(ConformanceIds.Tenant, deleted.GetValueOrThrow().OperationId);
+            OperationStatus? torn = null;
+
+            for (var i = 0; i < 40; i++) {
+                torn = (await teardown.DriveAsync()).GetValueOrThrow();
+
+                if (torn.IsTerminal) {
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1), token);
+            }
+
+            torn.ShouldNotBeNull();
+            torn!.State.ShouldBe(
+                OperationState.Succeeded,
+                $"the successor's teardown of '{name}' ended {torn.State}: {torn.Error?.Message}"
+            );
         } finally {
             await successor.DisposeAsync();
         }

@@ -155,7 +155,12 @@ public interface IKubeClusterConnection {
     ///     "select" that <c>RetainedVolume</c>'s remarks said no member could do.
     /// </summary>
     /// <param name="kind">The kind to list. One REST path, so one round trip per page.</param>
-    /// <param name="ns">The namespace to list in.</param>
+    /// <param name="ns">
+    ///     The namespace to list in, or empty for a cluster-scoped kind — the convention
+    ///     <see cref="ObjectRef.IsClusterScoped" /> states. ⚠ A <c>PersistentVolume</c> is the first
+    ///     kind listed this way: a file share's teardown selects the released volumes of its account
+    ///     before it removes the driver that reclaims them.
+    /// </param>
     /// <param name="labelSelector">
     ///     A Kubernetes label selector, for example <c>cnpg.io/cluster=main</c>. ⚠ Never empty:
     ///     an empty selector is <see cref="ListNamespaceAsync" />'s job for one kind, and a caller

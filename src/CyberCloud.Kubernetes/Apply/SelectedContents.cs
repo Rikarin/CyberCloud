@@ -1,8 +1,8 @@
 namespace CyberCloud.Kubernetes.Apply;
 
 /// <summary>
-///     Lists one kind in one namespace under a label selector, paging until the API server says the
-///     list is complete.
+///     Lists one kind in one namespace — or cluster-wide, for a cluster-scoped kind — under a label
+///     selector, paging until the API server says the list is complete.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -26,16 +26,36 @@ public static class SelectedContents {
     /// <param name="api">The cluster's client.</param>
     /// <param name="clusterId">The cluster, for the messages.</param>
     /// <param name="kind">The kind to list.</param>
-    /// <param name="ns">The namespace to list in.</param>
+    /// <param name="ns">
+    ///     The namespace to list in, or empty for a cluster-scoped kind — the same convention
+    ///     <see cref="ObjectRef.IsClusterScoped" /> states and <see cref="IKubeApiClient.GetAsync" />
+    ///     branches on.
+    /// </param>
     /// <param name="labelSelector">The selector. ⚠ Refused when empty — see the remarks.</param>
     /// <param name="cancellationToken">Cancels the listing.</param>
     /// <returns>Every match, or the failure that stopped the listing.</returns>
     /// <remarks>
-    ///     ⚠ <b>An empty selector is refused rather than read as "everything".</b> Every caller of
-    ///     this is looking for its own objects, and a selector that drifted to empty — a name that
-    ///     was never filled in — would hand a teardown every claim in the namespace, including the
-    ///     ones that belong to a different resource. <see cref="NamespaceContents" /> is the member
-    ///     for "everything", and it says so in its own remarks.
+    ///     <para>
+    ///         ⚠ <b>An empty selector is refused rather than read as "everything".</b> Every caller of
+    ///         this is looking for its own objects, and a selector that drifted to empty — a name that
+    ///         was never filled in — would hand a teardown every claim in the namespace, including the
+    ///         ones that belong to a different resource. <see cref="NamespaceContents" /> is the member
+    ///         for "everything", and it says so in its own remarks.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An empty namespace is NOT refused any more, and it was until
+    ///         <c>CyberCloud.Storage/accounts/fileShares</c>.</b> It used to be, on the same reasoning
+    ///         as the selector — but a <c>PersistentVolume</c> has no namespace to fill in, and the
+    ///         share's teardown lists the released volumes of an account by label before it removes
+    ///         the driver that reclaims them. The k3s-backed suite found the refusal: every share
+    ///         teardown ended <i>Failed</i> with <i>"was asked for with no namespace"</i> on a call
+    ///         whose selector named the subscription, the resource group, the type and the account.
+    ///         What protected a namespaced caller from listing across tenants was never this guard —
+    ///         a caller that forgets its namespace and passes a selector another tenant's objects
+    ///         also carry is a caller whose selector is wrong, and the guard cannot see that either.
+    ///         The convention is the one every other member already follows: empty means
+    ///         cluster-scoped, and the API client picks the REST path.
+    ///     </para>
     /// </remarks>
     public static async Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
         IKubeApiClient api,
@@ -48,12 +68,11 @@ public static class SelectedContents {
         ArgumentNullException.ThrowIfNull(api);
         ArgumentNullException.ThrowIfNull(kind);
 
-        if (string.IsNullOrEmpty(ns) || string.IsNullOrEmpty(labelSelector)) {
+        if (string.IsNullOrEmpty(labelSelector)) {
             return Result<IReadOnlyList<KubeObjectSummary>>.Failure(
                 ErrorCode.InvalidRequestBody,
-                $"A selected listing of {kind} on cluster {clusterId:D} was asked for with "
-                + (string.IsNullOrEmpty(ns) ? "no namespace" : "no label selector")
-                + ". Every caller of this listing is looking for its own objects, so an empty "
+                $"A selected listing of {kind} on cluster {clusterId:D} was asked for with no label "
+                + "selector. Every caller of this listing is looking for its own objects, so an empty "
                 + "selector is a name nobody filled in rather than a request for everything."
             );
         }
@@ -76,8 +95,9 @@ public static class SelectedContents {
             if (page.TryGetError(out var listError)) {
                 return Result<IReadOnlyList<KubeObjectSummary>>.Failure(
                     listError.Code,
-                    $"Listing {kind} matching '{labelSelector}' in namespace '{ns}' on cluster "
-                    + $"{clusterId:D} failed: {listError.Message} A listing with a hole in it "
+                    $"Listing {kind} matching '{labelSelector}' "
+                    + (string.IsNullOrEmpty(ns) ? "cluster-wide" : $"in namespace '{ns}'")
+                    + $" on cluster {clusterId:D} failed: {listError.Message} A listing with a hole in it "
                     + "would leave the objects it did not reach unaccounted for, so nothing is "
                     + "concluded from it."
                 );

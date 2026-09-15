@@ -41,12 +41,15 @@ spec:
     wrong path. `platform.parentName` is @internal in values.yaml for exactly that reason — it is
     projected out of the address by the reconciler, not set by a tenant.
 
-    ⚠ AND IT IS RENDERED AS A STRING ON WEAKER EVIDENCE THAN ANYTHING ELSE IN EITHER CHART. SOURCE
-    says so in as many words: the recorded review names `clusterRef` as a BucketSpec field without
-    giving its Go type. If upstream spells it `{name, namespace}`, every Bucket here is refused by
-    the CRD's own schema at apply time — per object, with the API server's own message.
+    ⚠ AN OBJECT, NOT A STRING — CORRECTED 2026-09-15. This rendered `clusterRef: "media"` for a month
+    on evidence SOURCE itself labelled weak, and api/v1/bucket_types.go at operator 0.1.38 spells
+    BucketClusterRef as {name, namespace}. The stub CRD the cluster suite derives has an open schema,
+    so nothing in the tree ever met the refusal a real operator's CRD gives a string here. `namespace`
+    is left unset: the Seaweed is in this namespace, and naming it would be a second spelling of
+    where the object already is.
   */}}
-  clusterRef: {{ .Values.platform.parentName | quote }}
+  clusterRef:
+    name: {{ .Values.platform.parentName | quote }}
 
   {{/*
     ⚠ A limit INSIDE capacity the account already reserved, which is why no quota meter is declared
@@ -54,12 +57,24 @@ spec:
     meter here would reserve the same gibibyte twice, once as the disk it is written to and once as
     the ceiling on part of it. Omitted entirely when empty, so the CRD's own default stands rather
     than a "" this chart invented.
+
+    ⚠ AN OBJECT WITH A QUANTITY AND AN ENFORCE FLAG — the same correction. `enforce` defaults to
+    true upstream and is left to that default: a ceiling the tenant asked for and this chart rendered
+    as advisory would be a limit in name only.
   */}}
   {{- if .Values.quota.size }}
-  quota: {{ .Values.quota.size | quote }}
+  quota:
+    size: {{ .Values.quota.size | quote }}
   {{- end }}
 
-  versioning: {{ .Values.versioning }}
+  {{/*
+    ⚠ AN ENUM, NOT A BOOLEAN — the third correction. VersioningState is Off | Enabled | Suspended,
+    defaults to Off, and cannot return to Off once Enabled: a body that turns the flag off after
+    turning it on is accepted by the platform's API and refused by the API server. conformance.yaml
+    § owed, `versioning-cannot-be-turned-off`. Suspended is never rendered, because choosing it needs
+    history a pure function of the body does not have.
+  */}}
+  versioning: {{ ternary "Enabled" "Off" .Values.versioning }}
 
   {{/*
     ⚠ NO `anonymousRead`, AND ITS ABSENCE IS THE MOST DELIBERATE LINE IN THIS FILE. docs/plan/15:

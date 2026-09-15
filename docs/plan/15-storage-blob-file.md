@@ -5,7 +5,7 @@
 | Kind | Resource | Backed by | Consumed as |
 |---|---|---|---|
 | **Object** | `CyberCloud.Storage/accounts` + `/buckets` | SeaweedFS + S3 gateway | HTTPS, S3 API |
-| **File** | `CyberCloud.Storage/fileShares` | SeaweedFS FUSE/NFS, or LINSTOR RWX + an NFS server | Mounted by VMs and pods |
+| **File** | ~~`CyberCloud.Storage/fileShares`~~ `CyberCloud.Storage/accounts/fileShares` | ~~SeaweedFS FUSE/NFS~~ SeaweedFS CSI (FUSE), or LINSTOR RWX + an NFS server | Mounted by pods; a VM only by running `weed mount` itself against what `listMountTargets` returns (`nfs-is-not-served`) |
 | **Block** | `CyberCloud.Compute/disks` ([13](13-compute-vm-containers.md)) | LINSTOR/DRBD PVC | Attached to one VM |
 
 They look similar and they are not: object storage is a service the tenant calls over the network,
@@ -101,6 +101,48 @@ requires an explicit two-step opt-in** — a publicly readable bucket is the mos
 misconfiguration in existence and the default is the whole mitigation.
 
 ## File storage — M2 · 1.2 EM
+
+> ⚠ **BUILT 2026-09-15, as `CyberCloud.Storage/accounts/fileShares` (#30) — and three sentences in
+> this section were false the moment the sources were read rather than the README.**
+> `charts/managed/seaweedfs-fileshare` and `StorageFileShares` in
+> `src/Providers/CyberCloud.Providers.Storage` are the result; that chart's `conformance.yaml § owed`
+> carries eleven named debts. The three corrections that are this document's to own:
+>
+> * **⚠ The table above spelled the type `CyberCloud.Storage/fileShares`, and it ships as a child of
+>   the account.** A share's bytes live in a *filer*, and the only filer this platform runs is the one
+>   inside an account's `Seaweed` — a top-level share would need a filer of its own or a platform-wide
+>   one, which is a tenancy boundary [06](06-tenancy-and-resource-model.md) does not have. The same
+>   argument put `buckets` under the account, and it holds harder here.
+> * **⚠ "NFS first" and "SeaweedFS's NFS/FUSE mount" — SeaweedFS has no NFS server.** `weed`'s command
+>   list at 4.41 is `mount`, `fuse`, `s3`, `webdav`, `sftp`, `iam`, `filer` and friends, and no NFS
+>   anything; the community answer is nfs-ganesha over a `weed mount`, which is a second workload to
+>   operate and is not built. What the engine has is a CSI driver that `weed mount`s a filer path into
+>   a pod over FUSE and advertises `MULTI_NODE_MULTI_WRITER`, and the operator deploys it from a
+>   `SeaweedCSIDriver` custom resource. So the **pod half** of "mountable from a tenant's VMs and pods"
+>   ships — a `ReadWriteMany` claim — and the **VM half** is owed (`nfs-is-not-served`). No `protocol`
+>   property is declared: an enum whose one value the cluster does not serve is the promise
+>   `encryption-at-rest` refused to make on the account.
+> * **⚠ "A CSI driver in the cluster bundle does the pod half" — it is per account, not in the
+>   bundle.** `seaweedfs-csi-driver` takes its filer as a process argument, not a StorageClass
+>   parameter, so one driver serves one account's filer. It is rendered by the account's *first share*
+>   and removed by its *last* — and not before the last share's *released volume* is reclaimed, because
+>   the provisioner that reclaims it runs inside the driver — because a driver is a controller
+>   Deployment plus two DaemonSets on every node and an account with no shares should not pay for one.
+>   What that costs — unmetered pods per account, and a driver whose resource-id label names whichever
+>   share applied it last and is rewritten on every pass — is `one-driver-per-account` and
+>   `the-driver-carries-one-shares-labels`.
+>
+> And one line below that is neither built nor a correction: "snapshots and per-share backup policy
+> through the same Velero binding as everything else" has no Velero binding to go through yet — the
+> account's `backup` row records why — and is `per-share-backup-policy`.
+>
+> What held: the size. The CSI mounter passes the claim's capacity to `weed mount` as a collection
+> quota on a collection named for the volume, so `quota.size` is a real, master-enforced ceiling that
+> grows online. "The choice is derived from the tier" holds vacuously — there is one tier, because
+> [§ Block storage](#block-storage) below already says nothing installs LINSTOR — and `tier` is absent
+> rather than an enum of one (`premium-tier-needs-linstor`). "Access rules by subnet and by managed
+> identity" wait on a managed identity type that [24](24-roadmap.md) lists as not shipped
+> (`access-rules-are-not-declared`).
 
 NFS first. SMB only if a customer asks, and it is a genuinely worse problem (Samba, AD integration,
 locking semantics), so it is not promised.

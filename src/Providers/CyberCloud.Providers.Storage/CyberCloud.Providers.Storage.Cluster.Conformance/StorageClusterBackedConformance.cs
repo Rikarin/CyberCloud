@@ -65,3 +65,22 @@ public sealed class StorageBucketLifecycleConformance(ClusterConformanceFixture<
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the bucket child type.</summary>
 public sealed class StorageBucketSiloKillConformance : SiloKillConformanceTests<StorageBucketCase>;
+
+/// <summary>
+///     The same two suites against the second child, <c>CyberCloud.Storage/accounts/fileShares</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Two kinds here, and only one of them needs a stub.</b> The harness derives a
+///     <c>SeaweedCSIDriver</c> definition from the case's <c>Objects</c>; the
+///     <c>PersistentVolumeClaim</c> is a kind k3s already serves, so the claim this suite applies is
+///     a real claim the real API server admits — and, with no CSI driver running, one that stays
+///     <c>Pending</c> forever. The reconciler converges on the claim's spec rather than on its binding
+///     for exactly that reason, and nothing here has ever mounted a share.
+/// </remarks>
+/// <param name="fixture">The harness.</param>
+public sealed class StorageFileShareLifecycleConformance(ClusterConformanceFixture<StorageFileShareCase> fixture)
+    : ClusterConformanceTests<StorageFileShareCase>(fixture),
+    IClassFixture<ClusterConformanceFixture<StorageFileShareCase>>;
+
+/// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the file-share child type.</summary>
+public sealed class StorageFileShareSiloKillConformance : SiloKillConformanceTests<StorageFileShareCase>;

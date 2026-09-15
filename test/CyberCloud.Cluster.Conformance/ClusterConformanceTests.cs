@@ -553,6 +553,9 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             + "is the half that distinguishes a conflict from the silent revert ADR-013 exists to "
             + "replace."
         );
+
+        // Not this test's subject; see TearDownAsync.
+        await TearDownAsync(harness, name);
     }
 
     // ── 3. Drift corrected after a real kubectl delete ─────────────────────────────────────────
@@ -759,6 +762,9 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             x => x.ResourceId == accepted.Resource.Id,
             "the object is back but the scan still calls it a stray. " + after.ToString()
         );
+
+        // Not this test's subject; see TearDownAsync.
+        await TearDownAsync(harness, name);
     }
 
     // ── 3b. What a real namespace actually holds ────────────────────────────────────────────────
@@ -983,6 +989,9 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
 
         afterReload.Attempts.ShouldBe(status.Attempts);
         afterReload.State.ShouldBe(OperationState.Succeeded);
+
+        // Not this test's subject; see TearDownAsync.
+        await TearDownAsync(harness, name);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────
@@ -1059,6 +1068,54 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
 
         accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
         return accepted;
+    }
+
+    /// <summary>
+    ///     Deletes a resource a test created and drives its teardown to the end, so the next test
+    ///     starts against the account it was written for and not against this one's leftovers.
+    /// </summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="name">The resource name the test wrote under.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>EVERY TEST HERE WRITES INTO ONE ACCOUNT, AND A TYPE WHOSE OBJECTS ARE SHARED
+    ///         BETWEEN SIBLINGS CANNOT PASS "DELETE → GONE" WITH A SIBLING LEFT BEHIND.</b> The harness
+    ///         creates the ancestors once, so <c>real-drift</c>, <c>real-conflict</c>,
+    ///         <c>real-roundtrip</c> and the lifecycle's own resource are all children of the same
+    ///         parent. For eleven families that was invisible: each resource's objects are its own,
+    ///         and a sibling's leftovers are not in its <c>Objects</c>. <c>CyberCloud.Storage/accounts/fileShares</c>
+    ///         is the first type to list an object <i>every share of the account applies and the last
+    ///         one out removes</i> — the account's <c>SeaweedCSIDriver</c> — and its lifecycle failed
+    ///         here on the first run that ever reached a real API server: the drift test had left
+    ///         <c>real-drift</c> standing, the lifecycle's teardown correctly saw a sibling and kept
+    ///         the driver, and the suite reported the driver as <i>"still in the real cluster after a
+    ///         converged teardown"</i>. The reconciler was right and the suite was leaking.
+    ///     </para>
+    ///     <para>
+    ///         So a test that creates a resource and is not itself about its deletion tears it down
+    ///         at the end. ⚠ Through the manager and a converged operation, never a raw
+    ///         <c>kubectl delete</c>: the provider's own teardown is what knows which objects are
+    ///         shared, and it is the same path <c>TheLifecycleRunsAgainstARealApiServer</c> already
+    ///         proves for every family, so this adds seconds and no new failure mode.
+    ///     </para>
+    /// </remarks>
+    protected static async Task TearDownAsync(ClusterConformanceHarness<TSource> harness, string name) {
+        var deleted = await harness.Manager.DeleteAsync(
+            new() {
+                Path = ClusterConformanceHarness<TSource>.Address(name).Path,
+                ApiVersion = Case.ApiVersion,
+                Caller = ClusterConformanceHarness<TSource>.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        deleted.IsSuccess.ShouldBeTrue($"'{name}' could not be deleted at the end of the test: {deleted.Error?.Message}");
+
+        var teardown = await ConvergeAsync(harness, deleted.GetValueOrThrow().OperationId);
+        teardown.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the teardown of '{name}' at the end of the test ended {teardown.State}: {teardown.Error?.Message}"
+        );
     }
 
     /// <summary>

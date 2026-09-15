@@ -16,7 +16,7 @@ description: An S3 bucket inside a managed object-storage account — an optiona
 type: application
 
 # The chart's own version. Bumped on every change to this directory.
-version: 0.1.0
+version: 0.2.0
 
 # ⚠ The SeaweedFS version this chart's object shape was reviewed against — the same release
 # charts/managed/seaweedfs pins, because a Bucket is reconciled by the same operator.

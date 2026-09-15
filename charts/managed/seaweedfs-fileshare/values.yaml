@@ -1,0 +1,48 @@
+# A file share inside a managed object-storage account — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from StorageFileShares.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ THE GENERATED HALF IS ONE ROW, AND THE THREE docs/plan/15 § File storage NAMES BESIDE IT ARE
+# EACH DECLINED WITH A REASON at StorageFileShares.Schema2026: `protocol`, because the only value
+# that document names is NFS and nothing behind this chart serves it (weed 4.41 has no NFS command);
+# `tier`, because the second tier is a LINSTOR volume and the bundle installs no LINSTOR; access rules,
+# because the managed identity they would name is not shipped. The size is real — the CSI mounter
+# enforces it as a SeaweedFS collection quota — and it is the whole tenant-facing surface.
+
+## @param quota {object} How much the share may hold.
+quota:
+  ## @param size {string} The share's size, in Kubernetes quantity form. Enforced as a SeaweedFS collection quota on the mount. Grows online; never shrinks. ⚠ This is a ceiling inside capacity the account's volume servers already reserved; it does not add any, and docs/plan/15 § Metering bills the provisioned figure rather than what is used.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "100Gi"
+  size: "100Gi"
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Storage/accounts/fileShares
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param parentName {string} The name of the account this share lives in. Rendered into the driver's seaweedRef, the storage.cybercloud.io/account label, and both object names.
+  parentName: ""
+  ## @param driverName {string} The cluster-unique CSI driver name — also the StorageClass the claim names. Computed by the reconciler from the namespace and the account; see StorageFileShares.DriverNameOf. Empty means derive a placeholder from the release name.
+  driverName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

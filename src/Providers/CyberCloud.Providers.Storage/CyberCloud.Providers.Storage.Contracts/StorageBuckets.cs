@@ -129,15 +129,24 @@ public static class StorageBuckets {
 
     /// <summary>The action that reports what a bucket holds.</summary>
     /// <remarks>
-    ///     ⚠ <b>Declared with no handler, and it is <i>not</i> the <c>listKeys</c> shape.</b> There is no
-    ///     <c>listKeys</c> on a bucket because SeaweedFS has no per-bucket credential — see the remarks
-    ///     on this class. What a bucket can answer is how much is in it, which docs/plan/15 § Metering
-    ///     already samples <i>"hourly from SeaweedFS volume stats per bucket"</i>. ⚠ The numbers come
-    ///     from docs/plan/22's usage pipeline rather than from the resource body, for exactly the reason
-    ///     <c>conformance.yaml § owed</c>'s <c>egress-is-not-derivable</c> gives: a counter only exists
-    ///     once traffic has flowed. So this is the tenant-facing half of a pipeline that is not built,
-    ///     and it is declared rather than omitted because an undeclared response is the one part of an
-    ///     API surface with no contract.
+    ///     <para>
+    ///         ⚠ <b>SERVED NOW, AND THE SOURCE OF THE NUMBERS IS THE OPERATOR, NOT A PIPELINE.</b> Until
+    ///         2026-09-15 this was on <c>actions-without-handlers.txt</c> with the reason that
+    ///         <i>"nothing scrapes the metrics port"</i> and the figures would have to come from
+    ///         docs/plan/22's usage pipeline. Read against the operator's source rather than its README,
+    ///         that was wrong: <c>internal/controller/bucket_usage.go</c> at 0.1.38 runs a
+    ///         <c>bucketUsageRunnable</c> every five minutes (<c>DefaultUsageRefreshInterval</c>) that
+    ///         calls <c>collection.list</c> through the embedded <c>weed shell</c> once per cluster and
+    ///         patches every <c>Bucket</c>'s <c>status.usage</c> with <c>objectCount</c>,
+    ///         <c>sizeBytes</c> and <c>lastUpdated</c>. So the observation exists, on the object this
+    ///         provider already reads, and <c>StorageBucketStatsHandler</c> hands it back. What the
+    ///         usage pipeline still owns is <i>billing</i> on it — docs/plan/15 § Metering's
+    ///         <c>storage.object.gb_month</c> — which is a different thing from answering a tenant.
+    ///     </para>
+    ///     <para>
+    ///         It is <i>not</i> the <c>listKeys</c> shape: there is no <c>listKeys</c> on a bucket
+    ///         because SeaweedFS has no per-bucket credential — see the remarks on this class.
+    ///     </para>
     /// </remarks>
     public const string StatsAction = "stats";
 
@@ -385,9 +394,10 @@ public static class StorageBuckets {
     ///     What a <c>POST …/stats</c> returns.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Declared with nothing serving it — see <see cref="StatsAction" />. Nothing in it is
-    ///     <c>Secret</c>, which is the difference from the account's <c>listKeys</c> response and the
-    ///     reason this action shares the <c>read</c> permission.
+    ///     Served by <c>StorageBucketStatsHandler</c> off the <c>Bucket</c>'s <c>status.usage</c> — see
+    ///     <see cref="StatsAction" />. Nothing in it is <c>Secret</c>, which is the difference from the
+    ///     account's <c>listKeys</c> response and the reason this action shares the <c>read</c>
+    ///     permission.
     /// </remarks>
     public static ResourceSchema StatsResponse { get; } =
         ResourceSchema.Of(
@@ -403,9 +413,9 @@ public static class StorageBuckets {
                     SchemaKind.WholeNumber,
                     Required: true,
                     Description: "How many bytes the bucket holds before replication, as of the last "
-                    + "sample. ⚠ Sampled rather than live — docs/plan/15 § Metering samples SeaweedFS "
-                    + "volume stats hourly per bucket — so it is not a number to write an assertion "
-                    + "against immediately after a PUT."
+                    + "sample. ⚠ Sampled rather than live — the operator refreshes every Bucket's "
+                    + "status.usage from collection.list every five minutes — so it is not a number "
+                    + "to write an assertion against immediately after a PUT."
                 ),
                 new(
                     "/sampledAt",
@@ -466,13 +476,27 @@ public static class StorageBuckets {
             // holding the account's name would be a second spelling of a fact ResourceId.Parent
             // already answers, and the two would disagree the first time a body was sent under the
             // wrong path.
-            ["clusterRef"] = ClusterRefOf(id),
-            ["versioning"] = Versioning(desired)
+            //
+            // ⚠ AN OBJECT, NOT A STRING — CORRECTED 2026-09-15. This rendered `clusterRef: "media"`
+            // for a month on evidence charts/managed/seaweedfs-bucket/SOURCE itself labelled weak,
+            // and api/v1/bucket_types.go at operator 0.1.38 spells BucketClusterRef as
+            // {name, namespace}. The stub CRD the cluster suite derives has an open schema, which is
+            // why a month of green runs never met the refusal a real operator's CRD gives every
+            // Bucket rendered the old way.
+            ["clusterRef"] = new JsonObject { ["name"] = ClusterRefOf(id) },
+            // ⚠ AN ENUM, NOT A BOOLEAN — the same correction. VersioningState is Off | Enabled |
+            // Suspended, `+kubebuilder:default:=Off`, and it cannot return to Off. See
+            // VersioningState.
+            ["versioning"] = VersioningState(desired)
         };
 
         var quota = QuotaSize(desired);
         if (quota.Length > 0) {
-            spec["quota"] = quota;
+            // ⚠ AN OBJECT WITH A QUANTITY AND AN ENFORCE FLAG — the third correction. `enforce`
+            // defaults to true in the CRD and is left to that default rather than rendered: a ceiling
+            // the tenant asked for and this provider rendered as advisory would be a limit in name
+            // only.
+            spec["quota"] = new JsonObject { ["size"] = quota };
         }
 
         return new JsonObject {
@@ -507,7 +531,7 @@ public static class StorageBuckets {
         MatchesBody(objectJson, desired)
         && Spec(objectJson) is { } spec
         && spec["name"]?.GetValue<string>() == id.Name
-        && spec["clusterRef"]?.GetValue<string>() == ClusterRefOf(id);
+        && (spec["clusterRef"] as JsonObject)?["name"]?.GetValue<string>() == ClusterRefOf(id);
 
     /// <summary>
     ///     The half of <see cref="Matches" /> that a desired <b>body</b> alone decides.
@@ -554,8 +578,54 @@ public static class StorageBuckets {
 
         var quota = QuotaSize(desired);
 
-        return spec["versioning"]?.GetValue<bool>() == Versioning(desired)
-            && (quota.Length == 0 || spec["quota"]?.GetValue<string>() == quota);
+        return spec["versioning"]?.GetValue<string>() == VersioningState(desired)
+            && (quota.Length == 0 || (spec["quota"] as JsonObject)?["size"]?.GetValue<string>() == quota);
+    }
+
+    /// <summary>The <c>VersioningState</c> literal a body's flag renders to.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <remarks>
+    ///     ⚠ <b><c>Enabled</c> or <c>Off</c>, never <c>Suspended</c>, and the flag cannot go back.</b>
+    ///     The CRD's <c>XValidation</c> refuses <c>Enabled → Off</c> — S3 semantics: versioning can be
+    ///     suspended, not undone — so a body that turns <c>versioning</c> off after turning it on is
+    ///     accepted by this API and refused by the API server, per object, with its own message.
+    ///     Rendering <c>Suspended</c> for <c>false</c> would need to know whether the bucket was ever
+    ///     <c>Enabled</c>, which is history a pure function of the body does not have.
+    ///     <c>charts/managed/seaweedfs-bucket/conformance.yaml § owed</c>,
+    ///     <c>versioning-cannot-be-turned-off</c>.
+    /// </remarks>
+    public static string VersioningState(JsonElement desired) => Versioning(desired) ? "Enabled" : "Off";
+
+    /// <summary>
+    ///     What the operator last observed in the bucket, off <c>status.usage</c>; or
+    ///     <see langword="null" /> when it has not sampled it yet.
+    /// </summary>
+    /// <param name="objectJson">The <c>Bucket</c>'s JSON, as the API server returned it.</param>
+    /// <remarks>
+    ///     ⚠ <c>api/v1/bucket_types.go</c>: <c>BucketUsage{objectCount int64, sizeBytes int64,
+    ///     lastUpdated *metav1.Time}</c>, written by <c>bucket_usage.go</c>'s refresher and by nothing
+    ///     else. A bucket the main loop has not reconciled (<c>status.bucketName</c> empty) is skipped
+    ///     by the refresher, so a fresh bucket has no <c>usage</c> for up to one interval and a
+    ///     <see langword="null" /> here is ordinary rather than an error.
+    /// </remarks>
+    public static (long ObjectCount, long SizeBytes, string SampledAt)? UsageOf(string objectJson) {
+        JsonNode? parsed;
+        try {
+            parsed = JsonNode.Parse(objectJson);
+        } catch (JsonException) {
+            return null;
+        }
+
+        if (((parsed as JsonObject)?["status"] as JsonObject)?["usage"] is not JsonObject usage
+            || usage["lastUpdated"]?.GetValue<string>() is not { Length: > 0 } sampledAt) {
+            return null;
+        }
+
+        return (
+            usage["objectCount"]?.GetValue<long>() ?? 0,
+            usage["sizeBytes"]?.GetValue<long>() ?? 0,
+            sampledAt
+        );
     }
 
     /// <summary>The <c>spec</c> of a <c>Bucket</c> document, or <see langword="null" />.</summary>
@@ -578,6 +648,33 @@ public static class StorageBuckets {
             && document["spec"] is JsonObject spec
                 ? spec
                 : null;
+    }
+
+    /// <summary>
+    ///     A <c>Bucket</c> document carrying the <c>status.usage</c> the operator's refresher writes —
+    ///     for the conformance case and the handler's tests, which have no operator.
+    /// </summary>
+    /// <param name="bucketJson">The document, as <see cref="BucketJson" /> rendered it.</param>
+    /// <param name="objectCount">What <c>collection.list</c> would have counted.</param>
+    /// <param name="sizeBytes">What it would have summed.</param>
+    /// <param name="sampledAt">When, RFC 3339 — the operator's <c>lastUpdated</c>.</param>
+    /// <remarks>
+    ///     ⚠ Lives here beside <see cref="Body" /> for the same reason: the shape of what an operator
+    ///     writes is a fact about the operator, and a fixture that spelled it in a test would be a
+    ///     second place the field names live. <see cref="UsageOf" /> is the reader; this is its inverse.
+    /// </remarks>
+    public static string WithSampledUsage(string bucketJson, long objectCount, long sizeBytes, string sampledAt) {
+        ArgumentException.ThrowIfNullOrEmpty(sampledAt);
+
+        var root = JsonNode.Parse(bucketJson)!.AsObject();
+
+        root["status"] = new JsonObject {
+            ["usage"] = new JsonObject {
+                ["objectCount"] = objectCount, ["sizeBytes"] = sizeBytes, ["lastUpdated"] = sampledAt
+            }
+        };
+
+        return root.ToJsonString();
     }
 
     // ── A body, for tests, fixtures and the conformance case ──────────────────────────────────

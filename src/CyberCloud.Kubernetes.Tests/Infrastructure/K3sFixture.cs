@@ -39,7 +39,21 @@ public sealed class K3sFixture : IAsyncLifetime {
     /// <summary>The cluster id the fabric addresses this container by.</summary>
     public static readonly Guid ClusterId = Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d");
 
-    readonly K3sContainer container = new K3sBuilder(Image).Build();
+    /// <summary>
+    ///     The kubelet drop-in that lets 1.35 start on a cgroup v1 host — Docker Desktop on Windows is
+    ///     one. The same two lines as <c>ClusterInfrastructure.KubeletDropIn</c> in
+    ///     <c>test/CyberCloud.Cluster.Conformance</c>, whose remarks say why the flag form is refused
+    ///     and why the suffix must be <c>.conf</c>; that assembly cannot be referenced from here.
+    /// </summary>
+    const string KubeletDropIn =
+        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n";
+
+    readonly K3sContainer container = new K3sBuilder(Image)
+        .WithResourceMapping(
+            Encoding.UTF8.GetBytes(KubeletDropIn),
+            "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf"
+        )
+        .Build();
 
     /// <summary>The raw client, for the parts of a test that are deliberately not us.</summary>
     public IKubernetes Raw { get; private set; } = null!;

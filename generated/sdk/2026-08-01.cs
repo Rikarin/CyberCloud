@@ -6823,7 +6823,7 @@ public sealed partial class BucketResource {
         [JsonPropertyName("sampledAt")]
         public required DateTimeOffset SampledAt { get; set; }
 
-        /// <summary>How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — docs/plan/15 § Metering samples SeaweedFS volume stats hourly per bucket — so it is not a number to write an assertion against immediately after a PUT.</summary>
+        /// <summary>How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — the operator refreshes every Bucket's status.usage from collection.list every five minutes — so it is not a number to write an assertion against immediately after a PUT.</summary>
         [JsonPropertyName("sizeBytes")]
         public required long SizeBytes { get; set; }
     }
@@ -6872,6 +6872,138 @@ public sealed partial class BucketCollection {
 
     /// <summary>The Buckets in one parent, paged.</summary>
     public partial AsyncPageable<BucketResource> GetAllAsync(string accountsName, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The body of a CyberCloud.Storage/accounts/fileShares.</summary>
+/// <remarks>A ReadWriteMany file share on a managed object-storage account's filer, mounted into pods through the SeaweedFS CSI driver with an enforced size.</remarks>
+public sealed partial class FileShareData {
+
+    /// <summary>The region the share is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The share's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The share's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose namespace holds the share. Must be the cluster the account is in — nothing checks that, and a share placed elsewhere is a claim against a driver whose filer reference resolves to nothing.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>How much the share may hold.</summary>
+        [JsonPropertyName("quota")]
+        public QuotaData? Quota { get; set; }
+
+        /// <summary>How much the share may hold.</summary>
+        public sealed partial class QuotaData {
+
+            /// <summary>The share's size, in Kubernetes quantity form. Enforced as a SeaweedFS collection quota on the mount. Grows online; never shrinks. ⚠ This is a ceiling inside capacity the account's volume servers already reserved; it does not add any, and docs/plan/15 § Metering bills the provisioned figure rather than what is used.</summary>
+            /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+            [JsonPropertyName("size")]
+            public required string Size { get; set; }
+        }
+    }
+}
+
+/// <summary>One File share, and the operations on it.</summary>
+public sealed partial class FileShareResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required FileShareData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<FileShareResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<FileShareResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        FileShareData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listMountTargets returns.</summary>
+    public sealed partial class ListMountTargetsResult {
+
+        /// <summary>The access mode the claim was bound with. Always ReadWriteMany.</summary>
+        [JsonPropertyName("accessMode")]
+        public required string AccessMode { get; set; }
+
+        /// <summary>The PersistentVolumeClaim a pod in the resource group's namespace names under volumes[].persistentVolumeClaim.claimName.</summary>
+        [JsonPropertyName("claimName")]
+        public required string ClaimName { get; set; }
+
+        /// <summary>The SeaweedFS collection the share's quota is enforced on — `weed mount -collection=`. A mount that omits it writes outside the quota.</summary>
+        [JsonPropertyName("collection")]
+        public required string Collection { get; set; }
+
+        /// <summary>The account's filer, host:port, for a `weed mount -filer=` from a VM on the cluster network. ⚠ In-cluster only, for the reason the account's listKeys endpoint is.</summary>
+        [JsonPropertyName("filer")]
+        public required string Filer { get; set; }
+
+        /// <summary>The filer path the share lives at — `weed mount -filer.path=`.</summary>
+        [JsonPropertyName("path")]
+        public required string Path { get; set; }
+    }
+
+    /// <summary>ListMountTargets. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListMountTargetsResult>> ListMountTargetsAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The File shares in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class FileShareCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Storage/accounts/fileShares";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{accountsName}/fileShares/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{accountsName}/fileShares";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one File share.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<FileShareResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string accountsName, string name,
+        FileShareData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one File share by name.</summary>
+    public partial Task<Response<FileShareResource>> GetAsync(string accountsName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The File shares in one parent, paged.</summary>
+    public partial AsyncPageable<FileShareResource> GetAllAsync(string accountsName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The values /properties/image/variant accepts. ⚠ Closed: the write path refuses anything else.</summary>
