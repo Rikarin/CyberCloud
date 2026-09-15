@@ -1724,6 +1724,57 @@ sharper than "owed"**, and both are at `NetworkProvider`'s remarks.
   and licence to be checked *before* it is designed around) or a parent reconciler that can list its
   own children, which is `loadBalancers`' missing reader in a second shape.
 
+### What the eleventh provider's fifth pass measured
+
+`CyberCloud.Network/virtualNetworks/natGateways` (#31), M2, one `OvnSnatRule`, and the half of the
+same issue that could not be built. Five things, three of them about the substrate and two about the
+platform.
+
+- **docs/plan/14 names the wrong object, and the address type is why.** The row says *"Kube-OVN
+  `VpcNatGateway` + an SNAT address"*. Read firsthand at `v1.16.2`: a `VpcNatGateway` *"represents a
+  NAT gateway for a VPC, implemented as a StatefulSet Pod"*, and its rules are `IptablesSnatRule`s
+  naming an `IptablesEIP` — a **second** public-address kind that `publicIpAddresses` does not render
+  and that would draw the same scarce meter through a second allocator. Kube-OVN's other NAT is the
+  router's own: an `OvnSnatRule` names the `OvnEip` this family already renders, and
+  `handleAddOvnSnatRule` turns the pair into one `AddNat(vpc, SNAT, eip, cidr)` row. No pod, no
+  second allocator, `Resources` alone as the meter. The document is corrected in place.
+- **The join needs no reader, because it is within one resource group.** `LoadBalancers` records that
+  attaching an address is *"a resource id this provider would have to resolve"*. For an address in the
+  same namespace it is `PublicIpAddresses.ObjectNameOf(ns, name)` — two strings the reconciler already
+  holds — and the subnet is `NetworkSubnets.ObjectNameOf(ns, network, subnet)` with the network read
+  off the address. So the type joins by *name*, cannot name another group's address at all, and the
+  reader stays owed for the cross-group case only. ⚠ Neither name is checked to exist before the
+  `202`; the fabric answers *"failed to get eip"* and the gateway reports `Succeeded` on the API and
+  `ready: false` on `showEgress`, which is why that action exists.
+- **`natOutgoing` on a tenant subnet is a control the substrate ignores** — the outcome
+  `NetworkSubnets`' own remarks call the worst of three, found on the way. `pkg/daemon/gateway.go`'s
+  `isSubnetNeedNat` requires `subnet.Spec.Vpc == c.config.ClusterRouter`, and every subnet this family
+  renders binds to a tenant `Vpc` on purpose. The property stays (the api-version is published), its
+  description now says so, and `charts/managed/kube-ovn-subnet/conformance.yaml § owed` records what
+  removing it would take. A tenant subnet's only egress is a NAT gateway.
+- ⚠ **Two resources cannot own one Kubernetes object on this platform, and that is what blocks
+  `peerings`.** A Kube-OVN peering has no object: it is an entry in `Vpc.spec.vpcPeerings` plus a
+  static route per exchanged range, on **both** networks' objects, in two arrays with no
+  `x-kubernetes-list-type` — the `routeTables` refusal twice over. The repair a reader expects — a
+  child that reads each `Vpc`, merges its entries and applies under its own field manager — cannot
+  land: `KubeCommandBuilder` injects ADR-013's labels and the reconcile hash from the *applying*
+  resource, non-overridably, so a peering applying its parent's `Vpc` is a `FieldManagerConflict` on
+  `resource-id`, `resource-type` and `reconcile-hash`, with `Force` unreachable by design. Under the
+  parent's manager instead, each apply prunes the other's slice. The parent cannot fold in children it
+  cannot list, and a sidecar the parent would fold in never converges because `DriftScanner` reports
+  and does not repair. What would close it is platform surface — a co-owned apply on the builder and
+  a conformance-case member that creates a sibling network — and it is recorded at
+  `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`,
+  rather than shipped as a type that erases itself.
+- **The immutable-once-ready finding is the address type's, on a second kind.** `handleUpdateOvnSnatRule`
+  refuses every effective change by name, so `ChangedBody` varies the subnet and proves the renderer
+  reaches the cluster without proving the update takes effect —
+  `charts/managed/kube-ovn-snat/conformance.yaml § owed`, `a-nat-rule-cannot-be-changed`.
+
+**What landed on this pass: `virtualNetworks/natGateways`.** `peerings` is **owed on the platform**,
+`dnsZones` and `vpnGateways` remain owed on the substrate, `routeTables` remains refused, and
+`applicationGateways` and flow logs are #31's untouched halves.
+
 ### What the fourteenth provider measured
 
 `CyberCloud.Mail/domains`, [17 § `CyberCloud.Mail`](../../docs/plan/17-communication-and-email.md),

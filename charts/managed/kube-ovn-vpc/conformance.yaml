@@ -176,6 +176,32 @@ owed:
       forces `showIsolation`'s limits table to be flattened to prose on the way out. It is the single
       most load-bearing limit of ResourceSchema for this problem domain, because networking
       configuration is lists of rules almost everywhere.
+  - id: peerings-need-a-second-writer-on-the-vpc
+    says: >
+      ⚠ docs/plan/14's `peerings/{name} → VPC-to-VPC within a tenant` IS BLOCKED, AND THE PLATFORM
+      CLOSES THE WAY OUT THE SUBSTRATE LEAVES OPEN (#31). Read firsthand at v1.16.2: a Kube-OVN
+      peering has no object of its own. It is an entry in `Vpc.spec.vpcPeerings` — `{remoteVpc,
+      localConnectIP}`, which handleAddOrUpdateVpc turns into a peer logical router port named
+      `{vpc}-{remoteVpc}` — plus one `Vpc.spec.staticRoutes` entry per exchanged range naming the
+      peer's connect address as next hop, on BOTH networks' objects. Neither array carries an
+      `x-kubernetes-list-type`, so both are atomic under server-side apply: `route-tables-have-no-object`
+      twice over and across two parents. The obvious repair is a child that READS each Vpc, MERGES
+      its own entries into what is there and applies the merged lists under a field manager of its
+      own — and that cannot land here, because KubeCommandBuilder injects ADR-013's seven labels and
+      two annotations from the APPLYING resource's identity, non-overridably. A peering applying its
+      parent's Vpc therefore claims `cybercloud.io/resource-id`, `resource-type` and `reconcile-hash`
+      at values that differ from the parent's, and the API server answers a FieldManagerConflict on
+      every one — the exact conflict ADR-013 exists to produce, with `Force` unreachable from the
+      builder on purpose. Applying under the parent's own manager instead makes each apply prune the
+      other's slice, because a manager's apply is the whole set of fields it owns. So two resources
+      cannot own one Kubernetes object on this platform, by construction. Nor can the parent fold in
+      children it cannot list, and a child that writes a sidecar and waits for the parent never
+      converges: DriftScanner "reports; it does not repair". ⚠ WHAT WOULD CLOSE IT, both halves
+      platform surface: a co-owned apply on KubeCommandBuilder — the OWNING resource's labels, a field
+      manager per child type, a hash key per fragment, and `metadata.resourceVersion` carried through
+      so two peerings merging into one Vpc lose a race loudly rather than silently — and a member on
+      ProviderConformanceCase that creates a sibling network, since the shared harness builds only
+      the parent chain and a peering to a network that does not exist cannot converge.
   - id: security-group-rules-are-arrays-of-objects
     says: >
       `virtualNetworks/securityGroups` is OWED rather than refused, and it is the one of docs/plan/14's

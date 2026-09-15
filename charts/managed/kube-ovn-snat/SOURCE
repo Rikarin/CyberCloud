@@ -1,0 +1,68 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here — Kube-OVN is
+# platform infrastructure installed once per cluster (ADR-019) and what this chart renders is a
+# tenant's row in that installation — and `vendored: none` is an answer to "where did this come from"
+# where a missing file is not.
+
+vendored: none
+upstream: https://github.com/kubeovn/kube-ovn
+
+# The upstream API this chart's template targets. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin.
+upstream-api: kubeovn.io/v1
+
+engine: https://github.com/ovn-org/ovn
+
+See ../kube-ovn-vpc/SOURCE for the family's shared review of the Kube-OVN CRD set and
+../kube-ovn-eip/SOURCE for the address this rule names. What was read at tag v1.16.2 for THIS chart,
+and the facts that bear hardest on it:
+
+  * pkg/apis/kubeovn/v1/ovn-snat-rule.go —
+    `+kubebuilder:resource:scope="Cluster",shortName="osnat",path="ovn-snat-rules",singular="ovn-snat-rule"`.
+    CLUSTER-SCOPED and the plural is HYPHENATED: the third such plural in this family, and the same
+    trap — ClusterConformanceHarness derives its CRD stub's path from GroupVersionKind.Plural.
+  * OvnSnatRuleSpec is six OPTIONAL strings — ovnEip, vpcSubnet, ipName, vpc, v4IpCidr, v6IpCidr.
+    Checked in the CRD the chart installs: `spec` declares NO `required:` list and NO `default:`.
+    This chart sends ovnEip, vpcSubnet and vpc and nothing else. ipName translates ONE pod's `IP`
+    object and v4IpCidr/v6IpCidr a bare range; each would let a body reach a range this resource's
+    address does not vouch for, so neither is expressible.
+  * pkg/apis/kubeovn/v1/vpc-nat-gateway.go, which is the object docs/plan/14 names and this chart
+    deliberately is not: "VpcNatGateway represents a NAT gateway for a VPC, implemented as a
+    StatefulSet Pod", and its rules are IptablesSnatRules whose `spec.eip` names an IptablesEIP — a
+    second public-address kind, allocated by that pod, which ../kube-ovn-eip does not render.
+  * pkg/controller/ovn_snat.go `handleAddOvnSnatRule`: reads the OvnEip named by spec.ovnEip
+    ("failed to get eip" and a retry when it does not exist), refuses an EIP of type `lsp`, resolves
+    spec.vpcSubnet through the subnet lister to the subnet's `spec.vpc` and `spec.cidrBlock`
+    ("failed to get vpc subnet" and a retry when it does not exist), then issues ONE
+    `AddNat(vpc, SNAT, eip, cidr)` per family on the VPC's logical router. THE CONTROLLER NEVER
+    WRITES BACK TO `.spec` ON THIS KIND — the first time that is true in this family. It patches a
+    finalizer, the `ovn.kubernetes.io/eip_v4_ip`/`eip_v6_ip` labels, the `ovn.kubernetes.io/vpc_eip`
+    annotation and the status subresource (ready, vpc, v4Eip, v6Eip, v4IpCidr, v6IpCidr).
+  * It ALSO patches the ADDRESS: `natLabelAndAnnoOvnEip` writes the rule's name into the OvnEip's
+    `ovn.kubernetes.io/vpc_nat` annotation and `patchOvnEipStatus` refreshes its status, which is what
+    `POST …/publicIpAddresses/{name}/showAllocation` reports as `attachedTo`. So an address with a
+    NAT gateway on it is the first address on this platform whose `attachedTo` is not empty.
+  * `handleUpdateOvnSnatRule`: returns at "already ok" until status.ready; afterwards recomputes the
+    VPC, both addresses and both CIDRs from the NEW spec and refuses every difference by name —
+    "vpc changed", "v4 eip changed", "v6 eip changed", "v4 ip cidr changed", "v6 ip cidr changed".
+    AN OvnSnatRule IS WHOLLY IMMUTABLE ONCE READY. conformance.yaml § owed,
+    `a-nat-rule-cannot-be-changed`.
+  * `enqueueUpdateOvnSnatRule` re-queues the OLD address for a reset when spec.ovnEip changes, so a
+    changed address name is refused AND clears the old address's `status.nat` — the one visible effect
+    an update has on a real fabric.
+  * pkg/controller/ovn_eip.go `getOvnEipNat` lists dnat, fip and snat rules by the
+    `ovn.kubernetes.io/eip_v4_ip` label and `handleUpdateOvnEip` refuses to release an address while
+    any exist — "is still being used by NAT rules … waiting for them to be deleted". So SEVERAL
+    OvnSnatRules may name one OvnEip, which is why several NAT gateways may share one address, and a
+    publicIpAddresses delete waits for its NAT gateways.
+  * pkg/daemon/gateway.go `isSubnetNeedNat` requires `subnet.Spec.Vpc == c.config.ClusterRouter`:
+    the node-side masquerade behind Subnet.spec.natOutgoing serves the DEFAULT VPC only. Every
+    subnet ../kube-ovn-subnet renders binds to a tenant Vpc, so `natOutgoing` there is a control the
+    substrate ignores and THIS chart is a tenant subnet's only egress.
+    ../kube-ovn-subnet/conformance.yaml § owed, `nat-outgoing-is-ignored-in-a-tenant-vpc`.
+  * pkg/controller/vpc.go: the NAT row is programmed on the router regardless of
+    Vpc.spec.enableExternal; packets leave through the external logical router port that flag
+    attaches, and without it they are translated and dropped. Nothing here can read the network's
+    flag. conformance.yaml § owed, `egress-needs-the-networks-external-attachment`.

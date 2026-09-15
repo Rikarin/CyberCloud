@@ -1286,7 +1286,7 @@ export interface NetworkPublicIpAddressesResource {
 
 /** What showAllocation returns. */
 export interface NetworkPublicIpAddressesShowAllocationResult {
-  /** The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic, which in this api-version is every address — nothing can attach one yet. */
+  /** The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic. The only thing that can attach one is a natGateways resource, which puts a subnet's outbound traffic on it; nothing can yet publish anything inbound on an address. */
   attachedTo?: string;
   /** The MAC address the fabric bound to it. ⚠ Reported because it is what an operator needs to find this address in an ARP table when it is unreachable. */
   macAddress?: string;
@@ -1315,7 +1315,7 @@ export interface NetworkVirtualNetworksData {
     };
     /** The cluster whose fabric carries the network. */
     clusterId: string;
-    /** Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes. */
+    /** Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. A natGateways child needs it on: without the attachment its translation is programmed and its packets are dropped. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes. */
     enableExternal?: boolean;
   };
   /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
@@ -1429,6 +1429,48 @@ export interface NetworkVirtualNetworksLoadBalancersShowBackendsResult {
   servers: string[];
 }
 
+/** NAT gateway. Outbound-only internet access for one subnet of a virtual network, translated to a public IP address the tenant holds. Inbound traffic is not admitted. */
+export interface NetworkVirtualNetworksNatGatewaysData {
+  /** The region the NAT gateway is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here. */
+  location: string;
+  /** The NAT gateway's own settings. */
+  properties?: {
+    /** The cluster whose fabric holds the network. ⚠ It must be the cluster the virtual network and the public address were created in: a rule in another cluster names a subnet and an address that do not exist there. */
+    clusterId: string;
+    /** The name of a publicIpAddresses resource in the same resource group whose address the subnet's traffic leaves with. ⚠ A name, not a resource id: the address must be in this subscription and resource group, and one in another cannot be named. An address that does not exist is refused by the fabric rather than by the API. */
+    publicIpAddress: string;
+    /** The subnet of this virtual network whose workloads egress through the address. One subnet per NAT gateway; a network with several private subnets creates one per subnet, and they may share the address. ⚠ A name that is not a subnet of this network is refused by the fabric rather than by the API, and the gateway never becomes ready. */
+    subnet: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One NAT gateway, as the API returns it. */
+export interface NetworkVirtualNetworksNatGatewaysResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.Network/virtualNetworks/natGateways';
+  readonly properties?: NetworkVirtualNetworksNatGatewaysData['properties'];
+}
+
+/** What showEgress returns. */
+export interface NetworkVirtualNetworksNatGatewaysShowEgressResult {
+  /** The IPv4 address the subnet's traffic leaves with, or empty until the fabric has resolved the named public address. */
+  publicV4: string;
+  /** The IPv6 address the subnet's traffic leaves with, or empty for an IPv4-only pool. */
+  publicV6?: string;
+  /** Whether the fabric has programmed the translation. ⚠ False with every address empty is a rule whose subnet or public address the fabric cannot find — check both names. */
+  ready: boolean;
+  /** When the platform read the object, RFC 3339. */
+  sampledAt: string;
+  /** The IPv4 range being translated — the subnet's prefix as the fabric resolved it, or empty until it has. */
+  sourceV4: string;
+  /** The IPv6 range being translated, or empty for an IPv4-only subnet. */
+  sourceV6?: string;
+}
+
 /** Security group. A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several. */
 export interface NetworkVirtualNetworksSecurityGroupsData {
   /** The region the security group lives in. It must be the network's own region — nothing checks that. */
@@ -1510,7 +1552,7 @@ export interface NetworkVirtualNetworksSubnetsData {
     clusterId: string;
     /** Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container. */
     enableDhcp?: boolean;
-    /** Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses. */
+    /** Whether the fabric's node gateway masquerades this subnet's outbound traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: Kube-OVN honours it only for subnets of its default VPC, and every subnet here is in a tenant's own. It stays because the api-version is published. Outbound access for a subnet is a natGateways resource, which translates the subnet to a public IP address you hold. */
     natOutgoing?: boolean;
     /** Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all. */
     private?: boolean;

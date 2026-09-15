@@ -160,10 +160,13 @@ owed:
     says: >
       This load balancer answers on a PRIVATE address inside the tenant's subnet. Publishing it needs a
       public address attached by a second Kube-OVN object — an OvnFip or an OvnDnatRule naming
-      PublicIpAddresses.ObjectNameOf's output — and nothing in this platform creates one yet, which is
-      the other half of charts/managed/kube-ovn-eip's `nothing-can-be-given-an-address-yet`. ⚠ WHAT WAS
-      AVOIDED is foreclosing it: the join is a resource id a future provider resolves through
-      CyberCloud.ResourceManager, and no property here would have to change.
+      PublicIpAddresses.ObjectNameOf's output — and nothing in this platform creates an INBOUND one,
+      which is the other half of charts/managed/kube-ovn-eip's
+      `only-a-nat-gateway-can-be-given-an-address` — the outbound half landed as
+      charts/managed/kube-ovn-snat, joining by NAME within one resource group, which is the shape an
+      inbound attachment would reuse. ⚠ WHAT WAS AVOIDED is foreclosing it: the join is a resource id
+      a future provider resolves through CyberCloud.ResourceManager, and no property here would have
+      to change.
   - id: backends-are-addresses-and-not-resource-ids
     says: >
       docs/plan/14 wants backend pools that "reference resource ids (a VM, a scale set, a cluster's

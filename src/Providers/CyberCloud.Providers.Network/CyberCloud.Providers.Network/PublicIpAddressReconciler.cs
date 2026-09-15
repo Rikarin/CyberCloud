@@ -171,8 +171,10 @@ public sealed class PublicIpAddressReconciler(IClock clock) : IResourceReconcile
     ///     </i> — so the object sits in <c>Terminating</c> and
     ///     this method keeps answering <c>InProgress</c> with the object still readable. That is the
     ///     right answer: releasing the address underneath a live rule would hand it to another tenant
-    ///     while traffic was still arriving. ⚠ It cannot happen in this api-version, because nothing
-    ///     can attach an address yet.
+    ///     while traffic was still arriving. ⚠ It happens the moment a <see cref="NatGateways" />
+    ///     resource names this address (#31): <c>getOvnEipNat</c> lists SNAT rules by the
+    ///     <c>ovn.kubernetes.io/eip_v4_ip</c> label, so a delete of an address with gateways on it
+    ///     waits for the gateways, and the message a tenant sees names the rules rather than a fault.
     /// </remarks>
     public async Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,

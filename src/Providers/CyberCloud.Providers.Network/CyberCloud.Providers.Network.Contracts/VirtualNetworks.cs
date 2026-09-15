@@ -527,9 +527,10 @@ public static class VirtualNetworks {
                     SchemaKind.Boolean,
                     Description: "Whether the network's router is attached to the external network. "
                     + "Off by default: a network that reaches the outside without being asked is a "
-                    + "network whose owner did not choose that. ⚠ Turning it on requires the cluster "
-                    + "to have an external subnet configured; without one the Vpc is accepted and the "
-                    + "attachment never completes."
+                    + "network whose owner did not choose that. A natGateways child needs it on: "
+                    + "without the attachment its translation is programmed and its packets are "
+                    + "dropped. ⚠ Turning it on requires the cluster to have an external subnet "
+                    + "configured; without one the Vpc is accepted and the attachment never completes."
                 ) { DefaultJson = "false" }
             ]
         );
@@ -680,9 +681,13 @@ public static class VirtualNetworks {
     ///         <item>
     ///             <b>
     ///                 <c>vpcPeerings</c>
-    ///             </b> — docs/plan/14 puts <c>peerings</c> at <b>M3</b>, and a
-    ///             peering names another VPC, which is a cross-resource reference this provider has no
-    ///             reader for.
+    ///             </b> — a peering is an entry here <i>and</i> a static route per exchanged
+    ///             range, on both networks' objects, in two atomic arrays. A <c>peerings</c> child
+    ///             would have to write into its parent's object, and <c>KubeCommandBuilder</c> stamps
+    ///             every apply with the applying resource's own ADR-013 labels, so the write is a
+    ///             <c>FieldManagerConflict</c> by construction. The whole finding is on
+    ///             <c>NetworkProvider</c> and at <c>charts/managed/kube-ovn-vpc/conformance.yaml
+    ///             § owed</c>, <c>peerings-need-a-second-writer-on-the-vpc</c> (#31).
     ///         </item>
     ///         <item>
     ///             <b>

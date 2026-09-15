@@ -33,8 +33,22 @@ virtualNetworks/{name}
   ├─ subnets/{name}          → prefix, gateway, DHCP, NAT flag
   ├─ securityGroups/{name}   → rules; Cilium policies + Kube-OVN ACLs
   ├─ routeTables/{name}      → static routes, next-hop
+  ├─ natGateways/{name}      → one subnet's egress through a publicIpAddresses resource (M2, shipped)
   └─ peerings/{name}         → VPC-to-VPC within a tenant (M3)
 ```
+
+> ⚠ **`peerings` is blocked inside this repository, and by the platform rather than by Kube-OVN
+> alone** (#31). A Kube-OVN peering has no object of its own: it is an entry in each network's
+> `Vpc.spec.vpcPeerings` plus a static route per exchanged range in each network's
+> `Vpc.spec.staticRoutes` — both arrays carry no `x-kubernetes-list-type`, so both are atomic under
+> server-side apply, which is the `routeTables` refusal twice over and across two parents. The
+> platform then closes the merge-and-apply way out: `KubeCommandBuilder` stamps every apply with the
+> *applying* resource's ADR-013 labels and reconcile hash, non-overridably, so a `peerings` child
+> applying its parent's `Vpc` is a `FieldManagerConflict` on `cybercloud.io/resource-id`,
+> `resource-type` and `reconcile-hash` by construction. Two resources cannot own one Kubernetes object
+> on this platform today. What would close it — a co-owned apply on the builder and a conformance case
+> that can create a sibling network — is recorded in `NetworkProvider` and at
+> `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`.
 
 **Address space is the tenant's problem and the platform's constraint.** Overlapping CIDRs between a
 tenant's VPCs is fine; overlapping with the platform's underlay is not. The API validates against a
@@ -112,7 +126,7 @@ path must be the good path, not the awkward one.
 
 | Resource | M | Notes |
 |---|---|---|
-| `natGateways` | M2 | Kube-OVN `VpcNatGateway` + an SNAT address. Needed the moment a private subnet wants outbound |
+| `natGateways` | M2 | ~~Kube-OVN `VpcNatGateway` + an SNAT address.~~ ⚠ **Corrected (#31): a Kube-OVN `OvnSnatRule` naming the `OvnEip` that `publicIpAddresses` renders**, shipped as `virtualNetworks/natGateways`. A `VpcNatGateway` is a StatefulSet pod whose rules name an `IptablesEIP` — a second public-address kind this platform does not allocate — while an `OvnSnatRule` is one NAT row on the VPC's own router, with no pod and no second allocator. ⚠ And it is a tenant subnet's *only* egress: the `natOutgoing` flag on `subnets` is honoured by Kube-OVN's node gateway for the default VPC alone (`isSubnetNeedNat` requires `subnet.Spec.Vpc == ClusterRouter`), so on a tenant VPC it is accepted and does nothing. Needed the moment a private subnet wants outbound |
 | `publicIpAddresses` | M1 | ⊂ the VPC provider; a metered, quota'd, allocatable resource in its own right — because IPv4 is scarce and must be accounted |
 | `firewallPolicies` | M3 | Centralised egress filtering |
 | `trafficManagerProfiles` | M3 | DNS-based failover over our own DNS |

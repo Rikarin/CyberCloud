@@ -49,6 +49,9 @@ import type {
   NetworkVirtualNetworksLoadBalancersData,
   NetworkVirtualNetworksLoadBalancersResource,
   NetworkVirtualNetworksLoadBalancersShowBackendsResult,
+  NetworkVirtualNetworksNatGatewaysData,
+  NetworkVirtualNetworksNatGatewaysResource,
+  NetworkVirtualNetworksNatGatewaysShowEgressResult,
   NetworkVirtualNetworksResource,
   NetworkVirtualNetworksSecurityGroupsData,
   NetworkVirtualNetworksSecurityGroupsResource,
@@ -646,6 +649,36 @@ export class CyberCloudApi {
   /** showBackends — permission 'read'. */
   showBackendsLoadBalancer(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksLoadBalancersShowBackendsResult>> {
     return this.transport.send<NetworkVirtualNetworksLoadBalancersShowBackendsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/loadBalancers/${CyberCloudApi.segment(resourceName)}/showBackends` });
+  }
+
+  /** Reads one NAT gateway. */
+  getNATGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksNatGatewaysResource>> {
+    return this.transport.send<NetworkVirtualNetworksNatGatewaysResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/natGateways/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one NAT gateway. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateNATGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string, data: NetworkVirtualNetworksNatGatewaysData): Promise<ApiResponse<NetworkVirtualNetworksNatGatewaysResource>> {
+    return this.transport.send<NetworkVirtualNetworksNatGatewaysResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/natGateways/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one NAT gateway. A merge patch: what is not set is not changed. */
+  updateNATGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string, data: Partial<NetworkVirtualNetworksNatGatewaysData>): Promise<ApiResponse<NetworkVirtualNetworksNatGatewaysResource>> {
+    return this.transport.send<NetworkVirtualNetworksNatGatewaysResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/natGateways/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one NAT gateway. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteNATGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/natGateways/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the NAT gateways in a resource group. ⚠ A short page never means "that is all there is". */
+  listNATGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, page: PageRequest = {}): Promise<ApiResponse<Page<NetworkVirtualNetworksNatGatewaysResource>>> {
+    return this.transport.send<Page<NetworkVirtualNetworksNatGatewaysResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/natGateways`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** showEgress — permission 'read'. */
+  showEgressNATGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksNatGatewaysShowEgressResult>> {
+    return this.transport.send<NetworkVirtualNetworksNatGatewaysShowEgressResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/natGateways/${CyberCloudApi.segment(resourceName)}/showEgress` });
   }
 
   /** Reads one Security group. */

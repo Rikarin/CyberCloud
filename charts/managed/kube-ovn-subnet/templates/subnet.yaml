@@ -47,6 +47,12 @@ spec:
     not — docs/plan/12 § Cross-cutting decisions defaults external exposure to off — and a subnet that
     silently egresses is the same class of surprise as a publicly readable bucket. It is the only
     field in this family where this provider's default and the substrate's convention disagree.
+
+    ⚠ AND ON A TENANT VPC THE FLAG DOES NOTHING EITHER WAY. pkg/daemon/gateway.go's isSubnetNeedNat
+    requires `subnet.Spec.Vpc == c.config.ClusterRouter`, and `vpc` above is never the cluster
+    router. It is rendered because the api-version is published; egress for a tenant subnet is an
+    OvnSnatRule, charts/managed/kube-ovn-snat. conformance.yaml § owed,
+    `nat-outgoing-is-ignored-in-a-tenant-vpc`.
   */}}
   natOutgoing: {{ .Values.natOutgoing }}
 

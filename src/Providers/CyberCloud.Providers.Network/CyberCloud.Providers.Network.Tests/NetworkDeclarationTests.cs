@@ -15,7 +15,7 @@ public sealed class NetworkDeclarationTests {
         // process that does not start. Running it here is what turns those into a test failure.
         var registry = Build();
 
-        registry.Types.Length.ShouldBe(5);
+        registry.Types.Length.ShouldBe(6);
 
         registry.Types.Select(x => x.Type.ToString())
             .ShouldBe(
@@ -31,7 +31,10 @@ public sealed class NetworkDeclarationTests {
                     // type renders is annotated onto one subnet of one VPC, so the network comes from the
                     // ADDRESS and cannot be wrong. The alternative is a network-name property nothing
                     // validates. See NetworkProvider's remarks.
-                    "CyberCloud.Network/virtualNetworks/loadBalancers"
+                    "CyberCloud.Network/virtualNetworks/loadBalancers",
+                    // ⚠ TWO SEGMENTS AGAIN, on the load balancer's argument: an OvnSnatRule names a
+                    // subnet of one VPC, and the subnet's object name folds in the network's.
+                    "CyberCloud.Network/virtualNetworks/natGateways"
                 ],
                 ignoreOrder: true
             );
@@ -59,8 +62,9 @@ public sealed class NetworkDeclarationTests {
             } else {
                 meters.ShouldNotContain(
                     QuotaMeter.PublicIps,
-                    $"{type.Type} draws the scarce meter, and a Vpc, a Subnet and a SecurityGroup are "
-                    + "rows in a database that consume no address at all"
+                    $"{type.Type} draws the scarce meter. A Vpc, a Subnet and a SecurityGroup are rows in "
+                    + "a database that consume no address, and a NAT gateway NAMES an address the "
+                    + "publicIpAddresses resource already drew — charging it twice"
                 );
             }
 
@@ -222,7 +226,7 @@ public sealed class NetworkDeclarationTests {
         // is a token somebody else will reach for, and docs/plan/21 § Grammar spells the type
         // `loadBalancers` — a tenant who has never heard of HAProxy should be able to guess it.
         ShortNames().ShouldBe(
-            ["vnet", "subnet", "secgroup", "publicip", "loadbalancer"],
+            ["vnet", "subnet", "secgroup", "publicip", "loadbalancer", "natgateway"],
             ignoreOrder: true
         );
     }

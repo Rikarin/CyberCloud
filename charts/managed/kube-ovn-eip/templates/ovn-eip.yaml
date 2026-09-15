@@ -15,7 +15,8 @@ allocated is the scarce one.
 
 ⚠ AN ADDRESS ON ITS OWN CARRIES NO TRAFFIC, which is this type's answer to "what does an empty body
 expose". Reaching a tenant workload through an EIP takes a SECOND object — an OvnFip, OvnDnatRule or
-OvnSnatRule naming it — and this chart renders none. conformance.yaml,
+OvnSnatRule naming it — and this chart renders none. The one this platform does render, the
+OvnSnatRule of charts/managed/kube-ovn-snat, is outbound-only. conformance.yaml,
 `an-unattached-address-carries-no-traffic`.
 */}}
 apiVersion: kubeovn.io/v1

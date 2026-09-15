@@ -420,6 +420,77 @@ public sealed class LoadBalancerCase : IProviderCaseSource {
     public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [VirtualNetworkCase.ProviderCase];
 }
 
+/// <summary>
+///     <c>CyberCloud.Network/virtualNetworks/natGateways</c> — the family's sixth type, and the first
+///     whose object names two other resources' objects.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠
+///         <b>
+///             THE ADDRESS AND THE SUBNET IT NAMES DO NOT EXIST IN THE HARNESS, AND THE SUITE
+///             CANNOT TELL.
+///         </b> The rendered <c>OvnSnatRule</c> carries <c>spec.ovnEip</c> and <c>spec.vpcSubnet</c>
+///         naming objects nothing here created; the k3s the cluster-backed half starts has no
+///         Kube-OVN, so nothing resolves either name, and the Docker-free half's world resolves
+///         nothing at all. What both halves therefore prove is that the join is <i>spelled</i> the way
+///         <see cref="PublicIpAddresses.ObjectNameOf" /> and
+///         <see cref="NetworkSubnets.ObjectNameOf(string, string, string)" /> spell it — which is the
+///         thing most likely to be wrong and the thing a real fabric reports worst, as a rule that
+///         never becomes ready. <c>charts/managed/kube-ovn-snat/conformance.yaml § owed</c>,
+///         <c>the-joins-are-not-resolved-before-202</c>.
+///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             <c>ChangedBody</c> VARIES A PROPERTY THE SCHEMA MARKS <c>Immutable</c>, FOR
+///             <see cref="PublicIpAddressCase" />'S REASON ON A SECOND KIND.
+///         </b> <c>handleUpdateOvnSnatRule</c> refuses every effective change by name once the rule
+///         is ready, so there is no body change that both reaches the cluster and would survive a real
+///         controller; the subnet is varied because it is the axis a tenant would most want to move.
+///         What this proves is that the renderer's output reaches the cluster on an update; what it
+///         cannot prove is that the update takes effect —
+///         <c>conformance.yaml § owed</c>, <c>a-nat-rule-cannot-be-changed</c>.
+///     </para>
+///     <para>
+///         ⚠ <b>THE INVALID BODY IS A MALFORMED NAME</b>, because both properties are names and
+///         <c>ResourceNaming.Pattern</c> is the whole rule. <c>Web_Tier</c> is refused at the API at
+///         <c>/properties/subnet</c>, with a <c>400</c> and that pointer, before the write path answers.
+///     </para>
+/// </remarks>
+public sealed class NatGatewayCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.Network/virtualNetworks/natGateways",
+            CreateProvider = () => new NetworkProvider(),
+            ReconcilerType = typeof(NatGatewayReconciler),
+            CreateReconciler = clock => new NatGatewayReconciler(clock),
+            Type = NatGateways.Type,
+            ApiVersion = NatGateways.V2026,
+            Body = cluster => NatGateways.Body(cluster),
+            ChangedBody = cluster => NatGateways.Body(cluster, subnet: "db"),
+            InvalidBody = cluster => NatGateways.Body(cluster, subnet: "Web_Tier"),
+            InvalidBodyTarget = "/properties/subnet",
+            ActionName = NatGateways.EgressAction,
+            Objects = (id, ns) => [NatGateways.OvnSnatRuleRef(ns, id)],
+            // ⚠ Empty, and it is a statement: an OvnSnatRule carries no credential, and what
+            // `showEgress` reads is the rule's own status.
+            OperatorWritten = static (_, _) => [],
+            // ⚠ THE WHOLE PREDICATE, AND TWO OF ITS THREE FIELDS ARE DERIVED FROM THE ADDRESS —
+            // `spec.vpc` and the network half of `spec.vpcSubnet`. It is the subnet case's reason for
+            // reading `match.Namespace` and `match.Id`, on the kind where a wrong binding translates
+            // another tenant's range out through this tenant's address.
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return NatGateways.Matches(match.ObjectJson, match.Namespace, match.Id, desired.RootElement);
+            }
+        };
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [VirtualNetworkCase.ProviderCase];
+}
+
 /// <summary>The shared suite, run against the virtual-network provider.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class VirtualNetworkConformance(ProviderTestCluster<VirtualNetworkCase> cluster)
@@ -464,6 +535,15 @@ public sealed class LoadBalancerConformance(ProviderTestCluster<LoadBalancerCase
     : ProviderConformanceTests<LoadBalancerCase>(cluster),
     IClassFixture<ProviderTestCluster<LoadBalancerCase>>;
 
+/// <summary>
+///     The <b>same</b> suite again, run against the NAT gateway — the family's third child-shaped
+///     addition and the first whose object names two other resources' objects.
+/// </summary>
+/// <param name="cluster">The harness.</param>
+public sealed class NatGatewayConformance(ProviderTestCluster<NatGatewayCase> cluster)
+    : ProviderConformanceTests<NatGatewayCase>(cluster),
+    IClassFixture<ProviderTestCluster<NatGatewayCase>>;
+
 /// <summary>The container-backed half, skipped loudly, against the virtual-network type.</summary>
 public sealed class VirtualNetworkClusterBackedConformance()
     : ClusterBackedConformanceTests(VirtualNetworkCase.ProviderCase);
@@ -503,6 +583,10 @@ public sealed class PublicIpAddressClusterBackedConformance()
 public sealed class LoadBalancerClusterBackedConformance()
     : ClusterBackedConformanceTests(LoadBalancerCase.ProviderCase);
 
+/// <summary>The container-backed half, skipped loudly, against the NAT gateway.</summary>
+public sealed class NatGatewayClusterBackedConformance()
+    : ClusterBackedConformanceTests(NatGatewayCase.ProviderCase);
+
 /// <summary>
 ///     What this provider's two registrations into the shared suite are <b>shaped</b> like.
 /// </summary>
@@ -539,6 +623,11 @@ public sealed class NetworkSuiteShapeTests {
             "the load balancer runs a different set of assertions than the virtual network does."
         );
 
+        RunnableFactsOf(typeof(NatGatewayConformance)).ShouldBe(
+            parent,
+            "the NAT gateway runs a different set of assertions than the virtual network does."
+        );
+
         parent.Length.ShouldBeGreaterThan(20);
     }
 
@@ -565,7 +654,10 @@ public sealed class NetworkSuiteShapeTests {
                      // address's answer and for the opposite reason: every object it renders is
                      // annotated onto a subnet of one VPC, so the harness must create the network
                      // first or the case is testing a proxy in a network that does not exist.
-                     AncestorsOf<LoadBalancerCase>()
+                     AncestorsOf<LoadBalancerCase>(),
+                     // ⚠ And the NAT gateway, for the load balancer's reason: its rule names a subnet
+                     // of one VPC, so the harness must create the network first.
+                     AncestorsOf<NatGatewayCase>()
                  ]) {
             ancestors.Length.ShouldBe(1);
 
@@ -668,6 +760,23 @@ public sealed class NetworkSuiteShapeTests {
             target.Namespace.ShouldBe("ns");
             target.Name.ShouldBe("net-web");
         }
+
+        // ⚠ AND THE SIXTH IS CLUSTER-SCOPED AGAIN, WITH THE THIRD HYPHENATED PLURAL. The scope
+        // alternates through the family — Vpc, Subnet, SecurityGroup and OvnEip cluster-scoped, a
+        // ConfigMap and a Deployment namespaced, an OvnSnatRule cluster-scoped — so "like the last
+        // one" is the wrong rule twice over and each case pins its own answer here.
+        var gateway = NatGatewayCase.ProviderCase.Objects(child with { Type = NatGateways.Type }, "ns");
+
+        gateway.Length.ShouldBe(1);
+        gateway[0].IsClusterScoped.ShouldBeTrue("a Kube-OVN OvnSnatRule is +kubebuilder:resource:scope=\"Cluster\".");
+        gateway[0].Name.ShouldBe("ns-net-web");
+
+        gateway[0].Kind.Plural.ShouldBe(
+            "ovn-snat-rules",
+            "the plural is HYPHENATED — +kubebuilder:resource:path=\"ovn-snat-rules\". "
+            + "ClusterConformanceHarness derives its CRD stub's path from GroupVersionKind.Plural, so "
+            + "`ovnsnatrules` would install a definition at a path the apply never reaches."
+        );
     }
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()
