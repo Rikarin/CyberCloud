@@ -303,6 +303,56 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
     }
 
     [Fact]
+    public void ARoleAssignmentPageRoundTripsWithItsRows() {
+        // ⚠ Not a defect today — IRoleAssignmentManager is gateway-side and a page never crosses a
+        // grain boundary — but the type carries [GenerateSerializer] and an ImmutableArray, which is
+        // exactly the pair this file's remarks say only a real serializer can vouch for. The day the
+        // listing is served from a grain, this is the row that already says the page survives it.
+        var value = new RoleAssignmentPage {
+            Assignments = [
+                new() {
+                    Path = "/tenants/t/subscriptions/s/providers/CyberCloud.Authorization/roleAssignments/owner-user-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d",
+                    Name = "owner-user-7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d",
+                    Scope = "/tenants/t/subscriptions/s",
+                    RoleDefinitionId = "owner",
+                    PrincipalType = "user",
+                    PrincipalId = "7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d",
+                    Inherited = true
+                },
+                new() {
+                    Path = "/tenants/t/subscriptions/s/resourceGroups/rg/providers/CyberCloud.Authorization/roleAssignments/reader-group-2b4a1c662e704a9d9d0a1f7ec1f1a4b3",
+                    Name = "reader-group-2b4a1c662e704a9d9d0a1f7ec1f1a4b3",
+                    Scope = "/tenants/t/subscriptions/s/resourceGroups/rg",
+                    RoleDefinitionId = "reader",
+                    PrincipalType = "group",
+                    PrincipalId = "2b4a1c662e704a9d9d0a1f7ec1f1a4b3"
+                }
+            ],
+            Continuation = "/tenants/t/subscriptions/s/resourceGroups/rg/providers/CyberCloud.Authorization/roleAssignments/reader-group-2b4a1c662e704a9d9d0a1f7ec1f1a4b3"
+        };
+
+        var round = RoundTrip(value);
+
+        round.Assignments.IsDefault.ShouldBeFalse();
+        round.Assignments.Length.ShouldBe(2);
+        round.Assignments[0].ShouldBe(value.Assignments[0]);
+        round.Assignments[0].Inherited.ShouldBeTrue();
+        round.Assignments[1].ShouldBe(value.Assignments[1]);
+        round.Assignments[1].Inherited.ShouldBeFalse();
+        round.Continuation.ShouldBe(value.Continuation);
+        round.HasMore.ShouldBeTrue();
+
+        var request = new RoleAssignmentListRequest {
+            Path = value.Assignments[1].Scope,
+            Caller = new() { TenantId = Guid.NewGuid(), SubjectType = "user", SubjectId = "alice" },
+            Top = 25,
+            Continuation = value.Continuation
+        };
+
+        RoundTrip(request).ShouldBe(request);
+    }
+
+    [Fact]
     public void ASecretRefRoundTripsAndCarriesNoValue() {
         // ⚠ The absence is the property — docs/plan/00 § Non-negotiables, "secrets never reach grain
         // state". A SecretRef is an address, and there is no member a value could ride in.

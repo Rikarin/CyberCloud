@@ -83,7 +83,9 @@ for building this rather than a role table.
 `PUT`/`GET`/`DELETE {scope}/providers/CyberCloud.Authorization/roleAssignments/{name}`, where the
 scope is a tenant, a subscription, a resource group or a resource — Azure's shape — is served by
 `IRoleAssignmentManager` over `ITupleStoreGrain`, and the name is
-**`{role}-{principalType}-{principalId}`**: `reader-user-7f3c…`, `contributor-group-eng`. That is
+**`{role}-{principalType}-{principalId}`**: `reader-user-7f3c…`, `contributor-group-2b4a…` (the id is
+the principal's `N`-form GUID — a group has one as a user does, and `contributor-group-eng` would
+name a principal the directory check below refuses). That is
 the one place the address departs from Azure's, and it is a decision rather than a shortcut. Azure's
 `{name}` is a client-minted GUID kept in a record beside the grant so that it can be looked up
 again; a record that maps a GUID to a tuple is the role table the paragraph above argues against,

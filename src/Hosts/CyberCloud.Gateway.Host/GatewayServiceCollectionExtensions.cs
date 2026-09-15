@@ -89,16 +89,22 @@ static class GatewayServiceCollectionExtensions {
         // docs/plan/10 § What the gateway must never do puts authorization in one place, inside the
         // resource manager, and a registration line is still a line that has to change when the
         // engine changes. GatewayIsolationTests reads this project's source for that name.
-        //
-        // ⚠ THE PRINCIPAL DIRECTORY GOES IN FIRST, AND THE ORDER IS THE WHOLE REGISTRATION.
-        // AddCyberCloudResourceManager TryAdds a refusing IPrincipalDirectory, so a line after it
-        // would leave the refusal in place and every PUT on a role assignment would answer 500
-        // naming this method. GrainPrincipalDirectory is the adapter over the identity grains that
-        // only a host referencing both assemblies can write — its remarks say why it is here and
-        // not in either module.
-        services.TryAddSingleton<IPrincipalDirectory, GrainPrincipalDirectory>();
         services.AddCyberCloudResourceManager();
         services.TryAddSingleton<IOperationReader, TenantScopedOperationReader>();
+
+        // ⚠ THE PRINCIPAL DIRECTORY IS Replace, NOT TryAdd, AND THAT IS WHAT MAKES THE ORDER FREE.
+        // AddCyberCloudResourceManager TryAdds a refusing IPrincipalDirectory. This line used to be
+        // a TryAdd placed BEFORE that call, which was correct and held by nothing: swap the two lines
+        // and the refusal stays, every PUT on a role assignment answers 500 naming that call, and
+        // both host suites stay green — the review of #86 ran exactly that sabotage. Replace is the
+        // shape the vault (AddOpenBaoSecretResolver) and the OTP seam (AddCommunicationOtpDelivery)
+        // already use over the same kind of default: it wins in either order and leaves exactly one
+        // descriptor, so nothing taking IEnumerable<IPrincipalDirectory> can meet the refusal behind
+        // the real one. HostCompositionTests.TheGatewayWiresTheDirectoryAndTheSiloKeepsTheRefusal
+        // pins the composed result, which is the half a comment cannot. GrainPrincipalDirectory is
+        // the adapter over the identity grains that only a host referencing both assemblies can
+        // write — its remarks say why it is here and not in either module.
+        services.Replace(ServiceDescriptor.Singleton<IPrincipalDirectory, GrainPrincipalDirectory>());
 
         // ── SignalR. docs/plan/10 § SignalR — no backplane product, by design. ──
         //

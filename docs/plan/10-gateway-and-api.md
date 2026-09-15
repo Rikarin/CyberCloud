@@ -68,9 +68,9 @@ On a resource group the address is a well-formed ten-segment resource path — a
 `CyberCloud.Authorization/roleAssignments` — so tried second it would reach `IResourceManager` and be
 refused as a type no provider serves. What keeps that from being a precedence rule nobody wrote down
 is that `CyberCloud.Authorization` is a reserved namespace: `ProviderRegistry.Build` refuses a
-provider that claims it, and under it only the assignment grammar answers — a malformed name is a
-`400` that names the grammar, never a fall-through into the resource or collection grammars and
-their `404`. `PUT` answers `201` on a grant and `200` on a repeat, `DELETE` answers `204`, and there
+provider that claims it, and under it only the two assignment grammars answer — the item's and,
+since #86, the collection's below — so a malformed name is a `400` that names the grammar, never a
+fall-through into the resource or resource-collection grammars and their `404`. `PUT` answers `201` on a grant and `200` on a repeat, `DELETE` answers `204`, and there
 is no `202`: an assignment is one tuple write and converges before the call returns.
 
 **The collection is served too (issue #86):** `GET {scope}/providers/CyberCloud.Authorization/roleAssignments`

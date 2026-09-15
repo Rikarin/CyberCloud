@@ -194,9 +194,10 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IRoleAssignmentStore, ReBacRoleAssignmentStore>();
         // ⚠ THE DIRECTORY IS A REFUSING DEFAULT, LIKE THE VAULT'S, AND FOR THE SAME LAYERING REASON.
         // The real one reads the identity grains, which this assembly cannot name; the gateway
-        // registers GrainPrincipalDirectory before calling this, and TryAdd leaves it in place. A
-        // host that composes the manager and forgets the directory grants nothing rather than
-        // granting to anybody — UnavailablePrincipalDirectory's remarks say why not `false`.
+        // Replaces this descriptor with GrainPrincipalDirectory, in whichever order it writes the
+        // two calls, exactly as AddOpenBaoSecretResolver replaces the vault's default. A host that
+        // composes the manager and forgets the directory grants nothing rather than granting to
+        // anybody — UnavailablePrincipalDirectory's remarks say why not `false`.
         services.TryAddSingleton<IPrincipalDirectory, UnavailablePrincipalDirectory>();
         services.TryAddSingleton<IRoleAssignmentManager, RoleAssignmentService>();
 
