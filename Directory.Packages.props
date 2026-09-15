@@ -168,6 +168,15 @@
         <PackageVersion Include="OpenIddict.Core" Version="7.6.0"/>
         <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.6.0"/>
         <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.6.0"/>
+        <!--
+          The gateway's half of ADR-015. docs/plan/11 § Managed identity used to name
+          Validation.AspNetCore as what the gateway references and is corrected: the gateway's stage 2
+          is not an ASP.NET Core authentication handler, so the AspNetCore integration would register
+          a scheme nothing consults, while SystemNetHttp is the piece that actually fetches the
+          discovery document and the key set. Same product, same version, same ADR — and still
+          Validation, never Server, which is the boundary that sentence is about.
+        -->
+        <PackageVersion Include="OpenIddict.Validation.SystemNetHttp" Version="7.6.0"/>
 
         <!--
           ⚠ CORRECTED: docs/plan/02 § Data, transport, Kubernetes pins 4.0.0-beta9 and justifies it with "it is a beta with no

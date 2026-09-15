@@ -43,27 +43,35 @@ readonly record struct TokenClaims(
 ///     <para>
 ///         ⚠
 ///         <b>
-///             This is a seam, and the implementation that closes it lives in the identity host,
-///             which is a different component being built separately.
-///         </b> docs/plan/10 § Authentication
-///         inputs describes five callers and one credential shape; nothing about that shape is the
-///         gateway's to decide. What the gateway owns is everything <i>after</i> a token is known
-///         good, and that half is complete and tested.
+///             This is a seam, and <see cref="JwksCallerContextResolver" /> is the production
+///             implementation — registered by <c>GatewayComposition.BuildAsync</c> from
+///             <c>CyberCloud:Gateway:Identity</c>, and refused at composition when nothing is.
+///         </b> docs/plan/10 § Authentication inputs describes five callers and one credential
+///         shape; nothing about that shape is the gateway's to decide. What the gateway owns is
+///         everything <i>after</i> a token is known good, and the list below is what it asked the
+///         identity host for so that a token could be known good at all. Each item now says where it
+///         is met. ⚠ For as long as no implementation was registered, the gateway built, started,
+///         passed its health checks and answered <c>500</c> to every other request —
+///         https://github.com/Rikarin/CyberCloud/issues/68 — which is why the composition now
+///         refuses rather than defaults.
 ///     </para>
 ///     <para>
-///         <b>Exactly what the identity host must provide for a production implementation:</b>
+///         <b>Exactly what the identity host provides, and where:</b>
 ///     </para>
 ///     <list type="number">
 ///         <item>
 ///             <b>An OIDC discovery document and a JWKS endpoint</b>, reachable from every gateway
 ///             pod in every region, with the signing keys the platform's tokens are signed with. The
 ///             gateway caches the JWKS and refreshes on an unknown <c>kid</c> — a rotation must not
-///             need a gateway deploy.
+///             need a gateway deploy. ✅ OpenIddict's server endpoints on the identity host, at
+///             <c>AccessTokenPolicy.DiscoveryPath</c> and <c>AccessTokenPolicy.JsonWebKeySetPath</c>;
+///             fetched, cached and refreshed by <c>OpenIddictValidationService</c>.
 ///         </item>
 ///         <item>
 ///             <b>The issuer and audience values</b> a valid token carries, so validation can pin
 ///             both. An unpinned audience means a token minted for some other relying party is
-///             accepted here.
+///             accepted here. ✅ <c>GatewayIdentityOptions</c>, from configuration; the audience is
+///             <c>AccessTokenPolicy.Audience</c> on both sides.
 ///         </item>
 ///         <item>
 ///             <b>A <c>tid</c> claim on every token</b>, a GUID, present on user tokens, service
@@ -71,7 +79,10 @@ readonly record struct TokenClaims(
 ///             whole tenancy boundary rests on — docs/plan/00 § The tenant-separation row, corrected
 ///             makes the gateway the <i>only</i> thing standing between a client-side
 ///             <c>IGrainFactory</c> and another tenant's grains. A token without <c>tid</c> must be
-///             rejected, never defaulted.
+///             rejected, never defaulted. ✅ Minted on every path by <c>AccessTokenPrincipalFactory</c>;
+///             refused when absent by <c>JwksCallerContextResolver.ToClaims</c>, and
+///             <c>JwksCallerContextResolverTests.AMissingMalformedOrEmptyTidIsRefusedNeverDefaulted</c>
+///             holds the refusal.
 ///         </item>
 ///         <item>
 ///             <b>A subject type</b> distinguishable from the subject id, because ReBAC subjects are
@@ -116,11 +127,15 @@ readonly record struct TokenClaims(
 ///             <b>Token lifetime of 10 minutes</b> and a refresh flow, per docs/plan/10
 ///             § Authentication inputs. The gateway enforces <see cref="TokenClaims.ExpiresAt" />
 ///             itself as well, so a validator misconfigured to ignore <c>exp</c> is still caught.
+///             ✅ <c>AccessTokenPolicy.AccessTokenLifetime</c> on the server; both checks in the
+///             resolver. ⚠ The refresh flow is owed — it follows the authorization-code grant, which
+///             the identity host's <c>TokenApi</c> says is waiting on a client index.
 ///         </item>
 ///         <item>
 ///             <b>The trusted OIDC issuer per tenant cluster</b>, for the workload-identity exchange
 ///             in docs/plan/10 § Authentication inputs. The exchange itself happens at the identity
-///             host; the gateway only ever sees the platform token it returns.
+///             host; the gateway only ever sees the platform token it returns. ⚠ The decision exists
+///             (<c>ITokenExchange</c>) and the grant is not yet accepted at <c>/token</c>.
 ///         </item>
 ///     </list>
 ///     <para>

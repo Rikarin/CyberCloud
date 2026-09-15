@@ -1,7 +1,10 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Core;
+using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Gateway.Host;
-using CyberCloud.Gateway.Host.Authentication;
+using CyberCloud.Identity.Contracts;
+using CyberCloud.Identity.Host;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.ServiceDefaults;
@@ -14,6 +17,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using AuthObjectRef = CyberCloud.Authorization.Contracts.ObjectRef;
@@ -38,15 +42,33 @@ namespace CyberCloud.AppHost.Tests;
 ///         between.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Why it could not be written before, and what changed.</b> Stage 2 resolves
-///         <c>ICallerContextResolver</c> and the only implementation that issues a token is
-///         <c>internal</c> to the gateway, so no suite outside that assembly could make an
-///         authenticated request at all. Three shapes were considered and the argument is recorded
-///         where the change is — <c>CyberCloud.Gateway.Host.csproj</c> § the one
-///         <c>InternalsVisibleTo</c> beyond the sibling suite. In short: the identity registration is
-///         supplied by this test through <c>GatewayComposition.BuildAsync</c>'s <c>configure</c>
-///         parameter, so no test-only seam was added to the composition root, and the gateway's own
-///         <c>Program.cs</c> passes nothing and behaves exactly as it did.
+///         ⚠
+///         <b>
+///             The token comes from the real identity host, and the gateway validates it the way
+///             the deployed one does.
+///         </b> This file starts <c>IdentityComposition.BuildAsync</c> — the object graph
+///         <c>CyberCloud.Identity.Host</c>'s own <c>Program.cs</c> builds — beside the gateway, and
+///         tells the gateway to trust it through the same <c>CyberCloud:Gateway:Identity:Issuer</c>
+///         key a deployment sets. A service principal takes a client-credentials token from
+///         <c>/token</c>; the gateway fetches the discovery document and the key set from
+///         <c>/.well-known/*</c>, checks the signature, the issuer, the audience and the expiry, and
+///         reads <c>tid</c> and <c>sub_typ</c> off what survived. Nothing in the identity seam is
+///         substituted, and https://github.com/Rikarin/CyberCloud/issues/68 — a deployed gateway
+///         with no resolver at all, invisible to a suite that supplied one through <c>configure</c>
+///         — is what this arrangement closes. The one thing supplied here that a deployment
+///         supplies differently is the vault: <see cref="TestClientSecrets" /> is the
+///         <c>IClientSecretSeam</c> a deployment registers over OpenBao, and it verifies exactly one
+///         secret.
+///     </para>
+///     <para>
+///         ⚠ <b>Why a service principal and not a user.</b> Client credentials is the one grant in
+///         docs/plan/11 § Protocol's table that completes with no browser, no cookie and no page —
+///         which makes it the one a test can drive over HTTP and the one the identity host serves
+///         first. <c>TokenApi</c>'s remarks say what each of the other grants is waiting on. The
+///         subject type therefore rides the whole path as <c>servicePrincipal</c>: the tenant's
+///         owner tuple names one, the token's <c>sub_typ</c> says so, and the resource manager's
+///         checks resolve against it — which is the property <c>AccessTokenClaims.SubjectType</c>
+///         exists for, exercised end to end for a subject that is not a user.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -66,25 +88,12 @@ namespace CyberCloud.AppHost.Tests;
 ///         where a claim assertion listed a shared namespace and saw five sibling resources.
 ///     </para>
 ///     <para>
-///         ⚠⚠ <b>WHAT THIS TEST DOES NOT PROVE, AND IT IS THE FIRST THING TO READ.</b> It composes
-///         the real gateway and then supplies, through <c>configure</c>, an identity implementation
-///         that <b>no shipping host supplies</b>: <c>AddIssuedTokenAuthentication</c> has no caller
-///         anywhere except <see cref="BuildGatewayAsync" /> below. So a green run here is compatible
-///         with a deployed <c>CyberCloud.Gateway.Host</c> that registers no
-///         <c>ICallerContextResolver</c>, starts, passes its health checks, and answers <c>500</c> to
-///         every request — which it does today. This test proves the nine stages reach the real
-///         resource manager <i>given</i> an identity implementation; it proves nothing about whether
-///         production has one, and it must not be read as evidence that it does.
-///     </para>
-///     <para>
-///         ⚠ That gap is deliberate rather than a defect of this file — docs/plan/11's identity host
-///         maps no token endpoint yet, so there is no correct production registration to make, and
-///         inventing one here would ship a gateway authenticating against an in-process table, which
-///         is worse than the <c>500</c> precisely because it would <i>work</i>. It is tracked as
-///         https://github.com/Rikarin/CyberCloud/issues/68 and written down in
-///         <c>GatewayServiceCollectionExtensions.AddIssuedTokenAuthentication</c>'s remarks.
-///         ⚠ <b>The day #68 closes, this paragraph stops being true and must be deleted</b> — a
-///         warning that has outlived its cause is how a file starts lying.
+///         ⚠ <b>What is still supplied by this file rather than by the platform.</b> The service
+///         principal is created by reaching for <c>IServicePrincipalGrain</c> directly, because
+///         nothing over HTTP creates one yet; and its secret is verified by
+///         <see cref="TestClientSecrets" /> rather than by a vault, because no host wires one.
+///         Both are stated so they can be paid rather than forgotten. Neither is the identity seam:
+///         the token is minted, signed, published and validated by the two real hosts.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>One test, not a sweep.</b> Every additional case here costs a topology cycle and
@@ -104,14 +113,30 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     static readonly Guid Subscription = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0021");
     static readonly Guid Cluster = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0022");
 
+    /// <summary>
+    ///     The service principal the story is performed as. Its id is its <c>client_id</c> —
+    ///     <c>TokenApi</c>'s remarks say why — and the ReBAC subject the tenant's owner tuple names.
+    /// </summary>
+    static readonly Guid ServicePrincipal = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0023");
+
     const string ResourceGroup = "over-http";
     const string Widget = "http-widget";
-    const string Subject = "http-operator";
     const string Slug = "phase-1-over-http";
+
+    /// <summary>Where the principal's secret would live in a vault; the handle its descriptor carries.</summary>
+    static readonly SecretRef CredentialRef = new() { Path = "tenants/phase-1-over-http/sp/ci", Field = "secret" };
+
+    /// <summary>
+    ///     The secret itself. ⚠ Held by the test and by <see cref="TestClientSecrets" />, and by
+    ///     nothing else — it is never written to a grain, which is the rule <c>CC1005</c> enforces on
+    ///     the platform side.
+    /// </summary>
+    const string ClientSecret = "phase-1-over-http-client-secret-9f3c";
 
     /// <summary>The query every non-hub route requires — docs/plan/10 § Versioning.</summary>
     const string Version = "?api-version=" + SampleWidgets.V2026;
 
+    WebApplication identity = null!;
     WebApplication gateway = null!;
     HttpClient http = null!;
     string token = null!;
@@ -123,25 +148,21 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     public async ValueTask InitializeAsync() {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        gateway = await BuildGatewayAsync();
+        // ⚠ The identity host first, because the gateway is configured with its address, and the
+        // address is not known until Kestrel has bound a port.
+        identity = await BuildIdentityHostAsync();
+        identity.MapIdentityHost();
+        await identity.StartAsync(cancellationToken);
+
+        gateway = await BuildGatewayAsync(identity.Urls.First());
         gateway.MapGateway();
         await gateway.StartAsync(cancellationToken);
 
         await BootstrapTenantAsync(cancellationToken);
+        await CreateServicePrincipalAsync();
         await AttachClusterAsync();
 
-        token = gateway.Services
-            .GetRequiredService<IssuedTokenCallerContextResolver>()
-            .Issue(
-                new(
-                    Tenant,
-                    SubjectTypes.User,
-                    Subject,
-                    Scopes: "",
-                    ImpersonatedBy: "",
-                    DateTimeOffset.UtcNow.AddMinutes(30)
-                )
-            );
+        token = await TakeTokenAsync(cancellationToken);
 
         http = new() { BaseAddress = new(gateway.Urls.First()) };
     }
@@ -153,6 +174,11 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         if (gateway is not null) {
             await gateway.StopAsync(CancellationToken.None);
             await gateway.DisposeAsync();
+        }
+
+        if (identity is not null) {
+            await identity.StopAsync(CancellationToken.None);
+            await identity.DisposeAsync();
         }
     }
 
@@ -185,6 +211,21 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         );
 
         anonymous.Headers.WwwAuthenticate.ToString().ShouldContain("Bearer");
+
+        // ⚠ AND A TOKEN THIS PLATFORM DID NOT SIGN IS REFUSED THE SAME WAY. The real token below has
+        // the same shape as this one — three base64url segments — and differs only in whose key
+        // signed it. A 401 here is what says the gateway checked the signature against the key set
+        // the identity host published, rather than reading tid off whatever it was handed.
+        using var forged = new HttpRequestMessage(HttpMethod.Get, new Uri(Address.Path + Version, UriKind.Relative));
+        forged.Headers.Authorization = new("Bearer", Forge(token));
+
+        using var refused = await http.SendAsync(forged, cancellationToken);
+
+        refused.StatusCode.ShouldBe(
+            HttpStatusCode.Unauthorized,
+            "a token with a valid body and an invalid signature was accepted. Stage 2 is not "
+            + "validating against the identity host's key set."
+        );
 
         // ── Step 1: the subscription. 201, and nothing in this test wrote a role tuple for it. ──
         //
@@ -481,7 +522,8 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
                 .Create(ObjectTypes.Tenant, Tenant.ToString("N", CultureInfo.InvariantCulture))
                 .GetValueOrThrow(),
             Relations.Owner,
-            SubjectRef.Create(SubjectTypes.User, Subject).GetValueOrThrow()
+            SubjectRef.Create(SubjectTypes.ServicePrincipal, ServicePrincipal.ToString("N", CultureInfo.InvariantCulture))
+                .GetValueOrThrow()
         )
             .GetValueOrThrow();
 
@@ -538,24 +580,196 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         Path.Combine(TestPaths.AppHostDirectory, ".k3s", "kubeconfig.yaml");
 
     /// <summary>
-    ///     Builds the <b>real</b> gateway and gives it the identity implementation this deployment
-    ///     supplies.
+    ///     Creates the service principal the story is performed as, with a credential handle that
+    ///     <see cref="TestClientSecrets" /> knows how to answer for.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><c>AddIssuedTokenAuthentication</c> is called by this test and by no host</b>, which
-    ///     is what keeps it out of production. <c>GatewayComposition.BuildAsync</c> registers no
-    ///     <c>ICallerContextResolver</c> at all — deliberately, so a gateway cannot end up
-    ///     authenticating nobody and serving anyway — and everything else about the host built here
-    ///     is the object graph <c>CyberCloud.Gateway.Host</c>'s own <c>Program.cs</c> builds.
+    ///     ⚠ Reached for directly, like the tenant record above, because nothing over HTTP creates
+    ///     a service principal yet — that is an identity-object API the portal's "app registrations"
+    ///     page will need and docs/plan/11 § The object model describes. The descriptor holds a
+    ///     <see cref="SecretRef" /> and never the secret, which is the difference between this and
+    ///     the "client secret in a Kubernetes Secret" the same document calls the bad answer.
     /// </remarks>
-    static Task<WebApplication> BuildGatewayAsync() =>
+    async Task CreateServicePrincipalAsync() {
+        var created = await topology.Client
+            .ForTenant(Tenant.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IServicePrincipalGrain>(GrainKeys.ServicePrincipal(ServicePrincipal))
+            .CreateAsync(
+                new() {
+                    DisplayName = "Phase 1 over HTTP, as CI would",
+                    Enabled = true,
+                    CredentialSecretRef = CredentialRef
+                }
+            );
+
+        created.IsSuccess.ShouldBeTrue(
+            $"the service principal could not be created: {created.Error?.Code} — {created.Error?.Message}"
+        );
+    }
+
+    /// <summary>
+    ///     Takes a client-credentials token from the identity host, as a CI job would.
+    /// </summary>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <returns>The access token, verbatim.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The response is asserted on beyond <c>access_token</c>, because the wire token is
+    ///         the contract.</b> <c>NoRolesInTokenTests</c> asserts the principal the factory builds;
+    ///         nothing until here asserted what OpenIddict serialized from it, and the two differ in
+    ///         exactly the way that bit: a claim without an access-token destination is dropped
+    ///         silently. So the payload is decoded and checked for the four claims the gateway cannot
+    ///         work without, and for the absence of every claim the contract forbids.
+    ///     </para>
+    ///     <para>
+    ///         Decoded without verifying — this is the test reading its own token, and verification
+    ///         is what the gateway is about to do with it against the published key set.
+    ///     </para>
+    /// </remarks>
+    async Task<string> TakeTokenAsync(CancellationToken cancellationToken) {
+        using var client = new HttpClient { BaseAddress = new(identity.Urls.First()) };
+
+        using var response = await client.PostAsync(
+            new Uri(IdentityHostOpenIddict.TokenPath, UriKind.Relative),
+            new FormUrlEncodedContent(
+                new Dictionary<string, string>(StringComparer.Ordinal) {
+                    ["grant_type"] = "client_credentials",
+                    ["client_id"] = ServicePrincipal.ToString("N", CultureInfo.InvariantCulture),
+                    ["client_secret"] = ClientSecret,
+                    ["scope"] = IdentityHostOpenIddict.Scopes.Api
+                }
+            ),
+            cancellationToken
+        );
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        response.StatusCode.ShouldBe(
+            HttpStatusCode.OK,
+            "the identity host refused the client-credentials grant: " + body
+        );
+
+        var issued = Json(body);
+
+        issued.GetProperty("token_type").GetString().ShouldBe("Bearer");
+
+        var accessToken = issued.GetProperty("access_token").GetString();
+        accessToken.ShouldNotBeNullOrEmpty();
+
+        var payload = Payload(accessToken);
+
+        TestContext.Current.TestOutputHelper?.WriteLine("access token payload: " + payload.GetRawText());
+
+        payload.GetProperty(AccessTokenClaims.TenantId).GetString().ShouldBe(Tenant.ToString("N"));
+        payload.GetProperty(AccessTokenClaims.SubjectType).GetString().ShouldBe(SubjectTypes.ServicePrincipal);
+        payload.GetProperty(AccessTokenClaims.Subject).GetString().ShouldBe(ServicePrincipal.ToString("N"));
+        payload.GetProperty(AccessTokenClaims.Audience).GetString().ShouldBe(AccessTokenPolicy.Audience);
+
+        foreach (var claim in payload.EnumerateObject()) {
+            AccessTokenClaims.ForbiddenClaims.ShouldNotContain(
+                claim.Name,
+                $"the issued token carries '{claim.Name}', which docs/plan/11 § Protocol forbids and "
+                + "the gateway refuses."
+            );
+        }
+
+        return accessToken;
+    }
+
+    /// <summary>The token's payload, decoded and not verified.</summary>
+    static JsonElement Payload(string jwt) {
+        var segment = jwt.Split('.')[1].Replace('-', '+').Replace('_', '/');
+        var padded = segment.PadRight(segment.Length + (4 - segment.Length % 4) % 4, '=');
+
+        return Json(Encoding.UTF8.GetString(Convert.FromBase64String(padded)));
+    }
+
+    /// <summary>
+    ///     The same token with its signature replaced — a body the platform wrote under a signature
+    ///     it did not.
+    /// </summary>
+    static string Forge(string jwt) {
+        var parts = jwt.Split('.');
+        var bogus = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+
+        return $"{parts[0]}.{parts[1]}.{bogus}";
+    }
+
+    /// <summary>
+    ///     Builds the <b>real</b> identity host, bound to this test's tenant and given the one
+    ///     vault seam its token endpoint needs.
+    /// </summary>
+    /// <remarks>
+    ///     <c>IdentityComposition.BuildAsync</c> is the method <c>CyberCloud.Identity.Host</c>'s own
+    ///     <c>Program.cs</c> calls: the same OpenIddict server in the same degraded mode with the same
+    ///     handlers, the same ephemeral ES256 key published at the same <c>/.well-known/jwks</c>, the
+    ///     same <c>TokenApi</c> over the same grains. <c>configure</c> supplies what a deployment
+    ///     supplies — the vault adapter — and nothing else.
+    /// </remarks>
+    static Task<WebApplication> BuildIdentityHostAsync() =>
+        IdentityComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort="
+                + CyberCloudResources.SiloOneGatewayPort.ToString(CultureInfo.InvariantCulture),
+                $"--{IdentityHostOptions.SectionName}:TenantId=" + Tenant.ToString("D", CultureInfo.InvariantCulture)
+            ],
+            services => services.AddSingleton<IClientSecretSeam>(new TestClientSecrets(CredentialRef, ClientSecret))
+        );
+
+    /// <summary>
+    ///     Builds the <b>real</b> gateway, told which identity host to trust.
+    /// </summary>
+    /// <param name="issuer">Where the identity host is listening.</param>
+    /// <remarks>
+    ///     ⚠ <b>No <c>configure</c>.</b> Everything about the host built here is the object graph
+    ///     <c>CyberCloud.Gateway.Host</c>'s own <c>Program.cs</c> builds, and stage 2's resolver
+    ///     arrives the way it arrives in production: from <c>CyberCloud:Gateway:Identity:Issuer</c>.
+    ///     This file used to register an in-process token table through <c>configure</c>, and its
+    ///     first paragraph warned that a green run therefore said nothing about production; the
+    ///     paragraph is gone because the cause is.
+    /// </remarks>
+    static Task<WebApplication> BuildGatewayAsync(string issuer) =>
         GatewayComposition.BuildAsync(
             [
                 "--environment", "Development",
                 "--urls", "http://127.0.0.1:0",
                 $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort="
-                + CyberCloudResources.SiloOneGatewayPort.ToString(CultureInfo.InvariantCulture)
-            ],
-            services => services.AddIssuedTokenAuthentication()
+                + CyberCloudResources.SiloOneGatewayPort.ToString(CultureInfo.InvariantCulture),
+                "--CyberCloud:Gateway:Identity:Issuer=" + issuer
+            ]
         );
+
+    /// <summary>
+    ///     The vault seam a deployment registers over OpenBao, answering for exactly one handle.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A real implementation of a real seam, doing the real thing for one value: the handle
+    ///     has to match, and the comparison is constant-time, as <see cref="IClientSecretSeam" />
+    ///     requires of every implementation. It is not a bypass — a verifier that answered
+    ///     <c>true</c> to everything would pass this suite and prove nothing about the endpoint.
+    /// </remarks>
+    /// <param name="known">The one handle this vault holds.</param>
+    /// <param name="secret">What is behind it.</param>
+    sealed class TestClientSecrets(SecretRef known, string secret) : IClientSecretSeam {
+        /// <inheritdoc />
+        public Task<Result<bool>> VerifyAsync(
+            SecretRef reference,
+            string presented,
+            CancellationToken cancellationToken = default
+        ) =>
+            Task.FromResult(
+                Result<bool>.Success(
+                    reference == known
+                    && CryptographicOperations.FixedTimeEquals(
+                        Encoding.UTF8.GetBytes(presented),
+                        Encoding.UTF8.GetBytes(secret)
+                    )
+                )
+            );
+    }
 }

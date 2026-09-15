@@ -1,6 +1,12 @@
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Identity.Host.Tokens;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
+using OpenIddict.Server;
+using OpenIddict.Server.AspNetCore;
 
 namespace CyberCloud.Identity.Host;
 
@@ -112,13 +118,67 @@ public static class IdentityHostOpenIddict {
     ///         <see cref="AccessTokenPolicy.SigningKeyOverlap" /> are the numbers whoever wires the
     ///         vault has to honour.
     ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Degraded mode, which is ADR-015's "we own the stores" applied to the protocol
+    ///             layer.
+    ///         </b> OpenIddict's built-in request validation goes through its core managers, and a
+    ///         manager needs a store implementation per object type — an application store with a
+    ///         <c>client_id</c> index this tenancy does not have yet, a token store, an
+    ///         authorization store. Without them the server threw <i>"The core services must be
+    ///         registered"</i> on the first token request, which is the state this host shipped in
+    ///         for as long as nothing called <c>/token</c>. The degraded mode turns those checks off
+    ///         and requires a custom validator per endpoint instead; <see cref="DegradedModeHandlers" />
+    ///         is the set, and <c>OpenIddictServerOptionsTests.EveryEndpointHasTheValidatorDegradedModeDemands</c>
+    ///         keeps it complete, because the failure for a missing one is a <c>500</c> at request
+    ///         time and not a refusal at start-up.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The signing key is ES256, by name.</b> <see cref="AccessTokenPolicy.SigningAlgorithm" />
+    ///         is the one algorithm the gateway is told to accept, and <c>AddEphemeralSigningKey()</c>
+    ///         with no argument mints RSA — a server that published an RS256 key beside a contract
+    ///         saying ES256 would have every token refused by a validator that honoured the contract.
+    ///         The algorithm is passed from the contract so the two cannot disagree.
+    ///     </para>
     /// </remarks>
     public static IServiceCollection AddIdentityHostOpenIddict(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.TryAddSingleton<TokenApi>();
+
+        // ⚠ The issuer comes from IdentityHostOptions, and only when it is set. OpenIddict infers
+        // one from the request otherwise, which is right on a developer's 127.0.0.1:port and wrong
+        // behind a proxy — IdentityHostOptions.Issuer carries the argument. Configured through the
+        // options pipeline rather than read here because the section is bound by AddIdentityHostApi,
+        // and this method must not care which order the two are called in.
+        services.AddOptions<OpenIddictServerOptions>()
+            .Configure<IOptions<IdentityHostOptions>>((options, host) => {
+                    if (!string.IsNullOrEmpty(host.Value.Issuer)) {
+                        options.Issuer = new Uri(host.Value.Issuer, UriKind.Absolute);
+                    }
+                }
+            );
+
+        // ⚠ Plain HTTP is accepted in Development and nowhere else. OpenIddict refuses a token
+        // request that did not arrive over TLS, which is correct behind Envoy (docs/plan/10 § Shape
+        // terminates TLS there) and impossible on a developer's or a test's 127.0.0.1:port. Keyed on
+        // the environment rather than on a setting so that no production configuration can turn it
+        // off by mistake — a value somebody can set is a value somebody will set.
+        services.AddOptions<OpenIddictServerAspNetCoreOptions>()
+            .Configure<IHostEnvironment>((options, environment) =>
+                options.DisableTransportSecurityRequirement = environment.IsDevelopment()
+            );
+
         services
             .AddOpenIddict()
             .AddServer(options => {
+                    options.EnableDegradedMode();
+
+                    foreach (var handler in DegradedModeHandlers.All) {
+                        options.AddEventHandler(handler);
+                    }
+
                     options
                         .SetAuthorizationEndpointUris(AuthorizationPath)
                         .SetTokenEndpointUris(TokenPath)
@@ -136,6 +196,14 @@ public static class IdentityHostOpenIddict {
 
                     options.RequireProofKeyForCodeExchange();
 
+                    // ⚠ Registered, not merely declared. OpenIddict validates every requested scope
+                    // against this list — in degraded mode too — and answers invalid_scope for one it
+                    // has not been told about. Scopes declared the four below for as long as nothing
+                    // called /token, and the first client-credentials request for `cyc.api` was
+                    // refused with "The specified 'scope' is invalid" (ID2052); TenantOverHttpTests
+                    // found it. Read from the nested class so the list has one home.
+                    options.RegisterScopes(Scopes.OpenId, Scopes.Profile, Scopes.OfflineAccess, Scopes.Api);
+
                     // ⚠ The ten minutes that ARE the revocation story — docs/plan/11 § Sessions and
                     // revocation. Read from the shared contract rather than written here, so the
                     // gateway and this server cannot drift on the one number both depend on.
@@ -143,9 +211,10 @@ public static class IdentityHostOpenIddict {
                     options.SetRefreshTokenLifetime(AccessTokenPolicy.RefreshTokenLifetime);
 
                     // ⚠ Development keys. See the remarks above — the production key set is the
-                    // vault's, and it does not exist yet.
+                    // vault's, and it does not exist yet. The signing algorithm is the contract's,
+                    // so the published key set and the gateway's pinned algorithm are one value.
                     options.AddEphemeralEncryptionKey();
-                    options.AddEphemeralSigningKey();
+                    options.AddEphemeralSigningKey(AccessTokenPolicy.SigningAlgorithm);
 
                     // ⚠ Access tokens are NOT encrypted, deliberately. OpenIddict encrypts by
                     // default, which makes a token opaque to anything but OpenIddict's own validation

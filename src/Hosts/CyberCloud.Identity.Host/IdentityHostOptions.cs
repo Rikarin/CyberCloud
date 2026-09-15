@@ -57,6 +57,28 @@ public sealed class IdentityHostOptions {
     public Guid TenantId { get; set; }
 
     /// <summary>
+    ///     The <c>iss</c> every token carries and the discovery document announces — this host's
+    ///     public origin, for example <c>https://id.cybercloud.io</c>. Empty means "whatever origin
+    ///     the request arrived on".
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Set it in production, and set the gateway's <c>CyberCloud:Gateway:Identity:Issuer</c>
+    ///         to the same string.</b> The gateway pins the issuer it validates against and refuses
+    ///         a discovery document whose <c>issuer</c> differs from the one it was configured with —
+    ///         so a host that inferred its issuer from the request would mint <c>iss</c> from
+    ///         whatever <c>Host</c> header Envoy passed through, and a token minted behind one
+    ///         hostname would be refused by a gateway configured with another. Inference is fine on a
+    ///         developer's <c>127.0.0.1:port</c>, where the port is not known until Kestrel binds;
+    ///         it is not a production configuration.
+    ///     </para>
+    ///     <para>
+    ///         Absolute, no query, no fragment — OpenIddict refuses anything else at start-up.
+    ///     </para>
+    /// </remarks>
+    public string Issuer { get; set; } = string.Empty;
+
+    /// <summary>
     ///     The WebAuthn relying-party id — the registrable domain a passkey is bound to.
     /// </summary>
     /// <remarks>

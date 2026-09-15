@@ -114,58 +114,85 @@ static class GatewayServiceCollectionExtensions {
     }
 
     /// <summary>
-    ///     Registers the test implementation of the identity seam.
+    ///     Registers the production identity seam: bearer JWTs validated against the identity host's
+    ///     published key set. docs/plan/11 § Protocol, docs/plan/10 § Request pipeline, stage 2.
     /// </summary>
     /// <param name="services">The container.</param>
+    /// <param name="identity">Which identity host to trust — the issuer and the audience to pin.</param>
     /// <remarks>
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             Separate from <see cref="AddCyberCloudGateway" /> so that a production host
-    ///             cannot get it by accident.
-    ///         </b> A host that calls only <c>AddCyberCloudGateway</c> has
-    ///         no <see cref="ICallerContextResolver" /> registered and cannot resolve the pipeline —
-    ///         which is the failure you want, rather than a gateway that authenticates nobody and
-    ///         serves anyway.
+    ///             Separate from <see cref="AddCyberCloudGateway" />, and called by
+    ///             <c>GatewayComposition.BuildAsync</c> only when <c>CyberCloud:Gateway:Identity</c>
+    ///             names an issuer.
+    ///         </b> A gateway told no issuer has nothing to validate against, and registering a
+    ///         resolver anyway would mean choosing a default origin for it — see
+    ///         <see cref="GatewayIdentityOptions" /> for why there is none. What the composition does
+    ///         instead is refuse to build, naming the section, which is the loud start-up failure
+    ///         https://github.com/Rikarin/CyberCloud/issues/68 asked for in place of the silent
+    ///         <c>500</c> that a missing <see cref="ICallerContextResolver" /> used to produce.
     ///     </para>
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             THAT FAILURE ARRIVES AT THE FIRST REQUEST AND NOT AT START-UP, and this remark
-    ///             used to say the opposite.
-    ///         </b> The pipeline is a singleton the one middleware resolves
-    ///         per request, and <c>OrleansApplication.CreateClient</c> calls
-    ///         <c>builder.Host.UseAutofac()</c> — so ASP.NET Core's <c>ValidateOnBuild</c>, which
-    ///         belongs to the default provider factory, never runs and cannot catch it. A gateway
-    ///         with no identity implementation therefore starts, passes its health checks, and
-    ///         answers <c>500</c> to everything else. ⚠
-    ///         <b>
-    ///             And no host in this tree calls this
-    ///             method
-    ///         </b>: its only caller is <c>CyberCloud.AppHost.Tests</c>'
-    ///         <c>TenantOverHttpTests</c>, through <c>GatewayComposition.BuildAsync</c>'s
-    ///         <c>configure</c> parameter. Until <c>CyberCloud.Identity.Host</c> issues real tokens
-    ///         (docs/plan/11), the shipping gateway can serve no authenticated request at all — which
-    ///         is a state to leave deliberately rather than to discover. Tracked as
-    ///         https://github.com/Rikarin/CyberCloud/issues/68.
+    ///             <c>OpenIddict.Validation.SystemNetHttp</c> and deliberately not
+    ///             <c>OpenIddict.Server.*</c> — the package-level expression of docs/plan/11
+    ///             § Hosts' boundary.
+    ///         </b> The gateway serves bearer tokens and mints none; a gateway that could issue a
+    ///         token would be a second authorization server on the origin whose entire job is to
+    ///         accept them. Nor is <c>OpenIddict.Validation.AspNetCore</c> here: that package is an
+    ///         ASP.NET Core authentication handler, and stage 2 is not one — the pipeline resolves
+    ///         <see cref="ICallerContextResolver" /> itself, so the handler would register a scheme
+    ///         nothing consults. <see cref="JwksCallerContextResolver" /> calls the validation
+    ///         service directly.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Calling this method from a host is NOT the fix, and it is the tempting one.</b>
-    ///         The tokens below come from an in-process dictionary, so a gateway that registered
-    ///         this would authenticate against a table that is empty in every replica and different
-    ///         in each — worse than the <c>500</c> precisely because it would <i>work</i>, and would
-    ///         answer <c>401</c> rather than failing. #68 carries the two real options: a
-    ///         composition-time refusal that names the missing registration, or the identity host
-    ///         and JWKS validation that docs/plan/11 budgets.
+    ///         ⚠
+    ///         <b>
+    ///             The in-process token table this method used to be about is gone from every host
+    ///             and every composition.
+    ///         </b> <c>AddIssuedTokenAuthentication</c> registered
+    ///         <see cref="IssuedTokenCallerContextResolver" />, whose tokens come from a dictionary
+    ///         that is empty in every replica and different in each; its one caller was a test, and
+    ///         that test now takes a real token from the real identity host. The resolver itself
+    ///         stays, <c>internal</c>, as the sibling suite's stage-2 double — a test that drives the
+    ///         nine stages against a substituted manager has no reason to sign anything.
     ///     </para>
     /// </remarks>
-    public static IServiceCollection AddIssuedTokenAuthentication(this IServiceCollection services) {
+    public static IServiceCollection AddJwksAuthentication(
+        this IServiceCollection services,
+        GatewayIdentityOptions identity
+    ) {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(identity);
+
+        if (!identity.IsConfigured) {
+            throw new ArgumentException(
+                $"{GatewayIdentityOptions.SectionName}:Issuer is empty. This method registers a "
+                + "resolver that validates against that host's key set, and there is no default "
+                + "host to validate against.",
+                nameof(identity)
+            );
+        }
+
+        services
+            .AddOpenIddict()
+            .AddValidation(options => {
+                    // ⚠ Pinned, both of them. An unpinned issuer accepts any host's discovery
+                    // document; an unpinned audience accepts a token minted for some other relying
+                    // party. Item 2 of ICallerContextResolver's list.
+                    options.SetIssuer(new Uri(identity.Issuer, UriKind.Absolute));
+                    options.AddAudiences(identity.Audience);
+
+                    // Discovery and the JWKS over HttpClient, cached, refreshed on an unknown kid.
+                    // Item 1 of the same list: a key rotation must not need a gateway deploy.
+                    options.UseSystemNetHttp();
+                }
+            );
 
         services.TryAddSingleton<IClock, SystemClock>();
-        services.TryAddSingleton<IssuedTokenCallerContextResolver>();
-        services.TryAddSingleton<ICallerContextResolver>(provider => provider.GetRequiredService<IssuedTokenCallerContextResolver>()
-        );
+        services.TryAddSingleton<ICallerContextResolver, JwksCallerContextResolver>();
 
         return services;
     }

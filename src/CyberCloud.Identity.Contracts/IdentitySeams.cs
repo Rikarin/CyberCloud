@@ -332,3 +332,51 @@ public interface ITotpSecretSeam {
     /// </returns>
     Task<Result<string>> ResolveAsync(SecretRef reference, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+///     Verifies a client secret against the vault handle a <see cref="ServicePrincipalDescriptor" />
+///     carries — docs/plan/11 § Protocol's client-credentials row.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠
+///         <b>
+///             The same seam shape as <see cref="ITotpSecretSeam" />, for the same assembly-graph
+///             reason, with one deliberate difference: the secret never comes back.
+///         </b> A TOTP verification has to hold the shared secret to compute the code, so that seam
+///         returns it. A client secret is compared and nothing else, so this one takes the presented
+///         value in and answers a Boolean — an implementation over the vault reads the stored value,
+///         compares in constant time, and lets it go out of scope. The token endpoint therefore never
+///         holds a stored credential at all, which is a smaller thing to get wrong than a value that
+///         must not be logged.
+///     </para>
+///     <para>
+///         ⚠ <b>Constant time, or the endpoint is an oracle.</b> A comparison that stops at the first
+///         differing byte leaks the length of the common prefix, and a client secret is exactly the
+///         kind of value that can be recovered a byte at a time from a timing difference. An
+///         implementation compares with <c>CryptographicOperations.FixedTimeEquals</c> over the UTF-8
+///         bytes, or not at all.
+///     </para>
+///     <para>
+///         ⚠ <b>A failure must not say why</b> — unknown handle, unreachable vault, wrong value — when
+///         the caller is unauthenticated. The token endpoint answers <c>invalid_client</c> for every
+///         reason, and the detail belongs in the log.
+///     </para>
+/// </remarks>
+public interface IClientSecretSeam {
+    /// <summary>
+    ///     Whether <paramref name="presented" /> is the secret behind <paramref name="reference" />.
+    /// </summary>
+    /// <param name="reference">The handle from <see cref="ServicePrincipalDescriptor.CredentialSecretRef" />.</param>
+    /// <param name="presented">What the client sent as <c>client_secret</c>.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>
+    ///     <c>true</c> only when the stored value exists and matches; a failure when it could not be
+    ///     read at all.
+    /// </returns>
+    Task<Result<bool>> VerifyAsync(
+        SecretRef reference,
+        string presented,
+        CancellationToken cancellationToken = default
+    );
+}

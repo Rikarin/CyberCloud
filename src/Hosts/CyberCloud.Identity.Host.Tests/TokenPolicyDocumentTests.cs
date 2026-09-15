@@ -136,8 +136,11 @@ public sealed class TokenPolicyDocumentTests {
         // ⚠ THE INVARIANT OnRedirectToLogin DEPENDS ON. A script-called endpoint mapped outside
         // `/api` receives a 302 to a login page instead of a 401, which every caller then fails to
         // parse — see UnauthenticatedApiCallsGet401Tests, which asserts the other half of the pair.
-        // The two navigable exceptions are named here so adding a third is a decision.
-        var navigable = new[] { "/health/live", "/.well-known/cybercloud-token-policy" };
+        // The navigable exceptions are named here so adding another is a decision. /token is the
+        // third: it is OpenIddict's passthrough, reached only after the server has validated the
+        // request, and it never authorizes — a cookie has nothing to say to it, so the redirect
+        // rule that the /api prefix exists for cannot apply.
+        var navigable = new[] { "/health/live", "/.well-known/cybercloud-token-policy", IdentityHostOpenIddict.TokenPath };
 
         var mapped = Endpoints()
             .OfType<RouteEndpoint>()
@@ -172,12 +175,21 @@ public sealed class TokenPolicyDocumentTests {
             mapped.ShouldContain(route, $"the identity page calls {route}");
         }
 
-        // ⚠ And the OIDC endpoints are NOT here. They are OpenIddict's, configured by
-        // IdentityHostOpenIddict; mapping one of them by hand would give this host two handlers for
-        // the same path and the winner would depend on registration order.
+        // ⚠ And the OIDC endpoints are NOT here, with one exception. They are OpenIddict's,
+        // configured by IdentityHostOpenIddict; mapping one of them by hand would give this host two
+        // handlers for the same path and the winner would depend on registration order. The
+        // exception is the passthrough: /token IS mapped, because OpenIddict hands a validated
+        // token request to whatever is mapped at its path, and until something was, the path
+        // answered 404 — https://github.com/Rikarin/CyberCloud/issues/68.
         foreach (var openIddicts in new[] { "/connect/authorize", "/connect/token", "/connect/userinfo" }) {
             mapped.ShouldNotContain(openIddicts, $"{openIddicts} is OpenIddict's to map, not this file's");
         }
+
+        mapped.ShouldContain(IdentityHostOpenIddict.TokenPath, "the token passthrough must have a handler behind it");
+
+        Route(IdentityHostOpenIddict.TokenPath)
+            .Metadata.GetMetadata<HttpMethodMetadata>()!
+            .HttpMethods.ShouldBe([HttpMethods.Post]);
     }
 
     [Fact]

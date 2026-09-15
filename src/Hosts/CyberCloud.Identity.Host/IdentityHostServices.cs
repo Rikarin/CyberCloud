@@ -3,6 +3,7 @@ using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.Host.Api;
 using CyberCloud.Identity.Host.Credentials;
+using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
 using Microsoft.Extensions.Configuration;
@@ -72,6 +73,14 @@ public static class IdentityHostServices {
         // TOTP code is refused with a uniform failure and a log line naming the missing
         // registration. See that type. Recovery codes are unaffected: they are hashed in the grain.
         services.TryAddSingleton<ITotpSecretSeam, UnavailableTotpSecrets>();
+
+        // ⚠ The same gap, at the token endpoint: a service principal's secret is a SecretRef into a
+        // vault nothing wires, so every client-credentials grant is refused with invalid_client and
+        // UnavailableClientSecrets' sentence in the log until a host registers a verifier. TryAdd,
+        // so a host — or a test supplying what its deployment would — wins without touching this
+        // line.
+        services.TryAddSingleton<IClientSecretSeam, UnavailableClientSecrets>();
+        services.TryAddSingleton<TokenApi>();
 
         // ── WebAuthn ───────────────────────────────────────────────────────────────────────────
         //
