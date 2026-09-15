@@ -193,18 +193,16 @@ public static class CyberCloudSchema {
             // one row in it — RoleAssignmentViewTests.ADenyAssignmentRemovesPurgeAndLeavesDeleteAndNoGrantSeparatesThem,
             // which runs THIS schema and which nothing did until it was written.
             //
-            // ⚠ A GRANTABLE `purger` RELATION WOULD NOT FIX IT, AND BOTH REASONS ARE CONCRETE RATHER
-            // THAN "a role-assignment story that does not exist". First, nothing in this platform can
-            // WRITE a role tuple: ITupleStoreGrain.WriteAsync is the store, IObjectRelationsGrain's
-            // remarks forbid reaching past it, and the only grant above either is
-            // IScopeRelationWriter.GrantOwnerAsync at scope creation — there is no PUT
-            // /roleAssignments and nothing writes `contributor` or `reader` either. A `purger`
-            // relation would be a relation nobody can be given. Second, and the deeper one: the
-            // separation Azure achieves lives BETWEEN TWO ROLES, and here there is no role beneath
-            // owner that can delete — `delete` is Rel(owner) while Azure's Contributor deletes. So the
-            // question the owed item is really asking is whether `delete` should be Rel(contributor),
-            // which is a widening of this platform's most destructive verb and not an addition.
-            // docs/plan/07 § Azure RBAC carries both.
+            // ⚠ A GRANTABLE `purger` RELATION WOULD NOT FIX IT, AND THE REASON IS CONCRETE. Role
+            // tuples ARE writable now — IRoleAssignmentManager over ITupleStoreGrain, issue #70 — so
+            // the older half of this argument ("a relation nobody can be given") is gone. What
+            // remains is the deeper one: the separation Azure achieves lives BETWEEN TWO ROLES, and
+            // here there is no role beneath owner that can delete — `delete` is Rel(owner) while
+            // Azure's Contributor deletes. The question underneath was whether `delete` should be
+            // Rel(contributor), and docs/plan/07 § Azure RBAC decides it: NO, deliberately, because
+            // owner-only delete is what keeps `purge` unreachable to a contributor.
+            // RoleAssignmentTests.AContributorCanWriteButNotDeleteByDecision pins it through a real
+            // Contributor grant, and its message names that paragraph as the one to change first.
                 .Permission(
                     Permissions.Purge,
                     Rel(Relations.Owner) & !Rel(Relations.Suspended)

@@ -75,6 +75,9 @@ sealed class GatewayHarness {
     /// <summary>The recording scope manager stage 8 dispatches a scope route to.</summary>
     public RecordingScopeManager Scopes { get; } = new();
 
+    /// <summary>The recording role assignment manager stage 8 dispatches an assignment route to.</summary>
+    public RecordingRoleAssignmentManager Roles { get; } = new();
+
     /// <summary>The operation reader, scripted so an LRO poll needs no cluster.</summary>
     public ScriptedOperationReader Operations { get; } = new();
 
@@ -131,7 +134,7 @@ sealed class GatewayHarness {
                 new RateLimitStage(new GatewayRateLimiter(Counters)),
                 new RouteStage(new OneTypeRegistry(), Options),
                 new ValidateStage(Options),
-                new DispatchStage(Manager, Scopes, Operations, Options)
+                new DispatchStage(Manager, Scopes, Roles, Operations, Options)
             ],
             NullLogger<GatewayPipeline>.Instance
         );

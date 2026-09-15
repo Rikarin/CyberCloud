@@ -119,6 +119,41 @@ static class ResponseBodies {
         writer.WriteEndObject();
     }
 
+    /// <summary>
+    ///     A role assignment, in Azure's envelope: <c>id</c>, <c>name</c>, <c>type</c> and a
+    ///     <c>properties</c> object carrying <c>scope</c>, <c>principalId</c>, <c>principalType</c>
+    ///     and <c>roleDefinitionId</c>.
+    /// </summary>
+    /// <param name="assignment">The assignment as the manager rendered it.</param>
+    /// <remarks>
+    ///     ⚠ The property names are <c>RoleAssignmentBodyProperties</c>' — the same three a
+    ///     <c>PUT</c> body may carry — so a client can read a <c>GET</c> back and send it as a
+    ///     <c>PUT</c> unchanged. <c>roleDefinitionId</c> is a role <i>name</i>; there are no role
+    ///     definitions to address, and that class's remarks say why.
+    /// </remarks>
+    public static string RoleAssignment(RoleAssignmentSnapshot assignment) {
+        ArgumentNullException.ThrowIfNull(assignment);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(512);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            writer.WriteStartObject();
+            writer.WriteString("id", assignment.Path);
+            writer.WriteString("name", assignment.Name);
+            writer.WriteString("type", RoleAssignmentId.TypeName);
+            writer.WritePropertyName("properties");
+            writer.WriteStartObject();
+            writer.WriteString("scope", assignment.Scope);
+            writer.WriteString(RoleAssignmentBodyProperties.PrincipalId, assignment.PrincipalId);
+            writer.WriteString(RoleAssignmentBodyProperties.PrincipalType, assignment.PrincipalType);
+            writer.WriteString(RoleAssignmentBodyProperties.RoleDefinitionId, assignment.RoleDefinitionId);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
     /// <summary>Renders a scope — docs/plan/06 § The hierarchy's subscription or resource group.</summary>
     /// <param name="scope">The scope as the manager reports it.</param>
     /// <remarks>

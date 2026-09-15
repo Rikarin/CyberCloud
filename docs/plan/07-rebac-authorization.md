@@ -79,6 +79,35 @@ how the portal shows a familiar screen over an unfamiliar engine. The reverse di
 `resourceGroup:prod#reader@group:eng#member` in Azure RBAC — is not possible, which is the argument
 for building this rather than a role table.
 
+**The write half of that view is built (issue #70), and its address is the tuple.**
+`PUT`/`GET`/`DELETE {scope}/providers/CyberCloud.Authorization/roleAssignments/{name}`, where the
+scope is a tenant, a subscription, a resource group or a resource — Azure's shape — is served by
+`IRoleAssignmentManager` over `ITupleStoreGrain`, and the name is
+**`{role}-{principalType}-{principalId}`**: `reader-user-7f3c…`, `contributor-group-eng`. That is
+the one place the address departs from Azure's, and it is a decision rather than a shortcut. Azure's
+`{name}` is a client-minted GUID kept in a record beside the grant so that it can be looked up
+again; a record that maps a GUID to a tuple is the role table the paragraph above argues against,
+however small. The tuple already *is* the assignment — one object, one relation, one subject, and an
+object's tuple set cannot hold it twice — so the name says which tuple, a repeated `PUT` is the same
+tuple, and there is no second durable thing to keep in step with the first. What it costs is the
+client that mints its own GUIDs; the Bicep `guid(scope, principal, role)` idiom exists because a
+deterministic name is what people want from this address anyway. The body's three properties
+(`principalId`, `principalType`, `roleDefinitionId` — a role *name*, since there are no role
+definitions to address) are optional and must agree with the address when present. Only `assignRole`
+holders may `PUT` or `DELETE` — `Rel("owner") & !Rel("suspended")`, which is Azure's
+`roleAssignments/write` sitting in Owner and in no built-in role beneath it — and a `GET` needs
+`read`. A `group` principal is written as the userset `group:{id}#member`, which is row two of the
+table above.
+
+⚠ **The address reaches no generated surface, and that is #63's question asked a third time rather
+than a new one.** `CyberCloud.Authorization` is a reserved namespace — `ProviderRegistry.Build`
+refuses a provider that claims it, because on a resource group the assignment address is a
+well-formed resource path and the gateway routes it first — so ADR-012's emitters, which read the
+registry and the scope extension #63 added, know nothing of it. `openapi/`, `cyc`, the SDK and the
+portal are silent about it exactly as they were about scopes before #63, and the fix is the same
+shape: a third non-registry source for the emitters. [10](10-gateway-and-api.md) § Shape records the
+gap.
+
 ⚠ **`purge` is the sixth permission, added at `SchemaVersion` 2, and how it came to be missing is the
 more useful half.** [08](08-resource-manager.md) § Soft delete gives a purge its own permission —
 `SoftDeletePolicy.DefaultPurgePermission` is `"purge"` — and `ResourceManagerService.PurgeAsync`
@@ -98,25 +127,25 @@ separation than [08](08-resource-manager.md) § Soft delete describes.** That se
 can hold the first without the second"*, copying `deletedVaults/purge/action` sitting in Key Vault
 Contributor's `notActions`. Here `delete` is already `Rel("owner")`, so **any** purge defined in terms
 of `owner` is held by everyone who can delete, and a strictly separable purge needs a grantable role
-of its own — which needs a role-assignment story this document does not yet have. What the definition
-above does deliver is worth stating exactly: a deny assignment removes `purge` while leaving `delete`,
-which is `notActions` with one row in it; and — the separation that actually bites — a parked resource
-has been re-parented to its **subscription** and had its direct role assignments dropped, so `owner`
-resolves through `From("parent", "owner")` to a *subscription* owner and **not** to the resource-group
-owner whose `DELETE` parked it. ⚠ **Owed: whether `purge` deserves a grantable relation of its own**,
-which is the only thing that makes "may delete, may not destroy" expressible for a role rather than
-for a deny assignment.
+of its own — the role-assignment path exists now (issue #70), and the three roles it grants are the
+schema's three. What the definition above does deliver is worth stating exactly: a deny assignment
+removes `purge` while leaving `delete`, which is `notActions` with one row in it; and — the
+separation that actually bites — a parked resource has been re-parented to its **subscription** and
+had its direct role assignments dropped, so `owner` resolves through `From("parent", "owner")` to a
+*subscription* owner and **not** to the resource-group owner whose `DELETE` parked it. Whether
+`purge` deserves a grantable relation of its own is answered two paragraphs down, under
+**Decided: `delete` stays `Rel("owner")`** — a fourth role is the same change as widening `delete`,
+and neither is taken.
 
-⚠ **And the owed item above is blocked by something narrower and more concrete than "a
-role-assignment story": there is no way to write a role tuple at all.** The tuple *store* exists —
-`ITupleStoreGrain.WriteAsync` — and `IObjectRelationsGrain`'s own remarks forbid reaching past it.
-What sits above it is one grant: `IScopeRelationWriter.GrantOwnerAsync`, called when a scope is
-created. There is no `PUT /roleAssignments`, no `IScopeManager` member that grants, and nothing
-anywhere that writes `contributor` or `reader` either. So the reads described above are real —
-`GET /roleAssignments` lists tuples, `ICheckGrain.ListRoleAssignmentsAsync` walks ancestors — and the
-write half of the same feature is absent. **Adding a `purger` relation today would add a relation
-nothing can write**, which is worse than the gap it closes: a schema version bump, a permission that
-looks grantable in the document, and no request that grants it.
+⚠ **The owed item above was blocked by something narrower and more concrete than "a
+role-assignment story": until issue #70 there was no way to write a role tuple at all.** The tuple
+*store* existed — `ITupleStoreGrain.WriteAsync` — and `IObjectRelationsGrain`'s own remarks forbid
+reaching past it. What sat above it was one grant: `IScopeRelationWriter.GrantOwnerAsync`, called
+when a tenant is created. There was no `PUT /roleAssignments` and nothing anywhere that wrote
+`contributor` or `reader`, so the reads described above were real and the write half of the same
+feature was absent — which is what made the M1 exit story's *"grant them Reader on one resource
+group"* unbuildable. § Azure RBAC, expressed in it's `IRoleAssignmentManager` is that write half.
+**A `purger` relation would still not fix the separation**, for the second reason below.
 
 ⚠ **The second finding is about `delete` rather than about `purge`, and it is why the separation
 cannot be expressed even in principle.** Azure's own version of "may delete, may not destroy" is
@@ -124,11 +153,28 @@ cannot be expressed even in principle.** Azure's own version of "may delete, may
 separation lives between two roles that both exist. Here `delete` is `Rel("owner")` and `write` is
 `Rel("contributor")`, so **a Contributor cannot delete at all**, which is stricter than the Azure
 role this schema says it is a view of. Every principal holding `delete` is an owner, every owner
-holds `purge`, and no grant can come between them. So the real question the owed item asks is
-*"should `delete` be `Rel("contributor")`"*, and that is a widening of the platform's most
-destructive verb rather than an addition — it is not a change to make in passing, and it is recorded
-here so that the next reader starts from it instead of from the `purger` relation, which does not fix
-anything on its own.
+holds `purge`, and no grant can come between them. So the real question underneath is *"should
+`delete` be `Rel("contributor")`"*, a widening of the platform's most destructive verb rather than
+an addition.
+
+**Decided: `delete` stays `Rel("owner")`, and a Contributor cannot delete, deliberately.** Issue #70
+put the widening on the table once the write path existed to make it matter, and the answer is no,
+for one reason: `purge` is defined in terms of `owner`, and owner-only `delete` is what keeps `purge`
+— the end of a recovery window, the one irreversible verb this platform has — **unreachable to a
+contributor**. Widening `delete` alone would let a contributor park a resource that only an owner
+could restore or destroy, which is a role that can start a process it cannot finish; widening both
+would hand the irreversible verb to the role Azure gives it to only through a `notActions` row this
+schema cannot express — § Caching across requests' negation rule allows `!Rel` over a direct
+relation on the same object and nothing else, so *"Contributor minus purge"* is not a permission
+here. The price is stated plainly: a Contributor in this platform is narrower than Azure's, and a
+tenant that wants "may remove, may not destroy" today gets it as a deny row on the resource
+(`#suspended` removes `purge` and leaves `delete`), not as a grantable role. Re-taking this needs a
+role beneath owner that holds `delete` and not `purge`, which is a fourth relation and a
+`SchemaVersion` bump, and it needs `purge` to stop being defined through `owner`; both are the same
+change and neither is a change to make in passing.
+`RoleAssignmentTests.AContributorCanWriteButNotDeleteByDecision` drives a real Contributor grant
+through the real `PUT` and asks the three verbs of a resource beneath it; its failure message names
+this paragraph as the one to change first.
 
 **Decided: an expired recovery window is ended by a mechanism, and the platform gains no system
 principal.** [08](08-resource-manager.md) § Soft delete deferred this here and stated the fork

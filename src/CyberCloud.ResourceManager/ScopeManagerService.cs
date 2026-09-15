@@ -388,8 +388,8 @@ public sealed class ScopeManagerService(
     ///     children in it. Requiring <c>delete</c> — that is, <c>owner</c> — would be stricter than
     ///     Azure and would make "may create a subscription" and "may delete the tenant" the same
     ///     right, which is a worse thing to hand out. A separable "may create a subscription and
-    ///     nothing else" needs a grantable relation of its own and a role-assignment story
-    ///     docs/plan/07 does not yet have — the same gap its <c>purge</c> remarks record as owed.
+    ///     nothing else" needs a grantable relation of its own — the three roles are what
+    ///     <c>IRoleAssignmentManager</c> can grant, and a fourth is a schema change.
     /// </remarks>
     async Task<Result<ScopeSnapshot>> CreateSubscriptionAsync(
         ScopeId scope,

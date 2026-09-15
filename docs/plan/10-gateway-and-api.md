@@ -51,6 +51,28 @@ written. ⚠ The tenant path carries a `GET` and no `PUT`, and the absence is em
 stage 3 below resolves the request's tenant from the token, so a create route could not authenticate,
 and documenting one would have generated a `cyc` verb that fails every time it is used.
 
+**The role assignment API is an extension address on every scope and on every resource, and it is a
+third component behind the same door.** `GET`, `PUT` and `DELETE` on
+`{scope}/providers/CyberCloud.Authorization/roleAssignments/{name}` reach `IRoleAssignmentManager`
+([07](07-rebac-authorization.md) § Azure RBAC, expressed in it), where the scope is any of the four
+addresses above or a resource path. ⚠ **This one the router tries first, and the order is not free.**
+On a resource group the address is a well-formed ten-segment resource path — a resource of type
+`CyberCloud.Authorization/roleAssignments` — so tried second it would reach `IResourceManager` and be
+refused as a type no provider serves. What keeps that from being a precedence rule nobody wrote down
+is that `CyberCloud.Authorization` is a reserved namespace: `ProviderRegistry.Build` refuses a
+provider that claims it, and under it only the assignment grammar answers — a malformed name is a
+`400` that names the grammar, never a fall-through into the resource or collection grammars and
+their `404`. `PUT` answers `201` on a grant and `200` on a repeat, `DELETE` answers `204`, and there
+is no `202`: an assignment is one tuple write and converges before the call returns.
+
+⚠ **The role assignment API is not in the generated document, and that is #63's question asked a
+third time.** The reserved namespace is exactly what keeps it out of the registry the emitters read,
+and the scope extension #63 added carries a scope, not an address *on* one. So `cyc`, the SDK and the
+portal are silent about it, as they were about scopes before #63, and a tenant grants a role today by
+hand. The fix has the same shape as #63's — a third non-registry source, emitted for every scope path
+and every resource path as a sub-path — and it is owed rather than done because it touches all five
+surfaces at once.
+
 ## Request pipeline
 
 Order matters and each step is here for a named reason.
