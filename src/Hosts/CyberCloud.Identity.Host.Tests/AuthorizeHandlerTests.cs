@@ -172,6 +172,42 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     }
 
     [Fact]
+    public async Task AHintNamingNoTenantSendsAFirstPartyClientToSignInWithTheHintRemoved() {
+        // The portal remembers the last tenant in a cookie and sends it on every /authorize. A
+        // developer's second `dotnet run` starts with an empty durable tier, so the remembered
+        // tenant is gone — and the first thing the portal showed was OpenIddict's error page with
+        // nowhere to go. A retired tenant and a mistyped slug are the same shape.
+        var request = Request();
+        request[TenantHint.ParameterName] = Guid.NewGuid().ToString("D");
+
+        var context = await ValidateAsync(request);
+
+        context.IsRejected.ShouldBeFalse("a first-party client with an unknown tenant hint has a page to go to, and the validator must let the passthrough send it there");
+        context.Transaction.Properties.ShouldContainKey(DegradedModeHandlers.UnknownTenantProperty);
+        context.Transaction.Properties[DegradedModeHandlers.ClientProperty].ShouldBeOfType<ApplicationRegistration>()
+            .ClientId.ShouldBe(FirstPartyClients.Portal, "the redirect_uri is still validated, against the static registration");
+
+        var location = Api.SignInLocationWithoutTenant("/authorize?client_id=cyc-portal&tenant=gone-tenant&state=s&prompt=login", "gone-tenant", FirstPartyClients.Portal);
+
+        Uri.UnescapeDataString(location.Split("returnUrl=")[1])
+            .ShouldBe("/authorize?client_id=cyc-portal&state=s", "the hint comes off so the sign-in page asks for the organisation, and prompt=login comes off as it always does");
+    }
+
+    [Fact]
+    public async Task AHintNamingNoTenantIsStillAnErrorForATenantClientAndForNoHintAtAll() {
+        // A tenant's own client is registered IN a tenant: with no tenant there is no registration
+        // to validate the redirect_uri against, so the error page is the only honest answer.
+        var request = Request(clientId: "some-tenant-app");
+        request[TenantHint.ParameterName] = Guid.NewGuid().ToString("D");
+
+        var context = await ValidateAsync(request);
+
+        context.IsRejected.ShouldBeTrue();
+        context.Error.ShouldBe(OpenIddictConstants.Errors.InvalidRequest);
+        context.Transaction.Properties.ShouldNotContainKey(DegradedModeHandlers.UnknownTenantProperty);
+    }
+
+    [Fact]
     public async Task ATenantRegisteredClientCannotConsentFreeItsWayToACode() {
         var (cookie, _) = await SignedInAsync();
 

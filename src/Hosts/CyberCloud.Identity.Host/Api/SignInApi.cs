@@ -7,6 +7,7 @@ using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.SignIn;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
+using System.Globalization;
 using System.Security.Claims;
 
 namespace CyberCloud.Identity.Host.Api;
@@ -567,9 +568,41 @@ public sealed class SignInApi(
         // has to be: it is how /api/signin/totp knows who is answering. IdentitySessionPrincipal's
         // remarks carry the argument for one stamped cookie over two cookies.
         return new(
-            new(true, value.SecondFactorRequired, returnUrl, string.Empty),
+            new(true, value.SecondFactorRequired, WithTenantWhenResuming(returnUrl, tenantId), string.Empty),
             IdentitySessionPrincipal.Build(tenantId, value)
         );
+    }
+
+    /// <summary>
+    ///     The destination with <c>tenant=</c> set to the tenant the cookie is for — when the
+    ///     destination is an <c>/authorize</c> request to resume, and only then.
+    /// </summary>
+    /// <param name="returnUrl">The already-sanitized destination.</param>
+    /// <param name="tenantId">The tenant the person just signed into.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Without this a sign-in that named its organisation loops.</b> The person arrived
+    ///         from an <c>/authorize</c> that named no tenant, or a remembered one that no longer
+    ///         exists, typed the organisation, and signed in; the page then navigates to the return
+    ///         URL as it was. The resumed <c>/authorize</c> resolves its <c>tenant</c> hint before it
+    ///         reads the cookie, and a request naming no tenant gets the fallback — so the cookie is
+    ///         for one tenant and the request for another, <c>AuthorizeApi</c> answers
+    ///         "no-usable-session", and the person is back on the sign-in page with the same return
+    ///         URL. <c>SignUpApi.WithTenant</c> already rewrites it after a sign-up, for the same
+    ///         reason; sign-in did not, and the first browser run of the second visit found it.
+    ///     </para>
+    ///     <para>
+    ///         Only an <c>/authorize</c> destination is rewritten. Any other same-origin path
+    ///         survives unchanged, which <c>SignInEndpointContractTests</c> pins for the paths a page
+    ///         may name, and which keeps a plain <c>/</c> from growing a query it does not read.
+    ///     </para>
+    /// </remarks>
+    static string WithTenantWhenResuming(string returnUrl, Guid tenantId) {
+        var path = returnUrl.Split('?', 2)[0];
+
+        return string.Equals(path, IdentityHostOpenIddict.AuthorizationPath, StringComparison.Ordinal)
+            ? SignUpApi.WithTenant(returnUrl, tenantId.ToString("D", CultureInfo.InvariantCulture))
+            : returnUrl;
     }
 
     /// <summary>

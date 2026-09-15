@@ -206,6 +206,45 @@ public sealed class AuthorizeApi(
         return options.SignInPageBaseUri.TrimEnd('/') + SignInPagePath + "?returnUrl=" + Uri.EscapeDataString(returnUrl);
     }
 
+    /// <summary>
+    ///     Where a person whose <c>tenant</c> hint named no tenant goes: the sign-in page, with this
+    ///     request as the return URL and the hint removed from it, so the page asks for the
+    ///     organisation and the resumed request names the one they type.
+    /// </summary>
+    /// <param name="pathAndQuery">This request's path and query.</param>
+    /// <param name="hint">The hint that resolved to nothing, for the log.</param>
+    /// <param name="clientId">The client, for the log.</param>
+    /// <remarks>
+    ///     ⚠ Removed rather than left in place: the sign-in page reads <c>tenant</c> off the return
+    ///     URL and, when it finds one, hides the organisation field and sends that value with the
+    ///     credential — so a stale hint left in the URL would be a sign-in against the missing tenant,
+    ///     refused uniformly, with the person never asked which organisation they meant. The rest
+    ///     of the query is kept byte for byte, as <see cref="SignInLocation" /> keeps it.
+    /// </remarks>
+    public string SignInLocationWithoutTenant(string pathAndQuery, string hint, string? clientId) {
+        GrantLog.AuthorizationRequestRedirectedForTenant(logger, hint, clientId ?? string.Empty);
+
+        var returnUrl = ReturnUrl.Sanitize(WithoutPair(WithoutPromptLogin(pathAndQuery), TenantHint.ParameterName));
+
+        return options.SignInPageBaseUri.TrimEnd('/') + SignInPagePath + "?returnUrl=" + Uri.EscapeDataString(returnUrl);
+    }
+
+    /// <summary>The path and query without every pair named <paramref name="name" />.</summary>
+    static string WithoutPair(string pathAndQuery, string name) {
+        var question = pathAndQuery.IndexOf('?', StringComparison.Ordinal);
+
+        if (question < 0) {
+            return pathAndQuery;
+        }
+
+        var kept = pathAndQuery[(question + 1)..]
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Where(pair => !string.Equals(pair.Split('=', 2)[0], name, StringComparison.Ordinal))
+            .ToList();
+
+        return kept.Count == 0 ? pathAndQuery[..question] : pathAndQuery[..question] + "?" + string.Join('&', kept);
+    }
+
     AuthorizeDecision NotSignedIn(bool promptNone, string pathAndQuery, string reason) {
         if (promptNone) {
             GrantLog.AuthorizationRequestRefused(logger, Guid.Empty, OpenIddictConstants.Errors.LoginRequired, reason);

@@ -268,6 +268,37 @@ public sealed partial class TokenApiTests {
     }
 
     [Fact]
+    public async Task ASignInThatNamedItsOrganisationResumesTheAuthorizeRequestWithThatTenant() {
+        // The person arrived from an /authorize that named no tenant (or a remembered one that is
+        // gone), typed the organisation, and signed in. The page navigates to the return URL as the
+        // response carries it — and the resumed /authorize resolves its tenant hint before it reads
+        // the cookie, so a return URL still naming nothing gets the fallback tenant, the cookie is
+        // for another, and the person is back on the sign-in page. Forever. Sign-up already stamps
+        // the tenant into the return URL; sign-in did not, and the first browser run of the second
+        // visit found the loop.
+        var api = fixture.Services.GetRequiredService<SignInApi>();
+        var resumed = "/authorize?client_id=cyc-portal&state=s&code_challenge=c&code_challenge_method=S256";
+
+        var signedIn = await api.SignInWithPasswordAsync(new(IdentityHostFixture.Email, IdentityHostFixture.Password, resumed, IdentityHostFixture.Slug), new(), Ct);
+
+        signedIn.Response.Succeeded.ShouldBeTrue(signedIn.Response.Message);
+        signedIn.Response.ReturnUrl.ShouldBe(resumed + "&tenant=" + IdentityHostFixture.Tenant.ToString("D"), "the resumed request has to name the tenant the cookie is for");
+
+        // A stale remembered tenant in the return URL is replaced, not joined by a second value.
+        var stale = "/authorize?tenant=" + Guid.NewGuid().ToString("D") + "&state=s";
+        var replaced = await api.SignInWithPasswordAsync(new(IdentityHostFixture.Email, IdentityHostFixture.Password, stale, IdentityHostFixture.Slug), new(), Ct);
+
+        replaced.Response.Succeeded.ShouldBeTrue(replaced.Response.Message);
+        replaced.Response.ReturnUrl.ShouldBe("/authorize?tenant=" + IdentityHostFixture.Tenant.ToString("D") + "&state=s");
+
+        // Any other destination survives unchanged — a plain `/` does not grow a query it never reads.
+        var elsewhere = await api.SignInWithPasswordAsync(new(IdentityHostFixture.Email, IdentityHostFixture.Password, "/account", IdentityHostFixture.Slug), new(), Ct);
+
+        elsewhere.Response.Succeeded.ShouldBeTrue(elsewhere.Response.Message);
+        elsewhere.Response.ReturnUrl.ShouldBe("/account");
+    }
+
+    [Fact]
     public async Task ASlugHintResolvesThroughTheDirectory() {
         var hint = fixture.Services.GetRequiredService<TenantHint>();
 

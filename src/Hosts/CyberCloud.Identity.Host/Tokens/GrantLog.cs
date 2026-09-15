@@ -26,6 +26,20 @@ static partial class GrantLog {
     )]
     public static partial void AuthorizationRequestRefused(ILogger logger, Guid tenantId, string error, string reason);
 
+    /// <summary>
+    ///     An authorization request named a tenant the directory does not know, and the person was
+    ///     sent to the sign-in page to name one — <c>AuthorizeApi.SignInLocationWithoutTenant</c>.
+    /// </summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="hint">The <c>tenant</c> value as it arrived.</param>
+    /// <param name="clientId">The first-party client that sent it.</param>
+    [LoggerMessage(
+        EventId = 1136,
+        Level = LogLevel.Information,
+        Message = "Authorization request from {ClientId} named unknown tenant '{Hint}'; sent to sign-in to name one"
+    )]
+    public static partial void AuthorizationRequestRedirectedForTenant(ILogger logger, string hint, string clientId);
+
     /// <summary>An authorization code was minted for a signed-in user.</summary>
     /// <param name="logger">The sink.</param>
     /// <param name="tenantId">The tenant.</param>

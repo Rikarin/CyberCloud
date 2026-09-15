@@ -74,7 +74,12 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         first.GetProperty("succeeded").GetBoolean().ShouldBeTrue(first.GetRawText());
         first.GetProperty("secondFactorRequired").GetBoolean().ShouldBeTrue("a password owes a second factor");
-        first.GetProperty("returnUrl").GetString().ShouldBe(authorize);
+        // The return URL comes back with the tenant the cookie is for stamped in — the slug the
+        // person typed becomes the tenant's id, so the resumed /authorize names exactly the tenant
+        // the session was opened in. SignInApi.WithTenantWhenResuming says why the alternative loops.
+        var resumed = first.GetProperty("returnUrl").GetString()!;
+
+        resumed.ShouldBe(AuthorizePath(challenge, state, tenant: IdentityHostFixture.Tenant.ToString("D")));
         browser.Cookies.ShouldContainKey(IdentityHostAuthentication.CookieName);
 
         // ── 3. A pending second factor is not a session /authorize will mint from.
@@ -98,8 +103,9 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         second.GetProperty("succeeded").GetBoolean().ShouldBeTrue(second.GetRawText());
         second.GetProperty("secondFactorRequired").GetBoolean().ShouldBeFalse();
 
-        // ── 5. /authorize now mints a code and sends it to the portal's callback.
-        using var authorized = await browser.GetAsync(authorize, Ct);
+        // ── 5. /authorize — the request as the sign-in response returned it, which is what the
+        //       page navigates to — now mints a code and sends it to the portal's callback.
+        using var authorized = await browser.GetAsync(resumed, Ct);
 
         authorized.StatusCode.ShouldBe(HttpStatusCode.Redirect, await authorized.Content.ReadAsStringAsync(Ct));
 
@@ -336,11 +342,31 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
     }
 
     [Fact]
-    public async Task AnUnknownTenantOnAuthorizeIsInvalidRequest() {
+    public async Task AnUnknownTenantOnAuthorizeSendsThePortalToSignInWithoutTheHint() {
+        // The portal remembers the last tenant in a cookie; a developer's second `dotnet run` has an
+        // empty durable tier, so that tenant is gone. The first version of this test asserted the
+        // error page, and the error page is what a person saw with nowhere to go. Now: the sign-in
+        // page, with the hint removed so it asks for the organisation, and the rest of the request
+        // — state, challenge, redirect_uri — byte for byte, so the exchange still works afterwards.
         using var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.PortalOrigin);
         var (_, challenge) = BrowserClient.Pkce();
+        var request = AuthorizePath(challenge, "s", tenant: "no-such-tenant");
 
-        using var refused = await browser.GetAsync(AuthorizePath(challenge, "s", tenant: "no-such-tenant"), Ct);
+        using var redirected = await browser.GetAsync(request, Ct);
+
+        redirected.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+
+        var signInPage = redirected.Headers.Location!.ToString();
+
+        signInPage.ShouldStartWith(IdentityHostFixture.SignInPageBaseUri + "/signin?returnUrl=");
+        BrowserClient.Query(new Uri(signInPage))["returnUrl"].ShouldBe(request.Replace("&tenant=no-such-tenant", "", StringComparison.Ordinal));
+
+        // A tenant's own client has no registration outside its tenant, so for it the error page is
+        // still the only honest answer — there is no redirect_uri to validate.
+        using var refused = await browser.GetAsync(
+            AuthorizePath(challenge, "s", tenant: "no-such-tenant").Replace("client_id=" + FirstPartyClients.Portal, "client_id=some-tenant-app", StringComparison.Ordinal),
+            Ct
+        );
 
         refused.StatusCode.ShouldNotBe(HttpStatusCode.Redirect);
         (await refused.Content.ReadAsStringAsync(Ct)).ShouldContain("tenant");

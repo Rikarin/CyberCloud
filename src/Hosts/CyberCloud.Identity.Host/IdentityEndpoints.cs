@@ -249,6 +249,14 @@ public static class IdentityEndpoints {
 
                 var transaction = context.Features.Get<OpenIddictServerAspNetCoreFeature>()?.Transaction;
 
+                // A hint that named no tenant: to the sign-in page to name one, before anything
+                // reads the cookie — DegradedModeHandlers.UnknownTenantProperty says why this is
+                // not the error page.
+                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.UnknownTenantProperty, out var unknown) == true
+                    && unknown is string hint) {
+                    return Results.Redirect(api.SignInLocationWithoutTenant(context.Request.Path + context.Request.QueryString, hint, request.ClientId));
+                }
+
                 if (transaction?.Properties.TryGetValue(DegradedModeHandlers.TenantProperty, out var tenantValue) != true
                     || tenantValue is not Guid tenantId
                     || !transaction.Properties.TryGetValue(DegradedModeHandlers.ClientProperty, out var clientValue)

@@ -70,6 +70,13 @@ public static class DegradedModeHandlers {
     /// <summary>Where <see cref="ValidateAuthorizationRequest" /> leaves the resolved tenant id.</summary>
     public const string TenantProperty = "cybercloud.token.tenant";
 
+    /// <summary>
+    ///     Where <see cref="ValidateAuthorizationRequest" /> leaves a <c>tenant</c> hint that named
+    ///     no tenant the directory knows — so the passthrough sends the person to the sign-in page
+    ///     to name one, instead of answering an error page. Absent when the hint resolved.
+    /// </summary>
+    public const string UnknownTenantProperty = "cybercloud.token.unknown-tenant";
+
     /// <summary>Every handler this server registers, in one list so a missing one is a visible gap.</summary>
     public static IReadOnlyList<OpenIddictServerHandlerDescriptor> All { get; } = [
         ValidateAuthorizationRequest.Descriptor,
@@ -126,7 +133,24 @@ public static class DegradedModeHandlers {
         public async ValueTask HandleAsync(ValidateAuthorizationRequestContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            var tenantId = await tenants.ResolveAsync((string?)context.Request[TenantHint.ParameterName], context.CancellationToken);
+            var hint = (string?)context.Request[TenantHint.ParameterName];
+            var tenantId = await tenants.ResolveAsync(hint, context.CancellationToken);
+
+            // ⚠ A HINT THAT NAMES NOBODY IS NOT AN ERROR PAGE — for a first-party client. The portal
+            // remembers the last tenant in a cookie and sends it on every /authorize; a developer's
+            // second `dotnet run` starts with an empty durable tier (ADR-014), so the remembered
+            // tenant is gone, and the first thing the portal showed was OpenIddict's
+            // `invalid_request: A tenant is required` with nowhere to go. A retired tenant and a
+            // mistyped slug are the same shape. There is a page for exactly this — the sign-in
+            // page's organisation field — so the request is validated against the client's static
+            // registration, marked, and the passthrough sends the person there with the hint
+            // removed; the request resumes with the tenant they name. A request that names nothing
+            // and has no fallback, or a tenant client (whose registration lives IN a tenant), still
+            // gets the error: there is no registration to validate the redirect_uri against.
+            if (tenantId is null && !string.IsNullOrWhiteSpace(hint) && FirstPartyClients.IsFirstParty(context.ClientId)) {
+                context.Transaction.Properties[UnknownTenantProperty] = hint;
+                tenantId = Guid.Empty;
+            }
 
             if (tenantId is null) {
                 Refuse(context, Guid.Empty, OpenIddictConstants.Errors.InvalidRequest, "A tenant is required: name one with the 'tenant' parameter, as a tenant id or a slug.", "no-tenant");
