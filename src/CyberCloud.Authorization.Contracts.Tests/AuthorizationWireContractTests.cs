@@ -35,6 +35,26 @@ public sealed class AuthorizationWireContractTests {
         ("ConsistencyToken", 0, "TenantId"),
         ("ConsistencyToken", 1, "Version"),
 
+        // ListObjects, issue #37 — the page and the request are wire types because the grain is
+        // called across silos; the outcome enum is under EveryEnumHasAnAlias.
+        ("ListObjectsPage", 0, "Objects"),
+        ("ListObjectsPage", 1, "Continuation"),
+        ("ListObjectsPage", 2, "Outcome"),
+        ("ListObjectsPage", 3, "CapDetail"),
+        ("ListObjectsPage", 4, "Token"),
+        ("ListObjectsPage", 5, "PairsReached"),
+        ("ListObjectsPage", 6, "ReverseReads"),
+        ("ListObjectsPage", 7, "ForwardReads"),
+        ("ListObjectsPage", 8, "Verified"),
+
+        ("ListObjectsRequest", 0, "ObjectType"),
+        ("ListObjectsRequest", 1, "Permission"),
+        ("ListObjectsRequest", 2, "SubjectRelation"),
+        ("ListObjectsRequest", 3, "Within"),
+        ("ListObjectsRequest", 4, "WithinDepth"),
+        ("ListObjectsRequest", 5, "PageSize"),
+        ("ListObjectsRequest", 6, "Continuation"),
+
         ("Consistency", 0, "Mode"),
         ("Consistency", 1, "Token"),
 
@@ -69,6 +89,8 @@ public sealed class AuthorizationWireContractTests {
         ("CheckResult", "CyberCloud.Authorization.CheckResult"),
         ("Consistency", "CyberCloud.Authorization.Consistency"),
         ("ConsistencyToken", "CyberCloud.Authorization.ConsistencyToken"),
+        ("ListObjectsPage", "CyberCloud.Authorization.ListObjectsPage"),
+        ("ListObjectsRequest", "CyberCloud.Authorization.ListObjectsRequest"),
         ("ObjectRef", "CyberCloud.Authorization.ObjectRef"),
         ("ObjectRelationsSnapshot", "CyberCloud.Authorization.ObjectRelationsSnapshot"),
         ("RelationTuple", "CyberCloud.Authorization.RelationTuple"),
