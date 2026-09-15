@@ -20,6 +20,7 @@ import { XuiInput } from '@xui/input';
 import { XuiNonIdealState } from '@xui/non-ideal-state';
 import { ApiCallError } from '../../app/api/http-transport';
 import { PlatformApi } from '../../app/api/platform-api';
+import { ScopeCollections, ScopeListItem } from '../../app/api/scope-collections';
 import { links } from '../../app/routes/portal-links';
 import { NeedsTenant, PageStatus, activeTenantId, load, pageState } from '../shared/page-state';
 
@@ -27,14 +28,13 @@ import { NeedsTenant, PageStatus, activeTenantId, load, pageState } from '../sha
 const GROUP_NAME = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 
 /**
- * The resource groups page: create one, or open one by name.
+ * The resource groups page: the subscription's groups, a create form, and open by name.
  *
- * ⚠ **There is no list endpoint for resource groups, and the empty state says so.** Issue #10
- * added collection routes for resources at resource-group scope; the scope API (#63) has a `GET`
- * and a `PUT` by name and nothing that enumerates a subscription's groups. This page therefore
- * offers the two things the API can do — create, and open by name — and an empty state that
- * names the gap rather than a list that is always empty. The day a
- * `/subscriptions/{s}/resourceGroups` collection lands, the list goes where the empty state is.
+ * The list is `GET /tenants/{tid}/subscriptions/{sid}/resourceGroups`, the scope collection that
+ * answers 404 unless the caller may `read` the subscription and lists the groups the caller may
+ * `read` within it. "Open by name" stays beside it: a group the caller may act in but not
+ * enumerate — a `contributor` on the group alone, with no role on the subscription — is reachable
+ * by its address and by nothing else, and a 404 on the collection is that person's normal case.
  *
  * The create form is the generated `scopeForms.resourceGroup` (`location`, required, no default —
  * "a group whose region were guessed would place a tenant's data somewhere nobody chose"), and the
@@ -136,6 +136,25 @@ const GROUP_NAME = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
         </section>
       }
 
+      <cc-page-status [state]="listing()" />
+
+      @if (known(); as known) {
+        @if (known.length === 0) {
+          <xui-non-ideal-state class="mt-6" [title]="emptyTitle" [description]="emptyDescription" />
+        } @else {
+          <ul class="divide-border mt-4 divide-y">
+            @for (group of known; track group.name) {
+              <li class="flex items-center justify-between py-2">
+                <a class="underline" [routerLink]="groupLink(group.name)">{{ group.name }}</a>
+                @if (group.location; as location) {
+                  <code class="text-foreground-muted text-xs">{{ location }}</code>
+                }
+              </li>
+            }
+          </ul>
+        }
+      }
+
       <form class="mt-6 flex items-end gap-2" (ngSubmit)="onOpen()">
         <div class="flex flex-col gap-1.5">
           <label class="text-sm font-medium" for="cc-rg-open" i18n="@@resourceGroups.openLabel">Open by name</label>
@@ -145,8 +164,6 @@ const GROUP_NAME = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
           Open
         </button>
       </form>
-
-      <xui-non-ideal-state class="mt-10" [title]="emptyTitle" [description]="emptyDescription" />
     }
   `
 })
@@ -154,12 +171,20 @@ export class ResourceGroups {
   readonly subscriptionId = input.required<string>();
 
   private readonly api = inject(PlatformApi);
+  private readonly scopes = inject(ScopeCollections);
   private readonly forms = inject(ResourceFormSource);
   private readonly router = inject(Router);
   private readonly blades = inject(BladeStackStore);
 
   protected readonly tenantId = activeTenantId();
   protected readonly subscriptionLink = computed(() => links.subscription(this.subscriptionId()));
+
+  /** The collection's first page. */
+  protected readonly listing = pageState<readonly ScopeListItem[]>();
+  protected readonly known = computed(() => {
+    const state = this.listing();
+    return state.kind === 'ready' ? state.value : null;
+  });
 
   protected readonly creating = signal(false);
   protected readonly form = pageState<ScopeForm>();
@@ -181,8 +206,8 @@ export class ResourceGroups {
 
   protected readonly refusedTitle = $localize`:@@resourceGroups.refused:The platform refused the create`;
   protected readonly submitLabel = $localize`:@@resourceGroups.submit:Create resource group`;
-  protected readonly emptyTitle = $localize`:@@resourceGroups.emptyTitle:No list endpoint yet`;
-  protected readonly emptyDescription = $localize`:@@resourceGroups.emptyDescription:The API can create a resource group and read one by name, and cannot yet enumerate a subscription's groups. Open one by name above.`;
+  protected readonly emptyTitle = $localize`:@@resourceGroups.emptyTitle:No resource groups`;
+  protected readonly emptyDescription = $localize`:@@resourceGroups.emptyDescription:Your sign-in can read none in this subscription. Create one above, or open one you have a role on by name.`;
 
   private readonly renderer = viewChild(ResourceFormRenderer);
 
@@ -201,6 +226,25 @@ export class ResourceGroups {
         if (this.form().kind === 'idle') void load(this.form, () => this.forms.scopeForm('resourceGroup', apiVersion));
       });
     });
+
+    effect(() => {
+      const tenantId = this.tenantId();
+      const subscriptionId = this.subscriptionId();
+      if (tenantId === null) return;
+      untracked(() => void this.list(tenantId, subscriptionId));
+    });
+  }
+
+  private async list(tenantId: string, subscriptionId: string): Promise<void> {
+    await load(
+      this.listing,
+      async () => (await this.scopes.listResourceGroups(tenantId, subscriptionId)).value.value,
+      () => this.tenantId() !== tenantId || this.subscriptionId() !== subscriptionId
+    );
+  }
+
+  protected groupLink(name: string): string {
+    return links.resourceGroup(this.subscriptionId(), name);
   }
 
   protected nameMessage(): string | null {

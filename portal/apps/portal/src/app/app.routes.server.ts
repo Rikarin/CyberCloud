@@ -25,6 +25,16 @@ import { RenderMode, ServerRoute } from '@angular/ssr';
  */
 export const serverRoutes: ServerRoute[] = [
   {
+    // The sign-in callback, rendered on the server as the shell with its "signing in" state and
+    // nothing else. The code and state in its query are for the browser: the exchange is a
+    // cross-origin `fetch` with the identity host's cookie, which the render never holds, and
+    // `authGuard` passes on the server for the same reason. Listed by name so nobody reads the
+    // `**` below as "every route is a page" and prerenders this one — it is the one route whose
+    // query string is a credential.
+    path: 'auth/callback',
+    renderMode: RenderMode.Server
+  },
+  {
     path: '**',
     renderMode: RenderMode.Server
   }

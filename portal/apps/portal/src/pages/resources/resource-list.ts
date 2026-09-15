@@ -7,6 +7,7 @@ import { XuiButton } from '@xui/button';
 import { XuiNonIdealState } from '@xui/non-ideal-state';
 import { XuiSelect } from '@xui/select';
 import { XuiTable, XuiTd, XuiTh, XuiTr } from '@xui/table';
+import { skipTokenOf } from '../../app/api/paging';
 import { PlatformApi } from '../../app/api/platform-api';
 import { ResourceEnvelope, listResources, parentCountOf, verbsFor } from '../../app/api/resource-verbs';
 import { links } from '../../app/routes/portal-links';
@@ -274,14 +275,5 @@ export class ResourceList {
 
   protected emptyTitle(form: ResourceForm): string {
     return $localize`:@@resources.emptyTitle:No ${form.plural}:plural: here`;
-  }
-}
-
-/** `$skipToken` out of a `nextLink`, or `null` when the link carries none. */
-export function skipTokenOf(nextLink: string): string | null {
-  try {
-    return new URL(nextLink, 'https://placeholder.invalid').searchParams.get('$skipToken');
-  } catch {
-    return null;
   }
 }

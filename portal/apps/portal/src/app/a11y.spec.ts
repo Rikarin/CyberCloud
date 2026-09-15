@@ -3,7 +3,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, RouterOutlet, withComponentInputBinding } from '@angular/router';
-import { ContextBar, NotificationsTray, TenantContextStore } from '@cybercloud/shell';
+import { AccessTokenStore, ContextBar, NotificationsTray, TenantContextStore } from '@cybercloud/shell';
 import axe from 'axe-core';
 import { appRoutes } from './app.routes';
 
@@ -95,6 +95,12 @@ describe('Accessibility — docs/plan/20 § Accessibility, i18n, theming', () =>
         provideHttpClientTesting()
       ]
     });
+
+    // Every route but the callback is behind `authGuard`, which sends a browser with no token
+    // to the identity host. A bearer token in memory — the guard reads nothing else — lets each
+    // page render for the audit; no tenant is loaded, so every page is audited in its no-tenant
+    // state, and `pages.spec.ts` covers the signed-in one.
+    TestBed.inject(AccessTokenStore).set('audit-token', Date.now() + 600_000);
   });
 
   it.each([...routePaths, '/definitely-not-a-route'])('%s has no WCAG 2.2 AA violations', async path => {

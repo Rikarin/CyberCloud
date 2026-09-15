@@ -7,6 +7,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="favicon.ico" />
     <!--
+      Where the portal sends a person to sign in. Read by `IDENTITY_ISSUER` in libs/shell, so the
+      deployed value is a property of the served document rather than of the bundle: one build
+      serves the AppHost's localhost:5101 and production's id.cybercloud.io. One issuer for every
+      tenant; the tenant rides in the token's `tid`, never in this value.
+    -->
+    <meta name="cyc-identity-issuer" content="http://localhost:5101" />
+    <!--
       `lang` is the source locale. `@angular/localize` rewrites it per localised build once the
       locale set grows past English — docs/plan/20 § Accessibility, i18n, theming: "i18n from day
       one with `@angular/localize`. English at M1, but the string extraction is in place from the

@@ -1,7 +1,14 @@
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection } from '@angular/core';
+import {
+  ApplicationConfig,
+  Injector,
+  inject,
+  provideBrowserGlobalErrorListeners,
+  provideZonelessChangeDetection
+} from '@angular/core';
 import { provideClientHydration, withEventReplay, withIncrementalHydration } from '@angular/platform-browser';
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
+import { TENANT_CONTEXT_SOURCE, TenantContextSource } from '@cybercloud/shell';
 import { appRoutes } from './app.routes';
 import { accessTokenInterceptor } from './auth/access-token.interceptor';
 
@@ -30,6 +37,19 @@ export const appConfig: ApplicationConfig = {
     ),
     provideHttpClient(withFetch(), withInterceptors([accessTokenInterceptor])),
 
+    // ── docs/plan/10 § Authentication inputs ────────────────────────────────────────────────
+    // The shell's sign-in flow knows the tenant from the token's `tid` and asks the app for the
+    // rest: the tenant's name and its subscriptions, through the generated client and the scope
+    // collections. The shell cannot import the client (`libs/shell` does not depend on
+    // `apps/portal`), so this is the one provider that turns a token into a context bar.
+    //
+    // ⚠ Imported lazily, on the first load, and not as a `useClass`. `PlatformTenantContextSource`
+    // reaches `PlatformApi`, which is the whole generated client — and a static import here would
+    // put its 150 methods in the initial bundle, which `platform-api.ts` promises does not happen
+    // and `scripts/bundle-budget.mjs` measures (it cost 8 KB gzipped when tried). The dynamic
+    // import lands in the same chunk the first page already loads.
+    { provide: TENANT_CONTEXT_SOURCE, useFactory: lazyTenantContextSource },
+
     // ── docs/plan/20 § SSR ──────────────────────────────────────────────────────────────────
     // Hydration rather than a re-render. The reason the doc gives is not SEO: "First paint on a
     // cold load matters when the alternative is a spinner on a 3 MB bundle" and "a link to a
@@ -43,3 +63,15 @@ export const appConfig: ApplicationConfig = {
     provideClientHydration(withEventReplay(), withIncrementalHydration())
   ]
 };
+
+/** The provider's factory, exported so `tenant-context.source.spec.ts` can drive it as the app does. */
+export function lazyTenantContextSource(): TenantContextSource {
+  const injector = inject(Injector);
+
+  return {
+    load: async tenantId => {
+      const { PlatformTenantContextSource } = await import('./auth/tenant-context.source');
+      return injector.get(PlatformTenantContextSource).load(tenantId);
+    }
+  };
+}

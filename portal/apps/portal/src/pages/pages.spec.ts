@@ -4,7 +4,7 @@ import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, RouterOutlet, provideRouter, withComponentInputBinding } from '@angular/router';
 import { apiVersion } from '@cybercloud/api';
-import { NotificationsStore, TenantContextStore } from '@cybercloud/shell';
+import { AccessTokenStore, NotificationsStore, TenantContextStore } from '@cybercloud/shell';
 import axe from 'axe-core';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,7 +14,7 @@ import { OPERATION_POLL_MS } from './operations/operation-view';
 /**
  * The pages, driven end to end against a recorded platform.
  *
- * `a11y.spec.ts` walks every route signed out; this signs in — a tenant in `TenantContextStore`,
+ * `a11y.spec.ts` walks every route with a token and no tenant; this signs in — a tenant in `TenantContextStore`,
  * the real form document served at `/forms/{apiVersion}.json`, and `HttpTestingController`
  * playing the gateway — and exercises what each page does: the create blade's `PUT` and its
  * hand-off to the operation view, the operation view's poll to `Succeeded`, the blade's read and
@@ -75,6 +75,8 @@ describe('the portal pages, signed in', () => {
       [{ id: SUBSCRIPTION, tenantId: TENANT, displayName: 'Acme Production' }]
     );
     context.selectTenant(TENANT);
+    // `authGuard` wants a token in memory; the context above is what the sign-in would have loaded.
+    TestBed.inject(AccessTokenStore).set('signed-in', Date.now() + 600_000);
 
     fixture = TestBed.createComponent(Host);
   });
@@ -750,8 +752,61 @@ describe('the portal pages, signed in', () => {
   });
 
   describe('the scope pages', () => {
+    const SUBSCRIPTIONS = `/api/tenants/${TENANT}/subscriptions`;
+    const GROUPS = `${SUBSCRIPTIONS}/${SUBSCRIPTION}/resourceGroups`;
+
+    it('lists the subscriptions the collection answers, by display name, linking each by its id', async () => {
+      await open('/subscriptions');
+
+      // The scope collection — GET only, `{ value, nextLink }`, filtered to what the caller may
+      // read (the contract's § 6). The id is the address's last segment; `name` is what a person reads.
+      http
+        .expectOne(r => r.method === 'GET' && r.url === SUBSCRIPTIONS)
+        .flush({
+          value: [
+            {
+              id: `/tenants/${TENANT}/subscriptions/${SUBSCRIPTION}`,
+              name: 'Acme Production',
+              type: 'CyberCloud.Resources/subscriptions'
+            },
+            {
+              id: `/tenants/${TENANT}/subscriptions/2f9a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43`,
+              name: '2f9a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43',
+              type: 'CyberCloud.Resources/subscriptions',
+              properties: { displayName: 'Default' }
+            }
+          ]
+        });
+      await settle();
+
+      const rows = [...host().querySelectorAll('li a')].map(a => [a.textContent?.trim(), a.getAttribute('href')]);
+      expect(rows).toEqual([
+        ['Acme Production', `/subscriptions/${SUBSCRIPTION}`],
+        ['Default', '/subscriptions/2f9a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43']
+      ]);
+    });
+
+    it('says so when the collection is empty, and shows the platform’s refusal when it is one', async () => {
+      await open('/subscriptions');
+      http.expectOne(r => r.method === 'GET' && r.url === SUBSCRIPTIONS).flush({ value: [] });
+      await settle();
+      expect(host().textContent).toContain('No subscriptions');
+
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups`);
+      http
+        .expectOne(r => r.method === 'GET' && r.url === GROUPS)
+        .flush(
+          { error: { code: 'ResourceNotFound', message: 'The subscription was not found.' } },
+          { status: 404, statusText: 'Not Found' }
+        );
+      await settle();
+      expect(host().textContent).toContain('The subscription was not found.');
+    });
+
     it('creates a subscription with the generated scope form and lands on its blade', async () => {
       await open('/subscriptions');
+      http.expectOne(r => r.method === 'GET' && r.url === SUBSCRIPTIONS).flush({ value: [] });
+      await settle();
       click('New subscription');
       await settle();
       await serveForms();
@@ -792,9 +847,24 @@ describe('the portal pages, signed in', () => {
       expect(host().querySelector('h1')?.textContent?.trim()).toBe('Acme Staging');
     });
 
-    it('creates a resource group and says there is no list endpoint', async () => {
+    it('lists the resource groups the collection answers and creates one', async () => {
       await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups`);
-      expect(host().textContent).toContain('No list endpoint yet');
+      http
+        .expectOne(r => r.method === 'GET' && r.url === GROUPS)
+        .flush({
+          value: [
+            {
+              id: `/tenants/${TENANT}/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}`,
+              name: GROUP,
+              type: 'CyberCloud.Resources/subscriptions/resourceGroups',
+              location: 'local'
+            }
+          ]
+        });
+      await settle();
+
+      const rows = [...host().querySelectorAll('li a')].map(a => [a.textContent?.trim(), a.getAttribute('href')]);
+      expect(rows).toEqual([[GROUP, `/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}`]]);
 
       click('New resource group');
       await settle();
