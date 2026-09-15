@@ -1,5 +1,12 @@
+using CyberCloud.Identity.Contracts;
+using CyberCloud.Identity.Host.Api;
+using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
+using OpenIddict.Server.AspNetCore;
+using System.Security.Claims;
 using static OpenIddict.Server.OpenIddictServerEvents;
 
 namespace CyberCloud.Identity.Host.Tokens;
@@ -25,20 +32,28 @@ namespace CyberCloud.Identity.Host.Tokens;
 ///         Every handler here exists to answer one of those sentences.
 ///     </para>
 ///     <para>
-///         ⚠ <b>All but the first answer "not yet", and they answer it as an OAuth error rather than
-///         as an exception.</b> A client that tries the authorization-code, device or end-session
-///         endpoint today gets <c>temporarily_unavailable</c> with a description naming what the flow
-///         is waiting on; without these handlers it would get a <c>500</c> and a stack trace naming
-///         an OpenIddict interface. <see cref="TokenApi" />'s remarks carry the reasons per flow.
-///         ⚠ Rejecting <i>before</i> reading a <c>redirect_uri</c> is what keeps the authorization
-///         handler from being an open redirect: OpenIddict redirects an error to the client only once
-///         the URI has been validated, and this handler validates nothing.
+///         ⚠ <b>What degraded mode switches off is wider than the store lookups, and two of the
+///         checks below exist to put it back.</b> OpenIddict's <c>ValidateClientRedirectUri</c>,
+///         its grant and scope permission checks and — less obviously — its
+///         <c>ValidateProofKeyForCodeExchangeRequirement</c> all carry the
+///         <c>RequireDegradedModeDisabled</c> filter, so <c>RequireProofKeyForCodeExchange()</c> is
+///         a setting the server no longer enforces on its own at <c>/authorize</c>.
+///         <see cref="ValidateAuthorizationRequest" /> refuses a request without a
+///         <c>code_challenge</c> for that reason; the verifier check at <c>/token</c>
+///         (<c>ValidateCodeVerifier</c>) has no such filter and stays OpenIddict's.
+///     </para>
+///     <para>
+///         The device flow's two handlers still answer <c>temporarily_unavailable</c>, naming what
+///         the flow is waiting on — a verification page and a code store. ⚠ Rejecting in the
+///         <i>validation</i> stage is what keeps <c>/authorize</c> from being an open redirect:
+///         OpenIddict sends an error to the client's redirect URI only for a request whose
+///         validation succeeded, and renders an error page for one whose validation did not.
 ///     </para>
 /// </remarks>
-static class DegradedModeHandlers {
+public static class DegradedModeHandlers {
     /// <summary>
-    ///     Where <see cref="ValidateClientCredentials" /> leaves the authenticated service principal
-    ///     for the endpoint that mints — <see cref="OpenIddictServerTransaction.Properties" />.
+    ///     Where <see cref="ValidateTokenRequest" /> leaves the authenticated service principal for
+    ///     the endpoint that mints — <see cref="OpenIddictServerTransaction.Properties" />.
     /// </summary>
     /// <remarks>
     ///     A transaction property rather than a second grain call: the endpoint runs later in the
@@ -46,34 +61,233 @@ static class DegradedModeHandlers {
     /// </remarks>
     public const string ServicePrincipalProperty = "cybercloud.token.service-principal";
 
+    /// <summary>
+    ///     Where the validators leave the resolved <see cref="ApplicationRegistration" /> for the
+    ///     passthrough — <c>/authorize</c>'s and <c>/token</c>'s.
+    /// </summary>
+    public const string ClientProperty = "cybercloud.token.client";
+
+    /// <summary>Where <see cref="ValidateAuthorizationRequest" /> leaves the resolved tenant id.</summary>
+    public const string TenantProperty = "cybercloud.token.tenant";
+
     /// <summary>Every handler this server registers, in one list so a missing one is a visible gap.</summary>
     public static IReadOnlyList<OpenIddictServerHandlerDescriptor> All { get; } = [
-        ValidateClientCredentials.Descriptor,
-        RefuseAuthorizationRequests.Descriptor,
+        ValidateAuthorizationRequest.Descriptor,
+        ExtractRefreshTokenFromCookie.Descriptor,
+        ValidateTokenRequest.Descriptor,
+        MoveRefreshTokenToCookie.Descriptor,
+        ValidateEndSessionRequest.Descriptor,
+        KeepAccessTokenToTheClosedSet.Descriptor,
         RefuseDeviceAuthorizationRequests.Descriptor,
         RefuseEndUserVerificationRequests.Descriptor,
-        RefuseEndSessionRequests.Descriptor,
         RefuseDeviceCodeStorage.GenerateDescriptor,
         RefuseDeviceCodeStorage.ValidateDescriptor
     ];
 
+    // ── /authorize ─────────────────────────────────────────────────────────────────────────────
+
     /// <summary>
-    ///     Answers the token request's validation: client credentials through
-    ///     <see cref="TokenApi.AuthenticateClientAsync" />, everything else refused.
+    ///     Validates an authorization request: the tenant through the directory, the client
+    ///     through the resolver, the redirect URI against the registration, the grant and the
+    ///     scopes against it too, and PKCE.
     /// </summary>
-    /// <param name="api">The decision.</param>
-    public sealed class ValidateClientCredentials(TokenApi api) : IOpenIddictServerHandler<ValidateTokenRequestContext> {
+    /// <param name="tenants">The tenant hint's resolver.</param>
+    /// <param name="clients">The client resolver — static first, then the tenant's index.</param>
+    /// <param name="logger">Where the reasons go.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Everything here rejects in the validation stage, so nothing here redirects.</b>
+    ///         A refusal during validation is rendered by OpenIddict as an error response on this
+    ///         origin, never as a redirect to the <c>redirect_uri</c> — which is the only safe
+    ///         answer before that URI has been matched against the registration, and is kept for
+    ///         the refusals after it (grant, scope, PKCE) so a broken client sees one behaviour.
+    ///         <c>AuthorizeHandlerTests.AnUnregisteredRedirectUriIsRefusedWithoutARedirect</c>.
+    ///     </para>
+    ///     <para>
+    ///         Ordered after OpenIddict's own parameter checks, so a malformed <c>redirect_uri</c> or
+    ///         a missing <c>response_type</c> gets the library's sentence naming the parameter, and
+    ///         this handler sees only well-formed requests.
+    ///     </para>
+    /// </remarks>
+    public sealed class ValidateAuthorizationRequest(
+        TenantHint tenants,
+        IClientResolver clients,
+        ILogger<ValidateAuthorizationRequest> logger
+    ) : IOpenIddictServerHandler<ValidateAuthorizationRequestContext> {
         /// <summary>The registration.</summary>
-        /// <remarks>
-        ///     ⚠ Ordered after OpenIddict's own parameter checks, so a request with no
-        ///     <c>client_secret</c> at all gets the library's <c>invalid_request</c> naming the
-        ///     parameter rather than this host's uniform <c>invalid_client</c> — the former is a
-        ///     malformed request and says so; the latter is reserved for a well-formed one that
-        ///     failed authentication, which is the one that must not explain itself.
-        /// </remarks>
+        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
+            OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateAuthorizationRequestContext>()
+                .UseSingletonHandler<ValidateAuthorizationRequest>()
+                .SetOrder(OpenIddictServerHandlers.Authentication.ValidateAuthorizedParty.Descriptor.Order + 1_000)
+                .SetType(OpenIddictServerHandlerType.Custom)
+                .Build();
+
+        /// <inheritdoc />
+        public async ValueTask HandleAsync(ValidateAuthorizationRequestContext context) {
+            ArgumentNullException.ThrowIfNull(context);
+
+            var tenantId = await tenants.ResolveAsync((string?)context.Request[TenantHint.ParameterName], context.CancellationToken);
+
+            if (tenantId is null) {
+                Refuse(context, Guid.Empty, OpenIddictConstants.Errors.InvalidRequest, "A tenant is required: name one with the 'tenant' parameter, as a tenant id or a slug.", "no-tenant");
+
+                return;
+            }
+
+            var client = await clients.ResolveAsync(tenantId.Value, context.ClientId, context.CancellationToken);
+
+            if (client is null) {
+                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.InvalidClient, "The client is not registered.", "unknown-client");
+
+                return;
+            }
+
+            if (!FirstPartyClients.IsRegisteredRedirectUri(client, context.RedirectUri)) {
+                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.InvalidRequest, "The 'redirect_uri' parameter is not registered for this client.", "unregistered-redirect-uri");
+
+                return;
+            }
+
+            if (!client.AllowedGrants.Contains(GrantType.AuthorizationCode)) {
+                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.UnauthorizedClient, "This client may not use the authorization-code flow.", "grant-not-allowed");
+
+                return;
+            }
+
+            if (context.Request.GetScopes().Any(x => !client.AllowedScopes.Contains(x, StringComparer.Ordinal))) {
+                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.InvalidScope, "A requested scope is not allowed for this client.", "scope-not-allowed");
+
+                return;
+            }
+
+            // ⚠ OpenIddict's own requirement check is filtered out in degraded mode — see the type's
+            // remarks — so the one setting docs/plan/11 § Protocol makes non-negotiable is enforced
+            // here. Only the presence: the method's spelling is OpenIddict's parameter check.
+            if (string.IsNullOrEmpty(context.Request.CodeChallenge)) {
+                Refuse(context, tenantId.Value, OpenIddictConstants.Errors.InvalidRequest, "The 'code_challenge' parameter is required: this server accepts the authorization-code flow only with PKCE.", "pkce-missing");
+
+                return;
+            }
+
+            context.Transaction.Properties[TenantProperty] = tenantId.Value;
+            context.Transaction.Properties[ClientProperty] = client;
+        }
+
+        void Refuse(ValidateAuthorizationRequestContext context, Guid tenantId, string error, string description, string reason) {
+            GrantLog.AuthorizationRequestRefused(logger, tenantId, error, reason);
+            context.Reject(error, description);
+        }
+    }
+
+    // ── /token ─────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Copies <c>__Host-cyc-refresh</c> into a browser client's refresh request that carries
+    ///     no <c>refresh_token</c> of its own — after checking who is asking.
+    /// </summary>
+    /// <param name="clients">The first-party registrations, for the origin allow-list.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The <c>Origin</c> check runs before any grain call and before the cookie is even
+    ///         read.</b> <c>SameSite=Lax</c> lets the browser send the cookie on a same-site
+    ///         <c>POST</c>, and a tenant's subdomain is same-site with the identity host
+    ///         (docs/plan/11 § Hosts). A page on such a subdomain could therefore <c>POST</c>
+    ///         <c>grant_type=refresh_token&amp;client_id=cyc-portal</c> and have the browser attach
+    ///         the person's cookie — and would get an access token for them, if the only check were
+    ///         the cookie. The browser sets <c>Origin</c> on every cross-origin <c>POST</c> and a
+    ///         page cannot forge it, so an origin outside the portal's redirect-URI origins is
+    ///         refused here with <c>invalid_request</c> and nothing else happens.
+    ///         <c>TokenApiTests.ACookieBorneRefreshFromAForeignOriginNeverReachesAGrain</c>.
+    ///     </para>
+    ///     <para>
+    ///         A request that carries <c>refresh_token</c> in its body is not this handler's — the
+    ///         CLI does that, from a process with no <c>Origin</c> — and a browser request with the
+    ///         right origin and no cookie is left alone too: OpenIddict then answers that the
+    ///         parameter is missing, which is what the portal's first load expects.
+    ///     </para>
+    /// </remarks>
+    public sealed class ExtractRefreshTokenFromCookie(FirstPartyClients clients) : IOpenIddictServerHandler<ExtractTokenRequestContext> {
+        /// <summary>The refusal, verbatim, for a request whose origin is not a first-party browser's.</summary>
+        public const string OriginNotAllowed = "The request's origin is not allowed to present the refresh cookie.";
+
+        /// <summary>The registration — after the form has been read, before anything validates it.</summary>
+        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
+            OpenIddictServerHandlerDescriptor.CreateBuilder<ExtractTokenRequestContext>()
+                .UseSingletonHandler<ExtractRefreshTokenFromCookie>()
+                .SetOrder(OpenIddictServerAspNetCoreHandlers.ExtractPostRequest<ExtractTokenRequestContext>.Descriptor.Order + 10_000)
+                .SetType(OpenIddictServerHandlerType.Custom)
+                .Build();
+
+        /// <inheritdoc />
+        public ValueTask HandleAsync(ExtractTokenRequestContext context) {
+            ArgumentNullException.ThrowIfNull(context);
+
+            var request = context.Request;
+
+            if (request is null
+                || !request.IsRefreshTokenGrantType()
+                || !string.IsNullOrEmpty(request.RefreshToken)
+                || !FirstPartyClients.IsBrowserClient(request.ClientId)) {
+                return default;
+            }
+
+            var http = context.Transaction.GetHttpRequest();
+
+            if (http is null) {
+                return default;
+            }
+
+            var origin = http.Headers.Origin.ToString();
+
+            if (!clients.AllowedOrigins.Contains(origin, StringComparer.Ordinal)) {
+                context.Reject(OpenIddictConstants.Errors.InvalidRequest, OriginNotAllowed);
+
+                return default;
+            }
+
+            if (RefreshCookie.Read(http) is { } token) {
+                request.RefreshToken = token;
+            }
+
+            return default;
+        }
+    }
+
+    /// <summary>
+    ///     Validates a token request, by grant: client credentials through
+    ///     <see cref="TokenApi.AuthenticateClientAsync" />; a code or a refresh token by resolving
+    ///     the client the token was minted for and checking it is the one asking.
+    /// </summary>
+    /// <param name="api">The client-credentials decision.</param>
+    /// <param name="clients">The client resolver.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ Ordered after OpenIddict's <c>ValidateAuthentication</c>, which is what decrypts the
+    ///         code or the refresh token and puts its principal on the context — so a token this
+    ///         server did not mint, or one past its lifetime, is refused by the library before this
+    ///         runs, and this handler reads the tenant off a principal it can trust. It runs before
+    ///         OpenIddict's <c>ValidateAuthorizedParty</c>, <c>ValidateRedirectUri</c> and
+    ///         <c>ValidateCodeVerifier</c>, which remain the library's: the presenter, the redirect
+    ///         URI the code was issued for, and PKCE.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The tenant for a code or a refresh comes from the token's own <c>tid</c> and never
+    ///         from a parameter: the token names the tenant the sign-in happened in, and letting the
+    ///         exchange say otherwise would be letting it move a code between tenants.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The grain calls — is the sign-in still live, rotate the chain — are not here but in
+    ///         the passthrough (<c>IdentityEndpoints.MapToken</c> → <see cref="TokenApi" />), after
+    ///         every check that could still refuse the request. A rotation followed by a refusal
+    ///         would leave the client holding a retired generation, and its next honest refresh
+    ///         would read as a replay and revoke the chain.
+    ///     </para>
+    /// </remarks>
+    public sealed class ValidateTokenRequest(TokenApi api, IClientResolver clients) : IOpenIddictServerHandler<ValidateTokenRequestContext> {
+        /// <summary>The registration.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateTokenRequestContext>()
-                .UseSingletonHandler<ValidateClientCredentials>()
+                .UseSingletonHandler<ValidateTokenRequest>()
                 .SetOrder(OpenIddictServerHandlers.Exchange.ValidateAuthentication.Descriptor.Order + 1_000)
                 .SetType(OpenIddictServerHandlerType.Custom)
                 .Build();
@@ -82,17 +296,26 @@ static class DegradedModeHandlers {
         public async ValueTask HandleAsync(ValidateTokenRequestContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            if (!context.Request.IsClientCredentialsGrantType()) {
-                context.Reject(
-                    OpenIddictConstants.Errors.UnsupportedGrantType,
-                    "Only the client_credentials grant is served today. The authorization-code, "
-                    + "refresh-token, device and token-exchange grants are owed — docs/plan/11 "
-                    + "§ Protocol, and TokenApi's remarks say what each is waiting on."
-                );
+            if (context.Request.IsClientCredentialsGrantType()) {
+                await ValidateClientCredentialsAsync(context);
 
                 return;
             }
 
+            if (context.Request.IsAuthorizationCodeGrantType() || context.Request.IsRefreshTokenGrantType()) {
+                await ValidateTokenBearingGrantAsync(context);
+
+                return;
+            }
+
+            context.Reject(
+                OpenIddictConstants.Errors.UnsupportedGrantType,
+                "The device and token-exchange grants are owed — docs/plan/11 § Protocol, and TokenApi's "
+                + "remarks say what each is waiting on."
+            );
+        }
+
+        async Task ValidateClientCredentialsAsync(ValidateTokenRequestContext context) {
             var authenticated = await api.AuthenticateClientAsync(
                 context.Request.ClientId,
                 context.Request.ClientSecret,
@@ -107,33 +330,241 @@ static class DegradedModeHandlers {
 
             context.Transaction.Properties[ServicePrincipalProperty] = authenticated.GetValueOrThrow();
         }
+
+        async Task ValidateTokenBearingGrantAsync(ValidateTokenRequestContext context) {
+            if ((context.AuthorizationCodePrincipal ?? context.RefreshTokenPrincipal) is not { } principal
+                || !Guid.TryParseExact(principal.GetClaim(AccessTokenClaims.TenantId), "N", out var tenantId)) {
+                context.Reject(OpenIddictConstants.Errors.InvalidGrant, "The token names no tenant.");
+
+                return;
+            }
+
+            var client = await clients.ResolveAsync(tenantId, context.ClientId, context.CancellationToken);
+
+            if (client is null) {
+                context.Reject(OpenIddictConstants.Errors.InvalidClient, "The client is not registered.");
+
+                return;
+            }
+
+            // ⚠ A public client presents no secret, and one that does is misconfigured in a way worth
+            // refusing: a "secret" a SPA or a CLI holds is one every copy of it holds.
+            if (client.IsPublicClient && !string.IsNullOrEmpty(context.Request.ClientSecret)) {
+                context.Reject(OpenIddictConstants.Errors.InvalidClient, "A public client must not send a client_secret.");
+
+                return;
+            }
+
+            var grant = context.Request.IsRefreshTokenGrantType() ? GrantType.RefreshToken : GrantType.AuthorizationCode;
+
+            if (!client.AllowedGrants.Contains(grant)) {
+                context.Reject(OpenIddictConstants.Errors.UnauthorizedClient, "This client may not use this grant.");
+
+                return;
+            }
+
+            context.Transaction.Properties[ClientProperty] = client;
+        }
     }
 
-    /// <summary>The authorization-code flow, until <c>/authorize</c> can validate a client.</summary>
-    public sealed class RefuseAuthorizationRequests : IOpenIddictServerHandler<ValidateAuthorizationRequestContext> {
-        /// <summary>The registration.</summary>
+    /// <summary>
+    ///     Moves a browser client's refresh token out of the JSON body and into
+    ///     <c>__Host-cyc-refresh</c>; clears that cookie when a browser client's refresh failed.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ Runs before OpenIddict's <c>ProcessJsonResponse</c> writes the body, and edits the
+    ///         response it is about to write: <c>refresh_token</c> is removed so the same credential
+    ///         is not handed out twice, once in a cookie the page cannot read and once in a body it
+    ///         can. For every other client the body is untouched —
+    ///         <c>RefreshCookieTests.OnlyBrowserClientsGetTheCookie</c>.
+    ///     </para>
+    ///     <para>
+    ///         The clearing half: a refresh that answered an error for a browser client is a cookie
+    ///         the browser should stop presenting — a revoked chain will refuse it every time, and a
+    ///         portal that keeps sending it keeps getting <c>invalid_grant</c> instead of a sign-in.
+    ///     </para>
+    /// </remarks>
+    public sealed class MoveRefreshTokenToCookie : IOpenIddictServerHandler<ApplyTokenResponseContext> {
+        /// <summary>The registration — before the JSON body is written.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
-            OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateAuthorizationRequestContext>()
-                .UseSingletonHandler<RefuseAuthorizationRequests>()
-                .SetOrder(int.MinValue + 100_000)
+            OpenIddictServerHandlerDescriptor.CreateBuilder<ApplyTokenResponseContext>()
+                .UseSingletonHandler<MoveRefreshTokenToCookie>()
+                .SetOrder(OpenIddictServerAspNetCoreHandlers.ProcessJsonResponse<ApplyTokenResponseContext>.Descriptor.Order - 1_000)
                 .SetType(OpenIddictServerHandlerType.Custom)
                 .Build();
 
         /// <inheritdoc />
-        public ValueTask HandleAsync(ValidateAuthorizationRequestContext context) {
+        public ValueTask HandleAsync(ApplyTokenResponseContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            context.Reject(
-                OpenIddictConstants.Errors.TemporarilyUnavailable,
-                "The authorization-code flow is not served yet: the client_id index it needs now "
-                + "exists (IClientIndexGrain, docs/plan/11 § Protocol), but the /authorize handler "
-                + "that resolves a client through it and validates the redirect_uri is not wired. "
-                + "docs/plan/11 § Protocol."
-            );
+            if (context.Transaction.GetHttpRequest()?.HttpContext.Response is not { } response
+                || !FirstPartyClients.IsBrowserClient(context.Request?.ClientId)) {
+                return default;
+            }
 
-            return ValueTask.CompletedTask;
+            if (!string.IsNullOrEmpty(context.Response.RefreshToken)) {
+                RefreshCookie.Issue(response, context.Response.RefreshToken);
+                context.Response.RefreshToken = null;
+
+                return default;
+            }
+
+            // ⚠ Only invalid_grant clears the cookie — the chain refused it, so the browser should
+            // stop presenting it. An invalid_request (a foreign Origin, a missing parameter) says
+            // nothing about the cookie, and clearing it then would let a page on another origin
+            // sign the person out of the portal with one POST.
+            if (string.Equals(context.Response.Error, OpenIddictConstants.Errors.InvalidGrant, StringComparison.Ordinal)
+                && context.Request?.IsRefreshTokenGrantType() == true) {
+                RefreshCookie.Clear(response);
+            }
+
+            return default;
         }
     }
+
+    // ── /logout ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Validates an end-session request: the client, and its <c>post_logout_redirect_uri</c>
+    ///     against the registration.
+    /// </summary>
+    /// <param name="tenants">The tenant hint's resolver, for the fallback tenant.</param>
+    /// <param name="clients">The client resolver.</param>
+    /// <remarks>
+    ///     ⚠ The tenant a tenant-registered client is looked up in is the cookie's, when there is
+    ///     one, and the fallback otherwise — a sign-out carries no <c>tenant</c> parameter, and the
+    ///     cookie is the only thing that says where the person signed in. First-party clients are
+    ///     tenant-independent and need neither.
+    /// </remarks>
+    public sealed class ValidateEndSessionRequest(TenantHint tenants, IClientResolver clients) : IOpenIddictServerHandler<ValidateEndSessionRequestContext> {
+        /// <summary>The registration.</summary>
+        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
+            OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateEndSessionRequestContext>()
+                .UseSingletonHandler<ValidateEndSessionRequest>()
+                .SetOrder(OpenIddictServerHandlers.Session.ValidateAuthorizedParty.Descriptor.Order + 1_000)
+                .SetType(OpenIddictServerHandlerType.Custom)
+                .Build();
+
+        /// <inheritdoc />
+        public async ValueTask HandleAsync(ValidateEndSessionRequestContext context) {
+            ArgumentNullException.ThrowIfNull(context);
+
+            if (string.IsNullOrEmpty(context.ClientId)) {
+                context.Reject(OpenIddictConstants.Errors.InvalidRequest, "The 'client_id' parameter is required.");
+
+                return;
+            }
+
+            var tenantId = await TenantOfAsync(context);
+
+            var client = tenantId is null ? null : await clients.ResolveAsync(tenantId.Value, context.ClientId, context.CancellationToken);
+
+            if (client is null) {
+                context.Reject(OpenIddictConstants.Errors.InvalidClient, "The client is not registered.");
+
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(context.PostLogoutRedirectUri)
+                && !FirstPartyClients.IsRegisteredPostLogoutRedirectUri(client, context.PostLogoutRedirectUri)) {
+                context.Reject(OpenIddictConstants.Errors.InvalidRequest, "The 'post_logout_redirect_uri' parameter is not registered for this client.");
+
+                return;
+            }
+
+            context.Transaction.Properties[ClientProperty] = client;
+        }
+
+        async Task<Guid?> TenantOfAsync(ValidateEndSessionRequestContext context) {
+            if (context.Transaction.GetHttpRequest()?.HttpContext is { } http) {
+                var cookie = await http.AuthenticateAsync(IdentityHostAuthentication.SchemeName);
+
+                if (IdentitySessionPrincipal.TenantId(cookie.Principal) is { } fromCookie) {
+                    return fromCookie;
+                }
+            }
+
+            return tenants.Default;
+        }
+    }
+
+    // ── The access token on the wire ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Keeps a serialized access token to exactly <see cref="AccessTokenClaims.Permitted" />, by
+    ///     removing what OpenIddict adds of its own accord.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Found on the wire, not on the principal, and that is why this handler exists.</b>
+    ///         <see cref="AccessTokenPrincipalFactory" /> checks its output against the closed set,
+    ///         and every assertion on the principal passed — while the first token
+    ///         <c>GrantsOverHttpTests</c> decoded carried <c>scope</c>, <c>client_id</c> and
+    ///         <c>oi_prst</c> beside it. OpenIddict writes the principal's scopes into a JWT access
+    ///         token as <c>scope</c> (RFC 9068 § 2.2.3), its presenter as <c>oi_prst</c>, and the
+    ///         client as <c>client_id</c> (RFC 9068 § 2.2) — and the scopes and the presenter
+    ///         <i>have</i> to be on the sign-in principal, because OpenIddict issues a refresh token
+    ///         only to a principal that holds <c>offline_access</c> and checks the presenter at the
+    ///         next exchange. So they are stripped here, from the access token's own copy of the
+    ///         principal, just before it is signed; the refresh token and the id_token are generated
+    ///         from their own copies and keep everything they need.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <c>scope</c> is not merely surplus: it is in
+    ///         <see cref="AccessTokenClaims.ForbiddenClaims" /> — "carrying both would be two sources
+    ///         of truth" beside <c>scp</c> — and <c>JwksBearerTokenValidator</c> refuses a token that
+    ///         carries it. Without this handler every token a person took from <c>/token</c> would
+    ///         be a <c>401</c> at the gateway with a message about a claim nobody added.
+    ///     </para>
+    ///     <para>
+    ///         Only the access token, and only claims outside the set: OpenIddict's own private
+    ///         claims (<c>oi_*</c>) that become <c>iss</c>, <c>exp</c>, <c>iat</c>, <c>jti</c> and
+    ///         <c>aud</c> are left alone, because those spellings are in the set.
+    ///     </para>
+    /// </remarks>
+    public sealed class KeepAccessTokenToTheClosedSet : IOpenIddictServerHandler<GenerateTokenContext> {
+        /// <summary>The registration — before the subject is cloned into the token descriptor.</summary>
+        /// <remarks>
+        ///     ⚠ Before <c>AttachTokenSubject</c>, not merely before the token is signed. OpenIddict's
+        ///     <c>AttachTokenSubject</c> clones the principal into the <c>SecurityTokenDescriptor</c>
+        ///     and <c>AttachTokenMetadata</c> computes <c>scope</c> from the principal's scopes
+        ///     right after it; a handler ordered between them and the signing step edits a principal
+        ///     the descriptor no longer reads, and every claim it removed is signed anyway. That
+        ///     ordering was found by <c>GrantsOverHttpTests</c> on the wire and confirmed against the
+        ///     decompiled handlers.
+        /// </remarks>
+        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
+            OpenIddictServerHandlerDescriptor.CreateBuilder<GenerateTokenContext>()
+                .UseSingletonHandler<KeepAccessTokenToTheClosedSet>()
+                .SetOrder(OpenIddictServerHandlers.Protection.AttachTokenSubject.Descriptor.Order - 500)
+                .SetType(OpenIddictServerHandlerType.Custom)
+                .Build();
+
+        /// <inheritdoc />
+        public ValueTask HandleAsync(GenerateTokenContext context) {
+            ArgumentNullException.ThrowIfNull(context);
+
+            if (context.TokenType is not OpenIddictConstants.TokenTypeIdentifiers.AccessToken
+                || context.Principal?.Identity is not ClaimsIdentity identity) {
+                return default;
+            }
+
+            foreach (var claim in identity.Claims.Where(IsOutsideTheSet).ToList()) {
+                identity.RemoveClaim(claim);
+            }
+
+            return default;
+        }
+
+        static bool IsOutsideTheSet(Claim claim) =>
+            string.Equals(claim.Type, OpenIddictConstants.Claims.Private.Scope, StringComparison.Ordinal)
+            || string.Equals(claim.Type, OpenIddictConstants.Claims.Private.Presenter, StringComparison.Ordinal)
+            || (!claim.Type.StartsWith(OpenIddictConstants.Claims.Prefixes.Private, StringComparison.Ordinal)
+                && !AccessTokenClaims.Permitted.Contains(claim.Type));
+    }
+
+    // ── The device flow, still owed ────────────────────────────────────────────────────────────
 
     /// <summary>The device flow, until there is a verification page and a code store.</summary>
     public sealed class RefuseDeviceAuthorizationRequests
@@ -185,30 +616,6 @@ static class DegradedModeHandlers {
         }
     }
 
-    /// <summary>Sign-out, until a <c>post_logout_redirect_uri</c> can be validated against a registration.</summary>
-    public sealed class RefuseEndSessionRequests : IOpenIddictServerHandler<ValidateEndSessionRequestContext> {
-        /// <summary>The registration.</summary>
-        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
-            OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateEndSessionRequestContext>()
-                .UseSingletonHandler<RefuseEndSessionRequests>()
-                .SetOrder(int.MinValue + 100_000)
-                .SetType(OpenIddictServerHandlerType.Custom)
-                .Build();
-
-        /// <inheritdoc />
-        public ValueTask HandleAsync(ValidateEndSessionRequestContext context) {
-            ArgumentNullException.ThrowIfNull(context);
-
-            context.Reject(
-                OpenIddictConstants.Errors.TemporarilyUnavailable,
-                "The end-session endpoint is not served yet: a post_logout_redirect_uri cannot be "
-                + "validated without the client index the authorization-code flow is also waiting on."
-            );
-
-            return ValueTask.CompletedTask;
-        }
-    }
-
     /// <summary>
     ///     The device flow's codes, which in degraded mode the server cannot store or look up
     ///     without help — refused at generation and at validation.
@@ -226,8 +633,9 @@ static class DegradedModeHandlers {
     ///     degraded mode, a custom 'IOpenIddictServerHandler&lt;ValidateTokenContext&gt;' must be
     ///     implemented to handle device and user codes"</i>.
     ///     <c>OpenIddictServerOptionsTests.TheOptionsCanBeMaterialisedAtAll</c> found it. ⚠ Both
-    ///     handlers act on those two token types and no other — an access token passes through
-    ///     untouched, which is what makes them safe to register beside the grant that is served.
+    ///     handlers act on those two token types and no other — an access token, a code and a
+    ///     refresh token pass through untouched, which is what makes them safe to register beside
+    ///     the grants that are served.
     /// </remarks>
     public sealed class RefuseDeviceCodeStorage
         : IOpenIddictServerHandler<GenerateTokenContext>, IOpenIddictServerHandler<ValidateTokenContext> {

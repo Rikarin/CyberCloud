@@ -33,6 +33,13 @@ public enum PasskeyChallengeKind {
 ///     answered on behalf of a different account than the one <c>begin</c> was called with.
 /// </param>
 /// <param name="ExpiresAt">When it stops being accepted.</param>
+/// <param name="TenantId">
+///     The tenant <c>begin</c> resolved the request's hint to. ⚠ Carried for the same reason the
+///     address is: <c>complete</c> takes no <c>tenant</c> of its own, so the assertion is verified
+///     against the tenant the challenge was issued for and cannot be redirected to another. A
+///     sign-up ticket carries the platform tenant (<c>Guid.Empty</c>): the tenant it will enrol
+///     into does not exist yet.
+/// </param>
 /// <param name="Kind">
 ///     Which ceremony. Defaults to <see cref="PasskeyChallengeKind.Assertion" />, which is what
 ///     every sign-in ticket is; sign-up issues <see cref="PasskeyChallengeKind.Registration" />.
@@ -44,6 +51,8 @@ public sealed record PasskeyChallengeTicket(
     string Email,
     [property: JsonPropertyName("x")]
     DateTimeOffset ExpiresAt,
+    [property: JsonPropertyName("t")]
+    Guid TenantId = default,
     [property: JsonPropertyName("k")]
     PasskeyChallengeKind Kind = PasskeyChallengeKind.Assertion
 );

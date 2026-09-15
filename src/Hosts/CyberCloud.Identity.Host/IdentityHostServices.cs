@@ -8,9 +8,12 @@ using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
 using CyberCloud.ResourceManager;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace CyberCloud.Identity.Host;
 
@@ -83,6 +86,33 @@ public static class IdentityHostServices {
         // line.
         services.TryAddSingleton<IClientSecretSeam, UnavailableClientSecrets>();
         services.TryAddSingleton<TokenApi>();
+
+        // ── The interactive grants ─────────────────────────────────────────────────────────────
+        //
+        // The tenant a request names, resolved through the platform directory; the two static
+        // first-party registrations and the resolver that consults them before a tenant's index;
+        // the /authorize decision; and the development key file that IdentityHostKeys reads. Each
+        // is TryAdd so a test can hand the handlers a double at the seam — a client resolver over a
+        // dictionary, say — without a cluster behind it.
+        services.TryAddSingleton<TenantHint>();
+        services.TryAddSingleton<FirstPartyClients>();
+        services.TryAddSingleton<IClientResolver, ClientResolver>();
+        services.TryAddSingleton<AuthorizeApi>();
+        services.TryAddSingleton<DevelopmentKeyFile>();
+
+        // ⚠ The data-protection key ring follows the signing keys onto disk when a development key
+        // directory is configured, and for the same reason: it protects the session cookie and the
+        // passkey-challenge cookie, and a ring that dies with the process signs everybody out on
+        // restart just as an ephemeral signing key does. DevelopmentKeyFile's constructor is what
+        // refuses the directory outside Development, so this configure cannot run there.
+        services.AddDataProtection();
+        services.AddOptions<KeyManagementOptions>()
+            .Configure<DevelopmentKeyFile, ILoggerFactory>((keys, file, loggers) => {
+                    if (file.IsConfigured) {
+                        keys.XmlRepository = new FileSystemXmlRepository(new DirectoryInfo(file.DataProtectionDirectory), loggers);
+                    }
+                }
+            );
 
         // ── WebAuthn ───────────────────────────────────────────────────────────────────────────
         //

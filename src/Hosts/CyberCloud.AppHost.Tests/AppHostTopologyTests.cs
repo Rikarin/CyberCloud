@@ -161,6 +161,15 @@ public sealed class AppHostTopologyTests {
         identity.ShouldNotContainKey("CyberCloud__Identity__Issuer", "inferred, so that the port is the one place the origin is decided");
         new Uri(CyberCloudResources.IdentityIssuer).Port.ShouldBe(CyberCloudResources.IdentityPort);
 
+        // ⚠ The person's path, pinned on the identity host's side: where an unauthenticated
+        // /authorize sends the person (the identity app's dev server, which proxies the resumed
+        // request back), where the portal's code may be sent (which is also the CORS origin for
+        // /token), and where the keys persist so a restart does not sign everybody out.
+        identity["CyberCloud__Identity__SignInPageBaseUri"].ShouldBe($"http://localhost:{CyberCloudResources.IdentityAppPort}");
+        identity["CyberCloud__Identity__Clients__Portal__RedirectUris__0"].ShouldBe($"http://localhost:{CyberCloudResources.PortalPort}/auth/callback");
+        identity["CyberCloud__Identity__Clients__Portal__PostLogoutRedirectUris__0"].ShouldBe($"http://localhost:{CyberCloudResources.PortalPort}/");
+        identity["CyberCloud__Identity__DevelopmentKeyDirectory"].ShouldBe(Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost", ".identity"));
+
         foreach (var (name, environment) in new[] { (CyberCloudResources.Gateway, gateway), (CyberCloudResources.Feeds, feeds), (CyberCloudResources.Identity, identity) }) {
             environment["CyberCloud__Cluster__LocalhostGatewayPort"]
                 .ShouldBe(CyberCloudResources.SiloOneGatewayPort.ToString(), $"{name} is an Orleans client of silo 1 — AsOrleansClient");
@@ -238,7 +247,11 @@ public sealed class AppHostTopologyTests {
     public void TheIdentityAppProxyForwardsToTheIdentityHostOnItsPinnedPort() {
         var proxy = ReadProxy(Path.Combine("apps", "identity", "proxy.conf.json"));
 
-        foreach (var path in new[] { "/api", "/connect", "/.well-known" }) {
+        // ⚠ /authorize and /logout, and no /connect: the sign-in page resumes the OIDC request by
+        // navigating to the relative /authorize its returnUrl carries, and only a proxy entry makes
+        // that reach the host on 5101 with the cookie. /connect was an entry for a path that never
+        // existed — the endpoints are at the root, IdentityHostOpenIddict says where.
+        foreach (var path in new[] { "/api", "/authorize", "/logout", "/.well-known" }) {
             proxy.ShouldContainKey(path);
             TargetPortOf(proxy[path]).ShouldBe(CyberCloudResources.IdentityPort, $"the identity app's {path} is the identity host — CyberCloudResources.IdentityPort");
         }

@@ -87,6 +87,13 @@
           loaded. What this host gains is the client-side scope path and nothing that reconciles.
         -->
         <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!--
+          The platform tenant directory (TenantHint resolves the `tenant` a request names through
+          it, before any per-tenant grain is touched) and the per-tenant client index (ClientResolver
+          reaches a tenant's application registrations through it). Both are contracts, reached as
+          grains; nothing from CyberCloud.Tenancy itself is referenced.
+        -->
+        <ProjectReference Include="../../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">

@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace CyberCloud.Identity.Host.Api;
 
-// ── The JSON the sign-in and sign-up pages exchange with this host ────────────────────────────
+// ── The JSON the sign-in pages exchange with this host ───────────────────────────────────────
 //
 // ⚠ EVERY MEMBER CARRIES AN EXPLICIT [JsonPropertyName], INCLUDING THE ONES THE DEFAULT POLICY
 // WOULD SPELL THE SAME WAY. Minimal APIs serialize with JsonSerializerDefaults.Web, whose camelCase
@@ -13,17 +13,28 @@ namespace CyberCloud.Identity.Host.Api;
 // `undefined` rather than a failure anybody can search for. Pinning the names here makes this
 // contract independent of how the host is configured.
 //
-// ⚠ There is no request type carrying a tenant. See IdentityHostOptions for why the tenant is
-// configured rather than asked for.
+// ⚠ The three first-factor requests carry a `tenant`, and the second-factor requests do not. The
+// first factor is where the tenant is chosen and checked — TenantHint resolves it through the
+// platform directory before any per-tenant grain is touched — and the cookie it produces is stamped
+// with the result; the second factor reads the tenant off that cookie, so a caller cannot present a
+// code in one tenant against a session opened in another.
 //
 // The sign-up surface — /api/signup/begin, /verify, /passkey/begin and /complete — has its own
 // records in SignUpContracts.cs, because none of its four bodies shares a shape with a sign-in.
 
 /// <summary>The body of <c>POST /api/signin/begin</c>.</summary>
 /// <param name="Email">The address typed. Sent as-is; this host normalizes it.</param>
+/// <param name="Tenant">
+///     The tenant to sign into — a tenant id or a slug — or nothing, for the host's fallback.
+///     ⚠ Not read by this endpoint, which touches no grain whatever the body says; carried so the
+///     page sends one shape to all three first-factor endpoints.
+/// </param>
 public sealed record SignInBeginRequest(
     [property: JsonPropertyName("email")]
-    string? Email);
+    string? Email,
+    [property: JsonPropertyName("tenant")]
+    string? Tenant = null
+);
 
 /// <summary>What <c>POST /api/signin/begin</c> answers.</summary>
 /// <param name="Offered">
@@ -45,20 +56,34 @@ public sealed record SignInBeginResponse(
 ///     history and the next navigation's <c>Referer</c>.
 /// </param>
 /// <param name="ReturnUrl">Where to go afterwards. Sanitized before it appears in any response.</param>
+/// <param name="Tenant">
+///     The tenant to sign into — a tenant id or a slug — or nothing, for the host's fallback. An
+///     unknown value is the uniform failure, with no per-tenant grain touched.
+/// </param>
 public sealed record SignInPasswordRequest(
     [property: JsonPropertyName("email")]
     string? Email,
     [property: JsonPropertyName("password")]
     string? Password,
     [property: JsonPropertyName("returnUrl")]
-    string? ReturnUrl
+    string? ReturnUrl,
+    [property: JsonPropertyName("tenant")]
+    string? Tenant = null
 );
 
 /// <summary>The body of <c>POST /api/signin/passkey/begin</c>.</summary>
 /// <param name="Email">The address typed.</param>
+/// <param name="Tenant">
+///     The tenant to sign into — a tenant id or a slug — or nothing, for the host's fallback. The
+///     resolved tenant rides in the challenge ticket, so <c>complete</c> answers in the tenant
+///     <c>begin</c> was asked about and no other.
+/// </param>
 public sealed record PasskeyBeginRequest(
     [property: JsonPropertyName("email")]
-    string? Email);
+    string? Email,
+    [property: JsonPropertyName("tenant")]
+    string? Tenant = null
+);
 
 /// <summary>What <c>POST /api/signin/passkey/begin</c> answers.</summary>
 /// <param name="OptionsJson">
@@ -82,7 +107,8 @@ public sealed record PasskeyBeginResponse(
 ///     ⚠ <b>The challenge is not here, and its absence is the security property.</b> An endpoint
 ///     that accepted the options JSON back from the caller would let an attacker present a challenge
 ///     they generated themselves, which reduces the assertion to a signature over data they chose.
-///     <see cref="PasskeyChallengeCookie" /> is where the issued challenge actually lives.
+///     <see cref="PasskeyChallengeCookie" /> is where the issued challenge actually lives — and the
+///     tenant with it, for the same reason.
 /// </remarks>
 public sealed record PasskeyCompleteRequest(
     [property: JsonPropertyName("assertionJson")]
@@ -120,8 +146,8 @@ public sealed record SecondFactorRequest(
 
 /// <summary>
 ///     What every credential endpoint answers — <c>/api/signin/password</c>,
-///     <c>/api/signin/passkey/complete</c>, <c>/api/signin/totp</c> and
-///     <c>/api/signin/recovery-code</c>. The sign-up surface has its own shapes —
+///     <c>/api/signin/passkey/complete</c>, <c>/api/signin/totp</c>, <c>/api/signin/otp</c>
+///     and <c>/api/signin/recovery-code</c>. The sign-up surface has its own shapes —
 ///     <c>SignUpContracts.cs</c>.
 /// </summary>
 /// <param name="Succeeded">Whether the caller is now authenticated.</param>
@@ -135,7 +161,8 @@ public sealed record SecondFactorRequest(
 ///     same-origin path or <c>/</c>, never the caller's string.
 /// </param>
 /// <param name="Message">
-///     What to render on failure, verbatim — <c>UniformFailures.SignIn</c>. Empty on success.
+///     What to render on failure, verbatim — <c>UniformFailures.SignIn</c> or
+///     <c>UniformFailures.OtpSent</c>. Empty on success.
 /// </param>
 public sealed record SignInResultResponse(
     [property: JsonPropertyName("succeeded")]

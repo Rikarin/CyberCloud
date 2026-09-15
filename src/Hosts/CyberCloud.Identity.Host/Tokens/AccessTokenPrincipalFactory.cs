@@ -214,7 +214,12 @@ public static class AccessTokenPrincipalFactory {
         // `sub` is the wrong answer even though it needs one fewer claim.
         Add(identity, AccessTokenClaims.SubjectType, subjectType);
 
-        Add(identity, AccessTokenClaims.TenantId, N(tenantId));
+        // ⚠ The tenant, the sign-in time and the methods are marked for the id_token as well as the
+        // access token. OpenIddict copies `sub` into an id_token by itself and nothing else, and the
+        // portal reads `tid` off the access token — but an id_token that named a subject with no
+        // tenant would be a token a second relying party could not place. A client-credentials grant
+        // asks for no `openid` scope, so no id_token is minted for it and the extra mark is inert.
+        Add(identity, AccessTokenClaims.TenantId, N(tenantId), identityToken: true);
 
         if (sessionId is { } session) {
             Add(identity, AccessTokenClaims.SessionId, N(session));
@@ -242,11 +247,12 @@ public static class AccessTokenPrincipalFactory {
             identity,
             AccessTokenClaims.AuthenticationTime,
             authenticatedAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
-            ClaimValueTypes.Integer64
+            ClaimValueTypes.Integer64,
+            identityToken: true
         );
 
         foreach (var method in methods) {
-            Add(identity, AccessTokenClaims.AuthenticationMethods, AmrValue(method));
+            Add(identity, AccessTokenClaims.AuthenticationMethods, AmrValue(method), identityToken: true);
         }
 
         // ⚠ Emitted only when there IS an impersonation, and only from this argument. An empty claim
@@ -271,10 +277,104 @@ public static class AccessTokenPrincipalFactory {
     }
 
     /// <summary>Adds one claim, marked for the access token — see the ⚠ on the type.</summary>
-    static void Add(ClaimsIdentity identity, string type, string value, string valueType = ClaimValueTypes.String) {
+    static void Add(
+        ClaimsIdentity identity,
+        string type,
+        string value,
+        string valueType = ClaimValueTypes.String,
+        bool identityToken = false
+    ) {
         var claim = new Claim(type, value, valueType);
-        claim.SetDestinations(OpenIddictConstants.Destinations.AccessToken);
+
+        claim.SetDestinations(
+            identityToken
+                ? [OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken]
+                : [OpenIddictConstants.Destinations.AccessToken]
+        );
+
         identity.AddClaim(claim);
+    }
+
+    // ── What travels beside the access token, and never in it ─────────────────────────────────
+
+    /// <summary>The refresh handle — <c>ISessionGrain.RefreshAsync</c>'s argument. Refresh token only.</summary>
+    public const string RefreshHandleClaim = "cyc:rh";
+
+    /// <summary>The interactive (cookie) session a token session is bound to. Refresh token only.</summary>
+    public const string InteractiveSessionClaim = "cyc:isid";
+
+    /// <summary>
+    ///     Adds the two claims a refresh token carries and an access token never does.
+    /// </summary>
+    /// <param name="principal">A principal <see cref="Build" /> returned.</param>
+    /// <param name="refreshHandle">The handle the session grain minted, shown once.</param>
+    /// <param name="interactiveSessionId">The cookie session the token session was opened from.</param>
+    /// <returns>The same principal, so a caller can chain.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             AFTER the closed-set check, with NO destination, and both halves of that sentence
+    ///             are the point.
+    ///         </b> OpenIddict writes every claim on the principal into the refresh token — the
+    ///         refresh token is encrypted and only this server reads it — and writes into the access
+    ///         token and the id_token only the claims whose destinations name them. A claim with no
+    ///         destination therefore reaches the refresh token and nothing else, which is the only
+    ///         place a refresh handle may exist outside the grain that hashes it. The closed set is
+    ///         unchanged: <c>NoRolesInTokenTests.TheRefreshHandleAndInteractiveSidNeverReachTheAccessToken</c>
+    ///         asserts on what would be serialized rather than on the principal.
+    ///     </para>
+    ///     <para>
+    ///         Public so <c>TokenApi</c> can call it, and not part of <see cref="Build" /> because
+    ///         <see cref="Build" /> checks its output against <see cref="AccessTokenClaims.Permitted" />
+    ///         and these two are not in it — deliberately, since a permitted claim is a claim the
+    ///         factory may put in an access token.
+    ///     </para>
+    /// </remarks>
+    public static ClaimsPrincipal AppendRefreshOnly(ClaimsPrincipal principal, string refreshHandle, Guid interactiveSessionId) {
+        ArgumentNullException.ThrowIfNull(principal);
+        ArgumentException.ThrowIfNullOrEmpty(refreshHandle);
+
+        var identity = (ClaimsIdentity)principal.Identity!;
+
+        identity.AddClaim(new Claim(RefreshHandleClaim, refreshHandle));
+        identity.AddClaim(new Claim(InteractiveSessionClaim, N(interactiveSessionId)));
+
+        return principal;
+    }
+
+    /// <summary>
+    ///     Adds the profile claims the id_token carries and the access token never does.
+    /// </summary>
+    /// <param name="principal">A principal <see cref="Build" /> returned.</param>
+    /// <param name="email">The user's address, from <c>IUserGrain.GetAsync</c>.</param>
+    /// <param name="name">The display name, from the same profile.</param>
+    /// <returns>The same principal, so a caller can chain.</returns>
+    /// <remarks>
+    ///     ⚠ Destination <c>id_token</c> only. An address in an access token would put PII on every
+    ///     gateway log line that records a token's claims, and the gateway has no use for it — a
+    ///     ReBAC subject is a GUID. The portal reads these off the id_token at the callback and
+    ///     nowhere else.
+    /// </remarks>
+    public static ClaimsPrincipal AppendIdentityTokenOnly(ClaimsPrincipal principal, string email, string name) {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        var identity = (ClaimsIdentity)principal.Identity!;
+
+        foreach (var (type, value) in new[] {
+                     (OpenIddictConstants.Claims.Email, email),
+                     (OpenIddictConstants.Claims.Name, name)
+                 }) {
+            if (string.IsNullOrEmpty(value)) {
+                continue;
+            }
+
+            var claim = new Claim(type, value);
+            claim.SetDestinations(OpenIddictConstants.Destinations.IdentityToken);
+            identity.AddClaim(claim);
+        }
+
+        return principal;
     }
 
     /// <summary>
@@ -297,6 +397,25 @@ public static class AccessTokenPrincipalFactory {
             AuthenticationMethod.EmailOtp => "otp",
             AuthenticationMethod.ClientCredential => "pop",
             _ => "unspecified"
+        };
+
+    /// <summary>
+    ///     The method behind an <c>amr</c> value <see cref="AmrValue" /> wrote, or
+    ///     <see langword="null" /> for one it did not.
+    /// </summary>
+    /// <param name="amr">The registered value.</param>
+    /// <remarks>
+    ///     Lossy where <see cref="AmrValue" /> is: <c>otp</c> reads back as
+    ///     <see cref="AuthenticationMethod.EmailOtp" />, which is the one delivered second factor
+    ///     this platform sends today. The value on the wire is the same either way.
+    /// </remarks>
+    public static AuthenticationMethod? MethodOf(string? amr) =>
+        amr switch {
+            "hwk" => AuthenticationMethod.Passkey,
+            "pwd" => AuthenticationMethod.Password,
+            "otp" => AuthenticationMethod.EmailOtp,
+            "pop" => AuthenticationMethod.ClientCredential,
+            _ => null
         };
 
     static string N(Guid value) => value.ToString("N", CultureInfo.InvariantCulture);

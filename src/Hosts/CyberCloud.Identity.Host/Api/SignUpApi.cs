@@ -219,7 +219,7 @@ public sealed class SignUpApi(
 
         return new(
             new PasskeyBeginResponse(issued.OptionsJson),
-            Challenge: new(issued.OptionsJson, signup.Email, issued.ExpiresAt, PasskeyChallengeKind.Registration)
+            Challenge: new(issued.OptionsJson, signup.Email, issued.ExpiresAt, Guid.Empty, PasskeyChallengeKind.Registration)
         );
     }
 

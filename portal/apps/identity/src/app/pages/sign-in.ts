@@ -74,6 +74,41 @@ type SecondFactor = 'totp' | 'recoveryCode';
       }
 
       <form class="mt-5 flex flex-col gap-4" (ngSubmit)="onSubmit()">
+        <!--
+          ⚠ Asked for only when the request named no tenant. The /authorize request that sent the
+          person here usually carries one (the portal remembers the last tenant it saw), and then
+          there is nothing to type; a person on a cleared browser types the organisation's name —
+          the slug, or the id — because an address alone resolves nothing on this platform.
+        -->
+        @if (tenantFromRequest() === null) {
+          <div class="flex flex-col gap-1.5">
+            <label class="text-sm font-medium" for="cc-organisation" i18n="@@identity.signIn.organisationLabel">
+              Organisation
+            </label>
+            <input
+              xuiInput
+              id="cc-organisation"
+              name="organisation"
+              type="text"
+              autocomplete="organization"
+              [attr.autocapitalize]="'none'"
+              spellcheck="false"
+              placeholder="contoso"
+              i18n-placeholder="@@identity.signIn.organisationPlaceholder"
+              [disabled]="step() !== 'address'"
+              [(ngModel)]="organisation"
+              [attr.aria-describedby]="'cc-organisation-hint'"
+            />
+            <p
+              class="text-foreground-muted text-xs"
+              id="cc-organisation-hint"
+              i18n="@@identity.signIn.organisationHint"
+            >
+              The organisation's short name from its sign-up, or its id. Leave it empty to sign into the default.
+            </p>
+          </div>
+        }
+
         <div class="flex flex-col gap-1.5">
           <label class="text-sm font-medium" for="cc-email" i18n="@@identity.signIn.emailLabel"> Email address </label>
           <input
@@ -252,6 +287,27 @@ export class SignInPage {
    */
   readonly returnUrl = computed(() => sanitizeReturnUrl(this.#route.snapshot.queryParamMap.get('returnUrl')));
 
+  /**
+   * The tenant the `/authorize` request named, or `null` when it named none.
+   *
+   * Read off the sanitized return URL's own query — that is the OIDC request being resumed, and its
+   * `tenant` is what the portal remembered or what a sign-up just created. `null` is what makes the
+   * organisation field appear.
+   */
+  readonly tenantFromRequest = computed(() => tenantOf(this.returnUrl()));
+
+  /**
+   * What the person typed as the organisation, when the request named no tenant.
+   *
+   * ⚠ Not a credential and not secret — a tenant's slug is its public name — but it decides which
+   * tenant's sign-in the address is tried against, so it is sent with every first-factor request
+   * and never changed between them.
+   */
+  readonly organisation = signal('');
+
+  /** The tenant to post: the request's, else what was typed, else nothing — the server's fallback. */
+  readonly tenant = computed(() => this.tenantFromRequest() ?? (this.organisation().trim() || undefined));
+
   /** The address, bound to the field. */
   readonly email = signal('');
 
@@ -375,7 +431,7 @@ export class SignInPage {
     this.busy.set(true);
     this.error.set(null);
 
-    this.#api.beginPasskey(this.email()).subscribe({
+    this.#api.beginPasskey(this.email(), this.tenant()).subscribe({
       next: challenge => {
         // An empty options string means the server could not build a challenge — a relying-party
         // misconfiguration, never an answer about the address. The password field is still there.
@@ -408,7 +464,7 @@ export class SignInPage {
     this.busy.set(true);
     this.error.set(null);
 
-    this.#api.begin(this.email()).subscribe({
+    this.#api.begin(this.email(), this.tenant()).subscribe({
       next: response => {
         this.offered.set(response.offered);
         this.step.set('credential');
@@ -422,7 +478,7 @@ export class SignInPage {
     this.busy.set(true);
     this.error.set(null);
 
-    this.#api.signInWithPassword(this.email(), this.password(), this.returnUrl()).subscribe({
+    this.#api.signInWithPassword(this.email(), this.password(), this.returnUrl(), this.tenant()).subscribe({
       next: result => this.#complete(result),
       error: () => this.#failed()
     });
@@ -494,5 +550,22 @@ export class SignInPage {
 
   #uniformFailure(): string {
     return $localize`:@@identity.signIn.uniformFailure:The email address or credential is incorrect, or the account cannot sign in right now.`;
+  }
+}
+
+/**
+ * The `tenant` a sanitized return URL's query names, or `null`.
+ *
+ * ⚠ Resolved against a probe origin the way `return-url.ts` does, so the parse is the browser's own
+ * and never a string split. `.invalid` is reserved by RFC 2606, so a value that somehow escaped
+ * sanitization still resolves nowhere. Empty and whitespace-only values count as absent — the
+ * organisation field then appears rather than an empty hint being posted.
+ */
+export function tenantOf(returnUrl: string): string | null {
+  try {
+    const tenant = new URL(returnUrl, 'https://return-url-probe.invalid').searchParams.get('tenant')?.trim();
+    return tenant ? tenant : null;
+  } catch {
+    return null;
   }
 }

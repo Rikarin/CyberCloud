@@ -1,5 +1,8 @@
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Identity.Host.Tests.Infrastructure;
+using CyberCloud.Identity.Host.Tokens;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
@@ -36,6 +39,7 @@ public sealed class OpenIddictServerOptionsTests {
         new ServiceCollection()
             .AddLogging()
             .AddOptions()
+            .AddSingleton<IHostEnvironment>(TestEnvironment.Development)
             .AddIdentityHostOpenIddict()
             .BuildServiceProvider()
             .GetRequiredService<IOptions<OpenIddictServerOptions>>()
@@ -204,6 +208,47 @@ public sealed class OpenIddictServerOptionsTests {
                 + "mode the corresponding endpoint answers 500 to its first request"
             );
         }
+
+        // ⚠ And the three that are ours by choice rather than by demand, by type: the validators
+        // that serve a flow rather than refuse one, so a refusing handler put back in their place
+        // would fail here by name rather than by a 400 in a browser.
+        var handlers = Options().Handlers.Where(x => x.Type == OpenIddictServerHandlerType.Custom).ToList();
+
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ValidateAuthorizationRequest));
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ValidateTokenRequest));
+        handlers.ShouldContain(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ValidateEndSessionRequest));
+    }
+
+    [Fact]
+    public void TheTwoCookieHandlersAreRegisteredExactlyOnce() {
+        // ⚠ Exactly once, on the two contexts they belong to. Registered twice, the extract handler
+        // would run the Origin check twice (harmless) and the response handler would move the
+        // refresh token into the cookie and then find nothing to move (also harmless) — the failure
+        // is the other direction: a refactor that drops one of them from DegradedModeHandlers.All
+        // leaves the refresh token in the portal's response body, which every assertion on the
+        // principal passes and only an HTTP test sees. Counting here makes it a start-up-shaped
+        // failure.
+        var handlers = Options().Handlers.Where(x => x.Type == OpenIddictServerHandlerType.Custom).ToList();
+
+        handlers.Count(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ExtractRefreshTokenFromCookie))
+            .ShouldBe(1);
+
+        handlers.Single(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.ExtractRefreshTokenFromCookie))
+            .ContextType.ShouldBe(typeof(OpenIddictServerEvents.ExtractTokenRequestContext));
+
+        handlers.Count(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.MoveRefreshTokenToCookie))
+            .ShouldBe(1);
+
+        handlers.Single(x => x.ServiceDescriptor.ImplementationType == typeof(DegradedModeHandlers.MoveRefreshTokenToCookie))
+            .ContextType.ShouldBe(typeof(OpenIddictServerEvents.ApplyTokenResponseContext));
+    }
+
+    [Fact]
+    public void AnAuthorizationCodeLivesFiveMinutes() {
+        // Long enough for a slow redirect chain, short enough that a code that leaked through a
+        // Referer or a log is stale before anybody reads it — and, with no token store in degraded
+        // mode, the only lifetime a code has.
+        Options().AuthorizationCodeLifetime.ShouldBe(TimeSpan.FromMinutes(5));
     }
 
     [Fact]
@@ -215,6 +260,7 @@ public sealed class OpenIddictServerOptionsTests {
         var configured = new ServiceCollection()
             .AddLogging()
             .AddOptions()
+            .AddSingleton<IHostEnvironment>(TestEnvironment.Development)
             .Configure<IdentityHostOptions>(x => x.Issuer = "https://id.example.test")
             .AddIdentityHostOpenIddict()
             .BuildServiceProvider()
