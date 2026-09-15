@@ -586,6 +586,7 @@ describe('the portal pages, signed in', () => {
       await settle();
 
       expect(outcome()).toBe('absent');
+      expect(host().textContent).toContain('Not assigned');
       expect(rows()).toEqual([]);
 
       click('Check');
@@ -639,7 +640,7 @@ describe('the portal pages, signed in', () => {
       expect(host().textContent).toContain('No list endpoint yet');
     });
 
-    it('shows the platform refusal, and the 404-never-403 wording on a check', async () => {
+    it('shows the platform refusal on a grant, and keeps no row for it', async () => {
       await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/access`);
 
       type('#cc-access-principal-id', RITA);
@@ -656,6 +657,60 @@ describe('the portal pages, signed in', () => {
       expect(outcome()).toBe('failed');
       expect(host().textContent).toContain('assignRole is not held on this scope.');
       expect(rows()).toEqual([]);
+    });
+
+    it('forgets what it knows when the tenant switches, and drops an answer that lands after one', async () => {
+      context.load(
+        [
+          { id: TENANT, displayName: 'Acme' },
+          { id: 't-other', displayName: 'Other' }
+        ],
+        [{ id: SUBSCRIPTION, tenantId: TENANT, displayName: 'Acme Production' }]
+      );
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/access`);
+      const name = `reader-user-${RITA}`;
+      const otherScope = `/tenants/t-other/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}`;
+
+      type('#cc-access-principal-id', RITA);
+      click('Assign role');
+      await settle();
+      http
+        .expectOne(r => r.method === 'PUT' && r.url === `${GROUP_SCOPE}${ROLE_ASSIGNMENTS}/${name}`)
+        .flush(served(GROUP_SCOPE.slice(4), name), { status: 201, statusText: 'Created' });
+      await settle();
+      expect(rows()).toEqual([name]);
+      expect(outcome()).toBe('granted');
+
+      // The context bar's switch moves the scope without moving the route. What was granted on
+      // Acme is not a row on Other, and a Remove here would have sent Acme's name down Other's path.
+      context.selectTenant('t-other');
+      await settle();
+      expect(router.url).toContain('/access');
+      expect(rows()).toEqual([]);
+      expect(outcome()).toBeNull();
+      expect(host().textContent).toContain('No list endpoint yet');
+
+      // A check that leaves for Other and is answered after a switch back to Acme is Other's answer.
+      click('Check');
+      await settle();
+      const pending = http.expectOne(
+        r => r.method === 'GET' && r.url === `/api${otherScope}${ROLE_ASSIGNMENTS}/${name}`
+      );
+      context.selectTenant(TENANT);
+      await settle();
+      pending.flush(served(otherScope, name));
+      await settle();
+      expect(rows()).toEqual([]);
+      expect(outcome()).toBeNull();
+
+      // And the page is usable again: the next grant goes to Acme's path and lands.
+      click('Assign role');
+      await settle();
+      http
+        .expectOne(r => r.method === 'PUT' && r.url === `${GROUP_SCOPE}${ROLE_ASSIGNMENTS}/${name}`)
+        .flush(served(GROUP_SCOPE.slice(4), name), { status: 201, statusText: 'Created' });
+      await settle();
+      expect(rows()).toEqual([name]);
     });
 
     it('is reached from the three blades', async () => {

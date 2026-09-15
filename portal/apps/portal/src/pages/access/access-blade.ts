@@ -480,17 +480,33 @@ export class AccessBlade {
   constructor() {
     effect(() => {
       const route = this.accessRoute();
+      // ⚠ Read for the change, not the value: the tenant is the part of the scope the route does
+      // not spell. A switch from the context bar leaves `accessRoute` untouched, and without this
+      // read the rows would stay — and the next Revoke would send the old tenant's name down the
+      // new tenant's path.
+      this.tenantId();
 
       untracked(() => {
         this.blades.open({ id: route, title: $localize`:@@access.blade:Access`, route });
 
-        // ⚠ What this page knows is per scope. A resource group's grants painted over its
-        // subscription's page would be a listing of the wrong scope, which is worse than none.
+        // ⚠ What this page knows is per scope, and the tenant is part of the scope. A resource
+        // group's grants painted over its subscription's page would be a listing of the wrong
+        // scope, which is worse than none; one tenant's grants shown under another's is the same
+        // wrong listing with a worse Revoke.
         this.known.set([]);
         this.outcome.set(null);
         this.removing.set(null);
       });
     });
+  }
+
+  /**
+   * Whether the scope moved while a call was in flight. `scope` is a computed over the tenant and
+   * the route's inputs, so it is the same object until one of them changes — and an answer for
+   * a scope this page no longer shows must not be painted onto the one it does.
+   */
+  private moved(scope: AccessScope): boolean {
+    return this.scope() !== scope;
   }
 
   /** Which of the three scopes the bound inputs spell, with the tenant the caller supplies. */
@@ -558,10 +574,11 @@ export class AccessBlade {
 
     try {
       const response = await this.api.assign(scope, name);
+      if (this.moved(scope)) return;
       this.remember(response.value);
       this.outcome.set({ kind: response.status === 201 ? 'granted' : 'repeated', name: renderName(name) });
     } catch (error) {
-      this.outcome.set(failed(renderName(name), error));
+      if (!this.moved(scope)) this.outcome.set(failed(renderName(name), error));
     } finally {
       this.busy.set(null);
     }
@@ -578,9 +595,11 @@ export class AccessBlade {
 
     try {
       const response = await this.api.read(scope, name);
+      if (this.moved(scope)) return;
       this.remember(response.value);
       this.outcome.set({ kind: 'assigned', name: renderName(name) });
     } catch (error) {
+      if (this.moved(scope)) return;
       if (error instanceof ApiCallError && error.status === 404) {
         this.forget(renderName(name));
         this.outcome.set({ kind: 'absent', name: renderName(name) });
@@ -601,10 +620,11 @@ export class AccessBlade {
 
     try {
       await this.api.revoke(scope, item.name);
+      if (this.moved(scope)) return;
       this.forget(item.rendered);
       this.outcome.set({ kind: 'revoked', name: item.rendered });
     } catch (error) {
-      this.outcome.set(failed(item.rendered, error));
+      if (!this.moved(scope)) this.outcome.set(failed(item.rendered, error));
     } finally {
       this.removing.set(null);
       this.busy.set(null);
