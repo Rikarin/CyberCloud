@@ -1,40 +1,11 @@
+using CyberCloud.Identity.Validation;
+
 namespace CyberCloud.Gateway.Host.Authentication;
 
-/// <summary>
-///     What a validated token says. The gateway never sees a token's bytes — only this.
-/// </summary>
-/// <remarks>
-///     ⚠ <b>Every field here is <i>output</i> of validation, never input to it.</b> A resolver that
-///     read <see cref="TenantId" /> off an unverified token and handed it back would defeat the whole
-///     of stage 3: the tenant would once again be caller-controlled, just through a different
-///     surface. <c>TenantFromTokenTests.AForgedTokenIs401AndCarriesNoTenantAtAll</c> is the assertion
-///     that a token this platform did not issue produces no claims at all.
-/// </remarks>
-/// <param name="TenantId">The token's <c>tid</c>. The one and only source of a request's tenant.</param>
-/// <param name="SubjectType">
-///     The ReBAC subject type — the token's <c>sub_typ</c> claim, one of <c>user</c>,
-///     <c>servicePrincipal</c>, <c>managedIdentity</c>. ⚠ Its own claim, never a prefix on
-///     <see cref="SubjectId" />: docs/plan/07 § The model makes <c>user:abc</c> and
-///     <c>servicePrincipal:abc</c> two different subjects, so a resolver that produced the id alone
-///     would leave the type to be guessed at the one place a wrong guess is a wrong access decision.
-/// </param>
-/// <param name="SubjectId">The ReBAC subject id — the <c>sub</c> claim, and only the id.</param>
-/// <param name="Scopes">The token's scopes, space-separated as the <c>scp</c> claim carries them.</param>
-/// <param name="ImpersonatedBy">
-///     The operator behind an impersonated request — the token's <c>act_sub</c> claim — or empty.
-///     docs/plan/06 § Platform administration.
-///     ⚠ A claim, not a header: a header would let any caller set it, and with it the audit record,
-///     the 60-minute box and the tenant's notification all become decoration.
-/// </param>
-/// <param name="ExpiresAt">When the token expires. docs/plan/10 § Authentication inputs: 10 minutes.</param>
-readonly record struct TokenClaims(
-    Guid TenantId,
-    string SubjectType,
-    string SubjectId,
-    string Scopes,
-    string ImpersonatedBy,
-    DateTimeOffset ExpiresAt
-);
+// ⚠ TokenClaims used to be declared here. It is CyberCloud.Identity.Validation's now, because the
+// feeds host reads the same record off the same validator — docs/plan/13 § Artifact feeds, issue
+// #29 — and two spellings of "what a validated token says" is how two hosts stop agreeing about
+// whose tenant a request is in.
 
 /// <summary>
 ///     Stage 2 — turns the request's credential into claims, or refuses it.
@@ -80,8 +51,8 @@ readonly record struct TokenClaims(
 ///             makes the gateway the <i>only</i> thing standing between a client-side
 ///             <c>IGrainFactory</c> and another tenant's grains. A token without <c>tid</c> must be
 ///             rejected, never defaulted. ✅ Minted on every path by <c>AccessTokenPrincipalFactory</c>;
-///             refused when absent by <c>JwksCallerContextResolver.ToClaims</c>, and
-///             <c>JwksCallerContextResolverTests.AMissingMalformedOrEmptyTidIsRefusedNeverDefaulted</c>
+///             refused when absent by <c>JwksBearerTokenValidator.ToClaims</c>, and
+///             <c>JwksBearerTokenValidatorTests.AMissingMalformedOrEmptyTidIsRefusedNeverDefaulted</c>
 ///             holds the refusal.
 ///         </item>
 ///         <item>

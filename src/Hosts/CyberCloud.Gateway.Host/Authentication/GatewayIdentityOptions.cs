@@ -1,4 +1,5 @@
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Identity.Validation;
 
 namespace CyberCloud.Gateway.Host.Authentication;
 
@@ -48,4 +49,15 @@ sealed class GatewayIdentityOptions {
 
     /// <summary>Whether the section names an issuer at all.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Issuer);
+
+    /// <summary>
+    ///     The same two values in the shape the shared validator is registered from.
+    /// </summary>
+    /// <remarks>
+    ///     Kept as a separate type rather than replaced by <see cref="BearerTokenOptions" /> because
+    ///     this one is bound from the gateway's own section, and the refusal for a blank issuer has to
+    ///     name <c>CyberCloud:Gateway:Identity:Issuer</c> — the key an operator would go and set —
+    ///     rather than a section every relying party shares.
+    /// </remarks>
+    public BearerTokenOptions ToBearerTokenOptions() => new() { Issuer = Issuer, Audience = Audience };
 }

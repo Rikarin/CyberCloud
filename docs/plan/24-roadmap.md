@@ -171,7 +171,7 @@ target scale.
 |---|---|---|---|---|
 | Data | FerretDB, RabbitMQ, Kafka, ClickHouse | 4.4 | — | ✅ **SHIPPED AHEAD OF PHASE 3 — all four, and the whole row.** `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, every one published with a provider, a chart and a conformance suite. ⚠ The 4.4 is [12 § Effort](12-managed-data-services.md)'s four M2 lines exactly — 1.2 + 0.8 + 1.2 + 1.2 — so the whole of it is spent, not part |
 | Compute | VMs + disks + images, scale sets, container instances | 3.8 | #28 | |
-| Registry | NuGet/npm/Maven feeds | 1.5 | #29 | |
+| Registry | NuGet/npm/Maven feeds | 1.5 | #29 | ◐ `ContainerRegistry/feeds` published (#29, 2026-09-15) with `CyberCloud.Registry.Feeds.Host` serving NuGet v3, npm and Maven over the gateway's bearer tokens, artefacts on the platform's object store, the catalogue in a durable grain. ⚠ The *host* third of [13](13-compute-vm-containers.md)'s "proxy + host + retention"; proxy and retention are not declared, and both are owed at `charts/managed/feeds/conformance.yaml § owed`, together with the two meters the row must emit and does not |
 | Storage | File shares, backup vaults, customer-managed keys | 3.0 | #30 | |
 | Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | |
 | Observability | App Insights views, OTel collector service, managed Grafana, alerts | 3.0 | #32 | |
@@ -214,10 +214,10 @@ other — see [§ Running total](#running-total), which is where the consequence
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
 median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 
-⚠ **On "28 resource types": there are 22 today**, and four of them are this phase's `Data` row. The
-other eighteen are counted, phase by phase, in
-[§ What has landed](#what-has-landed--recounted-2026-09-15) — which is also where to see that two of the
-22 belong to phase 4 and one is phase 1's deliberately trivial sample.
+⚠ **On "28 resource types": there are 24 today**, and six of them are this phase's — the four of the
+`Data` row, `Mail/domains` and `ContainerRegistry/feeds`. The other eighteen are counted, phase by
+phase, in [§ What has landed](#what-has-landed--recounted-2026-09-15) — which is also where to see that
+two of the 24 belong to phase 4 and one is phase 1's deliberately trivial sample.
 
 ---
 
@@ -320,7 +320,8 @@ pinned counts in this tree have gone stale more than once and recently — #81 w
 sitting in the machinery that gates citation honesty, and #78's review found a pinned `grep` that was
 counting its own paragraph. #45 said 22, and 22 was right until #34 published `Mail/domains` on 2026-09-12 without
 recounting here — the test this section describes went red and stayed red for three days, which is
-exactly the drift it exists to catch; 23 is right. That is worth *establishing* rather than
+exactly the drift it exists to catch. #29 published `ContainerRegistry/feeds` on 2026-09-15 and
+recounted in the same commit, which is what the test is for; 24 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
 The document, read directly:
@@ -328,7 +329,7 @@ The document, read directly:
 ```console
 $ grep -o '"x-cybercloud-resource-type": "[^"]*"' openapi/2026-08-01.json \
     | sed 's/.*: "//;s/"$//' | sort -u | wc -l
-23
+24
 ```
 
 and the build, from the other end — `./build.sh Architecture`'s **Generated surfaces** gate regenerates
@@ -336,7 +337,7 @@ every surface from `src/CyberCloud.ResourceManager/Registry/` and compares bytes
 registry's rather than the document's:
 
 ```text
-✔ Generated surfaces  Enforced  23 resource type(s) over 2 OpenAPI document(s), …
+✔ Generated surfaces  Enforced  24 resource type(s) over 2 OpenAPI document(s), …
 ```
 
 ⚠ **What would make this stale, said plainly so it can be checked rather than trusted:** any provider's
@@ -351,7 +352,7 @@ stopped being. So the recount is no longer only prose: `RoadmapReconciliationTes
 `CyberCloud.ResourceManager.Contracts.Tests`, reads the published document and this page and fails when
 they disagree — on the set of types, on **each phase row's count against the types that row names**, on
 their sum, on the **Total**, and on the number printed under the command above. Publishing a
-twenty-third type now turns a test red with the roadmap named in the message, rather than leaving a plan
+twenty-fifth type now turns a test red with the roadmap named in the message, rather than leaving a plan
 that gets re-planned from memory.
 
 ⚠ **The per-row half of that was prose before it was an assertion, and only for a day.** As first
@@ -363,7 +364,7 @@ only.** No EM figure anywhere in this document is machine-checked — not a phas
 the 71.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
 heading is still what says when a person last read the rest.
 
-All 23, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
+All 24, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
 published document and asserts the two sets are equal, so an abbreviated `…/subnets` would be a name no
 test could match and the check would quietly become a check of nothing.
@@ -372,9 +373,9 @@ test could match and the check would quietly become a check of nothing.
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles` | 15 |
-| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains` | 5 |
+| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `ContainerRegistry/feeds` | 6 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
-| **Total** | | **23** |
+| **Total** | | **24** |
 
 ⚠ **`agentPools` is itself an ahead-of-phase landing that this table cannot show twice.** Phase 2's row
 names node pools, so it is counted as phase 2 here — but [01](01-azure-parity-catalogue.md) verdicts

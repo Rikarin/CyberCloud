@@ -1,8 +1,6 @@
-// ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
-// global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
-// over the `Orleans.ErrorCode` this import would otherwise put back in play.
+// `CyberCloud.Core` — for the `Result<decimal>` the quota derivations below return — is a global
+// using now (GlobalUsings.cs says why), so the per-file import this header used to explain is gone.
 
-using CyberCloud.Core;
 using System.Text.Json;
 
 namespace CyberCloud.Providers.ContainerRegistry;
@@ -254,8 +252,56 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
                 ContainerRegistries.PurgePermission,
                 ContainerRegistries.PurgeProtectionPointer
             )
-            .RequiresCluster(ContainerRegistries.ClusterIdPointer);
+            .RequiresCluster(ContainerRegistries.ClusterIdPointer)
+            // ── Artifact feeds — docs/plan/13 § Artifact feeds, issue #29 ───────────────────────
+            //
+            // ⚠ THE SAME NAMESPACE AND NO SHARED IMPLEMENTATION, WHICH IS WHAT charts/managed/harbor
+            // /conformance.yaml's `feeds-is-a-different-product` said the day this type was not
+            // declared. It is declared now because something serves it: CyberCloud.Registry.Feeds.Host
+            // speaks the three protocols, FeedGrain holds the catalogue, and the platform's object
+            // store holds the bytes. Nothing here renders into a cluster.
+            //
+            // ⚠ NO RequiresCluster, AND THIS IS THE FIRST TYPE IN THE CATALOGUE WITHOUT IT. ReconcileDriver
+            // hands such a type a null connection and skips the namespace; the shared provider suite
+            // reads the registration and asserts the OTHER direction for it — that a pass applies
+            // nothing to any cluster. A clusterId pointer here would make every feed name a cluster it
+            // never touches.
+            //
+            // ⚠ A .Chart(...) BINDING FOR A CHART THAT RENDERS NO OBJECT, AND THE BINDING IS THE POINT.
+            // ChartSurfaces generates a values.yaml @param block from the schema above, and
+            // Build.Charts generates values.schema.json from that — the fifth surface of ADR-012, the
+            // one a person reads to learn what a feed is configured with. charts/managed/feeds carries
+            // that surface and the conformance manifest in the catalogue's format; its one template is
+            // a NOTES.txt saying that a feed is served by CyberCloud.Registry.Feeds.Host and lands in
+            // no cluster. ArtifactFeedDeclarationTests pins the binding.
+            //
+            // QuotaMeter.Resources and nothing else: what a feed costs is the bytes tenants put into
+            // it, which docs/plan/15 § Metering samples from the store rather than reserves from a
+            // body — the same argument CyberCloud.Storage/accounts/buckets makes.
+            .ResourceType(ArtifactFeeds.TypePath)
+            .ApiVersion(ArtifactFeeds.V2026, ArtifactFeeds.Schema2026)
+            .Reconciler<ArtifactFeedReconciler>()
+            .Meters(QuotaMeter.Resources)
+            // `read` is pull and `write` is push, on the data plane as on the control plane: the feeds
+            // host asks the resource manager's authorizer for exactly these two names, so a role
+            // assignment that grants `write` on the resource group grants `dotnet nuget push` too.
+            .Permissions("read", "write", "delete")
+            .Display(
+                "Artifact feed",
+                "Artifact feeds",
+                shortName: FeedShortName,
+                summary: "A NuGet, npm or Maven package feed served by the platform's feeds host, "
+                + "with artefacts on the platform's object storage."
+            )
+            .Chart(ArtifactFeeds.ChartName)
+            .SupportsTags();
     }
+
+    /// <summary>
+    ///     The <c>cyc</c> alias for a feed — <c>feed</c>, which is neither the group key
+    ///     <c>containerregistry</c> nor the sibling's <c>registry</c>.
+    /// </summary>
+    public const string FeedShortName = "feed";
 
     // ── What a registry draws ──────────────────────────────────────────────────────────────────
     //

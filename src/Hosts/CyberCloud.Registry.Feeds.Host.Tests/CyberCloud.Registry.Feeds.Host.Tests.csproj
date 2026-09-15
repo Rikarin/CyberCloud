@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The feeds host, driven over HTTP the way its clients drive it — ADR-018's sibling of
+      CyberCloud.Registry.Feeds.Host.
+
+        FeedsHostFixture        — an in-process Orleans silo with the real resource manager, the real
+                                  ReBAC engine and the ContainerRegistry provider, and the REAL host
+                                  started as a client against it (FeedsComposition.BuildAsync, the
+                                  call Program.cs makes), with two feeds a tenant created through the
+                                  host's own IResourceManager
+        NuGetProtocolTests      — the requests `dotnet nuget push`, `dotnet restore` and `dotnet
+                                  nuget delete` make, byte for byte where bytes matter
+        NpmProtocolTests        — `npm publish`, `npm install`, `npm dist-tag`, `npm search`
+        MavenProtocolTests      — the `mvn deploy` sequence, the generated maven-metadata.xml, the
+                                  release-immutability rule
+        FeedAccessTests         — the four steps every endpoint shares: 401 with both challenges,
+                                  404 for a feed the caller cannot see, 403 for a reader who pushes,
+                                  404 across a tenant, 404 for the wrong kind, and the three places
+                                  a token may arrive
+        FeedsIsolationTests     — the reference set, read off the assembly
+
+      ⚠ WHAT THIS SUITE DOES NOT DO: sign a token. The validator the host is composed with here is
+      a table of tokens the fixture issued, registered through BuildAsync's configure parameter —
+      the deployment's half, as the gateway suite uses it. That the production composition registers
+      the JWKS validator is CyberCloud.Hosts.Tests' assertion, by type name; that a token the
+      identity host signed validates against the key set it published is
+      CyberCloud.AppHost.Tests' TenantOverHttpTests', for the gateway, over the same validator.
+    -->
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Registry.Feeds.Host/CyberCloud.Registry.Feeds.Host.csproj"/>
+        <!-- The silo half: the real engine, the real manager, and the provider's grain and reconcilers. -->
+        <ProjectReference Include="../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.csproj"/>
+    </ItemGroup>
+
+</Project>

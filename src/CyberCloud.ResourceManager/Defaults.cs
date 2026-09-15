@@ -254,6 +254,60 @@ public sealed class UnavailableSecretWriter : ISecretWriter {
 }
 
 /// <summary>
+///     The <see cref="IObjectStore" /> a host with no object storage registers: it refuses.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠
+///         <b>
+///             Refuses rather than succeeding without storing, for the reason
+///             <see cref="UnavailableSecretWriter" /> gives one seam over.
+///         </b> A no-op put would let the feeds host answer <c>201 Created</c> to a <c>dotnet nuget
+///         push</c> whose bytes went nowhere, and a no-op list would let a feed's teardown converge
+///         over artefacts it never removed. Either is a data plane reporting success over an absence.
+///     </para>
+///     <para>
+///         ⚠ <b>Its message names the wiring rather than the feature</b>, because <c>S3ObjectStore</c>
+///         in <c>CyberCloud.ObjectStorage</c> exists and stores real bytes. Reaching this type means
+///         the host did not call <c>AddS3ObjectStore</c>, or that <c>CyberCloud:ObjectStorage</c> is
+///         not configured. Registered here as the <c>TryAdd</c> default rather than there, for the
+///         same layering reason <see cref="UnavailableSecretResolver" /> is: the real implementation
+///         references this assembly for the interface, and the other direction is a module cycle.
+///     </para>
+/// </remarks>
+public sealed class UnavailableObjectStore : IObjectStore {
+    const string Because =
+        "No object store is wired, so nothing can be stored, read, listed or removed. docs/plan/13 "
+        + "§ Artifact feeds keeps a feed's artefacts on the platform's SeaweedFS and "
+        + "CyberCloud.ObjectStorage is the client — but this host registered neither. Call "
+        + "AddS3ObjectStore() beside AddCyberCloudResourceManager(), with CyberCloud:ObjectStorage:"
+        + "Endpoint, :Bucket, :AccessKeyId and :SecretAccessKey configured. This refuses rather than "
+        + "reporting a write that did not happen, because a push that returns 201 over bytes that "
+        + "went nowhere is a feed nobody can restore from.";
+
+    /// <inheritdoc />
+    public Task<Result> PutAsync(
+        string key,
+        ReadOnlyMemory<byte> content,
+        string contentType,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result<StoredObject>> GetAsync(string key, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result<StoredObject>.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result> DeleteAsync(string key, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result<ImmutableArray<string>>> ListAsync(string prefix, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result<ImmutableArray<string>>.Failure(ErrorCode.InternalError, Because));
+}
+
+/// <summary>
 ///     The <see cref="IClusterConnectionFactory" /> a silo with no Kubernetes wiring registers.
 /// </summary>
 /// <remarks>

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The bearer-validation seam's own suite — ADR-018's sibling of CyberCloud.Identity.Validation.
+
+        JwksBearerTokenValidatorTests   — the claims read off an already-validated principal, every
+                                          refusal, and the second expiry check; moved here from the
+                                          gateway's suite when the validator did
+        BearerTokenWiringTests          — what AddJwksBearerTokenValidation registers, and that an
+                                          empty issuer is refused by name rather than defaulted
+
+      What a suite with no key set cannot cover: the signature. That is CyberCloud.AppHost.Tests'
+      TenantOverHttpTests, which takes a token the real identity host signed to the real gateway.
+    -->
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Identity.Validation/CyberCloud.Identity.Validation.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -2,14 +2,26 @@
 
     <!--
       docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
-      bindings". A reconciler, an action handler and a chart binding; no grain (see the .Contracts
-      .csproj).
+      bindings". Two reconcilers, an action handler, a chart binding — and, since docs/plan/13
+      § Artifact feeds landed, ONE GRAIN.
 
-      ⚠ ITS ENTIRE REFERENCE SET IS ITS OWN .Contracts. Everything else — IResourceReconciler,
-      IResourceActionHandler, ReconcileContext, KubeCommand, ISecretWriter — arrives through it.
-      docs/plan/07 § The enforcement seam: "Providers never call the engine." Here that is mechanical
-      rather than reviewed, because CyberCloud.ResourceManager.Contracts does not reference
-      CyberCloud.Authorization.Contracts, so ICheckGrain is not nameable from this assembly at all.
+      ⚠ THIS HEADER USED TO OPEN "no grain (see the .Contracts .csproj)" AND "ITS ENTIRE REFERENCE
+      SET IS ITS OWN .Contracts", AND BOTH SENTENCES STOPPED BEING TRUE ON THE SAME DAY. FeedGrain is
+      the catalogue of CyberCloud.ContainerRegistry/feeds — what tenants put INTO a feed after it
+      exists — and durable-grains.txt's Providers section says why the resource manager could not
+      hold that for the provider. A grain needs Orleans' server assembly to derive from Grain and
+      bind IPersistentState, and a reconciler that reaches a grain needs ForTenant, so the two
+      packages below are here. The Sample provider's .csproj said "if a future provider needs Orleans
+      in its implementation assembly, that is worth a second look before the package goes in"; the
+      second look is this paragraph, and the answer is that a feed's data plane IS a grain plus a
+      storage prefix, so reaching one is the whole of what its reconciler does.
+
+      ⚠ WHAT DID NOT CHANGE. docs/plan/07 § The enforcement seam: "Providers never call the engine."
+      That is still mechanical rather than reviewed — CyberCloud.ResourceManager.Contracts does not
+      reference CyberCloud.Authorization.Contracts, so ICheckGrain is not nameable from here, and
+      neither package below brings it in. CC1006 now polices this assembly for real: every GetGrain
+      goes through ForTenant, and the analyzer reference below is what makes that a compile error
+      rather than a review comment.
 
       ⚠ NO KubernetesClient. docs/plan/03 § Assembly graph rules, rule 3: nothing above
       CyberCloud.Kubernetes names a k8s.Models type. A harbor-operator `HarborCluster` has no
@@ -18,6 +30,13 @@
       here for the same reason it did on mariadb-operator: goharbor.io is served at v1beta1, and a
       generated model would pin a beta shape into a compiled assembly.
     -->
+
+    <ItemGroup>
+        <!-- Grain, IPersistentState, and the source generator over FeedState. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- IGrainFactory.ForTenant and GetTenantId — ADR-002; every grain reference here goes through them. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Providers.ContainerRegistry.Contracts/CyberCloud.Providers.ContainerRegistry.Contracts.csproj"/>

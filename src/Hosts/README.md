@@ -5,6 +5,7 @@
 | `CyberCloud.Silo.Host` | the Orleans silo — loads every provider module |
 | `CyberCloud.Gateway.Host` | REST + SignalR; an Orleans **client**, not a silo |
 | `CyberCloud.Identity.Host` | OIDC endpoints, cookies, sign-in/sign-up pages |
+| `CyberCloud.Registry.Feeds.Host` | the NuGet v3, npm and Maven wire protocols of `ContainerRegistry/feeds`; an Orleans **client** that validates the gateway's bearer tokens and stores artefacts on the platform's object store |
 | `CyberCloud.Portal.Host` | serves the API shim + static assets (the Angular SSR node process is separate) |
 | `CyberCloud.Ingest.Host` | OTLP + metrics ingest — high volume, separate scaling |
 | `CyberCloud.Worker.Host` | reconcile workers, informer bridges, billing rollups |
@@ -30,8 +31,18 @@ gateway is not allowed to reference one at all — only `.Contracts` and `.Appli
 
 ## What exists today
 
-`CyberCloud.Silo.Host` and `CyberCloud.AppHost`. The other six are named above because
-[docs/plan/03 § Hosts](../../docs/plan/03-repository-layout.md) names them; none of them exists yet.
+`CyberCloud.Silo.Host`, `CyberCloud.Gateway.Host`, `CyberCloud.Identity.Host`,
+`CyberCloud.Registry.Feeds.Host` and `CyberCloud.AppHost`. The other four are named above because
+[docs/plan/03 § Hosts](../../docs/plan/03-repository-layout.md) names them; none of those exists yet.
+
+⚠ **The feeds host references one provider's `.Application` assembly where the silo and the
+gateway reference all of them** — `ContainerRegistry.Application`, which names it with
+`[assembly: OwningHost("CyberCloud.Registry.Feeds.Host")]` so the assembly-graph gate's rule 4 knows
+the reference is declared rather than a leak. It references
+that family's *implementation* only through the silo: the catalogue is `IFeedGrain` in the Contracts
+assembly, and `FeedsIsolationTests` pins that the host never sees `FeedGrain`, a Kubernetes client or
+an identity store. `HostCompositionTests` starts it against a real silo and asserts that the two agree
+about the feeds type, and that composing it without `CyberCloud:Feeds:Identity:Issuer` refuses.
 
 `./build.sh Compile` then:
 

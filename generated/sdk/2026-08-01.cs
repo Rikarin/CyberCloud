@@ -598,6 +598,115 @@ public sealed partial class ValkeyCacheCollection {
     public partial AsyncPageable<ValkeyCacheResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ArtifactFeedKind {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>nuget</summary>
+    [JsonStringEnumMemberName("nuget")]
+    Nuget = 1,
+
+    /// <summary>npm</summary>
+    [JsonStringEnumMemberName("npm")]
+    Npm = 2,
+
+    /// <summary>maven</summary>
+    [JsonStringEnumMemberName("maven")]
+    Maven = 3
+}
+
+/// <summary>The body of a CyberCloud.ContainerRegistry/feeds.</summary>
+/// <remarks>A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage.</remarks>
+public sealed partial class ArtifactFeedData {
+
+    /// <summary>The region the feed is billed in and served from.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The feed's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The feed's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>What the feed is for, shown in the portal beside its name.</summary>
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        /// <summary>Which protocol the feed speaks: nuget (the v3 API), npm (the registry API) or maven (the repository layout). Immutable, because the three have three versioning models.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "nuget" when left unset.</remarks>
+        [JsonPropertyName("kind")]
+        public required ArtifactFeedKind Kind { get; set; }
+    }
+}
+
+/// <summary>One Artifact feed, and the operations on it.</summary>
+public sealed partial class ArtifactFeedResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ArtifactFeedData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ArtifactFeedResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ArtifactFeedResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ArtifactFeedData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Artifact feeds in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ArtifactFeedCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.ContainerRegistry/feeds";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/feeds/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/feeds";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Artifact feed.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ArtifactFeedResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ArtifactFeedData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Artifact feed by name.</summary>
+    public partial Task<Response<ArtifactFeedResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Artifact feeds in this group, paged.</summary>
+    public partial AsyncPageable<ArtifactFeedResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum ContainerRegistryPreset {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

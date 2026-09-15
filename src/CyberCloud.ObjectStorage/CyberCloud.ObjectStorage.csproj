@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/13 § Artifact feeds, docs/plan/15 § Object storage — the platform's S3 client, and
+      the one IObjectStore that stores bytes.
+
+      ⚠ NO .Contracts PAIR AND NO AWS SDK, AND BOTH ABSENCES ARE THE DESIGN. The seam it implements
+      — IObjectStore — lives in CyberCloud.ResourceManager.Contracts beside ISecretResolver, for the
+      reason CyberCloud.Vault gives: a contracts assembly of its own would be a second place to
+      declare a seam. And the wire is signed by hand: SeaweedFS speaks the S3 API (docs/plan/15), the
+      four calls a feed needs are PUT, GET, DELETE and ListObjectsV2, and Signature Version 4 is a
+      page of HMACs. docs/plan/02's dependency register has no AWS package and taking a 30 MB SDK
+      for four verbs would be a licence-scan row, a transitive-pin row and a supply-chain surface
+      for something S3ObjectStoreSigningTests can pin against Amazon's own published vectors.
+
+      ⚠ Microsoft.Extensions.Http is NOT referenced and there is no IHttpClientFactory, following
+      CyberCloud.Vault: nothing in this repository calls AddHttpClient, and one long-lived HttpClient
+      per store is what the factory would produce anyway.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <!--
+          IObjectStore and ObjectKeys. ⚠ CyberCloud.ResourceManager.Contracts must not learn this
+          assembly's name, because that pair of references is a module cycle — module-layering.txt
+          carries CyberCloud.ObjectStorage → CyberCloud.ResourceManager and nothing in the other
+          direction, which is why UnavailableObjectStore lives over there.
+        -->
+        <ProjectReference Include="../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

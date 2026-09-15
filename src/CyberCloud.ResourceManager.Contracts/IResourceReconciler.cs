@@ -118,6 +118,28 @@ public readonly record struct ReconcileContext(
     public ISecretWriter SecretWriter { get; init; } = new RefusingSecretWriter();
 
     /// <summary>
+    ///     The platform's object storage, for a type whose data plane keeps bytes there.
+    ///     docs/plan/13 § Artifact feeds.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         An <c>init</c> property with a refusing default, for exactly the reason
+    ///         <see cref="SecretWriter" /> is one: every hand-built context — a unit test, the
+    ///         conformance harness's four-clause check — gets <see cref="RefusingObjectStore" />, and
+    ///         only the driver, which knows what the host wired, replaces it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What a reconciler is entitled to do with it is delete.</b> A feed's teardown
+    ///         removes every object under the feed's prefix and reads the listing back to prove it;
+    ///         the writes are the feeds host's, on the data plane, and never a reconciler's. A
+    ///         reconciler that wrote artefacts would be a control-plane component holding a copy of
+    ///         data-plane content, which is the "manager's missing half inside the provider" shape
+    ///         docs/plan/25 § R1 warns about.
+    ///     </para>
+    /// </remarks>
+    public IObjectStore Objects { get; init; } = new RefusingObjectStore();
+
+    /// <summary>
     ///     Where a pass that produced a reachable cluster says so. ⚠ Reported, not attached — the
     ///     driver performs the write, and only after the pass converges.
     /// </summary>
@@ -170,6 +192,43 @@ public sealed class RefusingSecretWriter : ISecretWriter {
                 + "context built by hand has to supply one through ReconcileContext.SecretWriter."
             )
         );
+}
+
+/// <summary>
+///     The <see cref="IObjectStore" /> a hand-built <see cref="ReconcileContext" /> carries: it
+///     refuses everything, naming the property to set.
+/// </summary>
+/// <remarks>
+///     The sibling of <see cref="RefusingSecretWriter" />, for the same reason: this record lives in
+///     the contracts assembly and cannot name <c>UnavailableObjectStore</c>, which is the registered
+///     default and says more about the wiring.
+/// </remarks>
+public sealed class RefusingObjectStore : IObjectStore {
+    const string Because =
+        "This reconcile context carries no object store. A pass driven by ReconcileDriver always "
+        + "carries the host's store; a context built by hand has to supply one through "
+        + "ReconcileContext.Objects.";
+
+    /// <inheritdoc />
+    public Task<Result> PutAsync(
+        string key,
+        ReadOnlyMemory<byte> content,
+        string contentType,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result<StoredObject>> GetAsync(string key, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result<StoredObject>.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result> DeleteAsync(string key, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result<ImmutableArray<string>>> ListAsync(string prefix, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result<ImmutableArray<string>>.Failure(ErrorCode.InternalError, Because));
 }
 
 /// <summary>

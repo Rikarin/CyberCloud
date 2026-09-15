@@ -13,6 +13,11 @@ using Volo.Abp.Modularity;
 // does named in one reviewable line.
 [assembly: OwningHost("CyberCloud.Silo.Host")]
 [assembly: OwningHost("CyberCloud.Gateway.Host")]
+// ⚠ A THIRD HOST, AND IT IS THE FIRST DATA-PLANE HOST TO LOAD A PROVIDER MODULE. docs/plan/13
+// § Artifact feeds: the feeds host reads CyberCloud.ContainerRegistry/feeds through the resource
+// manager — one type, from one registry, built from this one module — and serves the three
+// package protocols over it. It loads no other family, on purpose; FeedsHostModule says why.
+[assembly: OwningHost("CyberCloud.Registry.Feeds.Host")]
 
 namespace CyberCloud.Providers.ContainerRegistry.Application;
 

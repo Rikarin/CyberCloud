@@ -40,7 +40,12 @@ charts/
 
 ## `bundle/` — the operator layer, which is not a chart family
 
-**Every chart under `managed/` renders a custom resource and installs no controller.** Three say so in
+**Every chart under `managed/` renders a custom resource and installs no controller — with one
+exception that renders nothing at all.** `managed/feeds` (#29) is the chart of a type whose data plane
+is `CyberCloud.Registry.Feeds.Host` rather than an object in a tenant's cluster; its `templates/` holds
+a `NOTES.txt` and nothing else, its `conformance.yaml` says `renders: []`, and it exists so the
+catalogue has one place — a `values.yaml` generated from the C# schema, a `SOURCE`, a conformance
+manifest — to read the type's surface in the same format as every other row. Three of the rest say so in
 the template itself: *"It renders a custom resource; it does not install the operator. The operator is
 `charts/bundle/`'s job."* [`charts/bundle/`](bundle/README.md) is that job — **nineteen components
 serving twenty-one `group/version` pairs**: the sixteen this catalogue renders, plus five nothing here

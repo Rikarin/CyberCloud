@@ -1,12 +1,11 @@
-using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Identity.Contracts;
 using OpenIddict.Abstractions;
 using System.Security.Claims;
 
-namespace CyberCloud.Gateway.Host.Tests;
+namespace CyberCloud.Identity.Validation.Tests;
 
 /// <summary>
-///     The half of the production identity seam that reads claims — <see cref="JwksCallerContextResolver.ToClaims" />
+///     The half of the production identity seam that reads claims — <see cref="JwksBearerTokenValidator.ToClaims" />
 ///     — driven with hand-built principals that stand in for what the validator returns.
 /// </summary>
 /// <remarks>
@@ -25,7 +24,7 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///         somehow told to trust. That is the case worth being strict in.
 ///     </para>
 /// </remarks>
-public sealed class JwksCallerContextResolverTests {
+public sealed class JwksBearerTokenValidatorTests {
     static readonly Guid Tenant = Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d");
     static readonly DateTimeOffset Now = new(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
 
@@ -50,7 +49,7 @@ public sealed class JwksCallerContextResolverTests {
 
     [Fact]
     public void EveryFieldComesFromTheValidatedPrincipal() {
-        var claims = JwksCallerContextResolver.ToClaims(Valid(), Now).GetValueOrThrow();
+        var claims = JwksBearerTokenValidator.ToClaims(Valid(), Now).GetValueOrThrow();
 
         claims.TenantId.ShouldBe(Tenant);
         claims.SubjectType.ShouldBe("servicePrincipal");
@@ -68,7 +67,7 @@ public sealed class JwksCallerContextResolverTests {
         var principal = Valid();
         principal.SetExpirationDate(Now.AddMinutes(5));
 
-        JwksCallerContextResolver.ToClaims(principal, Now).GetValueOrThrow().ExpiresAt.ShouldBe(Now.AddMinutes(5));
+        JwksBearerTokenValidator.ToClaims(principal, Now).GetValueOrThrow().ExpiresAt.ShouldBe(Now.AddMinutes(5));
     }
 
     [Fact]
@@ -76,7 +75,7 @@ public sealed class JwksCallerContextResolverTests {
         var principal = Valid();
         principal.SetClaim(AccessTokenClaims.ImpersonatedBy, "9c1e7b403f2a4d589a6c8b2d5e0f1a34");
 
-        JwksCallerContextResolver.ToClaims(principal, Now)
+        JwksBearerTokenValidator.ToClaims(principal, Now)
             .GetValueOrThrow()
             .ImpersonatedBy.ShouldBe("9c1e7b403f2a4d589a6c8b2d5e0f1a34");
     }
@@ -99,7 +98,7 @@ public sealed class JwksCallerContextResolverTests {
             principal.SetClaim(AccessTokenClaims.TenantId, tid);
         }
 
-        var refused = JwksCallerContextResolver.ToClaims(principal, Now);
+        var refused = JwksBearerTokenValidator.ToClaims(principal, Now);
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
@@ -111,7 +110,7 @@ public sealed class JwksCallerContextResolverTests {
         var principal = Valid();
         principal.RemoveClaims(AccessTokenClaims.SubjectType);
 
-        JwksCallerContextResolver.ToClaims(principal, Now).Error!.Message.ShouldContain("sub_typ");
+        JwksBearerTokenValidator.ToClaims(principal, Now).Error!.Message.ShouldContain("sub_typ");
     }
 
     [Fact]
@@ -119,7 +118,7 @@ public sealed class JwksCallerContextResolverTests {
         var principal = Valid();
         principal.RemoveClaims(AccessTokenClaims.Subject);
 
-        JwksCallerContextResolver.ToClaims(principal, Now).Error!.Message.ShouldContain("sub");
+        JwksBearerTokenValidator.ToClaims(principal, Now).Error!.Message.ShouldContain("sub");
     }
 
     [Fact]
@@ -127,15 +126,15 @@ public sealed class JwksCallerContextResolverTests {
         var principal = Valid();
         principal.RemoveClaims(AccessTokenClaims.ExpiresAt);
 
-        JwksCallerContextResolver.ToClaims(principal, Now).Error!.Message.ShouldContain("expiry");
+        JwksBearerTokenValidator.ToClaims(principal, Now).Error!.Message.ShouldContain("expiry");
     }
 
     [Fact]
     public void TheSecondExpiryCheckRefusesWhatAValidatorMightHaveLetThrough() {
         // ICallerContextResolver's item 6: the gateway enforces ExpiresAt itself as well, so a
         // validator misconfigured to ignore exp is still caught.
-        JwksCallerContextResolver.ToClaims(Valid(), Now.AddMinutes(10)).Error!.Message.ShouldContain("expired");
-        JwksCallerContextResolver.ToClaims(Valid(), Now.AddMinutes(11)).IsFailure.ShouldBeTrue();
+        JwksBearerTokenValidator.ToClaims(Valid(), Now.AddMinutes(10)).Error!.Message.ShouldContain("expired");
+        JwksBearerTokenValidator.ToClaims(Valid(), Now.AddMinutes(11)).IsFailure.ShouldBeTrue();
     }
 
     [Theory]
@@ -153,7 +152,7 @@ public sealed class JwksCallerContextResolverTests {
         var principal = Valid();
         principal.SetClaim(forbidden, "Owner");
 
-        var refused = JwksCallerContextResolver.ToClaims(principal, Now);
+        var refused = JwksBearerTokenValidator.ToClaims(principal, Now);
 
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Message.ShouldContain(forbidden);

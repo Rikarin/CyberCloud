@@ -82,6 +82,12 @@ CyberCloud.Identity -> CyberCloud.Communication
 # CyberCloud.Identity's ProjectReference on the implementation assembly is gone, so nothing in the
 # tree now depends on the ProjectReference half of rule 7 to see an edge. That is an argument for
 # keeping it — an unexercised half of a rule is the half that rots — not against.
+#
+# ⚠ CyberCloud.Identity.Validation IS IN THIS MODULE AND ADDS NO LINE. It is the relying-party half
+# of docs/plan/11 § Protocol — the bearer-token validator the gateway and the feeds host share —
+# and it references CyberCloud.Identity.Contracts and CyberCloud.Core only, both already covered.
+# ModuleOf() folds it into CyberCloud.Identity; the boundary that matters about it is not a module
+# edge but a HOST one: CyberCloud.Identity.Host must never reference it, and its .csproj says why.
 CyberCloud.Identity -> CyberCloud.Authorization
 CyberCloud.Identity -> CyberCloud.Core
 CyberCloud.Identity -> CyberCloud.Tenancy
@@ -114,6 +120,16 @@ CyberCloud.ResourceManager -> CyberCloud.Tenancy
 # CyberCloud.Communication refuses one section above and for the same reason.
 CyberCloud.Vault -> CyberCloud.Core
 CyberCloud.Vault -> CyberCloud.ResourceManager
+
+# ── Object storage — docs/plan/13 § Artifact feeds, docs/plan/15 § Object storage ──────────────
+# CyberCloud.ObjectStorage is the platform's S3 client: the one IObjectStore that stores bytes. The
+# same two edges as the vault, for the same reason — the seam lives in
+# CyberCloud.ResourceManager.Contracts beside ISecretResolver, the refusing default lives in
+# CyberCloud.ResourceManager, and the reverse edge would be the cycle the vault's paragraph
+# describes. A host that has a bucket calls AddS3ObjectStore; every other host keeps
+# UnavailableObjectStore, which refuses by name.
+CyberCloud.ObjectStorage -> CyberCloud.Core
+CyberCloud.ObjectStorage -> CyberCloud.ResourceManager
 
 # ── Providers — docs/plan/03 § The .Contracts split ────────────────────────────────────────────
 # A provider declares a ProjectReference on CyberCloud.ResourceManager.Contracts and

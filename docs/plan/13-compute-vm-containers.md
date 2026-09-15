@@ -95,6 +95,22 @@ plugin systems.
 Scope, stated so it does not creep: **proxy + host + retention.** No build integration, no license
 scanning, no dependency graph. Those are a different product.
 
+**What landed (#29, 2026-09-15): the host third.** `CyberCloud.ContainerRegistry/feeds` is published
+at `2026-08-01` with an immutable `kind` of `nuget`, `npm` or `maven` — one feed is one protocol,
+because the three versioning models do not share a catalogue — and `CyberCloud.Registry.Feeds.Host`
+is the single service: NuGet v3 (service index, push, unlist, flat container, registration, search),
+the npm registry protocol (publish, packument, tarball, dist-tags) and the Maven layout (PUT/GET with
+release immutability, generated `maven-metadata.xml` and checksums). Artefacts go to the platform's
+object store under `{tenant}/{feed}/` through the `IObjectStore` seam ([15](15-storage-blob-file.md)'s
+SeaweedFS behind Signature V4), the catalogue is a durable `FeedGrain` the provider owns, and every
+request carries the gateway's bearer token — as `Bearer`, as a Basic password, or in
+`X-NuGet-ApiKey`, because that is how the three clients send one — and is authorised through the
+resource manager with the type's own `read`/`write`, never a feed-local user list. ⚠ **It is the first
+type whose data plane is a platform host and not a tenant's cluster**, so it declares no `clusterId`
+and its chart renders nothing. ⚠ **Proxy and retention are not declared:** an `upstream` property
+nothing fetches through would publish a feature nobody can have. Both, and the storage and egress
+meters the host does not yet emit, are recorded at `charts/managed/feeds/conformance.yaml § owed`.
+
 ## Cross-cutting
 
 **Placement.** Every compute resource names a `clusterId` ([09](09-kubernetes-fabric.md)). VMs and

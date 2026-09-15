@@ -108,6 +108,9 @@ public sealed class OpenSearchCase : IProviderCaseSource {
             // deliberately leaves `spec.security.config.adminCredentialsSecret` unset. This fixture is
             // also the only place in the tree that asserts the NAME that helper builds — nothing here
             // creates the object, so the expectation is worth exercising rather than only declaring.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = (id, ns) => [
                 (KubeSecret.Ref(ns, OpenSearchServices.AdminCredentialsSecretName(id.Name)),
                     OperatorSecret.Json(

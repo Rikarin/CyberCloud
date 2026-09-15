@@ -221,6 +221,19 @@
       }
     },
     {
+      "type": "CyberCloud.ContainerRegistry/feeds",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Artifact feed",
+        "plural": "Artifact feeds",
+        "alias": "feed",
+        "summary": "A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.ContainerRegistry/registries",
       "apiVersions": [
         "2026-08-01"

@@ -20,6 +20,22 @@
     -->
 
     <ItemGroup>
+        <!--
+          ⚠ THE FIRST PROVIDER CONTRACTS ASSEMBLY TO CARRY AN ORLEANS PACKAGE, AND THE REASON IS A
+          GRAIN. docs/plan/03 § Providers says a .Contracts project holds "grain interfaces, resource
+          models, the JSON Schemas", and every provider before this one had none of the first —
+          durable-grains.txt's "Providers — NOTHING" section explains why that was a measurement.
+          CyberCloud.ContainerRegistry/feeds is the first type whose data plane is a platform host
+          (docs/plan/13 § Artifact feeds), and IFeedGrain is its catalogue: what tenants PUT INTO a
+          feed, which the resource manager holds for no type. The package is what runs Orleans'
+          source generator over the interface and its wire types in THIS assembly; the transitive
+          reference through CyberCloud.ResourceManager.Contracts puts the types in scope and runs no
+          generator here. CyberCloud.Communication.Contracts is the precedent.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
         <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
     </ItemGroup>

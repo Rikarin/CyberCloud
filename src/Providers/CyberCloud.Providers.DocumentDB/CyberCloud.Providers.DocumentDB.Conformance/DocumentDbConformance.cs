@@ -72,6 +72,9 @@ public sealed class DocumentDbCase : IProviderCaseSource {
             // reconciler never writes. The `uri` key the real object also carries is left out on
             // purpose: its dbname is "*", nothing may return it, and a fixture that offered it would
             // make reaching for it look supported.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = (id, ns) => [
                 (KubeSecret.Ref(ns, DocumentDbAccounts.SuperuserSecretName(id.Name)),
                     OperatorSecret.Json(

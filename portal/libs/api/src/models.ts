@@ -284,6 +284,36 @@ export interface CacheRedisListKeysResult {
   port: number;
 }
 
+/** The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else. */
+export type ContainerRegistryFeedsKind =
+  | 'nuget'
+  | 'npm'
+  | 'maven';
+
+/** Artifact feed. A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage. */
+export interface ContainerRegistryFeedsData {
+  /** The region the feed is billed in and served from. */
+  location: string;
+  /** The feed's own settings. */
+  properties?: {
+    /** What the feed is for, shown in the portal beside its name. */
+    description?: string;
+    /** Which protocol the feed speaks: nuget (the v3 API), npm (the registry API) or maven (the repository layout). Immutable, because the three have three versioning models. */
+    kind: ContainerRegistryFeedsKind;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Artifact feed, as the API returns it. */
+export interface ContainerRegistryFeedsResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.ContainerRegistry/feeds';
+  readonly properties?: ContainerRegistryFeedsData['properties'];
+}
+
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
 export type ContainerRegistryRegistriesPreset =
   | 's1.2xlarge'

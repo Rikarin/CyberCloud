@@ -38,6 +38,8 @@
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
         <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+        <!-- The third host, docs/plan/13 § Artifact feeds: composed here for the same reason the other two are. -->
+        <ProjectReference Include="../CyberCloud.Registry.Feeds.Host/CyberCloud.Registry.Feeds.Host.csproj"/>
     </ItemGroup>
 
 </Project>

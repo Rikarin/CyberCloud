@@ -87,6 +87,7 @@ public sealed class ReconcileDriver(
     IClusterConnectionRegistrar clusterRegistrar,
     ISecretResolver secrets,
     ISecretWriter secretWriter,
+    IObjectStore objects,
     NamespaceEnsurer namespaces,
     IClock clock
 ) {
@@ -308,6 +309,7 @@ public sealed class ReconcileDriver(
                 // ⚠ The one place the host's writer reaches a pass. Everything else that builds a context
                 // — a test, a conformance harness — gets RefusingSecretWriter and has to say otherwise.
                 SecretWriter = secretWriter,
+                Objects = objects,
                 // ⚠ COLLECTED HERE AND ACTED ON BELOW, WHICH IS WHAT KEEPS THE ATTACH BEHIND THE
                 // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
                 ClusterConnections = produced
@@ -539,7 +541,7 @@ public sealed class ReconcileDriver(
             clusters.Connect(reconcileInput.ClusterId),
             secrets,
             log
-        ) { SecretWriter = secretWriter };
+        ) { SecretWriter = secretWriter, Objects = objects };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(PassBudget);

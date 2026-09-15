@@ -53,6 +53,9 @@ public sealed class MariaDbCase : IProviderCaseSource {
             // so the operator creates this object and puts the value in the database at bootstrap.
             // The root Secret it also generates is deliberately absent: listKeys does not read it, and
             // a fixture carrying a credential no code path touches invites one to start.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = (id, ns) => [
                 (KubeSecret.Ref(ns, MariaDbServers.PasswordSecretName(id.Name)),
                     OperatorSecret.Json(

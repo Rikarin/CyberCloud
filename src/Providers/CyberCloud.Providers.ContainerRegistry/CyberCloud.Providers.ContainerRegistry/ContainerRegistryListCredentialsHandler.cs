@@ -1,8 +1,6 @@
-// ⚠ For `Result<string>`. `CyberCloud.Core.Resources` is global in this assembly and
-// `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
-// `Orleans.ErrorCode` this import would otherwise put back in play.
+// `CyberCloud.Core`, for `Result<string>`, is a global using now — GlobalUsings.cs says why the
+// per-file import this header used to explain is gone.
 
-using CyberCloud.Core;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.Providers.ContainerRegistry;

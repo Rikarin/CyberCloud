@@ -1,10 +1,16 @@
 // ⚠ `ErrorCode` is ambiguous in this assembly and the alias is the fix. Orleans ships a PUBLIC
-// `Orleans.ErrorCode`, and Microsoft.Orleans.Sdk's build props inject `global using Orleans;` — which
-// reaches a provider TRANSITIVELY through CyberCloud.ResourceManager.Contracts. So a provider that
-// names an error code needs this line even though it references no Orleans package itself.
+// `Orleans.ErrorCode`, and Microsoft.Orleans.Sdk's build props inject `global using Orleans;`. It
+// used to reach this assembly only transitively, through CyberCloud.ResourceManager.Contracts; since
+// FeedGrain landed the assembly references Microsoft.Orleans.Server itself, and the ambiguity is the
+// same either way.
 //
-// ⚠ The .Contracts sibling deliberately does NOT carry the alias: it names no error code, and an
-// unused alias is IDE0005, which is an error here (Directory.Build.props § Warnings and analysis).
+// ⚠ `CyberCloud.Core` is global now, and it was a per-file import in three files until FeedGrain and
+// ArtifactFeedReconciler made it five. Every file that names Result<T> would otherwise repeat the
+// same three-line header explaining that the alias above wins over the Orleans.ErrorCode the import
+// puts back in play. It does — an alias directive beats a namespace import for a simple name — and
+// saying so once here is better than saying it five times.
+//
+// ⚠ The .Contracts sibling now carries the alias too, since IFeedGrain's contract names error codes.
 //
 // ⚠ `CyberCloud.Tenancy.Contracts` is here for `QuotaMeter` alone — docs/plan/06 § Quota owns the
 // families. It also makes IQuotaGrain and IResourceIndexGrain NAMEABLE from a provider, and steps 6
@@ -12,6 +18,7 @@
 // reconciler is a review failure, not a compile one.
 
 global using ErrorCode = CyberCloud.Core.ErrorCode;
+global using CyberCloud.Core;
 global using CyberCloud.Core.Resources;
 global using CyberCloud.Kubernetes.Contracts;
 global using CyberCloud.Providers.ContainerRegistry.Contracts;

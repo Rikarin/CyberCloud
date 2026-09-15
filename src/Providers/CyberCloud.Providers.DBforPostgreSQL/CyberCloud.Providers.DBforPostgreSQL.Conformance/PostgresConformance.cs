@@ -67,6 +67,9 @@ public sealed class PostgresCase : IProviderCaseSource {
             // would miss serial 3, and the suite's follow-through would then pass over a claim the
             // reconciler never touched. The owner's uid is left empty: the harness fills in the one
             // the fake issued for the applied Cluster, which is what SetAsOwnedBy reads.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = (id, ns) => [
                 (KubeSecret.Ref(ns, PostgresServers.CredentialSecretName(id.Name)),
                     OperatorSecret.Json(

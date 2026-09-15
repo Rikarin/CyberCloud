@@ -202,6 +202,7 @@ src/Hosts/
 ├── CyberCloud.Silo.Host/          # the Orleans silo — loads every provider module
 ├── CyberCloud.Gateway.Host/       # REST + SignalR; Orleans *client* (10)
 ├── CyberCloud.Identity.Host/      # OIDC endpoints, cookies, sign-in/sign-up pages (11)
+├── CyberCloud.Registry.Feeds.Host/ # NuGet/npm/Maven wire protocols; Orleans *client* (13 § Artifact feeds)
 ├── CyberCloud.Portal.Host/        # Angular SSR node process is separate; this serves the API shim + static
 ├── CyberCloud.Ingest.Host/        # OTLP + metrics ingest — high volume, separate scaling (16)
 ├── CyberCloud.Worker.Host/        # reconcile workers, informer bridges, billing rollups
@@ -219,6 +220,15 @@ Co-hosting means one of the three is always the wrong size. The gateway is there
 ⚠ **The ingest host is not an Orleans client at all.** It writes straight to NATS and ClickHouse.
 Putting a million spans per second through a grain call is the one design mistake in this shape that
 would be expensive to undo, so it is excluded by process boundary rather than by discipline.
+
+⚠ **The feeds host is a data plane that is a process, not a chart.** Every other type's data plane
+is an object the silo applies into a tenant's cluster; `ContainerRegistry/feeds`' data plane is the
+NuGet, npm and Maven protocols, which a package client speaks to an origin. So the protocols are a
+host of their own — an Orleans client like the gateway, validating the same bearer tokens through
+`CyberCloud.Identity.Validation`, reaching the feed's catalogue grain and the object store directly —
+and it is the third host — after the silo and the gateway — that references a provider's
+`.Application` assembly, and the only one that references a single family's rather than all of them;
+`ContainerRegistry.Application` names it with a third `[OwningHost]` line (rule 4 below).
 
 ## `charts/`
 

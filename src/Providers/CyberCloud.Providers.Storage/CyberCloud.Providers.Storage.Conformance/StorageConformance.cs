@@ -99,6 +99,9 @@ public sealed class StorageCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
@@ -180,6 +183,9 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             // ⚠ THE WHOLE PREDICATE, WHICH IT WAS NOT UNTIL `MatchContext` CARRIED AN ADDRESS. This
             // used to be `StorageBuckets.MatchesBody` — the body half — because

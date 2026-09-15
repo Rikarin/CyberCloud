@@ -1782,6 +1782,53 @@ M2 · 3.5 EM. Dovecot, Postfix and Rspamd, per tenant, on five core kinds.
   a mail domain that cannot start. It is `charts/managed/mail/conformance.yaml § owed`,
   `the-images-do-not-exist`, and it is the reason no green here may be read as "managed mail works".
 
+### What the first clusterless type measured
+
+`CyberCloud.ContainerRegistry/feeds`, [13 § Artifact feeds](../../docs/plan/13-compute-vm-containers.md),
+M2 · 1.5 EM, #29. NuGet v3, npm and Maven, as a second type of the `ContainerRegistry` provider and
+the first type in the catalogue whose data plane is a platform host — `CyberCloud.Registry.Feeds.Host`
+— rather than an object in a tenant's cluster.
+
+- **⚠ IT IS THE FIRST PROVIDER GRAIN, AND THE RULE THAT EVERY EARLIER ROW LEANED ON — "it has no
+  grain and no durable state either" — WAS A CONSEQUENCE OF WHERE THE DATA PLANE LIVED, NOT A LAW.**
+  Twenty-three types needed no grain because the cluster held their state and `ResourceGrain` held the
+  desired body. A feed's state is its catalogue — which versions exist, which are listed, what each
+  weighs — and there is no cluster to hold it, so `FeedGrain` holds it, durably, per feed, and is the
+  first line under `Providers` in `durable-grains.txt`. ⚠ The catalogue is *data-plane content*, not
+  manager state: the resource manager never reads it, and the feeds host reaches it only through
+  `IFeedGrain` in the Contracts assembly, which is what lets the grain be split per package later
+  without the host noticing.
+- **⚠ `RequiresCluster` was implicitly `true` everywhere, and making it honestly `false` cost the
+  shared suite eight branches.** `ProviderConformanceTests` asserted "what the provider applied is in
+  the cluster" and "delete tears down the namespace" for every case; a type that applies nothing
+  passed the first vacuously and failed the second. The suite now branches on the registry's
+  `RequiresCluster`, and a clusterless case supplies its own `DataPlane` (break it, ask whether it
+  matches) and `StoragePrefix` (plant a byte, assert the teardown removed it) — both `required` on
+  `ProviderConformanceCase`, so the seventeen cluster types say `null` in as many words rather than
+  inheriting a default. ⚠ Two assertions are `Assert.Skip` rather than rewritten for a clusterless
+  type — a hand-edit in a cluster that does not exist, and a delete during an operation that
+  converges in one pass — and each says why at the skip.
+- **⚠ The reconciler's teardown converges only when the listing reads back empty, and the sabotage
+  that proved it was removing one line.** `ArtifactFeedReconciler.DeleteAsync` closes the catalogue,
+  lists the feed's prefix on `context.Objects`, deletes what it finds, and reports `Converged` only
+  once the list is empty. Without the deletion, `DeleteTearsDownTheDataPlaneAndTheResourceIsGone`
+  fails with *"still holds objects after a converged teardown"*, which is the message it was written
+  to give. `context.Objects` is a new seam on `ReconcileContext` — an `IObjectStore` beside the
+  `ISecretWriter` precedent, refusing by default — because a reconciler that reached the store through
+  its own client would be a second bucket configuration nothing checks against the host's.
+- **⚠ The authorisation is the resource manager's and the host adds none of its own.** The feeds host
+  resolves a feed by reading it through `IResourceManager.ReadAsync` as the caller — so a caller with
+  no role sees 404, never 403 — and asks `IResourceAuthorizer` for the type's own `write` against its
+  own `read` before a push, an unlist or a dist-tag write. The tenant is the token's; the URL has no
+  tenant segment to spell, so another tenant's owner sending the same path reaches her own feed. What
+  it took to get there was a bearer validator both hosts could share, which is why `JwksCallerContextResolver`
+  became an adapter over `CyberCloud.Identity.Validation` rather than the second copy of #68.
+- **⚠ What a green run here proves is bounded by the clients that were not run.** Every protocol
+  test reproduces the request a client makes — the multipart push, the publish document, the deploy
+  sequence — and drives the real host over HTTP; none runs `dotnet`, `npm` or `mvn`. It is
+  `charts/managed/feeds/conformance.yaml § owed`, `no-real-client-is-driven`, beside the proxy and
+  retention thirds of doc 13's scope and the two meters the host does not yet emit.
+
 ## Namespaces
 
 Every namespaced object this platform applies lands in `{subscriptionId:N}-{resourceGroup}`, derived

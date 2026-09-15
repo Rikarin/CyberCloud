@@ -3,6 +3,7 @@ using CyberCloud.Communication;
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes;
 using CyberCloud.Kubernetes.Connections;
+using CyberCloud.ObjectStorage;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
@@ -80,6 +81,23 @@ public static class SiloComposition {
         // IdentityHostAuthentication, where it sits under a real authentication scheme rather than
         // under an empty one.
         builder.Services.AddAuthorization();
+
+        // ── The platform's object storage — docs/plan/13 § Artifact feeds, docs/plan/15 ──────────
+        //
+        // ⚠ CONDITIONAL, LIKE THE GATEWAY'S VAULT, AND FOR THE SAME REASON. A feed's teardown lists
+        // and empties the feed's prefix through ReconcileContext.Objects, which is whatever this
+        // host registered as IObjectStore. Unconfigured leaves AddCyberCloudResourceManager's
+        // UnavailableObjectStore in place, whose refusal names the section and this method — so a
+        // silo with no object storage refuses to converge a feed's delete rather than converging
+        // over bytes it never removed. Misconfigured is not unconfigured: a plain-http endpoint
+        // without AllowInsecureTransport throws out of AddS3ObjectStore here, so the pod does not
+        // start. AddSingleton, so the order against ConfigureCluster's TryAdd does not matter.
+        var objectStorage = new ObjectStorageOptions();
+        builder.Configuration.GetSection(ObjectStorageOptions.SectionName).Bind(objectStorage);
+
+        if (objectStorage.IsConfigured) {
+            builder.Services.AddS3ObjectStore(objectStorage);
+        }
 
         // ⚠ Required, and not optional. CreateSilo calls builder.Host.UseAutofac(), and ABP's
         // service-provider factory resolves IModuleContainer during Build(). Without a module the host
