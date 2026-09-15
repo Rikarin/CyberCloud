@@ -74,6 +74,17 @@ export class TenantContextStore {
   }
 
   /**
+   * The sign-in path's `load`: one tenant — the token's `tid` — with its subscriptions, and that
+   * tenant selected. A token names exactly one tenant, so this is the whole list until the
+   * account switcher docs/plan/11 § Sign-up and tenant creation defers ("a client-side list of
+   * tokens") exists; `selectTenant` picks the subscription when there is only one.
+   */
+  loadFromToken(tenantId: string, displayName: string, subscriptions: readonly SubscriptionRef[]): void {
+    this.load([{ id: tenantId, displayName }], subscriptions);
+    this.selectTenant(tenantId);
+  }
+
+  /**
    * Switching tenant clears the subscription rather than guessing at one. Carrying a subscription
    * across a tenant switch is how a person ends up acting in a subscription they did not choose.
    */

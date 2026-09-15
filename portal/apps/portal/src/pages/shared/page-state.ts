@@ -74,10 +74,10 @@ export function activeTenantId(): Signal<string | null> {
 /**
  * What a page shows in place of its body while it has no tenant to act in.
  *
- * At M1 nothing populates `TenantContextStore` — the sign-in flow lives on the identity host and
- * the token exchange that would fill the store is docs/plan/11's M2 work — so this is the state a
- * fresh portal opens in. It says so rather than rendering an empty page, and it says it once,
- * here, so the eleven pages that need a tenant do not each invent a wording.
+ * `TenantContextStore` is filled by `AuthFlow.ensureContext` once a token is accepted, so this is
+ * what the server render shows and what a page shows for the moment between the guard passing
+ * and the tenant's `GET` answering. It says so rather than rendering an empty page, and it says it
+ * once, here, so the eleven pages that need a tenant do not each invent a wording.
  */
 @Component({
   selector: 'cc-needs-tenant',

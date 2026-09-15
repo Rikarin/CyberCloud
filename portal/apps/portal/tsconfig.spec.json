@@ -17,6 +17,7 @@
     "paths": {
       "@cybercloud/api": ["../../libs/api/src/index.ts"],
       "@cybercloud/shell": ["../../libs/shell/src/index.ts"],
+      "@cybercloud/shell/testing": ["../../libs/shell/src/testing.ts"],
       "@cybercloud/charts": ["../../libs/charts/src/index.ts"],
       "@cybercloud/resource-forms": ["../../libs/resource-forms/src/index.ts"],
       "@cybercloud/resource-forms-overrides": ["../../libs/resource-forms-overrides/src/index.ts"],

@@ -28,6 +28,7 @@ const config: Config = {
   moduleNameMapper: {
     '^@cybercloud/api$': '<rootDir>/libs/api/src/index.ts',
     '^@cybercloud/shell$': '<rootDir>/libs/shell/src/index.ts',
+    '^@cybercloud/shell/testing$': '<rootDir>/libs/shell/src/testing.ts',
     '^@cybercloud/charts$': '<rootDir>/libs/charts/src/index.ts',
     '^@cybercloud/resource-forms$': '<rootDir>/libs/resource-forms/src/index.ts',
     '^@cybercloud/resource-forms-overrides$': '<rootDir>/libs/resource-forms-overrides/src/index.ts'

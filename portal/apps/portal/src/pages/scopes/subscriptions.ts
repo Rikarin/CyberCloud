@@ -19,6 +19,7 @@ import { XuiInput } from '@xui/input';
 import { XuiNonIdealState } from '@xui/non-ideal-state';
 import { ApiCallError } from '../../app/api/http-transport';
 import { PlatformApi } from '../../app/api/platform-api';
+import { ScopeCollections, ScopeListItem, displayNameOf, lastSegmentOf } from '../../app/api/scope-collections';
 import { links } from '../../app/routes/portal-links';
 import { NeedsTenant, PageStatus, activeTenantId, load, pageState } from '../shared/page-state';
 
@@ -26,14 +27,14 @@ import { NeedsTenant, PageStatus, activeTenantId, load, pageState } from '../sha
 const SUBSCRIPTION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
- * The subscriptions page: the ones this sign-in can act in, and a create form.
+ * The subscriptions page: the ones this sign-in may read, and a create form.
  *
- * ⚠ **There is no list endpoint for subscriptions, and this page says so rather than faking one.**
- * Issue #63 gave the scope API a `GET` and a `PUT` by id, and the tenant a `GET`. What a person
- * may see is what their token grants, which is docs/plan/11's M2 token exchange — until it lands,
- * `TenantContextStore.subscriptions()` is what the context bar shows and what is listed here, and
- * it is empty on a fresh portal. A list invented from somewhere else would be the enumeration
- * oracle docs/plan/07 closes.
+ * The list is `GET /tenants/{tid}/subscriptions` — the scope collection served by
+ * `IScopeManager.ListAsync` and filtered to what the caller may `read`, which is Azure's
+ * `GET /subscriptions` semantics: what the token has any role on, not what exists. It is fetched
+ * fresh here rather than read from `TenantContextStore`, so a subscription granted since the
+ * sign-in appears without a reload; a create adds to both, so the context bar and the list agree
+ * with what the API just said.
  *
  * The create form is `generated/forms/{apiVersion}.json`'s `scopeForms.subscription`, rendered by
  * the same renderer as every resource form; the id is this page's field because it is the address,
@@ -63,7 +64,7 @@ const SUBSCRIPTION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
         <div>
           <h1 class="text-lg font-semibold" i18n="@@subscriptions.heading">Subscriptions</h1>
           <p class="text-foreground-muted mt-1 text-sm" i18n="@@subscriptions.subheading">
-            The subscriptions your sign-in grants. The API has no endpoint that lists them.
+            The subscriptions your sign-in may read.
           </p>
         </div>
         <button
@@ -137,30 +138,42 @@ const SUBSCRIPTION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
         </section>
       }
 
-      @if (known().length === 0) {
-        <xui-non-ideal-state class="mt-10" [title]="emptyTitle" [description]="emptyDescription" />
-      } @else {
-        <ul class="divide-border mt-4 divide-y">
-          @for (subscription of known(); track subscription.id) {
-            <li class="flex items-center justify-between py-2">
-              <a class="underline" [routerLink]="link(subscription.id)">{{ subscription.displayName }}</a>
-              <code class="text-foreground-muted text-xs">{{ subscription.id }}</code>
-            </li>
-          }
-        </ul>
+      <cc-page-status [state]="listing()" />
+
+      @if (known(); as known) {
+        @if (known.length === 0) {
+          <xui-non-ideal-state class="mt-10" [title]="emptyTitle" [description]="emptyDescription" />
+        } @else {
+          <ul class="divide-border mt-4 divide-y">
+            @for (subscription of known; track subscription.id) {
+              <li class="flex items-center justify-between py-2">
+                <a class="underline" [routerLink]="link(subscription.id)">{{ subscription.displayName }}</a>
+                <code class="text-foreground-muted text-xs">{{ subscription.id }}</code>
+              </li>
+            }
+          </ul>
+        }
       }
     }
   `
 })
 export class Subscriptions {
   private readonly api = inject(PlatformApi);
+  private readonly scopes = inject(ScopeCollections);
   private readonly forms = inject(ResourceFormSource);
   private readonly context = inject(TenantContextStore);
   private readonly router = inject(Router);
   private readonly blades = inject(BladeStackStore);
 
   protected readonly tenantId = activeTenantId();
-  protected readonly known = computed(() => this.context.subscriptions());
+
+  /** The collection's page. ⚠ The first page only: a tenant with more than the cap of subscriptions is not the M1 case. */
+  protected readonly listing = pageState<readonly ScopeListItem[]>();
+  protected readonly known = computed(() => {
+    const state = this.listing();
+    if (state.kind !== 'ready') return null;
+    return state.value.map(item => ({ id: lastSegmentOf(item), displayName: displayNameOf(item) }));
+  });
 
   protected readonly creating = signal(false);
   protected readonly form = pageState<ScopeForm>();
@@ -178,8 +191,8 @@ export class Subscriptions {
 
   protected readonly refusedTitle = $localize`:@@subscriptions.refused:The platform refused the create`;
   protected readonly submitLabel = $localize`:@@subscriptions.submit:Create subscription`;
-  protected readonly emptyTitle = $localize`:@@subscriptions.emptyTitle:No subscriptions known`;
-  protected readonly emptyDescription = $localize`:@@subscriptions.emptyDescription:The context bar fills in once the portal holds an access token. Create one above, or open one by id from a link.`;
+  protected readonly emptyTitle = $localize`:@@subscriptions.emptyTitle:No subscriptions`;
+  protected readonly emptyDescription = $localize`:@@subscriptions.emptyDescription:Your sign-in can read none in this tenant. Create one above, or ask an owner for a role on one.`;
 
   private readonly renderer = viewChild(ResourceFormRenderer);
 
@@ -196,6 +209,20 @@ export class Subscriptions {
         if (this.form().kind === 'idle') void load(this.form, () => this.forms.scopeForm('subscription', apiVersion));
       });
     });
+
+    effect(() => {
+      const tenantId = this.tenantId();
+      if (tenantId === null) return;
+      untracked(() => void this.list(tenantId));
+    });
+  }
+
+  private async list(tenantId: string): Promise<void> {
+    await load(
+      this.listing,
+      async () => (await this.scopes.listSubscriptions(tenantId)).value.value,
+      () => this.tenantId() !== tenantId
+    );
   }
 
   protected link(subscriptionId: string): string {
@@ -231,6 +258,13 @@ export class Subscriptions {
         ...this.context.subscriptions().filter(s => s.id !== this.id.value),
         { id: this.id.value, tenantId, displayName: created.name }
       ]);
+      const listed = this.listing();
+      if (listed.kind === 'ready') {
+        this.listing.set({
+          kind: 'ready',
+          value: [...listed.value.filter(s => lastSegmentOf(s) !== this.id.value), created]
+        });
+      }
 
       await this.router.navigateByUrl(links.subscription(this.id.value));
     } catch (error) {
