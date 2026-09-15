@@ -38,6 +38,44 @@ One activation per cluster platform-wide, pinned by a reminder, holding the clie
 Its state carries the owning tenant and every call checks it — the one place tenancy is enforced by
 code rather than by key ([06](06-tenancy-and-resource-model.md)).
 
+⚠ **CORRECTED 2026-09-15 by #36, which built `AgentInitiated`: the agent dials out over a
+WebSocket, not "over gRPC" as the table above says, and the table is left as written because it is
+the design and this is the record of where the build departed from it.** Three reasons, each of
+which would have been enough. The gateway already terminates WebSockets for its four hubs, so the
+tunnel adds no listener and no package — and [02 § Dependency register](02-technology-decisions.md)'s
+rule is that a package not in the register needs an ADR, which gRPC would have been. A bidirectional
+gRPC stream needs HTTP/2 end to end, and the corporate egress proxy a NAT'd on-prem cluster sits
+behind routinely downgrades to HTTP/1.1 — which is exactly the network this row exists for. And the
+frame protocol is carrier-agnostic (`ITunnelTransport` in `CyberCloud.Kubernetes.Contracts`), so a
+gRPC carrier is one more implementation if a network ever wants it, not a rewrite.
+
+**What landed, and where the authorization sentence above is enforced.** The tenant creates
+`CyberCloud.ContainerService/connectedClusters`, asks it for `listInstallCommand`, and runs the
+`helm upgrade --install` it answers with in their cluster. That command carries a one-time enrollment
+token; `charts/agent` runs `CyberCloud.Agent.Host`, which dials `GET /agent/v1/tunnel` on the gateway
+with it. The gateway hashes it and asks `IAgentTunnelGrain` — keyed by the cluster resource id, the
+same null-tenant key as the connection grain — whether that hash admits an agent to *that* cluster.
+That is the binding "to the cluster resource id at the gateway". The token is spent on the first
+admission and exchanged for a long-lived credential the agent keeps in a Secret in its own namespace;
+the platform holds hashes only, never a plaintext. The resource reaches `Succeeded` when the first
+heartbeat arrives, and on that pass the driver attaches an `AgentInitiated` connection under the
+resource's id, which is then a `clusterId` other resources can be placed in.
+
+⚠ **The tunnel carries `IKubeApiClient` calls, not HTTP, and that is the "scoped proxy".** The agent
+serves seven typed operations — ping, get, apply, delete, set-owner, discover, list — and refuses
+anything else by name, so a compromised platform, or a platform bug, cannot send a connected cluster a
+request a reconciler could not have expressed. What it costs is the watch: a tunnel frame has one
+answer and an informer is a stream, so **informers do not cross the tunnel yet** and
+`IClusterConnectionGrain.WatchAsync` fails to establish on a connected cluster. The connection grain's
+own tenancy check runs unchanged above the tunnel — an `AgentInitiated` descriptor gets a
+`TunnelKubeApiClient` from the same factory a kubeconfig would — and the tunnel grain admits
+`ExchangeAsync` from a null-tenant caller only, which in production is the connection grain after that
+check. Both halves are pinned by `AgentTunnelGrainTests`; the resource's flow by
+`ConnectedClusterConformance`; the protocol, both ends real over a pair of pipes, by
+`TunnelEndToEndTests`. **No suite crosses a real NAT** — `charts/agent/conformance.yaml § owed` says
+what a `kind` with no inbound route would add, and it is the "deliberately hostile BYO cluster" of
+§ Testing the fabric, which does not exist yet.
+
 **Connection health is a first-class resource property.** A cluster that has not answered a ping in
 90 seconds is `Degraded`; its resources' reconciles are suspended (not failed) and the portal says
 "cannot reach your cluster" instead of "provisioning failed". The distinction between *our* failure

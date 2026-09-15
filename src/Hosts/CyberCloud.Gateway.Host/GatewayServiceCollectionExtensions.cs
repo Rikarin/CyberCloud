@@ -5,6 +5,8 @@ using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
 using CyberCloud.Gateway.Host.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
+using CyberCloud.Kubernetes.Contracts.Tunnel;
+using CyberCloud.Kubernetes.Tunnel;
 using CyberCloud.ResourceManager;
 using CyberCloud.Tenancy;
 using CyberCloud.Tenancy.Directory;
@@ -100,6 +102,31 @@ static class GatewayServiceCollectionExtensions {
         // references through ForTenant; it activates nothing.
 
         // ── The nine stages, in the order docs/plan/10 § Request pipeline gives them. ──
+        // ── The agent tunnel (#36) — docs/plan/09 § Cluster connections, the AgentInitiated row ──
+        //
+        // The relay admits an agent through IAgentTunnelGrain and pumps its socket; the seam is what
+        // listInstallCommand mints through, served inline in this process like every other action.
+        // ⚠ BEFORE AddCyberCloudResourceManager above? No — after, and it still wins, because that
+        // method registers UnavailableAgentTunnels with TryAdd and this is an AddSingleton that
+        // REPLACES nothing: TryAdd left the refusing default in place, so this one is a second
+        // registration and the last one wins on resolve. Registered before would also work; what
+        // would NOT work is TryAdd here.
+        services.AddSingleton<AgentTunnelRelay>();
+        services.AddSingleton<IAgentTunnels, GrainAgentTunnels>();
+        services.AddOptions<AgentTunnelOptions>()
+            .BindConfiguration(AgentTunnelOptions.SectionName)
+            .PostConfigure(agent => {
+                    // The install command points at the gateway that minted it unless a
+                    // deployment says otherwise.
+                    if (string.IsNullOrWhiteSpace(agent.TunnelEndpoint)) {
+                        agent.TunnelEndpoint = new Uri(new(options.PublicBaseUri), TunnelCodec.TunnelPath)
+                            .ToString()
+                            .Replace("https://", "wss://", StringComparison.Ordinal)
+                            .Replace("http://", "ws://", StringComparison.Ordinal);
+                    }
+                }
+            );
+
         services.AddSingleton<IGatewayStage, CorrelationStage>();
         services.AddSingleton<IGatewayStage, AuthenticateStage>();
         services.AddSingleton<IGatewayStage, ResolveTenantStage>();

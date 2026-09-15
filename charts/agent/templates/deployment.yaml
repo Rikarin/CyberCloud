@@ -1,0 +1,120 @@
+{{/*
+The enrollment token, when the install command supplied one.
+
+⚠ RENDERED ONLY WHEN SET. An upgrade after enrollment leaves cluster.enrollmentToken empty — the agent
+holds its credential in the Secret rbac.yaml names — and rendering an empty token Secret would mount
+an empty file the agent then reads as "no credential, no token" on a pod restart, which is the one
+state it cannot recover from on its own.
+*/}}
+{{- if .Values.cluster.enrollmentToken }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "agent.enrollmentSecretName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  enrollment-token: {{ .Values.cluster.enrollmentToken | quote }}
+---
+{{- end }}
+{{/*
+The one agent pod.
+
+⚠ ONE REPLICA, AND A SECOND WOULD NOT BE A SPARE. The platform's tunnel grain holds one session per
+cluster and replaces it on every new connection, so two agents would take turns evicting each other
+and every request in flight on the evicted one would fail. Recreate rather than RollingUpdate for
+the same reason: the new pod must not connect until the old one is gone.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agent.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "agent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agent.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "agent.name" . }}
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 64000
+        runAsGroup: 64000
+        fsGroup: 64000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: {{ .Values.image.reference | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: ASPNETCORE_URLS
+              value: http://0.0.0.0:8080
+            - name: CyberCloud__Agent__TunnelEndpoint
+              value: {{ .Values.platform.tunnelEndpoint | quote }}
+            - name: CyberCloud__Agent__ClusterId
+              value: {{ .Values.cluster.id | quote }}
+            - name: CyberCloud__Agent__EnrollmentTokenFile
+              value: {{ include "agent.enrollmentTokenPath" . | quote }}
+            - name: CyberCloud__Agent__HeartbeatSeconds
+              value: {{ .Values.agent.heartbeatSeconds | quote }}
+            - name: CyberCloud__Agent__MaxReconnectSeconds
+              value: {{ .Values.agent.maxReconnectSeconds | quote }}
+            - name: Logging__LogLevel__Default
+              value: {{ .Values.agent.logLevel | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: {{ .Values.resources.cpu | quote }}
+              memory: {{ .Values.resources.memory | quote }}
+            limits:
+              cpu: {{ .Values.resources.cpu | quote }}
+              memory: {{ .Values.resources.memory | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.cluster.enrollmentToken }}
+            - name: enrollment
+              mountPath: /var/run/cybercloud
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.cluster.enrollmentToken }}
+        - name: enrollment
+          secret:
+            secretName: {{ include "agent.enrollmentSecretName" . }}
+            defaultMode: 0400
+        {{- end }}

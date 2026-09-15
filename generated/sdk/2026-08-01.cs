@@ -840,6 +840,126 @@ public sealed partial class ContainerRegistryCollection {
     public partial AsyncPageable<ContainerRegistryResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.ContainerService/connectedClusters.</summary>
+/// <remarks>A cluster you run yourself — on-prem, behind NAT, anywhere with outbound HTTPS — reached through an agent you install in it. Create it, run the install command it gives you, and place resources in it once it reports Succeeded.</remarks>
+public sealed partial class ConnectedKubernetesClusterData {
+
+    /// <summary>The region the cluster is billed in. ⚠ Where the cluster physically is is the tenant's business; this is the region whose gateway the agent dials and whose silos hold the connection.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The connected cluster's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The connected cluster's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>What the cluster runs — k3s, kubeadm, OpenShift, a hosted service. Informational: the agent works against any conformant API server and nothing here changes what it does.</summary>
+        /// <remarks>Defaults to "other" when left unset.</remarks>
+        [JsonPropertyName("distribution")]
+        public string? Distribution { get; set; }
+
+        /// <summary>How often the agent reports in. The install command passes it to the chart. ⚠ The platform calls a cluster Degraded after ninety seconds without one (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.</summary>
+        /// <remarks>Defaults to 15 when left unset.</remarks>
+        [JsonPropertyName("heartbeatSeconds")]
+        public long? HeartbeatSeconds { get; set; }
+    }
+}
+
+/// <summary>One Connected Kubernetes cluster, and the operations on it.</summary>
+public sealed partial class ConnectedKubernetesClusterResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ConnectedKubernetesClusterData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ConnectedKubernetesClusterResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ConnectedKubernetesClusterResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ConnectedKubernetesClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listInstallCommand returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListInstallCommandResult {
+
+        /// <summary>The chart reference the command installs — charts/agent in this tree.</summary>
+        [JsonPropertyName("chart")]
+        public required string Chart { get; set; }
+
+        /// <summary>The helm command to run against the cluster being connected, with the one-time token inline. Run it from a workstation with cluster-admin on that cluster; the platform needs nothing from the cluster's side.</summary>
+        [JsonPropertyName("command")]
+        public required string Command { get; set; }
+
+        /// <summary>When the token stops being accepted, RFC 3339. Twenty-four hours from the call; ask again for a fresh one.</summary>
+        [JsonPropertyName("expiresAt")]
+        public required DateTimeOffset ExpiresAt { get; set; }
+
+        /// <summary>The one-time enrollment token, separately, for an install that does not use helm. It admits exactly one agent connection and is spent by it.</summary>
+        [JsonPropertyName("token")]
+        public required string Token { get; set; }
+
+        /// <summary>The WebSocket URL the agent dials — wss://{gateway}/agent/v1/tunnel. The cluster needs outbound HTTPS to it and nothing inbound.</summary>
+        [JsonPropertyName("tunnelEndpoint")]
+        public required Uri TunnelEndpoint { get; set; }
+    }
+
+    /// <summary>ListInstallCommand. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListInstallCommandResult>> ListInstallCommandAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Connected Kubernetes clusters in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ConnectedKubernetesClusterCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.ContainerService/connectedClusters";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/connectedClusters/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/connectedClusters";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Connected Kubernetes cluster.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ConnectedKubernetesClusterResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ConnectedKubernetesClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Connected Kubernetes cluster by name.</summary>
+    public partial Task<Response<ConnectedKubernetesClusterResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Connected Kubernetes clusters in this group, paged.</summary>
+    public partial AsyncPageable<ConnectedKubernetesClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum ManagedKubernetesClusterVersion {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

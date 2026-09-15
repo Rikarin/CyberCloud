@@ -507,6 +507,8 @@
         <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj" />
         <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj" />
         <Project Path="src/Hosts/CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj" />
+        <!-- #36. The agent a tenant installs in a connected cluster — docs/plan/09 § Cluster connections. -->
+        <Project Path="src/Hosts/CyberCloud.Agent.Host/CyberCloud.Agent.Host.csproj" />
         <Project Path="src/Hosts/CyberCloud.Hosts.Tests/CyberCloud.Hosts.Tests.csproj" />
         <Project Path="src/Hosts/CyberCloud.Identity.Host.Tests/CyberCloud.Identity.Host.Tests.csproj" />
     </Folder>

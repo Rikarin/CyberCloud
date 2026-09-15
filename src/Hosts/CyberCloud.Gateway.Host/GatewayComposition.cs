@@ -1,3 +1,4 @@
+using CyberCloud.Gateway.Host.Agent;
 using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Pipeline;
@@ -227,9 +228,21 @@ public static class GatewayComposition {
                 if (result.Route.Kind == RouteKind.Hub) {
                     context.Items[GatewayCallerFeature.ItemKey] = result.Caller;
                     await next(context);
+                } else if (result.Route.Kind == RouteKind.AgentTunnel) {
+                    // No caller to park: the agent has no tenant token, and the endpoint admits it
+                    // by its own credential — see AgentTunnelEndpoint.
+                    await next(context);
                 }
             }
         );
+
+        // ── The agent tunnel — docs/plan/09 § Cluster connections, the AgentInitiated row (#36) ──
+        //
+        // ⚠ Mapped here for the reason the hubs are: an endpoint mapped outside this method would
+        // be reachable without stages 1 and 5. UseWebSockets is what puts IHttpWebSocketFeature on
+        // the request; the hubs get it from SignalR's own middleware, this endpoint does not.
+        app.UseWebSockets();
+        app.Map(GatewayRouter.AgentTunnelPath, AgentTunnelEndpoint.HandleAsync);
 
         app.MapHub<ResourcesHub>(GatewayRouter.HubPrefix + HubNames.Resources);
         app.MapHub<OperationsHub>(GatewayRouter.HubPrefix + HubNames.Operations);

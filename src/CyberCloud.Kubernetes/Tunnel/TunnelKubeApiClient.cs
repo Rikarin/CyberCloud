@@ -1,0 +1,174 @@
+using CyberCloud.Kubernetes.Apply;
+using CyberCloud.Kubernetes.Contracts.Tunnel;
+
+namespace CyberCloud.Kubernetes.Tunnel;
+
+/// <summary>
+///     <see cref="IKubeApiClient" /> over an agent tunnel: every call becomes one request frame down
+///     the tunnel and one response frame back, and the API server at the far end is the agent's.
+/// </summary>
+/// <remarks>
+///     <para>
+///         This is what <c>KubeApiClientFactory</c> hands <c>ClusterConnectionGrain</c> for a
+///         <see cref="ClusterConnectionKind.AgentInitiated" /> descriptor, in place of a
+///         <see cref="KubeApiClient" /> over a kubeconfig. The grain does not know the difference,
+///         which is the point: its tenancy check, its health window, its suspend-on-Degraded rule
+///         all run exactly as they do for a kubeconfig, above this seam.
+///     </para>
+///     <para>
+///         ⚠ <b>A tunnel failure and an API server failure are told apart by the error code, and the
+///         health tracker depends on it.</b> An answer the agent relayed — a <c>404</c>, a
+///         <c>409</c>, an admission refusal — comes back as the code the agent's own
+///         <see cref="KubeApiClient" /> produced, and <c>KubeFailures.MeansTheClusterAnswered</c>
+///         says the cluster is up. A request that never got an answer comes back as
+///         <see cref="ErrorCode.OperationTimeout" /> or <see cref="ErrorCode.ProvisioningFailed" />
+///         from the route, neither of which is on that list — so a dead tunnel drives the
+///         connection toward <c>Degraded</c> and a refused apply does not.
+///     </para>
+/// </remarks>
+/// <param name="clusterId">The cluster, for messages.</param>
+/// <param name="route">Where requests go.</param>
+public sealed class TunnelKubeApiClient(Guid clusterId, ITunnelRoute route) : IKubeApiClient {
+    /// <summary>The route this client sends down. Exposed so a test can prove which one the factory built.</summary>
+    public ITunnelRoute Route => route;
+
+    /// <inheritdoc />
+    public async Task<Result<string>> PingAsync(CancellationToken cancellationToken = default) {
+        var answer = await CallAsync<TunnelOperations.PingAnswer>(TunnelOperations.Ping, "{}", cancellationToken)
+            .ConfigureAwait(false);
+
+        return answer.TryGetError(out var error)
+            ? Result<string>.Failure(error)
+            : Result<string>.Success(answer.GetValueOrThrow().Version);
+    }
+
+    /// <inheritdoc />
+    public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(target);
+        return CallAsync<KubeObject>(TunnelOperations.Get, TunnelCodec.Serialize(target), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(command);
+        return CallAsync<ApplyOutcome>(TunnelOperations.Apply, KubeCommandJson.ToJson(command), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> DeleteAsync(ObjectRef target, CascadePolicy policy, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(target);
+
+        return CallAsync(
+            TunnelOperations.Delete,
+            TunnelCodec.Serialize(new TunnelOperations.DeleteArguments { Target = target, Policy = policy }),
+            cancellationToken
+        );
+    }
+
+    /// <inheritdoc />
+    public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(target);
+
+        return CallAsync(
+            TunnelOperations.SetOwner,
+            TunnelCodec.Serialize(new TunnelOperations.SetOwnerArguments { Target = target, Owner = owner }),
+            cancellationToken
+        );
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(
+        CancellationToken cancellationToken = default
+    ) {
+        var answer = await CallAsync<TunnelOperations.DiscoverAnswer>(TunnelOperations.Discover, "{}", cancellationToken)
+            .ConfigureAwait(false);
+
+        return answer.TryGetError(out var error)
+            ? Result<IReadOnlyList<GroupVersionKind>>.Failure(error)
+            : Result<IReadOnlyList<GroupVersionKind>>.Success(answer.GetValueOrThrow().Kinds);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<ListPage>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        string? resourceVersion = null,
+        string? continueToken = null,
+        int? limit = null,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(kind);
+
+        var answer = await CallAsync<TunnelOperations.ListAnswer>(
+            TunnelOperations.List,
+            TunnelCodec.Serialize(
+                new TunnelOperations.ListArguments {
+                    Kind = kind,
+                    Namespace = ns,
+                    LabelSelector = labelSelector,
+                    ResourceVersion = resourceVersion,
+                    ContinueToken = continueToken,
+                    Limit = limit
+                }
+            ),
+            cancellationToken
+        ).ConfigureAwait(false);
+
+        if (answer.TryGetError(out var error)) {
+            return Result<ListPage>.Failure(error);
+        }
+
+        var page = answer.GetValueOrThrow();
+        return Result<ListPage>.Success(new(page.Items, page.ResourceVersion, page.ContinueToken));
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>Refuses, by name, on the first move.</b> A watch is a stream and the tunnel's frames
+    ///     have one answer each. Yielding nothing would let <c>SharedInformer</c> believe a cluster
+    ///     is quiet; throwing here makes it record a failed establishment, which is the honest state.
+    ///     <c>charts/agent/conformance.yaml § owed</c>, <c>informers-do-not-cross-the-tunnel</c>.
+    /// </remarks>
+    public IAsyncEnumerable<KubeWatchEvent> WatchAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        string resourceVersion,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(kind);
+
+        throw new NotSupportedException(
+            $"Cluster {clusterId:D} is reached through an agent tunnel, and a watch on {kind} cannot "
+            + "cross it: the tunnel carries one response per request and a watch is a stream. "
+            + "charts/agent/conformance.yaml § owed, informers-do-not-cross-the-tunnel."
+        );
+    }
+
+    /// <inheritdoc />
+    public void Dispose() {
+        // The route is the grain's or the test's; nothing here owns a socket.
+    }
+
+    async Task<Result<T>> CallAsync<T>(string operation, string payload, CancellationToken cancellationToken)
+        where T : notnull {
+        var response = await route
+            .ExchangeAsync(TunnelFrame.Request(0, operation, payload), cancellationToken)
+            .ConfigureAwait(false);
+
+        return response.TryGetError(out var error)
+            ? Result<T>.Failure(error)
+            : TunnelOperations.Open<T>(response.GetValueOrThrow().Payload);
+    }
+
+    async Task<Result> CallAsync(string operation, string payload, CancellationToken cancellationToken) {
+        var response = await route
+            .ExchangeAsync(TunnelFrame.Request(0, operation, payload), cancellationToken)
+            .ConfigureAwait(false);
+
+        return response.TryGetError(out var error)
+            ? Result.Failure(error)
+            : TunnelOperations.Open(response.GetValueOrThrow().Payload);
+    }
+}

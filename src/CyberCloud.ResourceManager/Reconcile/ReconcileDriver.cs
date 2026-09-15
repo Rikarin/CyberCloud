@@ -1,4 +1,5 @@
 using CyberCloud.Core.Time;
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using Orleans.Multitenant;
 using System.Collections.Immutable;
@@ -88,7 +89,8 @@ public sealed class ReconcileDriver(
     ISecretResolver secrets,
     ISecretWriter secretWriter,
     NamespaceEnsurer namespaces,
-    IClock clock
+    IClock clock,
+    IAgentTunnels? agents = null
 ) {
     /// <summary>How long one pass may take. Clause 3 of docs/plan/08 § The reconcile loop.</summary>
     public static TimeSpan PassBudget { get; } = TimeSpan.FromSeconds(30);
@@ -310,7 +312,9 @@ public sealed class ReconcileDriver(
                 SecretWriter = secretWriter,
                 // ⚠ COLLECTED HERE AND ACTED ON BELOW, WHICH IS WHAT KEEPS THE ATTACH BEHIND THE
                 // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
-                ClusterConnections = produced
+                ClusterConnections = produced,
+                // The host's agent-tunnel seam, or the refusing default for a driver built without one.
+                Agents = agents ?? new UnavailableAgentTunnels()
             };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -539,7 +543,7 @@ public sealed class ReconcileDriver(
             clusters.Connect(reconcileInput.ClusterId),
             secrets,
             log
-        ) { SecretWriter = secretWriter };
+        ) { SecretWriter = secretWriter, Agents = agents ?? new UnavailableAgentTunnels() };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(PassBudget);
@@ -586,7 +590,9 @@ public sealed class ReconcileDriver(
             budget.CancelAfter(PassBudget);
 
             var observed = await reconciler.ObserveAsync(
-                new(id, input.ApiVersion, desired, NamespaceFor(id), connection),
+                new(id, input.ApiVersion, desired, NamespaceFor(id), connection) {
+                    Agents = agents ?? new UnavailableAgentTunnels()
+                },
                 budget.Token
             );
 

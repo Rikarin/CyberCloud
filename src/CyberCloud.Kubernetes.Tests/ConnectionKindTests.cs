@@ -1,41 +1,51 @@
 using CyberCloud.Kubernetes.Connections;
+using CyberCloud.Kubernetes.Tests.Infrastructure;
+using CyberCloud.Kubernetes.Tunnel;
 using Shouldly;
 
 namespace CyberCloud.Kubernetes.Tests;
 
 /// <summary>
-///     The connection kinds of docs/plan/09 § Cluster connections, including the one that is
-///     deliberately not built.
+///     The connection kinds of docs/plan/09 § Cluster connections, including the one that was
+///     deliberately not built until #36.
 /// </summary>
-public sealed class ConnectionKindTests {
+[Collection(KubeClusterSuite.Name)]
+public sealed class ConnectionKindTests(KubeTestCluster cluster) {
     static readonly KubeApiClientFactory Factory = new(new TestClock());
 
     [Fact]
-    public async Task AgentInitiatedIsRefusedWithAMessagePointingAtTheDocument() {
-        // ⚠ NOT BUILT, ON PURPOSE, AND SAID SO. docs/plan/09 § Cluster connections budgets
-        // AgentInitiated at 1.5 EM in M2 and warns that it "is not optional and is easy to defer
-        // into a crisis" — the brief's "connection string to kubernetes" implies inbound
-        // reachability, which for a tenant's on-prem cluster is usually false.
-        //
-        // A stub that pretended to connect would be exactly how you discover that at the first
-        // on-prem customer, so the refusal is explicit and names what is missing.
+    public async Task AgentInitiatedIsRoutedThroughTheTunnelGrainWhenThereIsASilo() {
+        // ⚠ BUILT, BY #36, AND THIS USED TO ASSERT THE REFUSAL. docs/plan/09 § Cluster connections
+        // budgets AgentInitiated at 1.5 EM in M2 and warns that it "is not optional and is easy to
+        // defer into a crisis"; the refusal this test pinned was the honest answer until the tunnel
+        // existed. What it pins now is that the factory hands the connection grain a client whose
+        // route is the tunnel grain for THIS cluster — the same IKubeApiClient surface, so the
+        // grain's tenancy check and health window run over it unchanged.
+        var withSilo = new KubeApiClientFactory(new TestClock(), grains: cluster.Grains);
+
+        var outcome = await withSilo.ConnectAsync(
+            Descriptor(ClusterConnectionKind.AgentInitiated),
+            TestContext.Current.CancellationToken
+        );
+
+        outcome.IsSuccess.ShouldBeTrue(outcome.Error?.Message);
+
+        var client = outcome.GetValueOrThrow().ShouldBeOfType<TunnelKubeApiClient>();
+        client.Route.ShouldBeOfType<GrainTunnelRoute>().ClusterId.ShouldBe(Descriptor(ClusterConnectionKind.AgentInitiated).ClusterId);
+    }
+
+    [Fact]
+    public async Task AgentInitiatedIsRefusedByNameInAProcessWithNoGrainFactory() {
+        // A stub that pretended to connect would still be exactly how the gap is discovered at the
+        // first on-prem customer, so a factory that cannot reach a silo says so.
         var outcome = await Factory.ConnectAsync(
             Descriptor(ClusterConnectionKind.AgentInitiated),
             TestContext.Current.CancellationToken
         );
 
         outcome.IsFailure.ShouldBeTrue();
-
-        var message = outcome.Error!.Message;
-        message.ShouldContain("not implemented");
-        message.ShouldContain("docs/plan/09");
-        message.ShouldContain("M2");
-        message.ShouldContain("NAT");
-        message.ShouldContain(
-            "cluster resource id",
-            customMessage: "the message must name the authorization work, which is the expensive "
-            + "half — a compromised agent must not be able to act as another tenant."
-        );
+        outcome.Error!.Message.ShouldContain("IAgentTunnelGrain");
+        outcome.Error.Message.ShouldContain("no grain factory");
     }
 
     [Fact]

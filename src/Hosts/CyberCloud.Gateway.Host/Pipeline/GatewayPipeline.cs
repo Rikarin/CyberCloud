@@ -117,7 +117,7 @@ sealed class GatewayPipeline {
 
         // A hub request that reached stage 8 without an outcome leaves the pipeline for SignalR's
         // own middleware; there is nothing to write and writing an empty 200 would break negotiate.
-        if (outcome is null && context.Route.Kind == RouteKind.Hub) {
+        if (outcome is null && context.Route.Kind is RouteKind.Hub or RouteKind.AgentTunnel) {
             return context;
         }
 

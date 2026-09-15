@@ -966,6 +966,102 @@
         }
       ]
     },
+    "CyberCloud.ContainerService/connectedClusters": {
+      "resourceType": "CyberCloud.ContainerService/connectedClusters",
+      "apiVersion": "2026-08-01",
+      "title": "Connected Kubernetes cluster",
+      "plural": "Connected Kubernetes clusters",
+      "summary": "A cluster you run yourself — on-prem, behind NAT, anywhere with outbound HTTPS — reached through an agent you install in it. Create it, run the install command it gives you, and place resources in it once it reports Succeeded.",
+      "overrideKey": "CyberCloud.ContainerService/connectedClusters@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/distribution",
+        "/properties/heartbeatSeconds",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the cluster is billed in. ⚠ Where the cluster physically is is the tenant's business; this is the region whose gateway the agent dials and whose silos hold the connection.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Connected Kubernetes cluster to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The connected cluster's own settings."
+        },
+        {
+          "jsonPointer": "/properties/distribution",
+          "name": "distribution",
+          "label": "Distribution",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "What the cluster runs — k3s, kubeadm, OpenShift, a hosted service. Informational: the agent works against any conformant API server and nothing here changes what it does.",
+          "minLength": 1,
+          "maxLength": 32,
+          "default": "other",
+          "placeholder": "k3s"
+        },
+        {
+          "jsonPointer": "/properties/heartbeatSeconds",
+          "name": "heartbeatSeconds",
+          "label": "Heartbeat seconds",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "general",
+          "hint": "How often the agent reports in. The install command passes it to the chart. ⚠ The platform calls a cluster Degraded after ninety seconds without one (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.",
+          "minimum": 5,
+          "maximum": 60,
+          "default": 15
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listInstallCommand",
+          "label": "List install command",
+          "permission": "listInstallCommand",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.ContainerService/managedClusters": {
       "resourceType": "CyberCloud.ContainerService/managedClusters",
       "apiVersion": "2026-08-01",

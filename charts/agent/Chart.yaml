@@ -1,0 +1,50 @@
+# The agent a tenant installs in a cluster this platform cannot reach — docs/plan/09 § Cluster
+# connections, the AgentInitiated row ("BYO clusters behind NAT with no inbound path — which is most
+# of them"), built by issue #36.
+#
+# ⚠ NOT UNDER charts/managed/, AND THAT IS THE FIRST CHART IN THE TREE TO BE OUTSIDE IT ON PURPOSE.
+# A managed chart is rendered BY the platform INTO a cluster, from a resource body, and Build.Charts
+# rewrites its values.yaml from the resource type's schema. This chart is the other direction: the
+# TENANT renders it, with helm, into a cluster the platform has never seen, and what it configures
+# (a tunnel endpoint, a token, a cluster id) is not any resource's properties. Binding it to
+# CyberCloud.ContainerService/connectedClusters through .Chart() would make the generator rewrite
+# these values from that type's schema and delete the token row. So the resource type names no chart,
+# this chart's values are hand-written and annotated like every other, and it carries the SOURCE and
+# conformance.yaml a managed chart owes even though the build does not demand them here.
+#
+# ⚠ WHAT IT INSTALLS IS THE PLATFORM'S HANDS IN THE TENANT'S CLUSTER. The Deployment runs
+# CyberCloud.Agent.Host, which dials the gateway once and then serves the platform's Kubernetes calls
+# against this cluster's API server under the ClusterRole in templates/rbac.yaml. Read that file's
+# header before widening or narrowing the role.
+apiVersion: v2
+name: agent
+description: The Cyber Cloud agent — dials the platform's gateway from inside a cluster you run yourself, so the platform can manage it without any inbound path.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The agent host's version, which is the platform's. ⚠ The IMAGE is pinned by digest at install time
+# through image.reference; this is a label, not a pin.
+appVersion: "0.1.0"
+
+kubeVersion: ">=1.28.0-0"
+
+keywords:
+  - cybercloud
+  - agent
+  - connected-cluster
+  - byo
+
+home: https://github.com/Rikarin/CyberCloud
+sources:
+  - https://github.com/Rikarin/CyberCloud
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ The resource type this chart serves, for a reader. Build.Charts requires these annotations only
+# under charts/managed/ and does NOT bind a chart outside it to a registry type — see the header.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.ContainerService/connectedClusters
+  cybercloud.io/api-version: "2026-08-01"

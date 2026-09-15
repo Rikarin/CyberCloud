@@ -3,6 +3,7 @@ using CyberCloud.Communication;
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes;
 using CyberCloud.Kubernetes.Connections;
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
@@ -172,6 +173,12 @@ public static class SiloComposition {
                         // establishes the caller tenant the null-tenant grain checks against.
                         services.AddSingleton<IClusterConnectionFactory, GrainClusterConnectionFactory>();
                         services.AddSingleton<IClusterConnectionRegistrar, GrainClusterConnectionRegistrar>();
+
+                        // The third seam, #36: what lets ConnectedClusterReconciler read whether its
+                        // agent has heartbeated. Same TryAdd rule, same ordering, same refusing
+                        // default (UnavailableAgentTunnels) if this line is lost.
+                        services.AddSingleton<IAgentTunnels, GrainAgentTunnels>();
+                        services.AddOptions<AgentTunnelOptions>().BindConfiguration(AgentTunnelOptions.SectionName);
                     }
                 )
                 .AddCyberCloudResourceManager();
@@ -211,10 +218,15 @@ public static class SiloComposition {
 
             services.TryAddSingleton<IClock, SystemClock>();
 
+            // ⚠ WITH THE GRAIN FACTORY, as AddCyberCloudKubernetes' own default passes it: this
+            // registration REPLACES that default, and a factory built without one refuses every
+            // AgentInitiated descriptor — so a silo given a kubeconfig root would otherwise lose
+            // every connected cluster (#36) in exchange for its local kubeconfig files.
             services.TryAddSingleton<IKubeApiClientFactory>(provider =>
                 new KubeApiClientFactory(
                     provider.GetRequiredService<IClock>(),
-                    provider.GetService<ILogger<KubeApiClientFactory>>()
+                    provider.GetService<ILogger<KubeApiClientFactory>>(),
+                    provider.GetRequiredService<IGrainFactory>()
                 ) { ResolveKubeconfig = LocalKubeconfigFiles.ResolverFor(root) }
             );
         };

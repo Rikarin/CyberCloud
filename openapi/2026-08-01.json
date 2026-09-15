@@ -1817,6 +1817,422 @@
       "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/registries",
       "x-cybercloud-action": "restore"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/connectedClusters": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_ContainerService_connectedClusters_List",
+        "summary": "List the CyberCloud.ContainerService/connectedClusters in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.connectedClusters.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerService/connectedClusters",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/connectedClusters/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_ContainerService_connectedClusters_Get",
+        "summary": "Read a CyberCloud.ContainerService/connectedClusters.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.connectedClusters"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_ContainerService_connectedClusters_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.ContainerService/connectedClusters.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.ContainerService.connectedClusters"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_ContainerService_connectedClusters_Update",
+        "summary": "Merge-patch a CyberCloud.ContainerService/connectedClusters.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.ContainerService.connectedClusters"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_ContainerService_connectedClusters_Delete",
+        "summary": "Delete a CyberCloud.ContainerService/connectedClusters.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerService/connectedClusters",
+      "x-cybercloud-display": {
+        "name": "Connected Kubernetes cluster",
+        "plural": "Connected Kubernetes clusters",
+        "alias": "byo",
+        "summary": "A cluster you run yourself — on-prem, behind NAT, anywhere with outbound HTTPS — reached through an agent you install in it. Create it, run the install command it gives you, and place resources in it once it reports Succeeded.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Clusters",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/connectedClusters/{resourceName}/listInstallCommand": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_ContainerService_connectedClusters_ListInstallCommand",
+        "summary": "listInstallCommand a CyberCloud.ContainerService/connectedClusters.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.connectedClusters.ListInstallCommandResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listInstallCommand",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerService/connectedClusters",
+      "x-cybercloud-action": "listInstallCommand"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters": {
       "parameters": [
         {
@@ -11999,6 +12415,121 @@
         "title": "CyberCloud.ContainerRegistry.registries.ListCredentialsResponse",
         "type": "object"
       },
+      "CyberCloud.ContainerService.connectedClusters": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.ContainerService/connectedClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the cluster is billed in. ⚠ Where the cluster physically is is the tenant's business; this is the region whose gateway the agent dials and whose silos hold the connection.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The connected cluster's own settings.",
+            "properties": {
+              "distribution": {
+                "default": "other",
+                "description": "What the cluster runs — k3s, kubeadm, OpenShift, a hosted service. Informational: the agent works against any conformant API server and nothing here changes what it does.",
+                "example": "k3s",
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "heartbeatSeconds": {
+                "default": 15,
+                "description": "How often the agent reports in. The install command passes it to the chart. ⚠ The platform calls a cluster Degraded after ninety seconds without one (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive.",
+                "maximum": 60,
+                "minimum": 5,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.ContainerService/connectedClusters",
+        "type": "object"
+      },
+      "CyberCloud.ContainerService.connectedClusters.List": {
+        "type": "object",
+        "title": "CyberCloud.ContainerService.connectedClusters.List",
+        "description": "One page of CyberCloud.ContainerService/connectedClusters. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.ContainerService.connectedClusters"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.ContainerService.connectedClusters.ListInstallCommandResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.ContainerService/connectedClusters/listInstallCommand returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "chart": {
+            "description": "The chart reference the command installs — charts/agent in this tree.",
+            "type": "string"
+          },
+          "command": {
+            "description": "The helm command to run against the cluster being connected, with the one-time token inline. Run it from a workstation with cluster-admin on that cluster; the platform needs nothing from the cluster's side.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "expiresAt": {
+            "description": "When the token stops being accepted, RFC 3339. Twenty-four hours from the call; ask again for a fresh one.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "token": {
+            "description": "The one-time enrollment token, separately, for an install that does not use helm. It admits exactly one agent connection and is spent by it.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "tunnelEndpoint": {
+            "description": "The WebSocket URL the agent dials — wss://{gateway}/agent/v1/tunnel. The cluster needs outbound HTTPS to it and nothing inbound.",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chart",
+          "command",
+          "expiresAt",
+          "token",
+          "tunnelEndpoint"
+        ],
+        "title": "CyberCloud.ContainerService.connectedClusters.ListInstallCommandResponse",
+        "type": "object"
+      },
       "CyberCloud.ContainerService.managedClusters": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.ContainerService/managedClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -16325,5 +16856,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 23
+  "x-cybercloud-resource-type-count": 24
 }

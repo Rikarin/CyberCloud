@@ -112,6 +112,15 @@
         <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
         <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
         <!--
+          #36 — the agent tunnel's gateway half. AgentTunnelRelay admits an agent through
+          IAgentTunnelGrain and relays its socket; it lives in CyberCloud.Kubernetes rather than here
+          because the gateway may not call IGrainFactory.GetGrain without ForTenant
+          (GatewayIsolationTests.NoGatewaySourceFileTakesAGrainReferenceWithoutForTenant) and a
+          tunnel grain is null-tenant. ⚠ No k8s.* type is bound from it: the relay speaks
+          TunnelFrame, and rule 3 stays true — the Architecture gate reads the AssemblyRef table.
+        -->
+        <ProjectReference Include="../../CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
+        <!--
           The token contract — docs/plan/11 § Protocol's claim set, audience and algorithm, in the
           form both hosts compile against. AccessTokenPolicy's own remarks: "a change to any of it
           is a compile-time event on both sides rather than a message somebody missed".

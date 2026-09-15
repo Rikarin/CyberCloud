@@ -26,14 +26,22 @@ public enum ClusterConnectionKind {
     ///     sends requests down that channel — for BYO clusters behind NAT with no inbound path.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>NOT IMPLEMENTED, deliberately, and the enum member exists anyway.</b> docs/plan/09
-    ///     § Cluster connections budgets this at 1.5 EM in M2 and warns that it "is not optional and
-    ///     is easy to defer into a crisis" — most on-prem clusters have no inbound path, so this is
-    ///     the kind the brief's "connection string to kubernetes" actually needs. The member is
-    ///     declared so that the enum is the document's closed set rather than the subset that happens
-    ///     to be built, and so that persisted state naming it round-trips instead of failing to
-    ///     deserialize when it lands. Attaching a connection of this kind fails with a message
-    ///     pointing at the document.
+    ///     <para>
+    ///         ⚠ <b>Over a WebSocket, not gRPC, and the summary above still says gRPC because it
+    ///         quotes the table.</b> docs/plan/09 § Cluster connections' correction says why the
+    ///         carrier changed; <c>WebSocketTunnelTransport</c> carries the short form.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This member spent its first weeks declared and unimplemented, on purpose</b> —
+    ///         so that the enum was the document's closed set and persisted state naming it would
+    ///         round-trip. Issue #36 built it: an agent (<c>charts/agent</c>, <c>CyberCloud.Agent.Host</c>)
+    ///         dials <c>/agent/v1/tunnel</c> on the gateway with a per-cluster credential, the
+    ///         gateway relays frames to <c>IAgentTunnelGrain</c>, and <c>KubeApiClientFactory</c>
+    ///         hands the connection grain a <c>TunnelKubeApiClient</c> in place of a kubeconfig. The
+    ///         descriptor's <see cref="ClusterConnectionDescriptor.CredentialRef" /> is unused for
+    ///         this kind: the credential is the agent's, hashed in the tunnel grain's state, and
+    ///         the platform holds no secret for the cluster at all.
+    ///     </para>
     /// </remarks>
     AgentInitiated = 3,
 

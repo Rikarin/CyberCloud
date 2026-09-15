@@ -119,10 +119,10 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Item | EM | Doc | Landed |
 |---|---|---|---|
 | Identity: OpenIddict, users/groups/apps/SPs, passkeys, TOTP, sign-up flow, sessions | 4.8 | [11](11-identity.md) | — [01](01-azure-parity-catalogue.md) gives this row a module and no resource type, so nothing in the type list is evidence either way |
-| Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 22. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
+| Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 24. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
 | Gateway: pipeline, auth, rate limits, region proxy, SignalR hubs, LRO endpoints | 4.2 | [10](10-gateway-and-api.md) | — no resource type. ⚠ #68 is an open **blocker**: the deployed gateway registers no `ICallerContextResolver` and 500s on every request, which is a different failure from "not written" and a worse one to read a green table over |
 | **Managed Kubernetes** (CAPI + Kamaji + KubeVirt) + node pools + credentials | 4.0 | [09](09-kubernetes-fabric.md), [13](13-compute-vm-containers.md) | ◐ `ContainerService/managedClusters` and `…/agentPools` both published; **the third noun in this row is the one that is owed.** The descriptor writes `kube-secret://{namespace}/{cluster}-kubeconfig#value` and nothing resolves that scheme, so the first call through an attached connection fails on the credential — `charts/managed/kubernetes/conformance.yaml` § `the-cluster-this-creates-is-not-connectable`. #24 is open behind it: no bootable node image for a Kubernetes minor worth offering |
-| Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 22 |
+| Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 24 |
 | Postgres · Valkey · NATS providers | 3.0 | [12](12-managed-data-services.md) | ✅ all three — `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`. ⚠ #69 (the seven-day recovery window came back to an `initdb`) closed 2026-09-15 by taking the claims into the platform's custody across the soft delete; the operator re-electing a primary over reattached claims is the half only a cluster with CloudNativePG installed can show — `charts/managed/postgres/conformance.yaml § owed` |
 | Container registry (Harbor) | 1.5 | [13](13-compute-vm-containers.md) | ✅ `ContainerRegistry/registries` |
 | Network: VPC, subnets, security groups, public IPs, DNS, L4 LB, WireGuard | 6.3 | [14](14-networking.md) | ◐ **3.3 shipped, 3.0 ⛔ blocked outside this repository (#23).** The split is below, and it is the row this reconciliation was asked for by name |
@@ -178,7 +178,7 @@ target scale.
 | Communication | Channels, templates, suppression, delivery receipts | 2.0 | #33 | |
 | **Mail** | Postfix/Dovecot/Rspamd, domains, mailboxes, deliverability, minimal webmail | 3.5 | #34 | ◐ `Mail/domains` published (#34, 2026-09-12) with the chart under `charts/managed/mail`. ⚠ The first noun of five; mailboxes, deliverability and the webmail are not resource types yet, so the type list confirms nothing about the other four |
 | Security | Malware scanning | 1.5 | #35 | |
-| Fabric | ⚠ Agent-initiated cluster connections (BYO behind NAT) | 1.5 | #36 | |
+| Fabric | ⚠ Agent-initiated cluster connections (BYO behind NAT) | 1.5 | #36 | ◐ `ContainerService/connectedClusters` published (#36, 2026-09-15): the agent (`charts/agent`, `CyberCloud.Agent.Host`), the gateway's tunnel endpoint, the tunnel grain and the connection grain's route through it, with the attach flow — create, `listInstallCommand`, first heartbeat → `Succeeded` — pinned end to end in-process. ⚠ **Two halves are not landed and the row stays ◐ for both:** informers do not cross the tunnel (a watch is a stream, a frame has one answer), and **no suite crosses a real NAT** — the M2 exit criterion this row exists for is unproved until the "deliberately hostile BYO cluster" of [09 § Testing the fabric](09-kubernetes-fabric.md) exists. `charts/agent/conformance.yaml § owed` holds both |
 | ReBAC | `ListObjects`, Leopard index | 2.2 | #37 | ◐ `ListObjects` landed 2026-09-15 as `IListObjectsGrain` — a scoped reverse walk the resource list now intersects with instead of a `Check` per member. ⚠ **The Leopard index is not built**; the walk reads the store's reverse index one hop at a time, and `IReverseRelationReader` is the seam it will fill. [07 § The Leopard index](07-rebac-authorization.md) says what it needs |
 | Billing | Rating, invoicing, PSP, tax service, cost views, budgets | 3.6 | #38 | |
 | Platform | Management groups, deployments (templates), shard pinning | 1.5 | #39 | |
@@ -217,7 +217,7 @@ median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 ⚠ **On "28 resource types": there are 22 today**, and four of them are this phase's `Data` row. The
 other eighteen are counted, phase by phase, in
 [§ What has landed](#what-has-landed--recounted-2026-09-15) — which is also where to see that two of the
-22 belong to phase 4 and one is phase 1's deliberately trivial sample.
+24 belong to phase 4 and one is phase 1's deliberately trivial sample.
 
 ---
 
@@ -320,15 +320,17 @@ pinned counts in this tree have gone stale more than once and recently — #81 w
 sitting in the machinery that gates citation honesty, and #78's review found a pinned `grep` that was
 counting its own paragraph. #45 said 22, and 22 was right until #34 published `Mail/domains` on 2026-09-12 without
 recounting here — the test this section describes went red and stayed red for three days, which is
-exactly the drift it exists to catch; 23 is right. That is worth *establishing* rather than
-assuming, and it is cheap to establish twice because two independent producers can be asked for it.
+exactly the drift it exists to catch; 23 was right until #36 published
+`ContainerService/connectedClusters` on 2026-09-15, and 24 is right. That is worth *establishing*
+rather than assuming, and it is cheap to establish twice because two independent producers can be
+asked for it.
 
 The document, read directly:
 
 ```console
 $ grep -o '"x-cybercloud-resource-type": "[^"]*"' openapi/2026-08-01.json \
     | sed 's/.*: "//;s/"$//' | sort -u | wc -l
-23
+24
 ```
 
 and the build, from the other end — `./build.sh Architecture`'s **Generated surfaces** gate regenerates
@@ -336,7 +338,7 @@ every surface from `src/CyberCloud.ResourceManager/Registry/` and compares bytes
 registry's rather than the document's:
 
 ```text
-✔ Generated surfaces  Enforced  23 resource type(s) over 2 OpenAPI document(s), …
+✔ Generated surfaces  Enforced  24 resource type(s) over 2 OpenAPI document(s), …
 ```
 
 ⚠ **What would make this stale, said plainly so it can be checked rather than trusted:** any provider's
@@ -351,8 +353,9 @@ stopped being. So the recount is no longer only prose: `RoadmapReconciliationTes
 `CyberCloud.ResourceManager.Contracts.Tests`, reads the published document and this page and fails when
 they disagree — on the set of types, on **each phase row's count against the types that row names**, on
 their sum, on the **Total**, and on the number printed under the command above. Publishing a
-twenty-third type now turns a test red with the roadmap named in the message, rather than leaving a plan
-that gets re-planned from memory.
+twenty-fifth type now turns a test red with the roadmap named in the message, rather than leaving a plan
+that gets re-planned from memory — as the twenty-fourth did, on 2026-09-15, until this table was
+recounted in the same commit.
 
 ⚠ **The per-row half of that was prose before it was an assertion, and only for a day.** As first
 published this paragraph claimed the per-phase counts were checked when the test compared their *sum*
@@ -363,7 +366,7 @@ only.** No EM figure anywhere in this document is machine-checked — not a phas
 the 71.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
 heading is still what says when a person last read the rest.
 
-All 23, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
+All 24, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
 published document and asserts the two sets are equal, so an abbreviated `…/subnets` would be a name no
 test could match and the check would quietly become a check of nothing.
@@ -372,9 +375,9 @@ test could match and the check would quietly become a check of nothing.
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles` | 15 |
-| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains` | 5 |
+| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `ContainerService/connectedClusters` | 6 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
-| **Total** | | **23** |
+| **Total** | | **24** |
 
 ⚠ **`agentPools` is itself an ahead-of-phase landing that this table cannot show twice.** Phase 2's row
 names node pools, so it is counted as phase 2 here — but [01](01-azure-parity-catalogue.md) verdicts
@@ -402,7 +405,7 @@ Where an issue tracks one of these rows it is named on the row; where none does,
 the finding.
 
 ⚠ **Tenancy is the case that looks like a gap and is not.** `CyberCloud.Platform/subscriptions` is an M1
-row in the catalogue and is not in the 22 — because tenants, subscriptions and resource groups are
+row in the catalogue and is not in the 24 — because tenants, subscriptions and resource groups are
 published as *scope paths* (`/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/…`) and
 not as typed resources under a provider (#63). Counting it as missing would have been the easy error in
 this recount, and it is written down here so the next recount does not make it.
@@ -414,7 +417,7 @@ this recount, and it is written down here so the next recount does not make it.
 | 0 — Prerequisites | ~~1.5~~ **1.1** | 1.1 | **0.4 ⊘** | Exact. Phase 0's heading *is* its row sum, so the dropped ADR-005 bump comes straight off |
 | 1 — Spine | 14 | 14.0 | — | Not reconciled here; only exit criterion 4 was checked |
 | 2 — M1 | 26 | 44.0 | **≥ 11.3 ✅** | 3.0 + 1.5 + 2.0 + 1.5 fully shipped rows, plus 3.3 of the `Network` row's split. Conservative: the partly-landed Managed Kubernetes (4.0) and Monitor (2.5) rows have no defensible split and are counted as zero. ⚠ Not conservative enough — the 3.0 row's ✅ means *published*, and #69 is open inside it; see below |
-| 3 — M2 | 28 | 38.4 | **4.4 ✅** | The whole `Data` row |
+| 3 — M2 | 28 | 38.4 | **4.4 ✅** | The whole `Data` row. ⚠ Not the `Fabric` row's 1.5, which is ◐: its type is published and its flow is pinned in-process, but the exit criterion it exists for — a cluster behind a real NAT — is unproved, so it is counted as zero the way the partly-landed rows in phase 2 are |
 | 4 — M3 | 20 | 16.9 priced, 4 items unpriced | **1.8 ✅, 0.6 ⊘** | MariaDB 0.8 + OpenSearch 1.0 shipped; Qdrant's 0.6 void |
 
 **Between 71.6 and 89.1 EM to M3** — where this section said **~90** until 2026-09-06. ⚠ **The range is

@@ -1,0 +1,167 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/agent/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the agent chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "agent": {
+      "additionalProperties": false,
+      "description": "How the agent behaves.",
+      "properties": {
+        "heartbeatSeconds": {
+          "default": 15,
+          "description": "How often the agent reports in. The platform calls a cluster Degraded after ninety seconds without a heartbeat, so a value above thirty leaves fewer than three chances for a packet to arrive. The install command sets it from the resource's own heartbeatSeconds.",
+          "maximum": 60,
+          "minimum": 5,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/agent/heartbeatSeconds"
+        },
+        "logLevel": {
+          "default": "Information",
+          "description": "The agent's minimum log level.",
+          "enum": [
+            "Debug",
+            "Information",
+            "Warning"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/agent/logLevel"
+        },
+        "maxReconnectSeconds": {
+          "default": 60,
+          "description": "The longest the agent waits between dial attempts. It starts at one second and doubles up to this.",
+          "maximum": 600,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/agent/maxReconnectSeconds"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/agent"
+    },
+    "cluster": {
+      "additionalProperties": false,
+      "description": "Which connected cluster this agent is.",
+      "properties": {
+        "credentialSecretName": {
+          "default": "cybercloud-agent-credential",
+          "description": "The Secret, in the release namespace, the agent stores its credential in. The Role in rbac.yaml grants the agent that Secret and no other.",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/cluster/credentialSecretName"
+        },
+        "enrollmentToken": {
+          "default": "",
+          "description": "The one-time token from listInstallCommand. It admits exactly one connection; the agent exchanges it for a credential it keeps in a Secret and never needs the token again. Leave it empty on a later upgrade — an agent that already holds its credential ignores it.",
+          "format": "password",
+          "type": "string",
+          "writeOnly": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/cluster/enrollmentToken",
+          "x-cybercloud-secret": true
+        },
+        "id": {
+          "default": "",
+          "description": "The connected-cluster resource's id, in 8-4-4-4-12 form, from the install command. The platform binds the tunnel to it at the gateway, so an agent presenting another cluster's id with this cluster's credential is refused.",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/cluster/id"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/cluster"
+    },
+    "image": {
+      "additionalProperties": false,
+      "description": "The agent image.",
+      "properties": {
+        "pullPolicy": {
+          "default": "IfNotPresent",
+          "description": "The kubelet's pull policy.",
+          "enum": [
+            "IfNotPresent",
+            "Always"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/image/pullPolicy"
+        },
+        "reference": {
+          "default": "ghcr.io/rikarin/cybercloud/cybercloud-agent-host:latest",
+          "description": "The image to run. ⚠ By digest in any real deployment — docs/plan/18 § Platform security, \"a pinned digest, never a tag\" — which is what the install command passes when the platform has one. The default is a tag so that a development install has something to pull.",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/image/reference"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/image"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Where the agent dials.",
+      "properties": {
+        "tunnelEndpoint": {
+          "default": "",
+          "description": "The WebSocket URL of the platform's gateway — wss://{gateway}/agent/v1/tunnel. The cluster needs outbound HTTPS to it and nothing inbound; the install command fills it in.",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tunnelEndpoint"
+        }
+      },
+      "required": [
+        "tunnelEndpoint"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "resources": {
+      "additionalProperties": false,
+      "description": "What the one agent pod requests and is limited to.",
+      "properties": {
+        "cpu": {
+          "default": "100m",
+          "description": "CPU, as a Kubernetes quantity. The agent relays frames and runs one API call per request; it is idle between reconciles.",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/resources/cpu"
+        },
+        "memory": {
+          "default": "128Mi",
+          "description": "Memory, as a Kubernetes quantity.",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/resources/memory"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/resources"
+    }
+  },
+  "title": "agent chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "agent",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.ContainerService/connectedClusters"
+}

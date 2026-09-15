@@ -1,6 +1,7 @@
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.WellKnown;
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 
 namespace CyberCloud.Gateway.Host.Routing;
 
@@ -96,7 +97,23 @@ enum RouteKind {
     ///     <c>/.well-known</c> through without a token and stage 3 leaves the caller empty, so this
     ///     is a route dispatch can serve from a constant and from nothing else.
     /// </remarks>
-    SecurityTxt
+    SecurityTxt,
+
+    /// <summary>
+    ///     A connected cluster's agent dialling in — <c>GET</c> on exactly <c>/agent/v1/tunnel</c>,
+    ///     upgraded to a WebSocket. docs/plan/09 § Cluster connections, the <c>AgentInitiated</c> row.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The third route with no <c>api-version</c> and no token, and the only one that
+    ///     authenticates by something other than a JWT.</b> Stage 2 lets <c>/agent/</c> through
+    ///     without a bearer token the identity host minted, because the agent holds a per-cluster
+    ///     credential the tunnel grain checks — <c>AgentTunnelRelay</c>, at the endpoint, after the
+    ///     pipeline. Stage 3 leaves the caller empty; stage 5 counts the upgrade against the
+    ///     per-IP bucket; stage 6 skips the api-version, as for <see cref="Hub" />; stage 8 leaves
+    ///     the request for the endpoint, as for a hub. What the pipeline does for it is stages 1
+    ///     and 5, and the correlation id on the refusal.
+    /// </remarks>
+    AgentTunnel
 }
 
 /// <summary>
@@ -173,6 +190,12 @@ static class GatewayRouter {
     /// <summary>The generated OpenAPI document.</summary>
     public const string OpenApiPath = "/openapi";
 
+    /// <summary>The agent tunnel — <see cref="TunnelCodec.TunnelPath" />, the one path under <c>/agent/</c>.</summary>
+    public const string AgentTunnelPath = TunnelCodec.TunnelPath;
+
+    /// <summary>The prefix stage 2 exempts from bearer authentication for the agent's sake.</summary>
+    public const string AgentPrefix = "/agent/";
+
     /// <summary>The RFC 9116 file. <see cref="SecurityTxt.Path" />, and the only <c>/.well-known</c> path routed.</summary>
     /// <remarks>
     ///     ⚠ Stage 2 exempts the whole <c>/.well-known</c> prefix from authentication — docs/plan/10
@@ -222,6 +245,15 @@ static class GatewayRouter {
 
         if (string.Equals(path, OpenApiPath, StringComparison.Ordinal)) {
             return Result<GatewayRoute>.Success(new(RouteKind.OpenApi, default, "", Guid.Empty, ""));
+        }
+
+        if (string.Equals(path, AgentTunnelPath, StringComparison.Ordinal)) {
+            // GET only: a WebSocket upgrade is a GET. Any other verb here is the canonical 404, and
+            // any other path under the exempted prefix falls through to the resource parser's 400 —
+            // the exemption is not routing, exactly as for /.well-known below.
+            return HttpMethods.IsGet(method)
+                ? Result<GatewayRoute>.Success(new(RouteKind.AgentTunnel, default, "", Guid.Empty, ""))
+                : Result<GatewayRoute>.Failure(GatewayErrors.NotFound(path));
         }
 
         if (string.Equals(path, SecurityTxtPath, StringComparison.Ordinal)) {

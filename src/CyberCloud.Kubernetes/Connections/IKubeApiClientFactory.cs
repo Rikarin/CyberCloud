@@ -1,5 +1,6 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Apply;
+using CyberCloud.Kubernetes.Tunnel;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using k8s;
@@ -26,24 +27,30 @@ public interface IKubeApiClientFactory {
 }
 
 /// <summary>
-///     The production factory: a kubeconfig for <see cref="ClusterConnectionKind.Kubeconfig" />, and
-///     an explicit refusal for the kinds docs/plan/09 defers.
+///     The production factory: a kubeconfig for <see cref="ClusterConnectionKind.Kubeconfig" />, the
+///     agent tunnel for <see cref="ClusterConnectionKind.AgentInitiated" />.
 /// </summary>
 /// <remarks>
-///     ⚠
-///     <b>
-///         <see cref="ClusterConnectionKind.AgentInitiated" /> throws rather than silently
-///         misbehaving
-///     </b>
-///     , and the message points at the document. docs/plan/09 § Cluster connections:
-///     <i>
-///         "AgentInitiated is not optional and is easy to defer into a crisis. The brief's 'connection
-///         string to kubernetes' implies inbound reachability, and for a tenant's on-prem cluster that is
-///         usually false. Budget it as part of the fabric (1.5 EM, M2) rather than discovering it at the
-///         first on-prem customer."
-///     </i>
-///     A stub that pretended to connect would be exactly the way to
-///     discover it at the first on-prem customer.
+///     <para>
+///         ⚠
+///         <b>
+///             <see cref="ClusterConnectionKind.AgentInitiated" /> used to be refused here with a
+///             message pointing at the document, and the refusal was the right thing until #36.
+///         </b>
+///         docs/plan/09 § Cluster connections:
+///         <i>
+///             "AgentInitiated is not optional and is easy to defer into a crisis. The brief's 'connection
+///             string to kubernetes' implies inbound reachability, and for a tenant's on-prem cluster that is
+///             usually false."
+///         </i>
+///         It now hands back a <see cref="TunnelKubeApiClient" /> over a
+///         <see cref="GrainTunnelRoute" /> — the same <see cref="IKubeApiClient" /> surface, with the
+///         socket in the gateway and the multiplexer in <c>AgentTunnelGrain</c>. The connection grain
+///         cannot tell the two kinds apart, and its tenancy check, health window and suspend rule run
+///         identically over both. ⚠ A stub that pretended to connect would still be exactly the way
+///         to discover the gap at the first on-prem customer, which is why the route is refused by
+///         name when this factory was built without a grain factory.
+///     </para>
 /// </remarks>
 /// <param name="clock">The clock a drift event's timestamp comes from.</param>
 /// <param name="logger">
@@ -52,7 +59,16 @@ public interface IKubeApiClientFactory {
 ///     that name the platform's service account, its namespaces or its hosts. See
 ///     <see cref="KubeRefusal" />.
 /// </param>
-public sealed class KubeApiClientFactory(IClock clock, ILogger<KubeApiClientFactory>? logger = null)
+/// <param name="grains">
+///     The grain factory an agent tunnel is routed through, or <see langword="null" /> in a process
+///     that has no silo — in which case an <see cref="ClusterConnectionKind.AgentInitiated" />
+///     descriptor is refused rather than half-served.
+/// </param>
+public sealed class KubeApiClientFactory(
+    IClock clock,
+    ILogger<KubeApiClientFactory>? logger = null,
+    IGrainFactory? grains = null
+)
     : IKubeApiClientFactory {
     /// <summary>
     ///     Resolves a credential reference to kubeconfig YAML.
@@ -75,16 +91,18 @@ public sealed class KubeApiClientFactory(IClock clock, ILogger<KubeApiClientFact
 
         switch (descriptor.Kind) {
             case ClusterConnectionKind.AgentInitiated:
-                return Result<IKubeApiClient>.Failure(
-                    ErrorCode.InternalError,
-                    "The AgentInitiated connection kind is not implemented. docs/plan/09 § Cluster "
-                    + "connections budgets it at 1.5 EM in M2: an agent in the tenant's cluster "
-                    + "dials out to the gateway over gRPC and the platform sends requests down that "
-                    + "channel, with the tunnel identity bound to the cluster resource id at the "
-                    + "gateway so that a compromised agent cannot act as another tenant. That "
-                    + "authorization work — not the tunnel — is the expensive half. Until it exists, "
-                    + "a cluster behind NAT with no inbound path cannot be connected; use "
-                    + "Kubeconfig or ServiceAccountToken against a reachable endpoint."
+                if (grains is null) {
+                    return Result<IKubeApiClient>.Failure(
+                        ErrorCode.InternalError,
+                        $"Cluster {descriptor.ClusterId:D} is agent-initiated and this process has no "
+                        + "grain factory to route the tunnel through. An agent tunnel is multiplexed by "
+                        + "IAgentTunnelGrain on a silo; a KubeApiClientFactory built without one can "
+                        + "serve kubeconfig connections only."
+                    );
+                }
+
+                return Result<IKubeApiClient>.Success(
+                    new TunnelKubeApiClient(descriptor.ClusterId, new GrainTunnelRoute(grains, descriptor.ClusterId))
                 );
 
             case ClusterConnectionKind.ServiceAccountToken:

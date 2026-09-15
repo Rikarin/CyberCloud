@@ -1,0 +1,93 @@
+{{/*
+What the agent may do in this cluster.
+
+⚠ THE CLUSTERROLE IS WIDE AND THE REASON IS WHAT THE AGENT IS FOR. The platform's whole product in a
+connected cluster is applying managed services into it — a PostgreSQL cluster in one namespace, a
+Kafka in another, each a custom resource of an operator the tenant installed from charts/bundle plus
+the built-ins around it. That is server-side apply, read, delete and owner-patch on ANY kind in ANY
+namespace, which is what the rules below grant. Narrower would be a role that has to be widened every
+time the catalogue gains a kind, silently, in a cluster the platform cannot see the RBAC of.
+
+⚠ WHAT BOUNDS IT IS THE WIRE, NOT THE ROLE. The agent serves seven operations — TunnelOperations in
+src/CyberCloud.Kubernetes — and refuses anything else by name, so what the platform can do through this
+role is exactly what a reconciler can express: an apply of a command whose seven labels the agent checks
+again, a read by reference, a delete, an owner patch, discovery, a paged list, a version ping. There is
+no exec, no port-forward, no secret READ by arbitrary name from the platform's side — a get is a get of
+one object the platform names, which it does for objects it applied. See conformance.yaml § owed,
+`the-role-is-cluster-wide`, for the narrowing this still owes.
+
+The Role below is the other half: the agent's OWN credential Secret, in its own namespace, and no
+other Secret — see InClusterAgent in src/CyberCloud.Kubernetes for what writes it.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "agent.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "agent.name" . }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - nonResourceURLs: ["/version", "/api", "/api/*", "/apis", "/apis/*"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "agent.name" . }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "agent.name" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agent.name" . }}
+    namespace: {{ .Release.Namespace }}
+---
+{{/*
+The credential Secret. `create` cannot be restricted by resourceNames in Kubernetes RBAC, so the
+first write is a create on the namespace's Secrets; every later one is an update on the one name.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "agent.name" . }}-credential
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.cluster.credentialSecretName | quote }}]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "agent.name" . }}-credential
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "agent.name" . }}-credential
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agent.name" . }}
+    namespace: {{ .Release.Namespace }}

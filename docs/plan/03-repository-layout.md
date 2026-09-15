@@ -206,8 +206,16 @@ src/Hosts/
 ├── CyberCloud.Ingest.Host/        # OTLP + metrics ingest — high volume, separate scaling (16)
 ├── CyberCloud.Worker.Host/        # reconcile workers, informer bridges, billing rollups
 ├── CyberCloud.Admin.Host/         # platform-admin UI backend (06 § Platform admin)
+├── CyberCloud.Agent.Host/         # ⚠ runs in the TENANT's cluster, not ours — the connected-cluster agent (09, #36)
 └── CyberCloud.AppHost/            # Aspire — local development only (ADR-014)
 ```
+
+⚠ **`CyberCloud.Agent.Host` is the one host that is not part of the platform's own deployment**, and
+it was not in this tree until #36 built it. It is the image `charts/agent` runs inside a tenant's
+cluster: no Orleans client, no silo, no reference to anything that could reach the control plane —
+one outbound WebSocket to the gateway, authenticated by a per-cluster credential the platform can
+revoke. `Build.Images` ships it with the others because it is under `src/Hosts`, which is what makes
+the install command able to name its digest. See [09 § Cluster connections](09-kubernetes-fabric.md).
 
 ⚠ **Why the silo and the gateway are separate processes.** Survival co-hosts them (`CreateServer` for
 the gateway) and that is right for a game where the gateway *is* the load. Here the gateway is
@@ -236,8 +244,19 @@ charts/
 │   │   ├── backup.yaml           # ⚠ the backup policy binding — 12 § The pattern, once, piece 7
 │   │   └── conformance.yaml      # what the conformance suite asserts for this type
 │   ├── valkey/ … clickhouse/ … kafka/ … harbor/ … seaweedfs/ …
+├── agent/                  # ⚠ the TENANT installs this, into a cluster we cannot reach — the connected-cluster agent (09, #36)
 └── tenant-cluster/         # Cluster API + Kamaji + KubeVirt templates for an in-house cluster (09)
 ```
+
+⚠ **`charts/agent` is the first chart outside `managed/` on purpose, and it is the other direction.**
+Every `managed/` chart is rendered *by* the platform *into* a cluster, from a resource body, and
+`Build.Charts` rewrites its `values.yaml` from the resource type's schema. The agent chart is rendered
+*by the tenant*, with `helm`, into a cluster the platform has never seen, and what it configures — a
+tunnel endpoint, a one-time token, a cluster id — is not any resource's properties. So
+`CyberCloud.ContainerService/connectedClusters` names no chart, this chart's `values.yaml` is
+hand-written and annotated like every other, and it carries the `SOURCE` and `conformance.yaml` a
+managed chart owes even though `Build.Charts` requires neither outside `managed/`. Its
+`conformance.yaml § owed` is where "what needs a real NAT'd cluster" is recorded.
 
 The annotated `values.yaml` is the **single description of a managed service's configuration surface**.
 `Build.Charts` generates `values.schema.json` from it; `Build.Generate` turns that into the resource

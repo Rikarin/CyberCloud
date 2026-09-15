@@ -14,6 +14,9 @@ import type {
   ContainerRegistryRegistriesData,
   ContainerRegistryRegistriesListCredentialsResult,
   ContainerRegistryRegistriesResource,
+  ContainerServiceConnectedClustersData,
+  ContainerServiceConnectedClustersListInstallCommandResult,
+  ContainerServiceConnectedClustersResource,
   ContainerServiceManagedClustersAgentPoolsData,
   ContainerServiceManagedClustersAgentPoolsResource,
   ContainerServiceManagedClustersData,
@@ -231,6 +234,36 @@ export class CyberCloudApi {
   /** restore — permission 'write'. ⚠ Long-running. */
   restoreContainerRegistry(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<unknown>> {
     return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerRegistry/registries/${CyberCloudApi.segment(resourceName)}/restore` });
+  }
+
+  /** Reads one Connected Kubernetes cluster. */
+  getConnectedKubernetesCluster(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ContainerServiceConnectedClustersResource>> {
+    return this.transport.send<ContainerServiceConnectedClustersResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerService/connectedClusters/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Connected Kubernetes cluster. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateConnectedKubernetesCluster(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: ContainerServiceConnectedClustersData): Promise<ApiResponse<ContainerServiceConnectedClustersResource>> {
+    return this.transport.send<ContainerServiceConnectedClustersResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerService/connectedClusters/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Connected Kubernetes cluster. A merge patch: what is not set is not changed. */
+  updateConnectedKubernetesCluster(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<ContainerServiceConnectedClustersData>): Promise<ApiResponse<ContainerServiceConnectedClustersResource>> {
+    return this.transport.send<ContainerServiceConnectedClustersResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerService/connectedClusters/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Connected Kubernetes cluster. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteConnectedKubernetesCluster(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerService/connectedClusters/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Connected Kubernetes clusters in a resource group. ⚠ A short page never means "that is all there is". */
+  listConnectedKubernetesCluster(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<ContainerServiceConnectedClustersResource>>> {
+    return this.transport.send<Page<ContainerServiceConnectedClustersResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerService/connectedClusters`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** listInstallCommand — permission 'listInstallCommand'. ⚠ The response carries secret material. */
+  listInstallCommandConnectedKubernetesCluster(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ContainerServiceConnectedClustersListInstallCommandResult>> {
+    return this.transport.send<ContainerServiceConnectedClustersListInstallCommandResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.ContainerService/connectedClusters/${CyberCloudApi.segment(resourceName)}/listInstallCommand` });
   }
 
   /** Reads one Managed Kubernetes cluster. */

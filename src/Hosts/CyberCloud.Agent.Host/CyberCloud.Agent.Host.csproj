@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/09 § Cluster connections, the AgentInitiated row, and issue #36 — the agent a tenant
+      installs in a cluster the platform cannot reach. charts/agent runs this image.
+
+      ⚠ NOT AN ORLEANS ANYTHING. Every other host in this directory is a silo or a cluster client;
+      this one runs in a tenant's cluster, on the far side of a NAT, and must hold no credential to
+      the platform's own infrastructure. Its whole contact with the platform is one outbound
+      WebSocket to the gateway, authenticated by a per-cluster credential the platform can revoke.
+      So: no Microsoft.Orleans.*, no Orleans.Multitenant, no ServiceDefaults' Orleans builders — a
+      plain WebApplication for /alive and /health, and one BackgroundService.
+
+      ⚠ THE REFERENCE SET IS THE SECURITY ARGUMENT, in the direction docs/plan/03 § Assembly graph
+      rules cares about: this host binds nothing from k8s.* (rule 3 — the Architecture gate reads
+      the AssemblyRef table), and gets its in-cluster API client and its credential Secret store
+      built for it by CyberCloud.Kubernetes.Apply.InClusterAgent. What the agent CAN do to the
+      cluster is the seven operations TunnelOperations names, under the ClusterRole charts/agent
+      grants, and nothing else has a spelling on the wire.
+
+      ⚠ Build.Images ships everything under src/Hosts that is not a test or the AppHost, so this
+      project becomes the cybercloud-agent-host image with no further wiring — which is the image
+      the install command names in image.reference.
+    -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <IsPublishable>true</IsPublishable>
+        <!--
+          CA1515 — the composition is public so CyberCloud.Hosts.Tests can build the host and read
+          the options it bound, the way it does for the silo and the gateway.
+        -->
+        <NoWarn>$(NoWarn);CA1515</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- WebApplication, for the two health endpoints the chart's probes hit. -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          TunnelAgent, WebSocketTunnelTransport, and InClusterAgent — the scoped proxy, the carrier,
+          and the one place k8s.* is named on this host's behalf.
+        -->
+        <ProjectReference Include="../../CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
+        <!-- AddServiceDefaults and MapDefaultEndpoints: OpenTelemetry and /alive, /health. -->
+        <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <ProjectReference Include="../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

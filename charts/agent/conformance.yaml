@@ -1,0 +1,248 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8, written for a chart that is not a
+# managed service and owes the piece anyway (the argument charts/managed/cloud-shell made).
+#
+# What the suites assert about CyberCloud.ContainerService/connectedClusters and the agent this chart
+# installs. This file is data: nothing in Build.Charts reads it outside charts/managed/, and it is
+# here so that what a real NAT'd cluster would prove is written down next to what the tree proves
+# without one.
+#
+# ⚠ FOUR SUITES, IN FOUR PLACES, AND EACH SAYS WHAT IT DOES NOT PROVE:
+#   * CyberCloud.Kubernetes.Tests/Tunnel/TunnelEndToEndTests — the protocol, both ends real, over a
+#     pair of pipes. No network, no grain, no gateway.
+#   * CyberCloud.Kubernetes.Tests/Tunnel/AgentTunnelGrainTests — the grain path: a tenant's reconciler
+#     through ClusterConnectionGrain, the production factory, the tunnel grain, the real relay, a real
+#     agent, into a scripted API server. The test process plays the gateway. No HTTP, no k3s.
+#   * CyberCloud.Hosts.Tests/AgentServiceTests — the agent host, started, over a real WebSocket to a
+#     Kestrel endpoint the test hosts: dial, enrollment, credential storage, redial with the
+#     credential, a refused agent that keeps dialling. No gateway pipeline, no grain, no NAT.
+#   * CyberCloud.Providers.ContainerService.Conformance/ConnectedClusterConformance — the resource:
+#     Creating until the first heartbeat, Succeeded after, the install command, the revocation.
+#     The heartbeat is played by the test; nothing dials.
+
+resourceType: CyberCloud.ContainerService/connectedClusters
+apiVersion: "2026-08-01"
+chart: agent
+
+# Objects this chart renders when the TENANT installs it. ⚠ NOT objects a reconciler applies — the
+# resource applies nothing anywhere, and ConnectedClusterCase.Objects is empty on purpose. Listed so
+# that a reader knows what a `helm install` puts in their cluster: one Deployment, its identity, and
+# the two roles rbac.yaml's header argues.
+renders:
+  - group: ""
+    version: v1
+    kind: ServiceAccount
+    count: 1
+  - group: rbac.authorization.k8s.io
+    version: v1
+    kind: ClusterRole
+    count: 1
+  - group: rbac.authorization.k8s.io
+    version: v1
+    kind: ClusterRoleBinding
+    count: 1
+  - group: rbac.authorization.k8s.io
+    version: v1
+    kind: Role
+    count: 1
+  - group: rbac.authorization.k8s.io
+    version: v1
+    kind: RoleBinding
+    count: 1
+  - group: apps
+    version: v1
+    kind: Deployment
+    count: 1
+  # Only while cluster.enrollmentToken is set — the first install, never an upgrade after enrollment.
+  - group: ""
+    version: v1
+    kind: Secret
+    count: 1
+
+# ⚠ NO cybercloud.io/* LABELS, AND THE ABSENCE IS DELIBERATE — see templates/_helpers.tpl. ADR-013's
+# seven labels mark objects the platform applied; these are objects the tenant applied, and stamping
+# managed-by=cybercloud on the agent's own Deployment would make it look like something the platform
+# owes a reconcile for. The one cybercloud.io label here is the cluster id, for a human with kubectl.
+labels:
+  required: []
+  values:
+    cybercloud.io/connected-cluster: "{cluster.id}"
+
+# Behaviour a tenant is entitled to. Each is a statement a suite fails on, and each names the suite.
+assertions:
+  - id: the-resource-is-creating-until-the-first-heartbeat-and-succeeded-after
+    says: >
+      A connected cluster created through the manager stays Creating — its operation open, every pass
+      InProgress — until the tunnel grain has recorded a heartbeat, and reaches Succeeded on the next
+      pass after one. ConnectedClusterConformance.ACreatedClusterIsCreatingUntilItsAgentHeartbeatsAndSucceededAfter.
+  - id: the-converging-pass-registers-an-agent-initiated-connection
+    says: >
+      On the pass that converges, ReconcileDriver attaches ClusterConnectionKind.AgentInitiated under
+      the resource's own id and the resource's own tenant — stamped by the driver, never taken from
+      the provider — with no credential reference, because the platform holds none for this kind.
+      Same suite, same assertion; ConnectedClusterReconcilerTests pins the descriptor's shape.
+  - id: the-install-command-carries-a-one-time-token-and-re-issuing-voids-it
+    says: >
+      listInstallCommand answers with a helm command carrying a fresh token the tunnel would admit;
+      asking again mints a different token and the first one would no longer be admitted.
+      ConnectedClusterConformance.ASecondInstallCommandVoidsTheFirstToken, and for the real grain
+      AgentTunnelGrainTests.TheEnrollmentTokenAdmitsExactlyOneConnectionAndTheCredentialAdmitsTheNext.
+  - id: the-token-is-spent-on-first-use-and-exchanged-for-a-credential
+    says: >
+      The first connection with the enrollment token is admitted, hands the agent a long-lived
+      credential in the welcome, and spends the token; the token is refused thereafter, the credential
+      is admitted, and a forged credential of the right shape gets the identical refusal.
+      AgentTunnelGrainTests, same test.
+  - id: a-reconciler-in-another-tenant-cannot-reach-the-cluster
+    says: >
+      A tenant grain that addresses the tunnel grain directly is refused with the canonical 404 —
+      the owner too, on that route — and a reconciler in another tenant is refused by the connection
+      grain before the tunnel is reached, with nothing arriving at the agent.
+      AgentTunnelGrainTests.ATenantGrainCannotExchangeDownAnotherTenantsTunnel and
+      AnotherTenantsReconcilerIsRefusedByTheConnectionGrainBeforeTheTunnelIsReached. ⚠ The first
+      was sabotage-verified: with the null-tenant check removed from AgentTunnelGrain.ExchangeAsync
+      the other tenant's exchange came back "ok" and the test failed.
+  - id: an-apply-crosses-the-tunnel-with-its-labels-and-its-outcome-comes-back
+    says: >
+      A command built by KubeCommandBuilder arrives at the agent's IKubeApiClient with the same
+      target, body and seven labels, and the ApplyOutcome — result, resourceVersion, drift — comes
+      back with its fields intact. TunnelEndToEndTests.AnApplyCrossesTheTunnelWithItsLabelsAndComesBackWithItsOutcome,
+      and through the grain AgentTunnelGrainTests.AnApplyFromTheOwningTenantTravelsThroughTheConnectionGrainAndTheTunnelToTheAgentsCluster.
+  - id: the-agent-refuses-an-unlabelled-command
+    says: >
+      A command whose seven mandatory labels were stripped in transit is refused by the agent with
+      InvalidRequestBody naming the label, and never reaches the API server.
+      TunnelEndToEndTests.TheAgentRefusesACommandThatLostItsMandatoryLabelsInTransit.
+  - id: an-api-server-refusal-keeps-its-code-and-a-dead-tunnel-does-not-look-like-one
+    says: >
+      A failure the API server gave — a 404, a 409, an admission refusal — crosses the tunnel with
+      its ErrorCode intact, so KubeFailures.MeansTheClusterAnswered reads it as the cluster being up;
+      a request the agent never answers fails with OperationTimeout, and a killed agent fails every
+      pending request with ProvisioningFailed, neither of which is on that list — so the connection
+      grain goes Degraded and applies come back Suspended rather than failed.
+      TunnelEndToEndTests (three tests) and AgentTunnelGrainTests.WithNoAgentConnectedTheConnectionGrainFailsTheCallAndGoesDegradedAfterTheWindow.
+  - id: requests-interleave
+    says: >
+      Two applies held open at the agent do not hold a ping: the correlation id, not arrival order,
+      pairs responses with requests. TunnelEndToEndTests.ASlowRequestDoesNotHoldAFastOne.
+  - id: the-agent-heartbeats-unasked-and-adopts-the-welcomed-interval
+    says: >
+      A heartbeat carrying the agent's version and the API server's version arrives without any
+      request having been sent, and the interval the welcome names is adopted.
+      TunnelEndToEndTests.TheAgentHeartbeatsWithoutBeingAskedAndAdoptsTheWelcomedInterval.
+  - id: delete-revokes-and-the-credential-stops-working
+    says: >
+      Deleting the resource revokes the tunnel: the agent's session is closed with a goodbye that
+      names the revocation, its credential is refused on the next dial, and a second revoke is a
+      no-op success. ConnectedClusterConformance.DeletingRevokesTheAgent and
+      AgentTunnelGrainTests.RevokingDropsTheSessionAndTheCredentialStopsWorking.
+  - id: the-gateway-admits-agents-behind-the-pipeline-and-without-a-jwt
+    says: >
+      GET /agent/v1/tunnel runs stages 1 and 5 of the pipeline and leaves for the endpoint with no
+      identity-host token and no api-version; any other verb on the path is the canonical 404 and
+      any other path under /agent/ is the resource parser's 400. AgentTunnelRoutingTests.
+  - id: the-agent-host-dials-enrolls-answers-and-redials-over-a-real-websocket
+    says: >
+      Started as production starts it, the agent host dials a Kestrel endpoint with the enrollment
+      token from its mounted file, receives the welcome, stores the credential before anything else,
+      answers a ping down the socket, heartbeats unasked, and — when the platform closes the socket
+      — redials presenting the stored credential rather than the token. A refused agent keeps
+      dialling at its backoff rather than exiting. AgentServiceTests, over WebSocketTunnelTransport
+      at both ends.
+  - id: the-three-hosts-compose
+    says: >
+      The silo registers GrainAgentTunnels and AgentTunnelGrain and hands an AgentInitiated
+      descriptor a TunnelKubeApiClient; the gateway registers AgentTunnelRelay and derives the
+      install command's endpoint from its own public base URI; the agent host composes without a
+      pod and binds the chart's environment. AgentTunnelCompositionTests.
+
+# Meters the type must emit. ⚠ Clusters and Resources only: the platform runs nothing in a connected
+# cluster and reserves nothing for it. The agent pod is the tenant's own capacity.
+meters:
+  - clusters
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered. The first four are the ones that need a real NAT'd
+# cluster — a kind or k3s with no inbound route and the platform's gateway on the other side of it —
+# which no suite in this tree has; the rest are decisions made in this branch that a later one may
+# revisit.
+owed:
+  - id: no-suite-crosses-a-real-nat
+    says: >
+      ⚠ THE CLAIM THIS CHART EXISTS TO MAKE — "a BYO on-prem cluster in production behind NAT",
+      docs/plan/24's M2 exit criterion — IS NOT PROVED BY ANY SUITE HERE. Every test substitutes the
+      network: pipes for the WebSocket, this process for the gateway, a played heartbeat for a pod's.
+      What would prove it: a k3s (Testcontainers) with no port published, running this chart against
+      a gateway the test process hosts, asserting the resource reaches Succeeded and an apply placed
+      in it lands. docs/plan/09 § Testing the fabric's "deliberately hostile BYO cluster" is the
+      right home; it does not exist yet (Build.E2E is a stub).
+  - id: the-gateway-endpoint-is-not-driven-over-http
+    says: >
+      AgentTunnelEndpoint — the 426, the 401s, the upgrade, the hand-off to AgentSession.RunAsync —
+      is read, not driven. AgentServiceTests proves the WebSocket carrier at both ends and the agent
+      host's dial, enrollment, credential storage, request answering and redial against a Kestrel
+      endpoint the TEST hosts; what that endpoint substitutes is the gateway's pipeline and the
+      tunnel grain. A test that starts GatewayComposition with an in-memory silo and dials the real
+      endpoint is the shape, and it is the one that would also prove the relay's outbox and the
+      grain's DeliverAsync over a real socket rather than over pipes.
+  - id: the-credential-secret-store-is-untested-against-an-api-server
+    says: >
+      InClusterAgent's Secret store — read, create-on-404, replace — is k8s.* code that a k3s
+      container would exercise and the Docker-free suites cannot. ServerSideApplyTests is where a
+      k3s-backed assertion of it belongs. ⚠ Its RBAC is in rbac.yaml and has not been applied to a
+      real cluster either: `create` on secrets plus get/update/patch on one resourceName is the
+      reading of the RBAC rules, and a misreading shows up as a 403 in the agent's log on the first
+      enrollment.
+  - id: informers-do-not-cross-the-tunnel
+    says: >
+      TunnelKubeApiClient.WatchAsync refuses by name. The tunnel carries one response per request
+      and a watch is a stream, so docs/plan/09 § Observing's informers cannot be established on a
+      connected cluster: IClusterConnectionGrain.WatchAsync fails to establish, and drift detection
+      on this cluster falls back to what a reconcile pass reads. Closing it is a streaming frame kind
+      — a request whose responses carry `more: true` until the watch ends — on the in-process
+      protocol, plus an Orleans IAsyncEnumerable route from the tunnel grain to the connection
+      grain. Neither half is built.
+  - id: the-role-is-cluster-wide
+    says: >
+      rbac.yaml grants the agent every verb on every resource in every namespace, and its header
+      says why: the platform applies whatever the catalogue renders, into namespaces it derives. What
+      bounds the platform is the seven operations on the wire, not the role, and a tenant reading
+      the ClusterRole sees cluster-admin. A narrower role would be one that lists the catalogue's
+      kinds and is widened on every new chart — which needs the bundle's `serves:` list to be
+      rendered into it, and a way for an old agent to learn a new kind. Not built.
+  - id: an-hour-to-install
+    says: >
+      docs/plan/08 § The reconcile loop caps an operation at sixty minutes, and a create whose agent
+      has not heartbeated by then is Failed. The reconciler's InProgress messages say what to do, and
+      a second PUT is idempotent and restarts the clock — but a tenant who reads "Failed" on a cluster
+      they simply had not got round to installing yet has been told the wrong thing. A longer or
+      type-specific ceiling is a manager change, not a provider one.
+  - id: no-status-fields-on-the-resource
+    says: >
+      The agent's version, the API server's version and the last heartbeat are in the resource's
+      observed state (ConnectedClusterReconciler.ObserveAsync) and NOT in its body: SchemaProperty
+      .ReadOnly refuses a write and nothing projects a value into a read, so three read-only rows
+      were drafted and dropped. A portal row wanting them reads the observed state. The general fix
+      — the manager projecting observed fields into read-only properties — is a manager change.
+  - id: a-grain-move-strands-the-session-for-one-timeout
+    says: >
+      The tunnel grain holds the session in memory. If the activation moves silos, the gateway's
+      next DeliverAsync lands on a fresh activation with no session and is dropped; the connection
+      grain's next request fails at the exchange, health goes Degraded, and the agent redials only
+      when its socket closes — which the gateway does after the relay's pump ends. Between the move
+      and the redial is one TunnelRequestTimeout of unreachability. Pinning the grain's placement to
+      the silo that holds the socket, or having the gateway notice the session id changed, would
+      close it.
+  - id: revocation-does-not-uninstall
+    says: >
+      Deleting the resource revokes the credential and closes the session; the agent pod keeps
+      running in the tenant's cluster and redials every MaxReconnectSeconds, getting 401 each time,
+      until the tenant runs `helm uninstall`. The reconciler's log says so. The platform cannot
+      reach into the cluster to remove it — that is the whole premise of the kind.
+  - id: the-transport-named-in-the-plan-was-grpc
+    says: >
+      docs/plan/09 § Cluster connections' table says the agent dials "over gRPC". This branch
+      dials over a WebSocket, and the section carries the correction with the three reasons. If a
+      gRPC carrier is ever wanted — HTTP/2 end to end being available on the network — it is one
+      more ITunnelTransport; nothing above the transport seam would change.

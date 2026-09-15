@@ -38,7 +38,13 @@ sealed class AuthenticateStage(ICallerContextResolver resolver) : IGatewayStage 
     ///     about a tenant.
     /// </remarks>
     public static bool IsAnonymous(PathString path) =>
-        path.StartsWithSegments("/openapi") || path.StartsWithSegments("/.well-known");
+        path.StartsWithSegments("/openapi")
+        || path.StartsWithSegments("/.well-known")
+        // ⚠ Anonymous to THIS stage only. An agent authenticates with a per-cluster credential the
+        // tunnel grain checks at the endpoint — docs/plan/09 § Cluster connections, "the tunnel
+        // identity is bound to the cluster resource id at the gateway" — and a JWT from the identity
+        // host is not a thing a pod in a tenant's cluster holds.
+        || path.StartsWithSegments("/agent");
 
     /// <inheritdoc />
     public async Task<GatewayOutcome?> RunAsync(

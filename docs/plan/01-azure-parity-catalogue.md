@@ -212,7 +212,7 @@ wholesale. Details, versions and per-service topology in [12](12-managed-data-se
 | Azure SDK for .NET | `CyberCloud.Sdk` | **M1** | In the brief. Azure.Core-shaped: `TokenCredential`, `Response<T>`, `Operation<T>`. Generated from OpenAPI | 1.5 |
 | Azure Portal | `CyberCloud.Portal` | **M1** | Angular 22 + xUI + Tailwind, SSR, zoneless. Resource forms generated from provider schemas. [20](20-portal.md) | 5.0 |
 | Azure DevOps / Pipelines / Repos / Artifacts | — | **✗** | Except artifact feeds — see § D. GitHub and Forgejo exist |
-| Azure Arc | — | **P1** | "Manage a cluster you already run" is *the brief's own core feature*, so the Arc concept is built in rather than bolted on |
+| Azure Arc | `CyberCloud.ContainerService/connectedClusters` | **P1** | "Manage a cluster you already run" is *the brief's own core feature*, so the Arc concept is built in rather than bolted on. ⚠ Published 2026-09-15 (#36): the type, the agent chart and the tunnel are [09 § Cluster connections](09-kubernetes-fabric.md)' `AgentInitiated` row, and this cell used to be `—` because the type had no name until it landed |
 | Terraform / Pulumi provider | `terraform-provider-cybercloud` | **M3** | Generated from the same OpenAPI. Cheap once the surface is generated, and it is what a serious customer asks for second |
 
 ---

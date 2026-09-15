@@ -1,3 +1,4 @@
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Globalization;
@@ -54,10 +55,16 @@ namespace CyberCloud.ResourceManager.Actions;
 ///     vault, which refuses legibly — which is what a <c>listKeys</c> on an unwired platform should
 ///     say.
 /// </param>
+/// <param name="agents">
+///     The agent-tunnel seam <c>listInstallCommand</c> mints through, or <see langword="null" /> for
+///     the refusing default — every dispatcher built by a test, and the right answer for a host that
+///     serves no connected cluster.
+/// </param>
 public sealed class ActionDispatcher(
     IServiceProvider services,
     IClusterConnectionFactory clusters,
-    ISecretResolver secrets
+    ISecretResolver secrets,
+    IAgentTunnels? agents = null
 ) {
     /// <summary>Runs one action and returns its response body.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
@@ -142,7 +149,12 @@ public sealed class ActionDispatcher(
             ReconcileDriver.NamespaceFor(id),
             connection,
             secrets
-        );
+        ) {
+            // ⚠ The host's seam, or the refusing default when a caller built this dispatcher
+            // without one — which every test double does, and which is the right answer for a
+            // dispatcher that serves no connected cluster.
+            Agents = agents ?? new UnavailableAgentTunnels()
+        };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(ReconcileDriver.PassBudget);
