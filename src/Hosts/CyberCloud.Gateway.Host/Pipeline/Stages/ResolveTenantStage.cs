@@ -1,6 +1,6 @@
-using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.Tenancy;
+using CyberCloud.Identity.Validation;
 using CyberCloud.Tenancy.Directory;
 using Microsoft.Extensions.Logging;
 

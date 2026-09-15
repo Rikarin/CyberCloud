@@ -5,6 +5,7 @@
 | `CyberCloud.Silo.Host` | the Orleans silo — loads every provider module |
 | `CyberCloud.Gateway.Host` | REST + SignalR; an Orleans **client**, not a silo |
 | `CyberCloud.Identity.Host` | OIDC endpoints, cookies, sign-in/sign-up pages |
+| `CyberCloud.Registry.Feeds.Host` | the NuGet v3, npm and Maven wire protocols of `ContainerRegistry/feeds`; an Orleans **client** that validates the gateway's bearer tokens and stores artefacts on the platform's object store |
 | `CyberCloud.Portal.Host` | serves the API shim + static assets (the Angular SSR node process is separate) |
 | `CyberCloud.Ingest.Host` | OTLP + metrics ingest — high volume, separate scaling |
 | `CyberCloud.Worker.Host` | reconcile workers, informer bridges, billing rollups |
@@ -30,8 +31,24 @@ gateway is not allowed to reference one at all — only `.Contracts` and `.Appli
 
 ## What exists today
 
-`CyberCloud.Silo.Host` and `CyberCloud.AppHost`. The other six are named above because
-[docs/plan/03 § Hosts](../../docs/plan/03-repository-layout.md) names them; none of them exists yet.
+`CyberCloud.Silo.Host`, `CyberCloud.Gateway.Host`, `CyberCloud.Identity.Host`,
+`CyberCloud.Registry.Feeds.Host` and `CyberCloud.AppHost`. The other four are named above because
+[docs/plan/03 § Hosts](../../docs/plan/03-repository-layout.md) names them; none of those exists yet.
+
+⚠ **The feeds host references one provider's `.Application` assembly where the silo and the
+gateway reference all of them** — `ContainerRegistry.Application`, which names it with
+`[assembly: OwningHost("CyberCloud.Registry.Feeds.Host")]` so the assembly-graph gate's rule 4 knows
+the reference is declared rather than a leak. ⚠ That `.Application` assembly references the family's
+*implementation*, and its module registers the provider — so `CyberCloud.Providers.ContainerRegistry`
+is loaded into the feeds process and its reconcilers are registered in its container, exactly as in
+the silo. What keeps the host from *running* any of it is that it is an Orleans client
+(`OrleansApplication.CreateClient`): no grain activates there, no reconcile driver runs there, and
+the catalogue is reached through `IFeedGrain` in the Contracts assembly. `FeedsIsolationTests` pins the
+compile-time half — the host's own AssemblyRef table names no `FeedGrain`, no Kubernetes client and no
+identity store — which is a statement about what the host's code can call, not about what its process
+loads; the review of #29 drew the line. `HostCompositionTests` starts it against a real silo and asserts
+that the two agree about the feeds type, and that composing it without
+`CyberCloud:Feeds:Identity:Issuer` refuses.
 
 `./build.sh Compile` then:
 

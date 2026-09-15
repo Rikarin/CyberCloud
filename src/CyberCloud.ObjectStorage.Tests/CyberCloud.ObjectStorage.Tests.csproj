@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The S3 client's behaviour — ADR-018's sibling of CyberCloud.ObjectStorage.
+
+        SignatureV4Tests            — the four worked examples from Amazon's own S3 documentation,
+                                      byte for byte: canonical request, string to sign, signature
+        S3ObjectStoreTests          — the four verbs against a recording HttpMessageHandler: what
+                                      goes on the wire, how each status comes back, that a listing
+                                      follows its continuation token, that no refusal carries the
+                                      credential
+        ObjectStorageWiringTests    — AddS3ObjectStore wins over the manager's refusing default in
+                                      both orders, and a wrong section fails at composition
+        SeaweedFsRoundTripTests     — the same four verbs against a real SeaweedFS in a container,
+                                      with an identities file so the server VALIDATES the signature
+                                      rather than waving it through
+
+      ⚠ The container suite needs a Docker daemon, like CyberCloud.Vault.Tests' OpenBao. It is the
+      only evidence in the tree that the signer agrees with a real S3 server about a real request;
+      the published vectors prove agreement with Amazon's document, which is not the same thing.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="A real SeaweedFS — ADR-018, docs/plan/23 § Test layers">
+        <!-- The generic ContainerBuilder, because there is no Testcontainers.SeaweedFS. -->
+        <PackageReference Include="Testcontainers"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.ObjectStorage/CyberCloud.ObjectStorage.csproj"/>
+        <!-- The REAL UnavailableObjectStore and the real AddCyberCloudResourceManager, for the wiring tests. -->
+        <ProjectReference Include="../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

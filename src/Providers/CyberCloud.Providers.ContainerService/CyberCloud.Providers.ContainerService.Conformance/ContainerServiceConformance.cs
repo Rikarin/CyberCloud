@@ -93,6 +93,9 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
             // body has finished with it. A fixture that tried to reproduce the whole applied object
             // would be asserting the reconciler's output from the test's side, which is what
             // ObjectMatchesDesired is for.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = (id, ns) => [
                 (KubeSecret.Ref(ns, ManagedClusters.KubeconfigSecretName(id.Name)),
                     OperatorSecret.Json(
@@ -263,6 +266,9 @@ public sealed class AgentPoolCase : IProviderCaseSource {
             // `upgradeNodeImage` is long-running and reads nothing; the node image roll is the
             // reconciler's work, driven through the operation grain. Stated rather than defaulted —
             // see ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             // ⚠ THE WHOLE PREDICATE, INCLUDING THE MachineDeployment'S `clusterName` AND SELECTOR.
             // Both are derived from the address, so this was `AgentPools.MatchesBody` until

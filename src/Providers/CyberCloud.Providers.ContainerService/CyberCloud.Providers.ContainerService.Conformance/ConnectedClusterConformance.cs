@@ -46,6 +46,11 @@ public sealed class ConnectedClusterCase : IProviderCaseSource {
             // ⚠ Empty on purpose, and the reason the shared suite is not run over this case.
             Objects = (_, _) => [],
             OperatorWritten = (_, _) => [],
+            // Neither clusterless world: this type's own suite reads the tunnel seam directly, and the
+            // shared suite that would ask for one is not run over it. Stated rather than defaulted —
+            // see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             ObjectMatchesDesired = _ => true
         };
 

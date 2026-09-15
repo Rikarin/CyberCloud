@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/11 § Protocol — the half of the token contract that ACCEPTS a token: a bearer JWT
+      validated against the identity host's published key set, and the claims read off it once it
+      is known good.
+
+      ⚠ ONE VALIDATOR, TWO HOSTS, AND THE SECOND HOST IS WHY THIS ASSEMBLY EXISTS. JwksBearerTokenValidator
+      was the gateway's JwksCallerContextResolver, internal to CyberCloud.Gateway.Host, until
+      CyberCloud.Registry.Feeds.Host (docs/plan/13 § Artifact feeds, issue #29) needed to accept the
+      same tokens from `dotnet nuget push`, `npm publish` and `mvn deploy`. docs/plan/13 says the
+      auth integration is the hard part and that doing it "once against our own token model is
+      cheaper than three times"; a second copy of ToClaims in a second host would have been the
+      first step towards three. The gateway's resolver is now an adapter over this one.
+
+      ⚠ IN THE IDENTITY MODULE, AND NOT REFERENCED BY THE IDENTITY HOST. docs/plan/11 § Hosts makes
+      cookie-versus-bearer a security boundary: the identity host references OpenIddict.Server.* and
+      never OpenIddict.Validation.*, so a bearer token can never be a credential on the cookie
+      origin. This assembly is the Validation side of that boundary. It shares the module's first
+      two dotted segments because it is the identity CONTRACT's consumer half — AccessTokenClaims
+      says what a token carries, this says what a relying party does with it — and
+      IdentityHostAuthenticationTests still asserts the host's one scheme is a cookie and that no
+      OpenIddict.Validation handler is nameable from it. Adding this project to
+      CyberCloud.Identity.Host.csproj is the single edit that would break the boundary, and it is
+      the edit the identity host's own .csproj header names as forbidden.
+
+      ⚠ OpenIddict.Validation.SystemNetHttp AND NOT OpenIddict.Validation.AspNetCore. The AspNetCore
+      package is an authentication handler; neither host's request path is one — the gateway's stage
+      2 resolves the validator itself, and the feeds host reads a token out of three different
+      places (a Bearer header, a Basic password, an X-NuGet-ApiKey header) before validating it — so
+      a registered scheme would be a second place authentication appears to happen and nothing
+      consults. SystemNetHttp is the discovery-document and JWKS fetch over HttpClient, cached and
+      refreshed on an unknown kid.
+    -->
+
+    <ItemGroup>
+        <!-- HttpContext, which is where the per-request OpenIddict scope lives. -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="OpenIddict.Validation.SystemNetHttp"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <!--
+          The claim names, the audience and the algorithm a token carries, stated once for both
+          sides. AccessTokenPolicy's own remarks: "a change to any of it is a compile-time event on
+          both sides rather than a message somebody missed".
+        -->
+        <ProjectReference Include="../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

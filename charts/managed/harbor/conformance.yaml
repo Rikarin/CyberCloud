@@ -318,10 +318,19 @@ owed:
       another provider's resource — the same seam as `storage-backend-is-not-the-tenants-bucket`, for
       the third time in one row.
   - id: feeds-is-a-different-product
+    status: closed
+    closed: 2026-09-15
     says: >
-      docs/plan/13 § Artifact feeds puts CyberCloud.ContainerRegistry/feeds in this same namespace at
-      M2 · 1.5 EM and says in as many words that "Harbor does OCI only" and that the three protocols
-      are "a single .NET service backed by SeaweedFS". So the type is not declared here: it shares a
-      namespace with this row and shares no implementation with it, and declaring it would publish an
-      API nothing serves. ⚠ Its dependency is the same one three items on this list already have — it
-      is "backed by SeaweedFS", which is CyberCloud.Storage/accounts.
+      ⚠ CLOSED BY #29, AND EXACTLY THE WAY THIS ROW SAID IT WOULD BE. docs/plan/13 § Artifact feeds
+      puts CyberCloud.ContainerRegistry/feeds in this same namespace at M2 · 1.5 EM and says in as
+      many words that "Harbor does OCI only" and that the three protocols are "a single .NET service
+      backed by SeaweedFS". The type is now declared — by this provider, as a second .ResourceType()
+      chain in ContainerRegistryProvider.Describe — and it still shares no implementation with this
+      row: its reconciler opens a catalogue grain and empties a storage prefix, its chart is
+      charts/managed/feeds and renders nothing, and the "single .NET service" is
+      CyberCloud.Registry.Feeds.Host. ⚠ The dependency this entry named was resolved the OTHER way
+      round: the feeds host does not create a CyberCloud.Storage/accounts resource, it writes to the
+      PLATFORM'S object store through the IObjectStore seam (CyberCloud.ObjectStorage, Signature V4
+      against SeaweedFS), which is the same store `storage-backend-is-not-the-tenants-bucket` above
+      says Harbor should be using and is not. What that row owes — the proxy, retention, the storage
+      and egress meters — is charts/managed/feeds/conformance.yaml § owed's to carry, not this one's.

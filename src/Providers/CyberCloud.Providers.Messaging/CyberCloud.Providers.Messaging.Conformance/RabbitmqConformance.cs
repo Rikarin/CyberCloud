@@ -76,6 +76,9 @@ public sealed class RabbitmqCase : IProviderCaseSource {
             // ⚠ The cluster-operator's default-user Secret. The real object carries seven keys; the
             // two returned are here and the other five are not, so a handler that started echoing
             // `host` or `port` back instead of computing them would fail rather than pass by accident.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = (id, ns) => [
                 (KubeSecret.Ref(ns, RabbitmqClusters.DefaultUserSecretName(id.Name)),
                     OperatorSecret.Json(

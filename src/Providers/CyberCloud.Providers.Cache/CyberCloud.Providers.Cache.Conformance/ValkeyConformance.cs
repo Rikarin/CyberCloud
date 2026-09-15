@@ -59,6 +59,9 @@ public sealed class ValkeyCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             // ⚠ ONE FUNCTION OVER TWO KINDS, WHICH IS WHY ValkeyCaches.Matches DISPATCHES ON `kind`
             // AND RETURNS FALSE FOR ONE IT DOES NOT KNOW. A Matches that defaulted to true for an

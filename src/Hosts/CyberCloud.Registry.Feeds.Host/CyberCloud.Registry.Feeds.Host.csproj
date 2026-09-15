@@ -1,0 +1,96 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/13 § Artifact feeds — "implement the three protocols in a single .NET service backed
+      by SeaweedFS". This is that service: the NuGet v3 API, the npm registry API and Maven's
+      repository layout, over CyberCloud.ContainerRegistry/feeds resources, with artefacts on the
+      platform's object storage and metadata in FeedGrain. An ASP.NET Core app and an Orleans CLIENT
+      (OrleansApplication.CreateClient), never a silo, for the reason the gateway is one.
+
+      ⚠ THE REFERENCE SET IS THE SECURITY ARGUMENT, AS IT IS AT THE GATEWAY.
+
+      What is here, and why each one has to be:
+
+        CyberCloud.Identity.Validation      The one bearer-token validator, shared with the gateway.
+                                            docs/plan/13: the auth integration is the hard part and
+                                            doing it once is what makes it cheap. Validation and
+                                            never Server — this host mints nothing.
+        CyberCloud.ResourceManager          IResourceManager and IResourceAuthorizer. A feed is
+                                            resolved by READING the resource through the manager's
+                                            front door, which is what answers the canonical 404 for
+                                            a feed the caller cannot see, and a push is authorised
+                                            by the manager's own authorizer against the permission
+                                            names the type declared. docs/plan/07 § The enforcement
+                                            seam: the engine is called from the resource manager and
+                                            from nowhere in this host.
+        CyberCloud.ObjectStorage            The S3 client, when CyberCloud:ObjectStorage is set. The
+                                            refusing default stays otherwise, and every push meets
+                                            its message.
+        Providers.ContainerRegistry.*       .Contracts for IFeedGrain and ArtifactFeeds; .Application
+                                            for the ONE provider module this host loads, which is
+                                            what gives it a registry with the feeds type in it. This
+                                            host is named in that module's [OwningHost] — rule 4 —
+                                            and, unlike the gateway, composes a registry of one
+                                            family on purpose: it routes nothing by type; it reads
+                                            one type.
+
+      What is deliberately ABSENT:
+
+        CyberCloud.Authorization.Contracts — this host must not be able to NAME ICheckGrain, for the
+          reason the gateway must not. Absent transitively too: CyberCloud.ResourceManager references
+          it and binds it; this assembly binds no type from it, and FeedsIsolationTests reads the
+          AssemblyRef table.
+
+        OpenIddict.Server.* — the host serves bearer tokens and mints none.
+
+        Any SignalR, EF Core or Npgsql package — nothing here is a control-plane write path.
+    -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <IsPublishable>true</IsPublishable>
+        <!--
+          CA1515 — "an application's API isn't typically referenced from outside the assembly". The
+          composition and the protocol services are public so CyberCloud.Hosts.Tests can compose the
+          real host and CyberCloud.Registry.Feeds.Host.Tests can drive it; Directory.Build.targets
+          grants InternalsVisibleTo to the sibling test project, so everything without that reason
+          stays internal.
+        -->
+        <NoWarn>$(NoWarn);CA1515</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- IGrainFactory.ForTenant. Every grain reference in this assembly goes through it. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+        <!-- OrleansApplication.CreateClient calls UseAutofac, so a module graph is mandatory. -->
+        <PackageReference Include="Volo.Abp.Autofac"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
+        <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Identity.Validation/CyberCloud.Identity.Validation.csproj"/>
+        <ProjectReference Include="../../CyberCloud.ObjectStorage/CyberCloud.ObjectStorage.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Contracts/CyberCloud.Providers.ContainerRegistry.Contracts.csproj"/>
+    </ItemGroup>
+
+    <!--
+      ⚠ THE .Application PROJECT AND NEVER THE IMPLEMENTATION, which is rule 5's distinction applied
+      to a third host. The module registers the provider into this container; the registry the
+      resource manager builds from it is what lets ReadAsync resolve a feed's path at all.
+    -->
+    <ItemGroup Label="The one provider module — docs/plan/03 § Assembly graph rules, rule 4">
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Application/CyberCloud.Providers.ContainerRegistry.Application.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — CC1006 polices every ForTenant here">
+        <ProjectReference Include="../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

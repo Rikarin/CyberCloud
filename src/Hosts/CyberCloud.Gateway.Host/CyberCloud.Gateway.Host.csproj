@@ -99,11 +99,13 @@
         <!-- Stage 5's counters. docs/plan/10 § Request pipeline: "Redis-backed sliding window". -->
         <PackageReference Include="StackExchange.Redis"/>
         <!--
-          Stage 2. docs/plan/11 § Protocol: "the gateway validates the JWT locally against the
-          published key set". Validation and never Server — see the header. SystemNetHttp is the
-          half that fetches the discovery document and the JWKS; the validation core comes with it.
+          ⚠ OpenIddict.Validation.SystemNetHttp IS NO LONGER REFERENCED HERE DIRECTLY, AND THE
+          BOUNDARY IT EXPRESSED IS UNCHANGED. Stage 2's validator moved to
+          CyberCloud.Identity.Validation (below) when the feeds host needed the same one; that
+          assembly carries the package, and this host still binds Validation and never Server. The
+          header's "Validation and never Server" is now a statement about that assembly's reference
+          set plus this one's, and GatewayIsolationTests' package assertions read the closure.
         -->
-        <PackageReference Include="OpenIddict.Validation.SystemNetHttp"/>
         <PackageReference Include="Volo.Abp.Autofac"/>
     </ItemGroup>
 
@@ -126,6 +128,14 @@
           is a compile-time event on both sides rather than a message somebody missed".
         -->
         <ProjectReference Include="../../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+        <!--
+          Stage 2. docs/plan/11 § Protocol: "the gateway validates the JWT locally against the
+          published key set". JwksBearerTokenValidator, shared with CyberCloud.Registry.Feeds.Host
+          (docs/plan/13 § Artifact feeds) — the one place a platform token is turned into claims.
+          It references OpenIddict.Validation.SystemNetHttp and never OpenIddict.Server.*, which is
+          the header's boundary carried one assembly down.
+        -->
+        <ProjectReference Include="../../CyberCloud.Identity.Validation/CyberCloud.Identity.Validation.csproj"/>
         <!--
           docs/plan/18's OpenBao client. The reference is here rather than on CyberCloud.Silo.Host
           because THIS host is the one that composes the resource manager, and a synchronous action —

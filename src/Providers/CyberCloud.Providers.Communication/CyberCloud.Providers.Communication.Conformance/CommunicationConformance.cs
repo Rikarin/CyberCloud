@@ -65,6 +65,11 @@ public sealed class CommunicationServiceCase : IProviderCaseSource {
             ActionName = CommunicationServices.ListSuppressionsAction,
             Objects = static (_, _) => [],
             OperatorWritten = static (_, _) => [],
+            // The world is the module — IProviderCaseSource.ConvergedModule below — and this type
+            // keeps nothing on the platform's object store. Stated rather than defaulted; see
+            // ProviderConformanceCase.DataPlane and ClusterlessWorld.
+            DataPlane = null,
+            StoragePrefix = null,
             // Never asked — a clusterless case has no object to match — and false rather than
             // true so that a harness bug that DID ask would read as a failure.
             ObjectMatchesDesired = static _ => false
@@ -118,6 +123,11 @@ public sealed class CommunicationChannelCase : IProviderCaseSource {
             ActionName = string.Empty,
             Objects = static (_, _) => [],
             OperatorWritten = static (_, _) => [],
+            // The world is the module — IProviderCaseSource.ConvergedModule below — and this type
+            // keeps nothing on the platform's object store. Stated rather than defaulted; see
+            // ProviderConformanceCase.DataPlane and ClusterlessWorld.
+            DataPlane = null,
+            StoragePrefix = null,
             ObjectMatchesDesired = static _ => false
         };
 
@@ -155,6 +165,11 @@ public sealed class CommunicationTemplateCase : IProviderCaseSource {
             ActionName = CommunicationTemplates.RenderAction,
             Objects = static (_, _) => [],
             OperatorWritten = static (_, _) => [],
+            // The world is the module — IProviderCaseSource.ConvergedModule below — and this type
+            // keeps nothing on the platform's object store. Stated rather than defaulted; see
+            // ProviderConformanceCase.DataPlane and ClusterlessWorld.
+            DataPlane = null,
+            StoragePrefix = null,
             ObjectMatchesDesired = static _ => false
         };
 
@@ -196,6 +211,11 @@ public sealed class CommunicationSuppressionCase : IProviderCaseSource {
             ActionName = string.Empty,
             Objects = static (_, _) => [],
             OperatorWritten = static (_, _) => [],
+            // The world is the module — IProviderCaseSource.ConvergedModule below — and this type
+            // keeps nothing on the platform's object store. Stated rather than defaulted; see
+            // ProviderConformanceCase.DataPlane and ClusterlessWorld.
+            DataPlane = null,
+            StoragePrefix = null,
             ObjectMatchesDesired = static _ => false
         };
 

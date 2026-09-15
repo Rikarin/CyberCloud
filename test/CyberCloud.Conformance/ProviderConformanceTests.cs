@@ -52,6 +52,79 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     /// <summary>The harness.</summary>
     protected ProviderTestCluster<TSource> Cluster { get; } = cluster;
 
+    // ── Which world this type lives in ───────────────────────────────────────────────────────────
+    //
+    // ⚠ THE SUITE BRANCHES ON THE REGISTRY, NEVER ON THE CASE. A type declares RequiresCluster in
+    // its Describe, and that declaration is what ReconcileDriver reads to decide whether a pass gets
+    // a connection and a namespace at all. So it is the one fact both the driver and this suite can
+    // agree on without either trusting the case — and a case that supplied a clusterless world for
+    // a type that declares a cluster, or none for a type that does not, is caught by name in
+    // AClusterlessTypeSuppliesTheWorldItConvergesOnto rather than silently choosing its own branch.
+    //
+    // ⚠ A CLUSTERLESS TYPE HAS ONE OF TWO REGISTRATIONS AND THIS SUITE HAS ONE BRANCH FOR BOTH. Two
+    // branches merged on the same day each taught this file about "the first clusterless type":
+    // #33's Communication family registers an IConvergedModule on its case source, #29's feeds type
+    // a DataPlane and a StoragePrefix on its case. Every world-facing assertion below reads a
+    // ClusterlessWorld — the harness's one shape over both — and the two facts that genuinely differ
+    // between them (whether a pass can rebuild the world from the body; whether a hand edit exists)
+    // are data on that shape rather than a second `if` in every method. ClusterlessWorld's remarks
+    // carry the argument; ClusterlessWorldOf is where a case that registered neither, or both, is
+    // refused by member name.
+
+    /// <summary>
+    ///     Whether the type under test applies objects to a cluster — the registry's own
+    ///     <c>RequiresCluster</c>, which is what the driver reads.
+    /// </summary>
+    protected bool HasClusterDataPlane {
+        get {
+            Cluster.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
+            return registration.RequiresCluster;
+        }
+    }
+
+    /// <summary>
+    ///     The world of a clusterless type, for one resource — the module the case source registered
+    ///     or the data plane the case built over the harness's grain factory — and the refusal, by
+    ///     member name, of a clusterless case that described neither.
+    /// </summary>
+    /// <param name="address">The resource, with its GUID resolved.</param>
+    protected ClusterlessWorld ClusterlessWorldOf(ResourceId address) {
+        HasClusterDataPlane.ShouldBeFalse("a type that declares RequiresCluster has the cluster for its world");
+
+        if (ProviderTestCluster<TSource>.Module is { } module) {
+            return ClusterlessWorld.Over(module, address, Case.StoragePrefix?.Invoke(address));
+        }
+
+        Case.DataPlane.ShouldNotBeNull(
+            $"{Case.DisplayName} declares no RequiresCluster and supplies neither a module nor a "
+            + "DataPlane. A type with no cluster has to tell the suite how its world is read and "
+            + "broken, or every world-facing assertion here passes over nothing — set "
+            + "IProviderCaseSource.ConvergedModule for a world in the silo, or "
+            + "ProviderConformanceCase.DataPlane for one on a platform host."
+        );
+
+        Case.StoragePrefix.ShouldNotBeNull(
+            $"{Case.DisplayName} declares no RequiresCluster, supplies a DataPlane and supplies no "
+            + "StoragePrefix. The teardown assertion for a type whose bytes live on the platform's "
+            + "object store is that the prefix is empty afterwards, and a case that names no prefix "
+            + "asks the suite to assert nothing — see ProviderConformanceCase.StoragePrefix."
+        );
+
+        return ClusterlessWorld.Over(Case.DataPlane(Cluster.Grains, address), Case.StoragePrefix(address));
+    }
+
+    /// <summary>
+    ///     Asserts that a pass of a clusterless type applied nothing to any cluster — the other
+    ///     direction of <c>RequiresCluster</c>, and the only cluster-facing assertion such a type has.
+    /// </summary>
+    protected void AssertNothingReachedTheCluster() =>
+        Cluster.World.Applied.ShouldBeEmpty(
+            $"{Case.DisplayName} declares no RequiresCluster and a pass still applied "
+            + $"{Cluster.World.Applied.Count.ToString(CultureInfo.InvariantCulture)} object(s) to the "
+            + "fake API server. A reconciler that reaches a cluster it never declared is one the "
+            + "driver hands a null connection to in production, which dereferences on the first pass."
+        );
+
     // ── The registry, which is the platform's whole description of this provider ────────────────
 
     [Fact]
@@ -79,12 +152,14 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     }
 
     [Fact]
-    public void AClusterlessTypeSuppliesTheModuleItConvergesOnto() {
-        // ⚠ THE CALIBRATION FOR IProviderCaseSource.ConvergedModule, and it runs for every case rather than
-        // only the clusterless ones — the failure it exists for is a cluster-backed case that names a
-        // module, or a clusterless case that names none, and each is a case testing a world its
-        // reconciler does not write to. See the remarks on IConvergedModule for what a clusterless
-        // run can and cannot say.
+    public void AClusterlessTypeSuppliesTheWorldItConvergesOnto() {
+        // ⚠ THE CALIBRATION FOR BOTH CLUSTERLESS REGISTRATIONS — IProviderCaseSource.ConvergedModule
+        // and ProviderConformanceCase.DataPlane — and it runs for every case rather than only the
+        // clusterless ones. The failures it exists for: a cluster-backed case that names a world
+        // beside its cluster, a clusterless case that names none, and a clusterless case that names
+        // both. Each is a case with assertions reading a world its reconciler does not write to. See
+        // ClusterlessWorld for why two registrations exist, and IConvergedModule for what a
+        // clusterless run can and cannot say.
         Cluster.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
 
         var address = ProviderTestCluster<TSource>.Address("calibration").WithId(Guid.NewGuid());
@@ -98,15 +173,42 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 + "assertions reading a world the reconciler never writes."
             );
 
+            Case.DataPlane.ShouldBeNull(
+                $"{Case.DisplayName} declares RequiresCluster and supplies a DataPlane, for the same "
+                + "reason: the cluster IS its world, and a second one is one the reconciler never writes."
+            );
+
+            Case.StoragePrefix.ShouldBeNull(
+                $"{Case.DisplayName} declares RequiresCluster and names a StoragePrefix. A cluster-backed "
+                + "type's bytes live in its cluster; a prefix on the platform's store would be asserted "
+                + "empty by a teardown that never touches it."
+            );
+
             return;
         }
 
-        ProviderTestCluster<TSource>.Module.ShouldNotBeNull(
-            $"{Case.DisplayName} declares no RequiresCluster and supplies no module, so this suite "
-            + "has nothing to read the world through: every world-facing assertion would skip and a "
-            + "reconciler that wrote nowhere would pass. Set IProviderCaseSource.ConvergedModule to the module "
-            + "the type converges onto — see IConvergedModule."
+        (ProviderTestCluster<TSource>.Module is not null || Case.DataPlane is not null).ShouldBeTrue(
+            $"{Case.DisplayName} declares no RequiresCluster and supplies neither a module nor a "
+            + "DataPlane, so this suite has nothing to read the world through: every world-facing "
+            + "assertion would skip and a reconciler that wrote nowhere would pass. Set "
+            + "IProviderCaseSource.ConvergedModule for a world in the silo (see IConvergedModule), or "
+            + "ProviderConformanceCase.DataPlane for one on a platform host."
         );
+
+        (ProviderTestCluster<TSource>.Module is not null && Case.DataPlane is not null).ShouldBeFalse(
+            $"{Case.DisplayName} supplies BOTH a module and a DataPlane. One world per type: the suite "
+            + "reads whichever it is handed through ClusterlessWorld, and a case that hands it two "
+            + "has half its assertions reading a world the reconciler never writes."
+        );
+
+        if (Case.DataPlane is not null) {
+            // ⚠ Both halves, because either alone is a suite that asserts less than it says: a
+            // DataPlane with no StoragePrefix is a teardown nobody checks emptied the store.
+            Case.StoragePrefix.ShouldNotBeNull(
+                $"{Case.DisplayName} supplies a DataPlane and no StoragePrefix — see "
+                + "ProviderConformanceCase.StoragePrefix for what the teardown then cannot assert."
+            );
+        }
 
         objects.ShouldBeEmpty(
             $"{Case.DisplayName} is clusterless and names objects. Those objects can never be applied "
@@ -191,18 +293,24 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var accepted = (await CreateAsync("world-applied")).GetValueOrThrow();
         await ConvergeAsync(accepted);
 
-        if (ProviderTestCluster<TSource>.Module is { } module) {
-            // ⚠ THE SAME ASSERTION, READ THROUGH THE MODULE — around the reconciler, never through
-            // its own ObserveAsync. A clusterless type that reported success and wrote nothing
-            // passes everything above and fails here, exactly as a cluster-backed one would. And it
-            // applied nothing to the cluster, because it has none.
-            Cluster.World.Applied.ShouldBeEmpty($"{Case.DisplayName} is clusterless and applied an object");
+        if (!HasClusterDataPlane) {
+            // ⚠ THE SAME ASSERTION, READ THROUGH THE OTHER WORLD — around the reconciler, never
+            // through its own ObserveAsync. A clusterless type's world is read through the module
+            // its case source registered or the data plane its case built — for a feed, the
+            // catalogue grain reached through ForTenant — and a clusterless type that reported
+            // success and wrote nothing passes everything above and fails here, exactly as a
+            // cluster-backed one would. The only thing the fake API server has to say about it is
+            // that nothing arrived, because the type has no cluster to arrive at.
+            AssertNothingReachedTheCluster();
 
-            (await module.HoldsAsync(AddressOf(accepted.Resource.Id, "world-applied"), TestContext.Current.CancellationToken))
-                .ShouldBeTrue($"{Case.DisplayName} converged and the module holds nothing for the resource");
+            var world = ClusterlessWorldOf(AddressOf(accepted.Resource.Id, "world-applied"));
+            var ct = TestContext.Current.CancellationToken;
 
-            (await module.MatchesAsync(AddressOf(accepted.Resource.Id, "world-applied"), Body(), TestContext.Current.CancellationToken))
-                .ShouldBeTrue($"what the module holds for '{Case.Type}' does not carry the desired body");
+            (await world.HoldsAsync(ct))
+                .ShouldBeTrue($"{Case.DisplayName} converged and its world holds nothing for the resource");
+
+            (await world.MatchesAsync(Body(), ct))
+                .ShouldBeTrue($"what the world holds for '{Case.Type}' does not read back as the desired body");
 
             return;
         }
@@ -229,21 +337,21 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var accepted = (await CreateAsync("world-labelled")).GetValueOrThrow();
         await ConvergeAsync(accepted);
 
-        if (ProviderTestCluster<TSource>.Clusterless) {
-            // ⚠ ASSERTED ABSENT, AND NOT SKIPPED — the one clusterless branch in this suite that does
-            // not skip, and the reason is the Labels architecture gate. That gate runs this method
-            // per provider suite under `--minimum-expected-tests 1`, and a filtered run whose only
-            // match skipped reports "Zero tests ran", which the gate reads as the suite failing. So
-            // the branch asserts the one thing that IS true of the seven labels on a clusterless
-            // type: no object was applied for them to be missing from — not even the resource
-            // group's namespace, which the driver ensures only for a pass with a connection. An
-            // object here would mean the type is not clusterless, which is the lie worth catching.
-            Cluster.World.Applied.ShouldBeEmpty(
-                $"{Case.DisplayName} is clusterless and applied an object. A clusterless type has no "
-                + "connection to apply through, so an object here came from somewhere the driver did "
-                + "not hand it — and it carries none of ADR-013's labels, because nothing injected them"
-            );
-
+        if (!HasClusterDataPlane) {
+            // ⚠ ASSERTED ABSENT, AND NOT SKIPPED, and the reason is the Labels architecture gate.
+            // That gate runs this method per .Conformance project under `--minimum-expected-tests 1`,
+            // and a filtered run whose only match skipped reports "Zero tests ran", which the gate
+            // reads as the suite failing. So the branch asserts the one thing that IS true of the
+            // seven labels on a clusterless type: no object was applied for them to be missing from
+            // — NOT EVEN THE RESOURCE GROUP'S NAMESPACE, which the driver applies for every
+            // cluster-backed type before the reconciler runs and must skip for this one. An object
+            // here came from somewhere the driver did not hand it, carries none of ADR-013's labels
+            // because nothing injected them, and means the type is not clusterless — which is the
+            // lie worth catching. Where a project mixes the two — ContainerRegistry's feeds beside
+            // its registries — the gate still sees a real rendered object; where every case is
+            // clusterless — the Communication family — this absence is the whole of what the gate
+            // can be shown, and it is shown rather than skipped.
+            AssertNothingReachedTheCluster();
             return;
         }
 
@@ -545,9 +653,9 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             Cluster.World.Holds(target).ShouldBeTrue("a lock that let the data plane go is not a lock");
         }
 
-        if (ProviderTestCluster<TSource>.Module is { } module) {
-            (await module.HoldsAsync(AddressOf(accepted.Resource.Id, "locked"), TestContext.Current.CancellationToken))
-                .ShouldBeTrue("a lock that let the module's state go is not a lock");
+        if (!HasClusterDataPlane) {
+            (await ClusterlessWorldOf(AddressOf(accepted.Resource.Id, "locked")).HoldsAsync(TestContext.Current.CancellationToken))
+                .ShouldBeTrue("a lock that let the clusterless world's state go is not a lock");
         }
     }
 
@@ -977,6 +1085,27 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         var objects = ObjectsOf(accepted.Resource.Id, "goodbye");
 
+        // ── A clusterless type's bytes, planted so the teardown has something to remove ─────────
+        //
+        // ⚠ The bytes are the tenant's and no reconciler writes them, so the suite writes one under
+        // the type's own prefix — the way it plants an operator's Secret for a cluster-backed type —
+        // and reads the prefix back after the teardown. A teardown that converged over a prefix it
+        // never emptied is the object-store shape of "still running while the resource says gone".
+        // A world that names no prefix keeps no bytes there, and a data plane must name one — see
+        // AClusterlessTypeSuppliesTheWorldItConvergesOnto.
+        var address = ProviderTestCluster<TSource>.Address("goodbye").WithId(accepted.Resource.Id);
+        var clusterless = HasClusterDataPlane ? null : ClusterlessWorldOf(address);
+        var storagePrefix = clusterless?.StoragePrefix;
+
+        if (storagePrefix is not null) {
+            (await Cluster.Objects.PutAsync(
+                storagePrefix + "planted/by-the-suite.bin",
+                "planted"u8.ToArray(),
+                "application/octet-stream",
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
+        }
+
         var deleted = await DeleteAsync("goodbye");
         deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
         deleted.GetValueOrThrow().Resource.ProvisioningState.ShouldBe(ProvisioningState.Deleting);
@@ -1024,13 +1153,25 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 );
         }
 
-        if (ProviderTestCluster<TSource>.Module is { } module) {
-            // The same sentence, read through the module: a teardown that reported Converged while
-            // the grain still answers for the resource is a resource that says it is gone and is not.
-            (await module.HoldsAsync(AddressOf(accepted.Resource.Id, "goodbye"), TestContext.Current.CancellationToken))
+        if (clusterless is not null) {
+            // The same sentence, read through the clusterless world: a teardown that reported
+            // Converged while the grain still answers for the resource — the module still holds it,
+            // the catalogue still reads back as an open feed — is a resource that says it is gone
+            // and is not.
+            (await clusterless.HoldsAsync(TestContext.Current.CancellationToken))
                 .ShouldBeFalse(
-                    $"the module still holds '{Case.Type}' after a converged teardown — docs/plan/06 "
-                    + "§ Two-phase create: never still running while the resource says it is gone"
+                    $"the clusterless world still holds '{Case.Type}' after a converged teardown — "
+                    + "docs/plan/06 § Two-phase create: never still running while the resource says it is gone"
+                );
+        }
+
+        if (storagePrefix is not null) {
+            (await Cluster.Objects.ListAsync(storagePrefix, TestContext.Current.CancellationToken))
+                .GetValueOrThrow()
+                .ShouldBeEmpty(
+                    $"'{storagePrefix}' still holds objects after a converged teardown. A resource whose "
+                    + "address answers 404 while its bytes are still billed against the platform's "
+                    + "bucket is the quota and the store disagreeing."
                 );
         }
 
@@ -1271,8 +1412,10 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // left UNDRIVEN, which is the same state a silo that has not yet picked the operation up
         // leaves it in. The guard under test is the resource's, not the pass's: a DELETE arriving
         // between the 202 and the first pass is exactly the race docs/plan/03 § Providers names.
+        // (This used to skip for a clusterless type, on the grounds that no data plane could hold a
+        // pass open on demand; the undriven create is the shape that needs no such data plane.)
         var operation = Cluster.Operation(ConformanceIds.Tenant, accepted.OperationId);
-        var status = ProviderTestCluster<TSource>.Clusterless ? await operation.GetAsync() : await operation.DriveAsync();
+        var status = HasClusterDataPlane ? await operation.DriveAsync() : await operation.GetAsync();
 
         status.GetValueOrThrow()
             .IsTerminal.ShouldBeFalse("the create must still be running for this test to mean anything");
@@ -1307,7 +1450,6 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // admission decision does not change between passes, so the ladder in ReconcileSchedule runs
         // 10s → 30s → 2min → 10min for sixty minutes and the tenant is then handed an OperationTimeout
         // — in place of the policy's own message, which was available on the first pass.
-        SkipIfClusterless("an admission refusal is a cluster's answer, and the harness has no way to make a module refuse a grain write by policy");
         ProviderTestCluster<TSource>.Reset();
 
         // The cluster ANSWERED. Not Suspended ("we cannot reach it") and not Conflict ("somebody else
@@ -1315,6 +1457,23 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         Cluster.World.RefuseWith = ErrorCode.PolicyViolation;
 
         var accepted = (await CreateAsync("refused-by-admission")).GetValueOrThrow();
+
+        if (!HasClusterDataPlane) {
+            // ⚠ THE INVERSE ASSERTION, AND NOT A SKIP. An admission refusal is a cluster's answer,
+            // and the harness has no way to make a module or a platform host refuse a grain write by
+            // policy — so what a clusterless type can be held to is the other direction. A cluster
+            // that refuses everything is invisible to a type that declared no cluster: the operation
+            // converges as if the fake were healthy, because the driver hands the reconciler no
+            // connection and skips the namespace it would otherwise have applied into the refusing
+            // cluster. A clusterless type whose create FAILED here would be one that reached a
+            // cluster after all.
+            var converged = await ConvergeAsync(accepted);
+            converged.State.ShouldBe(OperationState.Succeeded, $"the operation ended {converged.State}: {converged.Error?.Message}");
+            AssertNothingReachedTheCluster();
+            Cluster.World.RefuseWith = null;
+            return;
+        }
+
         var status = (await Cluster.Operation(ConformanceIds.Tenant, accepted.OperationId).DriveAsync())
             .GetValueOrThrow();
 
@@ -1346,12 +1505,23 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // failure a reconciler sees. A terminal-by-default rule would end an operation on a dropped
         // connection, so the rule has to be a named list of refusals rather than a named list of
         // hiccups. Asserted per provider because the list is read through each reconciler's own path.
-        SkipIfClusterless("a transport fault is a cluster's silence, and an in-process silo has no connection the harness can drop");
         ProviderTestCluster<TSource>.Reset();
 
         Cluster.World.RefuseWith = ErrorCode.InternalError;
 
         var accepted = (await CreateAsync("cluster-fell-over")).GetValueOrThrow();
+
+        if (!HasClusterDataPlane) {
+            // The same inverse as the admission case: a transport fault is a cluster's silence, an
+            // in-process silo has no connection the harness can drop, and a cluster that did not
+            // answer is a cluster this type never asked.
+            var converged = await ConvergeAsync(accepted);
+            converged.State.ShouldBe(OperationState.Succeeded, $"the operation ended {converged.State}: {converged.Error?.Message}");
+            AssertNothingReachedTheCluster();
+            Cluster.World.RefuseWith = null;
+            return;
+        }
+
         var status = (await Cluster.Operation(ConformanceIds.Tenant, accepted.OperationId).DriveAsync())
             .GetValueOrThrow();
 
@@ -1382,22 +1552,38 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var accepted = (await CreateAsync("drifting")).GetValueOrThrow();
         await ConvergeAsync(accepted);
 
-        if (ProviderTestCluster<TSource>.Module is { } module) {
-            // The same "kubectl delete", against the module: what the grain holds for the resource
-            // is removed behind the reconciler's back, and the next pass must put it back because
-            // it LOOKED — read through the module, never through the reconciler's own observation.
-            var address = AddressOf(accepted.Resource.Id, "drifting");
+        if (!HasClusterDataPlane) {
+            // The same "kubectl delete", against the clusterless world: what it holds for the
+            // resource is removed behind the reconciler's back — the module's RemoveAsync, the data
+            // plane's BreakAsync — and the next pass is read through the world, never through the
+            // reconciler's own observation.
+            //
+            // ⚠ CORRECTED OR NOTICED, AND WHICH ONE IS THE WORLD'S TO SAY. A module's grains are a
+            // function of the desired body, like a deleted ConfigMap, so the pass must put them
+            // back because it LOOKED. A catalogue somebody closed cannot be re-opened from the body,
+            // because what it held was the tenant's and the body never carried it — so for a data
+            // plane what the manager's reconcile path owes is clause 4: after the break, a pass that
+            // reports Converged over a world that does not match is an assumption. The stronger
+            // assertion is made wherever the world says it can be — ClusterlessWorld.RebuildsFromTheBody.
+            var world = ClusterlessWorldOf(AddressOf(accepted.Resource.Id, "drifting"));
             var ct = TestContext.Current.CancellationToken;
 
-            await module.RemoveAsync(address, Body(), ct);
-            (await module.HoldsAsync(address, ct)).ShouldBeFalse("the module did not remove what it holds; the drift test would measure nothing");
+            await world.BreakAsync(Body(), ct);
+            (await world.HoldsAsync(ct)).ShouldBeFalse($"{Case.DisplayName}'s world did not remove what it holds; the drift test would measure nothing");
 
-            var put = await ReconcileOnceAsync(accepted.Resource.Id, "drifting");
-            put.Kind.ShouldNotBe(ReconcileOutcomeKind.Failed, put.ToString());
+            var pass = await ReconcileOnceAsync(accepted.Resource.Id, "drifting");
 
-            (await module.HoldsAsync(address, ct)).ShouldBeTrue($"'{Case.Type}' was not put back");
-            (await module.MatchesAsync(address, Body(), ct)).ShouldBeTrue("what was put back does not carry the desired body");
+            if (world.RebuildsFromTheBody) {
+                pass.Kind.ShouldNotBe(ReconcileOutcomeKind.Failed, pass.ToString());
 
+                (await world.HoldsAsync(ct)).ShouldBeTrue($"'{Case.Type}' was not put back");
+                (await world.MatchesAsync(Body(), ct)).ShouldBeTrue("what was put back does not carry the desired body");
+            } else if (pass.IsConverged) {
+                (await world.MatchesAsync(Body(), ct))
+                    .ShouldBeTrue("the pass reported Converged over a data plane that does not match the desired body");
+            }
+
+            AssertNothingReachedTheCluster();
             return;
         }
 
@@ -1429,17 +1615,30 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var accepted = (await CreateAsync("hand-edited")).GetValueOrThrow();
         await ConvergeAsync(accepted);
 
-        if (ProviderTestCluster<TSource>.Module is { } module) {
-            var address = AddressOf(accepted.Resource.Id, "hand-edited");
+        if (!HasClusterDataPlane) {
+            var world = ClusterlessWorldOf(AddressOf(accepted.Resource.Id, "hand-edited"));
             var ct = TestContext.Current.CancellationToken;
 
-            await module.CorruptAsync(address, Body(), ct);
-            (await module.MatchesAsync(address, Body(), ct)).ShouldBeFalse("the module's hand edit changed nothing; the test would measure nothing");
+            if (world.CorruptAsync is not { } corrupt) {
+                Assert.Skip(
+                    $"SKIPPED, AND SAYING SO — {Case.DisplayName} has no cluster object for anyone to "
+                    + "hand-edit and its world describes no hand edit of its own. A DataPlane is "
+                    + "broken the one way it describes, and "
+                    + "DriftIsCorrectedWhenSomebodyDeletesTheObjectsByHand is where that break is "
+                    + "driven through the manager's reconcile path; a module supplies CorruptAsync "
+                    + "and is held to it here."
+                );
+
+                return;
+            }
+
+            await corrupt(Body(), ct);
+            (await world.MatchesAsync(Body(), ct)).ShouldBeFalse("the world's hand edit changed nothing; the test would measure nothing");
 
             var put = await ReconcileOnceAsync(accepted.Resource.Id, "hand-edited");
             put.Kind.ShouldNotBe(ReconcileOutcomeKind.Failed, put.ToString());
 
-            (await module.MatchesAsync(address, Body(), ct)).ShouldBeTrue("the hand edit survived a reconcile pass");
+            (await world.MatchesAsync(Body(), ct)).ShouldBeTrue("the hand edit survived a reconcile pass");
 
             return;
         }
@@ -1484,7 +1683,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             ns,
             // ⚠ null for a clusterless type, which is what ReconcileDriver hands one — a reconciler
             // that reached for the connection anyway would be a reconciler the driver could not run.
-            ProviderTestCluster<TSource>.Clusterless ? null : Cluster.World,
+            HasClusterDataPlane ? Cluster.World : null,
             // ⚠ THE HARNESS'S VAULT, NOT THE REFUSING DEFAULT, AND THE SAME INSTANCE ON BOTH MEMBERS.
             // This context is built BY HAND rather than by ReconcileDriver, so nothing fills
             // SecretWriter in for it — and a provider whose create mints a credential then fails every
@@ -1492,16 +1691,18 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             // found rather than guessed.
             Cluster.Vault,
             log
-        ) { SecretWriter = Cluster.Vault };
+            // ⚠ AND THE HARNESS'S OBJECT STORE, for the same reason and the same way: a type whose
+            // teardown empties a storage prefix cannot pass clause 3 against RefusingObjectStore.
+        ) { SecretWriter = Cluster.Vault, Objects = Cluster.Objects };
 
-        // The world clause 4 is checked against: the fake cluster's objects, or — for a clusterless
-        // type — the module, read around the reconciler exactly as the objects are.
-        var world = ProviderTestCluster<TSource>.Module is { } module
+        // ⚠ THE WORLD IS THE CLUSTER FOR A TYPE THAT DECLARED ONE AND THE CLUSTERLESS WORLD — the
+        // module its case source registered, or the DataPlane its case built — FOR A TYPE THAT DID
+        // NOT. Clause 4 is checked the same way in both: break, run a pass, and fail a pass that
+        // reports Converged over a world that does not match, read around the reconciler exactly as
+        // the objects are. What differs is who can reach the world — the harness owns the fake API
+        // server; only the case knows its grain.
+        var world = HasClusterDataPlane
             ? new ConformanceWorld(
-                BreakAsync: () => module.RemoveAsync(address, Body(), TestContext.Current.CancellationToken),
-                MatchesDesiredAsync: () => module.MatchesAsync(address, Body(), TestContext.Current.CancellationToken)
-            )
-            : new ConformanceWorld(
                 BreakAsync: () => {
                     foreach (var target in objects) {
                         Cluster.World.RemoveBehindTheirBack(target);
@@ -1515,7 +1716,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                         && MatchesDesired(accepted.Resource.Id, "clauses", target, json, Body())
                     )
                 )
-            );
+            )
+            : ClusterlessWorldOf(address).ForClauseFour(Body(), TestContext.Current.CancellationToken);
 
         var report = await ReconcilerConformance.RunAsync(
             reconciler,
@@ -1571,14 +1773,24 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         await ConvergeAsync(changed.GetValueOrThrow());
 
+        if (!HasClusterDataPlane) {
+            // The update converged through the same path and still reached no cluster. What it did
+            // reach is the clusterless world, which reads back as the CHANGED body afterwards — a
+            // module holds the new locale or the new threshold; the changed body of a feed alters
+            // nothing the catalogue holds, so "as desired" is the open catalogue itself, and the
+            // assertion is that the update did not close it. An update that stopped at the resource
+            // grain is an update the world never saw.
+            AssertNothingReachedTheCluster();
+
+            (await ClusterlessWorldOf(AddressOf(first.Resource.Id, "updated")).MatchesAsync(ChangedBody(), TestContext.Current.CancellationToken))
+                .ShouldBeTrue("the clusterless world does not read back as the changed body after an update converged");
+
+            return;
+        }
+
         foreach (var target in ObjectsOf(first.Resource.Id, "updated")) {
             MatchesDesired(first.Resource.Id, "updated", target, Cluster.World.Read(target)!, ChangedBody())
                 .ShouldBeTrue("an update that stopped at the grain is an update the tenant cannot see");
-        }
-
-        if (ProviderTestCluster<TSource>.Module is { } module) {
-            (await module.MatchesAsync(AddressOf(first.Resource.Id, "updated"), ChangedBody(), TestContext.Current.CancellationToken))
-                .ShouldBeTrue("an update that stopped at the resource grain is an update the module never saw");
         }
     }
 
@@ -1962,7 +2174,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     null,
                     ReconcileDriver.NamespaceFor(address),
                     // null for a clusterless type — what the driver hands one.
-                    ProviderTestCluster<TSource>.Clusterless ? null : Cluster.World,
+                    HasClusterDataPlane ? Cluster.World : null,
                     // ⚠ The harness's vault on both members. A drift-repair pass is a full reconcile
                     // pass — a provider that mints has to be able to mint on it, and the credential it
                     // finds must be the SAME one the create wrote, which is what mint-once buys and
@@ -2120,22 +2332,6 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///     what makes that safe: a reconciler with no state cannot tell the difference.
     /// </remarks>
     protected IResourceReconciler Reconciler() => Case.CreateReconciler(Cluster.Clock);
-
-    /// <summary>
-    ///     Skips an assertion that has no clusterless form, saying which and why — so a green run
-    ///     over a clusterless family lists, by name, what it did not check.
-    /// </summary>
-    /// <param name="why">What the assertion needs that a module cannot offer.</param>
-    protected static void SkipIfClusterless(string why) {
-        if (!ProviderTestCluster<TSource>.Clusterless) {
-            return;
-        }
-
-        Assert.Skip(
-            $"SKIPPED, AND SAYING SO — {Case.DisplayName} is clusterless: {why}. See IConvergedModule "
-            + "for the assertions a clusterless run makes instead, and for the one it still cannot."
-        );
-    }
 
     const int MaxDrives = 8;
 

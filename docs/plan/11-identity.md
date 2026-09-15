@@ -5,12 +5,20 @@ platform, which is why ADR-015 rejects running someone else's.
 
 ## Hosts
 
-Two, and the split is a security boundary rather than a scaling one.
+Two kinds, and the split is a security boundary rather than a scaling one: the one host that sets a
+cookie, and every host that accepts a token.
 
 | Host | Serves | Auth style |
 |---|---|---|
 | `CyberCloud.Identity.Host` | `/authorize`, `/token`, `/userinfo`, `/.well-known/*`, sign-up, sign-in, reset, MFA enrolment, consent | **Cookies** — and only here |
-| `CyberCloud.Gateway.Host` | Everything else | **Bearer tokens** — and only these |
+| `CyberCloud.Gateway.Host` | The resource API — everything under `/subscriptions/…` | **Bearer tokens** — and only these |
+| `CyberCloud.Registry.Feeds.Host` | The NuGet, npm and Maven wire protocols of `ContainerRegistry/feeds` ([13 § Artifact feeds](13-compute-vm-containers.md#artifact-feeds--cybercloudcontainerregistryfeeds--m2--15-em)) | **Bearer tokens** — the same tokens, validated against the same JWKS by the shared `CyberCloud.Identity.Validation`, and carried the way each client can carry one: `Authorization: Bearer`, a Basic password, or `X-NuGet-ApiKey` |
+
+⚠ **A data-plane host is a third row, not a third auth style.** The feeds host (#29) validates
+exactly what the gateway validates and mints nothing; it exists on its own origin because a package
+client speaks its own protocol, not the resource API. What it must never do is accept a credential
+of its own — a feed-local API key would be a second identity system with none of [§ Credentials](#credentials)'
+rules — and its isolation test pins that it references no identity store.
 
 A session cookie must never be a credential the resource API accepts. If it is, every CSRF becomes a
 control-plane write. Separate hosts on separate origins makes that structural instead of a middleware

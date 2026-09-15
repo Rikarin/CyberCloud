@@ -1,0 +1,44 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ⚠ NO UPSTREAM, NO IMAGE, NO OBJECT. charts/managed/cloud-shell was the first chart here with no
+# third-party upstream; this is the first with no Kubernetes upstream either. The provenance that
+# matters for a feed is three protocol specifications, each read from the client that speaks it,
+# and every claim below is about one of those.
+
+vendored: none
+upstream: none
+
+# ── What was actually read, per protocol ──────────────────────────────────────────────────────
+#
+# ⚠ NuGet v3 — the service index resource types the client resolves, the flat container's lower-cased
+# id and normalised version in every path, the multipart body `dotnet nuget push` sends with its
+# credential in X-NuGet-ApiKey, and DELETE-as-unlist. Unlisted versions stay in the flat container:
+# nuget.org's does the same, and a lock file that pins one keeps restoring. What was NOT read against
+# a real client: no `dotnet` process is run by any suite in the tree — the requests are reproduced
+# from the client's protocol documentation and the host answers them. conformance.yaml § owed,
+# `no-real-client-is-driven`.
+#
+# ⚠ npm — the publish document with the tarball base64-encoded under `_attachments`, the packument
+# with `dist-tags`, `versions` and `time`, `dist.shasum` as SHA-1 and `dist.integrity` as SHA-512,
+# scoped names arriving as `@scope%2Fname` on some paths and `@scope/name` on others, and the
+# dist-tag routes under `-/package/{name}/dist-tags`. A publish over an existing version answers
+# 409; npm's own registry answers 403 for that case with a message, and the CLI reports either.
+#
+# ⚠ Maven — the repository layout is the protocol. `mvn deploy` GETs maven-metadata.xml, PUTs each
+# file with `.sha1` and `.md5` beside it, then PUTs the merged metadata; a resolver reverses it. A
+# release path is immutable and a `-SNAPSHOT` version directory is not, which is the default release
+# policy of every repository manager. Basic authentication with the platform token as the password,
+# because settings.xml has a username and a password and nowhere else to put a token.
+#
+# ── What is assumed ───────────────────────────────────────────────────────────────────────────
+#
+# ⚠ THAT THE PLATFORM'S OBJECT STORE IS S3-COMPATIBLE. CyberCloud.ObjectStorage signs with Signature
+# Version 4 and speaks four verbs; SeaweedFS accepts all four and validates the signature when an
+# identities file is configured, which CyberCloud.ObjectStorage.Tests proves against a container.
+# Against an AWS bucket the same four verbs are pinned by Amazon's published vectors and not by a
+# request. conformance.yaml § owed, `the-store-is-seaweedfs-in-tests-and-assumed-elsewhere`.
+
+reviewed: 2026-09-15
+
+upstream-api: none — no Kubernetes object is rendered
+upstream-webhook: none

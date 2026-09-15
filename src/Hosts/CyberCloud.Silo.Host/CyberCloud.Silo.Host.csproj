@@ -42,6 +42,12 @@
         <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
         <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
         <!--
+          docs/plan/13 § Artifact feeds — the S3 client behind ReconcileContext.Objects, registered
+          only when CyberCloud:ObjectStorage is configured. A feed's teardown empties its storage
+          prefix through it; without it the refusing default stays and the delete does not converge.
+        -->
+        <ProjectReference Include="../../CyberCloud.ObjectStorage/CyberCloud.ObjectStorage.csproj"/>
+        <!--
           docs/plan/17's sending domain. Orleans DISCOVERS grains by scanning referenced assemblies,
           so this line is what puts CyberCloud.Communication's seven grain types in the silo; the
           AddCyberCloudCommunication() call in Program.cs is what registers the services their

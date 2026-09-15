@@ -1,0 +1,36 @@
+# Artifact feeds — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from ArtifactFeeds.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ NOTHING IN THIS FILE IS RENDERED INTO A CLUSTER. A feed's data plane is
+# CyberCloud.Registry.Feeds.Host, and the two rows a tenant sets — the kind and the description — are
+# read by that host from the resource body, never from a chart value. The chart carries them so the
+# catalogue has one place to read a type's surface, and templates/NOTES.txt is the whole of what it
+# renders.
+
+## @param kind {string} Which protocol the feed speaks: nuget (the v3 API), npm (the registry API) or maven (the repository layout). Immutable, because the three have three versioning models.
+## @required
+## @immutable
+## @enum nuget | npm | maven
+## @example "nuget"
+kind: nuget
+
+## @param description {string} What the feed is for, shown in the portal beside its name.
+## @length ..256
+description: ""
+
+## @param platform {object} Resource identity, for NOTES.txt. Not a tenant-facing setting.
+## @internal Supplied by whoever installs the chart, for NOTES.txt alone — a feed's reconciler renders nothing and reads none of this. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param feedsHost {string} The origin CyberCloud.Registry.Feeds.Host is reachable at — CyberCloud:Feeds:PublicBaseUri on that host, which is what a service index and a tarball URL are spelled with.
+  feedsHost: https://feeds.cybercloud.io
+  ## @param subscriptionId {string} Subscription GUID — the second segment of every feed URL.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name — the third segment of every feed URL.
+  resourceGroup: ""
+  ## @param name {string} The feed's own name — the fourth segment of every feed URL.
+  name: ""

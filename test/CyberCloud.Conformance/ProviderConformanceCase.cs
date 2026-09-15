@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Conformance;
 using System.Collections.Immutable;
 
 namespace CyberCloud.Conformance;
@@ -149,13 +150,15 @@ public sealed record ProviderConformanceCase {
     /// <remarks>
     ///     The parameters are the resource's id (with its GUID resolved) and the namespace
     ///     <c>ReconcileDriver.NamespaceFor</c> derived. Empty for a clusterless provider — which
-    ///     then supplies <see cref="IProviderCaseSource.ConvergedModule" /> instead, and is refused
-    ///     by name if it does not (<c>ProviderConformanceTests.AClusterlessTypeSuppliesTheModuleItConvergesOnto</c>).
-    ///     ⚠ The world-facing assertions read the module rather than skip; this remark said "the
+    ///     then supplies <see cref="IProviderCaseSource.ConvergedModule" /> or <see cref="DataPlane" />
+    ///     instead, and is refused by name if it supplies neither or both
+    ///     (<c>ProviderConformanceTests.AClusterlessTypeSuppliesTheWorldItConvergesOnto</c>).
+    ///     ⚠ The world-facing assertions read that world rather than skip; this remark said "the
     ///     cluster-facing half of the suite skips itself" for fourteen families before the first
     ///     clusterless one showed that a suite which skipped would have been green over a reconciler
-    ///     that wrote nowhere. Only the two assertions with no module analogue — an admission
-    ///     refusal and a dropped connection — skip, and say so.
+    ///     that wrote nowhere. The two assertions with no clusterless analogue — an admission
+    ///     refusal and a dropped connection — assert the inverse: the operation converges and
+    ///     nothing reached the cluster. See <c>ClusterlessWorld</c>.
     /// </remarks>
     public required Func<ResourceId, string, ImmutableArray<ObjectRef>> Objects { get; init; }
 
@@ -234,6 +237,64 @@ public sealed record ProviderConformanceCase {
     /// </remarks>
     public required Func<ResourceId, string, ImmutableArray<(ObjectRef Target, string Json)>>
         OperatorWritten { get; init; }
+
+    // ── A data plane that is not a cluster object — docs/plan/13 § Artifact feeds ─────────────────
+    //
+    // ⚠ THE FIRST TYPE WHOSE DATA PLANE IS A PLATFORM HOST, AND WHAT THE HARNESS COULD NOT SEE
+    // WITHOUT THESE TWO MEMBERS. Every assertion above that reads AROUND the reconciler reads a
+    // cluster: it removes the objects behind the reconciler's back, reads them back, and compares
+    // them to the desired body. CyberCloud.ContainerRegistry/feeds applies no object — its data
+    // plane is a durable catalogue grain plus a prefix on the platform's object store — so for it
+    // the harness has nothing to remove and nothing to read, and every world-facing assertion would
+    // pass vacuously. The suite branches on the registry's RequiresCluster and asks these instead.
+    //
+    // ⚠ THE SECOND OF TWO CLUSTERLESS REGISTRATIONS, AND THE SUITE READS BOTH THROUGH ONE SHAPE.
+    // IProviderCaseSource.ConvergedModule — a module in the silo, #33's Communication family — and
+    // this member — a platform host's grain, #29's feeds — were written on the same day against a
+    // master that had neither. Neither replaced the other: ClusterlessWorld in the harness adapts
+    // whichever a case registered, and a clusterless case registers exactly one. A module has a hand
+    // edit and can be put back from the body; a data plane has neither, and the suite's drift
+    // assertion reads that difference off the world rather than off a second branch.
+    //
+    // ⚠ REQUIRED AND NULLABLE, WHICH IS A SHAPE NO MEMBER ABOVE HAS, AND THE SUITE REFUSES THE
+    // COMBINATION THAT WOULD MAKE IT A LOOPHOLE. Required, because ReferenceConformance
+    // .EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile holds that an optional member is
+    // an assertion the suite quietly stops making — so every cluster-backed case writes
+    // `DataPlane = null, StoragePrefix = null` and says so in a line beside it, and a case that
+    // forgets does not compile. Nullable, because for a type that declares RequiresCluster the
+    // cluster IS its world and there is nothing to describe, and for a type whose world is a module
+    // the module is. A type that supplies a DataPlane MUST supply a StoragePrefix too, and the suite
+    // fails one that leaves it null with a message naming the member. So a provider cannot escape
+    // the world-facing assertions by declining a cluster: it trades one world the harness can reach
+    // for one it has to describe.
+
+    /// <summary>
+    ///     For a type with no cluster data plane: the world the four-clause check breaks and reads
+    ///     around the reconciler, built over the harness's grain factory and the resource's address.
+    ///     <see langword="null" /> for every type whose data plane is cluster objects.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The nearest thing in this record to a hook, and what keeps it from being one.</b>
+    ///     <c>BreakAsync</c> mutates the data plane behind the reconciler's back — the catalogue
+    ///     grain, reached through <c>ForTenant</c> like the harness reaches every other grain — and
+    ///     <c>MatchesDesiredAsync</c> reads it back. Neither decides whether the provider passed: the
+    ///     suite runs the reconciler after the break and fails it if it reports <c>Converged</c> over
+    ///     a world that does not match, which is clause 4 exactly as the cluster branch checks it. A
+    ///     case whose break did nothing would be caught by the suite asserting that
+    ///     <c>MatchesDesiredAsync</c> is <i>false</i> after the break and before the pass.
+    /// </remarks>
+    public required Func<IGrainFactory, ResourceId, ConformanceWorld>? DataPlane { get; init; }
+
+    /// <summary>
+    ///     For a type that keeps bytes on the platform's object store: the prefix under which one
+    ///     resource's bytes live, and nothing else's. <see langword="null" /> for a type that keeps none.
+    /// </summary>
+    /// <remarks>
+    ///     The suite plants an object under it after a create converges and asserts the teardown
+    ///     removed it — the object-store half of "delete tears down the data plane", which the
+    ///     cluster branch asserts by reading the fake API server.
+    /// </remarks>
+    public required Func<ResourceId, string>? StoragePrefix { get; init; }
 
     // ── There is deliberately NO RequiredCrds member, and the reason is worth keeping ─────────────
     //
@@ -445,17 +506,20 @@ public interface IProviderCaseSource {
     ///     <para>
     ///         ⚠ <b>A <c>static virtual</c> with a default, for the reason <see cref="Ancestors" />
     ///         is one: omitting it is not silent.</b> A case whose type declares no
-    ///         <c>RequiresCluster</c> and supplies no module does not run a smaller suite — it is
+    ///         <c>RequiresCluster</c> and supplies neither a module nor a
+    ///         <see cref="ProviderConformanceCase.DataPlane" /> does not run a smaller suite — it is
     ///         refused by name before its first assertion, because a clusterless run with nothing
-    ///         to read would be green over a reconciler that wrote nowhere. And a case that supplies
-    ///         a module for a type that <i>does</i> declare <c>RequiresCluster</c> is refused too:
-    ///         one world per type, and the registration says which.
-    ///         <c>ProviderConformanceTests.AClusterlessTypeSuppliesTheModuleItConvergesOnto</c> is
+    ///         to read would be green over a reconciler that wrote nowhere. A case that supplies
+    ///         a module for a type that <i>does</i> declare <c>RequiresCluster</c> is refused too,
+    ///         and so is one that supplies both a module and a data plane: one world per type, and
+    ///         the registration says which.
+    ///         <c>ProviderConformanceTests.AClusterlessTypeSuppliesTheWorldItConvergesOnto</c> is
     ///         the calibration.
     ///     </para>
     ///     <para>
     ///         See <see cref="IConvergedModule" /> for what the module answers and what a clusterless
-    ///         run still cannot say.
+    ///         run still cannot say, and <c>ClusterlessWorld</c> for how the suite reads a module and
+    ///         a data plane through one shape.
     ///     </para>
     /// </remarks>
     static virtual IConvergedModule? ConvergedModule => null;

@@ -30,17 +30,11 @@ static class GatewayErrors {
     /// </param>
     public static Error NotFound(string path) => new(ErrorCode.ResourceNotFound, $"'{path}' does not exist.");
 
-    /// <summary>The <c>401</c>. No token, an expired one, or one this platform did not issue.</summary>
-    /// <param name="reason">
-    ///     Why, in terms of the <i>request</i> — "no Authorization header", "the token has expired".
-    ///     ⚠ Never in terms of the token's contents: "tenant 9f3… is unknown" confirms a tenant id.
-    /// </param>
-    public static Error Unauthenticated(string reason) =>
-        new(
-            ErrorCode.AuthorizationFailed,
-            $"The request is not authenticated: {reason}. docs/plan/10 § Authentication inputs — "
-            + "every caller presents a bearer token scoped to one tenant, and tokens live 10 minutes."
-        );
+    // ⚠ The 401 — "no Authorization header", "the token has expired" — is BearerTokenErrors
+    // .Unauthenticated in CyberCloud.Identity.Validation now, because the feeds host refuses with the
+    // same sentence and a second spelling of it would be a second thing to keep in step. Its rule
+    // travelled with it: the reason is phrased in terms of the REQUEST and never of the token's
+    // contents, because "tenant 9f3… is unknown" confirms a tenant id.
 
     /// <summary>The <c>400</c> for a missing or unknown <c>api-version</c>.</summary>
     /// <param name="supplied">What the caller sent, or empty when the parameter was absent.</param>

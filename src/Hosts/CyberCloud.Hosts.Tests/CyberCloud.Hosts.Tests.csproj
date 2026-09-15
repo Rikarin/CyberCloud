@@ -40,6 +40,8 @@
         <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
         <!-- #36: the third host of the agent tunnel, composed here to prove it binds no pod at build. -->
         <ProjectReference Include="../CyberCloud.Agent.Host/CyberCloud.Agent.Host.csproj"/>
+        <!-- The third host, docs/plan/13 § Artifact feeds: composed here for the same reason the other two are. -->
+        <ProjectReference Include="../CyberCloud.Registry.Feeds.Host/CyberCloud.Registry.Feeds.Host.csproj"/>
     </ItemGroup>
 
 </Project>

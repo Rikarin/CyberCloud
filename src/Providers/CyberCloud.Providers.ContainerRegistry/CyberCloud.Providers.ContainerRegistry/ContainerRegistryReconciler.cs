@@ -1,7 +1,6 @@
-// ⚠ For `Result<T>` on the credential path. See ContainerRegistryProvider for why this import is safe
-// beside the ErrorCode alias.
+// `CyberCloud.Core`, for `Result<T>` on the credential path, is a global using now — GlobalUsings.cs
+// says why the per-file import this header used to explain is gone.
 
-using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Collections.Immutable;
 using System.Text.Json;

@@ -1,0 +1,22 @@
+CyberCloud.ContainerRegistry/feeds — a {{ .Values.kind }} feed.
+
+This chart renders no Kubernetes object, and that is not a defect of the release you just
+installed. A feed lands in no cluster: it is served by CyberCloud.Registry.Feeds.Host, which keeps
+the catalogue in a durable grain and the artefacts on the platform's object storage, and reads the
+feed's kind from the resource body rather than from these values.
+
+Point a client at it:
+
+{{- if eq .Values.kind "nuget" }}
+  dotnet nuget add source {{ .Values.platform.feedsHost }}/nuget/{{ .Values.platform.subscriptionId }}/{{ .Values.platform.resourceGroup }}/{{ .Values.platform.name }}/v3/index.json
+  dotnet nuget push <package>.nupkg --source <that url> --api-key <platform token>
+{{- else if eq .Values.kind "npm" }}
+  npm config set registry {{ .Values.platform.feedsHost }}/npm/{{ .Values.platform.subscriptionId }}/{{ .Values.platform.resourceGroup }}/{{ .Values.platform.name }}/
+  npm config set //<host>/npm/…/:_authToken <platform token>
+{{- else }}
+  <repository><url>{{ .Values.platform.feedsHost }}/maven/{{ .Values.platform.subscriptionId }}/{{ .Values.platform.resourceGroup }}/{{ .Values.platform.name }}</url></repository>
+  with a <server> in settings.xml whose password is a platform token
+{{- end }}
+
+docs/plan/13 § Artifact feeds is the design; charts/managed/feeds/conformance.yaml is what the
+platform asserts and what it still owes.

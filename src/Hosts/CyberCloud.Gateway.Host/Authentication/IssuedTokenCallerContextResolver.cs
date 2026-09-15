@@ -1,4 +1,5 @@
 using CyberCloud.Core.Time;
+using CyberCloud.Identity.Validation;
 using System.Collections.Concurrent;
 using System.Globalization;
 
@@ -65,14 +66,14 @@ sealed class IssuedTokenCallerContextResolver(IClock clock) : ICallerContextReso
 
         if (header.Length == 0) {
             return Task.FromResult(
-                Result<TokenClaims>.Failure(Http.GatewayErrors.Unauthenticated("no Authorization header"))
+                Result<TokenClaims>.Failure(BearerTokenErrors.Unauthenticated("no Authorization header"))
             );
         }
 
         if (!header.StartsWith(BearerPrefix, StringComparison.Ordinal)) {
             return Task.FromResult(
                 Result<TokenClaims>.Failure(
-                    Http.GatewayErrors.Unauthenticated("the Authorization header is not a bearer token")
+                    BearerTokenErrors.Unauthenticated("the Authorization header is not a bearer token")
                 )
             );
         }
@@ -82,14 +83,14 @@ sealed class IssuedTokenCallerContextResolver(IClock clock) : ICallerContextReso
         if (!issued.TryGetValue(header[BearerPrefix.Length..], out var claims)) {
             return Task.FromResult(
                 Result<TokenClaims>.Failure(
-                    Http.GatewayErrors.Unauthenticated("the bearer token was not issued by this platform")
+                    BearerTokenErrors.Unauthenticated("the bearer token was not issued by this platform")
                 )
             );
         }
 
         if (claims.ExpiresAt <= clock.UtcNow) {
             return Task.FromResult(
-                Result<TokenClaims>.Failure(Http.GatewayErrors.Unauthenticated("the bearer token has expired"))
+                Result<TokenClaims>.Failure(BearerTokenErrors.Unauthenticated("the bearer token has expired"))
             );
         }
 

@@ -1,0 +1,88 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/feeds/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the feeds chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "description": {
+      "default": "",
+      "description": "What the feed is for, shown in the portal beside its name.",
+      "maxLength": 256,
+      "type": "string",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/description"
+    },
+    "kind": {
+      "default": "nuget",
+      "description": "Which protocol the feed speaks: nuget (the v3 API), npm (the registry API) or maven (the repository layout). Immutable, because the three have three versioning models.",
+      "enum": [
+        "nuget",
+        "npm",
+        "maven"
+      ],
+      "examples": [
+        "nuget"
+      ],
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/kind"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity, for NOTES.txt. Not a tenant-facing setting.",
+      "properties": {
+        "feedsHost": {
+          "default": "https://feeds.cybercloud.io",
+          "description": "The origin CyberCloud.Registry.Feeds.Host is reachable at — CyberCloud:Feeds:PublicBaseUri on that host, which is what a service index and a tarball URL are spelled with.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Supplied by whoever installs the chart, for NOTES.txt alone — a feed's reconciler renders nothing and reads none of this. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/feedsHost"
+        },
+        "name": {
+          "default": "",
+          "description": "The feed's own name — the fourth segment of every feed URL.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Supplied by whoever installs the chart, for NOTES.txt alone — a feed's reconciler renders nothing and reads none of this. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/name"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name — the third segment of every feed URL.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Supplied by whoever installs the chart, for NOTES.txt alone — a feed's reconciler renders nothing and reads none of this. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID — the second segment of every feed URL.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Supplied by whoever installs the chart, for NOTES.txt alone — a feed's reconciler renders nothing and reads none of this. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Supplied by whoever installs the chart, for NOTES.txt alone — a feed's reconciler renders nothing and reads none of this. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/platform"
+    }
+  },
+  "required": [
+    "kind"
+  ],
+  "title": "feeds chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "feeds",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/feeds"
+}

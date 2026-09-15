@@ -99,6 +99,9 @@ public sealed class StorageCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
@@ -177,6 +180,9 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             InvalidBodyTarget = StorageBuckets.ClusterIdPointer,
             ActionName = StorageBuckets.StatsAction,
             Objects = (id, ns) => [StorageBuckets.BucketRef(ns, id)],
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             // ⚠ THE OPERATOR WRITES ONTO THE OBJECT THE RECONCILER APPLIED, AND THAT IS THE ONE SHAPE
             // THIS MEMBER HAD NOT MET. Every earlier use places a SEPARATE object — CloudNativePG's
             // `{cluster}-app` Secret — beside what the reconciler rendered. bucket_usage.go patches
@@ -282,6 +288,9 @@ public sealed class StorageFileShareCase : IProviderCaseSource {
                 StorageFileShares.DriverRef(ns, id),
                 StorageFileShares.ClaimRef(ns, id)
             ],
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = (id, ns) => [
                 (
                     StorageFileShares.ClaimRef(ns, id),

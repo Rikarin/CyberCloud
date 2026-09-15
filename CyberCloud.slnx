@@ -106,6 +106,13 @@
         <Project Path="src/CyberCloud.Identity/CyberCloud.Identity.csproj" />
         <Project Path="src/CyberCloud.Identity.Tests/CyberCloud.Identity.Tests.csproj" />
         <!--
+          The relying-party half of docs/plan/11 § Protocol — a bearer JWT validated against the
+          identity host's key set. Referenced by the gateway and by the feeds host, and by the
+          identity host NEVER: its .csproj header says why that one reference is the boundary.
+        -->
+        <Project Path="src/CyberCloud.Identity.Validation/CyberCloud.Identity.Validation.csproj" />
+        <Project Path="src/CyberCloud.Identity.Validation.Tests/CyberCloud.Identity.Validation.Tests.csproj" />
+        <!--
           The hand-written half of the .NET SDK — docs/plan/21 § Generation. ⚠ It is the ONE project
           under src/ with IsPackable=true: docs/plan/03 § Top level keeps `cli/` out of src/ "because
           it ships separately" and places the SDK nowhere at all, which is a gap in that document
@@ -129,6 +136,14 @@
         -->
         <Project Path="src/CyberCloud.Vault/CyberCloud.Vault.csproj" />
         <Project Path="src/CyberCloud.Vault.Tests/CyberCloud.Vault.Tests.csproj" />
+
+        <!--
+          docs/plan/13 § Artifact feeds, docs/plan/15 § Object storage — the platform's S3 client and
+          the one IObjectStore that stores bytes. No .Contracts pair, for the reason CyberCloud.Vault
+          has none: it implements a seam that already exists in CyberCloud.ResourceManager.Contracts.
+        -->
+        <Project Path="src/CyberCloud.ObjectStorage/CyberCloud.ObjectStorage.csproj" />
+        <Project Path="src/CyberCloud.ObjectStorage.Tests/CyberCloud.ObjectStorage.Tests.csproj" />
     </Folder>
     <!--
       docs/plan/03 § Providers — the five projects every provider has. CyberCloud.Sample is the first
@@ -529,6 +544,12 @@
         <Project Path="src/Hosts/CyberCloud.Agent.Host/CyberCloud.Agent.Host.csproj" />
         <Project Path="src/Hosts/CyberCloud.Hosts.Tests/CyberCloud.Hosts.Tests.csproj" />
         <Project Path="src/Hosts/CyberCloud.Identity.Host.Tests/CyberCloud.Identity.Host.Tests.csproj" />
+        <!--
+          docs/plan/13 § Artifact feeds — the NuGet, npm and Maven service. An Orleans client like
+          the gateway; accepts the gateway's bearer tokens through CyberCloud.Identity.Validation.
+        -->
+        <Project Path="src/Hosts/CyberCloud.Registry.Feeds.Host/CyberCloud.Registry.Feeds.Host.csproj" />
+        <Project Path="src/Hosts/CyberCloud.Registry.Feeds.Host.Tests/CyberCloud.Registry.Feeds.Host.Tests.csproj" />
     </Folder>
     <!--
       docs/plan/03 § Top level keeps `cli/` out of src/ because it ships separately.

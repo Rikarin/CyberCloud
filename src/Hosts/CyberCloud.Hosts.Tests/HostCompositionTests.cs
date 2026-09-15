@@ -1,6 +1,8 @@
 using CyberCloud.Core;
+using CyberCloud.Core.Resources;
 using CyberCloud.Gateway.Host;
 using CyberCloud.Gateway.Host.Principals;
+using CyberCloud.Registry.Feeds.Host;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager;
@@ -17,6 +19,7 @@ using Orleans.Configuration;
 using Shouldly;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 // Orleans has an ErrorCode too, and the Orleans global using arrives with both hosts' reference sets.
 using ErrorCode = CyberCloud.Core.ErrorCode;
 
@@ -799,6 +802,229 @@ public sealed class HostCompositionTests {
                 "--urls", "http://127.0.0.1:0",
                 $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
                 IssuerArgument
+            ]
+        );
+
+    // ── The feeds host — docs/plan/13 § Artifact feeds, the third bearer-token host ─────────────
+
+    /// <summary>
+    ///     ⚠ The feeds host composes a registry of exactly one family, and that family's two types.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Not the silo's fifteen, and the difference is asserted rather than tolerated. The
+    ///         gateway needs every provider because it routes every path; this host reads one type
+    ///         through <c>IResourceManager.ReadAsync</c> and would put fourteen implementation
+    ///         assemblies into a data-plane process for nothing. <c>FeedsHostModule</c> makes the
+    ///         argument; this is what holds it to one line.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Both types of the family and not the feeds type alone, because the module registers
+    ///         the provider and a provider's <c>Describe</c> is not divisible. A host that could load
+    ///         half a family would be a registry that disagrees with the silo's about the family's
+    ///         shape.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheFeedsHostComposesTheContainerRegistryFamilyAndNoOther() {
+        await using var feeds = await BuildFeedsAsync();
+
+        var registry = feeds.Services.GetRequiredService<IProviderRegistry>();
+
+        registry.Namespaces.ShouldBe(["CyberCloud.ContainerRegistry"]);
+
+        registry.Types
+            .Select(x => x.Type.ToString())
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ShouldBe(["CyberCloud.ContainerRegistry/feeds", "CyberCloud.ContainerRegistry/registries"]);
+    }
+
+    /// <summary>
+    ///     ⚠ The feeds host's registration of the feeds type is the silo's, type for type.
+    /// </summary>
+    /// <remarks>
+    ///     The same class-(b) failure the silo-and-gateway assertion above guards against, one host
+    ///     over: a feeds host that read a registration the silo did not reconcile would resolve
+    ///     feeds the silo never opened. Compared on the one type this host serves.
+    /// </remarks>
+    [Fact]
+    public async Task TheFeedsHostAndTheSiloAgreeAboutTheFeedsType() {
+        await using var silo = await BuildSiloAsync();
+        await using var feeds = await BuildFeedsAsync();
+
+        var type = new ResourceTypeName("CyberCloud.ContainerRegistry", "feeds");
+
+        silo.Services.GetRequiredService<IProviderRegistry>().TryGetType(type, out var atSilo).ShouldBeTrue();
+        feeds.Services.GetRequiredService<IProviderRegistry>().TryGetType(type, out var atFeeds).ShouldBeTrue();
+
+        atFeeds.ReconcilerType.ShouldBe(atSilo.ReconcilerType);
+        atFeeds.RequiresCluster.ShouldBe(atSilo.RequiresCluster);
+        atFeeds.ReadPermission.ShouldBe(atSilo.ReadPermission);
+        atFeeds.WritePermission.ShouldBe(atSilo.WritePermission);
+        atFeeds.ApiVersions.Select(x => x.Version).ShouldBe(atSilo.ApiVersions.Select(x => x.Version));
+    }
+
+    /// <summary>
+    ///     ⚠ The feeds host refuses to compose with no identity host to validate tokens against —
+    ///     the same refusal as the gateway's, for the same #68 reason.
+    /// </summary>
+    [Fact]
+    public async Task TheFeedsHostRefusesToComposeWithoutAnIdentityIssuer() {
+        var thrown = await Should.ThrowAsync<InvalidOperationException>(() =>
+            FeedsComposition.BuildAsync(
+                [
+                    "--environment", "Development",
+                    "--urls", "http://127.0.0.1:0",
+                    $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                    "--CyberCloud:Feeds:Identity:Issuer="
+                ]
+            )
+        );
+
+        thrown.Message.ShouldContain("IBearerTokenValidator");
+        thrown.Message.ShouldContain("CyberCloud:Feeds:Identity:Issuer");
+    }
+
+    /// <summary>
+    ///     ⚠ With an issuer, both bearer-token hosts validate through the SAME JWKS validator.
+    /// </summary>
+    /// <remarks>
+    ///     By type name, for the reason the gateway assertion gives. The feeds host resolves
+    ///     <c>IBearerTokenValidator</c> directly; the gateway resolves it behind its stage-2 adapter,
+    ///     and the adapter's dependency is asserted here too so that the two hosts cannot drift onto
+    ///     two validators for one token.
+    /// </remarks>
+    [Fact]
+    public async Task BothBearerTokenHostsValidateThroughTheOneJwksValidator() {
+        await using var feeds = await BuildFeedsAsync();
+        await using var gateway = await BuildGatewayAsync();
+
+        var seam = typeof(FeedsComposition).Assembly
+            .GetReferencedAssemblies()
+            .Select(Assembly.Load)
+            .Select(x => x.GetType("CyberCloud.Identity.Validation.IBearerTokenValidator"))
+            .First(x => x is not null)!;
+
+        feeds.Services.GetRequiredService(seam).GetType().Name.ShouldBe("JwksBearerTokenValidator");
+        gateway.Services.GetRequiredService(seam).GetType().Name.ShouldBe("JwksBearerTokenValidator");
+    }
+
+    /// <summary>
+    ///     ⚠ The two hosts that touch a feed's bytes — the feeds host to store, the silo to tear
+    ///     down — both wire the S3 store when <c>CyberCloud:ObjectStorage</c> is configured, and
+    ///     both keep the refusing default when it is not.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         By concrete type, for the reason <see cref="TheSiloWiresTheClusterFabricRatherThanTheRefusingDefaults" />
+    ///         gives: <c>UnavailableObjectStore</c> resolves perfectly well, and a silo left with it
+    ///         refuses every feed teardown with a message about configuration rather than converging
+    ///         over bytes it never removed. That refusal is the right default and the wrong
+    ///         production — so the configured half of this test is what a deployment relies on and
+    ///         the unconfigured half is what a developer machine relies on.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The endpoint is plain http with <c>AllowInsecureTransport</c> set, because without
+    ///         the flag <c>AddS3ObjectStore</c> throws at composition — which is its own contract and
+    ///         <c>ObjectStorageWiringTests</c>' to hold, not this test's. Nothing here connects to
+    ///         the endpoint: composition builds the store, it does not call it.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsThatTouchAFeedsBytesWireTheS3StoreOnlyWhenObjectStorageIsConfigured() {
+        await using var bareSilo = await BuildSiloAsync();
+        await using var bareFeeds = await BuildFeedsAsync();
+
+        bareSilo.Services.GetRequiredService<IObjectStore>().ShouldBeOfType<UnavailableObjectStore>();
+        bareFeeds.Services.GetRequiredService<IObjectStore>().ShouldBeOfType<UnavailableObjectStore>();
+
+        await using var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                .. ObjectStorageArguments
+            ]
+        );
+
+        await using var feeds = await FeedsComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                FeedsIssuerArgument,
+                .. ObjectStorageArguments
+            ]
+        );
+
+        silo.Services.GetRequiredService<IObjectStore>().GetType().Name.ShouldBe("S3ObjectStore");
+        feeds.Services.GetRequiredService<IObjectStore>().GetType().Name.ShouldBe("S3ObjectStore");
+    }
+
+    /// <summary>
+    ///     A complete <c>CyberCloud:ObjectStorage</c> section, as the arguments that spell it. ⚠ The
+    ///     credential is a placeholder for a store nothing connects to.
+    /// </summary>
+    static readonly string[] ObjectStorageArguments = [
+        "--CyberCloud:ObjectStorage:Endpoint=http://127.0.0.1:1",
+        "--CyberCloud:ObjectStorage:Bucket=cybercloud-feeds",
+        "--CyberCloud:ObjectStorage:AccessKeyId=composition-test",
+        "--CyberCloud:ObjectStorage:SecretAccessKey=composition-test",
+        "--CyberCloud:ObjectStorage:AllowInsecureTransport=true"
+    ];
+
+    /// <summary>
+    ///     ⚠ The feeds host <b>starts</b> against a silo, for the reason the gateway assertion above
+    ///     gives: composing is not starting, and this host loads a provider module the way the silo
+    ///     does, which is the path that inserts <c>UseAuthorization</c> and throws on
+    ///     <c>StartAsync</c> without <c>AddAuthorization</c>.
+    /// </summary>
+    [Fact]
+    public async Task TheFeedsHostStartsAndNotOnlyComposes() {
+        var siloPort = FreePort();
+        var gatewayPort = FreePort();
+
+        await using var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={siloPort}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}"
+            ]
+        );
+
+        await silo.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var feeds = await FeedsComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}",
+                FeedsIssuerArgument
+            ]
+        );
+
+        feeds.MapFeeds();
+        await feeds.StartAsync(TestContext.Current.CancellationToken);
+
+        feeds.Services.GetRequiredService<IProviderRegistry>().Types.ShouldNotBeEmpty();
+
+        await feeds.StopAsync(TestContext.Current.CancellationToken);
+        await silo.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>The identity host the feeds host is told to trust — the feeds section's spelling of <see cref="IssuerArgument" />.</summary>
+    const string FeedsIssuerArgument = "--CyberCloud:Feeds:Identity:Issuer=http://127.0.0.1:1";
+
+    /// <summary>Builds the real feeds host.</summary>
+    static Task<WebApplication> BuildFeedsAsync() =>
+        FeedsComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                FeedsIssuerArgument
             ]
         );
 

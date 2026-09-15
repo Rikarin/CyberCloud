@@ -1,0 +1,50 @@
+# Artifact feeds — docs/plan/13 § Artifact feeds, "CyberCloud.ContainerRegistry/feeds · M2 · 1.5 EM",
+# issue #29. NuGet, npm and Maven feeds, "a single .NET service backed by SeaweedFS".
+#
+# ⚠ THIS CHART RENDERS NO KUBERNETES OBJECT, AND IT IS THE FIRST UNDER charts/managed/ THAT DOES
+# NOT. Every other chart here renders a custom resource or a set of built-in objects into a tenant's
+# cluster; a feed lands in no cluster at all. Its data plane is CyberCloud.Registry.Feeds.Host — a
+# platform host that speaks the three protocols — plus a durable catalogue grain and a prefix on the
+# platform's object storage. templates/NOTES.txt is the one template and it says so.
+#
+# ⚠ SO WHY IS THERE A CHART. Because the chart is where the catalogue keeps a type's configuration
+# surface: Build.Charts generates the @param block in values.yaml from ArtifactFeeds.Schema2026 and
+# values.schema.json from that, which is ADR-012's fifth surface and the one a person reads. And
+# because Build.Charts requires SOURCE, conformance.yaml and the two annotations ONLY for a chart
+# under charts/managed/ — a type with no chart here is a catalogue row that quietly owes no
+# conformance manifest, which charts/managed/kubernetes and charts/managed/cloud-shell each declined
+# to be. The manifest is the part that matters; the templates directory is the price of carrying it
+# in the catalogue's format.
+apiVersion: v2
+name: feeds
+description: A NuGet, npm or Maven package feed served by the platform's feeds host, with artefacts on the platform's object storage. Renders nothing into a cluster.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ THERE IS NO UPSTREAM AND NO IMAGE EITHER: the feeds host is CyberCloud.Registry.Feeds.Host, which
+# build/Build.Images.cs publishes like every other host. appVersion tracks nothing here.
+appVersion: "0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - nuget
+  - npm
+  - maven
+  - artifact
+  - feed
+
+home: https://github.com/cybercloud
+sources:
+  - https://github.com/cybercloud
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.ContainerRegistry/feeds
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

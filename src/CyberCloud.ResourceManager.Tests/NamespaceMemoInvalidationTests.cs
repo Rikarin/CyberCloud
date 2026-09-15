@@ -169,6 +169,7 @@ public sealed class NamespaceMemoInvalidationTests(ResourceManagerCluster cluste
             new UnavailableClusterConnectionRegistrar(),
             new UnavailableSecretResolver(),
             new UnavailableSecretWriter(),
+            new UnavailableObjectStore(),
             namespaces,
             TestClock.Instance
         );

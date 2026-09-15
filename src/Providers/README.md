@@ -1958,8 +1958,10 @@ any provider existed, and **the first clusterless family in the catalogue**.
   it. Two skip loudly (an admission refusal and a dropped connection are a cluster's answers), one
   asserts *absence* rather than skipping (the seven labels, because the Labels gate reads a skipped
   test as a failed suite), and the rest read the module around the reconciler exactly as they read
-  the fake cluster. `ProviderConformanceTests.AClusterlessTypeSuppliesTheModuleItConvergesOnto` is
-  the calibration in both directions.
+  the fake cluster. `ProviderConformanceTests.AClusterlessTypeSuppliesTheWorldItConvergesOnto` is
+  the calibration in both directions. (The two skips became inverse assertions — the operation
+  converges and nothing reached the cluster — when #29's clusterless shape merged the same day; see
+  the next section.)
 - **⚠ THE RECONCILER CANNOT LEARN ITS PARENT'S GUID, AND THE ANSWER CHANGED HOW THE MODULE IS
   KEYED.** A `channels` resource converges onto its *service's* grain, and `ReconcileContext.Id`
   knows the parent by name only. Asking the resource index would be a provider calling the index,
@@ -2006,6 +2008,68 @@ any provider existed, and **the first clusterless family in the catalogue**.
   `test/CyberCloud.Cluster.Conformance` refuses a case with no objects by name. All four are in
   `charts/bundle/bundle.yaml § owed`, because a family with no chart has no `conformance.yaml` to
   carry them.
+
+### What the feeds type measured
+
+⚠ **Two branches merged on 2026-09-15 each called itself the first clusterless family** — #33's
+`Communication/services` above and this one — because each was written against a master that had
+neither. Communication merged first, so it holds the title; what this section measured is the
+*second* clusterless shape, and a different one: a data plane that is a platform host rather than a
+module in the silo. **Neither registration replaced the other, and the suite has one clusterless
+branch for both.** `test/CyberCloud.Conformance/ClusterlessWorld.cs` adapts whichever a case
+registered — `IConvergedModule` on the source, or `DataPlane` + `StoragePrefix` on the case — and
+the two facts that genuinely differ are data on that shape: a module has a hand edit and a pass can
+put its grains back from the body (#33's "corrected"); a data plane has no hand edit and a closed
+catalogue cannot be re-opened from the body (#29's "noticed"). The suite branches on the registry's
+`RequiresCluster`, and `AClusterlessTypeSuppliesTheWorldItConvergesOnto` refuses a clusterless
+case that registers neither or both. One of the two skips recorded below also went: the
+delete-during-an-operation race runs for a clusterless type by leaving the create undriven (#33's
+shape); the hand edit still skips, and only for a world that describes none.
+
+`CyberCloud.ContainerRegistry/feeds`, [13 § Artifact feeds](../../docs/plan/13-compute-vm-containers.md),
+M2 · 1.5 EM, #29. NuGet v3, npm and Maven, as a second type of the `ContainerRegistry` provider and
+the first type in the catalogue whose data plane is a platform host — `CyberCloud.Registry.Feeds.Host`
+— rather than an object in a tenant's cluster.
+
+- **⚠ IT IS THE FIRST PROVIDER GRAIN, AND THE RULE THAT EVERY EARLIER ROW LEANED ON — "it has no
+  grain and no durable state either" — WAS A CONSEQUENCE OF WHERE THE DATA PLANE LIVED, NOT A LAW.**
+  Twenty-three types needed no grain because the cluster held their state and `ResourceGrain` held the
+  desired body. A feed's state is its catalogue — which versions exist, which are listed, what each
+  weighs — and there is no cluster to hold it, so `FeedGrain` holds it, durably, per feed, and is the
+  second line under `Providers` in `durable-grains.txt` (#32's `AlertEvaluatorGrain` merged the same day). ⚠ The catalogue is *data-plane content*, not
+  manager state: the resource manager never reads it, and the feeds host reaches it only through
+  `IFeedGrain` in the Contracts assembly, which is what lets the grain be split per package later
+  without the host noticing.
+- **⚠ `RequiresCluster` was implicitly `true` everywhere, and making it honestly `false` cost the
+  shared suite eight branches.** `ProviderConformanceTests` asserted "what the provider applied is in
+  the cluster" and "delete tears down the namespace" for every case; a type that applies nothing
+  passed the first vacuously and failed the second. The suite now branches on the registry's
+  `RequiresCluster`, and a clusterless case supplies its own `DataPlane` (break it, ask whether it
+  matches) and `StoragePrefix` (plant a byte, assert the teardown removed it) — both `required` on
+  `ProviderConformanceCase`, so the seventeen cluster types say `null` in as many words rather than
+  inheriting a default. ⚠ Two assertions are `Assert.Skip` rather than rewritten for a clusterless
+  type — a hand-edit in a cluster that does not exist, and a delete during an operation that
+  converges in one pass — and each says why at the skip.
+- **⚠ The reconciler's teardown converges only when the listing reads back empty, and the sabotage
+  that proved it was removing one line.** `ArtifactFeedReconciler.DeleteAsync` closes the catalogue,
+  lists the feed's prefix on `context.Objects`, deletes what it finds, and reports `Converged` only
+  once the list is empty. Without the deletion, `DeleteTearsDownTheDataPlaneAndTheResourceIsGone`
+  fails with *"still holds objects after a converged teardown"*, which is the message it was written
+  to give. `context.Objects` is a new seam on `ReconcileContext` — an `IObjectStore` beside the
+  `ISecretWriter` precedent, refusing by default — because a reconciler that reached the store through
+  its own client would be a second bucket configuration nothing checks against the host's.
+- **⚠ The authorisation is the resource manager's and the host adds none of its own.** The feeds host
+  resolves a feed by reading it through `IResourceManager.ReadAsync` as the caller — so a caller with
+  no role sees 404, never 403 — and asks `IResourceAuthorizer` for the type's own `write` against its
+  own `read` before a push, an unlist or a dist-tag write. The tenant is the token's; the URL has no
+  tenant segment to spell, so another tenant's owner sending the same path reaches her own feed. What
+  it took to get there was a bearer validator both hosts could share, which is why `JwksCallerContextResolver`
+  became an adapter over `CyberCloud.Identity.Validation` rather than the second copy of #68.
+- **⚠ What a green run here proves is bounded by the clients that were not run.** Every protocol
+  test reproduces the request a client makes — the multipart push, the publish document, the deploy
+  sequence — and drives the real host over HTTP; none runs `dotnet`, `npm` or `mvn`. It is
+  `charts/managed/feeds/conformance.yaml § owed`, `no-real-client-is-driven`, beside the proxy and
+  retention thirds of doc 13's scope and the two meters the host does not yet emit.
 
 ## Namespaces
 

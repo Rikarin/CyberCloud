@@ -9,6 +9,7 @@ using CyberCloud.Gateway.Host.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.Kubernetes.Tunnel;
+using CyberCloud.Identity.Validation;
 using CyberCloud.ResourceManager;
 using CyberCloud.Tenancy;
 using CyberCloud.Tenancy.Directory;
@@ -197,8 +198,19 @@ static class GatewayServiceCollectionExtensions {
     ///         accept them. Nor is <c>OpenIddict.Validation.AspNetCore</c> here: that package is an
     ///         ASP.NET Core authentication handler, and stage 2 is not one — the pipeline resolves
     ///         <see cref="ICallerContextResolver" /> itself, so the handler would register a scheme
-    ///         nothing consults. <see cref="JwksCallerContextResolver" /> calls the validation
-    ///         service directly.
+    ///         nothing consults. <see cref="JwksCallerContextResolver" /> reads the header and hands
+    ///         the bytes to <c>IBearerTokenValidator</c>, which calls the validation service directly.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The validator is <c>CyberCloud.Identity.Validation</c>'s, shared with the feeds
+    ///             host, and this method is what makes it the gateway's stage 2.
+    ///         </b> <c>AddJwksBearerTokenValidation</c> registers OpenIddict and the JWKS validator;
+    ///         the line after it registers the one adapter that is this host's — the resolver that
+    ///         reads the <c>Authorization</c> header and nothing else. A host that composed the
+    ///         validator without the adapter would have a token validator nothing calls, which is
+    ///         the shape #68 was.
     ///     </para>
     ///     <para>
     ///         ⚠
@@ -229,22 +241,11 @@ static class GatewayServiceCollectionExtensions {
             );
         }
 
-        services
-            .AddOpenIddict()
-            .AddValidation(options => {
-                    // ⚠ Pinned, both of them. An unpinned issuer accepts any host's discovery
-                    // document; an unpinned audience accepts a token minted for some other relying
-                    // party. Item 2 of ICallerContextResolver's list.
-                    options.SetIssuer(new Uri(identity.Issuer, UriKind.Absolute));
-                    options.AddAudiences(identity.Audience);
+        // Pins the issuer and the audience, registers OpenIddict's validation over HttpClient and
+        // the JWKS validator — items 1 and 2 of ICallerContextResolver's list, met once for every
+        // host that accepts a platform token.
+        services.AddJwksBearerTokenValidation(identity.ToBearerTokenOptions(), GatewayIdentityOptions.SectionName);
 
-                    // Discovery and the JWKS over HttpClient, cached, refreshed on an unknown kid.
-                    // Item 1 of the same list: a key rotation must not need a gateway deploy.
-                    options.UseSystemNetHttp();
-                }
-            );
-
-        services.TryAddSingleton<IClock, SystemClock>();
         services.TryAddSingleton<ICallerContextResolver, JwksCallerContextResolver>();
 
         return services;

@@ -1,0 +1,206 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.ContainerRegistry/feeds. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as Chart.yaml.
+#
+# ⚠ THE AUTHORITY FOR THIS ROW IS docs/plan/13 § Artifact feeds — "CyberCloud.ContainerRegistry/feeds
+# · M2 · 1.5 EM", "implement the three protocols in a single .NET service backed by SeaweedFS" — and
+# docs/plan/24 § Phase 3, row Registry, issue #29. It shares a namespace with charts/managed/harbor's
+# row and shares no implementation with it, which is exactly what that row's `feeds-is-a-different-
+# product` said before this file existed.
+
+resourceType: CyberCloud.ContainerRegistry/feeds
+apiVersion: "2026-08-01"
+chart: feeds
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ NONE, AND THE SUITE ASSERTS THE ZERO. This is the first type in the catalogue that declares no
+# RequiresCluster; ReconcileDriver hands its reconciler a null connection and skips the namespace,
+# and the shared provider suite's clusterless branch asserts that a pass applied NOTHING to the fake
+# API server — not even the resource group's namespace. What the reconciler does instead is open the
+# feed's catalogue grain on create and empty its storage prefix on delete, and the suite reads both
+# around the reconciler through the case's DataPlane and StoragePrefix.
+renders: []
+
+# ADR-013 — every rendered object carries all seven labels. Nothing is rendered, so the list is what
+# the Labels architecture gate would assert if anything were; the gate's own run over this family's
+# .Conformance project still sees a real rendered object, because the registries case is in the same
+# project.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.containerregistry_feeds
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+# Every one below RUNS TODAY, against the real feeds host started as an Orleans client of an
+# in-process silo — CyberCloud.Registry.Feeds.Host.Tests — unless it says otherwise.
+assertions:
+  - id: a-push-is-restorable
+    says: >
+      `dotnet nuget push` with the platform token in X-NuGet-ApiKey answers 201; the flat container
+      lists the version lower-cased and normalised; the .nupkg comes back byte for byte at the address
+      a restore computes; the .nuspec is served on its own; the registration carries the catalogue
+      entry with its dependency groups; search finds it. NuGetProtocolTests
+      .APushIsStoredListedRegisteredSearchableAndRestorable.
+  - id: a-published-version-is-immutable
+    says: >
+      A second push of a version that exists is 409 on every protocol, and the first bytes stay —
+      including a NuGet version spelled differently (`2.0.0.0`, another case) and an npm publish with
+      a different description. Maven's release paths are immutable, checksums and signatures beside a
+      release with them; its metadata and -SNAPSHOT directories are not, which is the default policy of
+      every repository manager. ⚠ Two more ways the first bytes could have gone, both found by the
+      review of #29 and both closed: an npm publish of a NEW version whose `_attachments` was keyed
+      with an EXISTING version's file name overwrote the existing tarball under its old shasum
+      (NpmProtocolTests.APublishWhoseAttachmentIsNamedForAnotherVersionIs400AndThatVersionsBytesStay —
+      the tarball's name is now derived from name and version and the attachment must agree); and two
+      CONCURRENT pushes of one version both passed the catalogue's check and wrote one key, so the
+      surviving entry's hash described the loser's bytes (ImmutablePublishTests — an immutable
+      artefact's key now carries its own SHA-256 and a losing claim removes its bytes).
+  - id: an-unlist-keeps-the-version-restorable
+    says: >
+      `dotnet nuget delete` unlists: the version leaves search and the registration says listed=false,
+      and the flat container still lists it so a lock file that pins it keeps restoring. A relist
+      brings it back to search.
+  - id: npm-publish-install-and-dist-tags
+    says: >
+      `npm publish`'s document is stored as one version entry and one tarball; the packument names
+      the tarball at this host's origin with npm's own shasum and integrity; the tarball comes back
+      byte for byte; a scoped name round-trips whether the slash arrives escaped or not; dist-tags are
+      read, written and removed, and `latest` cannot be removed.
+  - id: maven-deploy-and-generated-metadata
+    says: >
+      The `mvn deploy` sequence stores every file with its checksums and serves them back with a
+      media type; a maven-metadata.xml nobody deployed is generated from the version directories
+      that exist, with `release` the newest non-snapshot and a checksum of exactly the bytes served.
+  - id: anonymous-push-is-refused
+    says: >
+      A request with no credential is 401 with both a Basic and a Bearer challenge, because NuGet and
+      Maven answer a Basic challenge by retrying with their configured credential and npm sends
+      Bearer unprompted. A token the platform did not issue is 401 too. FeedAccessTests.
+  - id: the-feed-is-authorised-through-the-resource-manager
+    says: >
+      A valid caller with no role on the group gets 404, never 403 — docs/plan/07 § The enforcement
+      seam. A reader on the group can pull and is 403 on a push, unlist or dist-tag write, because
+      the host asks IResourceAuthorizer for the type's own `write` against its own `read`. Another
+      tenant's owner sending exactly the same URL reaches her own feed and never this one, because
+      the tenant is the token's and there is no tenant segment to spell. A feed of another kind is
+      404 on this protocol's routes.
+  - id: a-delete-empties-the-storage-prefix
+    says: >
+      Every artefact a push stored lives under ArtifactFeeds.StoragePrefix, and the reconciler's
+      teardown lists that prefix, removes what it finds, and converges only when the listing reads
+      back empty. Driven three ways: the shared provider suite plants an object under the prefix and
+      asserts the teardown removed it; MavenProtocolTests.ADeletedFeedsBytesAreGoneFromTheStoreAndItsRoutesAnswer404
+      pushes through the real host, deletes through the real manager and reads the store; and
+      ArtifactFeedReconcilerTests holds a store whose listing does not empty and asserts the pass
+      stays InProgress rather than converging.
+  - id: the-store-validates-the-signature
+    says: >
+      CyberCloud.ObjectStorage's Signature Version 4 is pinned against three of Amazon's published
+      worked examples byte for byte, and the four verbs run against a real SeaweedFS with an
+      identities file — so the server checks the signature — with a wrong secret answering 403 as the
+      control. SeaweedFsRoundTripTests.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+#
+# ⚠ NEITHER IS EMITTED, and the type reserves QuotaMeter.Resources and nothing else at write time.
+# What a feed costs is the bytes tenants push into it and the bytes clients pull out, which are
+# measured at the data plane rather than derived from a body — the same shape docs/plan/15
+# § Metering records for object storage. See `storage-and-egress-are-not-metered` below.
+meters:
+  - feed.storage.gb_month
+  - feed.egress.gb
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down is
+# indistinguishable from one nobody thought of.
+owed:
+  - id: upstream-proxy
+    says: >
+      docs/plan/13 § Artifact feeds scopes this row as "proxy + host + retention", and this is the
+      host third. A proxy feed — one that answers a miss by fetching from nuget.org, registry.npmjs.org
+      or Maven Central and caching the artefact — is not declared: an `upstream` property whose only
+      honest value today is empty would publish a feature nobody can have, which is the reason
+      charts/managed/harbor renders WITH_TRIVY as false. It arrives as a new api-version with an
+      `upstream` block, and its cost is the three protocols' upstream semantics — NuGet's registration
+      pages, npm's abbreviated packument, Maven's metadata merge — each read from a real upstream.
+  - id: retention
+    says: >
+      The third of the row's three words. A retention policy — keep the newest N versions, or drop
+      unlisted versions after D days — is not declared for the reason `upstream-proxy` gives, and it
+      needs something the platform does not have yet: a scheduled pass over a feed's catalogue, which
+      is a reminder on the catalogue grain and a rule the tenant chose. What exists is the catalogue
+      entry's PublishedAt and Listed, which are what a policy would read.
+  - id: storage-and-egress-are-not-metered
+    says: >
+      `feed.storage.gb_month` and `feed.egress.gb` above are the meters this row must emit and
+      neither is. Storage is a sum over the catalogue's entry sizes, sampled hourly, which is
+      docs/plan/22's usage pipeline reached from the feeds host; egress is a counter on every download
+      the host serves. Both are the host's to emit and the host emits nothing yet — the same gap
+      charts/managed/harbor records as its pull-bandwidth meter, one row over. ⚠ Until then a feed is
+      billed as one resource however many gigabytes it holds.
+  - id: no-real-client-is-driven
+    says: >
+      Every protocol assertion above reproduces the request a client makes — the multipart body,
+      the publish document, the deploy sequence — and drives the real host with it over HTTP. No
+      suite runs `dotnet`, `npm` or `mvn` itself: a real client needs a real TLS origin it trusts, a
+      configured credential store and, for Maven, a JVM, and the tree's test images have none of
+      them. What is therefore not proven is that a client's OWN parser accepts every byte this host
+      serves — the service index shape, the registration's paging, the packument's `time` block —
+      rather than the bytes the documentation says it accepts. A container with the three clients
+      pointed at the fixture's host is the closer, and it is owed.
+  - id: the-store-is-seaweedfs-in-tests-and-assumed-elsewhere
+    says: >
+      CyberCloud.ObjectStorage is exercised against a real SeaweedFS and against Amazon's published
+      signing vectors. It has not been pointed at an AWS bucket, a MinIO or a Ceph RGW; each is
+      S3-compatible on paper and each has a documented quirk in how it canonicalises a path. The
+      platform's own store is SeaweedFS (docs/plan/15), so the tested one is the shipped one.
+  - id: no-endpoint-action
+    says: >
+      A feed declares no action. A `listEndpoints` action returning the service index URL, the npm
+      registry URL and the Maven repository URL would be the natural thing for `cyc` and the portal
+      to call, and it needs the feeds host's public origin — CyberCloud:Feeds:PublicBaseUri — which is
+      that host's configuration and not the silo's, where a synchronous action runs. Either the origin
+      becomes platform configuration both hosts read, or the portal derives the URL from the resource
+      path and a well-known origin; both are decisions above this row.
+  - id: the-catalogue-is-one-grain-per-feed
+    says: >
+      FeedGrain holds every entry of a feed in one state document, read on activation and written on
+      every publish. A feed with ten thousand versions is a document of a few megabytes and a write
+      per push of the same; fine at M2, and the first thing to split — per package — when a feed
+      proves it is not. The split is a grain-key change the feeds host never sees, because it reaches
+      the catalogue through IFeedGrain alone.
+  - id: no-public-or-anonymous-feed
+    says: >
+      Every request needs a platform token, including every pull. An anonymous-read feed — a public
+      NuGet feed for an open-source project — is a property the type does not declare and a permission
+      the ReBAC schema does not have: `read` for everybody is not a tuple. It is a schema decision
+      before it is a feed one.
+  - id: helm-lint-package-and-syft-never-ran
+    says: >
+      helm is not on the machine that wrote this chart and syft is not either. values.schema.json was
+      produced by Build.Charts' own generator reached through a no-op helm stand-in, so `helm lint` and
+      `helm package` of charts/managed/feeds have never run — a chart that renders one NOTES.txt has
+      little for lint to find, and that is a guess until it runs. Build.Images publishes
+      CyberCloud.Registry.Feeds.Host like every host under src/Hosts, and its SBOM step needs syft;
+      that step has not run for this host on this machine. Both are owed to the first CI run with the
+      two tools installed, and neither is a reason to hold the type: the chart's value to the catalogue
+      is the conformance manifest, and this row is it.
+  - id: the-hosts-object-store-and-the-silos-are-configured-twice
+    says: >
+      Both CyberCloud.Registry.Feeds.Host and CyberCloud.Silo.Host read CyberCloud:ObjectStorage, the
+      host to store and the silo to tear down, and nothing checks that a deployment gave them the same
+      bucket. A feeds host writing into one bucket and a silo listing another is a teardown that
+      converges over bytes it never saw — the one failure the refusing default exists to prevent,
+      reintroduced by configuration. HostCompositionTests asserts the two hosts agree about the
+      feeds TYPE; agreeing about the bucket is deploy/'s to assert when deploy/platform exists.

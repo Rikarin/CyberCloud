@@ -85,6 +85,18 @@ public static class ConformanceState<TSource>
     /// </remarks>
     public static InMemorySecretVault Vault { get; } = new();
 
+    /// <summary>
+    ///     The one object store this provider's harness keeps artefacts in — what
+    ///     <c>ReconcileContext.Objects</c> is inside the silo.
+    /// </summary>
+    /// <remarks>
+    ///     Static for the reason <see cref="Vault" /> is. A type whose data plane is a platform host
+    ///     rather than a cluster object — <c>CyberCloud.ContainerRegistry/feeds</c> — tears down by
+    ///     deleting its prefix here, and the assertion that the teardown emptied it reads the same
+    ///     instance from the test process.
+    /// </remarks>
+    public static InMemoryObjectStore Objects { get; } = new();
+
     /// <summary>The clock the silo reads.</summary>
     public static ConformanceClock Clock { get; } = new();
 
@@ -142,6 +154,7 @@ public static class ConformanceState<TSource>
         Relations.Reset();
         Agents.Reset();
         Registrar.Reset();
+        Objects.Reset();
 
         // ⚠ AFTER Cluster.Reset, and the order is the whole point: the memo describes the cluster,
         // and the cluster has just been emptied.
@@ -208,6 +221,9 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
 
     /// <summary>The test vault a minting reconciler writes into.</summary>
     public InMemorySecretVault Vault => ConformanceState<TSource>.Vault;
+
+    /// <summary>The object store the silo's ReconcileContext.Objects is, read from the test side.</summary>
+    public InMemoryObjectStore Objects => ConformanceState<TSource>.Objects;
 
     /// <summary>
     ///     A container holding every action handler the case's provider declares.
@@ -284,9 +300,14 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     public static IConvergedModule? Module => TSource.ConvergedModule;
 
     /// <summary>
-    ///     Whether this case's world is a module rather than the fake cluster — which is what every
-    ///     world-facing assertion in the suite branches on.
+    ///     Whether this case's world is a module rather than the fake cluster.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ Not what the suite branches on. A clusterless type may register a
+    ///     <c>ProviderConformanceCase.DataPlane</c> instead of a module, so the suite branches on
+    ///     the registry's <c>RequiresCluster</c> — <c>ProviderConformanceTests.HasClusterDataPlane</c>
+    ///     — and reads either registration through <c>ClusterlessWorld</c>.
+    /// </remarks>
     public static bool Clusterless => TSource.ConvergedModule is not null;
 
     /// <summary>The shared clock.</summary>
@@ -679,6 +700,10 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // refusing registrar would fail that pass for the harness's reason.
                     services.AddSingleton<IAgentTunnels>(ConformanceState<TSource>.Agents);
                     services.AddSingleton<IClusterConnectionRegistrar>(ConformanceState<TSource>.Registrar);
+                    // ⚠ The object store, for the same reason the vault is here: a type whose data
+                    // plane keeps bytes on the platform's storage cannot tear down against
+                    // UnavailableObjectStore, and a refusal there would read as a provider bug.
+                    services.AddSingleton<IObjectStore>(ConformanceState<TSource>.Objects);
 
                     // The provider, exactly as AddCyberCloudProvider<T> registers one: the provider
                     // itself, and the reconciler as a SINGLETON BY CONCRETE TYPE — clause 2 makes one

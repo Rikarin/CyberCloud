@@ -37,6 +37,9 @@ public sealed class ReferenceCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
@@ -85,6 +88,9 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };

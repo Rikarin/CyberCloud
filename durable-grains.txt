@@ -142,14 +142,16 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # only because the dedup above is durable.
 
 # ── Providers — docs/plan/03 § Providers ───────────────────────────────────────────────────────
-# ONE, since #32, and for fifteen families before it NOTHING — and the absence was the reviewed
-# decision rather than an omission.
+# TWO, since #32 and #29 — and for fifteen families before them NOTHING, an absence that was the
+# reviewed decision rather than an omission.
 #
 # CyberCloud.Providers.Sample is the first provider (docs/plan/24 § Phase 1, exit criterion 1) and
 # it declares no grain of its own. A widget's desired state is held by ResourceGrain above, which is
 # already on this list; its observed state is a ConfigMap in a cluster, which ADR-001 makes
 # rebuildable from that desired state by construction — "the cluster can be wiped and rebuilt from
-# grain state; grain state cannot be rebuilt from the cluster".
+# grain state; grain state cannot be rebuilt from the cluster". Every family up to the fifteenth
+# had the same shape, and the paragraph that stood here said: the day a provider does need a line
+# here, the first question is what the manager is missing.
 #
 # ⚠ Read this as a measurement, not as a note. docs/plan/25 § R1's leading indicator is how much a
 # provider has to add to the platform, and a provider that needed durable state of its own would be
@@ -174,6 +176,31 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # cap. IAlertEvaluatorGrain carries the argument; the action group's recipients are the one thing in
 # the state a person might mistake for sensitive, and they are what a notification is addressed to.
 CyberCloud.Providers.Monitor.Alerting.AlertEvaluatorGrain
+#
+# ⚠ THE QUESTION WAS ASKED, AND THE ANSWER IS THAT THE MANAGER IS MISSING NOTHING. FeedGrain is the
+# catalogue of CyberCloud.ContainerRegistry/feeds (docs/plan/13 § Artifact feeds): which versions of
+# which packages tenants have PUSHED INTO the feed, which are listed, what each hashes to, where its
+# bytes are, and where each npm dist-tag points. ResourceGrain holds the tenant's declared intent —
+# a feed's kind and description — and that is the whole of what the write path ever sees. The
+# catalogue is data-plane content that arrives through `dotnet nuget push` on a host the manager
+# never routes, the way rows arrive in a managed database through a connection string; the manager
+# holds no database's rows either, and holding a feed's would make it the second copy docs/plan/25
+# § R1 warns about, one layer up. So this is the first provider grain, and it is not a manager gap.
+#
+# ⚠ DURABLE AND NOT HOT, BY docs/plan/05 § Choosing a tier's test, and the test answers sharply.
+# The bytes are in the object store, so "can this be rebuilt" sounds like yes — list the prefix,
+# open every nupkg for its nuspec, every tarball for its package.json. It is no, three times: an
+# unlisting, an npm dist-tag and a NuGet publish timestamp exist nowhere but here, and a rebuild
+# would re-list every unlisted version, point every `latest` at whatever sorted last, and reset every
+# `published` to the day of the incident. The reverse-index paragraph above applies too: a scan of
+# every feed of every tenant is exactly the operation that is impossible during the incident where
+# you need it.
+CyberCloud.Providers.ContainerRegistry.FeedGrain
+#
+# ⚠ The measurement docs/plan/25 § R1 asks for is still being taken, and this line is part of it:
+# what the feeds provider added to the platform was not a grain the manager should have held but a
+# SEAM — IObjectStore on ReconcileContext, beside ISecretResolver — which is the manager growing a
+# capability rather than a provider working round its absence.
 
 # ── Communication — docs/plan/17 ───────────────────────────────────────────────────────────────
 # The sending product's four pieces of state that a person, a carrier or a regulator would notice

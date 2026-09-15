@@ -75,6 +75,9 @@ public sealed class VirtualNetworkCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
@@ -136,6 +139,9 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             // ⚠ THE WHOLE PREDICATE, AND `spec.vpc` IS THE FIELD IT WAS WORTH CHANGING THE HARNESS
             // FOR. A Subnet whose `vpc` is wrong hands out addresses inside a DIFFERENT tenant's
@@ -228,6 +234,9 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
@@ -327,6 +336,9 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
             // into `spec.v4Ip` and there is no Secret anywhere in this type's object set. The
             // provider most likely to omit this member is the next one to grow an
             // operator-generated credential, which is why it is `required`.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
@@ -403,6 +415,9 @@ public sealed class LoadBalancerCase : IProviderCaseSource {
             // ⚠ Empty, and it is a statement rather than a formality. `showBackends` reads a
             // Deployment's status and the resource's own stored body; there is no Secret in this
             // type's object set at all, because an L4 proxy terminates nothing and holds no key.
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
@@ -474,6 +489,9 @@ public sealed class NatGatewayCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/subnet",
             ActionName = NatGateways.EgressAction,
             Objects = (id, ns) => [NatGateways.OvnSnatRuleRef(ns, id)],
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
             // ⚠ Empty, and it is a statement: an OvnSnatRule carries no credential, and what
             // `showEgress` reads is the rule's own status.
             OperatorWritten = static (_, _) => [],

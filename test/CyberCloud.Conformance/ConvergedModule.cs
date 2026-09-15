@@ -40,12 +40,19 @@ namespace CyberCloud.Conformance;
 ///     <para>
 ///         ⚠ <b>What a clusterless run cannot say, said here so nobody reads a green run as saying
 ///         it.</b> An admission refusal and a cluster that did not answer have no module analogue the
-///         harness can inject, so the two assertions about them skip loudly for a clusterless type.
-///         The seven labels are asserted absent rather than present — a clusterless type that applied
-///         an object would be lying about being clusterless. And the cluster-backed half in
+///         harness can inject, so the two assertions about them assert the inverse for a clusterless
+///         type: the operation converges as if the refusing cluster were healthy, and nothing reached
+///         it. The seven labels are asserted absent rather than present — a clusterless type that
+///         applied an object would be lying about being clusterless. And the cluster-backed half in
 ///         <c>test/CyberCloud.Cluster.Conformance</c> refuses a case with no objects by name, so the
 ///         silo-kill criterion — docs/plan/24 § Phase 1's exit criterion 3 — has no clusterless
 ///         harness yet; that is owed, and <c>charts/bundle/bundle.yaml § owed</c> carries it.
+///     </para>
+///     <para>
+///         ⚠ <b>This is one of two clusterless registrations, and the suite reads both through
+///         <c>ClusterlessWorld</c>.</b> <c>ProviderConformanceCase.DataPlane</c> is the other — a
+///         world on a platform host rather than in the silo, with one way to break and no hand edit.
+///         A case registers exactly one; that type's remarks say why two exist.
 ///     </para>
 /// </remarks>
 public interface IConvergedModule {

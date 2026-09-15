@@ -21,6 +21,17 @@
     <ItemGroup>
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
+        <!--
+          ⚠ A TestCluster after all, and only for the grain. The header above says the lifecycle
+          belongs to the shared suite, and it still does; what the shared suite cannot ask is
+          whether FeedGrain's own rules hold — immutable versions, a sticky close, a refused
+          reopening — because it drives the reconciler and not the catalogue. FeedGrainTests asks
+          those of the real grain in an in-memory silo, and ArtifactFeedReconcilerTests drives the
+          reconciler against a substituted catalogue so its branches can be reached one at a time.
+        -->
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+        <PackageReference Include="NSubstitute"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">
