@@ -50,3 +50,17 @@ notes: >
   A CNI is the one component in this bundle that cannot be installed onto a running cluster without
   consequence — replacing the CNI restarts every pod's networking. It is phase 10 for that reason and
   belongs to cluster creation rather than to platform upgrade.
+  ⚠ WHAT THAT SENTENCE MEANS IN PRACTICE, MEASURED ON THE FIRST REAL RUN OF THE ROSTER (issue #2,
+  2026-09-15) AGAINST A `rancher/k3s:v1.35.7-k3s1` IN DOCKER: the chart refuses at template time —
+  `No nodes found with label 'kube-ovn/role=master'` — and behind that label it wants three things
+  install.sh cannot give a cluster it was handed. (1) The node label `kube-ovn/role=master` on at
+  least one node, which the chart's `MASTER_NODES` lookup reads to place the OVN central pods.
+  (2) A cluster started WITHOUT its own CNI — for k3s, `--flannel-backend=none` and
+  `--disable-network-policy` — because two CNIs on one node is the "every pod pending, none of them
+  says why" of bundle.yaml § phases. (3) ADR-019's values, `ENABLE_LB=false` among them, so that
+  kube-ovn's load balancer does not fight the platform's. And under all three, OVS kernel modules
+  (`openvswitch`, `geneve`) on a real host kernel, which Docker Desktop's VM does not offer to a
+  container. So this row is a CLUSTER-CREATION component for the VM lane — docs/plan/23 § The lane
+  that needs a kubelet — and not one k3s-in-Docker can host; it is the only row of the twenty the
+  first real run could not attempt, and bundle.yaml § owed, `kube-ovn-needs-a-node-this-lane-cannot-
+  give`, is where that is carried.

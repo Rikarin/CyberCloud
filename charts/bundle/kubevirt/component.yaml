@@ -31,6 +31,26 @@ serves:
 requiredBy:
   - charts/bundle/cluster-api-provider-kubevirt
 
+# ⚠ KUBEVIRT REQUIRES CDI, AND NOT THE OTHER WAY ROUND — FOUND BY THE PER-COMPONENT BARRIER ON
+# 2026-09-15. v1.9.0's `virt-template-controller` fails at start with "no matches for kind
+# DataVolume in version cdi.kubevirt.io/v1beta1" and the `KubeVirt` resource stays `Deploying`
+# forever; with CDI's definitions present it starts and the resource reaches `Deployed`. The
+# first real run had kubevirt first in phase 30 and went green only because nothing waited between
+# the two applies. Read by the Bundle gate, which checks containerized-data-importer's roster row
+# comes first.
+requires:
+  - charts/bundle/containerized-data-importer
+
+# What "installed" means for this component, read by install.sh after the apply: one `kubectl wait`
+# argument list per entry, the timeout supplied by the script. ⚠ THE `KubeVirt` RESOURCE'S PHASE AND
+# NOT `virt-operator`'S DEPLOYMENT, measured on 2026-09-15 on the first run with a kubelet:
+# `virt-operator` is 2/2 Available at 42 s and then renders virt-api, virt-controller,
+# virt-exportproxy, two template components and the `virt-handler` DaemonSet; the condition a later
+# phase can rely on is `status.phase == Deployed` (with `Available=True`), reached about seven
+# minutes after apply on a cold image cache.
+waitFor:
+  - "kubevirt/kubevirt -n kubevirt --for=jsonpath={.status.phase}=Deployed"
+
 # Every container image this component's pinned artefact renders, with the digest its registry served
 # on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
 #
@@ -47,3 +67,18 @@ notes: >
   guest finishes booting. That is a property of the host fleet rather than of this pin, and it is the
   first thing to check when charts/managed/kubernetes-agentpool creates Machines that never become
   Ready.
+  ⚠ INSTALLED ON 2026-09-15 THROUGH install.sh AGAINST A `rancher/k3s:v1.35.7-k3s1` WITH A KUBELET,
+  AND TWO THINGS ABOUT THAT NODE HAD TO BE TRUE FIRST. (1) `/var/run` must be a SHARED mount:
+  `virt-handler` refuses a node where it is not — `path "/var/run/kubevirt" is mounted on "/var/run"
+  but it is not a shared mount` — and every k3s-in-Docker in this repository was started with
+  `--tmpfs /var/run`, which is private. `mount --make-rshared /var/run` inside the container before
+  k3s starts is the fix, and it is now the container's own entrypoint in all three recipes
+  (CyberCloudTopology.cs, K3sFixture, ClusterInfrastructure) so the AppHost can host this component
+  at all; a real node has no such problem. (2) containerized-data-importer must be `Deployed` FIRST —
+  see `requires:` above. With both, the `KubeVirt` resource reached `Deployed` 1 m 40 s after apply
+  on a warm cache, `virt-handler` and all nine of the operator's workloads Running.
+  ⚠ WHAT THAT DOES NOT PROVE, AND STAYS FOR REAL NODES: no VirtualMachine has been created here.
+  Docker Desktop's VM exposes no `/dev/kvm` to a container, so a guest on this lane would be the
+  software emulation the paragraph above warns about, and charts/managed/kubernetes' Machines — the
+  reason this component exists — are the VM lane's to prove. bundle.yaml § owed,
+  `virtual-machines-need-a-node-with-kvm`.

@@ -89,7 +89,7 @@ public static class CyberCloudTopology {
         //
         // ADR-001 makes the Kubernetes API a data plane, and ADR-014 puts a k3s for it in this file.
         //
-        // ⚠ THREE THINGS ARE LOAD-BEARING AND NONE OF THEM IS AN ASPIRE CONCEPT:
+        // ⚠ FOUR THINGS ARE LOAD-BEARING AND NONE OF THEM IS AN ASPIRE CONCEPT:
         //
         //  1. `--privileged`, `--tmpfs /run`, `--tmpfs /var/run` — k3s runs containerd, which needs a real
         //     mount namespace and a writable non-overlay /run. Without the tmpfs mounts containerd starts
@@ -101,13 +101,31 @@ public static class CyberCloudTopology {
         //  3. A FIXED host port, and `--tls-san` naming the address that kubeconfig will contain. k3s bakes
         //     `server: https://127.0.0.1:6443` into the file it writes, and the certificate has to have
         //     that name in it.
+        //  4. THE ENTRYPOINT IS A SHELL THAT MAKES /var/run SHARED AND THEN EXECS k3s. A `--tmpfs` is a
+        //     private mount, and KubeVirt's `virt-handler` refuses to run on such a node — `path
+        //     "/var/run/kubevirt" is mounted on "/var/run" but it is not a shared mount` — so until
+        //     2026-09-15 charts/bundle/kubevirt was the one component this topology could never host
+        //     (issue #2). Aspire can run nothing after a container starts: `WithContainerRuntimeArgs`
+        //     reaches `docker run` and nothing reaches `docker exec`, and Docker has no propagation flag
+        //     for a tmpfs (`bind-propagation` is for binds). So the fix is the container's own first
+        //     command — `/bin/sh -c 'mount --make-rshared /var/run && exec /bin/k3s "$@"' k3s server …`
+        //     — the same four strings test/CyberCloud.Cluster.Conformance's ClusterInfrastructure and
+        //     CyberCloud.Kubernetes.Tests' K3sFixture hand Testcontainers, so the three k3s recipes in
+        //     this repository are one recipe. `"$@"` is expanded by the shell INSIDE the container from
+        //     the arguments after `k3s` (its $0); Aspire passes the array to Docker unparsed. Measured
+        //     the same day on a throwaway container: /proc/self/mountinfo shows `/var/run … shared`,
+        //     /run stays private, and "k3s is up and running" is logged five seconds in.
         var kubeconfigDirectory = Path.Combine(builder.AppHostDirectory, ".k3s");
         Directory.CreateDirectory(kubeconfigDirectory);
 
         var k3s = builder
             .AddContainer(CyberCloudResources.K3s, "rancher/k3s", "v1.32.5-k3s1")
             .WithContainerRuntimeArgs("--privileged", "--tmpfs", "/run", "--tmpfs", "/var/run")
+            .WithEntrypoint("/bin/sh")
             .WithArgs(
+                "-c",
+                "mount --make-rshared /var/run && exec /bin/k3s \"$@\"",
+                "k3s",
                 "server",
                 // Nothing in Cyber Cloud uses either, and both cost seconds and memory on every start.
                 "--disable=traefik",

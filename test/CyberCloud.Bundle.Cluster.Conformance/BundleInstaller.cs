@@ -123,6 +123,11 @@ public static class BundleInstaller {
     ///     alone. <c>charts/bundle/bundle.yaml</c> § owed,
     ///     <c>the-manifest-path-waits-for-nothing</c>, carries why that wait is cluster-wide and what
     ///     it costs.
+    ///     ⚠ <b>And since 2026-09-15 a manifest row also waits for its <c>waitFor:</c> entries, 10 m
+    ///     each</b>, so the same <c>--phase 40</c> is bounded by 3 × 5 m + 5 × 10 m + 10 m. Even one
+    ///     manifest row alone — kubevirt, measured at 1 m 40 s to <c>Deployed</c> on a warm cache and
+    ///     about seven minutes on a cold one — does not fit under this number with margin, which is
+    ///     the arithmetic the first such test has to do before it is written.
     /// </remarks>
     public static readonly TimeSpan Budget = TimeSpan.FromMinutes(12);
 
@@ -305,28 +310,43 @@ public static class BundleInstaller {
     ///     <see cref="Pin" /> gives: the block opens at <c>images:</c>, every <c>  - </c> line under
     ///     it is an entry, and any other line ends it.
     /// </remarks>
-    public static IReadOnlyList<string> Images(string component) {
-        var images = new List<string>();
+    public static IReadOnlyList<string> Images(string component) => Sequence(component, "images");
+
+    /// <summary>
+    ///     The entries of a component's <c>waitFor:</c> block — one <c>kubectl wait</c> argument
+    ///     list each — in file order. Empty for a component that declares none.
+    /// </summary>
+    /// <param name="component">The component's directory name.</param>
+    public static IReadOnlyList<string> WaitFor(string component) => Sequence(component, "waitFor");
+
+    /// <summary>
+    ///     The entries of one top-level block sequence, the way <c>install.sh</c>'s <c>recorded()</c>
+    ///     and <c>waits()</c> awk read them: the block opens at <c>&lt;key&gt;:</c>, every <c>  - </c>
+    ///     line under it is an entry, an indented comment is skipped, and the next top-level key
+    ///     ends it.
+    /// </summary>
+    static List<string> Sequence(string component, string key) {
+        var entries = new List<string>();
         var inside = false;
 
         foreach (var line in File.ReadLines(ComponentFile(component))) {
-            if (line.StartsWith("images:", StringComparison.Ordinal)) {
+            if (line.StartsWith(key + ":", StringComparison.Ordinal)) {
                 inside = true;
                 continue;
             }
 
-            if (!inside) {
+            if (line.Length > 0 && char.IsLetter(line[0])) {
+                inside = false;
+            }
+
+            if (!inside || !line.StartsWith("  - ", StringComparison.Ordinal)) {
                 continue;
             }
 
-            if (!line.StartsWith("  - ", StringComparison.Ordinal)) {
-                break;
-            }
-
-            images.Add(line[4..].Trim().Trim('"'));
+            entries.Add(line[4..].Trim().Trim('"'));
         }
 
-        return images;
+        return entries;
     }
 
     /// <summary>What a run of the installer did.</summary>
@@ -376,19 +396,25 @@ public static class BundleInstaller {
     ///     touches no cluster.
     /// </param>
     /// <param name="cancellationToken">The test's token.</param>
+    /// <param name="environment">
+    ///     Variables to set for the run — what a person exports before <c>install.sh</c>, which
+    ///     is how <c>substitute.sh</c>'s <c>${VAR:=default}</c> pass is overridden. Empty by default.
+    /// </param>
     /// <remarks>
     ///     ⚠ <b>Forward slashes on Windows, and it is not cosmetic.</b> <c>install.sh</c> finds its
     ///     directory with <c>dirname "${BASH_SOURCE[0]}"</c>, and a path handed to Git's bash with
     ///     backslashes makes <c>dirname</c> answer <c>.</c> — so the script would read whatever
     ///     <c>bundle.yaml</c> sits in the working directory, which for this harness is the
     ///     repository root, where there is none. With slashes the MSYS runtime resolves
-    ///     <c>C:/…</c> and the script reads the copy it was pointed at.
+    ///     <c>C:/…</c> and the script reads the copy it was pointed at. The same rule applies to
+    ///     every path in <paramref name="arguments" />, which is split on spaces and passed as is.
     /// </remarks>
     public static async Task<Run> RunAsync(
         string script,
         string arguments,
         string? kubeconfig,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environment = null
     ) {
         var start = new ProcessStartInfo(Bash ?? "bash") {
             WorkingDirectory = RepositoryRoot,
@@ -405,6 +431,10 @@ public static class BundleInstaller {
 
         if (kubeconfig is not null) {
             start.Environment["KUBECONFIG"] = kubeconfig;
+        }
+
+        foreach (var (name, value) in environment ?? new Dictionary<string, string>()) {
+            start.Environment[name] = value;
         }
 
         using var process = new Process { StartInfo = start };

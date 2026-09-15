@@ -207,6 +207,7 @@ partial class Build {
         var violations = new List<string>(manifestViolations);
 
         violations.AddRange(RosterViolations(components));
+        violations.AddRange(DependencyViolations(components));
         violations.AddRange(CoverageViolations(components, rendered));
         violations.AddRange(OrderingViolations(out var orderingDetail));
 
@@ -321,11 +322,101 @@ partial class Build {
             violations.AddRange(ImagesViolations(relative, file));
             violations.AddRange(LicenceViolations(relative, scalars));
             violations.AddRange(PinViolations(relative, scalars));
+            violations.AddRange(WaitForViolations(relative, file, scalars));
             violations.AddRange(CheckedDateViolations(relative, scalars));
         }
 
         return components;
     }
+
+    /// <summary>
+    ///     A <c>manifest:</c> component says what "serving" means for it, in a shape
+    ///     <c>install.sh</c> can hand to <c>kubectl wait</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Required on every <c>manifest:</c> component, because the first run with a
+    ///             kubelet showed the wait is three shapes and not one — and refused on every other
+    ///             kind, because helm's <c>--wait</c> is that barrier and a second one would be a
+    ///             record nothing reads.
+    ///         </b> Measured on 2026-09-15 (issue #2): a Deployment
+    ///         <c>Available</c> for rabbitmq-cluster-operator and the four Cluster API controllers;
+    ///         the <c>KubeVirt</c> resource's <c>status.phase == Deployed</c> for kubevirt, where
+    ///         <c>virt-operator</c> is Available at 42 s and is not the barrier; and the <c>CDI</c>
+    ///         resource's <c>Deployed</c> for containerized-data-importer, where a Deployment wait
+    ///         would have gone red on a transient missing Secret during a healthy install. No rule
+    ///         written here could have derived those; the component has to say.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Three readers, which is what separates this key from <c>imageDigest:</c>.</b>
+    ///         <c>install.sh</c> runs one <c>kubectl wait --timeout=10m</c> per entry after the
+    ///         apply; this gate checks the block exists and each entry has the shape
+    ///         <c>&lt;kind&gt;/&lt;name&gt; [-n &lt;namespace&gt;] --for=condition=… | --for=jsonpath=…</c>;
+    ///         and <c>BundleInstallSelection.EveryManifestComponentWaitsForWhatItsComponentYamlDeclares</c>
+    ///         asserts the dry run prints every entry after the component's apply. The timeout is
+    ///         refused inside an entry because the script owns it — one number, the same 10 m
+    ///         helm's <c>--wait</c> gets — and an entry that carried its own would be the second
+    ///         place it lives.
+    ///     </para>
+    /// </remarks>
+    static IEnumerable<string> WaitForViolations(string relative, AbsolutePath file, Dictionary<string, string> scalars) {
+        var entries = ReadBundleSequence(file, "waitFor");
+        var isManifest = scalars.TryGetValue("install", out var install) && install == "manifest";
+
+        if (!isManifest) {
+            if (scalars.ContainsKey("waitFor")) {
+                yield return
+                    $"{relative} declares `waitFor:` and `install: {install}`. install.sh reads the block "
+                    + "only in its `manifest` branch — a helm component's barrier is helm's own `--wait` "
+                    + "— so on this kind it is a record nothing reads, which is the defect "
+                    + "BundleComponentKeys exists to refuse";
+            }
+
+            yield break;
+        }
+
+        if (entries.Count == 0) {
+            yield return
+                $"{relative} declares `install: manifest` and no `waitFor:` entry. `kubectl apply` "
+                + "returns when the API server has STORED the objects, so without this block "
+                + "\"installed\" means \"stored\" and the next phase is admitted against an operator "
+                + "that may not be running — #74's finding 2. Name the Deployment or the custom "
+                + "resource that says the component serves, as `<kind>/<name> [-n <namespace>] "
+                + "--for=condition=<Condition>` or `--for=jsonpath={<path>}=<value>`";
+
+            yield break;
+        }
+
+        foreach (var entry in entries) {
+            if (entry.Contains("--timeout", StringComparison.Ordinal)) {
+                yield return
+                    $"{relative} lists `{entry}` under `waitFor:`, which carries its own `--timeout`. "
+                    + "install.sh supplies the timeout — the same 10 m helm's `--wait` gets — so a "
+                    + "second one here is either ignored or a fight between two numbers";
+            }
+
+            if (!WaitForEntry.IsMatch(entry)) {
+                yield return
+                    $"{relative} lists `{entry}` under `waitFor:`, which is not `<kind>/<name> "
+                    + "[-n <namespace>] --for=condition=<Condition>` or `--for=jsonpath={<path>}=<value>`. "
+                    + "install.sh splits the entry on whitespace and hands it to `kubectl wait` as "
+                    + "arguments, so a shape kubectl cannot read fails at phase time on a cluster "
+                    + "rather than here";
+            }
+        }
+    }
+
+    /// <summary>
+    ///     <c>&lt;kind&gt;/&lt;name&gt; [-n &lt;namespace&gt;] --for=condition=X</c> or
+    ///     <c>--for=jsonpath={.path}=value</c>. No quotes, no spaces inside an argument — install.sh
+    ///     splits on whitespace and never re-parses.
+    /// </summary>
+    static readonly Regex WaitForEntry = new(
+        @"^[a-z][a-z0-9.]*/[a-z0-9][a-z0-9.-]*( -n [a-z0-9][a-z0-9-]*)? --for=(condition=[A-Za-z]+|jsonpath=\{[^}\s]+\}=[^\s]+)$",
+        RegexOptions.Compiled
+    );
 
     /// <summary>
     ///     A component declares the definitions it serves, or declares in writing that it installs
@@ -719,7 +810,10 @@ partial class Build {
     ///         <c>notes</c> and <c>requiredBy</c> are consumed by whoever opens the file and by no
     ///         script; they are here deliberately, and the difference between "documented" and
     ///         "checked" is exactly what <c>imageDigest:</c> blurred. Everything else is read by
-    ///         <c>install.sh</c>, <c>images.sh</c> or this gate.
+    ///         <c>install.sh</c>, <c>images.sh</c> or this gate. Since 2026-09-15 the
+    ///         <c>charts/bundle/</c> entries of <c>requiredBy</c> are the exception to their own
+    ///         rule: <see cref="DependencyViolations" /> holds them against the other component's
+    ///         <c>requires:</c>.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Adding a key is meant to cost a diff here.</b> That is the whole mechanism: a new
@@ -762,9 +856,21 @@ partial class Build {
         // The `install: file` pin — a path beside the manifest. Read by install.sh (apply and
         // --verify) and by images.sh (render), and required by PinViolations for that kind.
         "file",
+        // What "serving" means for a `manifest:` component: one `kubectl wait` argument list per
+        // entry, run by install.sh after the apply, shape-checked by WaitForViolations, and
+        // asserted on the dry run by BundleInstallSelection. Required on that kind since 2026-09-15,
+        // when the first run with a kubelet measured three different shapes across six components.
+        "waitFor",
+
+        // Read by this gate, since 2026-09-15: the components this one needs installed first, as
+        // `charts/bundle/<name>`. DependencyViolations checks the roster reaches each one earlier
+        // and that the other side's `requiredBy:` agrees. The reader `requiredBy` never had.
+        "requires",
 
         // Read by people. Kept, and kept separate, because a key nobody reads at all is the defect
         // this list exists to catch and a key a reader needs is not.
+        // ⚠ `requiredBy` is half read now: its `charts/bundle/` entries are checked against the
+        // other component's `requires:` by DependencyViolations; its chart entries are still prose.
         "appVersion",
         "notes",
         "requiredBy"
@@ -875,9 +981,118 @@ partial class Build {
         }
     }
 
-    /// <summary>Component name to phase, from the roster's <c>components:</c> block.</summary>
-    Dictionary<string, string> ReadRoster() {
-        var roster = new Dictionary<string, string>(StringComparer.Ordinal);
+    /// <summary>
+    ///     Every <c>requires:</c> names a rostered component that <c>install.sh</c> reaches first,
+    ///     and the two components agree about it.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             This is the check #74's "cheap one" needed and did not have.
+    ///         </b> rabbitmq-cluster-operator's v2.22.4 document carries a cert-manager
+    ///         <c>Issuer</c> and two <c>Certificate</c>s for its webhook, so the phase-50 row depends
+    ///         on the phase-15 one; until 2026-09-15 that was written in a comment and in
+    ///         cert-manager's <c>requiredBy:</c> — read by people — and the roster happened to order
+    ///         it right. A <c>requires:</c> the gate reads is the same fact in a shape that fails
+    ///         the build when somebody moves the row.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Roster ORDER, not phase number.</b> Phase 30 holds containerized-data-importer
+    ///         and kubevirt, and kubevirt v1.9.0's <c>virt-template-controller</c> cannot start
+    ///         without CDI's <c>DataVolume</c> kind; phase 40 holds cluster-api and the two providers
+    ///         that admit against it. A check that only compared phases would call both fine. What
+    ///         install.sh actually guarantees, since every component waits after its own apply, is
+    ///         that the rows BEFORE this one are serving — so that is what the rule compares.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both directions.</b> A <c>requires: charts/bundle/x</c> here must be matched by
+    ///         <c>requiredBy: charts/bundle/&lt;this&gt;</c> in x, and every bundle entry under
+    ///         <c>requiredBy:</c> must be matched by a <c>requires:</c> in the component it names.
+    ///         One file saying a thing the other does not is the state cert-manager's list was in
+    ///         for rabbitmq — true, and read by nothing.
+    ///     </para>
+    /// </remarks>
+    IEnumerable<string> DependencyViolations(List<BundleComponent> components) {
+        if (!BundleRosterFile.FileExists()) {
+            yield break;
+        }
+
+        var order = ReadRosterRows().Select(row => row.Name).ToList();
+        var byName = components.ToDictionary(x => x.Name, StringComparer.Ordinal);
+        const string prefix = "charts/bundle/";
+
+        foreach (var component in components) {
+            var relative = RootDirectory.GetRelativePathTo(component.File);
+
+            foreach (var entry in ReadBundleSequence(component.File, "requires")) {
+                if (!entry.StartsWith(prefix, StringComparison.Ordinal)) {
+                    yield return
+                        $"{relative} lists `{entry}` under `requires:`, which is not a "
+                        + "`charts/bundle/<component>` path. A component can only require another "
+                        + "component of this bundle — a chart is a consumer, and belongs under "
+                        + "`requiredBy:`";
+
+                    continue;
+                }
+
+                var required = entry[prefix.Length..];
+
+                if (!byName.TryGetValue(required, out var target)) {
+                    yield return
+                        $"{relative} requires `{entry}`, and charts/bundle/{required}/ is not a "
+                        + "component. Nothing install.sh runs would ever satisfy it";
+
+                    continue;
+                }
+
+                var mine = order.IndexOf(component.Name);
+                var theirs = order.IndexOf(required);
+
+                if (mine >= 0 && theirs >= 0 && theirs >= mine) {
+                    yield return
+                        $"{relative} requires `{entry}`, and charts/bundle/bundle.yaml installs "
+                        + $"`{required}` {(theirs == mine ? "nowhere" : "after")} `{component.Name}` "
+                        + $"(row {theirs + 1} against row {mine + 1}). install.sh waits after every "
+                        + "row, so a requirement is met only by a row that comes first — move the "
+                        + "row, or change the phase";
+                }
+
+                if (!ReadBundleSequence(target.File, "requiredBy").Contains(prefix + component.Name, StringComparer.Ordinal)) {
+                    yield return
+                        $"{relative} requires `{entry}`, and charts/bundle/{required}/component.yaml's "
+                        + $"`requiredBy:` does not list `{prefix}{component.Name}`. Both files carry "
+                        + "the edge so that whoever bumps either pin sees the other side";
+                }
+            }
+
+            foreach (var entry in ReadBundleSequence(component.File, "requiredBy")
+                         .Where(x => x.StartsWith(prefix, StringComparison.Ordinal))) {
+                var dependant = entry[prefix.Length..];
+
+                if (!byName.TryGetValue(dependant, out var target)) {
+                    yield return
+                        $"{relative} lists `{entry}` under `requiredBy:`, and charts/bundle/{dependant}/ "
+                        + "is not a component";
+
+                    continue;
+                }
+
+                if (!ReadBundleSequence(target.File, "requires").Contains(prefix + component.Name, StringComparer.Ordinal)) {
+                    yield return
+                        $"{relative} says `{entry}` requires it, and charts/bundle/{dependant}/component.yaml "
+                        + $"declares no `requires: {prefix}{component.Name}`. A dependency written on "
+                        + "one side only is read by people and checked by nothing — which is how "
+                        + "rabbitmq-cluster-operator's cert-manager dependency went unrecorded until a "
+                        + "run without cert-manager found it";
+                }
+            }
+        }
+    }
+
+    /// <summary>The roster's rows, in install order.</summary>
+    List<(string Name, string Phase)> ReadRosterRows() {
+        var rows = new List<(string, string)>();
         var inside = false;
         string? name = null;
 
@@ -905,8 +1120,19 @@ partial class Build {
             if (match.Groups["key"].Value is "name") {
                 name = match.Groups["value"].Value;
             } else if (name is not null) {
-                roster[name] = match.Groups["value"].Value;
+                rows.Add((name, match.Groups["value"].Value));
             }
+        }
+
+        return rows;
+    }
+
+    /// <summary>Component name to phase, from the roster's <c>components:</c> block.</summary>
+    Dictionary<string, string> ReadRoster() {
+        var roster = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (name, phase) in ReadRosterRows()) {
+            roster[name] = phase;
         }
 
         return roster;

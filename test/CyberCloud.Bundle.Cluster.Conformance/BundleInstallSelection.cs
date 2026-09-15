@@ -313,11 +313,16 @@ public sealed class BundleInstallSelection {
                     + segment
                 );
 
-                // ⚠ The apply is located by the URL out of the component's own component.yaml
+                // ⚠ The apply is located THROUGH the URL out of the component's own component.yaml
                 // rather than by matching `kubectl apply` as a string, for the same reason the
                 // roster is read out of bundle.yaml: a component with a `manifestExtra` emits TWO
                 // apply lines and the assertions below are about WHICH of the two the wait sits
                 // between. Matching the pin distinguishes them; matching the verb cannot.
+                // ⚠ "Through", since 2026-09-15: the URL is no longer on the apply line. install.sh
+                // fetches the document, runs the `${VAR:=default}` substitution clusterctl would
+                // have, and applies the file it wrote — so the URL is on the `curl -o <file> <url>`
+                // line and the apply names the substituted file. ApplyOf follows that chain, and
+                // refuses a fetch that is not followed by a substitution of what it fetched.
                 var manifest = BundleInstaller.Pin(component, "manifest");
 
                 manifest.ShouldNotBeNullOrEmpty(
@@ -327,17 +332,7 @@ public sealed class BundleInstallSelection {
                     + "and this assertion refuses to pass over it."
                 );
 
-                var apply = segment.IndexOf(
-                    "kubectl apply --server-side -f " + manifest,
-                    StringComparison.Ordinal
-                );
-
-                apply.ShouldBeGreaterThanOrEqualTo(
-                    0,
-                    $"charts/bundle/install.sh never applied `{component}`'s own `manifest:` URL "
-                    + $"{manifest}. What it emitted for this component was:\n"
-                    + segment
-                );
+                var apply = ApplyOf(segment, manifest, component);
 
                 wait.ShouldBeGreaterThan(
                     apply,
@@ -358,18 +353,7 @@ public sealed class BundleInstallSelection {
                 var extra = BundleInstaller.Pin(component, "manifestExtra");
 
                 if (!string.IsNullOrEmpty(extra)) {
-                    var second = segment.IndexOf(
-                        "kubectl apply --server-side -f " + extra,
-                        StringComparison.Ordinal
-                    );
-
-                    second.ShouldBeGreaterThanOrEqualTo(
-                        0,
-                        $"charts/bundle/{component}/component.yaml declares `manifestExtra: {extra}` "
-                        + "and install.sh never applied it, so the custom resource the component "
-                        + "needs is never created. What it emitted was:\n"
-                        + segment
-                    );
+                    var second = ApplyOf(segment, extra, component);
 
                     second.ShouldBeGreaterThan(
                         wait,
@@ -452,6 +436,191 @@ public sealed class BundleInstallSelection {
             "no component in charts/bundle/bundle.yaml declares `install: manifest`, so this test "
             + "asserted the barrier over nothing and passed. Either the reader is broken or the "
             + "roster no longer has a manifest component, and both are worth a red run."
+        );
+    }
+
+    /// <summary>
+    ///     The position, within one component's dry-run segment, of the <c>kubectl apply</c> that
+    ///     applies the substituted copy of <paramref name="url" /> — or a failed assertion naming
+    ///     which link of the fetch → substitute → apply chain is missing.
+    /// </summary>
+    /// <param name="segment">The dry-run output between this component's header and the next.</param>
+    /// <param name="url">The <c>manifest:</c> or <c>manifestExtra:</c> pin.</param>
+    /// <param name="component">The component, for the message.</param>
+    /// <remarks>
+    ///     ⚠ <b>Each link is asserted, not just the last.</b> An apply of the fetched file WITHOUT
+    ///     the substitution between would be exactly the four-controller crashloop of issue #2 —
+    ///     the document reaches the API server with <c>${CAPI_INSECURE_DIAGNOSTICS:=false}</c> in
+    ///     its args — and it would pass a test that only looked for "an apply of something that
+    ///     was fetched from the URL". So the apply must name the file the substitution WROTE, and
+    ///     the substitution must READ the file the fetch wrote.
+    /// </remarks>
+    static int ApplyOf(string segment, string url, string component) {
+        var fetch = segment.IndexOf("curl -fsSL --retry 3 -o ", StringComparison.Ordinal);
+        string? fetched = null;
+
+        while (fetch >= 0) {
+            var lineEnd = segment.IndexOf('\n', fetch);
+            var line = segment[fetch..(lineEnd < 0 ? segment.Length : lineEnd)];
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            // `curl -fsSL --retry 3 -o <file> <url>` — the file is the token after -o.
+            var at = Array.IndexOf(parts, "-o");
+
+            if (at >= 0 && at + 2 < parts.Length && parts[at + 2] == url) {
+                fetched = parts[at + 1];
+
+                break;
+            }
+
+            fetch = segment.IndexOf("curl -fsSL --retry 3 -o ", fetch + 1, StringComparison.Ordinal);
+        }
+
+        fetched.ShouldNotBeNull(
+            $"charts/bundle/install.sh never fetched `{component}`'s document {url}. Since "
+            + "2026-09-15 a manifest is downloaded, substituted and applied from disk — `kubectl "
+            + "apply -f <url>` would hand clusterctl's `${VAR:=default}` templates to the API server "
+            + "verbatim, which is issue #2's four crashlooping controllers. What install.sh emitted "
+            + "for this component was:\n" + segment
+        );
+
+        var substitute = segment.IndexOf("substitute_manifest " + fetched + " ", StringComparison.Ordinal);
+
+        substitute.ShouldBeGreaterThan(
+            fetch,
+            $"charts/bundle/install.sh fetched `{component}`'s document to {fetched} and never ran "
+            + "substitute_manifest over that file. An unsubstituted apply is the crashloop the "
+            + "substitution exists to prevent. What it emitted was:\n" + segment
+        );
+
+        var substituteLineEnd = segment.IndexOf('\n', substitute);
+        var substituteLine = segment[substitute..(substituteLineEnd < 0 ? segment.Length : substituteLineEnd)];
+        var written = substituteLine.Split(' ', StringSplitOptions.RemoveEmptyEntries)[2];
+
+        var apply = segment.IndexOf(
+            "kubectl apply --server-side --force-conflicts -f " + written,
+            StringComparison.Ordinal
+        );
+
+        apply.ShouldBeGreaterThan(
+            substitute,
+            $"charts/bundle/install.sh substituted `{component}`'s document into {written} and never "
+            + "applied THAT file — it applied something else, or nothing, or applied before "
+            + "substituting. What it emitted was:\n" + segment
+        );
+
+        return apply;
+    }
+
+    /// <summary>
+    ///     Every <c>manifest:</c> component's applies are followed by one <c>kubectl wait</c> per
+    ///     entry of its <c>waitFor:</c> block, before the next component starts.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             This is the third reader of <c>waitFor:</c>, and it is what makes the key
+    ///             different from the <c>imageDigest:</c> that <c>bundle.yaml</c> § owed records
+    ///             nothing ever read.
+    ///         </b> The Bundle gate requires the block on every manifest component and checks
+    ///         its shape; install.sh runs it; this asserts, from the script's own output, that a
+    ///         declaration in a component.yaml becomes a wait in the run — after the component's
+    ///         last apply and before the next component's header, one line per entry, with the
+    ///         entry's arguments verbatim. A block the script silently skipped would be a record
+    ///         again.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What it cannot say is that the wait ever returns true.</b> That was measured
+    ///         on the cluster on 2026-09-15 — the four Cluster API controllers Available after the
+    ///         substitution landed, CDI and KubeVirt <c>Deployed</c> after phase 30 was reordered,
+    ///         and one wait that timed out at 10 m and exited 1 when kubevirt preceded CDI, which
+    ///         is the loud failure a barrier owes. <c>bundle.yaml</c> § owed,
+    ///         <c>the-manifest-path-waits-for-nothing</c>, carries the readings.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The braces are quoted by <c>printf %q</c>.</b> A jsonpath entry reaches kubectl
+    ///         as <c>--for=jsonpath={.status.phase}=Deployed</c> and is printed by the dry run as
+    ///         <c>--for=jsonpath=\{.status.phase\}=Deployed</c>; the expected line is built the
+    ///         same way rather than by relaxing the match.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task EveryManifestComponentWaitsForWhatItsComponentYamlDeclares() {
+        Assert.SkipUnless(
+            BundleInstaller.OnPath("bash"),
+            "SKIPPED — charts/bundle/install.sh is a bash script and `bash` is not on PATH. WOULD "
+            + "PROVE: that every `manifest:` component's `waitFor:` entries become `kubectl wait` "
+            + "lines after its apply."
+        );
+
+        var run = await BundleInstaller.RunAsync(
+            "--dry-run",
+            kubeconfig: null,
+            TestContext.Current.CancellationToken
+        );
+
+        run.ExitCode.ShouldBe(0, "charts/bundle/install.sh --dry-run failed:\n" + run.Output);
+
+        var roster = BundleInstaller.Roster();
+        var positions = roster
+            .Select(entry => run.Output.IndexOf("\n  " + entry.Component + "\n", StringComparison.Ordinal))
+            .ToList();
+        var waits = 0;
+
+        for (var index = 0; index < roster.Count; index++) {
+            var component = roster[index].Component;
+
+            if (BundleInstaller.Pin(component, "install") != "manifest") {
+                continue;
+            }
+
+            var at = positions[index];
+            at.ShouldBeGreaterThanOrEqualTo(0, $"`{component}` was never attempted:\n" + run.Output);
+
+            var end = index + 1 < roster.Count && positions[index + 1] > at
+                ? positions[index + 1]
+                : run.Output.Length;
+            var segment = run.Output[at..end];
+
+            var entries = BundleInstaller.WaitFor(component);
+
+            entries.ShouldNotBeEmpty(
+                $"charts/bundle/{component}/component.yaml declares `install: manifest` and no "
+                + "`waitFor:` entry. The Bundle gate refuses that file, and this test refuses to "
+                + "pass over a component whose \"installed\" means \"stored\"."
+            );
+
+            // The last apply: the manifestExtra's when there is one, the manifest's otherwise.
+            var extra = BundleInstaller.Pin(component, "manifestExtra");
+            var lastApply = ApplyOf(
+                segment,
+                string.IsNullOrEmpty(extra) ? BundleInstaller.Pin(component, "manifest")! : extra,
+                component
+            );
+
+            foreach (var entry in entries) {
+                waits++;
+
+                var expected = "would run: kubectl wait --timeout=10m " + entry.Replace("{", "\\{").Replace("}", "\\}");
+                var wait = segment.IndexOf(expected, StringComparison.Ordinal);
+
+                wait.ShouldBeGreaterThan(
+                    lastApply,
+                    $"charts/bundle/{component}/component.yaml declares `waitFor: {entry}` and "
+                    + "install.sh emitted no `" + expected + "` after the component's last apply. A "
+                    + "declaration the script does not run is a record nothing reads — the defect "
+                    + "charts/bundle/bundle.yaml § owed, `images-are-not-pinned-by-digest`, names "
+                    + "about `imageDigest:`. What install.sh emitted for this component was:\n"
+                    + segment
+                );
+            }
+        }
+
+        waits.ShouldBeGreaterThan(
+            0,
+            "no `manifest:` component in charts/bundle/bundle.yaml declares a `waitFor:` entry, so "
+            + "this test asserted the barrier over nothing and passed."
         );
     }
 

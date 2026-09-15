@@ -28,6 +28,20 @@ requiredBy:
   - charts/managed/kubernetes
   - charts/managed/kubernetes-agentpool
 
+# The rows install.sh must have serving before this one — read by the Bundle gate. cert-manager
+# for the webhook certificate its document annotates; cluster-api because its controller admits
+# against core definitions; kubevirt and containerized-data-importer because its RBAC names both
+# groups and it reconciles a Machine into a VirtualMachine.
+requires:
+  - charts/bundle/cert-manager
+  - charts/bundle/containerized-data-importer
+  - charts/bundle/kubevirt
+  - charts/bundle/cluster-api
+
+# What "installed" means for this component, read by install.sh after the apply.
+waitFor:
+  - "deployment/capk-controller-manager -n capk-system --for=condition=Available"
+
 # Every container image this component's pinned artefact renders, with the digest its registry served
 # on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
 #

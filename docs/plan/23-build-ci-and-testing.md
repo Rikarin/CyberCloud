@@ -95,6 +95,42 @@ Everything else about that pair of gaps runs everywhere and needs nothing:
 `UnreachableShardReadinessTests` starts a real silo with both tiers pointed at closed ports and asks
 `/health` and `/api/health` over HTTP.
 
+### The lane that needs a kubelet
+
+Seventeen suites in this repository hold a `rancher/k3s:v1.35.7-k3s1` in Docker, and until
+2026-09-15 none of them could schedule a pod on the machine that wrote them. The reason was two
+layers down: WSL2's kernel booted cgroup v1 (hybrid), Docker Desktop inherited it (`docker info`:
+`Cgroup Version: 1`), and from Kubernetes 1.35 the kubelet's `failCgroupV1` defaults to `true`, so
+k3s came up as an API server and shut its agent down — every cluster-backed suite skipped, and the
+skips read as a missing daemon. The bundle's six `manifest:` components were first applied against
+such a server (#74): definitions Established, no operator ever started.
+
+**What fixed it, on this laptop, and what the next one needs:** `kernelCommandLine = cgroup_no_v1=all`
+in `%UserProfile%\.wslconfig`, `wsl --shutdown`, restart Docker Desktop, and `docker info` reports
+`Cgroup Version: 2`. After that a k3s node is `Ready` in 7 s, `CyberCloud.Kubernetes.Tests` went
+from 36 `K3sFixture` failures to 146/146, and the whole of `charts/bundle/` was installed phase by
+phase through its own `install.sh` — issue #2's first real run, whose findings are recorded in
+`charts/bundle/bundle.yaml` § owed. The `failCgroupV1: false` kubelet drop-in the k3s fixtures carry
+is moot on a v2 host and is kept for a host in the state this one was in.
+
+> ⚠ **Two more things a k3s-in-Docker node has to be, found by installing KubeVirt on one.**
+> `/var/run` must be a *shared* mount — `--tmpfs /var/run` is private, and `virt-handler` refuses
+> the node — so every k3s recipe in this repository (the AppHost, `K3sFixture`,
+> `ClusterInfrastructure`) now starts through `/bin/sh -c 'mount --make-rshared /var/run && exec
+> /bin/k3s "$@"'`. And it needs no CNI of its own if kube-ovn is to be installed, which k3s cannot
+> be asked for after the fact: kube-ovn is a cluster-creation component and stays off this lane.
+
+**What this lane can and cannot prove**, so nobody re-derives it:
+
+| Proven on k3s-in-Docker (2026-09-15) | Stays for real nodes — the VM lane |
+|---|---|
+| 19 of the bundle's 20 components installed and serving through `install.sh`; the four Cluster API controllers 1/1 after the `${VAR:=default}` substitution; KubeVirt and CDI `Deployed`; every `waitFor:` returning | **kube-ovn** — needs the `kube-ovn/role=master` node label, a CNI-less cluster, ADR-019 values and OVS kernel modules; refuses at template time here |
+| The `.Cluster.Conformance` suites, the reconciler layer, the bundle suite's three helm rows | **LINSTOR/DRBD** — the replicated storage stage, a kernel module (`bundle.yaml` § owed, `the-replicated-stage-is-not-installed`) |
+| A cgroup-v2 host is the *only* prerequisite for the per-PR lanes above | **KubeVirt guests** — Docker Desktop's VM lends no `/dev/kvm`, so a Machine here is software emulation; the Cluster e2e row of the table above is this lane's, and it is still nightly-and-unbuilt |
+
+The lane that holds those three is the Hyper-V / real-node lane the Cluster e2e row already names.
+It does not exist yet; what changed on 2026-09-15 is that everything *else* no longer waits for it.
+
 ### The chaos invariants
 
 Each is an assertion, not an observation:
