@@ -1,0 +1,81 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# THE ADMISSION POLICIES, AND THE FIRST COMPONENT THIS REPOSITORY WROTE RATHER THAN PINNED. Two
+# ValidatingAdmissionPolicies and their bindings, in policies.yaml beside this file:
+#
+#   * cybercloud-secret-shaped-text — docs/plan/18 § Platform security, row Secrets, clause two:
+#     "never in env vars in a manifest". A ConfigMap value, a container's env var value, its args or
+#     its command carrying a credential-shaped run is refused, and the refusal names the rule.
+#     Issue #15: until this landed the row's middle control was "⚠ Nothing".
+#   * cybercloud-mandatory-labels — docs/plan/02 § ADR-013: "a validating admission policy on every
+#     managed cluster rejects unlabelled objects in tenant namespaces, because a cluster we manage may
+#     also be written to by the tenant." KubeCommandBuilder injects the seven and refuses an override;
+#     this is the half that survives a caller who is not this platform.
+#
+# ⚠ WHY IT IS A BUNDLE COMPONENT AND NOT A HELM CHART OR A RECONCILER. It is installed into every
+# cluster the platform manages, before the platform writes into it — which is this directory's
+# definition of itself (deploy/README.md: "the bundle applied to a cluster the platform adopts or
+# creates"), and charts/managed/monitor-workspace/conformance.yaml already names "an admission policy
+# in the bundle" as where such a thing goes. It is not a Helm chart because charts/bundle/README.md
+# § This directory holds no Helm charts applies to it in full: no resource type, no tenant-facing
+# values, nothing for Build.Charts to generate a schema for. And it is not applied by the platform at
+# runtime, for the reason docs/plan/18 gives for choosing an in-tree policy over a webhook: a control
+# the cluster holds on its own, with no process of ours to be up, is the one that is still there when
+# this platform is the thing that is broken. The cluster's operator installs it with the rest of the
+# bundle, and the platform is then a writer it holds like any other.
+#
+# ⚠ `install: file` IS A FOURTH KIND, ADDED FOR THIS COMPONENT, AND THE THREE FIELDS IT DOES NOT
+# CARRY ARE THE POINT. `source:` and `checked:` say where a pin was resolved and when; a document in
+# this commit resolves against nothing, and a date here would be a claim about a registry that does
+# not exist. `licence:` is ADR-011's audit of what THIS PLATFORM PULLS from other people; a
+# first-party file has no upstream to audit, and a component manifest is not where a repository
+# declares its own licence. build/Build.Bundle.cs § PinViolations refuses all three on this kind, so
+# a future first-party component cannot invent a registry to look verified against.
+#
+# ⚠ THE TWO RULE TABLES IN policies.yaml ARE COPIES OF C# TABLES, AND TWO TESTS HOLD THEM TO THE
+# ORIGINALS. The eleven credential shapes are CyberCloud.Core's SecretShapedText.Rules, the label
+# keys are CyberCloud.Kubernetes.Contracts' KubeLabels.Mandatory and KubeLabels.LifetimeStable.
+# SecretShapedAdmissionPolicyTests and MandatoryLabelAdmissionPolicyTests read policies.yaml by path
+# and assert byte-for-byte agreement, in order; a divergence is a red `./build.sh Test` that prints
+# the block to paste. That gate is the cost the issue names — "a second copy of SecretShapedText's
+# rule set in a language that cannot see the first" — and it is paid in the same commit rather than
+# owed.
+
+component: cybercloud-admission
+phase: 5
+install: file
+file: policies.yaml
+
+# ── serves: nothing, and the escape is declared rather than faked ─────────────────────────────
+#
+# build/Build.Bundle.cs § ServesViolations.
+servesNoDefinitions: >
+  Read off the file rather than assumed: this component applies two ValidatingAdmissionPolicies and
+  two ValidatingAdmissionPolicyBindings, all four in admissionregistration.k8s.io/v1, which the API
+  server has served since Kubernetes 1.30. It defines no kind, so there is no CustomResourceDefinition
+  here and nothing for the coverage check to cover. ⚠ `admissionregistration.k8s.io/v1` was available
+  and would have been a lie for the same reason `storage.k8s.io/v1` was for openebs-localpv: this
+  component puts four objects into that group, it does not serve it.
+
+# ── images: none, and images.sh reads the file to say so rather than trusting this line ───────
+rendersNoWorkloadImages: >
+  policies.yaml is four admissionregistration.k8s.io objects and no Pod template — a
+  ValidatingAdmissionPolicy is evaluated inside the API server and runs no container of its own,
+  which is docs/plan/18's reason for choosing it over a webhook. `images.sh` renders this component
+  by reading the file and scans it like any other, so a workload added to it later is counted.
+
+requiredBy:
+  - docs/plan/02 § ADR-013, the "belt and braces" half that holds a writer who is not the platform
+  - docs/plan/18 § Platform security, row Secrets, clause "never in env vars in a manifest"
+  - every chart under charts/managed/, whose rendered objects are admitted against both policies
+
+notes: >
+  Phase 5, before the CNI, and it is first because it needs nothing: no pod, no image, no definition
+  another component establishes — a policy is stored by the API server and served from its own
+  informer. Nothing in the bundle needs it either, since both bindings select only namespaces the
+  platform creates and the bundle creates none. So it goes where a component with no dependencies in
+  either direction goes, and being first means the rules are in place before the first object the
+  platform writes rather than after the last operator finishes pulling.
+  ⚠ Admitted by a real API server by hand on 2026-09-15 and by no test — bundle.yaml § owed,
+  `the-admission-policies-are-admitted-by-nothing-that-re-runs`, carries the readings, what they
+  settle, and what they cannot.

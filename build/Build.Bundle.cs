@@ -264,9 +264,11 @@ partial class Build {
             // carry one, so the rule was true of the files and false of the machine — which is the
             // same shape as the `imageDigest:` key that claimed `--verify` compared it: a control
             // that reads as a control and is not one. Issue #75.
-            foreach (var required in new[] {
-                         "component", "phase", "licence", "install", "source", "checked", "requiredBy"
-                     }) {
+            //
+            // ⚠ `licence`, `source` and `checked` are "always" for a PINNED component and forbidden
+            // for a first-party one — PinViolations owns that split, because whether a manifest
+            // describes something pulled or something written is what `install:` says.
+            foreach (var required in new[] { "component", "phase", "install", "requiredBy" }) {
                 if (!scalars.ContainsKey(required)) {
                     violations.Add($"{relative} declares no `{required}:`.");
                 }
@@ -547,32 +549,55 @@ partial class Build {
     }
 
     /// <summary>
-    ///     The keys each <c>install:</c> kind needs, so that a pin is complete and is in one place.
+    ///     The keys each <c>install:</c> kind needs, so that a pin is complete and is in one place —
+    ///     and, for the one kind that pins nothing, the keys it may not carry.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Three kinds rather than one, because upstream projects publish three ways and pretending
-    ///     otherwise would mean a URL assembled in <c>install.sh</c> from parts — which is a pin the
-    ///     gate cannot read. <c>helm</c> is a chart repository, <c>helm-archive</c> is a packaged
-    ///     chart published as a release asset (Altinity and SeaweedFS both do this), <c>manifest</c>
-    ///     is a plain document applied with <c>kubectl</c>.
+    ///     <para>
+    ///         ⚠ Three pinned kinds rather than one, because upstream projects publish three ways and
+    ///         pretending otherwise would mean a URL assembled in <c>install.sh</c> from parts —
+    ///         which is a pin the gate cannot read. <c>helm</c> is a chart repository,
+    ///         <c>helm-archive</c> is a packaged chart published as a release asset (Altinity and
+    ///         SeaweedFS both do this), <c>manifest</c> is a plain document applied with
+    ///         <c>kubectl</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             <c>file</c> is the fourth, it is first-party, and what it is REFUSED is the
+    ///             point.
+    ///         </b> <c>charts/bundle/cybercloud-admission</c> is a document this repository writes
+    ///         — two admission policies — applied from beside its <c>component.yaml</c>. It has no
+    ///         registry to resolve against, so <c>source:</c> and <c>checked:</c> would be claims
+    ///         about a resolution nobody performed, and it has no upstream to audit, so
+    ///         <c>licence:</c> would be a component manifest declaring the repository's own licence.
+    ///         All three are violations on this kind rather than merely optional, because an optional
+    ///         key is one a future first-party component fills in to look as verified as its pinned
+    ///         neighbours. The pin here is <c>file:</c>, a path relative to the component directory,
+    ///         and <c>install.sh --verify</c> checks it parses rather than that it resolves.
+    ///     </para>
     /// </remarks>
+    /// <summary>The keys that describe a resolution against somebody else's registry.</summary>
+    static readonly string[] PinnedOnlyKeys = ["licence", "source", "checked"];
+
     static IEnumerable<string> PinViolations(string relative, Dictionary<string, string> scalars) {
         if (!scalars.TryGetValue("install", out var install)) {
             yield break;
         }
 
         var required = install switch {
-            "helm" => new[] { "repo", "chart", "version" },
-            "helm-archive" => ["archive", "chart", "version"],
-            "manifest" => ["manifest", "release"],
+            "helm" => new[] { "repo", "chart", "version", "licence", "source", "checked" },
+            "helm-archive" => ["archive", "chart", "version", "licence", "source", "checked"],
+            "manifest" => ["manifest", "release", "licence", "source", "checked"],
+            "file" => ["file"],
             _ => [],
         };
 
         if (required.Length == 0) {
             yield return
-                $"{relative} declares `install: {install}`, which is not one of helm, helm-archive or "
-                + "manifest. install.sh switches on this value and does nothing for a kind it does "
-                + "not know, so an unknown kind is a component that is silently never installed";
+                $"{relative} declares `install: {install}`, which is not one of helm, helm-archive, "
+                + "manifest or file. install.sh switches on this value and does nothing for a kind it "
+                + "does not know, so an unknown kind is a component that is silently never installed";
 
             yield break;
         }
@@ -582,6 +607,20 @@ partial class Build {
                 $"{relative} declares `install: {install}` and no `{key}:`. install.sh reads the pin "
                 + "out of this file and hard-codes no version, so a missing key is not a default — it "
                 + "is an install command with an empty argument in it";
+        }
+
+        if (install != "file") {
+            yield break;
+        }
+
+        foreach (var key in PinnedOnlyKeys.Where(scalars.ContainsKey)) {
+            yield return
+                $"{relative} declares `install: file` and `{key}:`. A first-party document is pinned "
+                + "by being in the same commit as its manifest: `source:` and `checked:` would name "
+                + "a registry it was never resolved against, and `licence:` is ADR-011's audit of "
+                + "what this platform pulls from other people, which a file this repository wrote "
+                + "is not. Delete the key; if the component has become something pulled, change "
+                + "`install:` instead";
         }
     }
 
@@ -642,6 +681,9 @@ partial class Build {
         "manifest",
         "manifestExtra",
         "values",
+        // The `install: file` pin — a path beside the manifest. Read by install.sh (apply and
+        // --verify) and by images.sh (render), and required by PinViolations for that kind.
+        "file",
 
         // Read by people. Kept, and kept separate, because a key nobody reads at all is the defect
         // this list exists to catch and a key a reader needs is not.

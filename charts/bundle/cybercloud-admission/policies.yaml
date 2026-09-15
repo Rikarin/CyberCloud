@@ -1,0 +1,327 @@
+# The admission half of two rules this platform otherwise enforces only on itself.
+# charts/bundle/cybercloud-admission/component.yaml says why it is a bundle component; this file is
+# what `install.sh` applies.
+#
+# ⚠ TWO OF THE TABLES BELOW ARE COPIES OF C# TABLES, AND TWO TESTS HOLD THEM TO THE ORIGINALS.
+#
+#   * The eleven validations of cybercloud-secret-shaped-text are CyberCloud.Core's
+#     SecretShapedText.Rules — the same eleven shapes the log scrubber redacts, in the same order,
+#     under the same names, as RE2 rather than .NET. SecretShapedRule.Re2Pattern is the derivation
+#     and SecretShapedAdmissionPolicyTests.EveryRuleInThePolicyIsByteIdenticalToItsRe2Form is the
+#     gate: it prints the block to paste when the two differ. Do not edit a pattern here; edit the C#
+#     and paste what the test prints.
+#   * The `mandatory` and `lifetimeStable` variables of cybercloud-mandatory-labels are
+#     CyberCloud.Kubernetes.Contracts' KubeLabels.Mandatory and KubeLabels.LifetimeStable, held
+#     byte-for-byte by MandatoryLabelAdmissionPolicyTests.
+#
+# Both tests read this file by its path, so renaming it is a red Test run rather than a silent
+# de-gating. A rule set copied into a language that cannot see the original is the failure class the
+# issue that produced this file names (#15), and the copies are tolerated only because the gates
+# exist.
+#
+# ⚠ BOUND TO CYBER CLOUD NAMESPACES AND NOTHING ELSE. Both bindings select namespaces carrying
+# `cybercloud.io/managed-by=cybercloud`, which NamespaceEnsurer stamps on every namespace the
+# platform creates and nothing in this bundle stamps on its own. So no operator in charts/bundle/ is
+# admitted against these policies in its own namespace, and no object in kube-system is either. What
+# the scope costs is stated rather than hidden: a credential in an operator's OWN Deployment, in the
+# operator's own namespace, is not refused here — the bundle's images are pinned by digest and
+# reviewed, and this file is not that review.
+#
+# ⚠ ADMITTED BY HAND ON 2026-09-15 AND BY NO TEST — charts/bundle/bundle.yaml § owed,
+# `the-admission-policies-are-admitted-by-nothing-that-re-runs`. Every claim in the comments below
+# about what the API server refuses and admits was read off a `rancher/k3s:v1.35.7-k3s1` started
+# `--disable-agent`: the four objects applied with `kubectl apply --server-side -f` — once directly
+# and once through `install.sh --component cybercloud-admission`, which runs that same command — and
+# then probed with `kubectl` from a labelled namespace. That is a reading, not a gate.
+---
+# ── Never in env vars in a manifest ─────────────────────────────────────────────────────────────
+#
+# docs/plan/18 § Platform security, row Secrets, clause two. A ConfigMap value, a container's env
+# var value, its args or its command carrying a credential-shaped run is refused, and the refusal
+# names the rule — the same alert dimension SecretScrubbingSink counts on, for the same reason: "a
+# secret reached a manifest" is not actionable, "an AwsAccessKey reached a manifest" is.
+#
+# ⚠ A Secret IS NOT SCANNED, DELIBERATELY. A Secret is where a credential belongs; refusing one for
+# containing what it exists to contain would make the policy refuse the correct fix for every
+# refusal it issues. The kinds here are the ones a credential is put into by mistake.
+#
+# ⚠ THERE IS NO ENTROPY RULE, FOR THE REASON SecretShapedText GIVES. Every rule matches a shape
+# whose issuer is known or a grammar that puts a credential in a named position. A rule that refused
+# "a long high-entropy run" would refuse an image digest in an arg and a base64 body in a ConfigMap,
+# and an admission policy with false positives is a policy somebody unbinds.
+#
+# ⚠ WHAT THE PATTERNS RUN OVER, AND WHAT THAT COSTS. Each scanned string is matched against eleven
+# RE2 patterns, and Kubernetes meters CEL at admission. Measured on 2026-09-15 with an innocent
+# ConfigMap holding one value of N characters: 450,000 admitted, 500,000 refused — "expression
+# '!variables.strings.exists(s, s.matches('\\b(?:AKIA|…' resulted in error: … actual cost limit
+# exceeded". The ceiling is set by the longest pattern against the per-expression budget, and the
+# comment above `validations:` has the two shapes that were tried first and measured lower. An
+# object whose scanned strings total more than that is REFUSED, not skipped; the reason is there too.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cybercloud-secret-shaped-text
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["configmaps", "pods"]
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs", "cronjobs"]
+  variables:
+    # The pod spec this object carries, wherever its kind keeps it. A ConfigMap has none and gets an
+    # empty map so that the container walk below finds nothing rather than erroring.
+    - name: podSpec
+      expression: |-
+        object.kind == 'Pod' ? object.spec
+          : object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec
+          : object.kind == 'ConfigMap' ? {}
+          : object.spec.template.spec
+    - name: containers
+      expression: |-
+        (has(variables.podSpec.containers) ? variables.podSpec.containers : [])
+          + (has(variables.podSpec.initContainers) ? variables.podSpec.initContainers : [])
+    # A ConfigMap's `data` values. `binaryData` is bytes and is not read: a credential put there is
+    # base64 of a credential, which none of the shapes below match and no rule here pretends to.
+    - name: values
+      expression: |-
+        object.kind == 'ConfigMap' && has(object.data) ? object.data.map(k, object.data[k]) : []
+    # Every string the policy scans: the ConfigMap values, and each container's env var values,
+    # args and command. Computed once per request and read by all eleven validations.
+    - name: strings
+      expression: |-
+        variables.values + variables.containers.map(c,
+          (has(c.env) ? c.env.filter(e, has(e.value)).map(e, e.value) : [])
+            + (has(c.args) ? c.args : [])
+            + (has(c.command) ? c.command : [])).flatten()
+  # ⚠ ONE VALIDATION PER RULE, AND THE SHAPE IS THE COST BUDGET'S, NOT STYLE. Kubernetes charges a
+  # CEL `matches()` roughly one unit per character of string per forty characters of pattern, against
+  # ONE MILLION per expression and TEN MILLION per request. Measured on 2026-09-15 against
+  # rancher/k3s:v1.35.7-k3s1 with an innocent ConfigMap value of N characters:
+  #
+  #   * eleven rules in ONE expression (a `filter` over a rule table): 80,000 admitted, 100,000
+  #     refused — "composited variable "fired" fails to evaluate: operation cancelled: actual cost
+  #     limit exceeded";
+  #   * every rule in ONE alternation, one `matches()`: 60,000 admitted, 80,000 refused. Worse, not
+  #     better — the pattern is longer and the cost is a product;
+  #   * one validation per rule, below: 450,000 admitted, 500,000 refused. Each rule spends its own
+  #     million, so the ceiling is the longest single pattern's, not the rule set's.
+  #
+  # ⚠ ABOVE THAT CEILING AN INNOCENT OBJECT IS REFUSED, AND THAT IS THE SAFE DIRECTION. `failurePolicy:
+  # Fail` turns "could not finish scanning" into a refusal whose message says "cost budget" rather
+  # than naming a rule. The alternative — skipping a value too long to scan — is a policy that
+  # admits a credential behind enough padding, which is the failure this repository keeps naming: a
+  # check that answers a narrower question than it appears to. A ConfigMap that large in a Cyber
+  # Cloud namespace is rare, and one that is refused says why.
+  #
+  # Each expression carries its rule's pattern as a constant so that the API server compiles it once
+  # at policy creation rather than per request, and each message names the rule — the alert
+  # dimension SecretScrubbingSink counts on, for the same reason: "a secret reached a manifest" is not
+  # actionable, "an AwsAccessKey reached a manifest" is. When several rules match, every failing
+  # validation's message is returned, which is the CEL spelling of TryRedact's `rules` list.
+  #
+  # ⚠ GENERATED FROM SecretShapedText.Rules — one `expression:` line and one `message:` line per rule,
+  # in exactly this shape, in the C#'s order. SecretShapedAdmissionPolicyTests reads the file line by
+  # line and prints the whole block to paste when anything differs.
+  validations:
+    - expression: |-
+        !variables.strings.exists(s, s.matches('-----BEGIN[ A-Z]*PRIVATE KEY[ A-Z]*-----[\\s\\S]*'))
+      message: "a value in this object is credential-shaped (PrivateKey). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('eyJ[A-Za-z0-9_=-]{8,}\\.[A-Za-z0-9_=-]{8,}\\.[A-Za-z0-9_=-]*'))
+      message: "a value in this object is credential-shaped (JsonWebToken). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('\\bhv[sb]\\.[A-Za-z0-9_-]{20,}'))
+      message: "a value in this object is credential-shaped (VaultToken). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('\\bs\\.[A-Za-z0-9]{24}\\b'))
+      message: "a value in this object is credential-shaped (VaultLegacyToken). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('\\b(?:AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|APKA|AROA|ASCA)[0-9A-Z]{16}\\b'))
+      message: "a value in this object is credential-shaped (AwsAccessKey). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('\\bgh[pousr]_[A-Za-z0-9]{36,}\\b'))
+      message: "a value in this object is credential-shaped (GitHubToken). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('\\bgithub_pat_[A-Za-z0-9_]{22,}\\b'))
+      message: "a value in this object is credential-shaped (GitHubPersonalAccessToken). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('\\bxox[abeprs]-[A-Za-z0-9-]{10,}'))
+      message: "a value in this object is credential-shaped (SlackToken). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('(?i)(?:password|pwd)\\s*=\\s*(?:[^;,\\s"\']{3,})'))
+      message: "a value in this object is credential-shaped (ConnectionStringPassword). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('[a-zA-Z][a-zA-Z0-9+.-]*://[^\\s/:@]+:(?:[^\\s/@]+)@'))
+      message: "a value in this object is credential-shaped (UriCredentials). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+    - expression: |-
+        !variables.strings.exists(s, s.matches('(?i)\\bbearer\\s+(?:[A-Za-z0-9._~+/=-]{16,})'))
+      message: "a value in this object is credential-shaped (BearerToken). Cyber Cloud refuses a secret in a ConfigMap, an env var, an arg or a command — docs/plan/18 § Platform security, row Secrets. Put it in a Secret and reference it."
+      reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cybercloud-secret-shaped-text
+spec:
+  policyName: cybercloud-secret-shaped-text
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        cybercloud.io/managed-by: cybercloud
+---
+# ── The seven labels, held against a writer that is not this platform ───────────────────────────
+#
+# docs/plan/02 § ADR-013: "a validating admission policy on every managed cluster rejects
+# unlabelled objects in tenant namespaces, because a cluster we manage may also be written to by
+# the tenant." Client-side, KubeCommandBuilder injects the seven and refuses a caller that tries to
+# replace one; this is the half that survives a caller who is not this platform.
+#
+# Three rules, and which writers each holds:
+#
+#   1. AN OBJECT CREATED BY ANYTHING OTHER THAN A CONTROLLER CARRIES ALL SEVEN. A person with
+#      kubectl, a CI job, the platform itself. ⚠ Controllers are exempt from this rule and from no
+#      other, and the exemption is what makes the policy installable at all: every operator in this
+#      bundle creates children — CloudNativePG its Pods and Secrets, the StatefulSet controller its
+#      claims, the token controller every namespace's `default` ServiceAccount — that carry only the
+#      labels the parent's template gave them, or none. A rule that held those would refuse every
+#      managed service on its first reconcile. A controller is a ServiceAccount, a node, or one of the
+#      three control-plane identities, and the list is closed rather than prefix-matched: k3s's own
+#      admin credential is `system:admin` in `system:masters`, and a prefix rule would have exempted
+#      the one human identity most likely to write an unlabelled object by hand.
+#   2. AN OBJECT THAT CLAIMS `cybercloud.io/managed-by` CLAIMS IT AS `cybercloud` AND CARRIES THE OTHER
+#      FIVE LIFETIME-STABLE LABELS. Held on CREATE and UPDATE and against every writer. An object with
+#      managed-by and no resource-id is what the drift scan reports as an orphan forever and what
+#      billing cannot attribute — "the 1 % is what you page about". ⚠ Six and not seven: a claim a
+#      StatefulSet's volumeClaimTemplate creates carries KubeLabels.LifetimeStable and deliberately
+#      not api-version (KubeLabels.LifetimeStable says why), so a rule requiring seven here would
+#      refuse every claim template the builder stamps.
+#   3. THE SIX LIFETIME-STABLE LABELS OF AN OBJECT THAT WAS OURS DO NOT CHANGE. An UPDATE that
+#      re-tenants an object, re-attributes its subscription or drops its resource-id is refused
+#      whoever sends it. This is the server-side twin of KubeCommandBuilder.WithLabels' refusal to
+#      override a mandatory label, and it is the case ServerSideApplyTests'
+#      AConflictOnAMandatoryLabelIsAlsoDetected calls "the belt to this braces". Only a label the
+#      old object carried is held, so an object written before this policy existed stays writable.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cybercloud-mandatory-labels
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["*"]
+        # ⚠ Namespaced only. A namespaceSelector does not filter a cluster-scoped object — it is
+        # evaluated against the object itself when that object is a Namespace and against nothing
+        # otherwise — so without this line a ClusterRole applied by a person would be held to labels
+        # that name a tenant it cannot belong to.
+        scope: Namespaced
+  variables:
+    # KubeLabels.Mandatory, in ADR-013's order. Held byte-for-byte by MandatoryLabelAdmissionPolicyTests.
+    - name: mandatory
+      expression: |-
+        [
+          'cybercloud.io/tenant-id',
+          'cybercloud.io/subscription-id',
+          'cybercloud.io/resource-group',
+          'cybercloud.io/resource-id',
+          'cybercloud.io/resource-type',
+          'cybercloud.io/api-version',
+          'cybercloud.io/managed-by'
+        ]
+    # KubeLabels.LifetimeStable — the six whose value cannot change for the life of a resource.
+    - name: lifetimeStable
+      expression: |-
+        [
+          'cybercloud.io/tenant-id',
+          'cybercloud.io/subscription-id',
+          'cybercloud.io/resource-group',
+          'cybercloud.io/resource-id',
+          'cybercloud.io/resource-type',
+          'cybercloud.io/managed-by'
+        ]
+    - name: labels
+      expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
+    - name: oldLabels
+      expression: |-
+        oldObject != null && has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}
+    - name: claimsOurs
+      expression: "'cybercloud.io/managed-by' in variables.labels"
+    - name: wasOurs
+      expression: |-
+        'cybercloud.io/managed-by' in variables.oldLabels
+          && variables.oldLabels['cybercloud.io/managed-by'] == 'cybercloud'
+    - name: controller
+      expression: |-
+        (has(request.userInfo.groups)
+          && ('system:serviceaccounts' in request.userInfo.groups
+              || 'system:nodes' in request.userInfo.groups))
+          || request.userInfo.username in [
+               'system:kube-controller-manager', 'system:kube-scheduler', 'system:apiserver'
+             ]
+  validations:
+    - expression: |-
+        request.operation != 'CREATE' || variables.controller
+          || variables.mandatory.all(k, k in variables.labels && variables.labels[k] != '')
+      message: >-
+        an object created in a Cyber Cloud namespace carries the seven cybercloud.io/* labels
+        (tenant-id, subscription-id, resource-group, resource-id, resource-type, api-version,
+        managed-by), each non-empty — docs/plan/02 § ADR-013. They are how billing attributes it,
+        how the reconciler finds it, and how a support engineer answers "whose is this".
+      reason: Invalid
+    - expression: |-
+        !variables.claimsOurs
+          || (variables.labels['cybercloud.io/managed-by'] == 'cybercloud'
+              && variables.lifetimeStable.all(k, k in variables.labels && variables.labels[k] != ''))
+      message: >-
+        an object carrying cybercloud.io/managed-by carries it as "cybercloud" and carries
+        cybercloud.io/tenant-id, subscription-id, resource-group, resource-id and resource-type
+        beside it, each non-empty — docs/plan/02 § ADR-013. Half a label set is an object the drift
+        scan reports as an orphan forever.
+      reason: Invalid
+    - expression: |-
+        !variables.wasOurs
+          || variables.lifetimeStable.all(k,
+               !(k in variables.oldLabels)
+               || (k in variables.labels && variables.labels[k] == variables.oldLabels[k]))
+      message: >-
+        the cybercloud.io/tenant-id, subscription-id, resource-group, resource-id, resource-type and
+        managed-by labels of an object Cyber Cloud manages cannot be changed or removed — docs/plan/02
+        § ADR-013 makes the set "injected and non-overridable", and a writer that could re-tenant an
+        object could detach it from the platform that bills for it.
+      reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cybercloud-mandatory-labels
+spec:
+  policyName: cybercloud-mandatory-labels
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        cybercloud.io/managed-by: cybercloud

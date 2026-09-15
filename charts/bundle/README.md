@@ -48,10 +48,10 @@ if it ever inspects nothing.
 |---|---|---|
 | `component` | always | The component name. Must equal the directory name |
 | `phase` | always | Install order. Must equal the phase `bundle.yaml` gives it |
-| `licence` | always | The upstream's SPDX identifier — ADR-011 |
-| `install` | always | `helm`, `helm-archive` or `manifest` |
-| `source` | always | The URL that was read to resolve the pin |
-| `checked` | always | The ISO date it was read. Not in the future |
+| `licence` | pinned kinds; **forbidden** on `file` | The upstream's SPDX identifier — ADR-011 |
+| `install` | always | `helm`, `helm-archive`, `manifest` or `file` |
+| `source` | pinned kinds; **forbidden** on `file` | The URL that was read to resolve the pin |
+| `checked` | pinned kinds; **forbidden** on `file` | The ISO date it was read. Not in the future |
 | `serves` | unless `servesNoDefinitions` | The `group/version` pairs the component's definitions serve |
 | `servesNoDefinitions` | when `serves` is absent | Why this component installs no CustomResourceDefinition. At least 60 characters of prose |
 | `images` | unless `rendersNoWorkloadImages` | Every image the pinned artefact renders, as `repository:tag@sha256:…` |
@@ -60,6 +60,19 @@ if it ever inspects nothing.
 | `repo`, `chart`, `version` | `install: helm` | Chart repository, chart name, chart version |
 | `archive`, `chart`, `version` | `install: helm-archive` | Packaged-chart URL, chart name, chart version |
 | `manifest`, `release` | `install: manifest` | Manifest URL and the release tag it belongs to |
+| `file` | `install: file` | A document this repository wrote, as a path beside the manifest |
+
+> ⚠ **`install: file` is the fourth kind, it is first-party, and it landed on 2026-09-15 with one
+> component: `cybercloud-admission`.** Three pinned kinds describe something pulled; this one
+> describes something written here, applied with `kubectl apply --server-side` from beside its
+> `component.yaml`. The three keys it may not carry are the point rather than a relaxation: `source:`
+> and `checked:` say where a pin was resolved and when, and a document in the same commit resolves
+> against nothing; `licence:` is ADR-011's audit of what this platform pulls from other people. A
+> future first-party component that filled them in would look as verified as its pinned neighbours
+> while having been verified against nothing, so `build/Build.Bundle.cs` § `PinViolations` refuses
+> all three on this kind. `--verify` checks the file is beside the manifest and that every document
+> in it names an `apiVersion` and a `kind`; the schema check is the API server's, at apply.
+> `cybercloud-admission/component.yaml` argues why the policies are a bundle component at all.
 
 ### `serves:` is the load-bearing key
 
@@ -79,8 +92,10 @@ one definition.
 > group the API server has served since 1.6. A component may declare `serves:` or
 > `servesNoDefinitions:`, never both.
 
-Today that is **nineteen components serving twenty-one `group/version` pairs against twenty-one charts
-rendering sixteen**, one of the nineteen serving none. The five that no chart renders are the reason
+Today that is **twenty components serving twenty-one `group/version` pairs against twenty-one charts
+rendering sixteen**, two of the twenty serving none — `openebs-localpv`, and since 2026-09-15
+`cybercloud-admission`, whose four objects go into `admissionregistration.k8s.io/v1` without serving
+it. The five that no chart renders are the reason
 a bundle cannot be derived from `charts/managed/` alone: `cluster-api-provider-kubevirt` reconciles a Machine into a `kubevirt.io/v1`
 VirtualMachine and imports its disk through `cdi.kubevirt.io/v1beta1`; Cluster API's and Kamaji's
 webhooks mount a Secret only `cert-manager.io/v1` creates; and Kamaji's own `kamaji.clastix.io/v1alpha1`
@@ -373,6 +388,9 @@ What *is* verified, on every build, by the Bundle gate:
   `servesNoDefinitions: true`, and adding a `serves: storage.k8s.io/v1` beside it each turn this row
   red, with a different message;
 * the roster and the directories agree;
+* a `file` component carries its `file:` and none of `licence:`, `source:` or `checked:` — the
+  first-party kind may not dress as a pinned one. ⚠ Verified by sabotage on 2026-09-15: adding
+  `checked: 2026-09-15` to `cybercloud-admission/component.yaml` turns the row red naming the key;
 * no `images:` entry names the tag `latest`. ⚠ A rule that could only be written *after* the two that
   did were closed, on 2026-09-05, and one with no prose escape on purpose: `servesNoDefinitions:` and
   `rendersNoWorkloadImages:` exist because a real component genuinely serves nothing and a real

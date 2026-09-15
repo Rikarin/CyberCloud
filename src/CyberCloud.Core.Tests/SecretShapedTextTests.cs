@@ -191,6 +191,58 @@ public class SecretShapedTextTests {
         SecretShapedText.RuleNames.ShouldNotBeEmpty();
     }
 
+    /// <summary>
+    ///     The RE2 spelling of every rule — what the admission policy runs — recognises exactly what
+    ///     the .NET spelling recognises, over every fixture in this file.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The nearest thing to Go's engine this suite can run is .NET's non-backtracking one,
+    ///     and the nearness is a fact rather than a hope.</b> Both are linear-time automata over the
+    ///     same syntax subset: no lookaround, no backreference, no atomic group, each refused at
+    ///     construction. So a <see cref="SecretShapedRule.Re2Pattern" /> that does not compile here
+    ///     would not compile on the API server either, and one that matches here matches there for
+    ///     the ASCII fixtures this file holds. What this cannot see is a Unicode edge — RE2's
+    ///     <c>\b</c> and <c>\s</c> are ASCII, .NET's are not — which is why the fixtures are ASCII on
+    ///     purpose and why <c>charts/bundle/bundle.yaml</c> § owed still names a real API server as
+    ///     the proof this is not.
+    /// </remarks>
+    [Fact]
+    public void TheRe2FormOfEveryRuleMatchesWhatTheDotNetFormMatches() {
+        var rules = SecretShapedText.Rules;
+
+        foreach (var rule in rules) {
+            // Named groups are the one thing the RE2 form is not allowed to carry — a `(?<secret>`
+            // that survived the rewrite is a `(?P<secret>` Go would want and a pattern the policy
+            // would refuse to compile.
+            rule.Re2Pattern.ShouldNotContain("(?<");
+
+            if (rule.IgnoreCase) {
+                rule.Re2Pattern.ShouldStartWith("(?i)");
+            } else {
+                rule.Re2Pattern.ShouldNotContain("(?i)");
+            }
+        }
+
+        // Every credential fixture is caught by its own rule's RE2 form.
+        foreach (var row in Credentials) {
+            var (line, expected) = row.Data;
+            var rule = rules.Single(x => x.Name == expected);
+
+            Re2(rule).IsMatch(line).ShouldBeTrue($"{expected}'s RE2 form does not match: {line}");
+        }
+
+        // And nothing the platform logs on purpose is caught by any of them.
+        foreach (var row in Innocent) {
+            var line = row.Data;
+            var fired = rules.Where(rule => Re2(rule).IsMatch(line)).Select(rule => rule.Name).ToList();
+
+            fired.ShouldBeEmpty($"{string.Join(", ", fired)} fired in RE2 form on: {line}");
+        }
+    }
+
+    static System.Text.RegularExpressions.Regex Re2(SecretShapedRule rule) =>
+        new(rule.Re2Pattern, System.Text.RegularExpressions.RegexOptions.NonBacktracking);
+
     [Fact]
     public void ALongHostileStringIsAnsweredInLinearTimeRatherThanEventually() {
         // ⚠ The reason every pattern is NonBacktracking. The input below is the classic prefix that

@@ -17,9 +17,13 @@
 # questions, two scripts — the same split `--verify` and the apply path already have.
 #
 # ⚠ WHAT IT IS NOT: ADMISSION. docs/plan/18 § Platform security asks for images "verified at
-# admission", which is #15 and is a policy controller on a cluster. This is the checked-in record
-# that such a policy would be written against, and a drift detector over it. A digest recorded here
-# and served by nobody is caught the next time this runs; a digest swapped on a cluster is not.
+# admission", which is a policy on a cluster that refuses an unsigned image, and nothing in this
+# repository is that policy yet. ⚠ It is NOT #15, which this comment used to say: #15 is the
+# Secrets row's admission policy, and it landed as charts/bundle/cybercloud-admission — a
+# ValidatingAdmissionPolicy over credential-shaped text, which reads no image at all. This is the
+# checked-in record an image policy would be written against, and a drift detector over it. A
+# digest recorded here and served by nobody is caught the next time this runs; a digest swapped on
+# a cluster is not.
 #
 # Usage:
 #   ./charts/bundle/images.sh                       # compare every component against its record
@@ -134,6 +138,13 @@ render() {
                 printf '\n---\n'
                 curl -sSL --max-time 120 "$extra"
             fi
+            ;;
+        file)
+            # A first-party document beside its component.yaml — read, not fetched, so the same
+            # `image:` scan runs over it and a workload added to one later is counted rather than
+            # assumed away. The one such component today renders admission policies and no image,
+            # and says so in `rendersNoWorkloadImages:`.
+            cat "$(dirname "$file")/$(key "$file" file)"
             ;;
     esac
 }
