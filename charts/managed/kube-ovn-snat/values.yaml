@@ -1,0 +1,68 @@
+# One subnet's egress through one public address — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from NatGateways.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ TWO NAMES AND NOTHING ELSE, AND THAT IS THE TYPE. An OvnSnatRule is a join — which subnet, which
+# address — and source NAT on an OVN router has no port, no protocol and no size. What a reader
+# expects and does not find, a CIDR to translate, is deliberately absent: spec.v4IpCidr is the
+# substrate's escape hatch for a range that is not a subnet, and offering it would let a body name a
+# range in another tenant's VPC.
+#
+# ⚠ NEITHER NAME IS RENDERED DIRECTLY. The reconciler qualifies both — `{namespace}-{network}-{subnet}`
+# and `{namespace}-{publicIpAddress}` — into the @internal `platform` block below, because on their
+# own they name nothing and because qualifying them is what keeps a body inside its own network and
+# resource group.
+#
+# ⚠ BOTH ARE IMMUTABLE, AND THE MANAGER DOES NOT ENFORCE THAT. handleUpdateOvnSnatRule refuses every
+# effective change by name once the rule is ready; a PUT that changes one is accepted, applied and
+# reported Succeeded while the fabric refuses it. conformance.yaml § owed,
+# `a-nat-rule-cannot-be-changed`.
+
+## @param subnet {string} The subnet of this virtual network whose workloads egress through the address. One subnet per NAT gateway; a network with several private subnets creates one per subnet, and they may share the address. ⚠ A name that is not a subnet of this network is refused by the fabric rather than by the API, and the gateway never becomes ready.
+## @required
+## @immutable
+## @length ..63
+## @pattern [a-z0-9]([-a-z0-9]*[a-z0-9])?
+## @example "web"
+## @widget subnet
+subnet: web
+
+## @param publicIpAddress {string} The name of a publicIpAddresses resource in the same resource group whose address the subnet's traffic leaves with. ⚠ A name, not a resource id: the address must be in this subscription and resource group, and one in another cannot be named. An address that does not exist is refused by the fabric rather than by the API.
+## @required
+## @immutable
+## @length ..63
+## @pattern [a-z0-9]([-a-z0-9]*[a-z0-9])?
+## @example "egress"
+publicIpAddress: egress
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Network/virtualNetworks/natGateways
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param parentName {string} The Vpc object name this rule's network renders. Rendered into spec.vpc. ⚠ Already qualified by the reconciler — it is VirtualNetworks.ObjectNameOf's output, not the tenant's network name.
+  parentName: ""
+  ## @param subnetName {string} The Subnet object name the rule translates. Rendered into spec.vpcSubnet. ⚠ NetworkSubnets.ObjectNameOf's output — the namespace, the network read off the address, and the tenant's `subnet` value.
+  subnetName: ""
+  ## @param eipName {string} The OvnEip object name the rule translates to. Rendered into spec.ovnEip. ⚠ PublicIpAddresses.ObjectNameOf's output — the namespace and the tenant's `publicIpAddress` value.
+  eipName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

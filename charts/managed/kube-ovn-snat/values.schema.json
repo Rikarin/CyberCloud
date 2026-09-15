@@ -1,52 +1,9 @@
 {
-  "$id": "https://schema.cybercloud.io/charts/kube-ovn-vpc/values.schema.json",
+  "$id": "https://schema.cybercloud.io/charts/kube-ovn-snat/values.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "The configuration surface of the kube-ovn-vpc chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "description": "The configuration surface of the kube-ovn-snat chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
   "properties": {
-    "addressSpace": {
-      "additionalProperties": false,
-      "description": "The address range the network plans for. ⚠ Declarative: it is checked against the region's reserved ranges and is not rendered into the fabric, because a Kube-OVN Vpc carries no CIDR — the subnets do.",
-      "properties": {
-        "v4": {
-          "default": "10.20.0.0/16",
-          "description": "The IPv4 range the network plans for, in CIDR form. It may overlap another of your own virtual networks — that is what a VPC is for — and it may not overlap a range the platform reserves, which is refused with the conflicting range named.",
-          "examples": [
-            "10.20.0.0/16"
-          ],
-          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
-          "type": "string",
-          "x-cybercloud-immutable": true,
-          "x-cybercloud-order": 0,
-          "x-cybercloud-pointer": "/properties/addressSpace/v4"
-        },
-        "v6": {
-          "default": "",
-          "description": "The IPv6 range the network plans for, or empty for an IPv4-only network. ⚠ docs/plan/14 § IPv6 asks for dual-stack from day one rather than as a retrofit, which is why this is here at the first api-version even though a v4-only network is the ordinary case.",
-          "examples": [
-            "fd00:20::/48"
-          ],
-          "pattern": "^(?:([0-9A-Fa-f:.]+/[0-9]{1,3})?)$",
-          "type": "string",
-          "x-cybercloud-immutable": true,
-          "x-cybercloud-order": 1,
-          "x-cybercloud-pointer": "/properties/addressSpace/v6"
-        }
-      },
-      "required": [
-        "v4"
-      ],
-      "type": "object",
-      "x-cybercloud-order": 0,
-      "x-cybercloud-pointer": "/properties/addressSpace"
-    },
-    "enableExternal": {
-      "default": false,
-      "description": "Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. A natGateways child needs it on: without the attachment its translation is programmed and its packets are dropped. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.",
-      "type": "boolean",
-      "x-cybercloud-order": 1,
-      "x-cybercloud-pointer": "/properties/enableExternal"
-    },
     "nameOverride": {
       "default": "",
       "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
@@ -69,6 +26,15 @@
           "x-cybercloud-order": 5,
           "x-cybercloud-pointer": "/properties/platform/apiVersion"
         },
+        "eipName": {
+          "default": "",
+          "description": "The OvnEip object name the rule translates to. Rendered into spec.ovnEip. ⚠ PublicIpAddresses.ObjectNameOf's output — the namespace and the tenant's `publicIpAddress` value.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 9,
+          "x-cybercloud-pointer": "/properties/platform/eipName"
+        },
         "managedBy": {
           "default": "cybercloud",
           "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
@@ -77,6 +43,15 @@
           "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
           "x-cybercloud-order": 6,
           "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "parentName": {
+          "default": "",
+          "description": "The Vpc object name this rule's network renders. Rendered into spec.vpc. ⚠ Already qualified by the reconciler — it is VirtualNetworks.ObjectNameOf's output, not the tenant's network name.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 7,
+          "x-cybercloud-pointer": "/properties/platform/parentName"
         },
         "resourceGroup": {
           "default": "",
@@ -97,13 +72,22 @@
           "x-cybercloud-pointer": "/properties/platform/resourceId"
         },
         "resourceType": {
-          "default": "CyberCloud.Network/virtualNetworks",
+          "default": "CyberCloud.Network/virtualNetworks/natGateways",
           "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
           "type": "string",
           "x-cybercloud-api": false,
           "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
           "x-cybercloud-order": 4,
           "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subnetName": {
+          "default": "",
+          "description": "The Subnet object name the rule translates. Rendered into spec.vpcSubnet. ⚠ NetworkSubnets.ObjectNameOf's output — the namespace, the network read off the address, and the tenant's `subnet` value.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 8,
+          "x-cybercloud-pointer": "/properties/platform/subnetName"
         },
         "subscriptionId": {
           "default": "",
@@ -129,12 +113,43 @@
       "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
       "x-cybercloud-order": 2,
       "x-cybercloud-pointer": "/properties/platform"
+    },
+    "publicIpAddress": {
+      "default": "egress",
+      "description": "The name of a publicIpAddresses resource in the same resource group whose address the subnet's traffic leaves with. ⚠ A name, not a resource id: the address must be in this subscription and resource group, and one in another cannot be named. An address that does not exist is refused by the fabric rather than by the API.",
+      "examples": [
+        "egress"
+      ],
+      "maxLength": 63,
+      "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/publicIpAddress"
+    },
+    "subnet": {
+      "default": "web",
+      "description": "The subnet of this virtual network whose workloads egress through the address. One subnet per NAT gateway; a network with several private subnets creates one per subnet, and they may share the address. ⚠ A name that is not a subnet of this network is refused by the fabric rather than by the API, and the gateway never becomes ready.",
+      "examples": [
+        "web"
+      ],
+      "maxLength": 63,
+      "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/subnet",
+      "x-cybercloud-widget": "subnet"
     }
   },
-  "title": "kube-ovn-vpc chart values",
+  "required": [
+    "publicIpAddress",
+    "subnet"
+  ],
+  "title": "kube-ovn-snat chart values",
   "type": "object",
   "x-cybercloud-api-version": "2026-08-01",
-  "x-cybercloud-chart": "kube-ovn-vpc",
+  "x-cybercloud-chart": "kube-ovn-snat",
   "x-cybercloud-chart-version": "0.1.0",
-  "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks"
+  "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/natGateways"
 }

@@ -30,11 +30,25 @@ A tenant's VPC is a Kube-OVN `Vpc`; subnets are `Subnet`s bound to it.
 ```
 virtualNetworks/{name}
   ├─ addressSpace: [10.20.0.0/16]
-  ├─ subnets/{name}          → prefix, gateway, DHCP, NAT flag
+  ├─ subnets/{name}          → prefix, gateway, DHCP (⚠ the NAT flag does nothing here — egress is natGateways)
   ├─ securityGroups/{name}   → rules; Cilium policies + Kube-OVN ACLs
   ├─ routeTables/{name}      → static routes, next-hop
+  ├─ natGateways/{name}      → one subnet's egress through a publicIpAddresses resource (M2, shipped)
   └─ peerings/{name}         → VPC-to-VPC within a tenant (M3)
 ```
+
+> ⚠ **`peerings` is blocked inside this repository, and by the platform rather than by Kube-OVN
+> alone** (#31). A Kube-OVN peering has no object of its own: it is an entry in each network's
+> `Vpc.spec.vpcPeerings` plus a static route per exchanged range in each network's
+> `Vpc.spec.staticRoutes` — both arrays carry no `x-kubernetes-list-type`, so both are atomic under
+> server-side apply, which is the `routeTables` refusal twice over and across two parents. The
+> platform then closes the merge-and-apply way out: `KubeCommandBuilder` stamps every apply with the
+> *applying* resource's ADR-013 labels and reconcile hash, non-overridably, so a `peerings` child
+> applying its parent's `Vpc` is a `FieldManagerConflict` on `cybercloud.io/resource-id`,
+> `resource-type` and `reconcile-hash` by construction. Two resources cannot own one Kubernetes object
+> on this platform today. What would close it — a co-owned apply on the builder and a conformance case
+> that can create a sibling network — is recorded in `NetworkProvider` and at
+> `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`.
 
 **Address space is the tenant's problem and the platform's constraint.** Overlapping CIDRs between a
 tenant's VPCs is fine; overlapping with the platform's underlay is not. The API validates against a
@@ -83,6 +97,26 @@ L7 over Envoy Gateway: listeners, host/path routes, TLS (with cert-manager and o
 uploaded certificate from Vault), header rewrites, rate limits, and the Coraza WAF with a
 rule-set/paranoia-level selection.
 
+> ⚠ **Owed (#31), and the shape it has to take was measured before anything was written** — at
+> `charts/managed/haproxy/conformance.yaml § owed`, `application-gateway-is-not-an-http-mode-of-this-proxy`.
+> The short form. **The controller is not installed:** `charts/bundle` carries Kube-OVN as the CNI and
+> no Envoy Gateway, no Cilium and no Gateway API definitions, so the first deliverable is a bundle
+> component and the comparison [ADR-019](02-technology-decisions.md) asks for, not a chart. **The
+> proxy sits inside the tenant's subnet or it is useless**, which for a controller-managed Envoy means
+> `provider.kubernetes.deploy.type: GatewayNamespace` plus the `logical_switch` and `ip_pool`
+> annotations through an `EnvoyProxy` pod template — the objects this type renders are then owned by
+> a controller, the CloudNativePG shape rather than the HAProxy one. **Backends are addresses**, for
+> #23's reason (no Service and no DNS inside a tenant VPC), and Gateway API's `backendRefs` reach a
+> bare address only through Envoy Gateway's `Backend` extension, which is off by default *"due to
+> security considerations"*. **Routes are one child resource each**, because an `HTTPRoute` is its
+> own object attaching to its Gateway by `parentRefs` — the one place in this family where the
+> substrate's object model dodges the array-of-objects refusal instead of hitting it. **The WAF is an
+> `EnvoyExtensionPolicy`** loading `coraza-proxy-wasm`, and its rule set and paranoia level are that
+> plugin's configuration. ⚠ And it is reachable from outside only through the inbound attachment
+> nothing renders yet — `charts/managed/kube-ovn-eip/conformance.yaml § owed`,
+> `only-a-nat-gateway-can-be-given-an-address` — so until that lands it is an L7 proxy private to the
+> VPC, exactly as `loadBalancers` is.
+
 ## VPN — `CyberCloud.Network/vpnGateways` · M1 · 1.5 EM
 
 **WireGuard**, per the brief.
@@ -112,7 +146,7 @@ path must be the good path, not the awkward one.
 
 | Resource | M | Notes |
 |---|---|---|
-| `natGateways` | M2 | Kube-OVN `VpcNatGateway` + an SNAT address. Needed the moment a private subnet wants outbound |
+| `natGateways` | M2 | ~~Kube-OVN `VpcNatGateway` + an SNAT address.~~ ⚠ **Corrected (#31): a Kube-OVN `OvnSnatRule` naming the `OvnEip` that `publicIpAddresses` renders**, shipped as `virtualNetworks/natGateways`. A `VpcNatGateway` is a StatefulSet pod whose rules name an `IptablesEIP` — a second public-address kind this platform does not allocate — while an `OvnSnatRule` is one NAT row on the VPC's own router, with no pod and no second allocator. ⚠ And it is a tenant subnet's *only* egress: the `natOutgoing` flag on `subnets` is honored by Kube-OVN's node gateway for the default VPC alone (`isSubnetNeedNat` requires `subnet.Spec.Vpc == ClusterRouter`), so on a tenant VPC it is accepted and does nothing. Needed the moment a private subnet wants outbound |
 | `publicIpAddresses` | M1 | ⊂ the VPC provider; a metered, quota'd, allocatable resource in its own right — because IPv4 is scarce and must be accounted |
 | `firewallPolicies` | M3 | Centralised egress filtering |
 | `trafficManagerProfiles` | M3 | DNS-based failover over our own DNS |
@@ -139,6 +173,22 @@ pipeline, which is why it is worth the volume.
 ⚠ Flow logs are the highest-cardinality data in the platform. Sampling is on by default above a rate
 threshold and the sampling rate is visible in the UI, because a silently sampled flow log is a
 debugging trap.
+
+> ⚠ **Owed (#31), and there is nothing for a `Network` resource type to render** —
+> `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `flow-logs-have-nothing-to-render`. The
+> paragraph above names Hubble, and `charts/bundle` installs no Cilium: Kube-OVN is the bundle's CNI
+> and the only one, so a bundle-built cluster has no Hubble to read, and whether Hubble would see
+> OVN-switched tenant traffic at all is unmeasured. What the substrate itself exposes was read at
+> v1.16.2: `SubnetSpec` has 41 fields and none of them exports a flow; `acls[]` is
+> `{direction, priority, match, action}` with no log field; the OVN ACLs Kube-OVN *does* log are
+> NetworkPolicy's (`ENABLE_NP=false` here), AdminNetworkPolicy's, and a `private: true` subnet's
+> default drop — never a security group's — and the lines land in each node's `ovn-controller` log;
+> mirroring (`--enable-mirror` on `kube-ovn-cni`, or `ovn.kubernetes.io/mirror: "true"` on a pod)
+> copies packets to a node NIC for `tcpdump`; and OVS's own IPFIX is per-node `ovs-vsctl` state on
+> nodes [ADR-020](02-technology-decisions.md) gives no shell. So a flow log is a *collector* the
+> bundle does not carry yet plus [16](16-observability.md)'s pipeline plus a query view —
+> [01](01-azure-parity-catalogue.md) files it under `CyberCloud.Monitor` at M3 — and not a chart under
+> `charts/managed`.
 
 ## Effort
 

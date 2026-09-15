@@ -123,10 +123,10 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Item | EM | Doc | Landed |
 |---|---|---|---|
 | Identity: OpenIddict, users/groups/apps/SPs, passkeys, TOTP, sign-up flow, sessions | 4.8 | [11](11-identity.md) | — [01](01-azure-parity-catalogue.md) gives this row a module and no resource type, so nothing in the type list is evidence either way |
-| Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 22. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
+| Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 24. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
 | Gateway: pipeline, auth, rate limits, region proxy, SignalR hubs, LRO endpoints | 4.2 | [10](10-gateway-and-api.md) | — no resource type. ⚠ #68 is an open **blocker**: the deployed gateway registers no `ICallerContextResolver` and 500s on every request, which is a different failure from "not written" and a worse one to read a green table over |
 | **Managed Kubernetes** (CAPI + Kamaji + KubeVirt) + node pools + credentials | 4.0 | [09](09-kubernetes-fabric.md), [13](13-compute-vm-containers.md) | ◐ `ContainerService/managedClusters` and `…/agentPools` both published; **the third noun in this row is the one that is owed.** The descriptor writes `kube-secret://{namespace}/{cluster}-kubeconfig#value` and nothing resolves that scheme, so the first call through an attached connection fails on the credential — `charts/managed/kubernetes/conformance.yaml` § `the-cluster-this-creates-is-not-connectable`. #24 is open behind it: no bootable node image for a Kubernetes minor worth offering |
-| Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 22 |
+| Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 24 |
 | Postgres · Valkey · NATS providers | 3.0 | [12](12-managed-data-services.md) | ✅ all three — `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`. ⚠ #69 (the seven-day recovery window came back to an `initdb`) closed 2026-09-15 by taking the claims into the platform's custody across the soft delete; the operator re-electing a primary over reattached claims is the half only a cluster with CloudNativePG installed can show — `charts/managed/postgres/conformance.yaml § owed` |
 | Container registry (Harbor) | 1.5 | [13](13-compute-vm-containers.md) | ✅ `ContainerRegistry/registries` |
 | Network: VPC, subnets, security groups, public IPs, DNS, L4 LB, WireGuard | 6.3 | [14](14-networking.md) | ◐ **3.3 shipped, 3.0 ⛔ blocked outside this repository (#23).** The split is below, and it is the row this reconciliation was asked for by name |
@@ -333,6 +333,21 @@ on 2026-09-15, recounting in the same change, and 27 until #32 published `Monito
 the same day, again recounting in the same change; 28 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
+⚠ **Two branches recounted to 24 on the same day from the same 23, and only one of them can be
+right after the other merges.** #31 counts `Network/virtualNetworks/natGateways`; #30's branch
+counts `Storage/accounts/fileShares`, in this same paragraph, the phase-3 row below, and the phase-3
+exit paragraph above. Whichever merges second lands on a master that already has 24 and is itself
+the 25th. ⚠ And the merge was run rather than imagined — `git merge-tree --write-tree` over the two
+branches — and it conflicts on the *prose* and not on the *numbers*: the phase-3 row, this
+paragraph, the exit paragraph and the two M2 rows conflict, while the pinned `24` under the command,
+the gate line, "All 24" and the **Total** row were changed identically on both sides and merge
+clean — at 24, which is then wrong. Resolve it by re-running the command, not by picking a side:
+every count in this section, the phase-3 row and its Total, the phase-3 exit paragraph, the gate
+line quoted under phase 2's criterion 4, and the three rows that say "the 24" in prose (managed
+identity, Vault, tenancy) all move to 25 together. `RoadmapReconciliationTests` fails on the table,
+the Total and the pinned number if that is skipped; the prose it cannot see is why the list is
+written out here.
+
 The document, read directly:
 
 ```console
@@ -412,7 +427,7 @@ Where an issue tracks one of these rows it is named on the row; where none does,
 the finding.
 
 ⚠ **Tenancy is the case that looks like a gap and is not.** `CyberCloud.Platform/subscriptions` is an M1
-row in the catalogue and is not in the 22 — because tenants, subscriptions and resource groups are
+row in the catalogue and is not in the 24 — because tenants, subscriptions and resource groups are
 published as *scope paths* (`/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/…`) and
 not as typed resources under a provider (#63). Counting it as missing would have been the easy error in
 this recount, and it is written down here so the next recount does not make it.
@@ -489,7 +504,7 @@ The estimate is load-bearing on two assumptions, both stated so they could be ch
 have now been checked**:
 
 1. **That the operator selections in [12](12-managed-data-services.md) hold up without a fork —
-   holding, with one exception that is worse than a fork.** All 21 charts under `charts/managed/` carry
+   holding, with one exception that is worse than a fork.** All 23 charts under `charts/managed/` carry
    the `SOURCE` file [R4](25-risks-and-open-questions.md) asks for and every one of them records
    `vendored: none`: nothing upstream has been forked, because nothing upstream has been copied — these
    charts render somebody else's CRDs and were written here. ⚠ The exception is Qdrant, and it fails the

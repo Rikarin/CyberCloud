@@ -1,0 +1,52 @@
+{{/*
+Kube-OVN `OvnSnatRule` — docs/plan/14 § Everything else, `natGateways`: "Needed the moment a private
+subnet wants outbound".
+
+⚠ This renders a custom resource; it does not install Kube-OVN, and it creates neither the subnet nor
+the address it names. Both are other resources' objects — one chart directory over each — and this
+object is a JOIN between them: which subnet, which address. The controller turns the pair into one
+NAT row on the VPC's logical router, `AddNat(vpc, SNAT, eip, cidr)`, with no pod anywhere.
+
+⚠ NO `namespace:` IN metadata. `OvnSnatRule` is `+kubebuilder:resource:scope="Cluster"`. The
+separation a namespace would have provided is in the object's NAME — see `kube-ovn-snat.objectName`
+— and inside both names the spec carries.
+
+⚠ ONE object, and no Service, no Secret and no ServiceMonitor. A NAT row consumes no pod, no disk and
+no address of its own — the address is drawn by the publicIpAddresses resource this rule names,
+which is why the type declares QuotaMeter.Resources and NOT PublicIps.
+
+⚠ WHAT AN EMPTY BODY EXPOSES: NOTHING INBOUND. Source NAT translates the subnet's OUTBOUND packets;
+it admits no connection from outside. Inbound is an OvnFip or an OvnDnatRule, which this platform does
+not render. conformance.yaml, `a-nat-gateway-admits-nothing-inbound`.
+*/}}
+apiVersion: kubeovn.io/v1
+kind: OvnSnatRule
+metadata:
+  name: {{ include "kube-ovn-snat.objectName" . }}
+  labels:
+    {{- include "kube-ovn-snat.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ ALL THREE ARE QUALIFIED OBJECT NAMES THE RECONCILER COMPUTES, AND NONE IS THE TENANT'S OWN
+    SPELLING. `ovnEip` is PublicIpAddresses.ObjectNameOf(namespace, publicIpAddress), `vpcSubnet` is
+    NetworkSubnets.ObjectNameOf(namespace, network, subnet) and `vpc` is
+    VirtualNetworks.ObjectNameOf(namespace, network) — the network read off the ADDRESS, never off
+    the body. That is what makes the join safe: the namespace is a component of every one of them,
+    so a body can only ever name a subnet of its own network and an address of its own resource
+    group. The tenant-facing `subnet` and `publicIpAddress` values above are what the reconciler
+    qualifies; they are not rendered here directly because on their own they name nothing.
+
+    ⚠ `vpc` IS SENT AND THE CONTROLLER IGNORES IT when vpcSubnet is set — handleAddOvnSnatRule
+    takes the VPC from the subnet's own spec.vpc. It is sent so that NatGateways.Matches has a field
+    naming the network to compare, which is spec.vpc's hazard on the subnet in a third shape.
+  */}}
+  ovnEip: {{ .Values.platform.eipName | quote }}
+  vpcSubnet: {{ .Values.platform.subnetName | quote }}
+  vpc: {{ .Values.platform.parentName | quote }}
+
+  {{/*
+    ⚠ NO `v4IpCidr`, NO `v6IpCidr`, NO `ipName`. Each is the substrate's way of translating something
+    that is not a whole subnet — a bare range, or one pod's `IP` object — and each would let a body
+    reach a range this resource's address does not vouch for. The controller derives both CIDRs from
+    the subnet when the two are absent, which is the only path this chart takes.
+  */}}

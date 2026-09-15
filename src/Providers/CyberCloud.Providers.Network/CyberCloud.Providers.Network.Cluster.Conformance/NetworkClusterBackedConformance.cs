@@ -11,7 +11,7 @@ namespace CyberCloud.Providers.Network.ClusterConformance;
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Ten class declarations over the five cases
+///             Twelve class declarations over the six cases
 ///             <c>CyberCloud.Providers.Network.Conformance</c> declares.
 ///         </b> One provider, one
 ///         <c>ProviderConformanceCase</c> per type, two suites per case. ⚠
@@ -165,3 +165,24 @@ public sealed class LoadBalancerLifecycleConformance(
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the load balancer.</summary>
 public sealed class LoadBalancerSiloKillConformance : SiloKillConformanceTests<LoadBalancerCase>;
+
+/// <summary>
+///     The same two suites against <c>CyberCloud.Network/virtualNetworks/natGateways</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>What this half establishes for this type is the third hyphenated plural</b>,
+///     <c>ovn-snat-rules</c>, for <see cref="NetworkSecurityGroupLifecycleConformance" />'s reason, and
+///     that the parent network is really created before the rule that names one of its subnets. What
+///     it cannot establish is either join: the k3s has no Kube-OVN, so <c>spec.ovnEip</c> and
+///     <c>spec.vpcSubnet</c> name objects nothing resolves, and no NAT row has ever been programmed —
+///     <c>charts/managed/kube-ovn-snat/conformance.yaml § owed</c>,
+///     <c>the-joins-are-not-resolved-before-202</c>.
+/// </remarks>
+/// <param name="fixture">The harness.</param>
+public sealed class NatGatewayLifecycleConformance(
+    ClusterConformanceFixture<NatGatewayCase> fixture
+) : ClusterConformanceTests<NatGatewayCase>(fixture),
+    IClassFixture<ClusterConformanceFixture<NatGatewayCase>>;
+
+/// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the NAT gateway.</summary>
+public sealed class NatGatewaySiloKillConformance : SiloKillConformanceTests<NatGatewayCase>;

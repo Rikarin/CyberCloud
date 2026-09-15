@@ -581,3 +581,78 @@ public sealed class ShowAllocationHandler(IClock clock) : IResourceActionHandler
             ? value.GetValue<string>()
             : string.Empty;
 }
+
+/// <summary>
+///     Serves <c>POST …/natGateways/{name}/showEgress</c>: what the fabric is translating, and to what.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>THE ANSWER IS THE JOIN, RESOLVED, AND IT LIVES ONLY ON <c>status</c>.</b> The body
+///         names a subnet and an address resource; <c>handleAddOvnSnatRule</c> resolves the first to
+///         a CIDR and the second to the address the fabric allocated, programs one NAT row, and writes
+///         all four figures plus <c>ready</c> to <c>OvnSnatRule.status</c>. Neither figure is in this
+///         resource's body and neither is derivable without the cluster, which is
+///         <see cref="ShowAllocationHandler" />'s argument for a second kind.
+///     </para>
+///     <para>
+///         ⚠ <b><c>ready: false</c> with every address empty is the diagnostic, not a transient.</b>
+///         The controller returns an error and retries when the named address or subnet does not
+///         exist, and the platform's own resource has already converged — the rule reads back exactly
+///         as applied. So a gateway whose two names are wrong is <c>Succeeded</c> on the API and
+///         translating nothing, and this action is the only place that says so.
+///     </para>
+/// </remarks>
+/// <param name="clock">Stamps <c>sampledAt</c>.</param>
+public sealed class ShowEgressHandler(IClock clock) : IResourceActionHandler {
+    /// <inheritdoc />
+    public ResourceTypeName Type => NatGateways.Type;
+
+    /// <inheritdoc />
+    public string Action => NatGateways.EgressAction;
+
+    /// <inheritdoc />
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
+        if (context.Cluster is not { } cluster) {
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{context.Id.Path}' has no cluster connection, and what a NAT gateway translates is "
+                + "read from the OvnSnatRule object in a cluster."
+            );
+        }
+
+        var read = await cluster.GetAsync(
+            NatGateways.OvnSnatRuleRef(context.Namespace, context.Id),
+            cancellationToken
+        );
+
+        if (read.TryGetError(out var error)) {
+            return Result<string>.Failure(error);
+        }
+
+        var status = NatGateways.Status(read.GetValueOrThrow().Json);
+
+        return Result<string>.Success(
+            new JsonObject {
+                ["publicV4"] = Text(status, "v4Eip"),
+                ["publicV6"] = Text(status, "v6Eip"),
+                ["sourceV4"] = Text(status, "v4IpCidr"),
+                ["sourceV6"] = Text(status, "v6IpCidr"),
+                ["ready"] = status?["ready"] is JsonValue ready
+                    && ready.TryGetValue<bool>(out var isReady)
+                    && isReady,
+                ["sampledAt"] = clock.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+            }.ToJsonString()
+        );
+    }
+
+    /// <summary>One status string, or empty when the controller has not written one.</summary>
+    /// <param name="status">The rule's status.</param>
+    /// <param name="name">The status field.</param>
+    static string Text(JsonObject? status, string name) =>
+        status?[name] is JsonValue value && value.GetValueKind() is JsonValueKind.String
+            ? value.GetValue<string>()
+            : string.Empty;
+}

@@ -231,14 +231,77 @@ namespace CyberCloud.Providers.Network;
 ///             ⚠ <b><c>publicIpAddresses</c> and this row share the unfinished half</b>: a gateway a
 ///             remote worker can reach needs a public address attached by an <c>OvnFip</c> or
 ///             <c>OvnDnatRule</c> naming <see cref="PublicIpAddresses.ObjectNameOf" />'s output, and
-///             nothing creates one yet — <c>charts/managed/kube-ovn-eip/conformance.yaml § owed</c>,
-///             <c>nothing-can-be-given-an-address-yet</c>.
+///             nothing creates an <i>inbound</i> attachment yet —
+///             <c>charts/managed/kube-ovn-eip/conformance.yaml § owed</c>,
+///             <c>only-a-nat-gateway-can-be-given-an-address</c>.
+///         </item>
+///         <item>
+///             <b><c>virtualNetworks/natGateways</c> — SHIPPED (#31), on the router's own NAT rather
+///             than on the object docs/plan/14 names.</b> That document's row reads <i>"Kube-OVN
+///             <c>VpcNatGateway</c> + an SNAT address"</i>, and a <c>VpcNatGateway</c> is a StatefulSet
+///             pod whose rules name an <c>IptablesEIP</c> — a second public-address kind that
+///             <c>publicIpAddresses</c> does not render. An <c>OvnSnatRule</c> naming the
+///             <c>OvnEip</c> that type <i>does</i> render is one NAT row on the VPC's logical router,
+///             with no pod and no second allocator, and it is what landed. The full argument, and the
+///             finding that <c>natOutgoing</c> on a tenant subnet is a control the substrate ignores,
+///             is on <see cref="NatGateways" />.
+///         </item>
+///         <item>
+///             ⚠ <b><c>virtualNetworks/peerings</c> — OWED (#31), AND THE BLOCKER IS THIS PLATFORM'S
+///             OWN APPLY PATH RATHER THAN THE SUBSTRATE ALONE.</b> Three facts, each measured:
+///             <list type="number">
+///                 <item>
+///                     <b>A Kube-OVN peering has no object of its own.</b> Read firsthand in
+///                     <c>pkg/apis/kubeovn/v1/vpc.go</c> and <c>pkg/controller/vpc.go</c> at
+///                     <c>v1.16.2</c>: a peering is an entry in <c>Vpc.spec.vpcPeerings</c>
+///                     (<c>{remoteVpc, localConnectIP}</c>, which <c>handleAddOrUpdateVpc</c> turns into
+///                     a peer router port) plus one <c>Vpc.spec.staticRoutes</c> entry per routed range
+///                     — on <b>both</b> networks' objects. The CRD declares no
+///                     <c>x-kubernetes-list-type</c> on either array, so both are atomic under
+///                     server-side apply: the <c>routeTables</c> refusal above, twice over and across
+///                     two parents.
+///                 </item>
+///                 <item>
+///                     ⚠ <b>A merge-and-apply design cannot land either, and this is the new
+///                     finding.</b> <c>KubeCommandBuilder</c> injects ADR-013's seven labels and two
+///                     annotations non-overridably, from the <i>applying</i> resource's identity. A
+///                     peering applying its parent's <c>Vpc</c> therefore claims
+///                     <c>cybercloud.io/resource-id</c>, <c>…/resource-type</c> and
+///                     <c>…/reconcile-hash</c> at values that differ from the parent's, and the API
+///                     server answers a <c>FieldManagerConflict</c> on every one — the exact conflict
+///                     ADR-013 exists to produce, with <c>Force</c> unreachable from the builder on
+///                     purpose. Applying under the parent's field manager instead makes each apply
+///                     prune the other's slice, because a manager's apply is the whole set of fields it
+///                     owns. So on this platform <b>two resources cannot own one Kubernetes object</b>,
+///                     by construction, and that is a stronger statement than the list-type one.
+///                 </item>
+///                 <item>
+///                     <b>The parent cannot render its children's peerings</b> without the reader
+///                     <c>loadBalancers</c> and <c>vpnGateways</c> are already owed for, and a
+///                     child-writes-a-sidecar-object design that waits for the parent to fold it in
+///                     never converges: <c>DriftScanner</c> <i>"reports; it does not repair"</i>.
+///                 </item>
+///             </list>
+///             What would close it is a co-owned apply on the platform — a builder mode that stamps
+///             the <i>owning</i> resource's labels, a field manager per child type and a hash key per
+///             fragment — plus a conformance-case member that creates a sibling network, since the
+///             shared harness builds only the parent chain. Both are platform surface and neither is a
+///             provider's to add quietly. Recorded at
+///             <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
+///             <c>peerings-need-a-second-writer-on-the-vpc</c>.
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>NO <c>applicationGateways</c>, <c>natGateways</c>, <c>privateEndpoints</c> OR
-///         <c>peerings</c>.</b> docs/plan/14 puts them at M2/M3 and they are out of scope rather than
-///         owed.
+///         ⚠ <b>NO <c>applicationGateways</c> OR <c>privateEndpoints</c>, AND NO FLOW LOGS.</b> The
+///         first and the third are #31's other two nouns and stay owed there, each measured before
+///         it was left: <c>applicationGateways</c> at
+///         <c>charts/managed/haproxy/conformance.yaml § owed</c>,
+///         <c>application-gateway-is-not-an-http-mode-of-this-proxy</c> — the L7 controller is not
+///         in <c>charts/bundle</c>, the proxy has to be inside the tenant's subnet, backends are
+///         addresses, routes are one child each, and the WAF is an <c>EnvoyExtensionPolicy</c> —
+///         and flow logs at <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
+///         <c>flow-logs-have-nothing-to-render</c>, which is why they are not a type under this
+///         namespace at all. docs/plan/14 puts <c>privateEndpoints</c> at M3.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE SHORT NAMES HAVE TO STAY CLEAR OF THIS GROUP'S KEY AND OF EACH OTHER, AND OF
@@ -525,7 +588,45 @@ public sealed class NetworkProvider : IResourceProvider {
             )
             .Chart(LoadBalancers.ChartName)
             .SupportsTags()
-            .RequiresCluster(LoadBalancers.ClusterIdPointer);
+            .RequiresCluster(LoadBalancers.ClusterIdPointer)
+            // ── The sixth type — docs/plan/14 § Everything else, `natGateways` ─────────────────
+            //
+            // ⚠ A CHILD, ON THE LOAD BALANCER'S ARGUMENT: every OvnSnatRule names a subnet of one
+            // VPC, and the subnet's object name folds in the network's, so the network has to come
+            // from the ADDRESS. And NOT a VpcNatGateway, which is what docs/plan/14 names: that is
+            // a StatefulSet pod whose rules name an IptablesEIP, a second address kind the
+            // publicIpAddresses type does not render. NatGateways' remarks carry the reading.
+            .ResourceType(NatGateways.TypePath)
+            .ApiVersion(NatGateways.V2026, NatGateways.Schema2026)
+            .Reconciler<NatGatewayReconciler>()
+            // ⚠ `Resources` ALONE, AND NOT PublicIps — the address is drawn by the publicIpAddresses
+            // resource this one NAMES, and drawing it again here would charge one scarce address
+            // twice. An OvnSnatRule is one NAT row on an OVN logical router: no pod, no disk, no
+            // address of its own. What limits how many a tenant may have is the count.
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                NatGateways.EgressAction,
+                ActionKind.Post,
+                NatGateways.EgressPermission,
+                response: NatGateways.EgressResponse,
+                handler: typeof(ShowEgressHandler)
+            )
+            // ⚠ `natgateway`, AND NOT `nat` OR `natgw`: three characters is the token `secgroup`
+            // was named to stay off, and `natgw` is Kube-OVN's own shortName for the OTHER object
+            // (vpc-nat-gw), which this type deliberately is not. docs/plan/21 § Grammar spells the
+            // type `natGateways`. CliTokens carries the rule and ProviderRegistry.Build enforces it.
+            .Display(
+                "NAT gateway",
+                "NAT gateways",
+                shortName: "natgateway",
+                summary: "Outbound-only internet access for one subnet of a virtual network, "
+                + "translated to a public IP address the tenant holds. Inbound traffic is not "
+                + "admitted."
+            )
+            .Chart(NatGateways.ChartName)
+            .SupportsTags()
+            .RequiresCluster(NatGateways.ClusterIdPointer);
     }
 
     // ── What a load balancer draws ─────────────────────────────────────────────────────────────

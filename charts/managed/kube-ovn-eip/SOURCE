@@ -54,7 +54,8 @@ facts that bear hardest on it:
     `an-allocated-address-cannot-be-changed`.
   * The deletion path in `handleUpdateOvnEip` refuses to drop the finalizer while a NAT rule names
     the address — "is still being used by NAT rules … waiting for them to be deleted" — so a delete
-    can legitimately not finish. Nothing can attach an address in this api-version, so it cannot
-    happen yet.
+    can legitimately not finish. Since #31 it can: ../kube-ovn-snat renders an OvnSnatRule naming
+    this address, `getOvnEipNat` finds it by the `ovn.kubernetes.io/eip_v4_ip` label, and an address
+    with NAT gateways on it waits for them.
   * OvnEipStatus carries v4Ip, v6Ip, macAddress, ready, nat and conditions[]. `POST …/showAllocation`
     reads exactly those; the allocated address exists NOWHERE ELSE.

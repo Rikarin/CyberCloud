@@ -5126,7 +5126,7 @@ public sealed partial class PublicIPAddressResource {
     /// <summary>What showAllocation returns.</summary>
     public sealed partial class ShowAllocationResult {
 
-        /// <summary>The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic, which in this api-version is every address — nothing can attach one yet.</summary>
+        /// <summary>The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic. The only thing that can attach one is a natGateways resource, which puts a subnet's outbound traffic on it; nothing can yet publish anything inbound on an address.</summary>
         [JsonPropertyName("attachedTo")]
         public string? AttachedTo { get; set; }
 
@@ -5222,7 +5222,7 @@ public sealed partial class VirtualNetworkData {
         [JsonPropertyName("clusterId")]
         public required Guid ClusterId { get; set; }
 
-        /// <summary>Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.</summary>
+        /// <summary>Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. A natGateways child needs it on: without the attachment its translation is programmed and its packets are dropped. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.</summary>
         /// <remarks>Defaults to false when left unset.</remarks>
         [JsonPropertyName("enableExternal")]
         public bool? EnableExternal { get; set; }
@@ -5612,6 +5612,139 @@ public sealed partial class LoadBalancerCollection {
     public partial AsyncPageable<LoadBalancerResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Network/virtualNetworks/natGateways.</summary>
+/// <remarks>Outbound-only internet access for one subnet of a virtual network, translated to a public IP address the tenant holds. Inbound traffic is not admitted.</remarks>
+public sealed partial class NATGatewayData {
+
+    /// <summary>The region the NAT gateway is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The NAT gateway's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The NAT gateway's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster whose fabric holds the network. ⚠ It must be the cluster the virtual network and the public address were created in: a rule in another cluster names a subnet and an address that do not exist there.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The name of a publicIpAddresses resource in the same resource group whose address the subnet's traffic leaves with. ⚠ A name, not a resource id: the address must be in this subscription and resource group, and one in another cannot be named. An address that does not exist is refused by the fabric rather than by the API.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "egress" when left unset.</remarks>
+        [JsonPropertyName("publicIpAddress")]
+        public required string PublicIpAddress { get; set; }
+
+        /// <summary>The subnet of this virtual network whose workloads egress through the address. One subnet per NAT gateway; a network with several private subnets creates one per subnet, and they may share the address. ⚠ A name that is not a subnet of this network is refused by the fabric rather than by the API, and the gateway never becomes ready.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "web" when left unset.</remarks>
+        [JsonPropertyName("subnet")]
+        public required string Subnet { get; set; }
+    }
+}
+
+/// <summary>One NAT gateway, and the operations on it.</summary>
+public sealed partial class NATGatewayResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required NATGatewayData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<NATGatewayResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<NATGatewayResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        NATGatewayData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showEgress returns.</summary>
+    public sealed partial class ShowEgressResult {
+
+        /// <summary>The IPv4 address the subnet's traffic leaves with, or empty until the fabric has resolved the named public address.</summary>
+        [JsonPropertyName("publicV4")]
+        public required string PublicV4 { get; set; }
+
+        /// <summary>The IPv6 address the subnet's traffic leaves with, or empty for an IPv4-only pool.</summary>
+        [JsonPropertyName("publicV6")]
+        public string? PublicV6 { get; set; }
+
+        /// <summary>Whether the fabric has programmed the translation. ⚠ False with every address empty is a rule whose subnet or public address the fabric cannot find — check both names.</summary>
+        [JsonPropertyName("ready")]
+        public required bool Ready { get; set; }
+
+        /// <summary>When the platform read the object, RFC 3339.</summary>
+        [JsonPropertyName("sampledAt")]
+        public required DateTimeOffset SampledAt { get; set; }
+
+        /// <summary>The IPv4 range being translated — the subnet's prefix as the fabric resolved it, or empty until it has.</summary>
+        [JsonPropertyName("sourceV4")]
+        public required string SourceV4 { get; set; }
+
+        /// <summary>The IPv6 range being translated, or empty for an IPv4-only subnet.</summary>
+        [JsonPropertyName("sourceV6")]
+        public string? SourceV6 { get; set; }
+    }
+
+    /// <summary>ShowEgress. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowEgressResult>> ShowEgressAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The NAT gateways in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class NATGatewayCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/virtualNetworks/natGateways";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/natGateways/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/natGateways";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one NAT gateway.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<NATGatewayResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string virtualNetworksName, string name,
+        NATGatewayData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one NAT gateway by name.</summary>
+    public partial Task<Response<NATGatewayResource>> GetAsync(string virtualNetworksName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The NAT gateways in one parent, paged.</summary>
+    public partial AsyncPageable<NATGatewayResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The body of a CyberCloud.Network/virtualNetworks/securityGroups.</summary>
 /// <remarks>A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.</remarks>
 public sealed partial class SecurityGroupData {
@@ -5853,7 +5986,7 @@ public sealed partial class SubnetData {
         [JsonPropertyName("enableDhcp")]
         public bool? EnableDhcp { get; set; }
 
-        /// <summary>Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.</summary>
+        /// <summary>Whether the fabric's node gateway masquerades this subnet's outbound traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: Kube-OVN honors it only for subnets of its default VPC, and every subnet here is in a tenant's own. It stays because the api-version is published. Outbound access for a subnet is a natGateways resource, which translates the subnet to a public IP address you hold.</summary>
         /// <remarks>Defaults to false when left unset.</remarks>
         [JsonPropertyName("natOutgoing")]
         public bool? NatOutgoing { get; set; }

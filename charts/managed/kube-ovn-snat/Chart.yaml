@@ -1,0 +1,53 @@
+# One subnet's egress to the internet through one public address — docs/plan/14 § Everything else,
+# `natGateways`: "Needed the moment a private subnet wants outbound".
+#
+# ⚠ NOT A VpcNatGateway, WHICH IS THE OBJECT docs/plan/14 NAMES. Read firsthand at v1.16.2: a
+# VpcNatGateway "represents a NAT gateway for a VPC, implemented as a StatefulSet Pod", and the rules
+# it serves are IptablesSnatRules naming an IptablesEIP — a SECOND public-address kind that
+# charts/managed/kube-ovn-eip does not render. An OvnSnatRule names the OvnEip that chart DOES render
+# and becomes one NAT row on the VPC's own logical router: no pod, no second allocator. SOURCE has
+# the reading.
+#
+# ⚠ A DIRECTORY OF ITS OWN, for the reason charts/managed/kube-ovn-subnet gives: `Build.Charts` pairs
+# a chart with a resource type through ONE `cybercloud.io/resource-type` annotation per Chart.yaml.
+#
+# ⚠ CLUSTER-SCOPED, AND THE NAME CARRIES THREE THINGS. `NatGateways.ObjectNameOf` is
+# `{namespace}-{network}-{name}`: the namespace because two subscriptions must not collide, and the
+# network's name because two networks in ONE resource group may each hold a gateway called `egress`.
+# A collision here is one tenant's subnet translated to another tenant's address.
+apiVersion: v2
+name: kube-ovn-snat
+description: Outbound-only internet access for one subnet of a virtual network, translated to a public IP address the tenant holds. Inbound traffic is not admitted.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The Kube-OVN version this chart's object shape was reviewed against — the same release the other
+# four charts in this family pin. The OvnSnatRule type, its CRD and pkg/controller/ovn_snat.go were
+# all read at this tag; see SOURCE.
+appVersion: "1.16.2"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kube-ovn
+  - nat
+  - snat
+  - egress
+  - networking
+
+home: https://kubeovn.github.io/docs/
+sources:
+  - https://github.com/kubeovn/kube-ovn
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ TWO segments — a child's type path is `virtualNetworks/natGateways`, interleaved, on the load
+# balancer's argument: every OvnSnatRule names a subnet of one VPC, so the network comes from the
+# ADDRESS. The api-version is the family's, because every type in it moves together.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Network/virtualNetworks/natGateways
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: kube-ovn

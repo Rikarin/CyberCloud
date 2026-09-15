@@ -535,8 +535,12 @@ public static class LoadBalancers {
     ///         <see cref="PublicIpAddresses.ObjectNameOf" />'s output — and the join is a resource id
     ///         this provider would have to resolve through <c>CyberCloud.ResourceManager</c>, which is
     ///         the reader that does not exist. The address type's own
-    ///         <c>nothing-can-be-given-an-address-yet</c> is the other half of this sentence and neither
-    ///         half is closed by declaring a property.
+    ///         <c>only-a-nat-gateway-can-be-given-an-address</c> is the other half of this sentence and
+    ///         neither half is closed by declaring a property. ⚠ <see cref="NatGateways" /> joins by
+    ///         <i>name</i> within one resource group instead, which is what a same-group join makes
+    ///         derivable without the reader; the same shape would attach an address here, and it is
+    ///         not taken because the inbound object is an <c>OvnDnatRule</c> per port rather than one
+    ///         rule per resource — a second design rather than a second property.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>THE PORTS ARE BOUNDED WHOLE NUMBERS RATHER THAN A PATTERNED STRING</b>, which is the

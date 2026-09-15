@@ -75,7 +75,10 @@ assertions:
       of Kube-OVN's own default for its cluster subnet, deliberately — docs/plan/12 § Cross-cutting
       decisions defaults external exposure to off across the platform, and a subnet that silently
       egresses is the same class of surprise as a publicly readable bucket. It is the only field in
-      this family where this provider's default and the substrate's convention disagree.
+      this family where this provider's default and the substrate's convention disagree. ⚠ AND IT
+      STAYS TRUE WITH THE FLAG ON, which is not what this row meant when it was written — see § owed,
+      `nat-outgoing-is-ignored-in-a-tenant-vpc`. A tenant subnet egresses only through a natGateways
+      resource, charts/managed/kube-ovn-snat.
   - id: dual-stack-works-in-both-families
     says: >
       A subnet carrying both a v4 and a v6 prefix allocates an address of each family to a workload's
@@ -93,6 +96,21 @@ meters:
 
 # ── owed ──────────────────────────────────────────────────────────────────────────────────────────
 owed:
+  - id: nat-outgoing-is-ignored-in-a-tenant-vpc
+    says: >
+      ⚠ A PUBLISHED PROPERTY THAT IS A CONTROL THE SUBSTRATE IGNORES — the outcome NetworkSubnets'
+      own remarks call "the worst of the three", found while building charts/managed/kube-ovn-snat
+      (#31). Read firsthand in pkg/daemon/gateway.go at v1.16.2: `isSubnetNeedNat` requires
+      `subnet.Spec.Vpc == c.config.ClusterRouter`, so the node-side masquerade behind
+      Subnet.spec.natOutgoing serves the DEFAULT VPC only, and every subnet this chart renders binds
+      to a tenant's own Vpc — deliberately, because an unbound subnet joins the platform's. So
+      `natOutgoing: true` on this platform is accepted, rendered, read back as converged, and moves no
+      packet. The property description now says so and points at natGateways, which is a tenant
+      subnet's only egress. ⚠ WHAT WOULD CLOSE IT is removing the property, and 2026-08-01 is
+      published: `Build.Generate` reports a removed property as a breaking change, and docs/plan/08
+      § The provider registry makes an api-version immutable. The honest path is a second api-version
+      without it, which is a platform decision about when the family's next date is cut rather than
+      this chart's to take.
   - id: object-matches-desired-cannot-see-an-address
     says: >
       ⚠ SETTLED — this was the second sighting, and the note asking the third to make the change

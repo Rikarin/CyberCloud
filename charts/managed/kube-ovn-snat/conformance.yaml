@@ -1,0 +1,156 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Network/virtualNetworks/natGateways. This file
+# is data: `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet.
+
+resourceType: CyberCloud.Network/virtualNetworks/natGateways
+apiVersion: "2026-08-01"
+chart: kube-ovn-snat
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+renders:
+  - group: kubeovn.io
+    version: v1
+    kind: OvnSnatRule
+    count: 1
+    clusterScoped: true
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.network_virtualnetworks_natgateways
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: a-nat-gateway-admits-nothing-inbound
+    says: >
+      A NAT gateway translates the subnet's OUTBOUND packets and admits no connection from outside.
+      ⚠ THIS IS THE SAFETY QUESTION FOR THIS TYPE and the answer comes from the object model: an
+      OvnSnatRule becomes one `AddNat(vpc, SNAT, eip, cidr)` row, and an OVN SNAT row rewrites the
+      source of packets leaving the router — it creates no destination mapping. Inbound is an OvnFip
+      or an OvnDnatRule, and this platform renders neither. So a tenant who attaches a public address
+      to a private subnet has published nothing, which is the third time in this family the empty-body
+      answer has come back safe.
+  - id: the-rule-names-the-subnet-and-the-address-exactly-as-their-own-types-do
+    says: >
+      spec.vpcSubnet is the string NetworkSubnets.ObjectNameOf renders for the named subnet of THIS
+      network, spec.ovnEip is the string PublicIpAddresses.ObjectNameOf renders for the named address
+      in THIS resource group, and spec.vpc is VirtualNetworks.ObjectNameOf for this network. ⚠ THE
+      NETWORK HALF COMES FROM THE ADDRESS AND ONLY THE SUBNET HALF FROM THE BODY, so a gateway under
+      `prod` cannot translate `staging`'s `web` whatever the body says — and the namespace is a
+      component of all three, so a body cannot name another subscription's address of the same name.
+      NetworkNatGatewayTests asserts each against the sibling types' own functions, with the two
+      collisions the shared harness cannot build.
+  - id: a-ready-rule-is-not-drift
+    says: >
+      A rule the controller has finalized, labeled, and marked ready converges and stays converged.
+      ⚠ handleAddOvnSnatRule patches two labels, one annotation, a finalizer and the status onto an
+      object this provider applied — and, uniquely in this family, NEVER writes back to `.spec`. So
+      NatGateways.Matches is containment for the metadata and verbatim on the three spec fields, and a
+      rewritten vpcSubnet, ovnEip or vpc is drift. NetworkNatGatewayTests runs both halves.
+  - id: several-gateways-may-share-one-address
+    says: >
+      Two NAT gateways naming the same publicIpAddresses resource both become ready, and the address
+      cannot be deleted while either exists. ⚠ getOvnEipNat lists SNAT rules by the
+      ovn.kubernetes.io/eip_v4_ip label and handleUpdateOvnEip refuses to release the address while
+      any remain — "is still being used by NAT rules … waiting for them to be deleted" — so a
+      publicIpAddresses delete with gateways on it sits in InProgress rather than releasing an
+      address traffic is still leaving through. That is the fabric protecting the tenant, and it is
+      the first time the address type's delete path has had anything to wait for.
+  - id: the-translation-is-readable-only-through-the-action
+    says: >
+      `POST …/showEgress` returns the public address the fabric resolved, the range being translated
+      and whether the row is programmed. ⚠ None of it is in the body — the body names two resources
+      and these are what they resolved to — and it exists on OvnSnatRule.status and nowhere else.
+      `ready: false` with every address empty is the diagnostic for a wrong name, because the
+      platform's own resource has already converged: the rule reads back exactly as applied.
+  - id: one-gateway-draws-one-resource-and-no-address
+    says: >
+      Creating a NAT gateway reserves exactly 1 against QuotaMeter.Resources and nothing against
+      QuotaMeter.PublicIps. ⚠ The address is drawn by the publicIpAddresses resource this one NAMES;
+      drawing it again here would charge one scarce address twice. A NAT row is a row in OVN's
+      northbound database and consumes no pod and no disk.
+
+# Meters the type must emit.
+meters:
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: a-nat-rule-cannot-be-changed
+    says: >
+      ⚠ THE ADDRESS TYPE'S HEADLINE COST, ON A SECOND KIND. Read firsthand in
+      pkg/controller/ovn_snat.go at v1.16.2: handleAddOvnSnatRule returns at "already ok" once
+      status.ready is set, and handleUpdateOvnSnatRule recomputes the VPC, both addresses and both
+      CIDRs from the NEW spec and refuses every difference by name — "vpc changed", "v4 eip changed",
+      "v6 eip changed", "v4 ip cidr changed", "v6 ip cidr changed". So both body properties are
+      Immutable, SchemaProperty.Immutable is a declaration the manager does not enforce, and a PUT
+      that moves the gateway to another subnet is accepted, applied and reported Succeeded while the
+      fabric keeps translating the old subnet and logs a refusal nobody sees. ⚠ THE SHARED SUITE
+      CANNOT SEE IT EITHER: ProviderConformanceCase.ChangedBody is required and must reach the
+      cluster, so NatGatewayCase varies the subnet, which proves the renderer reaches the cluster on
+      an update and cannot prove the update takes effect. What would close it is the update path
+      consulting Immutable — CyberCloud.ResourceManager surface, the same seam
+      charts/managed/kube-ovn-eip records.
+  - id: the-joins-are-not-resolved-before-202
+    says: >
+      A body may name a subnet this network does not have, or an address this resource group does not
+      hold, and the API accepts it: ResourceNaming.Pattern checks the SHAPE of each name and nothing on
+      the write path can ask whether the object it qualifies to exists. handleAddOvnSnatRule answers
+      "failed to get vpc subnet" or "failed to get eip", retries with backoff, and the gateway reports
+      Succeeded on the API and `ready: false` on showEgress. ⚠ WHAT WOULD CLOSE IT is the reader this
+      family is owed — ReconcileContext carries nothing that resolves a resource id — and on this type
+      it would be the cheapest of the family's sightings to close, because both joins are within one
+      resource group. Not two cluster reads per pass in the reconciler: docs/plan/08 § Deleting a
+      parent resource that has children says the platform "must not re-check the parent on every
+      write to a child", and the same reasoning covers a sibling.
+  - id: the-address-must-be-in-the-same-resource-group
+    says: >
+      `publicIpAddress` is a NAME, and the OvnEip it qualifies to is PublicIpAddresses.ObjectNameOf
+      of THIS resource's namespace — so an address in another resource group, or another
+      subscription, cannot be named at all. docs/plan/14 § Load balancing wants joins that "reference
+      resource ids", which would let a subscription hold its addresses in one group and its networks
+      in another; that needs the reader above. ⚠ Recorded as a limit rather than dressed up as a
+      design: the same-group rule is what made the join derivable WITHOUT the reader, and it is the
+      reason this type could ship before the reader did.
+  - id: one-subnet-per-nat-gateway
+    says: >
+      Azure attaches one NAT gateway to many subnets; this one takes one, so a network with three
+      private subnets holds three gateways naming one address. An OvnSnatRule is one subnet by
+      construction, so a multi-subnet gateway is N rules — and removing a subnet from a list has to
+      DELETE the rule that name rendered, which needs a reconciler that lists its own objects. That is
+      the reader loadBalancers wants for its backends and vpnGateways for its peers, in a third shape.
+  - id: egress-needs-the-networks-external-attachment
+    says: >
+      The NAT row is programmed on the router whether or not the network's `enableExternal` is on;
+      packets leave through the external logical router port that flag attaches, and without it they
+      are translated and dropped. The flag is in the virtual network's body, which is another
+      resource's and unreadable from here — charts/managed/seaweedfs-bucket's
+      `bucket-cluster-may-differ-from-its-accounts` shape, on a field that decides whether the type
+      does anything. The property description says so; nothing checks it.
+  - id: the-cluster-backed-suite-proves-less-than-it-looks
+    says: >
+      The k3s the cluster suite starts has no Kube-OVN and no CRDs for it, so the derived stub's
+      schema is x-kubernetes-preserve-unknown-fields. What it proves: a cluster-scoped apply reaches
+      the right REST path under the HYPHENATED plural `ovn-snat-rules`, ADR-013 labels survive real
+      admission, and the parent network is really created first. ⚠ WHAT IT CANNOT PROVE is either
+      join or the NAT row — no controller resolves spec.vpcSubnet or spec.ovnEip and nothing has ever
+      programmed an OVN NAT. NetworkNatGatewayTests hand-writes the controller-shaped read-back for
+      exactly that reason, as the family's other kinds do.
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12 § The pattern, once, piece 6 keeps the dashboard chart-side. ⚠ IT DOES NOT APPLY
+      TO THIS TYPE, for charts/managed/kube-ovn-vpc's reason: both of piece 6's branches presuppose a
+      workload to scrape and a NAT row has no pod. What a tenant would want — bytes translated through
+      this address — is per-flow data out of Hubble into ClickHouse, docs/plan/14 § Observability,
+      which is a pipeline rather than a scrape and is #31's flow-logs half, still owed.

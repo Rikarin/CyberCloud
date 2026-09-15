@@ -38,8 +38,9 @@ assertions:
       nothing. ⚠ THIS IS THE SAFETY QUESTION FOR THIS TYPE and it was established from the object
       model rather than assumed: an OvnEip is an entry in OVN's IPAM plus a logical address, and every
       path from the internet to a tenant workload goes through a SECOND object that names the EIP — an
-      OvnFip, an OvnDnatRule or an OvnSnatRule. This chart renders none of them and nothing in this
-      platform creates one yet. So "I allocated a public address" is not "I published something",
+      OvnFip, an OvnDnatRule or an OvnSnatRule. This chart renders none of them; the one this platform
+      does create — charts/managed/kube-ovn-snat, an OvnSnatRule — is OUTBOUND-only and publishes
+      nothing. So "I allocated a public address" is not "I published something",
       which is the opposite of how this class of question usually fails, and it is the second time in
       this family that the answer has come back safe.
   - id: an-address-the-fabric-picks-is-not-drift
@@ -168,16 +169,18 @@ owed:
       allowance, 20 by default, against addresses they deleted, for the whole window, with no way to
       recover one and no way to release one early: a one-way leak on the platform's scarcest meter.
       The window becomes right THE DAY A PURGE ROUTE EXISTS, and not before.
-  - id: nothing-can-be-given-an-address-yet
+  - id: only-a-nat-gateway-can-be-given-an-address
     says: >
       docs/plan/14 § Load balancing has a public address serve a loadBalancers resource, and
-      § Everything else has natGateways use one for SNAT. Neither exists: loadBalancers is owed and
-      natGateways is M2. So every address in this api-version reports `attachedTo: ""` and carries no
-      traffic. ⚠ WHAT WAS AVOIDED is foreclosing the join: an attachment is a SECOND Kube-OVN object
-      (OvnFip/OvnDnatRule/OvnSnatRule) that names this EIP by its rendered object name, which
-      PublicIpAddresses.ObjectNameOf derives from a resource id alone — so the join is a resource id a
-      future provider resolves through CyberCloud.ResourceManager, exactly as
-      `nothing-can-join-a-network-yet` describes, and nothing here needs to change for it.
+      § Everything else has natGateways use one for SNAT. ⚠ THE SECOND HALF LANDED (#31) AND THE
+      FIRST DID NOT. charts/managed/kube-ovn-snat renders an OvnSnatRule naming this chart's OvnEip by
+      its rendered object name — PublicIpAddresses.ObjectNameOf of the SAME namespace and the address's
+      name — so a NAT gateway in the same resource group attaches an address with no reader at all,
+      and `attachedTo` is no longer empty on every address. What is still owed is INBOUND: an OvnFip
+      or an OvnDnatRule that publishes a load balancer's private frontend, which is
+      charts/managed/haproxy's `nothing-can-be-reached-from-outside-the-vpc`. ⚠ This row used to be
+      called `nothing-can-be-given-an-address-yet`, which the NAT gateway made false; the same-group
+      join by name that closed its outbound half is what an inbound attachment would reuse.
   - id: the-cilium-lb-ipam-allocator-is-not-implemented
     says: >
       docs/plan/14 § Load balancing warns that "which allocator serves this depends on where the
@@ -186,7 +189,8 @@ owed:
       reconciler picks". This provider implements the tenant half only, and says so rather than
       pretending the choice is made. ⚠ WHY THERE IS NO PROPERTY FOR IT: the input that would choose is
       "what is this address for", which is a fact about the resource that gets ATTACHED to it, and
-      nothing can attach one yet. A selector declared now would be a control with no consequence, and
+      the one thing that can attach one today — a natGateways resource — is by construction inside a
+      tenant VPC. A selector declared now would be a control with no consequence, and
       the doc's own warning — "assuming one allocator for both is the mistake this note exists to
       prevent" — is met by naming the gap rather than by guessing at it.
   - id: the-cluster-backed-suite-proves-less-than-it-looks

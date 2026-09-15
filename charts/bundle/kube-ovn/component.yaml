@@ -1,6 +1,6 @@
 # Bundle component — charts/bundle/README.md § What a component owes.
 #
-# The CNI, and the source of the four network resource types' custom resources. ADR-011: Apache-2.0.
+# The CNI, and the source of the five network resource types' custom resources. ADR-011: Apache-2.0.
 
 component: kube-ovn
 phase: 10
@@ -18,8 +18,8 @@ source: https://kubeovn.github.io/kube-ovn/index.yaml
 checked: 2026-08-19
 
 # Read off the CustomResourceDefinition documents in the pulled chart, not off its documentation.
-# The chart ships one `kubeovn.io/v1` group holding 24 kinds; the four this platform renders are
-# Vpc, Subnet, SecurityGroup and OvnEip.
+# The chart ships one `kubeovn.io/v1` group holding 24 kinds; the five this platform renders are
+# Vpc, Subnet, SecurityGroup, OvnEip and, since #31, OvnSnatRule.
 serves:
   - kubeovn.io/v1
 
@@ -28,6 +28,7 @@ requiredBy:
   - charts/managed/kube-ovn-subnet
   - charts/managed/kube-ovn-security-group
   - charts/managed/kube-ovn-eip
+  - charts/managed/kube-ovn-snat
 
 # ⚠ THE REPOSITORY SERVES TWO CHARTS AND THE OTHER ONE IS NOT A NEWER VERSION OF THIS ONE.
 # `kubeovn/kube-ovn-v2` carries the same chart version and app version as `kubeovn/kube-ovn`; the

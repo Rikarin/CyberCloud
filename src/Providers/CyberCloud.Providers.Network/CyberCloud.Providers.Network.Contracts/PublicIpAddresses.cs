@@ -541,7 +541,9 @@ public static class PublicIpAddresses {
     ///             an address with nothing attached carries no
     ///             traffic
     ///         </b>, and "I allocated an address and nothing happens" is the question this type
-    ///         will be asked most often in M1 — where nothing can attach one yet.
+    ///         will be asked most often. ⚠ Since #31 a <see cref="NatGateways" /> resource can attach
+    ///         one — <c>handleAddOvnSnatRule</c> writes the rule's name here — and it is the only
+    ///         thing that can: inbound attachment (<c>OvnFip</c>, <c>OvnDnatRule</c>) is still owed.
     ///     </para>
     /// </remarks>
     public static ResourceSchema AllocationResponse { get; } =
@@ -578,8 +580,9 @@ public static class PublicIpAddresses {
                     "/attachedTo",
                     SchemaKind.Text,
                     Description: "The NAT rule currently using this address, or empty. ⚠ Empty means "
-                    + "the address is allocated and carries no traffic, which in this api-version is "
-                    + "every address — nothing can attach one yet."
+                    + "the address is allocated and carries no traffic. The only thing that can attach "
+                    + "one is a natGateways resource, which puts a subnet's outbound traffic on it; "
+                    + "nothing can yet publish anything inbound on an address."
                 ),
                 new(
                     "/sampledAt",

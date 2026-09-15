@@ -538,6 +538,19 @@
       }
     },
     {
+      "type": "CyberCloud.Network/virtualNetworks/natGateways",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "NAT gateway",
+        "plural": "NAT gateways",
+        "alias": "natgateway",
+        "summary": "Outbound-only internet access for one subnet of a virtual network, translated to a public IP address the tenant holds. Inbound traffic is not admitted.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Network/virtualNetworks/securityGroups",
       "apiVersions": [
         "2026-08-01"

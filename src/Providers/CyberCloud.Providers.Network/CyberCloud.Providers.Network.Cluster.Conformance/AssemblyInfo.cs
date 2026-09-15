@@ -5,7 +5,7 @@
 // class is using. `CollectionBehavior` is per-assembly, so every assembly that derives from those
 // suites needs this line; there is no way to inherit it.
 //
-// ⚠ THIS FAMILY REGISTERS FIVE CASES INTO THIS ASSEMBLY, WHICH IS MORE THAN ANY BEFORE IT, AND THE
-// LINE BELOW IS WHAT KEEPS THAT FROM BEING FIVE CLUSTERS AT ONCE.
+// ⚠ THIS FAMILY REGISTERS SIX CASES INTO THIS ASSEMBLY, WHICH IS MORE THAN ANY BEFORE IT, AND THE
+// LINE BELOW IS WHAT KEEPS THAT FROM BEING SIX CLUSTERS AT ONCE.
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]

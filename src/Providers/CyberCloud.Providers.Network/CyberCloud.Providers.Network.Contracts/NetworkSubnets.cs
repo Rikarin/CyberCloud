@@ -297,6 +297,22 @@ public static class NetworkSubnets {
     ///     <para>
     ///         ⚠
     ///         <b>
+    ///             AND THE FLAG DOES NOTHING ON A TENANT NETWORK, WHICH WAS FOUND WHILE BUILDING
+    ///             <see cref="NatGateways" /> (#31) AND IS THE WORST OF THE THREE OUTCOMES THIS CLASS
+    ///             WARNS ABOUT.
+    ///         </b> Read firsthand in <c>pkg/daemon/gateway.go</c> at <c>v1.16.2</c>:
+    ///         <c>isSubnetNeedNat</c> requires <c>subnet.Spec.Vpc == c.config.ClusterRouter</c>, so
+    ///         the node-side masquerade behind this flag serves the <b>default</b> VPC only — and
+    ///         <see cref="SubnetJson" /> binds every subnet to a tenant's own <c>Vpc</c>, deliberately.
+    ///         The paragraph above was written as though the flag worked; the description now says it
+    ///         does not, and <c>charts/managed/kube-ovn-subnet/conformance.yaml § owed</c>,
+    ///         <c>nat-outgoing-is-ignored-in-a-tenant-vpc</c>, records what it would take to remove a
+    ///         property from a published api-version. Egress for a tenant subnet is an
+    ///         <c>OvnSnatRule</c>, which is what <see cref="NatGateways" /> renders.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
     ///             <c>private</c> IS DECLARED AND <c>allowSubnets</c> IS NOT, WHICH IS HALF A FEATURE
     ///             AND IS DELIBERATE.
     ///         </b> <c>spec.private</c> isolates a subnet from every other subnet;
@@ -399,12 +415,12 @@ public static class NetworkSubnets {
                 new(
                     "/properties/natOutgoing",
                     SchemaKind.Boolean,
-                    Description: "Whether workloads in this subnet reach the internet through source "
-                    + "NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its "
-                    + "cluster subnet, deliberately: a tenant subnet that silently egresses is a "
-                    + "surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure "
-                    + "to off. It also requires the network's enableExternal to be on; without it the "
-                    + "flag is accepted and nothing egresses."
+                    Description: "Whether the fabric's node gateway masquerades this subnet's outbound "
+                    + "traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: "
+                    + "Kube-OVN honors it only for subnets of its default VPC, and every subnet here "
+                    + "is in a tenant's own. It stays because the api-version is published. Outbound "
+                    + "access for a subnet is a natGateways resource, which translates the subnet to "
+                    + "a public IP address you hold."
                 ) { DefaultJson = "false" },
                 new(
                     "/properties/private",

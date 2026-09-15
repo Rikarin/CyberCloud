@@ -31,7 +31,7 @@ addressSpace:
   ## @example "fd00:20::/48"
   v6: ""
 
-## @param enableExternal {boolean} Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.
+## @param enableExternal {boolean} Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. A natGateways child needs it on: without the attachment its translation is programmed and its packets are dropped. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.
 enableExternal: false
 
 ## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
