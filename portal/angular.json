@@ -81,6 +81,7 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": { "port": 4200, "proxyConfig": "apps/portal/proxy.conf.json" },
           "configurations": {
             "production": { "buildTarget": "portal:build:production" },
             "development": { "buildTarget": "portal:build:development" }
@@ -169,6 +170,7 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": { "port": 4201, "proxyConfig": "apps/identity/proxy.conf.json" },
           "configurations": {
             "production": { "buildTarget": "identity:build:production" },
             "development": { "buildTarget": "identity:build:development" }

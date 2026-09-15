@@ -44,6 +44,8 @@
         <PackageReference Include="Aspire.Hosting.Redis"/>
         <PackageReference Include="Aspire.Hosting.PostgreSQL"/>
         <PackageReference Include="Aspire.Hosting.NATS"/>
+        <!-- The two Angular dev servers, through pnpm — the API shim docs/plan/03 gives Portal.Host, until it exists. -->
+        <PackageReference Include="Aspire.Hosting.JavaScript"/>
     </ItemGroup>
 
     <ItemGroup Label="The processes Aspire launches">
@@ -53,6 +55,9 @@
           the silo is referenced here even though no code in this project uses a type from it.
         -->
         <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
+        <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+        <ProjectReference Include="../CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj"/>
+        <ProjectReference Include="../CyberCloud.Registry.Feeds.Host/CyberCloud.Registry.Feeds.Host.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">

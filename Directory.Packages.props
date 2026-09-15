@@ -389,6 +389,7 @@
         <PackageVersion Include="Aspire.Hosting.Redis" Version="$(AspireVersion)"/>
         <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="$(AspireVersion)"/>
         <PackageVersion Include="Aspire.Hosting.NATS" Version="$(AspireVersion)"/>
+        <PackageVersion Include="Aspire.Hosting.JavaScript" Version="$(AspireVersion)"/>
         <!--
           ⚠ The exit criterion in docs/plan/24 § Phase 0 is a statement about the AppHost, so the only
           honest way to test it is to run the AppHost. Aspire.Hosting.Testing starts the real

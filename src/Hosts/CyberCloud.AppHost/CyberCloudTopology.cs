@@ -1,0 +1,359 @@
+using Projects;
+using System.Globalization;
+
+namespace CyberCloud.AppHost;
+
+/// <summary>
+///     The whole platform, as one method over an <see cref="IDistributedApplicationBuilder" />.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <c>Program.cs</c> calls this and runs what it built; <c>AppHostTopologyTests</c> calls it
+///         over a builder of its own and reads the model back <i>without starting anything</i>.
+///         That second caller is why this is a method and not the body of <c>Program.cs</c>:
+///         <c>Aspire.Hosting.Testing</c>'s builder runs the AppHost's entry point, and the entry
+///         point ends in <c>RunAsync</c> — so "build the model to look at it" through that route
+///         is "start k3s, two silos and three hosts to look at it", which was measured the day this
+///         file was made and is the reason it exists.
+///     </para>
+///     <para>
+///         The prose is the point of this file as much as the code. Every ⚠ below records a way the
+///         topology was wrong once, or a way it deliberately differs from production (ADR-014), and
+///         the divergences are the part a reader most needs when "works locally" stops meaning
+///         anything.
+///     </para>
+/// </remarks>
+public static class CyberCloudTopology {
+    /// <summary>Declares every resource of the local platform on <paramref name="builder" />.</summary>
+    /// <param name="builder">A fresh builder; nothing is expected to be on it yet.</param>
+    public static void Compose(IDistributedApplicationBuilder builder) {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // ── The hot tier ───────────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ DIVERGENCE FROM docs/plan/05 § Hot: this is a single Redis, not a Redis Cluster. The wiring
+        // under test is unaffected — HotTierConfigurator connects with StackExchange.Redis and the
+        // per-tenant decision is the `{cc:t:<id>}` hash tag, which a single node parses and ignores. What a
+        // single node cannot show is slot distribution across nodes; RedisClusterHashTagTests covers that
+        // arithmetic directly, and it does not need a cluster to be true.
+        var redis = builder.AddRedis(CyberCloudResources.Redis);
+
+        // ── The durable tier ───────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ DIVERGENCE FROM docs/plan/05 § Durable, which is "N plain Postgres servers that do not know
+        // about each other". These three shards are three databases on one server. What that preserves is
+        // everything the code can observe: three distinct connection strings, three distinct Npgsql pools,
+        // and a shard map that routes tenants across them — including the platform shard that carries every
+        // null-tenant grain. What it does not preserve is failure isolation, so "stop one shard and watch
+        // the blast radius" is not a thing you can do here. That is what TenancyCluster's three real
+        // containers are for (docs/plan/23's chaos-invariant 5); paying three container start-ups for it on
+        // every `dotnet run` would trade the thing ADR-014 is justified by — start-up time — for a property
+        // the test suite already has.
+        //
+        // ⚠ `AddDatabase` DOES NOT CREATE THE DATABASE. It declares a connection string with a `Database=`
+        // in it and a health check that opens it, and nothing else — so without `WithCreationScript` the
+        // three shard resources sit unhealthy forever and every dependent waits on them, with the only
+        // evidence being three lines in the PostgreSQL container's log:
+        //     FATAL: database "durable00" does not exist
+        // Observed exactly that. Aspire reports "waiting", not "misconfigured", because from its point of
+        // view a health check that fails is a resource that has not come up yet.
+        //
+        // The scripts are plain `CREATE DATABASE`, not guarded, because there is deliberately no data
+        // volume on this server: `dotnet run` starts from empty every time. Local state that survives a
+        // restart is a local state that drifts from what a colleague's run produces, and the durable tier is
+        // the one place a stale shard would look like working code.
+        var postgres = builder.AddPostgres(CyberCloudResources.Postgres);
+
+        var shardA = postgres.AddShard(CyberCloudResources.ShardA);
+        var shardB = postgres.AddShard(CyberCloudResources.ShardB);
+        var platformShard = postgres.AddShard(CyberCloudResources.PlatformShard);
+
+        // ── Streams ────────────────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ NOTHING CONSUMES THIS YET, and it is here anyway because docs/plan/24 § Phase 0 lists it. The
+        // stream provider is still a seam: OrleansApplication.CreateSilo's body names
+        // `.AddMultitenantStreams(StreamProviders.Events, …)` as not-yet-wired, and
+        // Microsoft.Orleans.Streaming.NATS is a prerelease that no project references
+        // (Directory.Packages.props § Orleans spells out why). The silos get the connection string, so the
+        // day that provider lands the AppHost does not change.
+        var nats = builder.AddNats(CyberCloudResources.Nats).WithJetStream();
+
+        // ── The Kubernetes data plane ──────────────────────────────────────────────────────────────────
+        //
+        // ADR-001 makes the Kubernetes API a data plane, and ADR-014 puts a k3s for it in this file.
+        //
+        // ⚠ THREE THINGS ARE LOAD-BEARING AND NONE OF THEM IS AN ASPIRE CONCEPT:
+        //
+        //  1. `--privileged`, `--tmpfs /run`, `--tmpfs /var/run` — k3s runs containerd, which needs a real
+        //     mount namespace and a writable non-overlay /run. Without the tmpfs mounts containerd starts
+        //     and then fails to create sandboxes. Testcontainers.K3s does exactly this; the arguments are
+        //     the same because the requirement is k3s', not the test library's.
+        //  2. `--write-kubeconfig` into a bind-mounted directory, mode 666. A kubeconfig that stays inside
+        //     the container is a cluster nothing can reach. This is the one thing Aspire has no shape for:
+        //     it has no "copy a file out when the container is ready".
+        //  3. A FIXED host port, and `--tls-san` naming the address that kubeconfig will contain. k3s bakes
+        //     `server: https://127.0.0.1:6443` into the file it writes, and the certificate has to have
+        //     that name in it.
+        var kubeconfigDirectory = Path.Combine(builder.AppHostDirectory, ".k3s");
+        Directory.CreateDirectory(kubeconfigDirectory);
+
+        var k3s = builder
+            .AddContainer(CyberCloudResources.K3s, "rancher/k3s", "v1.32.5-k3s1")
+            .WithContainerRuntimeArgs("--privileged", "--tmpfs", "/run", "--tmpfs", "/var/run")
+            .WithArgs(
+                "server",
+                // Nothing in Cyber Cloud uses either, and both cost seconds and memory on every start.
+                "--disable=traefik",
+                "--disable=metrics-server",
+                "--tls-san=127.0.0.1",
+                "--tls-san=host.docker.internal",
+                "--write-kubeconfig=/output/kubeconfig.yaml",
+                "--write-kubeconfig-mode=666"
+            )
+            .WithBindMount(kubeconfigDirectory, "/output")
+            .WithEndpoint(
+                CyberCloudResources.K3sApiPort,
+                CyberCloudResources.K3sApiPort,
+                "https",
+                "api",
+                // ⚠ isProxied: false, and it is the difference between a kubeconfig that works and one that
+                // lies. Aspire's default is to publish the container port on a random host port and put its
+                // own proxy on the named one — which is invisible under `dotnet run` (the proxy does listen
+                // on 6443) and absent under Aspire.Hosting.Testing, where the same test got
+                // `Connection refused (127.0.0.1:6443)` while k3s was up and healthy. Unproxied, Docker
+                // publishes 6443 → 6443 itself, so the address baked into the kubeconfig by
+                // `--write-kubeconfig` is the address that works, in both.
+                isProxied: false
+            );
+
+        // ── The durable schema ─────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ WITHOUT THIS RESOURCE THE DURABLE TIER IS AN EMPTY DATABASE AND SILO 1 FAILS TO START.
+        //
+        // Microsoft.Orleans.Persistence.AdoNet ships zero SQL and does not migrate — the whole account is on
+        // CyberCloud.ServiceDefaults.Storage.OrleansAdoNetSchema. The scripts are bare `CREATE TABLE`, so
+        // they must run once, before the silos, which is exactly what `WaitForCompletion` expresses. The
+        // same program with the same argument is what a Helm pre-install hook Job would run; nothing about
+        // this step is Aspire-shaped, which is the point.
+        var durableSchema = builder
+            .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.DurableSchema)
+            .WithArgs("--apply-durable-schema")
+            .WithDurableShards(shardA, shardB, platformShard)
+            .WaitFor(postgres);
+
+        // ── The two silos ──────────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ TWO `AddProject` CALLS, NOT `WithReplicas(2)`, AND THE REASON IS ORLEANS' PORTS.
+        //
+        // Aspire replicas are copies of one resource definition: same image or assembly, same environment,
+        // endpoint ports individually allocated. Orleans' silo-to-silo and gateway sockets are NOT Aspire
+        // endpoints — they are opened by the Orleans runtime from configuration, long after the process
+        // starts, and Aspire has no way to vary a configuration value per replica. Two replicas would
+        // therefore be handed the same CyberCloud:Cluster:LocalhostSiloPort and the second would die on
+        // AddressInUseException out of SocketConnectionListener. Two named resources with two ports is the
+        // honest spelling of what is actually two different configurations.
+        //
+        // ⚠ AND THEY MUST BE TOLD ABOUT EACH OTHER. `UseLocalhostClustering(silo, gateway)` defaults the
+        // primary-silo endpoint to the caller's own port, so two silos with distinct ports silently become
+        // TWO ONE-SILO CLUSTERS — see CyberCloudClusterOptions.LocalhostPrimarySiloPort. Silo 2 names silo
+        // 1 as the primary; that is the line that makes this a two-silo cluster rather than two clusters.
+        // ⚠ WHAT LETS A SILO ACTUALLY REACH THE k3s ABOVE, AND WITHOUT IT THE CLUSTER IS DECORATION.
+        //
+        // KubeApiClientFactory needs a `ResolveKubeconfig` delegate to turn a cluster connection's
+        // CredentialRef into kubeconfig bytes; with none registered it refuses every connect, so a reconcile
+        // of any type declaring RequiresCluster failed at its first apply — see LocalKubeconfigFiles. The
+        // silo registers the file-backed resolver when it is given a directory, and this is the directory:
+        // the same bind mount `--write-kubeconfig` writes into. Production sets no such key and keeps the
+        // refusal, because a production kubeconfig belongs in Vault (docs/plan/09 § Cluster connections).
+        var kubeconfigRoot = Path.GetFullPath(kubeconfigDirectory);
+
+        // ── The object store ───────────────────────────────────────────────────────────────────────────
+        //
+        // SeaweedFS with its S3 gateway — what CyberCloud.ContainerRegistry/feeds writes artefacts to (#29),
+        // through the hand-written SigV4 client in CyberCloud.ObjectStorage. The same image
+        // SeaweedFsRoundTripTests stands up, with the same one-identity s3.json, so the store the AppHost
+        // runs is the store the client is tested against.
+        //
+        // ⚠ THE BUCKET HAS TO BE MADE, AND THE CLIENT WILL NOT MAKE IT. IObjectStore writes into a bucket
+        // an operator created — PUT /{bucket} is the one S3 call it deliberately does not know — and
+        // SeaweedFS answers NoSuchBucket rather than creating one on the first PutObject. A bucket, to
+        // SeaweedFS, is a directory under the filer's /buckets, and the filer's own HTTP API creates a
+        // directory on the first upload into it; so the init container below is one POST of an empty file
+        // to the filer, which is the whole of "create the bucket". The feeds host and the silo wait on it.
+        //
+        // ⚠ Both ports are published unproxied, like k3s' above and for the same reason: the endpoint has
+        // to BE the address, because the SigV4 signature covers the Host header the client sends.
+        var objectStoreIdentities =
+            $$"""
+              {"identities":[{"name":"cybercloud","credentials":[{"accessKey":"{{CyberCloudResources.ObjectStoreAccessKeyId}}","secretKey":"{{CyberCloudResources.ObjectStoreSecretAccessKey}}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
+              """;
+        var objectStoreConfigDirectory = Path.Combine(builder.AppHostDirectory, ".seaweedfs");
+        var objectStoreConfigFile = Path.Combine(objectStoreConfigDirectory, "s3.json");
+        Directory.CreateDirectory(objectStoreConfigDirectory);
+
+        // ⚠ WRITTEN ONLY WHEN IT DIFFERS, AND THE REASON IS DOCKER DESKTOP ON WINDOWS. A bind-mounted
+        // file is held open by the container that mounts it, and a SeaweedFS from the previous run —
+        // a `dotnet run` killed a moment ago, a test topology still tearing down — holds this one.
+        // An unconditional write then dies with "being used by another process" out of a line that
+        // reads as a formatting step, and the whole AppHost with it. The content is a constant, so
+        // after the first run there is nothing to write.
+        if (!File.Exists(objectStoreConfigFile) || !string.Equals(File.ReadAllText(objectStoreConfigFile), objectStoreIdentities, StringComparison.Ordinal)) {
+            File.WriteAllText(objectStoreConfigFile, objectStoreIdentities);
+        }
+
+        var objectStore = builder
+            .AddContainer(CyberCloudResources.ObjectStore, "chrislusf/seaweedfs", "3.80")
+            .WithArgs("server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data", "-ip.bind=0.0.0.0")
+            .WithBindMount(objectStoreConfigDirectory, "/etc/seaweedfs", isReadOnly: true)
+            .WithEndpoint(CyberCloudResources.ObjectStoreS3Port, CyberCloudResources.ObjectStoreS3Port, "http", "s3", isProxied: false)
+            .WithEndpoint(CyberCloudResources.ObjectStoreFilerPort, CyberCloudResources.ObjectStoreFilerPort, "http", "filer", isProxied: false)
+            // ⚠ 403, not 200, and on the S3 port rather than the filer's — SeaweedFsRoundTripTests' finding:
+            // the gateway prints its banner before the filer it depends on is ready, and a 403 to an
+            // unsigned GET / is the earliest answer that means "the S3 gateway is up and checking
+            // credentials". A 200 from the filer's own port comes sooner and means less.
+            .WithHttpHealthCheck("/", 403, "s3");
+
+        var objectStoreBucket = builder
+            .AddContainer(CyberCloudResources.ObjectStoreBucketInit, "curlimages/curl", "8.12.1")
+            .WithArgs(
+                "--fail", "--silent", "--show-error", "--retry", "10", "--retry-connrefused", "--retry-delay", "2",
+                "-F", "file=@/dev/null;filename=.bucket",
+                $"http://{CyberCloudResources.ObjectStore}:{CyberCloudResources.ObjectStoreFilerPort.ToString(CultureInfo.InvariantCulture)}/buckets/{CyberCloudResources.ObjectStoreBucket}/.bucket"
+            )
+            .WaitFor(objectStore);
+
+        var siloOne = builder
+            .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloOne)
+            .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
+            .WithReference(nats)
+            .WithObjectStore()
+            .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
+            .WithOrleansPorts(CyberCloudResources.SiloOnePort, CyberCloudResources.SiloOneGatewayPort)
+            // ⚠ The endpoint is declared, not inherited. Aspire reads a project's endpoints from its
+            // launchSettings.json, and this host deliberately has none: it is launched by Aspire, by
+            // `dotnet run` with plain environment variables, and in production by a container image, and a
+            // launchSettings.json is a fourth answer that only one of those three reads. Without this line
+            // the AppHost fails at start with "no endpoint was found matching one of the specified names:
+            // https, http" — from WithHttpHealthCheck, which is where it is least expected.
+            .WithHttpEndpoint()
+            .WithHttpHealthCheck("/health")
+            .WaitForCompletion(durableSchema)
+            .WaitForCompletion(objectStoreBucket)
+            .WaitFor(redis);
+
+        builder
+            .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloTwo)
+            .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
+            .WithReference(nats)
+            .WithObjectStore()
+            .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
+            .WithOrleansPorts(CyberCloudResources.SiloTwoPort, CyberCloudResources.SiloTwoGatewayPort)
+            .WithEnvironment(
+                "CyberCloud__Cluster__LocalhostPrimarySiloPort",
+                CyberCloudResources.SiloOnePort.ToString(CultureInfo.InvariantCulture)
+            )
+            .WithHttpEndpoint()
+            .WithHttpHealthCheck("/health")
+            // ⚠ The development membership table lives in silo 1's process, so silo 2 cannot join before
+            // silo 1 is serving. This is the ordering constraint that ADR-004's Kubernetes membership does
+            // not have, and it is the price of not running a membership store on a laptop.
+            .WaitFor(siloOne);
+
+        // ── The hosts a user reaches — docs/plan/03 § Hosts ────────────────────────────────────────────
+        //
+        // Until 2026-09-15 this file stopped at the silos: docs/plan/24 § Phase 0's criterion is about the
+        // cluster, and the gateway and identity host were started in-process by TenantOverHttpTests through
+        // the same GatewayComposition and IdentityComposition their Program.cs files call. That made "the
+        // whole platform" a thing a test could drive and nobody could open. These three are the same
+        // composition roots, launched as the processes they are.
+        //
+        // ⚠ THREE FIXED PORTS, AND THE ISSUER IS WHY. The gateway and the feeds host validate a bearer
+        // token against exactly the issuer they were configured with — JwksCallerContextResolver refuses a
+        // discovery document whose `issuer` differs — and the identity host, given no Issuer, infers it
+        // from the request it is asked on. So `http://localhost:5101` has to be one string on three sides;
+        // CyberCloudResources.IdentityIssuer is that string, and the port it names is pinned rather than
+        // allocated so that it can be. The gateway's port is pinned for the portal's proxy file (below),
+        // and the feeds host's for `dotnet nuget push`, which wants a URL a person can type.
+        //
+        // ⚠ ALL THREE ARE ORLEANS CLIENTS AND WAIT ON SILO 1 — see AsOrleansClient. None waits on k3s, for
+        // the reason the silos do not.
+        var identity = builder
+            .AddProject<CyberCloud_Identity_Host>(CyberCloudResources.Identity)
+            .AsOrleansClient()
+            // ⚠ WebAuthn checks the ORIGIN of the page that made the credential against this list, and the
+            // page is the identity app's dev server, not this host. IdentityHostOptions.Origins defaults to
+            // https://localhost:5001, which nothing here listens on; a passkey ceremony from the dev server
+            // would be refused with "origin not allowed" and nothing in that message names this line.
+            // `localhost` is a secure context to every browser, so plain http is fine for the ceremony.
+            .WithEnvironment("CyberCloud__Identity__Origins__0", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            .WithHttpEndpoint(CyberCloudResources.IdentityPort, isProxied: false)
+            .WithHttpHealthCheck("/health")
+            .WaitFor(siloOne);
+
+        var gateway = builder
+            .AddProject<CyberCloud_Gateway_Host>(CyberCloudResources.Gateway)
+            .AsOrleansClient()
+            .WithEnvironment("CyberCloud__Gateway__Identity__Issuer", CyberCloudResources.IdentityIssuer)
+            // ⚠ PublicBaseUri is what the gateway tells OTHERS about itself — the agent tunnel address a
+            // connected cluster's install command carries (#36), among other things. The shipped default
+            // is https://api.cybercloud.io, which is a host nothing on this laptop can reach; a tenant's
+            // agent installed from a local run would dial production. It is this gateway's own address.
+            .WithEnvironment("CyberCloud__Gateway__PublicBaseUri", $"http://localhost:{CyberCloudResources.GatewayPort.ToString(CultureInfo.InvariantCulture)}")
+            .WithHttpEndpoint(CyberCloudResources.GatewayPort, isProxied: false)
+            .WithHttpHealthCheck("/health")
+            .WaitFor(siloOne)
+            .WaitFor(identity);
+
+        builder
+            .AddProject<CyberCloud_Registry_Feeds_Host>(CyberCloudResources.Feeds)
+            .AsOrleansClient()
+            .WithObjectStore()
+            .WithEnvironment("CyberCloud__Feeds__Identity__Issuer", CyberCloudResources.IdentityIssuer)
+            .WithEnvironment("CyberCloud__Feeds__PublicBaseUri", $"http://localhost:{CyberCloudResources.FeedsPort.ToString(CultureInfo.InvariantCulture)}")
+            .WithHttpEndpoint(CyberCloudResources.FeedsPort, isProxied: false)
+            .WithHttpHealthCheck("/health")
+            .WaitFor(siloOne)
+            .WaitFor(identity)
+            .WaitForCompletion(objectStoreBucket);
+
+        // ── The two Angular apps ───────────────────────────────────────────────────────────────────────
+        //
+        // `ng serve` for the portal and for the identity app, through pnpm, each with the proxy file that
+        // stands in for the API shim docs/plan/03 § `portal/` gives CyberCloud.Portal.Host: the portal calls
+        // the platform on its own origin at /api (API_BASE_PATH), and the identity app calls the sign-in
+        // endpoints at /api/signin/…. The ports and the targets are pinned in CyberCloudResources and the
+        // files are pinned to them by AppHostTopologyTests, because a proxy file that names a stale port
+        // is a portal that loads and cannot call anything.
+        //
+        // ⚠ NODE 24. portal/.nvmrc pins the major and the Angular CLI refuses older ones outright; Aspire
+        // runs whatever `node` is on PATH. On a machine whose PATH has an older Node the two resources fail
+        // at start with the CLI's own message, and everything above them is unaffected — which is why they
+        // come last, wait on the hosts they proxy to, and are the one thing this file can be asked to leave
+        // out: `--CyberCloud:AppHost:Frontends=false`, which CyberCloud.AppHost.Tests passes.
+        //
+        // ⚠ install: false. The portal is a pnpm workspace with a frozen lockfile and a single-version
+        // policy (portal/pnpm-workspace.yaml); an install Aspire ran on every start would be one that could
+        // write the lockfile, and `pnpm install --frozen-lockfile` is a step a person runs once.
+        if (!string.Equals(builder.Configuration[CyberCloudResources.FrontendsKey], "false", StringComparison.OrdinalIgnoreCase)) {
+            var portalDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "..", "portal"));
+
+            builder
+                .AddJavaScriptApp(CyberCloudResources.Portal, portalDirectory, "serve")
+                .WithPnpm(install: false)
+                .WithHttpEndpoint(CyberCloudResources.PortalPort, isProxied: false)
+                .WaitFor(gateway);
+
+            builder
+                .AddJavaScriptApp(CyberCloudResources.IdentityApp, portalDirectory, "serve:identity")
+                .WithPnpm(install: false)
+                .WithHttpEndpoint(CyberCloudResources.IdentityAppPort, isProxied: false)
+                .WaitFor(identity);
+        }
+
+        // ⚠ NOTHING WAITS ON k3s, ON PURPOSE. ADR-001 makes the Kubernetes API a data plane that is written
+        // to and reconciled against, not a dependency of the control plane booting — so a silo that refused
+        // to start without a cluster would be modelling the opposite of ADR-001. It also costs: k3s takes
+        // about 20 s to serve `/readyz` and the two silos are up in a third of that.
+        _ = k3s;
+    }
+}

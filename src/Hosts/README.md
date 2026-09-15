@@ -56,14 +56,44 @@ that the two agree about the feeds type, and that composing it without
 dotnet run --project src/Hosts/CyberCloud.AppHost
 ```
 
-brings up Redis, one PostgreSQL server carrying three shard databases, NATS, a k3s in Docker, and
-**two** silos — [docs/plan/24 § Phase 0](../../docs/plan/24-roadmap.md)'s exit criterion.
-`CyberCloud.AppHost.Tests` runs that same AppHost and asserts the criterion; it is a per-PR test.
+brings up **the whole platform**: Redis, one PostgreSQL server carrying three shard databases, NATS,
+a k3s in Docker, SeaweedFS as the object store, **two** silos —
+[docs/plan/24 § Phase 0](../../docs/plan/24-roadmap.md)'s exit criterion — and, since 2026-09-15,
+the three hosts a user reaches and the two Angular apps:
 
-⚠ **The AppHost fixes five ports** — 11111/30011 and 11112/30012 for the two silos' Orleans sockets,
-6443 for the k3s API server. Orleans' sockets are opened from configuration rather than from an
-Aspire endpoint, so Aspire cannot allocate them and cannot detect a collision. A second `dotnet run`,
-or a `dotnet run` beside `CyberCloud.AppHost.Tests`, fails with `AddressInUseException`.
+| Resource | Address | What it is |
+|---|---|---|
+| `gateway` | `http://localhost:5100` | `CyberCloud.Gateway.Host`, validating tokens against the identity host below |
+| `identity` | `http://localhost:5101` | `CyberCloud.Identity.Host`; this address is also the `iss` every token carries |
+| `feeds` | `http://localhost:5102` | `CyberCloud.Registry.Feeds.Host` — `dotnet nuget push`, `npm publish`, `mvn deploy` go here |
+| `portal` | `http://localhost:4200` | `ng serve portal`; its `/api` is proxied to the gateway |
+| `identity-app` | `http://localhost:4201` | `ng serve identity`; the sign-in and sign-up pages, proxied to the identity host |
+| `seaweedfs` | `http://localhost:8333` | the S3 gateway, bucket `cybercloud`, created by the `seaweedfs-bucket` container |
+
+`CyberCloud.AppHost.Tests` runs that same AppHost — minus the two Angular apps,
+`--CyberCloud:AppHost:Frontends=false` — and asserts the criterion; it is a per-PR test.
+`AppHostTopologyTests` in the same project asserts the declarations above without starting anything,
+including that the two proxy files name the ports in `CyberCloudResources`.
+
+⚠ **The two Angular apps need Node 24 on `PATH`** (`portal/.nvmrc`); the Angular CLI refuses an
+older major outright, and Aspire runs whatever `node` it finds. On such a machine the two resources
+fail at start with the CLI's own message and nothing above them is affected. They also need
+`pnpm install --frozen-lockfile` to have been run once in `portal/` — the AppHost deliberately does
+not install (`WithPnpm(install: false)`), because an install that can write the lockfile is not a
+thing to run on every start.
+
+⚠ **What the portal can and cannot do against this run today.** Sign-in and sign-up work on the
+identity app. The portal's pages render and call the gateway through the proxy — and every call
+answers `401`, because a person has no token path yet (#88): the gateway validates bearer tokens the
+identity host issues, and the identity host issues them to service principals only. That is the gap
+this topology makes visible rather than hides.
+
+⚠ **The AppHost fixes eleven ports** — 11111/30011 and 11112/30012 for the two silos' Orleans
+sockets, 6443 for the k3s API server, 8333/8888 for SeaweedFS, and the five in the table. Orleans'
+sockets are opened from configuration rather than from an Aspire endpoint, so Aspire cannot allocate
+them and cannot detect a collision; the rest are pinned because a proxy file, a kubeconfig, an S3
+signature and an OIDC issuer each name a port. A second `dotnet run`, or a `dotnet run` beside
+`CyberCloud.AppHost.Tests`, fails with `AddressInUseException`.
 
 ⚠ **`CyberCloud.Silo.Host --apply-durable-schema`** is a one-shot mode, not a silo. It creates the
 Orleans grain-storage schema on every configured durable shard and exits;

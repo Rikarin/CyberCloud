@@ -201,6 +201,26 @@ reported no unmet peer at a 22.1.4 framework with 22.1.6 tooling, as the table p
 **`@ng-icons/*` is pinned to `35.1.0`**, the head of the `35` range `@xui/*@3.0.0` peers on. The
 registry head is `36.0.0`, which is out of range.
 
+## Running it against the platform
+
+`dotnet run --project src/Hosts/CyberCloud.AppHost` from the repository root starts both apps beside
+the platform — see [src/Hosts/README.md](../src/Hosts/README.md) for the whole table. What makes
+that work is two files and one rule:
+
+- **`apps/portal/proxy.conf.json`** forwards `/api` to the gateway on `localhost:5100`, stripping the
+  prefix, because `API_BASE_PATH` is `/api` and the gateway serves its routes at the root. It stands
+  in for the API shim docs/plan/03 § `portal/` gives `CyberCloud.Portal.Host`, which does not exist.
+- **`apps/identity/proxy.conf.json`** forwards `/api`, `/connect` and `/.well-known` to the identity
+  host on `localhost:5101`.
+- ⚠ **The ports are pinned in `angular.json`'s `serve.options` and in `CyberCloudResources`, and
+  `AppHostTopologyTests` reads the proxy files back and refuses a drift** — a proxy file naming a
+  stale port is a portal that renders and cannot call anything, with the only symptom an
+  `ECONNREFUSED` in the dev server's console.
+
+The apps run through Aspire's JavaScript hosting with `install: false` — run
+`pnpm install --frozen-lockfile` here once first — and with whatever `node` is on `PATH`, which
+§ Node above says has to be 24.
+
 ## The pages, and what each one calls
 
 Issue #22's M1 pages, each a lazy route over the generated client (`libs/api`) and the generated

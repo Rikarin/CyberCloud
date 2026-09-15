@@ -176,4 +176,60 @@ public static class CyberCloudResourceExtensions {
                     gatewayPort.ToString(CultureInfo.InvariantCulture)
                 );
     }
+
+    /// <summary>
+    ///     Makes a host an Orleans <b>client</b> of the cluster — the gateway, the identity host and
+    ///     the feeds host all connect this way.
+    /// </summary>
+    /// <param name="builder">The host resource.</param>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     ⚠ The client connects to silo 1's gateway port and nothing else. Under localhost
+    ///     clustering that is the whole address book: <c>UseLocalhostClustering(gatewayPort)</c> names
+    ///     one gateway, and a client that named silo 2's would work exactly as well — until silo 2
+    ///     restarted. The hosts therefore <c>WaitFor</c> silo 1, which is also the silo that carries
+    ///     the development membership table (see silo 2's remarks in <c>Program.cs</c>).
+    /// </remarks>
+    public static IResourceBuilder<T> AsOrleansClient<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEnvironment {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder
+            .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
+            .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
+            .WithEnvironment(
+                $"{ClusterPrefix}LocalhostGatewayPort",
+                CyberCloudResources.SiloOneGatewayPort.ToString(CultureInfo.InvariantCulture)
+            );
+    }
+
+    /// <summary>
+    ///     Points a resource at the SeaweedFS object store — the silo, for the feed reconciler's
+    ///     teardown, and the feeds host, for every artefact it stores.
+    /// </summary>
+    /// <param name="builder">The resource being configured.</param>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     Writes <c>CyberCloud__ObjectStorage__…</c>, the section <c>ObjectStorageOptions</c> binds,
+    ///     for the reason the type's remarks give about every other variable here. ⚠
+    ///     <c>AllowInsecureTransport</c> is what lets the SigV4 client speak plain HTTP to a
+    ///     container on the laptop; the option exists so that a production endpoint without TLS is
+    ///     a refusal rather than a warning, and this is the one place it is turned on.
+    /// </remarks>
+    public static IResourceBuilder<T> WithObjectStore<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEnvironment {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder
+            .WithEnvironment(
+                "CyberCloud__ObjectStorage__Endpoint",
+                $"http://localhost:{CyberCloudResources.ObjectStoreS3Port.ToString(CultureInfo.InvariantCulture)}"
+            )
+            .WithEnvironment("CyberCloud__ObjectStorage__Bucket", CyberCloudResources.ObjectStoreBucket)
+            .WithEnvironment("CyberCloud__ObjectStorage__AccessKeyId", CyberCloudResources.ObjectStoreAccessKeyId)
+            .WithEnvironment("CyberCloud__ObjectStorage__SecretAccessKey", CyberCloudResources.ObjectStoreSecretAccessKey)
+            .WithEnvironment("CyberCloud__ObjectStorage__AllowInsecureTransport", "true");
+    }
 }

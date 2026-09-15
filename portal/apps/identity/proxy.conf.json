@@ -1,0 +1,5 @@
+{
+  "/api": { "target": "http://localhost:5101", "secure": false },
+  "/connect": { "target": "http://localhost:5101", "secure": false },
+  "/.well-known": { "target": "http://localhost:5101", "secure": false }
+}

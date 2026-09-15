@@ -117,8 +117,12 @@ public sealed class LocalTopology : IAsyncLifetime {
         machineLock = await AcquireMachineLockAsync(token);
         await WaitForApiPortToBeFreeAsync(token);
 
+        // ⚠ The two Angular dev servers stay out. Nothing in this suite opens a browser; what it
+        // measures is the cluster, the storage tiers and the three hosts, and `ng serve` twice over
+        // is a Node toolchain (portal/.nvmrc) and two more minutes that a .NET run has no business
+        // requiring. CyberCloudResources.FrontendsKey is the switch and this is its one caller.
         var builder = await DistributedApplicationTestingBuilder
-            .CreateAsync<CyberCloud_AppHost>([], token);
+            .CreateAsync<CyberCloud_AppHost>([$"--{CyberCloudResources.FrontendsKey}=false"], token);
 
         Application = await builder.BuildAsync(token);
 

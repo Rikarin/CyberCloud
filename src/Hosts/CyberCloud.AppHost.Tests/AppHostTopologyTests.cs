@@ -1,0 +1,251 @@
+using Aspire.Hosting;
+using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
+
+namespace CyberCloud.AppHost.Tests;
+
+/// <summary>
+///     That <c>dotnet run</c> on the AppHost brings up the whole platform — the three hosts a user
+///     reaches and the two Angular apps — and that the pieces which have to agree on a port do.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Model-level, and deliberately so.</b> Every other file in this suite starts the
+///         topology, which is a k3s and a two-silo cluster and a minute of wall clock;
+///         <see cref="LocalTopology" /> holds the machine lock for it. What is asserted here is what
+///         <c>Program.cs</c> <i>declares</i> — which resources exist, what environment they are
+///         handed, what they wait on — and Aspire answers that from the built model without
+///         starting anything. The one thing this cannot see is whether a host actually comes up on
+///         the port it was given; <c>TenantOverHttpTests</c> drives the same composition roots over
+///         HTTP, and a run of the AppHost is the rest.
+///     </para>
+///     <para>
+///         ⚠ <b>The proxy files are read back from disk, and that is the point of the class.</b>
+///         The portal calls the platform on its own origin at <c>/api</c> and the Angular dev server
+///         forwards it — <c>apps/portal/proxy.conf.json</c> names the gateway's port, and
+///         <c>apps/identity/proxy.conf.json</c> the identity host's. Those are JSON files no
+///         compiler reads against <see cref="CyberCloudResources" />, so a port moved in one place
+///         is a portal that loads, renders, and cannot call anything — with the only symptom a
+///         <c>ECONNREFUSED</c> in the dev server's console. This is the compiler.
+///     </para>
+/// </remarks>
+public sealed class AppHostTopologyTests {
+    /// <summary>The repository root, found the way <see cref="LocalTopology" /> finds it: by walking up to the solution file.</summary>
+    static readonly string RepositoryRoot = FindRepositoryRoot();
+
+    static string PortalRoot => Path.Combine(RepositoryRoot, "portal");
+
+    static string FindRepositoryRoot() {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "CyberCloud.slnx"))) {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName ?? throw new InvalidOperationException("CyberCloud.slnx is above no ancestor of " + AppContext.BaseDirectory);
+    }
+
+    /// <summary>The built model and the context its environment is resolved in — nothing started.</summary>
+    sealed record Built(DistributedApplicationModel Model) {
+        public IResource Resource(string name) => Model.Resources.Single(x => x.Name == name);
+
+        public IEnumerable<string> Names => Model.Resources.Select(x => x.Name);
+
+        /// <summary>A resource's environment as the AppHost declares it.</summary>
+        /// <remarks>
+        ///     ⚠ Resolved in the <b>Publish</b> operation, not Run. In Run, a value that references
+        ///     another resource's endpoint — the silos' NATS connection string, say — is resolved
+        ///     by waiting for that endpoint to be allocated, which happens when the application
+        ///     starts, which it never does here: the first version of this method hung for ten
+        ///     minutes on silo-1. Under Publish a reference renders as its manifest expression and
+        ///     a literal renders as itself, and every value this class asserts on is a literal.
+        /// </remarks>
+        public async Task<IReadOnlyDictionary<string, string>> EnvironmentOf(string name) {
+            var resolved = await ExecutionConfigurationBuilder
+                .Create(Resource(name))
+                .WithEnvironmentVariablesConfig()
+                .BuildAsync(
+                    new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+                    NullLogger.Instance,
+                    TestContext.Current.CancellationToken
+                );
+
+            resolved.Exception.ShouldBeNull($"{name}'s environment could not be resolved");
+
+            return resolved.EnvironmentVariables.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
+    ///     The model <c>Program.cs</c> would run, built and not started.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not <c>DistributedApplicationTestingBuilder</c>.</b> That builder runs the AppHost's
+    ///     entry point, whose last line is <c>RunAsync</c> — so its <c>BuildAsync</c> is a started
+    ///     platform, and the first version of this class left three sets of Redis, PostgreSQL, NATS
+    ///     and SeaweedFS containers running on the machine while asserting that a dictionary held a
+    ///     string. <see cref="CyberCloudTopology.Compose" /> is the same declarations over a plain
+    ///     builder, and <c>Build()</c> on that starts nothing until somebody calls <c>Start</c>,
+    ///     which nobody here does.
+    /// </remarks>
+    static Built Model(params string[] args) {
+        var builder = DistributedApplication.CreateBuilder(
+            new DistributedApplicationOptions {
+                Args = args,
+                // Where Program.cs lives, so that AppHostDirectory — which the topology uses for the
+                // k3s kubeconfig and the SeaweedFS identity file — is the same directory it is under
+                // `dotnet run`, and the portal is found two levels above it.
+                ProjectDirectory = Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost"),
+                DisableDashboard = true
+            }
+        );
+
+        CyberCloudTopology.Compose(builder);
+
+        var application = builder.Build();
+
+        return new(application.Services.GetRequiredService<DistributedApplicationModel>());
+    }
+
+    [Fact]
+    public async Task TheThreeHostsAndTheTwoAppsAreInTheModel() {
+        var built = Model();
+        var names = built.Names.ToHashSet(StringComparer.Ordinal);
+
+        foreach (var expected in new[] {
+                     CyberCloudResources.Gateway, CyberCloudResources.Identity, CyberCloudResources.Feeds,
+                     CyberCloudResources.Portal, CyberCloudResources.IdentityApp,
+                     CyberCloudResources.ObjectStore, CyberCloudResources.ObjectStoreBucketInit
+                 }) {
+            names.ShouldContain(
+                expected,
+                "src/Hosts/README.md § What exists today lists four hosts; a `dotnet run` that started fewer "
+                + "would be a platform a test can drive and nobody can open"
+            );
+        }
+
+        built.Model.Resources.Where(x => x.Name is CyberCloudResources.Gateway or CyberCloudResources.Identity or CyberCloudResources.Feeds)
+            .ShouldAllBe(x => x is ProjectResource, "the hosts are the processes their own Program.cs files start, not containers of a build");
+    }
+
+    [Fact]
+    public async Task TheFrontendsCanBeLeftOutAndNothingElseCan() {
+        var built = Model($"--{CyberCloudResources.FrontendsKey}=false");
+        var names = built.Names.ToHashSet(StringComparer.Ordinal);
+
+        names.ShouldNotContain(CyberCloudResources.Portal);
+        names.ShouldNotContain(CyberCloudResources.IdentityApp);
+
+        foreach (var kept in new[] { CyberCloudResources.Gateway, CyberCloudResources.Identity, CyberCloudResources.Feeds, CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo }) {
+            names.ShouldContain(kept, $"{CyberCloudResources.FrontendsKey} is the one switch this AppHost has, and it turns off the two dev servers only");
+        }
+    }
+
+    [Fact]
+    public async Task TheIssuerIsOneStringOnAllThreeSides() {
+        var built = Model();
+
+        var gateway = await built.EnvironmentOf(CyberCloudResources.Gateway);
+        var feeds = await built.EnvironmentOf(CyberCloudResources.Feeds);
+        var identity = await built.EnvironmentOf(CyberCloudResources.Identity);
+
+        gateway["CyberCloud__Gateway__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer);
+        feeds["CyberCloud__Feeds__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer);
+
+        // ⚠ The identity host infers its issuer from the request, so the only way the string above
+        // is the string it announces is if it listens on exactly that port. An Issuer handed to it
+        // explicitly would also work; an Issuer handed to it that DIFFERED from the port would be a
+        // discovery document the gateway refuses, with both hosts healthy.
+        identity.ShouldNotContainKey("CyberCloud__Identity__Issuer", "inferred, so that the port is the one place the origin is decided");
+        new Uri(CyberCloudResources.IdentityIssuer).Port.ShouldBe(CyberCloudResources.IdentityPort);
+
+        foreach (var (name, environment) in new[] { (CyberCloudResources.Gateway, gateway), (CyberCloudResources.Feeds, feeds), (CyberCloudResources.Identity, identity) }) {
+            environment["CyberCloud__Cluster__LocalhostGatewayPort"]
+                .ShouldBe(CyberCloudResources.SiloOneGatewayPort.ToString(), $"{name} is an Orleans client of silo 1 — AsOrleansClient");
+            environment["DOTNET_ENVIRONMENT"].ShouldBe("Development", $"{name} would otherwise choose Kubernetes membership under Aspire.Hosting.Testing — WithOrleansPorts' remarks");
+        }
+    }
+
+    [Fact]
+    public async Task TheGatewayAnnouncesItselfAndNotProduction() {
+        var built = Model();
+        var gateway = await built.EnvironmentOf(CyberCloudResources.Gateway);
+
+        gateway["CyberCloud__Gateway__PublicBaseUri"].ShouldBe(
+            $"http://localhost:{CyberCloudResources.GatewayPort}",
+            "the shipped default is https://api.cybercloud.io, and a connected cluster's install command (#36) would carry it"
+        );
+    }
+
+    [Fact]
+    public async Task TheObjectStoreReachesTheSilosAndTheFeedsHost() {
+        var built = Model();
+
+        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Feeds }) {
+            var environment = await built.EnvironmentOf(name);
+
+            environment["CyberCloud__ObjectStorage__Endpoint"].ShouldBe($"http://localhost:{CyberCloudResources.ObjectStoreS3Port}");
+            environment["CyberCloud__ObjectStorage__Bucket"].ShouldBe(CyberCloudResources.ObjectStoreBucket);
+            environment["CyberCloud__ObjectStorage__AllowInsecureTransport"].ShouldBe("true", $"{name} speaks plain http to a container on the laptop, and the option exists so production cannot");
+        }
+
+        // The bucket is made by the init container, and everything that writes into it waits for
+        // that to have finished — a store pointed at a bucket that does not exist answers
+        // NoSuchBucket, which reads like a signing bug.
+        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.Feeds }) {
+            built.Resource(name).Annotations.OfType<WaitAnnotation>()
+                .ShouldContain(
+                    x => x.Resource.Name == CyberCloudResources.ObjectStoreBucketInit && x.WaitType == WaitType.WaitForCompletion,
+                    $"{name} writes into {CyberCloudResources.ObjectStoreBucket} and must wait for the container that creates it"
+                );
+        }
+    }
+
+    [Fact]
+    public void ThePortalProxyForwardsApiToTheGatewayOnItsPinnedPort() {
+        var proxy = ReadProxy(Path.Combine("apps", "portal", "proxy.conf.json"));
+
+        proxy.ShouldContainKey("/api", "API_BASE_PATH in portal/apps/portal/src/app/api/http-transport.ts is /api");
+        TargetPortOf(proxy["/api"]).ShouldBe(CyberCloudResources.GatewayPort, "the portal's /api is the gateway — CyberCloudResources.GatewayPort");
+        proxy["/api"].GetProperty("pathRewrite").GetProperty("^/api").GetString()
+            .ShouldBe("", "the gateway serves its routes at the root, so /api has to come off");
+
+        ServePortOf("portal").ShouldBe(CyberCloudResources.PortalPort);
+    }
+
+    [Fact]
+    public void TheIdentityAppProxyForwardsToTheIdentityHostOnItsPinnedPort() {
+        var proxy = ReadProxy(Path.Combine("apps", "identity", "proxy.conf.json"));
+
+        foreach (var path in new[] { "/api", "/connect", "/.well-known" }) {
+            proxy.ShouldContainKey(path);
+            TargetPortOf(proxy[path]).ShouldBe(CyberCloudResources.IdentityPort, $"the identity app's {path} is the identity host — CyberCloudResources.IdentityPort");
+        }
+
+        ServePortOf("identity").ShouldBe(CyberCloudResources.IdentityAppPort);
+    }
+
+    /// <summary>The proxy file's entries, keyed by the path each forwards.</summary>
+    static Dictionary<string, JsonElement> ReadProxy(string relative) {
+        var path = Path.Combine(PortalRoot, relative);
+        File.Exists(path).ShouldBeTrue($"{path} is the file `ng serve` reads through angular.json's proxyConfig, and it is gone");
+
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+
+        return document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+    }
+
+    static int TargetPortOf(JsonElement entry) => new Uri(entry.GetProperty("target").GetString()!).Port;
+
+    /// <summary>The <c>port</c> angular.json's serve target pins for a project.</summary>
+    static int ServePortOf(string project) {
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(PortalRoot, "angular.json")));
+
+        return document.RootElement
+            .GetProperty("projects").GetProperty(project)
+            .GetProperty("architect").GetProperty("serve").GetProperty("options").GetProperty("port")
+            .GetInt32();
+    }
+}

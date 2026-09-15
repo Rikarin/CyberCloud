@@ -219,6 +219,9 @@ desktop.ini
 # of CyberCloud.AppHost and carries that run's client certificate, so it is worthless the moment
 # the container stops and is a credential while it is alive.
 src/Hosts/CyberCloud.AppHost/.k3s/
+# The one-identity s3.json the AppHost writes for SeaweedFS's bind mount, from constants in
+# CyberCloudResources. Regenerated on every run for the same reason as the kubeconfig above.
+src/Hosts/CyberCloud.AppHost/.seaweedfs/
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 # The generated Python and Go SDKs — issue #40
