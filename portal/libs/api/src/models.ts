@@ -1806,8 +1806,49 @@ export interface StorageAccountsBucketsStatsResult {
   objectCount: number;
   /** When the two figures above were sampled, RFC 3339. ⚠ Returned because a sampled number with no timestamp is a number a caller will read as live. */
   sampledAt: string;
-  /** How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — docs/plan/15 § Metering samples SeaweedFS volume stats hourly per bucket — so it is not a number to write an assertion against immediately after a PUT. */
+  /** How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — the operator refreshes every Bucket's status.usage from collection.list every five minutes — so it is not a number to write an assertion against immediately after a PUT. */
   sizeBytes: number;
+}
+
+/** File share. A ReadWriteMany file share on a managed object-storage account's filer, mounted into pods through the SeaweedFS CSI driver with an enforced size. */
+export interface StorageAccountsFileSharesData {
+  /** The region the share is billed in. */
+  location: string;
+  /** The share's own settings. */
+  properties?: {
+    /** The cluster whose namespace holds the share. Must be the cluster the account is in — nothing checks that, and a share placed elsewhere is a claim against a driver whose filer reference resolves to nothing. */
+    clusterId: string;
+    /** How much the share may hold. */
+    quota?: {
+      /** The share's size, in Kubernetes quantity form. Enforced as a SeaweedFS collection quota on the mount. Grows online; never shrinks. ⚠ This is a ceiling inside capacity the account's volume servers already reserved; it does not add any, and docs/plan/15 § Metering bills the provisioned figure rather than what is used. */
+      size: string;
+    };
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One File share, as the API returns it. */
+export interface StorageAccountsFileSharesResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.Storage/accounts/fileShares';
+  readonly properties?: StorageAccountsFileSharesData['properties'];
+}
+
+/** What listMountTargets returns. */
+export interface StorageAccountsFileSharesListMountTargetsResult {
+  /** The access mode the claim was bound with. Always ReadWriteMany. */
+  accessMode: string;
+  /** The PersistentVolumeClaim a pod in the resource group's namespace names under volumes[].persistentVolumeClaim.claimName. */
+  claimName: string;
+  /** The SeaweedFS collection the share's quota is enforced on — `weed mount -collection=`. A mount that omits it writes outside the quota. */
+  collection: string;
+  /** The account's filer, host:port, for a `weed mount -filer=` from a VM on the cluster network. ⚠ In-cluster only, for the reason the account's listKeys endpoint is. */
+  filer: string;
+  /** The filer path the share lives at — `weed mount -filer.path=`. */
+  path: string;
 }
 
 /** The values /properties/image/variant accepts. ⚠ Closed: the write path refuses anything else. */

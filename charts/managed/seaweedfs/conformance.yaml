@@ -296,3 +296,32 @@ owed:
       SIGHTING of charts/managed/nats' item of the same name, and no service in the catalogue has
       delivered that half yet — which at two of five is now a property of the pattern rather than of
       either service.
+  # ── Issue #30's other two thirds, recorded here because this is the row they extend ────────
+  - id: backup-vaults
+    says: >
+      docs/plan/24 § Phase 3's Storage row is "File shares, backup vaults, customer-managed keys"
+      (#30, 3.0 EM), and the first third landed 2026-09-15 as CyberCloud.Storage/accounts/fileShares.
+      BACKUP VAULTS ARE STILL OWED. docs/plan/15 § Backup as a service makes them
+      `CyberCloud.RecoveryServices/vaults` — a POLICY resource binding protected resources to
+      schedules and retention, with Velero, volume snapshots, engine-native backup and "bucket
+      replication for object" as its four backends — and docs/plan/05 § Backup and restore already
+      splits a SHARD restore (M1) from a TENANT restore (M3, "more product than plumbing"), of which
+      a vault is the tenant-facing half. What blocks it is not this provider: a vault protects
+      resources of several providers and src/Providers/README.md § Hard rule forbids one Providers.*
+      assembly referencing another, so a vault is the first type whose reconciler must reach OTHER
+      providers' resources by id through CyberCloud.ResourceManager — the seam
+      `filer-is-a-single-point-of-failure` above names as untested. And the `backup` row above
+      records why this account cannot even be its own destination. It is a provider namespace of its
+      own, after that seam, and it is not started.
+  - id: customer-managed-keys
+    says: >
+      The third third of #30. docs/plan/15 § The resource model: "customer-managed keys from the
+      tenant's Vault are a bucket property (M2)". OWED, AND BLOCKED TWICE OVER. First by
+      `encryption-at-rest` above: SeaweedFS encrypts behind `weed volume -encryptVolumeData` and the
+      operator's VolumeServerConfig has no field for it, so PLATFORM-managed encryption is not
+      rendered yet and a customer key would be a key for nothing. Second by the key's home:
+      docs/plan/24 § What has landed lists CyberCloud.KeyVault/vaults (M1, 2.0 EM) as a type the
+      catalogue has and this tree has not published, so there is no resource for a bucket property
+      to reference. The order that works is a first-class encryption field upstream or a decision
+      that extraArgs carries it; then KeyVault/vaults; then a `encryption.keyId` property on a NEW
+      api-version of accounts/buckets. None of the three is started.

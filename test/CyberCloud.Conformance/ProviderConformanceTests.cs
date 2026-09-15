@@ -664,11 +664,24 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // ⚠ The operator's claims, owned by the object the reconciler applied — see the remarks. Every
         // owner is resolved to a uid the fake issued, so the collector below can find the dependents
         // exactly as the real one would.
-        var operatorOwned = PlantOperatorObjects(accepted.Resource.Id, "keeps-disks")
+        //
+        // ⚠ SPLIT ON WHETHER THE CASE DECLARED AN OWNER, AND THE SECOND HALF IS NEWER. A claim a
+        // dynamic provisioner BINDS — CyberCloud.Storage/accounts/fileShares' ReadWriteMany claim,
+        // which the reconciler applies and the CSI external-provisioner then writes spec.volumeName
+        // onto — is planted through OperatorWritten so the action handler has a bound claim to read,
+        // and it names no owner because in the real world nothing owns it. Asking such a claim for a
+        // controller would refuse the real shape; not following it through the teardown would let a
+        // reconciler leave its own claim behind. So an unowned planted claim joins `claims` — gone
+        // after a hard delete, kept through a soft one, gone at the purge — and is exempt from the
+        // three controller assertions, which are about the collector and a collector never touches it.
+        var planted = PlantOperatorObjects(accepted.Resource.Id, "keeps-disks")
             .Where(x => x.Target.Kind == RetainedVolume.ClaimKind)
             .ToList();
 
-        if (templated.Count == 0 && operatorOwned.Count == 0) {
+        var operatorOwned = planted.Where(x => KubeJson.ControllerOf(JsonNode.Parse(x.Json)) is not null).ToList();
+        var provisionerBound = planted.Except(operatorOwned).ToList();
+
+        if (templated.Count == 0 && planted.Count == 0) {
             Assert.Skip(
                 $"SKIPPED — {Case.DisplayName} renders no volumeClaimTemplate and declares no "
                 + "operator-owned PersistentVolumeClaim in OperatorWritten, so this case has no claim "
@@ -682,7 +695,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             );
         }
 
-        var claims = templated.Concat(operatorOwned).ToList();
+        var claims = templated.Concat(operatorOwned).Concat(provisionerBound).ToList();
 
         // ⚠ The StatefulSet controller's job, done by hand because this cluster has no controllers.
         // The name and the labels both come from the applied document — see the remarks.

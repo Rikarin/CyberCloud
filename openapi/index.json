@@ -481,6 +481,19 @@
       }
     },
     {
+      "type": "CyberCloud.Storage/accounts/fileShares",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "File share",
+        "plural": "File shares",
+        "alias": "fileshare",
+        "summary": "A ReadWriteMany file share on a managed object-storage account's filer, mounted into pods through the SeaweedFS CSI driver with an enforced size.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Terminal/consoles",
       "apiVersions": [
         "2026-08-01"

@@ -71,10 +71,20 @@ CyberCloud.Messaging/natsClusters             listKeys
 # is a copy of the Valkey row.
 
 # ── The reading the action returns comes from a pipeline that is not built ──────────────────────
-
-# `stats` returns an object count and a byte total. There is no S3 or RGW admin client in the tree
-# and nothing scrapes the metrics port the account asks the operator to expose; the metering pipeline
-# derives storage from the account's DESIRED body rather than from an observation, so it has no
-# reading to hand over either. docs/plan/22's usage pipeline is what this is the tenant-facing half
-# of, and it is not written.
-CyberCloud.Storage/accounts/buckets           stats
+#
+# ⚠ EMPTY SINCE 2026-09-15, AND THE ROW THAT LEFT IT IS WORTH KEEPING AS A LESSON. It read:
+#
+#   `stats` returns an object count and a byte total. There is no S3 or RGW admin client in the tree
+#   and nothing scrapes the metrics port the account asks the operator to expose; the metering
+#   pipeline derives storage from the account's DESIRED body rather than from an observation, so it
+#   has no reading to hand over either. docs/plan/22's usage pipeline is what this is the tenant-
+#   facing half of, and it is not written.
+#
+# Every sentence about THIS TREE was true and the conclusion was wrong, because the observation was
+# being made one repository over: seaweedfs-operator's internal/controller/bucket_usage.go runs
+# `collection.list` through the embedded weed shell every five minutes and patches the result into
+# every Bucket's status.usage. The handler is one GetAsync of the object the reconciler already reads
+# (StorageBucketStatsHandler). The row's premise — "the reading needs a pipeline" — assumed the
+# platform had to observe the backend itself; the operator is also an observer, and a CRD's `status`
+# is where an operator reports what it saw. Before adding a line under this heading, read the
+# operator's status types first.

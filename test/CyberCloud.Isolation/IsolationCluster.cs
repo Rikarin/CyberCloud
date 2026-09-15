@@ -176,6 +176,20 @@ public static class IsolationCatalog {
             cluster => StorageBuckets.Body(cluster),
             StorageBuckets.StatsAction,
             [StorageAccount]
+        ),
+        // ⚠ THE SECOND CHILD OF THE SAME PARENT, AND THE FIRST TARGET WHOSE ACTION HANDLER READS THE
+        // CLUSTER. `listMountTargets` hands back a filer address and a path — the whole of what a
+        // VM needs to mount another tenant's data — so the wrong-tenant 404 on this row protects a
+        // mount rather than a name. The handler is never reached on the attacker's path (the
+        // enforcement seam refuses first), and this row is what proves that for a handler that
+        // WOULD have answered.
+        new(
+            "CyberCloud.Storage/accounts/fileShares",
+            StorageFileShares.Type,
+            StorageFileShares.V2026,
+            cluster => StorageFileShares.Body(cluster),
+            StorageFileShares.ListMountTargetsAction,
+            [StorageAccount]
         )
     ];
 
@@ -309,6 +323,8 @@ public sealed class IsolationCluster : IAsyncLifetime {
     static ServiceProvider BuildHandlers() {
         var services = new ServiceCollection();
         services.AddSingleton<StorageAccountListKeysHandler>();
+        services.AddSingleton<StorageBucketStatsHandler>();
+        services.AddSingleton<StorageFileShareListMountTargetsHandler>();
 
         return services.BuildServiceProvider();
     }
@@ -705,7 +721,14 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     services.AddSingleton<IResourceProvider, StorageProvider>();
                     services.AddSingleton<StorageAccountReconciler>();
                     services.AddSingleton<StorageBucketReconciler>();
+                    // ⚠ The third type, and the failure that reported its absence is worth keeping:
+                    // every verb in the sweep passed for the share while its reconciler was
+                    // unregistered, because the attacker's path is refused before a reconciler is
+                    // resolved. Only the VICTIM's own delete, driven to convergence, found it.
+                    services.AddSingleton<StorageFileShareReconciler>();
                     services.AddSingleton<StorageAccountListKeysHandler>();
+                    services.AddSingleton<StorageBucketStatsHandler>();
+                    services.AddSingleton<StorageFileShareListMountTargetsHandler>();
 
                     // ⚠ The SAME vault instance the client-side manager reads. The mint happens in
                     // the silo and listKeys resolves on the client, so two instances would make every

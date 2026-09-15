@@ -8,9 +8,18 @@ using System.Text.Json;
 namespace CyberCloud.Providers.Storage;
 
 /// <summary>
-///     Managed object storage — an account and the buckets inside it, on SeaweedFS.
+///     Managed storage on SeaweedFS — an account, the buckets inside it, and the file shares its
+///     filer serves.
 /// </summary>
 /// <remarks>
+///     <para>
+///         ⚠ <b>THREE TYPES SINCE 2026-09-15, AND THE THIRD IS docs/plan/15 § The three kinds' second
+///         row rather than a third child kind of the first.</b> <c>accounts/fileShares</c> is the RWX
+///         shape — a <c>ReadWriteMany</c> claim the SeaweedFS CSI driver binds against the account's
+///         filer — and it is a child of the account for the reason <see cref="StorageFileShares" />
+///         gives: the only filer this platform runs is the one inside an account. The paragraphs below
+///         about "the first child" are the bucket's and are kept as written.
+///     </para>
 ///     <para>
 ///         ⚠
 ///         <b>
@@ -255,7 +264,12 @@ public sealed class StorageProvider : IResourceProvider {
                 StorageBuckets.StatsAction,
                 ActionKind.Post,
                 StorageBuckets.StatsPermission,
-                response: StorageBuckets.StatsResponse
+                response: StorageBuckets.StatsResponse,
+                // ⚠ OFF actions-without-handlers.txt ON 2026-09-15, AND WHAT CLOSED IT WAS A READING OF
+                // THE OPERATOR RATHER THAN A PIPELINE. The row said nothing observed the backend. The
+                // operator does — bucket_usage.go patches status.usage every five minutes — and the
+                // handler is one GetAsync of the object the reconciler already reads.
+                handler: typeof(StorageBucketStatsHandler)
             )
             // ⚠ `bucket`, and the check the parent's own comment demands is the one that made this
             // safe: `CliEmitter` derives the CLI group key from the provider namespace, so
@@ -275,7 +289,51 @@ public sealed class StorageProvider : IResourceProvider {
             )
             .Chart(StorageBuckets.ChartName)
             .SupportsTags()
-            .RequiresCluster(StorageBuckets.ClusterIdPointer);
+            .RequiresCluster(StorageBuckets.ClusterIdPointer)
+            // ── The RWX shape, docs/plan/15 § The three kinds' second row ────────────────────
+            //
+            // ⚠ A SECOND CHILD OF THE SAME PARENT, AND IT COSTS THE SAME ONE CHAINED BLOCK. What is
+            // new against the bucket is the shape of what it renders: a built-in kind the CSI
+            // external-provisioner binds, and a per-ACCOUNT driver object every share of the account
+            // applies and the last one removes — see StorageFileShareReconciler.
+            //
+            // ⚠ NO `.Meter(...)` DERIVATION, FOR THE BUCKET'S REASON AND ONE MORE. The share's size is
+            // enforced — the CSI mounter passes it to `weed mount` as a collection quota — and it is
+            // still a ceiling INSIDE capacity StorageDrawn already reserved for the account's volume
+            // servers. docs/plan/15 § Metering's storage.file.gb_month ("provisioned, not used") is a
+            // BILLING meter over the same figure and belongs to docs/plan/22's pipeline, which is a
+            // different thing from reserving it twice against quota.
+            //
+            // ⚠ NO SupportsSoftDelete, AND ON THIS TYPE THAT IS A GAP RATHER THAN THE BUCKET'S
+            // DECISION. A bucket's bytes are inside its parent's window; a share's are behind a
+            // StorageClass whose reclaimPolicy is Delete, so its teardown deletes them. Making a
+            // window real needs Retain plus a rebind on restore, and half of that is worse than none:
+            // charts/managed/seaweedfs-fileshare/conformance.yaml § owed, `no-recovery-window`.
+            .ResourceType(StorageFileShares.TypePath)
+            .ApiVersion(StorageFileShares.V2026, StorageFileShares.Schema2026)
+            .Reconciler<StorageFileShareReconciler>()
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                StorageFileShares.ListMountTargetsAction,
+                ActionKind.Post,
+                StorageFileShares.ListMountTargetsPermission,
+                response: StorageFileShares.ListMountTargetsResponse,
+                handler: typeof(StorageFileShareListMountTargetsHandler)
+            )
+            // ⚠ `fileshare`: neither this namespace's group key (`storage`), nor a sibling's command
+            // name, nor a sibling's short name (`objectstore`, `bucket`). CliTokens is what checks
+            // that at silo start; StorageFileShareDeclarationTests asserts the word.
+            .Display(
+                "File share",
+                "File shares",
+                shortName: "fileshare",
+                summary: "A ReadWriteMany file share on a managed object-storage account's filer, "
+                + "mounted into pods through the SeaweedFS CSI driver with an enforced size."
+            )
+            .Chart(StorageFileShares.ChartName)
+            .SupportsTags()
+            .RequiresCluster(StorageFileShares.ClusterIdPointer);
     }
 
     // ── What an account draws ──────────────────────────────────────────────────────────────────

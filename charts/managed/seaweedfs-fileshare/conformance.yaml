@@ -1,0 +1,196 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Storage/accounts/fileShares. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+#
+# ⚠ THE TYPE IS docs/plan/15 § The three kinds' SECOND ROW — "File · Mounted by VMs and pods" — and
+# § File storage, "M2 · 1.2 EM". That table spells it `CyberCloud.Storage/fileShares`; it ships as a
+# child of the account because the only filer this platform runs is the one inside an account's
+# Seaweed, and docs/plan/15 is corrected in place. Issue #30.
+
+resourceType: CyberCloud.Storage/accounts/fileShares
+apiVersion: "2026-08-01"
+chart: seaweedfs-fileshare
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ TWO, AND THE FIRST IS SHARED WITH EVERY OTHER SHARE OF THE ACCOUNT. A SeaweedCSIDriver is one per
+# filer (`--filer=` is a plugin argument, not a StorageClass parameter), so it is the account's; every
+# share applies it, and the last share out removes it. With one share per suite run "last out" is
+# this one, so the suite's delete assertion proves the driver goes — the sibling half is
+# StorageFileShareReconcilerTests'.
+renders:
+  - group: seaweed.seaweedfs.com
+    version: v1
+    kind: SeaweedCSIDriver
+    count: 1
+  # The share itself. ⚠ The first core/v1 claim in the catalogue the PLATFORM applies rather than an
+  # operator's volumeClaimTemplate creating — so it is the platform's to delete, and it is.
+  - group: ""
+    version: v1
+    kind: PersistentVolumeClaim
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK — the harness derives the SeaweedCSIDriver stub from the case's
+# own `Objects`, and the claim is a kind every cluster serves.
+
+# ADR-013 — every rendered object carries all seven labels, and this type adds an eighth.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+    # ⚠ THE EIGHTH, AND THE DELETE DEPENDS ON IT. StorageFileShareReconciler lists the claims in the
+    # namespace carrying this label for this account to decide whether the driver still has a user.
+    # None of the seven names the account, and `{account}-{share}` cannot be split back when both
+    # halves contain hyphens. Carried through WithLabels so it passes the same syntax check.
+    - storage.cybercloud.io/account
+  values:
+    cybercloud.io/resource-type: cybercloud.storage_accounts_fileshares
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: two-pods-write-one-share
+    says: >
+      Two pods on two nodes mount the same share ReadWriteMany, one writes a file and the other reads
+      the same bytes back. ⚠ NEEDS A SEAWEEDFS OPERATOR AND A CSI DRIVER IN THE CLUSTER HARNESS, which
+      the k3s bundle does not run — what the cluster suite proves today is that the claim is applied
+      with the desired spec and stays Pending, honestly, with no driver to bind it.
+  - id: the-size-is-a-ceiling-the-mount-enforces
+    says: >
+      A pod writing past quota.size is refused by the filesystem, not by the platform: the CSI mounter
+      passes the claim's capacity to `weed mount` as a collection quota, and the master stops
+      allocating. Raising quota.size raises the ceiling online. ⚠ Same blocker as above.
+  - id: the-driver-outlives-every-share-but-the-last
+    says: >
+      Deleting one share of an account leaves the account's SeaweedCSIDriver — and every sibling's
+      mount — untouched; deleting the last share removes it. A reconciler that removed the driver on
+      every delete would unmount the sibling's data under a running pod, which is the assertion
+      StorageFileShareReconcilerTests.DeletingOneShareOfTwoLeavesTheDriverForTheOther pins.
+  - id: a-share-is-not-a-bucket
+    says: >
+      A share never appears in the account's S3 bucket list. The StorageClass's parentDir is
+      /fileshares rather than the driver's default /buckets, which the S3 gateway serves as its bucket
+      directory.
+  - id: mount-targets-are-what-the-claim-says
+    says: >
+      listMountTargets returns the claim's own name, the account's filer, the path the provisioner
+      created under /fileshares, and the collection the quota is enforced on — and refuses, rather
+      than answering with an empty path, while the claim is still Pending.
+  - id: two-accounts-may-hold-the-same-share-name
+    says: >
+      Two accounts in ONE resource group each hold a share named `home`, on two claims, against two
+      drivers, on two filers.
+  - id: deleting-a-share-leaves-its-account-alone
+    says: >
+      Deleting a share removes its claim and, when it was the account's last, the driver: the
+      account's Seaweed, its buckets and its other shares are untouched.
+
+# Meters the type must emit — docs/plan/15 § Metering for the unit.
+#
+# ⚠ `storage.file.gb_month`, "Provisioned, not used — file shares reserve", is a BILLING meter over
+# docs/plan/22's usage pipeline and is listed here for that suite. It is NOT a quota derivation:
+# StorageProvider's StorageDrawn already reserves every volume server's PVC for the account, and a
+# share's size is a collection quota INSIDE those same disks, so a derived meter would reserve the
+# gibibyte twice. QuotaMeter.Resources is what a share draws at write time.
+meters:
+  - storage.file.gb_month
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: nfs-is-not-served
+    says: >
+      docs/plan/15 § File storage: "NFS first. SMB only if a customer asks", and the table's backing
+      is "SeaweedFS FUSE/NFS". READ AGAINST THE ENGINE, THE NFS HALF DOES NOT EXIST: weed 4.41's
+      command list is mount, fuse, s3, webdav, sftp, iam, filer and friends, and no NFS server of any
+      kind; the operator's SeaweedCSIDriver deploys a FUSE mount into pods. So the POD half of
+      "mountable from a tenant's VMs and pods" ships — a ReadWriteMany claim — and the VM half does
+      not: a VM can `weed mount` the path listMountTargets returns, over the cluster network, which
+      is a client install on the VM rather than a protocol the cluster serves. No `protocol` property
+      is declared, for the reason charts/managed/seaweedfs' `encryption-at-rest` gives: a property that
+      says NFS over a backend that serves none is a promise the product page makes and the cluster
+      does not. Closing it is an NFS server pod in front of the filer (nfs-ganesha over a `weed
+      mount`, the community's answer) rendered per account, or LINSTOR's RWX plus an NFS export —
+      and either is a decision about what to operate before it is a property. docs/plan/15 is
+      corrected to say so.
+  - id: premium-tier-needs-linstor
+    says: >
+      docs/plan/15 § File storage derives the backend from a "performance tier" that is "not exposed":
+      SeaweedFS FUSE for scale-out shares, "or a LINSTOR RWX volume with an NFS server pod for small
+      shares that need real POSIX locking". charts/bundle/ installs no LINSTOR — docs/plan/15 § Block
+      storage and docs/plan/24 § The replicated-storage switch both say so — so there is one tier and
+      no property to choose it with. An enum of one value is a property that does nothing; it is
+      absent rather than decorative, and the day the replicated stage is on, `tier` is a new
+      api-version on this type.
+  - id: access-rules-are-not-declared
+    says: >
+      docs/plan/15 § File storage names "access rules by subnet and by managed identity". By subnet
+      needs a network policy the FUSE path does not pass through — the mount is a node-side process
+      talking to the filer, not a pod-to-pod flow — and by managed identity needs
+      CyberCloud.ManagedIdentity/*, which docs/plan/24 § What has landed lists as not shipped. Data-
+      plane access to a share today is namespace membership: any pod in the resource group's
+      namespace may name the claim. listMountTargets checks `read` for that reason and is where a
+      real rule would land.
+  - id: one-driver-per-account
+    says: >
+      A SeaweedCSIDriver serves one filer, so every account with a share runs a controller Deployment
+      and TWO DaemonSets — node plugin and mount service — on every node of the cluster, none of it
+      metered: the share draws QuotaMeter.Resources and nothing counts a DaemonSet's pods against
+      vCPU or memory, because their number is a fact about the cluster rather than the body. The
+      driver is rendered lazily — by the first share, not by the account — so an account with no
+      shares pays nothing. What would close it is a driver whose filer is a StorageClass parameter,
+      which is an upstream change to seaweedfs-csi-driver; until then this is the cost of the row and
+      is written down as one.
+  - id: the-driver-carries-one-shares-labels
+    says: >
+      Every share applies the account's driver on every pass, so ADR-013's resource-id label on it
+      names whichever share reconciled last. A drift scan keyed on resource id attributes the driver
+      to that share; nothing is wrong on the cluster, but "which resource owns this object" has two
+      answers for the first time in the catalogue. Closing it is a label the account's GUID could go
+      in — ResourceId.Parent carries no GUID, so a child cannot write it — or the account rendering
+      the driver itself once it can know it has shares.
+  - id: no-recovery-window
+    says: >
+      No SupportsSoftDelete, and unlike the bucket this is a gap rather than a decision. A bucket's
+      bytes are inside its parent's seven-day window; a share's are behind a StorageClass whose
+      reclaimPolicy is Delete, so the share's own teardown deletes them. Making a window real needs
+      Retain on the class, a PersistentVolume that survives the claim, and a restore that re-binds
+      the new claim to the old volume by name — half of which (Retain alone) is the untracked,
+      unbilled released volume charts/managed/seaweedfs-bucket refused. docs/plan/06 § Tags, locks
+      promises 7 days for "resources carrying data (Vault, Storage, databases)", and this one does
+      not keep it yet.
+  - id: shrink-is-refused-late
+    says: >
+      quota.size "grows online; never shrinks", and nothing at this API refuses a decrease — a
+      relation between the stored body and the new one that ResourceSchema's Immutable cannot
+      express (charts/managed/seaweedfs' `storage-grows-never-shrinks` has the same shape). What
+      refuses it is the API server: a claim's request may not decrease, so the apply fails with the
+      server's message and the operation reports it. Late, but not silent.
+  - id: parent-delete-orphans-shares
+    says: >
+      The same hole charts/managed/seaweedfs-bucket records as `parent-delete-orphans-buckets`, and
+      worse here: deleting an account tears down its Seaweed while every share's claim stays bound
+      to a driver whose seaweedRef now resolves to nothing, and every pod mounting one hangs on a
+      filer that is gone. The 409 docs/plan/08 § Deleting a parent resource that has children decides
+      is not implemented, for the enumeration reason recorded there.
+  - id: forms-cannot-address-a-child
+    says: >
+      SECOND SIGHTING of charts/managed/seaweedfs-bucket's item of the same name, unchanged: the
+      generated form for this type carries `/location`, `/properties/clusterId`,
+      `/properties/quota/size` and `/tags` and no account name, so the portal cannot build the
+      address from it. Still docs/plan/20's to close, not a provider's.
+  - id: grafana-dashboard
+    says: >
+      Piece 6's dashboard half. The driver's controller exposes nothing scraped, the operator emits no
+      ServiceMonitor for it, and per-share figures are the usage pipeline's. FOURTH SIGHTING of the
+      item charts/managed/nats first recorded.

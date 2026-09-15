@@ -84,11 +84,11 @@ public sealed class StorageBucketReconcilerTests {
         var applied = connection.Applied;
         applied.Count.ShouldBe(4);
 
-        Spec(applied[2].Body)["quota"]!.GetValue<string>()
+        Spec(applied[2].Body)["quota"]!["size"]!.GetValue<string>()
             .ShouldBe("10Gi", "tenant A's quota came back as tenant B's");
 
-        Spec(applied[3].Body)["versioning"]!.GetValue<bool>()
-            .ShouldBe(true, "tenant B's versioning came back as tenant A's");
+        Spec(applied[3].Body)["versioning"]!.GetValue<string>()
+            .ShouldBe("Enabled", "tenant B's versioning came back as tenant A's");
 
         applied[0].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantA));
         applied[1].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantB));
@@ -157,11 +157,24 @@ public sealed class StorageBucketReconcilerTests {
 
         await Pass(new StorageBucketReconciler(new FixedClock()), connection, address, body.RootElement);
 
-        Spec(connection.Applied[0].Body)["clusterRef"]!.GetValue<string>()
+        // ⚠ `clusterRef.name`, AN OBJECT — CORRECTED 2026-09-15. For a month this read
+        // `["clusterRef"]!.GetValue<string>()` against a renderer that wrote a string, and both were
+        // wrong together: api/v1/bucket_types.go spells BucketClusterRef as {name, namespace}, and the
+        // stub CRD the cluster suite derives has an open schema, so nothing in the tree ever met the
+        // refusal a real operator's CRD gives a string here. The expectation is the field's SHAPE as
+        // well as its value, against the operator's source rather than against the renderer.
+        Spec(connection.Applied[0].Body)["clusterRef"]!["name"]!.GetValue<string>()
             .ShouldBe(
                 "media",
                 "the Bucket does not reference the Seaweed of the account it is addressed under, so the "
                 + "operator would reconcile it against a different account's cluster or against none."
+            );
+
+        Spec(connection.Applied[0].Body)["clusterRef"]!.GetValueKind()
+            .ShouldBe(
+                JsonValueKind.Object,
+                "clusterRef rendered as something other than the {name, namespace} object the CRD "
+                + "declares, so every Bucket is refused at admission with the API server's message"
             );
 
         // ⚠ A LITERAL, not StorageBuckets.ClusterRefOf(address). Deriving the expectation the same way

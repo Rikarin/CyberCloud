@@ -1,0 +1,54 @@
+{{/*
+seaweedfs-operator `SeaweedCSIDriver` — the account's CSI driver, rendered by every share of the
+account and removed by the last one.
+
+⚠ This renders a custom resource; it does not install the operator, which is charts/bundle/'s job.
+The operator expands it into a controller Deployment, a node DaemonSet and a mount DaemonSet on
+EVERY node, plus a cluster-scoped CSIDriver and StorageClass. That is one driver per FILER by the
+driver's own design (`--filer=` is a process argument), which is why it belongs to the account and
+not to the share — and why it is rendered from here rather than from the account's own chart: an
+account with no shares should not pay for three workloads. conformance.yaml § owed,
+`one-driver-per-account`.
+
+⚠ A PURE FUNCTION OF THE ACCOUNT AND THE NAMESPACE. Nothing from the share's body reaches this
+object. Two shares rendering it differently would take turns rewriting each other's version under one
+field manager and neither would report drift.
+*/}}
+apiVersion: seaweed.seaweedfs.com/v1
+kind: SeaweedCSIDriver
+metadata:
+  name: {{ include "seaweedfs-fileshare.driverObjectName" . }}
+  labels:
+    {{- include "seaweedfs-fileshare.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ `seaweedRef` and not `filerAddress`, so the operator resolves the filer itself and reports
+    ClusterReachable=False by name when the account is missing or in another cluster; an address
+    string would fail as a mount timeout on a node instead. Same namespace, so no
+    ResourceReferenceGrant: referencegrant.go permits a same-namespace reference unconditionally.
+  */}}
+  seaweedRef:
+    name: {{ .Values.platform.parentName | quote }}
+
+  {{/*
+    ⚠ IMMUTABLE AND CLUSTER-UNIQUE — see `seaweedfs-fileshare.driverName`. The StorageClass takes
+    this name too (`storageClass.name` is left empty, and the controller defaults it to the driver's).
+  */}}
+  driverName: {{ include "seaweedfs-fileshare.driverName" . | quote }}
+
+  storageClass:
+    {{/*
+      ⚠ `Delete`, for the reason charts/managed/seaweedfs-bucket gave against Retain: a released
+      volume holding a directory no resource addresses is untracked, unbilled and removable only by
+      hand. What that costs is a recovery window — conformance.yaml § owed, `no-recovery-window`.
+    */}}
+    reclaimPolicy: Delete
+    allowVolumeExpansion: true
+    parameters:
+      {{/*
+        ⚠ NOT THE DRIVER'S DEFAULT. controllerserver.go creates a volume at `{parentDir}/{name}` and
+        defaults parentDir to `/buckets` — the directory the S3 gateway serves as its bucket list. A
+        share left there appears to every S3 client of the account as a bucket called `pvc-…`,
+        listable and deletable through the wrong API.
+      */}}
+      parentDir: /fileshares

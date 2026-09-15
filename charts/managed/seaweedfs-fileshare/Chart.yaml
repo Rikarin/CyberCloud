@@ -1,0 +1,47 @@
+# A file share inside a managed object-storage account — docs/plan/15 § The three kinds' second row,
+# "File · Mounted by VMs and pods", and § File storage's "fileShares/{name} → size …".
+#
+# ⚠ THE SECOND CHART WHOSE RESOURCE TYPE IS A CHILD OF CyberCloud.Storage/accounts, and a directory
+# of its own for the reason charts/managed/seaweedfs-bucket gives: `Build.Charts` pairs one chart
+# with one type through one annotation.
+#
+# ⚠ AND THE FIRST CHART IN THE TREE THAT RENDERS A KIND SHARED WITH ITS SIBLINGS. The SeaweedCSIDriver
+# in templates/csidriver.yaml is one per ACCOUNT — the driver's filer is a process argument, not a
+# StorageClass parameter — so every share of an account renders the same document and the last share
+# out removes it. See StorageFileShareReconciler for how "last" is decided.
+apiVersion: v2
+name: seaweedfs-fileshare
+description: A ReadWriteMany file share on a managed object-storage account's filer — a claim the SeaweedFS CSI driver binds, with an enforced size.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The SeaweedFS version this chart's object shape was reviewed against — the same release
+# charts/managed/seaweedfs pins, because the driver mounts that release's filer.
+appVersion: "4.41"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - seaweedfs
+  - csi
+  - file-share
+  - readwritemany
+
+home: https://seaweedfs.com
+sources:
+  - https://github.com/seaweedfs/seaweedfs
+  - https://github.com/seaweedfs/seaweedfs-operator
+  - https://github.com/seaweedfs/seaweedfs-csi-driver
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ Read by `Build.Charts` and written into values.schema.json as `x-cybercloud-*`. The resource type
+# carries BOTH segments — `accounts/fileShares`, interleaved — and the api-version is the ACCOUNT'S,
+# for the reason the bucket chart gives.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Storage/accounts/fileShares
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: seaweedfs-operator

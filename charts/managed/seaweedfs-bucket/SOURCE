@@ -34,6 +34,28 @@ engine: https://github.com/seaweedfs/seaweedfs
 # saying which claim is weak is the point of this file.
 inherited-review: charts/managed/seaweedfs/SOURCE, reviewed 2026-08-12
 
+# ⚠ RE-READ 2026-09-15 AGAINST `api/v1/bucket_types.go` AT seaweedfs-operator-0.1.38 — THE TAG
+# charts/bundle/seaweedfs-operator PINS — AND THE PARAGRAPH ABOVE WAS RIGHT TO BE WORRIED. THREE OF THE
+# FOUR RENDERED FIELDS HAD THE WRONG SHAPE, and every Bucket this chart rendered for a month would have
+# been refused by the real CRD's schema. The stub the cluster suite derives has an open schema, which
+# is why a month of green runs met no refusal. What the struct actually says:
+#
+#   * `clusterRef` is `BucketClusterRef{name string (required, minLength 1), namespace string}` —
+#     an OBJECT. Rendered `clusterRef: {name: …}` now.
+#   * `versioning` is `VersioningState`, enum `Off | Enabled | Suspended`, `+kubebuilder:default:=Off`,
+#     with an XValidation that it cannot return to Off. Rendered `Enabled`/`Off` from the boolean.
+#     Turning the flag off after enabling is refused by the API server; conformance.yaml § owed,
+#     `versioning-cannot-be-turned-off`.
+#   * `quota` is `*BucketQuota{size resource.Quantity (required), enforce bool (default true)}` — an
+#     OBJECT. Rendered `quota: {size: …}`, `enforce` left to its default.
+#   * `name` is optional, pattern `^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$` — three characters minimum,
+#     which is the S3 rule `name-grammar-is-wider-than-s3s` already records.
+#
+# The same read established `BucketStatus.usage` — `BucketUsage{objectCount int64, sizeBytes int64,
+# lastUpdated *metav1.Time}` — written by `internal/controller/bucket_usage.go`'s refresher every five
+# minutes from `collection.list`. That is what took `stats` off actions-without-handlers.txt.
+reviewed: 2026-09-15 (bucket_types.go, bucket_usage.go, bucket_admin.go at seaweedfs-operator-0.1.38)
+
 # ⚠ THE MUTATING WEBHOOK, WHICH IS WHY `StorageBuckets.Matches` IS CONTAINMENT RATHER THAN EQUALITY.
 # `api/v1/seaweed_webhook.go` registers a defaulter whose body is a log line and
 # `// TODO(user): fill in your defaulting logic.` It mutates nothing at the reviewed commit — so an
