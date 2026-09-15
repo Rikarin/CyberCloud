@@ -3,6 +3,9 @@ using CyberCloud.Authorization.Contracts;
 using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
+using CyberCloud.Gateway.Host.Principals;
+using CyberCloud.Identity;
+using CyberCloud.Identity.Contracts;
 using CyberCloud.Providers.Sample;
 using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.Providers.Storage;
@@ -451,6 +454,73 @@ public sealed class IsolationCluster : IAsyncLifetime {
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
     }
 
+    // ── Principals — the directory objects a role assignment is checked against (issue #86) ────
+
+    /// <summary>
+    ///     Creates a user in a tenant's directory and returns the subject id a token would carry
+    ///     for them — the GUID in <c>N</c> form, which is also the id a role assignment names.
+    /// </summary>
+    /// <param name="tenant">The tenant the user belongs to. ⚠ One tenant, forever — docs/plan/11 § Sign-up and tenant creation.</param>
+    /// <param name="userId">The user's GUID.</param>
+    /// <param name="status">Their lifecycle state; <see cref="UserStatus.Active" /> unless a test says otherwise.</param>
+    /// <remarks>
+    ///     ⚠ <b>Through <c>IUserGrain.CreateAsync</c> and nothing else</b> — no email index claim,
+    ///     no sign-up flow. The directory check reads the grain, so the grain is what has to exist;
+    ///     an index entry with no grain behind it would be exactly the case the check must refuse.
+    /// </remarks>
+    public async Task<string> CreateUserAsync(Guid tenant, Guid userId, UserStatus status = UserStatus.Active) {
+        var created = await For(tenant)
+            .GetGrain<IUserGrain>(GrainKeys.User(userId))
+            .CreateAsync(SubjectId(userId) + "@isolation.test", "Isolation " + SubjectId(userId)[..8], status);
+
+        created.IsSuccess.ShouldBeTrue("the harness could not create a user: " + created.Error?.Message);
+        return SubjectId(userId);
+    }
+
+    /// <summary>Creates a group and returns its subject id.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="groupId">The group's GUID.</param>
+    public async Task<string> CreateGroupAsync(Guid tenant, Guid groupId) {
+        var created = await For(tenant)
+            .GetGrain<IGroupGrain>(GrainKeys.Group(groupId))
+            .CreateAsync("group-" + SubjectId(groupId)[..8], "an isolation group");
+
+        created.IsSuccess.ShouldBeTrue("the harness could not create a group: " + created.Error?.Message);
+        return SubjectId(groupId);
+    }
+
+    /// <summary>Creates a service principal and returns its subject id.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="servicePrincipalId">The principal's GUID.</param>
+    public async Task<string> CreateServicePrincipalAsync(Guid tenant, Guid servicePrincipalId) {
+        var created = await For(tenant)
+            .GetGrain<IServicePrincipalGrain>(GrainKeys.ServicePrincipal(servicePrincipalId))
+            .CreateAsync(new() { DisplayName = "sp-" + SubjectId(servicePrincipalId)[..8] });
+
+        created.IsSuccess.ShouldBeTrue("the harness could not create a service principal: " + created.Error?.Message);
+        return SubjectId(servicePrincipalId);
+    }
+
+    /// <summary>Creates a managed identity, unbound, and returns its subject id.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="managedIdentityId">The identity's GUID.</param>
+    public async Task<string> CreateManagedIdentityAsync(Guid tenant, Guid managedIdentityId) {
+        var created = await For(tenant)
+            .GetGrain<IManagedIdentityGrain>(GrainKeys.ManagedIdentity(managedIdentityId))
+            .CreateAsync("mi-" + SubjectId(managedIdentityId)[..8]);
+
+        created.IsSuccess.ShouldBeTrue("the harness could not create a managed identity: " + created.Error?.Message);
+        return SubjectId(managedIdentityId);
+    }
+
+    /// <summary>
+    ///     The subject id a principal's GUID becomes — the <c>N</c> form, which is what
+    ///     <c>AccessTokenPrincipalFactory</c> mints as <c>sub</c> and what <c>GrainKeys.User</c> keys
+    ///     the grain by.
+    /// </summary>
+    /// <param name="principalId">The GUID.</param>
+    public static string SubjectId(Guid principalId) => principalId.ToString("N", CultureInfo.InvariantCulture);
+
     /// <summary>Creates a resource and drives it to a terminal state.</summary>
     /// <param name="target">Which provider.</param>
     /// <param name="name">The resource name.</param>
@@ -576,6 +646,12 @@ public sealed class IsolationCluster : IAsyncLifetime {
             new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
             new ReBacResourceAuthorizer(cluster.GrainFactory, NullLogger<ReBacResourceAuthorizer>.Instance),
             new ReBacRoleAssignmentStore(cluster.GrainFactory, NullLogger<ReBacRoleAssignmentStore>.Instance),
+            // ⚠ THE REAL DIRECTORY, THE ONE THE GATEWAY REGISTERS, over the same client-side grain
+            // factory. It reads the identity grains the silo below composes, so "this principal does
+            // not exist" here is a grain that was never created and not a fake's answer — and a
+            // principal of another tenant is refused by ForTenant alone, which is the claim
+            // RoleAssignmentTests makes about it.
+            new GrainPrincipalDirectory(cluster.GrainFactory),
             cluster.GrainFactory,
             NullLogger<RoleAssignmentService>.Instance
         );
@@ -721,6 +797,12 @@ public sealed class IsolationCluster : IAsyncLifetime {
             // The real engine, with the real schema — this is what makes the suite worth running.
             silo.AddCyberCloudAuthorization();
             silo.AddCyberCloudResourceManager();
+
+            // ⚠ The identity grains, so that a role assignment's principal check reads a real
+            // directory (issue #86). Every seam this registers stays at its refusing default —
+            // no OTP delivery, no TOTP vault, no communication — because nothing here signs in;
+            // what the suite needs is IUserGrain and its three siblings answering GetAsync.
+            silo.AddCyberCloudIdentity();
         }
     }
 }

@@ -60,6 +60,29 @@ enum RouteKind {
     /// </remarks>
     RoleAssignment,
 
+    /// <summary>
+    ///     The role assignments at a scope —
+    ///     <c>{scope}/providers/CyberCloud.Authorization/roleAssignments</c>, on a tenant, a
+    ///     subscription, a resource group or a resource. <c>GET</c> only. docs/plan/07 § Azure RBAC,
+    ///     expressed in it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The ninth kind, and until it existed the address was a <c>400</c> (issue #86).</b>
+    ///     Under the reserved namespace the router asked one grammar, the assignment's, and a path
+    ///     with no name failed it. Now it asks two, in the order <see cref="Collection" /> is asked
+    ///     after <see cref="Resource" /> and for the same reason: the grammars are disjoint — one
+    ///     ends on <c>RoleAssignmentId.CollectionSuffix</c>, the other on a name after it — so the
+    ///     order changes only which message a malformed path gets.
+    ///     <para>
+    ///         ⚠ <b>Separate from <see cref="RoleAssignment" /> for the reason
+    ///         <see cref="Collection" /> is separate from <see cref="Resource" />:</b> the two are
+    ///         different addresses, and which one a path is, is decided by the path and never by
+    ///         the method. Both go to <c>IRoleAssignmentManager</c>; this one to its
+    ///         <c>ListAsync</c>, which pages.
+    ///     </para>
+    /// </remarks>
+    RoleAssignmentCollection,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -128,6 +151,10 @@ enum RouteKind {
 ///     <i>token's</i> too — <c>RoleAssignmentId.WithTenant</c> rebuilds whichever of its two scope
 ///     members is set.
 /// </param>
+/// <param name="RoleAssignments">
+///     The collection, for <see cref="RouteKind.RoleAssignmentCollection" />. ⚠ Its tenant is the
+///     <i>token's</i> too, rebuilt the same way.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -136,7 +163,8 @@ readonly record struct GatewayRoute(
     string HubName,
     ScopeId Scope = default,
     ResourceCollectionId Collection = default,
-    RoleAssignmentId RoleAssignment = default
+    RoleAssignmentId RoleAssignment = default,
+    RoleAssignmentCollectionId RoleAssignments = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -157,7 +185,12 @@ readonly record struct GatewayRoute(
         };
 
     /// <summary>The collection address dispatch uses — rebuilt, carrying the token's tenant.</summary>
-    public string CollectionPath => Kind is RouteKind.Collection ? Collection.Path : "";
+    public string CollectionPath =>
+        Kind switch {
+            RouteKind.Collection => Collection.Path,
+            RouteKind.RoleAssignmentCollection => RoleAssignments.Path,
+            _ => ""
+        };
 }
 
 /// <summary>
@@ -244,29 +277,61 @@ static class GatewayRouter {
         // provider that claims it, and RoleAssignmentIdTests sweeps the other direction: no
         // assignment path parses as a scope, and no scope or resource path parses as an assignment.
         //
-        // ⚠ AND UNDER THAT NAMESPACE THE ASSIGNMENT GRAMMAR IS THE ONLY ONE ASKED. A path that names
-        // the namespace and fails to parse — `…/roleAssignments/reader`, a trailing segment, the
-        // bare collection — is a 400 that names the grammar, never a fall-through into the resource
+        // ⚠ AND UNDER THAT NAMESPACE ONLY THE TWO ASSIGNMENT GRAMMARS ARE ASKED. A path that names
+        // the namespace and parses as neither — `…/roleAssignments/reader`, a trailing segment, a
+        // trailing slash — is a 400 that names the grammar, never a fall-through into the resource
         // or collection grammars. Both of those accept it as a type no provider serves and answer
         // the canonical 404, which sends a client looking for a missing assignment when their URL is
         // wrong. RoleAssignmentId.IsUnderNamespace's remarks carry the argument.
+        //
+        // ⚠ THE COLLECTION IS ASKED SECOND AND ONLY ON A GET, as ResolveResource asks its collection
+        // (issue #86). The two grammars are disjoint — an assignment ends on a name, the collection
+        // on the suffix — so the order decides only the message: a PUT or DELETE on the collection
+        // path gets a 400 that says the grant needs a name, which is what an ARM client that emitted
+        // `PUT …/roleAssignments/{guid}` and lost the segment most needs to read.
         if (RoleAssignmentId.IsUnderNamespace(path)) {
             var assignment = RoleAssignmentId.ParsePath(path);
 
-            return assignment.TryGetError(out var assignmentError)
-                ? Result<GatewayRoute>.Failure(assignmentError)
-                : Result<GatewayRoute>.Success(
+            if (assignment.TryGetError(out var assignmentError)) {
+                if (!RoleAssignmentCollectionId.TryParsePath(path, out var collection)) {
+                    return Result<GatewayRoute>.Failure(assignmentError);
+                }
+
+                if (!HttpMethods.IsGet(method)) {
+                    return Result<GatewayRoute>.Failure(
+                        ErrorCode.InvalidResourceId,
+                        $"'{path}' is the role assignment collection, which is read with GET only. A "
+                        + "grant is a PUT and a revoke a DELETE on one assignment — "
+                        + "'{scope}" + RoleAssignmentId.Suffix + "{role}-{principalType}-{principalId}' "
+                        + "— and the name is derived from those three parts rather than chosen "
+                        + "(docs/plan/07 § Azure RBAC, expressed in it)."
+                    );
+                }
+
+                return Result<GatewayRoute>.Success(
                     new(
-                        RouteKind.RoleAssignment,
+                        RouteKind.RoleAssignmentCollection,
                         default,
                         "",
                         Guid.Empty,
                         "",
-                        // ⚠ NAMED, for the reason Collection is below — three optional address kinds
-                        // now, and the positional form would put an assignment into Scope and compile.
-                        RoleAssignment: assignment.GetValueOrThrow().WithTenant(tenantId)
+                        RoleAssignments: collection.WithTenant(tenantId)
                     )
                 );
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    RouteKind.RoleAssignment,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // ⚠ NAMED, for the reason Collection is below — four optional address kinds
+                    // now, and the positional form would put an assignment into Scope and compile.
+                    RoleAssignment: assignment.GetValueOrThrow().WithTenant(tenantId)
+                )
+            );
         }
 
         // ── A scope, before the resource/action split. docs/plan/06 § The hierarchy. ────────────

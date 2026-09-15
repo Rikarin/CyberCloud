@@ -195,21 +195,73 @@ static class ResponseBodies {
         var buffer = new System.Buffers.ArrayBufferWriter<byte>(512);
 
         using (var writer = new Utf8JsonWriter(buffer)) {
+            WriteRoleAssignment(writer, assignment);
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    ///     Renders a page of role assignments, in the same <c>{ "value": [ … ], "nextLink": … }</c>
+    ///     shape as <see cref="Collection" />.
+    /// </summary>
+    /// <param name="page">The page the manager built.</param>
+    /// <param name="nextLink">The absolute next-page URL, or empty when there is no next page.</param>
+    /// <remarks>
+    ///     ⚠ Each element is the same object <see cref="RoleAssignment" /> writes, member for
+    ///     member, and <c>nextLink</c> is omitted rather than written empty — both for the reasons
+    ///     <see cref="Collection" /> gives. There is no <c>count</c> either, though here the reason
+    ///     is symmetry with the other collection rather than an oracle: a caller who may read this
+    ///     page may read all of it.
+    /// </remarks>
+    public static string RoleAssignments(RoleAssignmentPage page, string nextLink) {
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(nextLink);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
             writer.WriteStartObject();
-            writer.WriteString("id", assignment.Path);
-            writer.WriteString("name", assignment.Name);
-            writer.WriteString("type", RoleAssignmentId.TypeName);
-            writer.WritePropertyName("properties");
-            writer.WriteStartObject();
-            writer.WriteString("scope", assignment.Scope);
-            writer.WriteString(RoleAssignmentBodyProperties.PrincipalId, assignment.PrincipalId);
-            writer.WriteString(RoleAssignmentBodyProperties.PrincipalType, assignment.PrincipalType);
-            writer.WriteString(RoleAssignmentBodyProperties.RoleDefinitionId, assignment.RoleDefinitionId);
-            writer.WriteEndObject();
+            writer.WritePropertyName("value");
+            writer.WriteStartArray();
+
+            foreach (var assignment in page.Assignments) {
+                WriteRoleAssignment(writer, assignment);
+            }
+
+            writer.WriteEndArray();
+
+            if (nextLink.Length > 0) {
+                writer.WriteString("nextLink", nextLink);
+            }
+
             writer.WriteEndObject();
         }
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>The one role assignment object, written into whichever document is being built.</summary>
+    /// <remarks>
+    ///     ⚠ <c>inherited</c> is written on every row, <c>false</c> included, so a generated client
+    ///     reads one shape. When it is <c>true</c>, <c>id</c> and <c>properties.scope</c> are the
+    ///     ancestor's — the tuple's own address — and not the scope the listing was asked at;
+    ///     <c>IRoleAssignmentManager.ListAsync</c>'s remarks say why.
+    /// </remarks>
+    static void WriteRoleAssignment(Utf8JsonWriter writer, RoleAssignmentSnapshot assignment) {
+        writer.WriteStartObject();
+        writer.WriteString("id", assignment.Path);
+        writer.WriteString("name", assignment.Name);
+        writer.WriteString("type", RoleAssignmentId.TypeName);
+        writer.WritePropertyName("properties");
+        writer.WriteStartObject();
+        writer.WriteString("scope", assignment.Scope);
+        writer.WriteString(RoleAssignmentBodyProperties.PrincipalId, assignment.PrincipalId);
+        writer.WriteString(RoleAssignmentBodyProperties.PrincipalType, assignment.PrincipalType);
+        writer.WriteString(RoleAssignmentBodyProperties.RoleDefinitionId, assignment.RoleDefinitionId);
+        writer.WriteBoolean("inherited", assignment.Inherited);
+        writer.WriteEndObject();
+        writer.WriteEndObject();
     }
 
     /// <summary>Renders a scope — docs/plan/06 § The hierarchy's subscription or resource group.</summary>

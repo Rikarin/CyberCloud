@@ -192,6 +192,13 @@ public static class ResourceManagerSiloBuilderExtensions {
         // tenant, a subscription or a group, the resource seam for a resource — so there is no third
         // check to keep in step with the first two.
         services.TryAddSingleton<IRoleAssignmentStore, ReBacRoleAssignmentStore>();
+        // ⚠ THE DIRECTORY IS A REFUSING DEFAULT, LIKE THE VAULT'S, AND FOR THE SAME LAYERING REASON.
+        // The real one reads the identity grains, which this assembly cannot name; the gateway
+        // Replaces this descriptor with GrainPrincipalDirectory, in whichever order it writes the
+        // two calls, exactly as AddOpenBaoSecretResolver replaces the vault's default. A host that
+        // composes the manager and forgets the directory grants nothing rather than granting to
+        // anybody — UnavailablePrincipalDirectory's remarks say why not `false`.
+        services.TryAddSingleton<IPrincipalDirectory, UnavailablePrincipalDirectory>();
         services.TryAddSingleton<IRoleAssignmentManager, RoleAssignmentService>();
 
         // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────

@@ -39,6 +39,26 @@
         <!-- The real engine, not its contracts: this suite needs the grains, the schema and the evaluator. -->
         <ProjectReference Include="../../src/CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
         <ProjectReference Include="../../src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <!--
+          ⚠ THE IDENTITY GRAINS, BECAUSE A GRANT IS NOW REFUSED FOR A PRINCIPAL THE DIRECTORY DOES NOT
+          HOLD (issue #86). RoleAssignmentTests writes its principals through the real IUserGrain,
+          IGroupGrain, IServicePrincipalGrain and IManagedIdentityGrain, and the silo composes
+          AddCyberCloudIdentity so those grains activate. A suite that doubled the directory would
+          pass with a lookup that never reached a grain — which is the class of defect this project
+          exists to catch, one seam over.
+        -->
+        <ProjectReference Include="../../src/CyberCloud.Identity/CyberCloud.Identity.csproj"/>
+        <!--
+          ⚠ THE GATEWAY, FOR ONE CLASS: GrainPrincipalDirectory, the IPrincipalDirectory over the
+          identity grains. It lives in the gateway because that is the one shipping assembly that
+          references both CyberCloud.ResourceManager.Contracts (the seam) and
+          CyberCloud.Identity.Contracts (the grains) — module-layering.txt declares no edge between
+          those two modules, and hosts are outside its rule. This suite drives the same class the
+          gateway registers, so "an unknown principal is refused" is a claim about production code
+          rather than about a copy of it. Nothing else from the host is composed: no pipeline, no
+          stage, no provider module.
+        -->
+        <ProjectReference Include="../../src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
         <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
         <!--
           ⚠ THE FIRST SHIPPING PROVIDER THIS SUITE ATTACKS, and it is here for its CHILD type.

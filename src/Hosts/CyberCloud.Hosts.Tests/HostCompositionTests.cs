@@ -1,5 +1,6 @@
 using CyberCloud.Core;
 using CyberCloud.Gateway.Host;
+using CyberCloud.Gateway.Host.Principals;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager;
@@ -374,6 +375,68 @@ public sealed class HostCompositionTests {
         silo.Services
             .GetRequiredService<IClusterConnectionRegistrar>()
             .ShouldBeOfType<GrainClusterConnectionRegistrar>();
+    }
+
+    // ── The principal directory: a grant has to be checkable ─────────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ The gateway wires the directory over the identity grains and the silo keeps the refusal,
+    ///     asserted on the composed hosts.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>The same failure class as the cluster seams above, found by the review of #86.</b>
+    ///         <c>AddCyberCloudResourceManager</c> <c>TryAdd</c>s <see cref="UnavailablePrincipalDirectory" />,
+    ///         and the gateway's real registration was a <c>TryAdd</c> on the line before that call —
+    ///         correct, and held only by line order. With the two lines swapped the refusal stayed,
+    ///         every <c>PUT</c> on a role assignment answered <c>500</c>, and this suite and the
+    ///         gateway's both stayed green: the gateway suite drives the nine stages against a
+    ///         recording manager and never calls <c>AddCyberCloudGateway</c>, and nothing here resolved
+    ///         the seam. The registration is now a <c>Replace</c>, which wins in either order; this is
+    ///         the assertion that says so of the composed host rather than of the file.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ It checks the concrete type rather than that something resolves, because the refusing
+    ///         default resolves perfectly well — and it checks the count, because that is the one
+    ///         thing <c>Replace</c> buys over an <c>Add</c> that a single resolution cannot tell apart
+    ///         (<c>VaultSeamWiringTests.OptingInLeavesNoRefusingResolverBehindIt</c>).
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The silo half is not decoration. <c>GrainPrincipalDirectory</c>'s remarks say a silo
+    ///         never serves a grant and keeps the refusal; a silo that resolved the real one would
+    ///         mean somebody made it the manager's default, which is the "tempting fix"
+    ///         <c>VaultSeamWiringTests.WiringOneSiloDoesNotChangeWhatAnotherSiloGets</c> exists to
+    ///         refuse.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheGatewayWiresTheDirectoryAndTheSiloKeepsTheRefusal() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        gateway.Services
+            .GetRequiredService<IPrincipalDirectory>()
+            .ShouldBeOfType<GrainPrincipalDirectory>(
+                "the composed gateway must check a grant's principal against the identity grains; the "
+                + "refusing default here means every PUT on a role assignment is a 500 — "
+                + "https://github.com/Rikarin/CyberCloud/issues/86"
+            );
+
+        gateway.Services
+            .GetServices<IPrincipalDirectory>()
+            .Count()
+            .ShouldBe(
+                1,
+                "the gateway should hold one IPrincipalDirectory, not the real one stacked on a "
+                + "refusing one that GetServices would still hand out"
+            );
+
+        silo.Services
+            .GetRequiredService<IPrincipalDirectory>()
+            .ShouldBeOfType<UnavailablePrincipalDirectory>(
+                "a silo never serves a grant and must keep the manager's refusing default; the real "
+                + "directory resolving here means it became the default for every host"
+            );
     }
 
     /// <summary>

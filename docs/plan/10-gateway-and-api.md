@@ -68,18 +68,33 @@ On a resource group the address is a well-formed ten-segment resource path — a
 `CyberCloud.Authorization/roleAssignments` — so tried second it would reach `IResourceManager` and be
 refused as a type no provider serves. What keeps that from being a precedence rule nobody wrote down
 is that `CyberCloud.Authorization` is a reserved namespace: `ProviderRegistry.Build` refuses a
-provider that claims it, and under it only the assignment grammar answers — a malformed name is a
-`400` that names the grammar, never a fall-through into the resource or collection grammars and
-their `404`. `PUT` answers `201` on a grant and `200` on a repeat, `DELETE` answers `204`, and there
+provider that claims it, and under it only the two assignment grammars answer — the item's and,
+since #86, the collection's below — so a malformed name is a `400` that names the grammar, never a
+fall-through into the resource or resource-collection grammars and their `404`. `PUT` answers `201` on a grant and `200` on a repeat, `DELETE` answers `204`, and there
 is no `202`: an assignment is one tuple write and converges before the call returns.
+
+**The collection is served too (issue #86):** `GET {scope}/providers/CyberCloud.Authorization/roleAssignments`
+— no name, no trailing `/` — is the second grammar under the reserved namespace, asked after the
+assignment's and only on a `GET`, exactly as the resource collection is asked after the resource. It
+answers `{ "value": [ … ], "nextLink": … }` with `$top` and `$skipToken` read and echoed the way the
+resource collection reads and echoes them (#76), each element the object a by-name `GET` renders plus
+`properties.inherited`, and an inherited row under the *ancestor's* address. A `PUT`, `PATCH`,
+`POST` or `DELETE` on the collection path is a `400` that says the grant is one assignment with a
+derived name — the sentence an ARM client that emitted `PUT …/roleAssignments/{guid}` and lost the
+segment most needs. The listing is one `read` check on the scope and no per-row filter;
+[07](07-rebac-authorization.md) § Azure RBAC, expressed in it says why that differs from the resource
+collection and is still right. And a grant now checks the principal against the directory — the same
+section — so a `PUT` naming a user this tenant does not have is a `400`, not a tuple.
 
 ⚠ **The role assignment API is not in the generated document, and that is #63's question asked a
 third time.** The reserved namespace is exactly what keeps it out of the registry the emitters read,
 and the scope extension #63 added carries a scope, not an address *on* one. So `cyc`, the SDK and the
 portal are silent about it, as they were about scopes before #63, and a tenant grants a role today by
 hand. The fix has the same shape as #63's — a third non-registry source, emitted for every scope path
-and every resource path as a sub-path — and it is owed rather than done because it touches all five
-surfaces at once.
+and every resource path as a sub-path, the collection and the item both — and it is owed rather than
+done because it touches all five surfaces at once. #86 added the collection and changed nothing here:
+the portal's role-assignments page can now read what is assigned, through a client it still has to
+write by hand.
 
 ## Request pipeline
 

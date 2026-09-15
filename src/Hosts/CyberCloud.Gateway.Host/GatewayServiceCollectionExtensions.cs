@@ -3,6 +3,7 @@ using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
+using CyberCloud.Gateway.Host.Principals;
 using CyberCloud.Gateway.Host.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
 using CyberCloud.ResourceManager;
@@ -90,6 +91,20 @@ static class GatewayServiceCollectionExtensions {
         // engine changes. GatewayIsolationTests reads this project's source for that name.
         services.AddCyberCloudResourceManager();
         services.TryAddSingleton<IOperationReader, TenantScopedOperationReader>();
+
+        // ⚠ THE PRINCIPAL DIRECTORY IS Replace, NOT TryAdd, AND THAT IS WHAT MAKES THE ORDER FREE.
+        // AddCyberCloudResourceManager TryAdds a refusing IPrincipalDirectory. This line used to be
+        // a TryAdd placed BEFORE that call, which was correct and held by nothing: swap the two lines
+        // and the refusal stays, every PUT on a role assignment answers 500 naming that call, and
+        // both host suites stay green — the review of #86 ran exactly that sabotage. Replace is the
+        // shape the vault (AddOpenBaoSecretResolver) and the OTP seam (AddCommunicationOtpDelivery)
+        // already use over the same kind of default: it wins in either order and leaves exactly one
+        // descriptor, so nothing taking IEnumerable<IPrincipalDirectory> can meet the refusal behind
+        // the real one. HostCompositionTests.TheGatewayWiresTheDirectoryAndTheSiloKeepsTheRefusal
+        // pins the composed result, which is the half a comment cannot. GrainPrincipalDirectory is
+        // the adapter over the identity grains that only a host referencing both assemblies can
+        // write — its remarks say why it is here and not in either module.
+        services.Replace(ServiceDescriptor.Singleton<IPrincipalDirectory, GrainPrincipalDirectory>());
 
         // ── SignalR. docs/plan/10 § SignalR — no backplane product, by design. ──
         //

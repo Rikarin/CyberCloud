@@ -89,6 +89,18 @@ CyberCloud.Identity -> CyberCloud.Tenancy
 # ── The resource manager — docs/plan/08 ────────────────────────────────────────────────────────
 # Authorization for the ReBAC check, Kubernetes for the fabric it projects onto, tenancy for the
 # tenant a resource id resolves within.
+#
+# ⚠ NO EDGE TO CyberCloud.Identity, AND ISSUE #86 IS WHERE IT WAS ASKED FOR FIRST. A role assignment
+# must refuse a principal the directory does not hold, and the directory is four identity grains —
+# so the obvious line is this module reaching CyberCloud.Identity.Contracts for IUserGrain and its
+# siblings. It is not here, for the reason the vault's paragraph above gives in the other direction:
+# a line is standing permission, and the identity module's sign-up flow (docs/plan/11 § Sign-up and
+# tenant creation: "create tenant → create default subscription and resource group") is the first
+# thing that will want the REVERSE edge, which this line would turn into a cycle. The lookup goes
+# through IPrincipalDirectory in CyberCloud.ResourceManager.Contracts — shaped like CallerContext, a
+# type and an id — with a refusing default in this module and the real implementation,
+# GrainPrincipalDirectory, in the gateway host: the one shipping assembly that references both
+# contracts assemblies, and outside this rule's scope by rule 7's own terms.
 CyberCloud.ResourceManager -> CyberCloud.Authorization
 CyberCloud.ResourceManager -> CyberCloud.Core
 CyberCloud.ResourceManager -> CyberCloud.Kubernetes
