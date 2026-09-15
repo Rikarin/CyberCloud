@@ -17,6 +17,7 @@
 component: openebs-localpv
 phase: 25
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/openebs/dynamic-localpv-provisioner/v4.6.0/LICENSE
 install: helm
 repo: https://openebs.github.io/dynamic-localpv-provisioner
 chart: localpv-provisioner

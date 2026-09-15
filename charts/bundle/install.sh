@@ -37,10 +37,26 @@
 # victoria-metrics-operator. It goes stale the moment a suite or a person applies one more.
 # charts/bundle/README.md § Verification, and its honest limit. `--verify` is the half that is
 # reproducible with no cluster at all, and it is the half to run first.
+#
+# ⚠ THE RECORDED DIGEST IS CONSUMED HERE, SINCE ISSUE #17, AND UNTIL THEN IT WAS CONSUMED NOWHERE.
+# Every component.yaml records the images its artefact renders as `repository:tag@sha256:…`, and
+# bundle.yaml § owed, `images-are-not-pinned-by-digest`, was honest that this was "a record, not a
+# pin: the tag is still what reaches the kubelet". It still is — several charts have no digest key,
+# and an override that froze bytes upstream never chose would be a fork. What changed is that this
+# script now REFUSES a component before it applies anything when any recorded image is not pinned
+# (`@unresolved`, or no digest at all) or when its tag no longer serves the recorded digest. So a
+# tag that moved is no longer a red run of images.sh that somebody has to remember to make; it is a
+# component that does not install. `verify_images` below is the gate, `--verify` runs it over the
+# whole roster with no cluster, and test/CyberCloud.Bundle.Cluster.Conformance § BundleImagePins
+# asserts both refusals against sabotaged copies of this directory.
 
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The tag-to-digest resolver, shared with images.sh so the recorder and this refuser agree.
+# shellcheck source=oci.sh
+. "$here/oci.sh"
 dry_run=false
 verify_only=false
 only_phase=""
@@ -74,8 +90,10 @@ usage() {
     cat <<'USAGE'
 Usage: install.sh [options]
 
-  --dry-run          Print every command and run none.
-  --verify           Resolve every pin against its registry and apply nothing.
+  --dry-run          Print every command and run none. Checks that every image is recorded with a
+                     digest; resolves nothing.
+  --verify           Resolve every pin, and every recorded image's tag, against its registry and
+                     apply nothing.
   --phase <n>        Install one phase only. Phases are listed in bundle.yaml.
   --component <name> Install one component only. Repeatable. Combines with --phase as an AND.
   --context <name>   kubectl/helm context.
@@ -96,6 +114,10 @@ USAGE
 
 
 A selector that matches no component is an error, not an empty success.
+
+A component is refused — before anything is applied — when any image its component.yaml records
+carries no digest, or when the tag no longer serves the recorded digest. Re-review the move, then
+`images.sh --resolve` to re-record it.
 USAGE
 }
 
@@ -155,6 +177,104 @@ helm_sets() {
         }' "$1"
 }
 
+# recorded <file> — the image references under `images:`, one per line, digest included. Mirrored
+# from images.sh for the reason `key` is.
+recorded() {
+    awk '
+        /^images:/ { inside = 1; next }
+        /^[A-Za-z]/ { inside = 0 }
+        inside && /^  - / { line = $0; sub(/^  - /, "", line); gsub(/^"|"$/, "", line); print line }
+    ' "$1"
+}
+
+# ── The digest gate ───────────────────────────────────────────────────────────────────────────
+#
+# verify_images <dir> — every image the component records is pinned, and its tag still serves the
+# pin. Returns 1, having printed why, when the component must not be installed.
+#
+# ⚠ THREE REFUSALS, AND THE FIRST TWO NEED NO NETWORK. (1) An entry with no `@sha256:<64 hex>` —
+# which is how `@unresolved` is spelled when somebody records an image on a machine that cannot reach
+# its registry — is a pin nobody has. (2) A component that records no `images:` and does not argue
+# in `rendersNoWorkloadImages:` that it renders none is a component whose pulls nobody has looked at.
+# Both are checked under --dry-run too, so a dry run over a tree with an unresolved pin is red and
+# says which image. (3) The tag resolved today serves a different digest from the one recorded — a
+# rebuild upstream, or a moved tag — which is the one that costs a registry round-trip per image and
+# is therefore NOT made under --dry-run, whose contract is that it executes nothing and needs no
+# network. It is made by --verify and by every real apply.
+#
+# ⚠ WHY THE APPLY PATH PAYS THE ROUND-TRIPS RATHER THAN TRUSTING A GREEN images.sh. images.sh is a
+# script a person runs, and bundle.yaml § owed records that nothing runs it on a schedule; between
+# its last green run and this install the tag can move, and `bitnami/kubectl:latest` did so within
+# forty-eight hours of being recorded. Checking at the moment of install is the only check whose
+# timing is not somebody's memory. It costs about a second per image against the four registries
+# this bundle pulls from — measured on 2026-09-15: a full `--verify` over the roster, thirty-two
+# resolves plus the pin checks, took 46 s wall-clock, and its first pass found two versioned tags
+# rebuilt upstream (clickhouse-operator/component.yaml).
+#
+# ⚠ IT IS A CHECK AND NOT A PIN, STILL. The kubelet pulls by tag, and between this resolve and that
+# pull the tag can move again. What closes that window is a digest in the values the chart renders,
+# which bundle.yaml § owed, `images-are-not-pinned-by-digest`, explains most charts cannot carry, or
+# admission — docs/plan/18 § Platform security, "verified at admission", which is #15.
+verify_images() {
+    local dir="$1" file="$1/component.yaml"
+    local entry ref pin digest refused=0 count=0
+
+    if [[ -z "$(recorded "$file")" ]]; then
+        if [[ -n "$(key "$file" rendersNoWorkloadImages)" ]]; then
+            printf '  ✔ %-14s (records no workload image, and says why)\n' images
+            return 0
+        fi
+        printf '  ✘ %-14s component.yaml records no images: block and does not say it renders none.\n' images
+        printf '      Nothing here knows what this component would pull. `images.sh --component %s --resolve`.\n' \
+            "$(basename "$dir")"
+        return 1
+    fi
+
+    while read -r entry; do
+        [[ -n "$entry" ]] || continue
+        count=$((count + 1))
+        ref="${entry%%@*}"
+        pin="${entry#*@}"
+        [[ "$entry" == *@* ]] || pin=""
+
+        if [[ ! "$pin" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            printf '  ✘ %-14s %s is recorded with no digest (`%s`), so there is nothing to hold it to.\n' \
+                image "$ref" "${pin:-none}"
+            printf '      A pin nobody resolved is not a pin. `images.sh --component %s --resolve` on a machine\n' \
+                "$(basename "$dir")"
+            printf '      that can reach the registry, review what it found, and record it.\n'
+            refused=$((refused + 1))
+            continue
+        fi
+
+        if [[ "$dry_run" == true ]]; then
+            printf '  ✔ %-14s %s@%s (recorded; not resolved under --dry-run)\n' image "$ref" "${pin:0:19}…"
+            continue
+        fi
+
+        digest=$(digest_of "$ref")
+
+        if [[ -z "$digest" ]]; then
+            printf '  ✘ %-14s %s -> the registry serves no manifest for that tag\n' image "$ref"
+            refused=$((refused + 1))
+        elif [[ "$digest" != "$pin" ]]; then
+            printf '  ✘ %-14s %s no longer serves the digest that was reviewed. A tag is mutable;\n' image "$ref"
+            printf '      this is the move it exists to catch, and the component is refused rather than installed.\n'
+            printf '      recorded %s\n' "$pin"
+            printf '      serves   %s\n' "$digest"
+            refused=$((refused + 1))
+        else
+            printf '  ✔ %-14s %s@%s\n' image "$ref" "$digest"
+        fi
+    done < <(recorded "$file")
+
+    if [[ "$refused" -gt 0 ]]; then
+        printf '  ✘ %-14s %d of %d recorded image(s) failed the digest gate; nothing was applied for this component.\n' \
+            refused "$refused" "$count"
+        return 1
+    fi
+}
+
 run() {
     if [[ "$dry_run" == true ]]; then
         printf '  would run:'
@@ -186,11 +306,27 @@ verify_component() {
     local dir="$1" file="$1/component.yaml"
     local install repo chart version archive manifest extra
     install=$(key "$file" install)
+
+    # ⚠ Images first, and every image, before the artefact pin. The artefact half needs `helm` for a
+    # `helm` component and this half needs only curl, so on a machine with no helm the image lines
+    # are still real answers rather than lines that never printed. `|| return 1` after the loop and
+    # not per image: one moved tag is one refusal, and the reader wants all of them.
+    verify_images "$dir" || return 1
+
     case "$install" in
         helm)
             repo=$(key "$file" repo); chart=$(key "$file" chart); version=$(key "$file" version)
             verify_url index "$repo/index.yaml" || return 1
             # `helm show chart` resolves the entry AND the version, which an index fetch does not.
+            # ⚠ A missing helm is reported as a missing helm. Until 2026-09-15 this branch printed
+            # "not in <repo>" for every helm component on a machine without helm — eleven false
+            # "the pin is gone" lines, indistinguishable from the real one this exists to find.
+            if ! command -v helm >/dev/null 2>&1; then
+                printf '  ✘ %-14s %s %s could not be checked: `helm` is not on PATH, and the index\n' \
+                    chart "$chart" "$version"
+                printf '      fetch above does not say whether that version is in it\n'
+                return 1
+            fi
             if ! helm show chart "$chart" --repo "$repo" --version "$version" >/dev/null 2>&1; then
                 printf '  ✘ %-14s %s %s not in %s\n' chart "$chart" "$version" "$repo"
                 return 1
@@ -261,6 +397,12 @@ install_component() {
     name=$(key "$file" component)
     install=$(key "$file" install)
     ns="${name}${namespace_suffix}"
+
+    # ⚠ THE DIGEST GATE IS NOT HERE. It runs in the roster loop, immediately before this function is
+    # called, and the placement is bash rather than taste: a function invoked as the condition of an
+    # `if` or behind `||` runs with `set -e` switched OFF for its whole body, so putting the gate in
+    # here and calling this function in a condition would let a failed `helm upgrade` fall through
+    # to the next `run` line. Called plainly, a failing helm or kubectl still ends the run at once.
 
     # ⚠ Not `mapfile`. It is bash 4, and macOS ships bash 3.2 — a script that installs a cluster is
     # the wrong place to discover that. The same reason every array below is expanded as
@@ -511,9 +653,30 @@ for phase in $phases; do
 
         if [[ "$verify_only" == true ]]; then
             verify_component "$dir" || failures=$((failures + 1))
-        else
-            install_component "$dir"
+            continue
         fi
+
+        # ⚠ THE DIGEST GATE, BEFORE ANY helm OR kubectl LINE AND BEFORE ANY `run`. A refusal here
+        # is the whole of what "pinned by digest" means for a chart that cannot carry a digest in
+        # its values: the tag the kubelet is about to pull was resolved a moment ago and serves the
+        # reviewed bytes. It runs under --dry-run too, where it resolves nothing and refuses only a
+        # record with no digest in it.
+        #
+        # ⚠ A refused component ENDS the run rather than being counted and skipped, because a phase
+        # is a barrier: everything after this row in the roster assumes it is installed, and a run
+        # that skipped kube-ovn and went on to install eighteen more rows onto a cluster with no CNI
+        # would fail everywhere except at the line that says why. A helm or kubectl failure already
+        # ends the run under `set -e`; this makes the digest gate end it the same way, with a
+        # sentence in front.
+        if ! verify_images "$dir"; then
+            printf '\n%s (phase %s) was refused by the digest gate above. Nothing was applied for it, and\n' \
+                "$component" "$phase" >&2
+            printf 'nothing after it in the roster was attempted: a phase is a barrier, and a component\n' >&2
+            printf 'the next phase needs is not one this run skips. charts/bundle/README.md § What this bundle pulls.\n' >&2
+            exit 1
+        fi
+
+        install_component "$dir"
     done < <(printf '%s\n' "$selection")
 done
 
@@ -525,8 +688,9 @@ if [[ "$failures" -gt 0 ]]; then
 fi
 
 if [[ "$verify_only" == true ]]; then
-    printf 'Every pin resolves. That is a claim about registries and about nothing else — no operator\n'
-    printf 'was installed and no custom resource was reconciled. charts/bundle/README.md § Verification.\n'
+    printf 'Every pin resolves, and every recorded image tag serves the digest reviewed for it. That is\n'
+    printf 'a claim about registries and about nothing else — no operator was installed and no custom\n'
+    printf 'resource was reconciled. charts/bundle/README.md § Verification.\n'
 elif [[ "$dry_run" == true ]]; then
     printf 'Dry run. No command above was executed.\n'
 else

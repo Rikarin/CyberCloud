@@ -566,15 +566,32 @@ provenance is how a platform ends up unable to upgrade Postgres.
 SSPL/BUSL/AGPL image outside an allow-list with a written reason — ADR-011. Valkey not Redis,
 OpenBao not Vault, FerretDB not MongoDB, OpenSearch not Elasticsearch.
 
-> ⚠ **CORRECTED 2026-08-19. `Build.Licence` is `NotImplementedYet` and the paragraph above describes
-> what it will do.** What exists is narrower and is labelled as such: the **Bundle** gate checks each
-> `charts/bundle/*/component.yaml`'s **declared** SPDX identifier against an allow-list of four —
-> Apache-2.0, BSD-3-Clause, MIT, MPL-2.0. That catches a component added under SSPL or BUSL by an
-> author who wrote its licence down honestly. It reads no `LICENSE` file and opens no image, so the
-> distance between it and the sentence above is the distance between an attestation and a scan.
-> AGPL-3.0 is deliberately off the list even though ADR-011 marks Grafana offerable, because that row
-> carries a condition — *we distribute, we do not modify* — and a gate that turns a conditional into an
-> unconditional yes is a gate that retires the condition.
+> ⚠ **CORRECTED 2026-08-19, AND CORRECTED BACK ON 2026-09-15 (issue #17).** For four weeks the
+> sentence above described a target that was `NotImplementedYet`, and this note said so. It is
+> implemented now, and what it does is worth being exact about, because it is two scans and not one:
+>
+> * **The artefact's own licence, against the allow-list.** For every `charts/bundle/` component it
+>   fetches the `LICENSE` at the pinned release (`licenceEvidence:` in the `component.yaml`, a URL
+>   the Bundle gate requires to name the pin), classifies the text, and fails when the result is off
+>   the allow-list — Apache-2.0, BSD-2-Clause, BSD-3-Clause, MIT, MPL-2.0 — **or disagrees with the
+>   `licence:` the file declares**, naming both. The pinned chart's `artifacthub.io/license` and every
+>   recorded image's `org.opencontainers.image.licenses` label are checked the same way wherever they
+>   exist. On 2026-09-15 that was three charts of thirteen and five images of thirty-two, which is why
+>   the LICENSE file is the evidence that is required rather than the one that is nice to have.
+> * **What each image links, against ADR-011's deny-list.** Syft produces an SBOM per recorded image
+>   and per platform image `Build.Images` pushed, and every package licence is checked against the
+>   families ADR-011 § Enforcement names — SSPL, BUSL, AGPL, Elastic, RSAL. Everything else at the
+>   package level is *reported and not judged*: 76 of the 99 packages in our own base image are GPL
+>   or LGPL, and which second list judges them is issue #18's decision, deliberately not taken by the
+>   scan. `build/Build.Licence.cs`' header carries the measurement and the argument.
+>
+> The **Bundle** gate still checks the *declared* identifier on every PR with no network; the scan
+> runs weekly with one, and both write the same finding from opposite sides. AGPL-3.0 is deliberately
+> off the allow-list even though ADR-011 marks Grafana offerable, because that row carries a
+> condition — *we distribute, we do not modify* — and the day a Grafana image enters the bundle the
+> condition gets written into `LicenceExceptions` beside the artefact, not into the list.
+> `./build.sh Licence --skip Charts Images` runs it on a workstation; `artifacts/licence/report.md`
+> lists every artefact and its evidence.
 
 See [docs/plan/03 § charts](../docs/plan/03-repository-layout.md) and
 [docs/plan/12](../docs/plan/12-managed-data-services.md).

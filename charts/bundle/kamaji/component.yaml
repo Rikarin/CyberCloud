@@ -8,6 +8,7 @@
 component: kamaji
 phase: 40
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/clastix/kamaji/v1.0.0/LICENSE
 install: helm
 repo: https://clastix.github.io/charts
 chart: kamaji

@@ -8,6 +8,7 @@
 component: mariadb-operator
 phase: 50
 licence: MIT
+licenceEvidence: https://raw.githubusercontent.com/mariadb-operator/mariadb-operator/26.6.0/LICENSE
 install: helm
 repo: https://helm.mariadb.com/mariadb-operator
 chart: mariadb-operator

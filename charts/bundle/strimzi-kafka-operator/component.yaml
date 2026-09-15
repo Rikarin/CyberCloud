@@ -25,6 +25,7 @@
 component: strimzi-kafka-operator
 phase: 50
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/0.51.0/LICENSE
 install: helm
 repo: https://strimzi.io/charts
 chart: strimzi-kafka-operator

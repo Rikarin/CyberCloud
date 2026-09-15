@@ -421,12 +421,15 @@ public sealed class BundleInstallSelection {
                 );
             } else {
                 // ⚠ THE COMMAND, NOT THE WORD. This asserted `ShouldNotContain("kubectl")` until
-                // #15, and had been red since #75 for a reason nothing to do with a barrier:
+                // #15 and #17, and had been red since #75 for a reason nothing to do with a barrier:
                 // clickhouse-operator's helm line carries `--set crdHook.image.repository=clastix/kubectl`
-                // — the very values override #75 added to get off `bitnami/kubectl:latest`. The suite
-                // skips wherever `bash` is not a file on PATH, which is every Windows checkout, so
-                // the red run was waiting for a Linux runner. A dry run prints every command as
-                // `would run: <argv>`, so the verb at the head of that line is the claim.
+                // — the very values override #75 added to get off `bitnami/kubectl:latest` — and
+                // since #17 the dry run also prints every recorded image under its component, so
+                // kamaji's and clickhouse-operator's `clastix/kubectl` helper appears under two helm
+                // components that run no kubectl at all. The suite skips wherever `bash` is not a
+                // file on PATH, which is every Windows checkout, so the red run was waiting for a
+                // Linux runner. A dry run prints every command as `would run: <argv>`, so the verb
+                // at the head of that line is the claim.
                 segment.ShouldNotContain(
                     "would run: kubectl",
                     Case.Sensitive,

@@ -6,6 +6,7 @@
 component: seaweedfs-operator
 phase: 50
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/seaweedfs/seaweedfs-operator/seaweedfs-operator-0.1.38/LICENSE
 
 # Packaged chart published as a GitHub release asset, like clickhouse-operator, so the release tag
 # and the chart version are both part of the pin.

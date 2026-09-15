@@ -491,6 +491,25 @@ owed:
       list to make the target implementable would answer #18 by making the list stop answering its
       own question. build/Build.Licence.cs now carries the measurement and stays unimplemented on
       purpose.
+      ✅ CLOSED ON 2026-09-15 BY ISSUE #17, AND THE ROW'S NAME IS NOW A HISTORY RATHER THAN A CLAIM.
+      build/Build.Licence.cs is the scan, and it is TWO scans because the paragraph above was right
+      that one list cannot answer both questions. (1) The artefact's OWN licence, against the
+      offering allow-list: every component now carries `licenceEvidence:`, the URL of the upstream
+      LICENSE at the pinned release, which the scan fetches and classifies by text and compares with
+      `licence:` — a mismatch fails naming both. The pinned chart's `artifacthub.io/license` and every
+      recorded image's `org.opencontainers.image.licenses` label are compared the same way wherever
+      they exist, which on 2026-09-15 was three charts of thirteen and five images of thirty-two —
+      the count that made the LICENSE file the evidence that is required. (2) What each image LINKS,
+      with Syft, against the families ADR-011 § Enforcement names — SSPL, BUSL, AGPL, Elastic, RSAL —
+      and nothing else: GPL and LGPL inside a layer are reported and not judged, and the second
+      allow-list that would judge them is still #18's decision, deliberately not taken. First run:
+      all nineteen LICENSE files agree with their declarations, and the first disagreement the labels
+      produced was cfssl/cfssl under BSD-2-Clause — a helper image kamaji renders — which widened the
+      allow-list with a component behind it. What is still owed here: the managed charts' ENGINE
+      images. charts/managed/* compose `repository:tag` from a `version` value inside templates, so
+      scanning them means a `helm template` per chart — the render images.sh already does for bundle
+      components — and this machine has no helm. The operators' own images are scanned; the engines
+      they run are not yet.
   - id: images-are-not-pinned-by-digest
     says: >
       ⚠ THE FIRST SENTENCE OF THIS ROW WAS WRONG AND IS CORRECTED RATHER THAN QUIETLY EDITED. It read
@@ -527,6 +546,25 @@ owed:
       virt-api, virt-controller, virt-handler and virt-launcher by names that appear nowhere in the
       applied document. (4) Nothing runs images.sh on a schedule, so a tag that moves is caught when
       somebody asks.
+      ✅ (4) CLOSED ON 2026-09-15 BY ISSUE #17, AND IT CLOSED BY MOVING THE CHECK RATHER THAN BY
+      SCHEDULING IT. The record is now CONSUMED by install.sh: before a component's first helm or
+      kubectl line, every recorded image is resolved through the same `digest_of` images.sh uses —
+      one copy, in oci.sh, sourced by both — and the component is refused, ending the run, when a
+      tag serves other bytes than the recorded ones or when an entry is `@unresolved`. `--verify`
+      runs the same gate over the roster with no cluster; `--dry-run` checks the shape and resolves
+      nothing. test/CyberCloud.Bundle.Cluster.Conformance § BundleImagePins runs both refusals
+      against sabotaged copies of this directory in REAL apply mode and asserts no kubectl line was
+      reached, plus a positive control over the checked-in record. Its first run over the roster
+      found the Altinity pair rebuilt under `0.27.3` — see clickhouse-operator/component.yaml — so
+      the count of moved tags this directory has caught is now three, and two of them were
+      versioned. (1) is unchanged and is stated precisely in charts/bundle/README.md § What this
+      bundle pulls: the tag is still what the kubelet pulls, and the window between the resolve and
+      the pull is closed by a digest the chart can render or by admission (#15), not by this. (2)
+      and (3) are unchanged. ⚠ AND THE HARNESS THAT PROVES IT NOW RUNS ON WINDOWS, which #74's
+      closing comment recorded it did not: BundleInstaller.OnPath found no `bash` because it looked
+      for a file with no extension, and the fix was NOT to add one — `bash.exe` on a Windows PATH is
+      the WSL launcher in System32. It finds Git for Windows' bash beside git.exe instead, and it
+      normalises the output's line endings, which was the second thing that had never run.
   - id: a-tag-that-names-no-version-is-not-a-pin
     says: >
       ⚠ THIS ROW WAS CALLED `two-images-in-this-bundle-are-latest` AND THE NUMBER IN ITS NAME IS NOW

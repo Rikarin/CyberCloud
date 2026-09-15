@@ -27,7 +27,9 @@
 //   * a component.yaml carrying a top-level key nothing under charts/bundle/ reads        → Manifest
 //   * a component declaring neither `serves:` nor a written `servesNoDefinitions:`         → Manifest
 //   * an `images:` entry whose tag is `latest`, which is the absence of a pin             → Manifest
-//   * a component declaring a licence outside ADR-011's allow-list                        → Licence
+//   * an `images:` entry recorded `@unresolved`, which install.sh refuses to install       → Manifest
+//   * a component declaring a licence outside ADR-011's allow-list, or a
+//     `licenceEvidence:` URL that does not name the pinned release                        → Licence
 //   * bundle.yaml and the directories disagreeing about which components exist            → Roster
 //   * a managed chart rendering a group no component serves, OR a pin that stopped
 //     serving one, OR two components claiming the same group/version                      → Coverage
@@ -95,17 +97,31 @@ partial class Build {
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             What this checks is a DECLARATION, and the distance from what ADR-011
-    ///             § Enforcement asks for is the distance from an attestation to a scan.
-    ///         </b> That clause
-    ///         wants "a licence scan over the chart set and the container images in the platform
-    ///         bundle"; <c>build/Build.Licence.cs</c> is still <c>NotImplementedYet</c>. This catches
-    ///         a component added under SSPL or BUSL by an author who wrote the licence down honestly,
-    ///         and catches nothing else. charts/bundle/bundle.yaml § owed says so in its own words.
+    ///             BSD-2-Clause was added on 2026-09-15 with a component behind it, which is the
+    ///             only way this list widens.
+    ///         </b> The first run of the licence scan found <c>cfssl/cfssl:v1.6.5</c> — a helper
+    ///         image the kamaji chart renders — labelled <c>org.opencontainers.image.licenses=BSD-2-Clause</c>.
+    ///         Two-clause BSD is three-clause BSD without the no-endorsement clause: the same
+    ///         permissive grant, the same absence of any service clause, and the same answer to the
+    ///         question this list asks. It was absent only because no component had declared it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             What this gate checks is the DECLARATION; <c>build/Build.Licence.cs</c> is the
+    ///             scan, and the two are one claim read from two sides.
+    ///         </b> This gate reads no
+    ///         network and fails a component.yaml that declares a licence off this list — catching a
+    ///         component added under SSPL or BUSL by an author who wrote the licence down honestly.
+    ///         <c>Licence</c> fetches the artefacts the declaration is about — the LICENSE at the
+    ///         pinned release, the chart's annotation, every image's label — and fails when any of
+    ///         them says something else, naming both sides. Neither replaces the other: the gate runs
+    ///         on every PR with no network, the scan runs weekly with one.
     ///     </para>
     /// </remarks>
     static readonly string[] BundleLicenceAllowList = [
         "Apache-2.0",
+        "BSD-2-Clause",
         "BSD-3-Clause",
         "MIT",
         "MPL-2.0"
@@ -265,9 +281,14 @@ partial class Build {
             // same shape as the `imageDigest:` key that claimed `--verify` compared it: a control
             // that reads as a control and is not one. Issue #75.
             //
-            // ⚠ `licence`, `source` and `checked` are "always" for a PINNED component and forbidden
-            // for a first-party one — PinViolations owns that split, because whether a manifest
-            // describes something pulled or something written is what `install:` says.
+            // ⚠ `licence`, `licenceEvidence`, `source` and `checked` are "always" for a PINNED
+            // component and forbidden for a first-party one — PinViolations owns that split, because
+            // whether a manifest describes something pulled or something written is what `install:`
+            // says. `licenceEvidence` joined the pinned set with issue #17, the same day
+            // Build.Licence.cs started reading it, which is the rule BundleComponentKeys states: a
+            // key arrives with its reader. It is the URL of the upstream LICENSE at the pinned
+            // release, and it is required because the artefacts alone witness fourteen of nineteen
+            // declarations to nobody — Build.Licence.cs' header carries the count.
             foreach (var required in new[] { "component", "phase", "install", "requiredBy" }) {
                 if (!scalars.ContainsKey(required)) {
                     violations.Add($"{relative} declares no `{required}:`.");
@@ -468,7 +489,22 @@ partial class Build {
             yield break;
         }
 
-        foreach (var image in images.Where(image => !ImageReference.IsMatch(image))) {
+        // ⚠ `@unresolved` IS ITS OWN VIOLATION, WITH ITS OWN SENTENCE, AND IT IS STILL A VIOLATION.
+        // Issue #17: somebody recording an image on a machine that cannot reach its registry writes
+        // the reference with `@unresolved` in place of the digest, so the record is honest about
+        // what it does not know. install.sh refuses to install that component — verified by
+        // test/CyberCloud.Bundle.Cluster.Conformance § BundleImagePins — and this gate keeps the
+        // build red until somebody resolves it, because a pin nobody resolved is not a pin. What the
+        // separate sentence buys is that the fix is named: `images.sh --resolve`, not "fix the typo".
+        foreach (var image in images.Where(image => image.EndsWith("@unresolved", StringComparison.Ordinal))) {
+            yield return
+                $"{relative} lists `{image}` under `images:` — recorded, and deliberately not resolved. "
+                + "install.sh refuses to install this component until it is, and so does this gate: "
+                + "run `./charts/bundle/images.sh --component <name> --resolve` on a machine that can "
+                + "reach the registry, review what it found, and record the digest";
+        }
+
+        foreach (var image in images.Where(image => !ImageReference.IsMatch(image) && !image.EndsWith("@unresolved", StringComparison.Ordinal))) {
             yield return
                 $"{relative} lists `{image}` under `images:`, which is not a "
                 + "`repository:tag@sha256:<64 hex>` reference. charts/bundle/images.sh compares its "
@@ -530,22 +566,58 @@ partial class Build {
         }
     }
 
+    /// <summary>
+    ///     The declared licence is on the allow-list, and the evidence URL names the release the pin
+    ///     names.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The evidence URL must contain the pinned release, and that is the whole shape check.</b>
+    ///     A <c>licenceEvidence:</c> pointing at <c>main</c> is the licence of whatever upstream
+    ///     merged this morning, which is a different artefact from the one the pin installs and can
+    ///     change under a pin that has not. The URL has to carry the <c>release:</c> tag, or for a
+    ///     chart the <c>appVersion:</c> or <c>version:</c>, so that a bump that forgets to move the
+    ///     evidence is a red build naming the file rather than a scan of the wrong release. The
+    ///     fetch and the classification are Build.Licence.cs'; this gate reads no network.
+    /// </remarks>
+    /// <summary>The keys whose value a <c>licenceEvidence:</c> URL must contain, in the order they are tried.</summary>
+    static readonly string[] PinKeysForEvidence = ["release", "appVersion", "version"];
+
     static IEnumerable<string> LicenceViolations(string relative, Dictionary<string, string> scalars) {
-        if (!scalars.TryGetValue("licence", out var licence)) {
+        if (scalars.TryGetValue("licence", out var licence) && Array.IndexOf(BundleLicenceAllowList, licence) < 0) {
+            yield return
+                $"{relative} declares `licence: {licence}`, which is not on ADR-011's allow-list "
+                + $"({string.Join(", ", BundleLicenceAllowList)}). docs/plan/02 § ADR-011: \"Offering "
+                + "software as a service is exactly the use that several 2023-2025 licence changes exist "
+                + "to prevent. This is a product-blocking category of mistake.\" An SSPL or BUSL operator "
+                + "is a refusal with the alternative written down, not a dependency; anything else needs "
+                + "the allow-list widened in build/Build.Bundle.cs with the reason next to it";
+        }
+
+        if (!scalars.TryGetValue("licenceEvidence", out var evidence)) {
             yield break;
         }
 
-        if (Array.IndexOf(BundleLicenceAllowList, licence) >= 0) {
+        if (!evidence.StartsWith("https://", StringComparison.Ordinal)) {
+            yield return
+                $"{relative} declares `licenceEvidence: {evidence}`, which is not an https URL. "
+                + "Build.Licence.cs fetches this and classifies the text it finds, so anything else is "
+                + "a licence the scan never reads";
+
             yield break;
         }
 
-        yield return
-            $"{relative} declares `licence: {licence}`, which is not on ADR-011's allow-list "
-            + $"({string.Join(", ", BundleLicenceAllowList)}). docs/plan/02 § ADR-011: \"Offering "
-            + "software as a service is exactly the use that several 2023-2025 licence changes exist "
-            + "to prevent. This is a product-blocking category of mistake.\" An SSPL or BUSL operator "
-            + "is a refusal with the alternative written down, not a dependency; anything else needs "
-            + "the allow-list widened in build/Build.Bundle.cs with the reason next to it";
+        var pins = PinKeysForEvidence
+            .Where(scalars.ContainsKey)
+            .Select(key => scalars[key])
+            .ToList();
+
+        if (pins.Count > 0 && !pins.Any(pin => evidence.Contains(pin, StringComparison.Ordinal))) {
+            yield return
+                $"{relative} declares `licenceEvidence: {evidence}`, and the URL names none of this "
+                + $"component's pins ({string.Join(", ", pins)}). The licence file has to be the one at "
+                + "the release the pin installs — a URL on a branch is the licence of a different "
+                + "artefact, and one that can change under a pin that has not";
+        }
     }
 
     /// <summary>
@@ -578,7 +650,7 @@ partial class Build {
     ///     </para>
     /// </remarks>
     /// <summary>The keys that describe a resolution against somebody else's registry.</summary>
-    static readonly string[] PinnedOnlyKeys = ["licence", "source", "checked"];
+    static readonly string[] PinnedOnlyKeys = ["licence", "licenceEvidence", "source", "checked"];
 
     static IEnumerable<string> PinViolations(string relative, Dictionary<string, string> scalars) {
         if (!scalars.TryGetValue("install", out var install)) {
@@ -586,9 +658,9 @@ partial class Build {
         }
 
         var required = install switch {
-            "helm" => new[] { "repo", "chart", "version", "licence", "source", "checked" },
-            "helm-archive" => ["archive", "chart", "version", "licence", "source", "checked"],
-            "manifest" => ["manifest", "release", "licence", "source", "checked"],
+            "helm" => new[] { "repo", "chart", "version", "licence", "licenceEvidence", "source", "checked" },
+            "helm-archive" => ["archive", "chart", "version", "licence", "licenceEvidence", "source", "checked"],
+            "manifest" => ["manifest", "release", "licence", "licenceEvidence", "source", "checked"],
             "file" => ["file"],
             _ => [],
         };
@@ -669,7 +741,13 @@ partial class Build {
         "images",
         "rendersNoWorkloadImages",
 
+        // Read by Build.Licence.cs, which fetches the LICENSE it names and classifies the text; this
+        // gate checks only that it is an https URL naming the pinned release.
+        "licenceEvidence",
+
         // Read by install.sh and images.sh, which switch on `install:` and read the pin beneath it.
+        // ⚠ `images` is read by install.sh too since issue #17 — the digest gate — and is listed
+        // above under this gate because that is where its shape is checked.
         "install",
         "repo",
         "chart",

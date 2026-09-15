@@ -14,6 +14,7 @@
 component: opensearch-operator
 phase: 50
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/opensearch-project/opensearch-k8s-operator/v2.8.0/LICENSE
 install: helm
 repo: https://opensearch-project.github.io/opensearch-k8s-operator
 chart: opensearch-operator

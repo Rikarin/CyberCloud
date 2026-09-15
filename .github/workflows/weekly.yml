@@ -81,15 +81,26 @@ jobs:
 
   # ── docs/plan/23 § Build, row `Licence`: "ADR-011 scan over charts and images" ───────────────────
   #
-  # ⚠ THIS JOB IS RED TODAY FOR A REASON THAT IS NOT THE STUB, AND THE ORDER MATTERS.
+  # ⚠ THIS JOB IS RED TODAY FOR A REASON THAT IS NOT THE SCAN, AND THE ORDER MATTERS.
   #
   # `Licence` depends on `Charts` and `Images`. `Images` is BLOCKED without a registry, syft and
   # cosign, so `./build.sh Licence` never reaches ScanLicences at all — verified by running it: it
-  # ends "Images is BLOCKED on 3 of 3 precondition(s)". Configure those and the target will reach
-  # Build.Licence.cs, which is a stub that logs "Not implemented yet" and returns success.
+  # ends "Images is BLOCKED on 3 of 3 precondition(s)". Configure those and the target reaches
+  # Build.Licence.cs, which since issue #17 is the scan itself: every bundle component's licence
+  # read off its artefacts, every image's contents through syft against ADR-011's deny-list, and
+  # the SBOMs `Images` just wrote. On CI a missing syft FAILS the target rather than warning, so the
+  # `Install syft` step below is load-bearing and not a courtesy.
   #
-  # That second state is the dangerous one — a green weekly licence scan that scanned nothing, on
-  # the row with a legal consequence — and it is what the tripwire below is armed for.
+  # ⚠ DOCKER HUB RATIONS ANONYMOUS MANIFEST READS, AND GITHUB RUNNERS SHARE ADDRESSES. Eleven of the
+  # bundle's thirty-two images are on docker.io; the scan makes two manifest GETs per image, and a
+  # runner whose address is already over the 100-per-six-hours budget gets HTTP 429 on all of them —
+  # which the scan reports as a finding, because an artefact it could not read is one it did not
+  # scan. build/OciRegistry.cs reads DOCKERHUB_USERNAME and DOCKERHUB_TOKEN when they are set and
+  # spends the account's budget instead. They are optional and are passed below when present.
+  #
+  # The tripwire step stays: it exits 0 the moment the log no longer says "Not implemented yet",
+  # which it no longer does, and .github/scripts/assert-stub-still-blocked.sh explains why the call
+  # is kept rather than removed.
   licence:
     name: licence
     runs-on: ubuntu-24.04
@@ -98,6 +109,8 @@ jobs:
       CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
