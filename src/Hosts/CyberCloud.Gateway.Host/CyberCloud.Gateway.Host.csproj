@@ -174,6 +174,17 @@
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Application/CyberCloud.Providers.Terminal.Application.csproj"/>
     </ItemGroup>
 
+    <ItemGroup Label="RFC 9116 security.txt — embedded so the build can see it expire">
+        <!--
+          Embedded rather than copied to the output directory or read from a ConfigMap, because the
+          Expires line is gated: SecurityTxtTests.ExpiresIsAtLeastThirtyDaysOut reads this exact
+          resource and fails the build thirty days before the file lapses. A file the gateway read
+          at start-up would be one the build could not see. WellKnown/SecurityTxt.cs reads it by the
+          logical name below; change one and change the other.
+        -->
+        <EmbeddedResource Include="WellKnown/security.txt" LogicalName="security.txt"/>
+    </ItemGroup>
+
     <ItemGroup Label="CyberCloud.Analyzers — CC1006 is the reason this project exists in the gate">
         <ProjectReference Include="../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
                           OutputItemType="Analyzer"

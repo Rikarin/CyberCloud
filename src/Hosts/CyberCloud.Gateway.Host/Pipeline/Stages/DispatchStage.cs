@@ -1,6 +1,7 @@
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Routing;
+using CyberCloud.Gateway.Host.WellKnown;
 using System.Globalization;
 
 namespace CyberCloud.Gateway.Host.Pipeline.Stages;
@@ -62,6 +63,9 @@ sealed class DispatchStage(
             // pipeline's job for it was stages 1 to 5.
             RouteKind.Hub => null,
             RouteKind.OpenApi => OpenApi(context),
+            // A constant, and the only plain-text body this gateway writes. No caller, no tenant, no
+            // grain — SecurityTxt's remarks say why it is embedded rather than read at start-up.
+            RouteKind.SecurityTxt => GatewayOutcome.PlainText(SecurityTxt.Content),
             _ => GatewayOutcome.Failure(StatusCodes.Status404NotFound, GatewayErrors.NotFound(path))
         };
     }
