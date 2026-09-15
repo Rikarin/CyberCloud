@@ -1,4 +1,4 @@
-import { ApiResponse, CyberCloudApi, Page, PageRequest } from '@cybercloud/api';
+import { ApiResponse, CyberCloudApi, Page, PageRequest, Resource } from '@cybercloud/api';
 
 /**
  * Where a resource lives, as the pieces a route carries.
@@ -16,14 +16,14 @@ export interface ResourceAddress {
   readonly name: string;
 }
 
-/** A resource as the gateway renders one, over what the generated per-type interface types. */
-export interface ResourceEnvelope {
-  readonly id: string;
-  readonly name: string;
-  readonly type: string;
+/**
+ * A resource as the gateway renders one, for a page that does not know the type: the generated
+ * `Resource` envelope — `id`, `name`, `type`, `provisioningState`, `etag`, typed from the document
+ * since issue #85 — plus the body members every type declares, untyped because the type is only
+ * known at run time.
+ */
+export interface ResourceEnvelope extends Resource {
   readonly location?: string;
-  readonly provisioningState?: string;
-  readonly etag?: string;
   readonly properties?: unknown;
   readonly tags?: Readonly<Record<string, string>>;
 }

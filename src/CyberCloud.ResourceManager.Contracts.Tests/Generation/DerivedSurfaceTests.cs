@@ -113,6 +113,54 @@ public sealed class DerivedSurfaceTests {
         // to fail.
         Flag("create", "--provisioning-state").ShouldBeNull();
 
+    /// <summary>
+    ///     ⚠ <b>The read envelope reaches no write surface — issue #85.</b>
+    /// </summary>
+    /// <remarks>
+    ///     Every type's schema now carries <c>id</c>, <c>name</c>, <c>type</c>,
+    ///     <c>provisioningState</c> and <c>etag</c> beside the body, and every surface below walks
+    ///     that schema to build the thing a caller writes. <see cref="DocumentReader" /> takes the
+    ///     inherited members out once, in <see cref="DocumentType.Body" />; this is the assertion
+    ///     that the split reaches the CLI's flags, the portal's fields and the SDK's
+    ///     <c>{Model}Data</c>. The failure it refuses is quiet: <c>--etag</c> on <c>cyc create</c>
+    ///     and an <c>id</c> control on every form, each sending a member the write path refuses.
+    /// </remarks>
+    [Fact]
+    public void TheReadEnvelopeReachesNoWriteSurface() {
+        var type = DocumentReader.TypesOf(Document).Single(x => x.ResourceType == Fixtures.Namespace + "/servers");
+        var envelope = DocumentReader.LeavesOf(type.Envelope).Select(x => x.Name).ToList();
+
+        envelope.ShouldBe(["etag", "id", "name", "provisioningState", "type"]);
+
+        // The split itself: the write body is the schema with the inherited members and the allOf
+        // taken out, and nothing else changed.
+        type.Body["allOf"].ShouldBeNull();
+        type.Body["properties"]!.AsObject().Select(x => x.Key).ShouldBe(["location", "properties", "tags"]);
+        type.Body["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
+        type.Body["required"]!.AsArray().Select(x => DocumentReader.Text(x)).ShouldBe(["location", "properties"]);
+        DocumentReader.ReadRequiredOf(type.Envelope).ShouldBe(envelope, ignoreOrder: true);
+
+        foreach (var name in envelope) {
+            var flag = "--" + CliEmitter.Kebab(name);
+
+            // `--name` is the resource's own address flag on every verb and must stay; the envelope's
+            // `name` is the same value read back, so the only thing to assert is that no flag carries
+            // the envelope's pointer.
+            Flags("create").ShouldNotContain(x => DocumentReader.Text(x!["jsonPointer"]) == "/" + name, flag);
+            Flags("update").ShouldNotContain(x => DocumentReader.Text(x!["jsonPointer"]) == "/" + name, flag);
+            Field("/" + name).ShouldBeNull(name);
+        }
+
+        var data = Sdk[Sdk.IndexOf("public sealed partial class PostgreSQLServerData {", StringComparison.Ordinal)..];
+        data = data[..data.IndexOf("\n}\n", StringComparison.Ordinal)];
+
+        foreach (var name in envelope) {
+            // At the class's own depth: the fixture nests a `name` of its own under /properties/sku,
+            // and that one belongs on the body.
+            data.ShouldNotContain("\n    [JsonPropertyName(\"" + name + "\")]", customMessage: name);
+        }
+    }
+
     [Fact]
     public void ALongRunningVerbOffersWaitAndNoWait() {
         Command["verbs"]!["create"]!["waitFlags"].ShouldNotBeNull();

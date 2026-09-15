@@ -51,10 +51,12 @@ interface PropertyRow {
  * docs/plan/20 § Live updates: "anything that creates, deletes or costs money … shows the
  * operation's real progress."
  *
- * ⚠ **`provisioningState`, `location`, `etag` and `tags` are not in the generated per-type
- * interface**, which types only what the body schema declares. `ResourceEnvelope` in
- * `resource-verbs.ts` names what `ResponseBodies.WriteResource` actually writes; the two should
- * be one type once the emitter types the response envelope.
+ * ⚠ **The envelope is typed from the document since issue #85.** `Resource` in `@cybercloud/api`
+ * is the generated `id`, `name`, `type`, `provisioningState` and `etag`, and every per-type
+ * `{Type}Resource` extends it and its body; `ResourceEnvelope` in `resource-verbs.ts` extends
+ * the same `Resource` for a page that only learns the type at run time. Until that issue the
+ * generated interface carried four of the eight members the gateway writes and this file typed
+ * the rest by hand.
  */
 @Component({
   selector: 'cc-resource-blade',

@@ -58,13 +58,19 @@ export interface OperationProgress {
   step: string;
 }
 
-/** An operation's current state. ⚠ The members are docs/plan/10 § Long-running operations, over HTTP's, which is a subset of the OperationStatus wire type — no HTTP projection of that record is declared anywhere in the tree. */
+/** An operation's current state. ⚠ The members are docs/plan/10 § Long-running operations, over HTTP's, which is a subset of the OperationStatus wire type — no HTTP projection of that record is declared anywhere in the tree. id, status, startTime, percentComplete and progress are always present; endTime once the status is terminal; error once it is Failed. */
 export interface OperationStatus {
+  /** When the operation reached a terminal status. Absent until it does. */
+  readonly endTime?: string;
   /** Present once the status is Failed, and the reason the portal shows. */
   readonly error?: CyberCloudError;
-  readonly percentComplete?: number;
+  /** The operation id — the last segment of the URL this was polled from. */
+  readonly id: string;
+  readonly percentComplete: number;
   /** Oldest first. What makes a nine-minute cluster creation tolerable — docs/plan/10. */
-  readonly progress?: readonly OperationProgress[];
+  readonly progress: readonly OperationProgress[];
+  /** When the write was accepted. */
+  readonly startTime: string;
   readonly status: OperationState;
 }
 
@@ -91,6 +97,29 @@ export interface ScopeResource {
   name: string;
   /** The Azure-shaped type string. */
   type: string;
+}
+
+/** The values /provisioningState carries. ⚠ Read-only: the server sets it, and a write that carries it is refused. */
+export type ProvisioningState =
+  | 'Canceled'
+  | 'Creating'
+  | 'Deleting'
+  | 'Failed'
+  | 'Succeeded'
+  | 'Updating';
+
+/** The envelope every resource is read in — docs/plan/10 § Request pipeline, step 9. Every type's schema is allOf this: a GET, a list element and a 202 all carry these five members beside the body the type declares, in this order, then tags. ⚠ All five are readOnly and none is required, although a read always carries every one — the same schema validates a PUT, and this platform refuses a read-only member on a write rather than ignoring it (docs/plan/08 § The write path, end to end). x-cybercloud-read-required lists what a read guarantees. */
+export interface Resource {
+  /** The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. */
+  readonly etag: string;
+  /** The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. */
+  readonly id: string;
+  /** The last segment of the path: the name the caller chose on the PUT. */
+  readonly name: string;
+  /** Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. */
+  readonly provisioningState: ProvisioningState;
+  /** The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. */
+  readonly type: string;
 }
 
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
@@ -151,13 +180,9 @@ export interface AnalyticsClickhouseClustersData {
   tags?: Record<string, string>;
 }
 
-/** One ClickHouse cluster, as the API returns it. */
-export interface AnalyticsClickhouseClustersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One ClickHouse cluster, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface AnalyticsClickhouseClustersResource extends Resource, AnalyticsClickhouseClustersData {
   readonly type: 'CyberCloud.Analytics/clickhouseClusters';
-  readonly properties?: AnalyticsClickhouseClustersData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -263,13 +288,9 @@ export interface CacheRedisData {
   tags?: Record<string, string>;
 }
 
-/** One Valkey cache, as the API returns it. */
-export interface CacheRedisResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Valkey cache, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface CacheRedisResource extends Resource, CacheRedisData {
   readonly type: 'CyberCloud.Cache/redis';
-  readonly properties?: CacheRedisData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -340,13 +361,9 @@ export interface ContainerRegistryRegistriesData {
   tags?: Record<string, string>;
 }
 
-/** One Container registry, as the API returns it. */
-export interface ContainerRegistryRegistriesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Container registry, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ContainerRegistryRegistriesResource extends Resource, ContainerRegistryRegistriesData {
   readonly type: 'CyberCloud.ContainerRegistry/registries';
-  readonly properties?: ContainerRegistryRegistriesData['properties'];
 }
 
 /** What listCredentials returns. ⚠ Secret material — never log or persist this. */
@@ -398,13 +415,9 @@ export interface ContainerServiceManagedClustersData {
   tags?: Record<string, string>;
 }
 
-/** One Managed Kubernetes cluster, as the API returns it. */
-export interface ContainerServiceManagedClustersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Managed Kubernetes cluster, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ContainerServiceManagedClustersResource extends Resource, ContainerServiceManagedClustersData {
   readonly type: 'CyberCloud.ContainerService/managedClusters';
-  readonly properties?: ContainerServiceManagedClustersData['properties'];
 }
 
 /** What listCredentials returns. ⚠ Secret material — never log or persist this. */
@@ -470,13 +483,9 @@ export interface ContainerServiceManagedClustersAgentPoolsData {
   tags?: Record<string, string>;
 }
 
-/** One Node pool, as the API returns it. */
-export interface ContainerServiceManagedClustersAgentPoolsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Node pool, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ContainerServiceManagedClustersAgentPoolsResource extends Resource, ContainerServiceManagedClustersAgentPoolsData {
   readonly type: 'CyberCloud.ContainerService/managedClusters/agentPools';
-  readonly properties?: ContainerServiceManagedClustersAgentPoolsData['properties'];
 }
 
 /** The values /properties/highAvailability accepts. ⚠ Closed: the write path refuses anything else. */
@@ -546,13 +555,9 @@ export interface DBforMySQLServersData {
   tags?: Record<string, string>;
 }
 
-/** One MariaDB server, as the API returns it. */
-export interface DBforMySQLServersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One MariaDB server, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface DBforMySQLServersResource extends Resource, DBforMySQLServersData {
   readonly type: 'CyberCloud.DBforMySQL/servers';
-  readonly properties?: DBforMySQLServersData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -670,13 +675,9 @@ export interface DBforPostgreSQLServersData {
   tags?: Record<string, string>;
 }
 
-/** One PostgreSQL server, as the API returns it. */
-export interface DBforPostgreSQLServersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One PostgreSQL server, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface DBforPostgreSQLServersResource extends Resource, DBforPostgreSQLServersData {
   readonly type: 'CyberCloud.DBforPostgreSQL/servers';
-  readonly properties?: DBforPostgreSQLServersData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -764,13 +765,9 @@ export interface DocumentDBAccountsData {
   tags?: Record<string, string>;
 }
 
-/** One Document database account, as the API returns it. */
-export interface DocumentDBAccountsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Document database account, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface DocumentDBAccountsResource extends Resource, DocumentDBAccountsData {
   readonly type: 'CyberCloud.DocumentDB/accounts';
-  readonly properties?: DocumentDBAccountsData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -847,13 +844,9 @@ export interface MailDomainsData {
   tags?: Record<string, string>;
 }
 
-/** One Mail domain, as the API returns it. */
-export interface MailDomainsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Mail domain, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MailDomainsResource extends Resource, MailDomainsData {
   readonly type: 'CyberCloud.Mail/domains';
-  readonly properties?: MailDomainsData['properties'];
 }
 
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
@@ -945,13 +938,9 @@ export interface MessagingKafkaClustersData {
   tags?: Record<string, string>;
 }
 
-/** One Kafka cluster, as the API returns it. */
-export interface MessagingKafkaClustersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Kafka cluster, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MessagingKafkaClustersResource extends Resource, MessagingKafkaClustersData {
   readonly type: 'CyberCloud.Messaging/kafkaClusters';
-  readonly properties?: MessagingKafkaClustersData['properties'];
 }
 
 /** The values /securityProtocol accepts. ⚠ Closed: the write path refuses anything else. */
@@ -1049,13 +1038,9 @@ export interface MessagingNatsClustersData {
   tags?: Record<string, string>;
 }
 
-/** One NATS cluster, as the API returns it. */
-export interface MessagingNatsClustersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One NATS cluster, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MessagingNatsClustersResource extends Resource, MessagingNatsClustersData {
   readonly type: 'CyberCloud.Messaging/natsClusters';
-  readonly properties?: MessagingNatsClustersData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -1150,13 +1135,9 @@ export interface MessagingRabbitmqClustersData {
   tags?: Record<string, string>;
 }
 
-/** One RabbitMQ cluster, as the API returns it. */
-export interface MessagingRabbitmqClustersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One RabbitMQ cluster, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MessagingRabbitmqClustersResource extends Resource, MessagingRabbitmqClustersData {
   readonly type: 'CyberCloud.Messaging/rabbitmqClusters';
-  readonly properties?: MessagingRabbitmqClustersData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -1228,13 +1209,9 @@ export interface MonitorWorkspacesData {
   tags?: Record<string, string>;
 }
 
-/** One Monitor workspace, as the API returns it. */
-export interface MonitorWorkspacesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Monitor workspace, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MonitorWorkspacesResource extends Resource, MonitorWorkspacesData {
   readonly type: 'CyberCloud.Monitor/workspaces';
-  readonly properties?: MonitorWorkspacesData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -1275,13 +1252,9 @@ export interface NetworkPublicIpAddressesData {
   tags?: Record<string, string>;
 }
 
-/** One Public IP address, as the API returns it. */
-export interface NetworkPublicIpAddressesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Public IP address, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface NetworkPublicIpAddressesResource extends Resource, NetworkPublicIpAddressesData {
   readonly type: 'CyberCloud.Network/publicIpAddresses';
-  readonly properties?: NetworkPublicIpAddressesData['properties'];
 }
 
 /** What showAllocation returns. */
@@ -1322,13 +1295,9 @@ export interface NetworkVirtualNetworksData {
   tags?: Record<string, string>;
 }
 
-/** One Virtual network, as the API returns it. */
-export interface NetworkVirtualNetworksResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Virtual network, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface NetworkVirtualNetworksResource extends Resource, NetworkVirtualNetworksData {
   readonly type: 'CyberCloud.Network/virtualNetworks';
-  readonly properties?: NetworkVirtualNetworksData['properties'];
 }
 
 /** What showIsolation returns. */
@@ -1404,13 +1373,9 @@ export interface NetworkVirtualNetworksLoadBalancersData {
   tags?: Record<string, string>;
 }
 
-/** One Load balancer, as the API returns it. */
-export interface NetworkVirtualNetworksLoadBalancersResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Load balancer, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface NetworkVirtualNetworksLoadBalancersResource extends Resource, NetworkVirtualNetworksLoadBalancersData {
   readonly type: 'CyberCloud.Network/virtualNetworks/loadBalancers';
-  readonly properties?: NetworkVirtualNetworksLoadBalancersData['properties'];
 }
 
 /** What showBackends returns. */
@@ -1470,13 +1435,9 @@ export interface NetworkVirtualNetworksSecurityGroupsData {
   tags?: Record<string, string>;
 }
 
-/** One Security group, as the API returns it. */
-export interface NetworkVirtualNetworksSecurityGroupsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Security group, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface NetworkVirtualNetworksSecurityGroupsResource extends Resource, NetworkVirtualNetworksSecurityGroupsData {
   readonly type: 'CyberCloud.Network/virtualNetworks/securityGroups';
-  readonly properties?: NetworkVirtualNetworksSecurityGroupsData['properties'];
 }
 
 /** What showEffectiveRules returns. */
@@ -1519,13 +1480,9 @@ export interface NetworkVirtualNetworksSubnetsData {
   tags?: Record<string, string>;
 }
 
-/** One Subnet, as the API returns it. */
-export interface NetworkVirtualNetworksSubnetsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Subnet, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface NetworkVirtualNetworksSubnetsResource extends Resource, NetworkVirtualNetworksSubnetsData {
   readonly type: 'CyberCloud.Network/virtualNetworks/subnets';
-  readonly properties?: NetworkVirtualNetworksSubnetsData['properties'];
 }
 
 /** What listAddressUsage returns. */
@@ -1582,13 +1539,9 @@ export interface SampleWidgetsData {
   tags?: Record<string, string>;
 }
 
-/** One Widget, as the API returns it. */
-export interface SampleWidgetsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Widget, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface SampleWidgetsResource extends Resource, SampleWidgetsData {
   readonly type: 'CyberCloud.Sample/widgets';
-  readonly properties?: SampleWidgetsData['properties'];
 }
 
 /** The parameters of ping. */
@@ -1661,13 +1614,9 @@ export interface SearchServicesData {
   tags?: Record<string, string>;
 }
 
-/** One OpenSearch service, as the API returns it. */
-export interface SearchServicesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One OpenSearch service, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface SearchServicesResource extends Resource, SearchServicesData {
   readonly type: 'CyberCloud.Search/services';
-  readonly properties?: SearchServicesData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -1750,13 +1699,9 @@ export interface StorageAccountsData {
   tags?: Record<string, string>;
 }
 
-/** One Storage account, as the API returns it. */
-export interface StorageAccountsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Storage account, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface StorageAccountsResource extends Resource, StorageAccountsData {
   readonly type: 'CyberCloud.Storage/accounts';
-  readonly properties?: StorageAccountsData['properties'];
 }
 
 /** What listKeys returns. ⚠ Secret material — never log or persist this. */
@@ -1791,13 +1736,9 @@ export interface StorageAccountsBucketsData {
   tags?: Record<string, string>;
 }
 
-/** One Bucket, as the API returns it. */
-export interface StorageAccountsBucketsResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Bucket, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface StorageAccountsBucketsResource extends Resource, StorageAccountsBucketsData {
   readonly type: 'CyberCloud.Storage/accounts/buckets';
-  readonly properties?: StorageAccountsBucketsData['properties'];
 }
 
 /** What stats returns. */
@@ -1878,13 +1819,9 @@ export interface TerminalConsolesData {
   tags?: Record<string, string>;
 }
 
-/** One Cloud terminal, as the API returns it. */
-export interface TerminalConsolesResource {
-  /** The resource's fully qualified id. */
-  readonly id: string;
-  readonly name: string;
+/** One Cloud terminal, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface TerminalConsolesResource extends Resource, TerminalConsolesData {
   readonly type: 'CyberCloud.Terminal/consoles';
-  readonly properties?: TerminalConsolesData['properties'];
 }
 
 /** What connect returns. */

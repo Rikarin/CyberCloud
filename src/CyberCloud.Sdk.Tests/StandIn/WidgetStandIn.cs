@@ -106,7 +106,54 @@ public sealed partial class WidgetResource {
 
     public Uri Uri { get; }
 
+    // ⚠ THE READ ENVELOPE, FROM THE DOCUMENT — issue #85. SdkEmitter emits one member per leaf of
+    // the Resource component the type's schema allOf's (openapi/2026-08-01.json § Resource): the
+    // five the gateway serves beside the body, each with its wire name, initialised rather than
+    // `required` because the hand-written half sets them from a response after construction. Until
+    // that issue the emitted class declared `Id` alone, from a literal, and the document described
+    // none of the five. Mirrored here rather than described, for the header's reason.
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
     public required WidgetData Data { get; init; }
+}
+
+/// <summary>
+///     The read envelope's closed set, declared once per generated file — the shape
+///     <c>SdkEmitter.AppendEnvelopeEnums</c> emits from the document's <c>Resource</c> component.
+/// </summary>
+public enum ProvisioningState {
+    Unknown = 0,
+
+    [JsonStringEnumMemberName("Canceled")]
+    Canceled = 1,
+
+    [JsonStringEnumMemberName("Creating")]
+    Creating = 2,
+
+    [JsonStringEnumMemberName("Deleting")]
+    Deleting = 3,
+
+    [JsonStringEnumMemberName("Failed")]
+    Failed = 4,
+
+    [JsonStringEnumMemberName("Succeeded")]
+    Succeeded = 5,
+
+    [JsonStringEnumMemberName("Updating")]
+    Updating = 6
 }
 
 /// <summary>

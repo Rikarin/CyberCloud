@@ -463,4 +463,167 @@ public sealed class OpenApiEmitterTests {
     [Fact]
     public void EmittingWithoutAnApiVersionIsARejectedArgument() =>
         Should.Throw<ArgumentException>(() => OpenApiEmitter.Emit(Fixtures.Postgres(), default));
+
+    // ── The read envelope — issue #85 ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     The eight members <c>ResponseBodies.Resource</c> writes, in the order it writes them.
+    ///     <c>ResourceBodyShapeTests.TheWriterRendersTheEnvelopeThenTheBodyThenTags</c> pins the
+    ///     writer to this list; this class pins the document to it.
+    /// </summary>
+    static readonly string[] Served = ["id", "name", "type", "location", "provisioningState", "etag", "properties", "tags"];
+
+    static readonly string[] Envelope = ["id", "name", "type", "provisioningState", "etag"];
+
+    [Fact]
+    public void EveryResourceSchemaIsTheReadEnvelopePlusTheWriteBody() {
+        var schemas = Emit(Fixtures.Postgres())["components"]!["schemas"]!;
+        var envelope = schemas[OpenApiEmitter.ResourceEnvelopeSchema]!;
+        var body = schemas["CyberCloud.DBforPostgreSQL.servers"]!;
+
+        // allOf names where the five come from; the repeated members are what let the schema's own
+        // additionalProperties: false admit them, because that keyword never sees a subschema.
+        body["allOf"]!.AsArray().Select(x => DocumentReader.Text(x!["$ref"]))
+            .ShouldBe(["#/components/schemas/" + OpenApiEmitter.ResourceEnvelopeSchema]);
+
+        foreach (var name in Envelope) {
+            body["properties"]![name]!["readOnly"]!.GetValue<bool>().ShouldBeTrue(name);
+            body["properties"]![name]!.ToJsonString().ShouldBe(envelope["properties"]![name]!.ToJsonString(), name);
+        }
+
+        // Every member the gateway serves is a member the schema names — the defect, stated as the
+        // property that was missing.
+        var declared = body["properties"]!.AsObject().Select(x => x.Key).ToList();
+        declared.ShouldBe(Served.Order(StringComparer.Ordinal).ToList());
+
+        body["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
+        body["required"]!.AsArray().Select(x => DocumentReader.Text(x)).ShouldBe(["location", "properties"]);
+    }
+
+    [Fact]
+    public void TheEnvelopeIsNeverRequiredAndSaysWhatAReadGuarantees() {
+        var envelope = Emit(Fixtures.Postgres())["components"]!["schemas"]![OpenApiEmitter.ResourceEnvelopeSchema]!;
+
+        // ⚠ Not `required`: the same schema validates a PUT, and this platform refuses a read-only
+        // member on a write rather than ignoring it. The read side's promise goes in the extension.
+        envelope["required"].ShouldBeNull();
+        envelope["additionalProperties"].ShouldBeNull();
+        envelope["properties"]!.AsObject().Select(x => x.Key).ShouldBe(Envelope);
+        envelope[OpenApiEmitter.ReadRequiredExtension]!.AsArray().Select(x => DocumentReader.Text(x))
+            .ShouldBe(Envelope.Order(StringComparer.Ordinal));
+
+        var states = DocumentReader.EnumOf(envelope["properties"]!["provisioningState"]!.AsObject());
+        states.ShouldBe(["Canceled", "Creating", "Deleting", "Failed", "Succeeded", "Updating"]);
+    }
+
+    [Fact]
+    public void EveryReadOfAResourcePointsAtItsOneSchema() {
+        var document = Emit(Fixtures.Postgres());
+        var item = document["paths"]![ServerPath]!;
+        const string Expected = "#/components/schemas/CyberCloud.DBforPostgreSQL.servers";
+
+        static string Schema(JsonNode? response) =>
+            DocumentReader.Text(response!["content"]!["application/json"]!["schema"]!["$ref"]);
+
+        Schema(item["get"]!["responses"]!["200"]).ShouldBe(Expected);
+
+        // The 202 carries the resource as the write left it, for every verb and for a long-running
+        // action — DispatchStage.Accepted writes ResponseBodies.Resource for all of them.
+        Schema(item["put"]!["responses"]!["202"]).ShouldBe(Expected);
+        Schema(item["patch"]!["responses"]!["202"]).ShouldBe(Expected);
+        Schema(item["delete"]!["responses"]!["202"]).ShouldBe(Expected);
+        Schema(document["paths"]![ServerPath + "/restart"]!["post"]!["responses"]!["202"]).ShouldBe(Expected);
+
+        // A list element is exactly what a GET returns — ResponseBodies.Collection's own remark.
+        DocumentReader.Text(
+                document["components"]!["schemas"]!["CyberCloud.DBforPostgreSQL.servers.List"]!
+                ["properties"]!["value"]!["items"]!["$ref"]
+            )
+            .ShouldBe(Expected);
+    }
+
+    [Fact]
+    public void ABodyPropertyNamedLikeAnEnvelopeMemberIsRefused() {
+        // The envelope's copy is the one served — the gateway skips a body member with that name — so
+        // a caller could write the property and never read it back.
+        var broken = Fixtures.PostgresWith(
+            ResourceSchema.Of(
+                [
+                    new("/location", SchemaKind.Text, Required: true),
+                    new("/etag", SchemaKind.Text, Description: "A provider's own etag.")
+                ]
+            )
+        );
+
+        Should.Throw<InvalidOperationException>(() => Emit(broken)).Message.ShouldContain("'/etag'");
+    }
+
+    [Fact]
+    public void TheOperationBodyDeclaresEveryMemberServed() {
+        // ResponseBodies.Operation writes these; three of the seven were declared by nobody.
+        var schemas = Emit(Fixtures.Empty)["components"]!["schemas"]!;
+        var status = schemas[OpenApiEmitter.OperationStatusSchema]!;
+
+        status["properties"]!.AsObject().Select(x => x.Key)
+            .ShouldBe(["endTime", "error", "id", "percentComplete", "progress", "startTime", "status"]);
+        status["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
+        status[OpenApiEmitter.ReadRequiredExtension]!.AsArray().Select(x => DocumentReader.Text(x))
+            .ShouldBe(["id", "percentComplete", "progress", "startTime", "status"]);
+
+        schemas[OpenApiEmitter.OperationProgressSchema]!["properties"]!.AsObject().Select(x => x.Key)
+            .ShouldBe(["at", "message", "percentComplete", "step"]);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The envelope is an addition over the document that lacked it, and the compatibility
+    ///     gate says so.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The document published before issue #85 is reconstructed by taking the envelope back out
+    ///     — the <c>allOf</c>, the five members, the <c>202</c> bodies, the three operation members
+    ///     and the component — and diffed against what the emitter produces now, in both
+    ///     directions. Forwards is empty, which is the verdict <c>./build.sh Generate</c> gave over
+    ///     the real checked-in file; backwards is not, which is what makes the forwards verdict a
+    ///     finding rather than a diff that finds nothing. It is also the reason the read schema is
+    ///     the write schema with <c>readOnly</c> members rather than a <c>{Type}.Resource</c> the
+    ///     <c>200</c> points at: moving that <c>$ref</c> is a changed scalar, and
+    ///     <see cref="OpenApiCompatibility" /> refuses every one of those.
+    /// </remarks>
+    [Fact]
+    public void TheEnvelopeIsAnAdditionUnderTheCompatibilityGate() {
+        var now = Emit(Fixtures.Postgres());
+        var before = (JsonObject)now.DeepClone();
+
+        before["components"]!["schemas"]!.AsObject().Remove(OpenApiEmitter.ResourceEnvelopeSchema);
+
+        foreach (var member in new[] { "id", "startTime", "endTime" }) {
+            before["components"]!["schemas"]![OpenApiEmitter.OperationStatusSchema]!["properties"]!.AsObject().Remove(member);
+        }
+
+        before["components"]!["schemas"]![OpenApiEmitter.OperationStatusSchema]!.AsObject()
+            .Remove(OpenApiEmitter.ReadRequiredExtension);
+
+        foreach (var schema in before["components"]!["schemas"]!.AsObject()) {
+            if (schema.Value!["allOf"] is null) {
+                continue;
+            }
+
+            schema.Value.AsObject().Remove("allOf");
+
+            foreach (var name in Envelope) {
+                schema.Value["properties"]!.AsObject().Remove(name);
+            }
+        }
+
+        foreach (var path in before["paths"]!.AsObject()) {
+            foreach (var operation in path.Value!.AsObject()) {
+                if (operation.Value is JsonObject { } verb && verb["responses"]?["202"] is JsonObject accepted) {
+                    accepted.Remove("content");
+                }
+            }
+        }
+
+        OpenApiCompatibility.Diff(before, now).ShouldBeEmpty();
+        OpenApiCompatibility.Diff(now, before).Select(x => x.Rule).Distinct().ShouldBe([OpenApiCompatibility.Removed]);
+    }
 }

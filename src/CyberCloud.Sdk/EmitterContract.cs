@@ -62,6 +62,17 @@ namespace CyberCloud.Sdk;
 ///                 <c>x-cybercloud-action</c> actions.
 ///                 ⚠
 ///                 <b>
+///                     And the read envelope — <c>Id</c>, <c>Name</c>, <c>Type</c>,
+///                     <c>ProvisioningState</c>, <c>Etag</c> — one member per leaf of the
+///                     document's <c>Resource</c> component, which every type's schema
+///                     <c>allOf</c>s (issue #85).
+///                 </b> Each carries its wire name and is initialised rather than <c>required</c>,
+///                 because the hand-written half constructs the resource from a response and sets
+///                 them after; <c>ProvisioningState</c> is a file-level enum emitted once from
+///                 the same component. Until that issue the class declared <c>Id</c> alone, from
+///                 a literal, and the document described none of the five the gateway serves.
+///                 ⚠
+///                 <b>
 ///                     <c>Data</c> is <c>required</c>, so a hand-written constructor that assigns it
 ///                     needs <c>[SetsRequiredMembers]</c>.
 ///                 </b> It was <c>= new()</c> until 2026-09-05, and

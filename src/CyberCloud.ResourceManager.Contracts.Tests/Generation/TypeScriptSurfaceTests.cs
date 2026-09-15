@@ -93,10 +93,11 @@ public sealed class TypeScriptSurfaceTests {
                 continue;
             }
 
-            models.ShouldContain(
-                "export interface " + name + " {",
-                customMessage: $"src/client.ts imports '{name}' and src/models.ts does not declare it"
-            );
+            // A `{Model}Resource` extends the envelope and its body since issue #85, so a
+            // declaration is either form.
+            (models.Contains("export interface " + name + " {", StringComparison.Ordinal)
+                || models.Contains("export interface " + name + " extends ", StringComparison.Ordinal))
+                .ShouldBeTrue($"src/client.ts imports '{name}' and src/models.ts does not declare it");
         }
     }
 
@@ -230,6 +231,81 @@ public sealed class TypeScriptSurfaceTests {
                 scan[at..].ShouldStartWith("${CyberCloudApi.segment(", customMessage: line.Trim());
             }
         }
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Both clients type the read envelope from the document, and neither writes it —
+    ///     issue #85.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Until that issue each emitter carried the envelope as a literal: the TypeScript
+    ///         <c>{Model}Resource</c> was <c>id</c>, <c>name</c>, <c>type</c> and <c>properties</c>,
+    ///         the .NET one was <c>Id</c> alone, the gateway served eight members, and the document
+    ///         described three. This walks <see cref="DocumentType.Envelope" /> — what the type's
+    ///         schema <c>allOf</c>s — and asserts every member is on the read model of both clients,
+    ///         with its wire name, and on the write model of neither: a <c>{Model}Data</c> carrying
+    ///         <c>etag</c> would serialise it into every <c>PUT</c>, which the write path refuses.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ It also asserts the envelope is not empty. A document with no <c>allOf</c> would
+    ///         make every other assertion here vacuous, and that is the document this issue found.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void BothClientsReadTheEnvelopeFromTheDocumentAndNeitherWritesIt() {
+        var document = Document;
+        var models = TypeScriptEmitter.Emit(document)["src/models.ts"];
+        var sdk = SdkEmitter.Emit(document);
+
+        models.ShouldContain("export interface Resource {");
+        models.ShouldContain("export type ProvisioningState =");
+        sdk.ShouldContain("public enum ProvisioningState {");
+
+        var types = DocumentReader.TypesOf(document);
+        var csNames = SdkEmitter.ModelNames(types);
+
+        foreach (var type in types) {
+            var envelope = DocumentReader.LeavesOf(type.Envelope);
+            var served = DocumentReader.ReadRequiredOf(type.Envelope);
+            var model = TypeScriptEmitter.ModelOf(type);
+            var csModel = csNames[type.ResourceType];
+
+            envelope.Length.ShouldBe(5, type.ResourceType);
+            served.Count.ShouldBe(5, type.ResourceType);
+
+            var tsResource = Block(models, "export interface " + model + "Resource extends Resource, " + model + "Data {");
+            var tsData = Block(models, "export interface " + model + "Data {");
+            var csResource = Block(sdk, "public sealed partial class " + csModel + "Resource {");
+            var csData = Block(sdk, "public sealed partial class " + csModel + "Data {");
+
+            tsResource.ShouldContain("readonly type: " + "'" + type.ResourceType + "'");
+
+            foreach (var leaf in envelope) {
+                var member = "readonly " + leaf.Name + (served.Contains(leaf.Name) ? ": " : "?: ");
+
+                Block(models, "export interface Resource {").ShouldContain(member, customMessage: leaf.Name);
+
+                // At the write body's own depth — two spaces in TypeScript, four in C# — because a
+                // provider may nest a `name` of its own under /properties/sku, and the fixture does.
+                tsData.ShouldNotContain("\n  " + leaf.Name + ":", customMessage: leaf.Name + " on the TypeScript write body");
+                tsData.ShouldNotContain("\n  " + leaf.Name + "?:", customMessage: leaf.Name + " on the TypeScript write body");
+                tsData.ShouldNotContain("\n  readonly " + leaf.Name, customMessage: leaf.Name + " on the TypeScript write body");
+
+                csResource.ShouldContain("[JsonPropertyName(\"" + leaf.Name + "\")]", customMessage: leaf.Name);
+                csResource.ShouldContain(" " + SdkEmitter.Pascal(leaf.Name) + " { get; init; }", customMessage: leaf.Name);
+                csData.ShouldNotContain("\n    [JsonPropertyName(\"" + leaf.Name + "\")]", customMessage: leaf.Name + " on the .NET write body");
+            }
+        }
+    }
+
+    /// <summary>The text of one declaration, from its opening line to the first line that is a bare <c>}</c>.</summary>
+    static string Block(string source, string opening) {
+        var start = source.IndexOf(opening, StringComparison.Ordinal);
+        start.ShouldBeGreaterThanOrEqualTo(0, opening);
+
+        var end = source.IndexOf("\n}\n", start, StringComparison.Ordinal);
+        return source[start..(end < 0 ? source.Length : end)];
     }
 
     /// <summary>

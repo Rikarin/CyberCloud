@@ -114,6 +114,12 @@ off the wire. Issue #72 is what happens when the writer takes the projected docu
 `properties` slice — `properties.properties.*` and `location` twice — and it went unseen because the
 gateway suite's substitute manager hand-wrote the shape the writer expected. The substitute now
 builds its snapshot through the grain's own projection, so the two cannot drift apart on one commit.
+Issue #85 is the other half: the published schema described only the projected body, so the five
+members the gateway writes around it were forbidden by the document's own `additionalProperties:
+false`. Every type's schema now `allOf`s a shared `Resource` component and repeats its five members
+as `readOnly`, the `202` declares the body it always carried, and
+`ServedShapesMatchTheDocumentTests` validates what this step serves against that document —
+[21](21-cli-and-sdks.md) § Generation says why that shape and not a separate read schema.
 
 ⚠ **Step 3 is a security boundary, not a routing convenience, and this was not obvious.** The
 gateway is an Orleans **client**, and `Orleans.Multitenant`'s call filter skips clients entirely
