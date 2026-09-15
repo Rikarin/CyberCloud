@@ -346,3 +346,69 @@ public interface IEmailIndexGrain : IGrainWithStringKey {
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     Task DeactivateAsync();
 }
+
+/// <summary>
+///     The <b>per-tenant</b> OAuth client-id index — "which application does this <c>client_id</c>
+///     name" as a grain. docs/plan/11 § Protocol.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Kind</b> Index · <b>Tier</b> Durable · <b>Key</b>
+///         <c>idx/client/{sha256(tenantId + clientId)[..16]}</c>, tenant-qualified. Build it with
+///         <c>GrainKeys.ClientIndex</c>.
+///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             This is the index ADR-015's degraded mode requires, and its absence is what left the
+///             authorization-code flow owed.
+///         </b> <c>IApplicationGrain</c> is keyed by the application's
+///         GUID, not by its <c>client_id</c> — <c>GrainKeys.Application</c>'s remarks say why the
+///         caller-controlled client id must not be a grain key. So an authorization request arriving
+///         with a <c>client_id</c> has no way to reach its registration without a lookup, and
+///         OpenIddict's own application store — which would have done that lookup — is turned off by
+///         degraded mode (docs/plan/11 § Protocol). This grain is the lookup: it maps a
+///         <c>client_id</c> to the <c>applicationId</c> the host then reads through
+///         <c>IApplicationGrain</c>.
+///     </para>
+///     <para>
+///         ⚠ <b>The same two-phase claim as <see cref="IEmailIndexGrain" />, and for the same
+///         reason.</b> A <c>client_id</c> is unique within a tenant, and uniqueness without a unique
+///         constraint is a single-threaded index activation that is the mutex (docs/plan/04 § Grain
+///         taxonomy). <c>IApplicationGrain.CreateAsync</c> claims the id here before it writes its
+///         own state, so two applications cannot take one <c>client_id</c>.
+///     </para>
+///     <para>
+///         <b>Cardinality:</b> one activation per (tenant, client id). A tenant with a thousand app
+///         registrations touches a thousand distinct grains, not one.
+///     </para>
+/// </remarks>
+[Alias("CyberCloud.Tenancy.IClientIndexGrain")]
+public interface IClientIndexGrain : IGrainWithStringKey {
+    /// <summary>Claims the client id under a lease, or <c>Conflict</c>.</summary>
+    /// <param name="clientId">The <c>client_id</c>. Re-validated with <c>GrainKeys.EnsureValidClientId</c>.</param>
+    /// <param name="applicationId">The application to bind it to.</param>
+    /// <remarks>
+    ///     ⚠ The client id is re-validated here rather than trusted, and the validated form is what
+    ///     the digest is checked against — a caller that built the key from a different value than
+    ///     the one it is claiming is refused rather than recorded against a grain no lookup reaches.
+    /// </remarks>
+    Task<Result<IndexEntry>> TryClaimAsync(string clientId, Guid applicationId);
+
+    /// <summary>Converts the lease into a permanent binding.</summary>
+    /// <param name="applicationId">The application claimed. A mismatch is a <c>Conflict</c>.</param>
+    Task<Result<IndexEntry>> ConfirmAsync(Guid applicationId);
+
+    /// <summary>Releases the binding, so the client id is free again.</summary>
+    /// <param name="applicationId">The bound application. A mismatch is a <c>Conflict</c>.</param>
+    Task<Result> ReleaseAsync(Guid applicationId);
+
+    /// <summary>What the index currently holds. An expired lease reads as <c>Free</c>.</summary>
+    Task<Result<IndexEntry>> GetAsync();
+
+    /// <summary>Resolves the client id to its application, or <c>ResourceNotFound</c>.</summary>
+    Task<Result<Guid>> ResolveAsync();
+
+    /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
+    Task DeactivateAsync();
+}

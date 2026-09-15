@@ -125,9 +125,10 @@ static class DegradedModeHandlers {
 
             context.Reject(
                 OpenIddictConstants.Errors.TemporarilyUnavailable,
-                "The authorization-code flow is not served yet: nothing maps a client_id to its "
-                + "application registration, so neither the client nor its redirect_uri can be "
-                + "validated. docs/plan/11 § Protocol; IdentityHostOptions says where the index goes."
+                "The authorization-code flow is not served yet: the client_id index it needs now "
+                + "exists (IClientIndexGrain, docs/plan/11 § Protocol), but the /authorize handler "
+                + "that resolves a client through it and validates the redirect_uri is not wired. "
+                + "docs/plan/11 § Protocol."
             );
 
             return ValueTask.CompletedTask;

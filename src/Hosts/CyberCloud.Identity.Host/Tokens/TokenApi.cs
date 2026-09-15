@@ -31,10 +31,11 @@ namespace CyberCloud.Identity.Host.Tokens;
 ///     <list type="bullet">
 ///         <item>
 ///             <b>Authorization code + PKCE</b> needs <c>/authorize</c> to validate a
-///             <c>client_id</c> and a <c>redirect_uri</c> against an <c>ApplicationRegistration</c>,
-///             and nothing maps a <c>client_id</c> to its application — <see cref="IdentityHostOptions" />
-///             records that the index is a tenancy change rather than a host change. The cookie
-///             session it would mint from already exists (<c>IdentitySessionPrincipal</c>).
+///             <c>client_id</c> and a <c>redirect_uri</c> against an <c>ApplicationRegistration</c>.
+///             The <c>client_id</c> → application index that blocked it has landed —
+///             <c>IClientIndexGrain</c> in tenancy, claimed by <c>ApplicationGrain</c> — so the
+///             remaining work is the host handler that resolves a client through it and mints from
+///             the cookie session, which already exists (<c>IdentitySessionPrincipal</c>).
 ///         </item>
 ///         <item>
 ///             <b>Refresh</b> follows the authorization code: OpenIddict issues one only to a flow

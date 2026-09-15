@@ -24,9 +24,11 @@ namespace CyberCloud.Identity.Host;
 ///             <b>Derive it from the OIDC request.</b> The sign-in page is reached from
 ///             <c>/authorize</c>, whose <c>client_id</c> belongs to an
 ///             <c>ApplicationRegistration</c> that names a tenant — but <c>client_id</c> is
-///             unique <i>within</i> a tenant (see that record) and no index maps one to its
-///             application. Adding that index is the real fix and it is a tenancy change, not a host
-///             change.
+///             unique <i>within</i> a tenant (see that record), so resolving one needs a per-tenant
+///             index. That index now exists — <c>IClientIndexGrain</c>, claimed by
+///             <c>ApplicationGrain.CreateAsync</c> — but the <c>/authorize</c> handler that would use
+///             it to derive the tenant is still owed, so this host still takes its tenant from
+///             configuration.
 ///         </item>
 ///         <item>
 ///             <b>Ask the caller.</b> A tenant hint in the request body would let an unauthenticated

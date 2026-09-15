@@ -32,6 +32,12 @@ public enum GrainKeyKind {
     /// <summary><c>IEmailIndexGrain</c> — <c>idx/email/{digest}</c>.</summary>
     EmailIndex,
 
+    /// <summary>
+    ///     <c>IClientIndexGrain</c> — <c>idx/client/{digest}</c>. See
+    ///     <see cref="GrainKeys.ClientIndex" />.
+    /// </summary>
+    ClientIndex,
+
     /// <summary><c>IOperationGrain</c> — <c>op/{operationId:N}</c>.</summary>
     Operation,
 
@@ -188,15 +194,20 @@ public enum GrainKeyKind {
 ///             <description><see cref="Id" /> = the cluster.</description>
 ///         </item>
 ///         <item>
-///             <term><see cref="GrainKeyKind.PathIndex" /> / <see cref="GrainKeyKind.EmailIndex" /></term>
+///             <term>
+///                 <see cref="GrainKeyKind.PathIndex" /> / <see cref="GrainKeyKind.EmailIndex" /> /
+///                 <see cref="GrainKeyKind.ClientIndex" />
+///             </term>
 ///             <description><see cref="Digest" /> only.</description>
 ///         </item>
 ///     </list>
 ///     <para>
 ///         ⚠ <b>An index key decodes to its digest and no further, and that is the point of a hash.</b>
-///         <see cref="GrainKeys.PathIndex" /> and <see cref="GrainKeys.EmailIndex" /> are one-way; the
-///         path and the address live in the grain's <i>state</i>, not in its key. "Parse" for those
-///         two shapes therefore means "recognise the shape and extract the digest", which is what a
+///         <see cref="GrainKeys.PathIndex" />, <see cref="GrainKeys.EmailIndex" /> and
+///         <see cref="GrainKeys.ClientIndex" /> are one-way; the
+///         path, the address and the client id live in the grain's <i>state</i>, not in its key.
+///         "Parse" for those shapes therefore means "recognise the shape and extract the digest",
+///         which is what a
 ///         caller routing a key to a grain type actually needs.
 ///     </para>
 /// </remarks>
@@ -263,6 +274,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.PathIndex => GrainKeys.PathIndexPrefix + Digest,
             GrainKeyKind.User => GrainKeys.User(Id),
             GrainKeyKind.EmailIndex => GrainKeys.EmailIndexPrefix + Digest,
+            GrainKeyKind.ClientIndex => GrainKeys.ClientIndexPrefix + Digest,
             GrainKeyKind.Operation => GrainKeys.Operation(Id),
             GrainKeyKind.ClusterConnection => GrainKeys.ClusterConnection(Id),
             GrainKeyKind.Tenant => GrainKeys.Tenant(Id),
@@ -375,6 +387,14 @@ public readonly record struct GrainKey {
 ///             </term>
 ///             <description>
 ///                 <c>idx/email/{sha256(tenantId + normalizedEmail)[..16]}</c>
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ClientIndex" />
+///             </term>
+///             <description>
+///                 <c>idx/client/{sha256(tenantId + clientId)[..16]}</c> — not in docs/plan/06's table
 ///             </description>
 ///         </item>
 ///         <item>
@@ -591,6 +611,9 @@ public static class GrainKeys {
 
     /// <summary><c>idx/email/</c> — the per-tenant email index.</summary>
     public const string EmailIndexPrefix = "idx/email/";
+
+    /// <summary><c>idx/client/</c> — the per-tenant OAuth client-id index.</summary>
+    public const string ClientIndexPrefix = "idx/client/";
 
     /// <summary><c>tenant/</c> — the tenant's own entity grain.</summary>
     public const string TenantPrefix = "tenant/";
@@ -1053,7 +1076,7 @@ public static class GrainKeys {
     ///     id is per tenant, so <c>portal</c> in two tenants would be two activations whose keys
     ///     differ only by the qualification. The GUID is the identity and the client id is an
     ///     attribute resolved through the application's own tenant, exactly as an email is resolved
-    ///     for a user.
+    ///     for a user — through <see cref="ClientIndex" />, <c>IClientIndexGrain</c>.
     /// </remarks>
     public static string Application(Guid applicationId) => ApplicationPrefix + N(applicationId);
 
@@ -1209,6 +1232,96 @@ public static class GrainKeys {
         // and no (tenant, email) pair can be re-cut into a different one.
         return EmailIndexPrefix
             + Digest(EmailIndexPrefix, N(tenantId) + "\n" + normalized.GetValueOrThrow());
+    }
+
+    /// <summary>
+    ///     <c>idx/client/{sha256(tenantId + clientId)[..16]}</c> — <c>IClientIndexGrain</c>, the
+    ///     per-tenant OAuth client-id index. docs/plan/11 § Protocol.
+    /// </summary>
+    /// <param name="tenantId">The tenant the client is registered in.</param>
+    /// <param name="clientId">The <c>client_id</c>, verbatim. Validated by <see cref="EnsureValidClientId" />.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The tenant id is in the digest as well as in the qualification, exactly as
+    ///             <see cref="EmailIndex" /> puts it there, and for the same reason.
+    ///         </b> A
+    ///         <c>client_id</c> is unique <i>within</i> a tenant — docs/plan/11 § Sign-up and tenant
+    ///         creation and <see cref="Application" />'s remarks — so <c>portal</c> in two tenants is
+    ///         two distinct entries. A key read outside its qualification still says which tenant it
+    ///         belongs to, which is the property that matters in a repair tool or an audit export.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Case-sensitive, unlike the email digest.</b> An OAuth <c>client_id</c> is an
+    ///         opaque identifier compared byte for byte, so lower-casing it — the way
+    ///         <see cref="NormalizeEmail" /> folds an address — would merge two ids the protocol keeps
+    ///         apart. The only transformation is the validation that refuses the bytes a key cannot
+    ///         carry.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="clientId" /> is not a value <see cref="EnsureValidClientId" /> accepts.
+    /// </exception>
+    public static string ClientIndex(Guid tenantId, string clientId) {
+        var validated = EnsureValidClientId(clientId);
+        if (validated.TryGetError(out var error)) {
+            throw new ArgumentException(error.Message, nameof(clientId));
+        }
+
+        return ClientIndexPrefix
+            + Digest(ClientIndexPrefix, N(tenantId) + "\n" + validated.GetValueOrThrow());
+    }
+
+    /// <summary>The longest a <c>client_id</c> may be — the same bound the email index uses.</summary>
+    public const int MaxClientIdLength = 254;
+
+    /// <summary>
+    ///     Whether <paramref name="clientId" /> is a value that can be indexed, and the value itself.
+    /// </summary>
+    /// <param name="clientId">The <c>client_id</c> as it arrived.</param>
+    /// <returns>The client id unchanged on success, or a failure naming what is wrong.</returns>
+    /// <remarks>
+    ///     ⚠ <b>The one forbidden character is the digest separator.</b> <see cref="ClientIndex" />
+    ///     joins the tenant id and the client id with <c>'\n'</c> so the pair is prefix-free; a
+    ///     client id carrying a newline could be re-cut into a different (tenant, client) pair, which
+    ///     is the collision <see cref="EmailIndex" />'s fixed-width tenant id closes. Control
+    ///     characters and leading or trailing white space are refused for the same reason a resource
+    ///     name is — they are invisible in a log and turn one identifier into two.
+    /// </remarks>
+    public static Result<string> EnsureValidClientId(string? clientId) {
+        if (string.IsNullOrEmpty(clientId)) {
+            return Result<string>.Failure(ErrorCode.InvalidRequestBody, "A client id is empty.");
+        }
+
+        if (clientId.Length > MaxClientIdLength) {
+            return Result<string>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"A client id is {clientId.Length} characters, longer than the {MaxClientIdLength} an "
+                + "index can carry."
+            );
+        }
+
+        if (clientId != clientId.Trim()) {
+            return Result<string>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A client id has leading or trailing white space, which is invisible in a log and "
+                + "turns one identifier into two."
+            );
+        }
+
+        foreach (var character in clientId) {
+            if (char.IsControl(character) || char.IsWhiteSpace(character)) {
+                return Result<string>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    "A client id carries a control or white-space character. The client-id index "
+                    + "joins the tenant id and the client id with a newline, so a newline in the id "
+                    + "could be re-cut into a different pair."
+                );
+            }
+        }
+
+        return Result<string>.Success(clientId);
     }
 
     // ── Email normalization ────────────────────────────────────────────────────────────────────
@@ -1384,7 +1497,7 @@ public static class GrainKeys {
                 + "'op/{id}', 'cluster/{id}', "
                 + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', "
                 + "'platform/{singleton}', 'idx/path/{digest}', "
-                + "'idx/email/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
+                + "'idx/email/{digest}', 'idx/client/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}' or 'rel/list/{type}/{id}' — see "
                 + "docs/plan/06 § Grain keys, "
                 + "docs/plan/07 § Storage, docs/plan/08 § Soft delete and docs/plan/11 § The object "
@@ -1527,13 +1640,15 @@ public static class GrainKeys {
         var kind = segments[1] switch {
             "path" => GrainKeyKind.PathIndex,
             "email" => GrainKeyKind.EmailIndex,
+            "client" => GrainKeyKind.ClientIndex,
             _ => GrainKeyKind.None
         };
 
         if (kind == GrainKeyKind.None) {
             return Invalid(
-                $"'{key}' is not a grain key: '{segments[1]}' is not an index. The two indexes are "
-                + "'idx/path' (docs/plan/06 § Grain keys) and 'idx/email' (docs/plan/06 § Grain keys)."
+                $"'{key}' is not a grain key: '{segments[1]}' is not an index. The three indexes are "
+                + "'idx/path' (docs/plan/06 § Grain keys), 'idx/email' (docs/plan/06 § Grain keys) and "
+                + "'idx/client' (docs/plan/11 § Protocol)."
             );
         }
 

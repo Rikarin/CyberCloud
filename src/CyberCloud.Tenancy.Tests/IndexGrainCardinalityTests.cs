@@ -39,6 +39,7 @@ public sealed class IndexGrainCardinalityTests(TenancyCluster cluster) {
         ("IResourceGroupGrain", "sub/{subscriptionId:N}/rg/{name}", Cardinality.PerEntity),
         ("IResourceIndexGrain", "idx/path/{sha256(canonicalPath)[..16]}", Cardinality.PerEntity),
         ("IEmailIndexGrain", "idx/email/{sha256(tenantId + email)[..16]}", Cardinality.PerEntity),
+        ("IClientIndexGrain", "idx/client/{sha256(tenantId + clientId)[..16]}", Cardinality.PerEntity),
         ("IQuotaGrain", "sub/{subscriptionId:N}", Cardinality.PerEntity),
         ("IShardMapGrain", "platform/shard-map", Cardinality.Singleton),
         ("ITenantDirectoryGrain", "platform/tenant-directory", Cardinality.Singleton)
@@ -76,7 +77,7 @@ public sealed class IndexGrainCardinalityTests(TenancyCluster cluster) {
         // create in the platform.
         var indexGrains = Keys.Where(x => x.Key.Contains("idx/", StringComparison.Ordinal)).ToList();
 
-        indexGrains.Count.ShouldBe(2, "there are exactly two index grains.");
+        indexGrains.Count.ShouldBe(3, "there are exactly three index grains.");
         indexGrains.ShouldAllBe(x => x.Cardinality == Cardinality.PerEntity);
     }
 

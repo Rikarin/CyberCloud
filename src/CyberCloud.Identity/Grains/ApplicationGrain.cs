@@ -1,5 +1,8 @@
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
+using CyberCloud.Tenancy.Contracts;
+using Orleans.Multitenant;
+using System.Globalization;
 
 namespace CyberCloud.Identity.Grains;
 
@@ -7,12 +10,23 @@ namespace CyberCloud.Identity.Grains;
 ///     <see cref="IApplicationGrain" /> — Entity, Durable, key <c>app/{applicationId:N}</c>.
 /// </summary>
 /// <remarks>
-///     This is what OpenIddict's application store reads through. ADR-015: "OpenIddict is a library:
-///     it handles the protocol, we own the stores, and the stores are grains."
+///     <para>
+///         This is what OpenIddict's application store reads through. ADR-015: "OpenIddict is a
+///         library: it handles the protocol, we own the stores, and the stores are grains."
+///     </para>
+///     <para>
+///         ⚠ <b>The <c>client_id</c> index is claimed here, not by the caller.</b> A registration is
+///         keyed by its GUID, so nothing maps a <c>client_id</c> back to it without
+///         <see cref="IClientIndexGrain" /> — the lookup the authorization-code flow needs and the
+///         one ADR-015's degraded mode leaves to us. Claiming it inside create is what makes "two
+///         applications cannot share a <c>client_id</c>" a property of the platform rather than a
+///         convention, because the single-threaded index activation is the mutex.
+///     </para>
 /// </remarks>
 public sealed class ApplicationGrain(
     [PersistentState("application", StorageTiers.Durable)]
     IPersistentState<ApplicationGrainState> state,
+    IGrainFactory grains,
     IClock clock
 )
     : Grain, IApplicationGrain {
@@ -42,6 +56,20 @@ public sealed class ApplicationGrain(
             return Result<ApplicationRegistration>.Failure(error);
         }
 
+        var clientId = validated.GetValueOrThrow().ClientId;
+
+        // ⚠ CLAIM THE CLIENT ID BEFORE WRITING STATE — docs/plan/06 § Two-phase create's ordering,
+        // applied to a client-id index rather than a path index. A registration written first and a
+        // claim that then failed would leave an application no lookup can reach; the claim first means
+        // a taken client id is a 409 before this grain owns anything. TryClaim is idempotent for the
+        // same application id, so a retried create re-claims its own id and succeeds.
+        var index = ClientIndex(clientId);
+
+        var claimed = await index.TryClaimAsync(clientId, applicationId);
+        if (claimed.TryGetError(out var conflict)) {
+            return Result<ApplicationRegistration>.Failure(conflict);
+        }
+
         // ⚠ The ids come from the KEY, not from the body. A registration whose body named a different
         // application would otherwise write one grain's state under another's identity — and the body
         // is caller-supplied on a control-plane endpoint.
@@ -50,6 +78,12 @@ public sealed class ApplicationGrain(
         };
 
         await state.WriteStateAsync();
+
+        var confirmed = await index.ConfirmAsync(applicationId);
+        if (confirmed.TryGetError(out var confirmError)) {
+            return Result<ApplicationRegistration>.Failure(confirmError);
+        }
+
         return Result<ApplicationRegistration>.Success(state.State.Registration);
     }
 
@@ -113,8 +147,16 @@ public sealed class ApplicationGrain(
 
     /// <inheritdoc />
     public async Task<Result> DeleteAsync() {
-        if (state.State.Registration is null) {
+        if (state.State.Registration is not { } registration) {
             return Result.Failure(ErrorCode.ResourceNotFound, $"Application {applicationId:D} does not exist.");
+        }
+
+        // ⚠ Release the index before dropping the state, so the client id is free the moment the
+        // registration is gone. Release is idempotent and refuses a mismatched application id, so a
+        // re-driven delete cannot hand away a client id the tenant re-registered in the meantime.
+        var released = await ClientIndex(registration.ClientId).ReleaseAsync(applicationId);
+        if (released.TryGetError(out var error)) {
+            return Result.Failure(error);
         }
 
         state.State.Registration = null;
@@ -130,6 +172,20 @@ public sealed class ApplicationGrain(
     }
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     The client-id index grain for a client id in this application's tenant.
+    /// </summary>
+    /// <param name="clientId">The <c>client_id</c> being indexed.</param>
+    /// <remarks>
+    ///     ⚠ Through <c>ForTenant</c>, like every other grain reference in this module — the index
+    ///     lives in tenancy but is tenant-qualified, so it is reached the same way <c>UserGrain</c>
+    ///     reaches <c>IEmailIndexGrain</c>.
+    /// </remarks>
+    IClientIndexGrain ClientIndex(string clientId) =>
+        grains
+            .ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IClientIndexGrain>(GrainKeys.ClientIndex(tenantId, clientId));
 
     static Result<ApplicationRegistration> Validate(ApplicationRegistration registration) {
         if (string.IsNullOrWhiteSpace(registration.ClientId)) {
