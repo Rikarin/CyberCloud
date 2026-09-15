@@ -5154,6 +5154,350 @@
         }
       ]
     },
+    "CyberCloud.Monitor/workspaces/alertRules": {
+      "resourceType": "CyberCloud.Monitor/workspaces/alertRules",
+      "apiVersion": "2026-08-01",
+      "title": "Alert rule",
+      "plural": "Alert rules",
+      "summary": "A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.",
+      "overrideKey": "CyberCloud.Monitor/workspaces/alertRules@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/actionGroup",
+        "/properties/actionGroup/channel",
+        "/properties/actionGroup/notifyOnResolve",
+        "/properties/actionGroup/recipients",
+        "/properties/actionGroup/service",
+        "/properties/condition",
+        "/properties/condition/lookbackSeconds",
+        "/properties/condition/operator",
+        "/properties/condition/query",
+        "/properties/condition/signal",
+        "/properties/condition/threshold",
+        "/properties/enabled",
+        "/properties/evaluation",
+        "/properties/evaluation/forSeconds",
+        "/properties/evaluation/intervalSeconds",
+        "/properties/severity",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the rule is evaluated in — the workspace's.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Alert rule to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The rule's own settings."
+        },
+        {
+          "jsonPointer": "/properties/actionGroup",
+          "name": "actionGroup",
+          "label": "Action group",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Who is told, and how."
+        },
+        {
+          "jsonPointer": "/properties/actionGroup/channel",
+          "name": "channel",
+          "label": "Channel",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "actionGroup",
+          "hint": "Which of that service's channels carries it. The service must have the channel configured and enabled, or every notification is refused by name.",
+          "choices": [
+            {
+              "value": "sms",
+              "label": "Sms"
+            },
+            {
+              "value": "whatsapp",
+              "label": "Whatsapp"
+            },
+            {
+              "value": "email",
+              "label": "Email"
+            },
+            {
+              "value": "push",
+              "label": "Push"
+            },
+            {
+              "value": "voice",
+              "label": "Voice"
+            }
+          ],
+          "placeholder": "email"
+        },
+        {
+          "jsonPointer": "/properties/actionGroup/notifyOnResolve",
+          "name": "notifyOnResolve",
+          "label": "Notify on resolve",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "actionGroup",
+          "hint": "Whether the recipients are told when the condition stops holding, as well as when it starts.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/actionGroup/recipients",
+          "name": "recipients",
+          "label": "Recipients",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": true,
+          "section": "actionGroup",
+          "hint": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch.",
+          "placeholder": [
+            "oncall@example.com"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/actionGroup/service",
+          "name": "service",
+          "label": "Service",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "actionGroup",
+          "hint": "The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant.",
+          "maxLength": 512,
+          "format": "cybercloud-resource-id",
+          "placeholder": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Communication/services/alerts"
+        },
+        {
+          "jsonPointer": "/properties/condition",
+          "name": "condition",
+          "label": "Condition",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What is asked, and what answer counts."
+        },
+        {
+          "jsonPointer": "/properties/condition/lookbackSeconds",
+          "name": "lookbackSeconds",
+          "label": "Lookback seconds",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "condition",
+          "hint": "How far back the query may read, in seconds. Capped at a day: the look-back is the query's cost, and the cap is the platform's, not the tenant's.",
+          "minimum": 60,
+          "maximum": 86400,
+          "default": 300
+        },
+        {
+          "jsonPointer": "/properties/condition/operator",
+          "name": "operator",
+          "label": "Operator",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "condition",
+          "hint": "How a value is compared with the threshold.",
+          "choices": [
+            {
+              "value": "greaterThan",
+              "label": "Greater than"
+            },
+            {
+              "value": "greaterOrEqual",
+              "label": "Greater or equal"
+            },
+            {
+              "value": "lessThan",
+              "label": "Less than"
+            },
+            {
+              "value": "lessOrEqual",
+              "label": "Less or equal"
+            },
+            {
+              "value": "equal",
+              "label": "Equal"
+            },
+            {
+              "value": "notEqual",
+              "label": "Not equal"
+            }
+          ],
+          "placeholder": "greaterThan"
+        },
+        {
+          "jsonPointer": "/properties/condition/query",
+          "name": "query",
+          "label": "Query",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "condition",
+          "hint": "The query, verbatim. It must produce numbers; the rule fires when any of them satisfies the operator against the threshold.",
+          "minLength": 1,
+          "maxLength": 4096,
+          "placeholder": "max(rate(http_requests_errors_total[5m]))"
+        },
+        {
+          "jsonPointer": "/properties/condition/signal",
+          "name": "signal",
+          "label": "Signal",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "condition",
+          "hint": "Which store the query runs against: metrics is MetricsQL over the workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database.",
+          "choices": [
+            {
+              "value": "metrics",
+              "label": "Metrics"
+            },
+            {
+              "value": "logs",
+              "label": "Logs"
+            }
+          ],
+          "placeholder": "metrics"
+        },
+        {
+          "jsonPointer": "/properties/condition/threshold",
+          "name": "threshold",
+          "label": "Threshold",
+          "control": "xui-numeric-input",
+          "type": "number",
+          "required": true,
+          "section": "condition",
+          "hint": "The number the value is compared with.",
+          "placeholder": 5
+        },
+        {
+          "jsonPointer": "/properties/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether the rule is evaluated. Off keeps the rule and its history and stops the clock; an open alert is resolved without a notification.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/evaluation",
+          "name": "evaluation",
+          "label": "Evaluation",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "How often, and how long before it counts."
+        },
+        {
+          "jsonPointer": "/properties/evaluation/forSeconds",
+          "name": "forSeconds",
+          "label": "For seconds",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "evaluation",
+          "hint": "How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes.",
+          "minimum": 0,
+          "maximum": 86400,
+          "default": 0
+        },
+        {
+          "jsonPointer": "/properties/evaluation/intervalSeconds",
+          "name": "intervalSeconds",
+          "label": "Interval seconds",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "evaluation",
+          "hint": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick.",
+          "minimum": 60,
+          "maximum": 3600,
+          "default": 60
+        },
+        {
+          "jsonPointer": "/properties/severity",
+          "name": "severity",
+          "label": "Severity",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing.",
+          "choices": [
+            {
+              "value": "critical",
+              "label": "Critical"
+            },
+            {
+              "value": "error",
+              "label": "Error"
+            },
+            {
+              "value": "warning",
+              "label": "Warning"
+            },
+            {
+              "value": "informational",
+              "label": "Informational"
+            }
+          ],
+          "placeholder": "warning"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listInstances",
+          "label": "List instances",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Network/publicIpAddresses": {
       "resourceType": "CyberCloud.Network/publicIpAddresses",
       "apiVersion": "2026-08-01",

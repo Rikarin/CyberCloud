@@ -2,24 +2,29 @@
 
     <!--
       docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
-      the JSON Schemas". This one is the schema, the retention tables and the three objects a
-      workspace's tenancy becomes.
+      the JSON Schemas". Two types: the workspace — its schema, the retention tables and the three
+      objects a tenancy becomes — and, since #32, the alert rule under it, with the ONE grain
+      interface this family has.
 
-      ⚠ NO GRAIN INTERFACES, AND THIS IS THE TWELFTH TYPE TO REPORT THAT. What is different here is
-      that this type has the strongest case for one in the catalogue and still does not need it: a
-      workspace owns a VictoriaMetrics accountID and a ClickHouse database name, both of which look
-      like allocations somebody has to remember. Both are PURE FUNCTIONS of the resource's own id —
-      MonitorWorkspaces.AccountId and MonitorWorkspaces.Database — so there is nothing to remember
-      between passes and no allocator to keep consistent across silos.
+      ⚠ ONE GRAIN INTERFACE, AND THIS FILE SAID "NO GRAIN INTERFACES" FOR THE TWELVE FAMILIES BEFORE
+      THE ALERT RULES LANDED. The workspace still needs none: its accountID and its database name are
+      pure functions of the resource's own id. An alert rule is different in kind — it has to be
+      EVALUATED on a schedule and remember what it found, and neither the schedule nor the memory is
+      a function of anything. IAlertEvaluatorGrain is that memory, one per workspace, and
+      IAlertQuerySeam and IAlertControlPlane are the two seams around it.
 
-      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
-      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
-      § Assembly graph rules forbids the rest.
+      ⚠ IT REFERENCES CyberCloud.ResourceManager.Contracts, CyberCloud.Kubernetes.Contracts — the
+      reference set docs/plan/03 § The .Contracts split allows every provider — AND
+      CyberCloud.Communication.Contracts, which is this family's fifth module edge and the second
+      such line in module-layering.txt. docs/plan/16 § Alerts: delivery is docs/plan/17, and the
+      action group names a ChannelKind and the evaluator calls IMessageSender. The line is to the
+      .Contracts assembly only; the sending module's implementation is never bound here.
     -->
 
     <ItemGroup>
         <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
         <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">

@@ -4,19 +4,26 @@
       docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
       parameterised".
 
-      ⚠ IT CONTAINS NO ASSERTIONS, AND IT IS THE TWELFTH FAMILY TO TEST THAT CLAIM. What this one adds
-      is not a new extreme of object count — three objects sits inside the bracket natsClusters (five)
-      and StorageAccounts (one) already set — but a new KIND of resource: one whose objects are
-      configuration for a data plane rather than a description of a workload. test/CyberCloud.Conformance
-      still needed no change.
+      ⚠ IT CONTAINS NO ASSERTIONS, AND IT IS THE TWELFTH FAMILY TO TEST THAT CLAIM — TWICE OVER SINCE
+      #32. The workspace added a new KIND of resource: one whose objects are configuration for a data
+      plane rather than a description of a workload. The alert rule added a new SHAPE: a clusterless
+      child under a cluster-backed parent, read through an IConvergedModule while its ancestor is
+      converged against the fake cluster in the same run. test/CyberCloud.Conformance still needed no
+      change for either.
 
       ⚠ THIS PROJECT IS ONE OF THE SUITES THE Labels ARCHITECTURE GATE COUNTS. Build.Architecture
       § LabelsGate runs EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations in every
-      *.Conformance project under src/Providers.
+      *.Conformance project under src/Providers — for the workspace it asserts the seven labels on
+      three objects; for the alert rule it asserts there is no object at all.
 
       ⚠ IT REFERENCES A PROJECT UNDER test/, which docs/plan/03 § test/ intends: CyberCloud.Conformance
       is "the shared provider suite (parameterised, REFERENCED BY PROVIDERS)". docs/plan/03 § Assembly
       graph rules is about the shipped graph and excludes test projects by construction.
+
+      ⚠ AND CyberCloud.Communication's IMPLEMENTATION, since #32, for the reason the sending module's own
+      conformance project references it: the alert evaluator grain takes an IMessageSender, so the
+      harness silo has to host the sending module the way the silo host does — MonitorAlertingModule
+      calls AddCyberCloudCommunication. No carrier is registered and nothing in the suite sends.
     -->
 
     <ItemGroup>
@@ -30,6 +37,7 @@
 
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
         <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
     </ItemGroup>
 

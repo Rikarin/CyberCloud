@@ -725,6 +725,12 @@ owed:
       run it. The Docker-free suite's clusterless half (IConvergedModule) is what the family passes
       today; a clusterless SiloKillConformanceTests over the same IConvergedModule is the missing
       piece, and it is the first thing to build before a second clusterless family lands.
+      ⚠ A SECOND CLUSTERLESS TYPE LANDED FIRST (2026-09-15, #32): CyberCloud.Monitor/workspaces/alertRules,
+      a clusterless child of a cluster-backed parent, converges onto a durable grain through its own
+      IConvergedModule and has the same criterion unrun. It was not built ahead of that type because
+      the type is a child — its harness has to create the workspace ancestor against a real API
+      server before it can kill a silo under the rule — so the clusterless silo-kill harness now has
+      a second shape to cover, and two creditors.
   - id: communication-senders-have-no-resource-surface
     says: >
       docs/plan/17 § The channel abstraction makes sender-id registration, US 10DLC campaign approval

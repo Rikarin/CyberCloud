@@ -1597,6 +1597,102 @@ export interface MonitorWorkspacesListKeysResult {
   sqlEndpoint: string;
 }
 
+/** The values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesAlertRulesChannel =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** The values /properties/condition/operator accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesAlertRulesOperator =
+  | 'greaterThan'
+  | 'greaterOrEqual'
+  | 'lessThan'
+  | 'lessOrEqual'
+  | 'equal'
+  | 'notEqual';
+
+/** The values /properties/condition/signal accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesAlertRulesSignal =
+  | 'metrics'
+  | 'logs';
+
+/** The values /properties/severity accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesAlertRulesSeverity =
+  | 'critical'
+  | 'error'
+  | 'warning'
+  | 'informational';
+
+/** Alert rule. A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops. */
+export interface MonitorWorkspacesAlertRulesData {
+  /** The region the rule is evaluated in — the workspace's. */
+  location: string;
+  /** The rule's own settings. */
+  properties?: {
+    /** Who is told, and how. */
+    actionGroup?: {
+      /** Which of that service's channels carries it. The service must have the channel configured and enabled, or every notification is refused by name. */
+      channel: MonitorWorkspacesAlertRulesChannel;
+      /** Whether the recipients are told when the condition stops holding, as well as when it starts. */
+      notifyOnResolve?: boolean;
+      /** Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. */
+      recipients: string[];
+      /** The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant. */
+      service: string;
+    };
+    /** What is asked, and what answer counts. */
+    condition?: {
+      /** How far back the query may read, in seconds. Capped at a day: the look-back is the query's cost, and the cap is the platform's, not the tenant's. */
+      lookbackSeconds?: number;
+      /** How a value is compared with the threshold. */
+      operator: MonitorWorkspacesAlertRulesOperator;
+      /** The query, verbatim. It must produce numbers; the rule fires when any of them satisfies the operator against the threshold. */
+      query: string;
+      /** Which store the query runs against: metrics is MetricsQL over the workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database. */
+      signal: MonitorWorkspacesAlertRulesSignal;
+      /** The number the value is compared with. */
+      threshold: number;
+    };
+    /** Whether the rule is evaluated. Off keeps the rule and its history and stops the clock; an open alert is resolved without a notification. */
+    enabled?: boolean;
+    /** How often, and how long before it counts. */
+    evaluation?: {
+      /** How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes. */
+      forSeconds?: number;
+      /** How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. */
+      intervalSeconds?: number;
+    };
+    /** How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing. */
+    severity: MonitorWorkspacesAlertRulesSeverity;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Alert rule, as the API returns it. */
+export interface MonitorWorkspacesAlertRulesResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.Monitor/workspaces/alertRules';
+  readonly properties?: MonitorWorkspacesAlertRulesData['properties'];
+}
+
+/** What listInstances returns. */
+export interface MonitorWorkspacesAlertRulesListInstancesResult {
+  /** How many firings the rule keeps. */
+  count: number;
+  /** Every firing, oldest first, one line each: '{state} {severity} fired {firedAt} resolved {resolvedAt} value {value}: {summary} | {notification}'. */
+  instances: string[];
+  /** How many of them are still firing. */
+  open: number;
+  /** Where the rule is now: ok, pending or firing. */
+  state: string;
+}
+
 /** Public IP address. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic. */
 export interface NetworkPublicIpAddressesData {
   /** The region the address is allocated in. ⚠ It must be a region whose operator has an external pool — nothing checks that, and an address in a region with none never becomes ready. */

@@ -57,6 +57,9 @@ import type {
   MessagingRabbitmqClustersData,
   MessagingRabbitmqClustersListKeysResult,
   MessagingRabbitmqClustersResource,
+  MonitorWorkspacesAlertRulesData,
+  MonitorWorkspacesAlertRulesListInstancesResult,
+  MonitorWorkspacesAlertRulesResource,
   MonitorWorkspacesData,
   MonitorWorkspacesListKeysResult,
   MonitorWorkspacesResource,
@@ -699,6 +702,36 @@ export class CyberCloudApi {
   /** restore — permission 'write'. ⚠ Long-running. */
   restoreMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<unknown>> {
     return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/restore` });
+  }
+
+  /** Reads one Alert rule. */
+  getAlertRule(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesAlertRulesResource>> {
+    return this.transport.send<MonitorWorkspacesAlertRulesResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/alertRules/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Alert rule. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateAlertRule(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, data: MonitorWorkspacesAlertRulesData): Promise<ApiResponse<MonitorWorkspacesAlertRulesResource>> {
+    return this.transport.send<MonitorWorkspacesAlertRulesResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/alertRules/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Alert rule. A merge patch: what is not set is not changed. */
+  updateAlertRule(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, data: Partial<MonitorWorkspacesAlertRulesData>): Promise<ApiResponse<MonitorWorkspacesAlertRulesResource>> {
+    return this.transport.send<MonitorWorkspacesAlertRulesResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/alertRules/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Alert rule. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteAlertRule(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/alertRules/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Alert rules in a resource group. ⚠ A short page never means "that is all there is". */
+  listAlertRule(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MonitorWorkspacesAlertRulesResource>>> {
+    return this.transport.send<Page<MonitorWorkspacesAlertRulesResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/alertRules`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** listInstances — permission 'read'. */
+  listInstancesAlertRule(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesAlertRulesListInstancesResult>> {
+    return this.transport.send<MonitorWorkspacesAlertRulesListInstancesResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/alertRules/${CyberCloudApi.segment(resourceName)}/listInstances` });
   }
 
   /** Reads one Public IP address. */

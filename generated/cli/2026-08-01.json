@@ -9765,6 +9765,624 @@
             }
           },
           "alias": "workspace"
+        },
+        "workspaces-alert-rules": {
+          "name": "workspaces-alert-rules",
+          "resourceType": "CyberCloud.Monitor/workspaces/alertRules",
+          "title": "Alert rule",
+          "plural": "Alert rules",
+          "summary": "A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Alert rule.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Which of that service's channels carries it. The service must have the channel configured and enabled, or every notification is refused by name.",
+                  "jsonPointer": "/properties/actionGroup/channel",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ],
+                  "example": "email"
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the rule is evaluated. Off keeps the rule and its history and stops the clock; an open alert is resolved without a notification.",
+                  "jsonPointer": "/properties/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--for-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes.",
+                  "jsonPointer": "/properties/evaluation/forSeconds",
+                  "default": 0
+                },
+                {
+                  "name": "--interval-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick.",
+                  "jsonPointer": "/properties/evaluation/intervalSeconds",
+                  "default": 60
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the rule is evaluated in — the workspace's.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--lookback-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How far back the query may read, in seconds. Capped at a day: the look-back is the query's cost, and the cap is the platform's, not the tenant's.",
+                  "jsonPointer": "/properties/condition/lookbackSeconds",
+                  "default": 300
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--notify-on-resolve",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the recipients are told when the condition stops holding, as well as when it starts.",
+                  "jsonPointer": "/properties/actionGroup/notifyOnResolve",
+                  "default": true
+                },
+                {
+                  "name": "--operator",
+                  "type": "string",
+                  "required": true,
+                  "summary": "How a value is compared with the threshold.",
+                  "jsonPointer": "/properties/condition/operator",
+                  "choices": [
+                    "greaterThan",
+                    "greaterOrEqual",
+                    "lessThan",
+                    "lessOrEqual",
+                    "equal",
+                    "notEqual"
+                  ],
+                  "example": "greaterThan"
+                },
+                {
+                  "name": "--query",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The query, verbatim. It must produce numbers; the rule fires when any of them satisfies the operator against the threshold.",
+                  "jsonPointer": "/properties/condition/query",
+                  "example": "max(rate(http_requests_errors_total[5m]))"
+                },
+                {
+                  "name": "--recipients",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch.",
+                  "jsonPointer": "/properties/actionGroup/recipients",
+                  "repeated": true,
+                  "example": [
+                    "oncall@example.com"
+                  ]
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--service",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant.",
+                  "jsonPointer": "/properties/actionGroup/service",
+                  "example": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Communication/services/alerts"
+                },
+                {
+                  "name": "--severity",
+                  "type": "string",
+                  "required": true,
+                  "summary": "How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing.",
+                  "jsonPointer": "/properties/severity",
+                  "choices": [
+                    "critical",
+                    "error",
+                    "warning",
+                    "informational"
+                  ],
+                  "example": "warning"
+                },
+                {
+                  "name": "--signal",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Which store the query runs against: metrics is MetricsQL over the workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database.",
+                  "jsonPointer": "/properties/condition/signal",
+                  "choices": [
+                    "metrics",
+                    "logs"
+                  ],
+                  "example": "metrics"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--threshold",
+                  "type": "number",
+                  "required": true,
+                  "summary": "The number the value is compared with.",
+                  "jsonPointer": "/properties/condition/threshold",
+                  "example": 5
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Alert rule lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Alert rule. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Alert rule lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Alert rules in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Alert rule lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "list-instances": {
+              "name": "list-instances",
+              "summary": "listInstances a Alert rule.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules/{resourceName}/listInstances",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Alert rule lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "action": "listInstances",
+              "permission": "read",
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Alert rule.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Alert rule lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Alert rule. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--channel",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which of that service's channels carries it. The service must have the channel configured and enabled, or every notification is refused by name.",
+                  "jsonPointer": "/properties/actionGroup/channel",
+                  "choices": [
+                    "sms",
+                    "whatsapp",
+                    "email",
+                    "push",
+                    "voice"
+                  ],
+                  "example": "email"
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the rule is evaluated. Off keeps the rule and its history and stops the clock; an open alert is resolved without a notification.",
+                  "jsonPointer": "/properties/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--for-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes.",
+                  "jsonPointer": "/properties/evaluation/forSeconds",
+                  "default": 0
+                },
+                {
+                  "name": "--interval-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick.",
+                  "jsonPointer": "/properties/evaluation/intervalSeconds",
+                  "default": 60
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the rule is evaluated in — the workspace's.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--lookback-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How far back the query may read, in seconds. Capped at a day: the look-back is the query's cost, and the cap is the platform's, not the tenant's.",
+                  "jsonPointer": "/properties/condition/lookbackSeconds",
+                  "default": 300
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--notify-on-resolve",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the recipients are told when the condition stops holding, as well as when it starts.",
+                  "jsonPointer": "/properties/actionGroup/notifyOnResolve",
+                  "default": true
+                },
+                {
+                  "name": "--operator",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How a value is compared with the threshold.",
+                  "jsonPointer": "/properties/condition/operator",
+                  "choices": [
+                    "greaterThan",
+                    "greaterOrEqual",
+                    "lessThan",
+                    "lessOrEqual",
+                    "equal",
+                    "notEqual"
+                  ],
+                  "example": "greaterThan"
+                },
+                {
+                  "name": "--query",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The query, verbatim. It must produce numbers; the rule fires when any of them satisfies the operator against the threshold.",
+                  "jsonPointer": "/properties/condition/query",
+                  "example": "max(rate(http_requests_errors_total[5m]))"
+                },
+                {
+                  "name": "--recipients",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch.",
+                  "jsonPointer": "/properties/actionGroup/recipients",
+                  "repeated": true,
+                  "example": [
+                    "oncall@example.com"
+                  ]
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--service",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant.",
+                  "jsonPointer": "/properties/actionGroup/service",
+                  "example": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Communication/services/alerts"
+                },
+                {
+                  "name": "--severity",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing.",
+                  "jsonPointer": "/properties/severity",
+                  "choices": [
+                    "critical",
+                    "error",
+                    "warning",
+                    "informational"
+                  ],
+                  "example": "warning"
+                },
+                {
+                  "name": "--signal",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which store the query runs against: metrics is MetricsQL over the workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database.",
+                  "jsonPointer": "/properties/condition/signal",
+                  "choices": [
+                    "metrics",
+                    "logs"
+                  ],
+                  "example": "metrics"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--threshold",
+                  "type": "number",
+                  "required": false,
+                  "summary": "The number the value is compared with.",
+                  "jsonPointer": "/properties/condition/threshold",
+                  "example": 5
+                },
+                {
+                  "name": "--workspaces-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Alert rule lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "workspacesName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "alert"
         }
       }
     },

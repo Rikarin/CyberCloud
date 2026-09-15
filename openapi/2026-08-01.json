@@ -8447,6 +8447,451 @@
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-action": "restore"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Monitor_workspaces_alertRules_List",
+        "summary": "List the CyberCloud.Monitor/workspaces/alertRules in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.alertRules.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/alertRules",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Monitor_workspaces_alertRules_Get",
+        "summary": "Read a CyberCloud.Monitor/workspaces/alertRules.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.alertRules"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Monitor_workspaces_alertRules_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Monitor/workspaces/alertRules.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.alertRules"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Monitor_workspaces_alertRules_Update",
+        "summary": "Merge-patch a CyberCloud.Monitor/workspaces/alertRules.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.alertRules"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Monitor_workspaces_alertRules_Delete",
+        "summary": "Delete a CyberCloud.Monitor/workspaces/alertRules.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/alertRules",
+      "x-cybercloud-display": {
+        "name": "Alert rule",
+        "plural": "Alert rules",
+        "alias": "alert",
+        "summary": "A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/alertRules/{resourceName}/listInstances": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "workspacesName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_alertRules_ListInstances",
+        "summary": "listInstances a CyberCloud.Monitor/workspaces/alertRules.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.alertRules.ListInstancesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces/alertRules",
+      "x-cybercloud-action": "listInstances"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/publicIpAddresses": {
       "parameters": [
         {
@@ -16963,6 +17408,238 @@
         "title": "CyberCloud.Monitor.workspaces.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.Monitor.workspaces.alertRules": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Monitor/workspaces/alertRules. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the rule is evaluated in — the workspace's.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The rule's own settings.",
+            "properties": {
+              "actionGroup": {
+                "additionalProperties": false,
+                "description": "Who is told, and how.",
+                "properties": {
+                  "channel": {
+                    "description": "Which of that service's channels carries it. The service must have the channel configured and enabled, or every notification is refused by name.",
+                    "enum": [
+                      "sms",
+                      "whatsapp",
+                      "email",
+                      "push",
+                      "voice"
+                    ],
+                    "example": "email",
+                    "type": "string"
+                  },
+                  "notifyOnResolve": {
+                    "default": true,
+                    "description": "Whether the recipients are told when the condition stops holding, as well as when it starts.",
+                    "type": "boolean"
+                  },
+                  "recipients": {
+                    "description": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch.",
+                    "example": [
+                      "oncall@example.com"
+                    ],
+                    "items": {
+                      "maxLength": 320,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "service": {
+                    "description": "The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant.",
+                    "example": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Communication/services/alerts",
+                    "format": "cybercloud-resource-id",
+                    "maxLength": 512,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "channel",
+                  "recipients",
+                  "service"
+                ],
+                "type": "object"
+              },
+              "condition": {
+                "additionalProperties": false,
+                "description": "What is asked, and what answer counts.",
+                "properties": {
+                  "lookbackSeconds": {
+                    "default": 300,
+                    "description": "How far back the query may read, in seconds. Capped at a day: the look-back is the query's cost, and the cap is the platform's, not the tenant's.",
+                    "maximum": 86400,
+                    "minimum": 60,
+                    "type": "integer"
+                  },
+                  "operator": {
+                    "description": "How a value is compared with the threshold.",
+                    "enum": [
+                      "greaterThan",
+                      "greaterOrEqual",
+                      "lessThan",
+                      "lessOrEqual",
+                      "equal",
+                      "notEqual"
+                    ],
+                    "example": "greaterThan",
+                    "type": "string"
+                  },
+                  "query": {
+                    "description": "The query, verbatim. It must produce numbers; the rule fires when any of them satisfies the operator against the threshold.",
+                    "example": "max(rate(http_requests_errors_total[5m]))",
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "signal": {
+                    "description": "Which store the query runs against: metrics is MetricsQL over the workspace's VictoriaMetrics account, logs is SQL over its ClickHouse database.",
+                    "enum": [
+                      "metrics",
+                      "logs"
+                    ],
+                    "example": "metrics",
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "description": "The number the value is compared with.",
+                    "example": 5,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "operator",
+                  "query",
+                  "signal",
+                  "threshold"
+                ],
+                "type": "object"
+              },
+              "enabled": {
+                "default": true,
+                "description": "Whether the rule is evaluated. Off keeps the rule and its history and stops the clock; an open alert is resolved without a notification.",
+                "type": "boolean"
+              },
+              "evaluation": {
+                "additionalProperties": false,
+                "description": "How often, and how long before it counts.",
+                "properties": {
+                  "forSeconds": {
+                    "default": 0,
+                    "description": "How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes.",
+                    "maximum": 86400,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "intervalSeconds": {
+                    "default": 60,
+                    "description": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick.",
+                    "maximum": 3600,
+                    "minimum": 60,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "severity": {
+                "description": "How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing.",
+                "enum": [
+                  "critical",
+                  "error",
+                  "warning",
+                  "informational"
+                ],
+                "example": "warning",
+                "type": "string"
+              }
+            },
+            "required": [
+              "severity"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Monitor/workspaces/alertRules",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.alertRules.List": {
+        "type": "object",
+        "title": "CyberCloud.Monitor.workspaces.alertRules.List",
+        "description": "One page of CyberCloud.Monitor/workspaces/alertRules. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.alertRules"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Monitor.workspaces.alertRules.ListInstancesResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/alertRules/listInstances returns.",
+        "properties": {
+          "count": {
+            "description": "How many firings the rule keeps.",
+            "type": "integer"
+          },
+          "instances": {
+            "description": "Every firing, oldest first, one line each: '{state} {severity} fired {firedAt} resolved {resolvedAt} value {value}: {summary} | {notification}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "open": {
+            "description": "How many of them are still firing.",
+            "type": "integer"
+          },
+          "state": {
+            "description": "Where the rule is now: ok, pending or firing.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "instances",
+          "open",
+          "state"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.alertRules.ListInstancesResponse",
+        "type": "object"
+      },
       "CyberCloud.Network.publicIpAddresses": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Network/publicIpAddresses. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -18998,5 +19675,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 27
+  "x-cybercloud-resource-type-count": 28
 }

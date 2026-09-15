@@ -230,11 +230,14 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # ⚠ What it costs is that the selector is unverifiable from here: the tenant-wide rule matches
 # namespaces nothing in this repository labels. See
 # charts/managed/cloud-shell/conformance.yaml § owed, `namespaces-are-not-labelled`.
-# ⚠ AND CyberCloud.Providers.Monitor IS THE FAMILY MOST OBVIOUSLY OWED A FIFTH LINE AND TAKES NONE,
-# WHICH IS WORTH MORE THAN THE TEN AGREEMENTS ABOVE IT. docs/plan/16 makes the platform its own first
-# customer — platform telemetry runs "under a platform workspace. No separate stack." — so the naive
-# reading is that every module reaches CyberCloud.Providers.Monitor to emit, and that this family
-# reaches CyberCloud.Metering to bill. NEITHER LINE EXISTS AND NEITHER MAY:
+# ⚠ AND CyberCloud.Providers.Monitor WAS THE FAMILY MOST OBVIOUSLY OWED A FIFTH LINE AND TOOK NONE —
+# for the two lines the naive reading wants. It takes a DIFFERENT fifth line since #32, declared with
+# the Communication family below, and the two refusals here still stand word for word, because the
+# line it takes is neither of them. The absence was worth more than the ten agreements above it, and
+# it is worth the same now. docs/plan/16 makes the platform its own first customer — platform
+# telemetry runs "under a platform workspace. No separate stack." — so the naive reading is that
+# every module reaches CyberCloud.Providers.Monitor to emit, and that this family reaches
+# CyberCloud.Metering to bill. NEITHER LINE EXISTS AND NEITHER MAY:
 #
 #   * NOTHING REACHES THIS FAMILY TO EMIT TELEMETRY. Emission goes to CyberCloud.Ingest.Host over
 #     OTLP, which docs/plan/03 § Hosts makes deliberately NOT an Orleans client. If a module
@@ -254,8 +257,8 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # file's scope. Recorded BEFORE the first platform dashboard exists, so that whoever wires the tenth
 # signal finds the refusal and the alternative rather than discovering the edge is easy.
 #
-# ⚠ FOUR EDGES, THE SAME FOUR, FOR THE TWELFTH FAMILY — over the first resource type in the catalogue
-# whose product is not a workload at all.
+# ⚠ FOUR EDGES, THE SAME FOUR, FOR THE TWELFTH FAMILY AS IT LANDED — over the first resource type in the catalogue
+# whose product is not a workload at all. The fifth arrived with its second type (#32); see below.
 CyberCloud.Providers.Analytics -> CyberCloud.Core
 CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
@@ -316,6 +319,28 @@ CyberCloud.Providers.Mail -> CyberCloud.Core
 CyberCloud.Providers.Mail -> CyberCloud.Kubernetes
 CyberCloud.Providers.Mail -> CyberCloud.ResourceManager
 CyberCloud.Providers.Mail -> CyberCloud.Tenancy
+
+# ⚠ THE SECOND LINE BEYOND THE FOUR IN THIS FILE, AND THE FIRST FAMILY WITH ALL FIVE. #32:
+# CyberCloud.Monitor/workspaces/alertRules names an action group — a CyberCloud.Communication/services
+# resource, a ChannelKind and recipients — and its evaluator delivers through IMessageSender.
+# docs/plan/16 § The stack's Alerting row says it in four words: "delivery is [17]". The line is to the
+# .Contracts assembly for ChannelKind, IMessageSender, SendRequest and CommunicationGrainKeys, and the
+# last of those is the join: the sending service's grain id is derived from its resource id PATH, so
+# the rule reaches the tenant's service with no index read and no line to CyberCloud.Providers.Communication
+# — which rule 2 forbids and this file would delete. docs/plan/03 § Assembly graph rules, rule 2's
+# "through CyberCloud.ResourceManager by resource id", taken literally for the first time.
+#
+# ⚠ THIS IS THE LINE THE COMMUNICATION PARAGRAPH ABOVE PREDICTED, FROM THE OTHER DIRECTION. That
+# paragraph kept the sending module's grains in CyberCloud.Communication because identity reaches
+# them. Nothing reaches an alert evaluator but this family, so its grain lives HERE — the first grain
+# in any provider's implementation assembly, which docs/plan/03 § Providers always allowed — and the
+# family reaches the sending module the way identity does: as a customer of IMessageSender.
+#
+# ⚠ WHAT THE DIRECTION FORBIDS, SAID SO THE REVERSE IS NEVER ASKED FOR. CyberCloud.Communication
+# reaches CyberCloud.Core and nothing else, and the floor paragraph calls that the most load-bearing
+# absence in this file. An alert is the sending module's customer exactly as an OTP is; a line from
+# the sending module to this family would let a failed alert query take the OTP path down with it.
+CyberCloud.Providers.Monitor -> CyberCloud.Communication
 CyberCloud.Providers.Monitor -> CyberCloud.Core
 CyberCloud.Providers.Monitor -> CyberCloud.Kubernetes
 CyberCloud.Providers.Monitor -> CyberCloud.ResourceManager

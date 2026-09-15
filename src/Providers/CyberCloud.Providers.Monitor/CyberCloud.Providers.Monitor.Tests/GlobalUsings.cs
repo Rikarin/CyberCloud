@@ -3,7 +3,9 @@
 // arriving transitively.
 
 global using ErrorCode = CyberCloud.Core.ErrorCode;
+global using CyberCloud.Communication.Contracts;
 global using CyberCloud.Core;
+global using CyberCloud.Core.Contracts;
 global using CyberCloud.Core.Resources;
 global using CyberCloud.Kubernetes.Contracts;
 global using CyberCloud.Providers.Monitor.Contracts;

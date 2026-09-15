@@ -120,7 +120,8 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # only because the dedup above is durable.
 
 # ── Providers — docs/plan/03 § Providers ───────────────────────────────────────────────────────
-# NOTHING, and the absence is the reviewed decision rather than an omission.
+# ONE, since #32, and for fifteen families before it NOTHING — and the absence was the reviewed
+# decision rather than an omission.
 #
 # CyberCloud.Providers.Sample is the first provider (docs/plan/24 § Phase 1, exit criterion 1) and
 # it declares no grain of its own. A widget's desired state is held by ResourceGrain above, which is
@@ -132,6 +133,25 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # provider has to add to the platform, and a provider that needed durable state of its own would be
 # holding something the resource manager should have been holding for it. The day a provider does
 # need a line here, the first question is what the manager is missing.
+#
+# ⚠ THE DAY CAME WITH CyberCloud.Monitor/workspaces/alertRules, AND THE QUESTION HAS AN ANSWER THAT
+# IS NOT "THE MANAGER". The manager holds one desired body and one observed state per resource. An
+# alert rule's memory is neither: it is a SEQUENCE — when the condition started holding, when it
+# fired, whether each recipient was told and what the sending module said if not, when it resolved —
+# and a manager that held a history per resource would be holding it for every type that has none.
+# docs/plan/05 § Choosing a tier's test ("if the honest answer is 'this can be rebuilt', the tier is
+# Hot") answers no in the sharp direction: the samples that fired an alert age out of the store in
+# days, and whether a page was SENT was never in any store but this one. A tenant reading the history
+# at 03:00 to learn whether they were told is docs/plan/16 § Cost and retention honesty's closing
+# sentence applied to a page rather than a log line — a monitoring product that quietly loses one is
+# trusted. The open instance is also what a re-drive after a silo move reads to NOT page twice: its
+# id is half of every idempotency key sent about it, and losing it would mint a second.
+#
+# ⚠ AND IT IS PER WORKSPACE, NOT PER RULE, so the row count is the workspace count and the reminder
+# count is too — docs/plan/04 § Reminders' scaling arithmetic, answered by the key rather than by a
+# cap. IAlertEvaluatorGrain carries the argument; the action group's recipients are the one thing in
+# the state a person might mistake for sensitive, and they are what a notification is addressed to.
+CyberCloud.Providers.Monitor.Alerting.AlertEvaluatorGrain
 
 # ── Communication — docs/plan/17 ───────────────────────────────────────────────────────────────
 # The sending product's four pieces of state that a person, a carrier or a regulator would notice

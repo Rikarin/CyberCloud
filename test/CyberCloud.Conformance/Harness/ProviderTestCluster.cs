@@ -702,6 +702,13 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
             // so the module's TryAdd registrations see the harness's clock rather than replacing it.
             TSource.ConvergedModule?.ConfigureSilo(silo);
 
+            // ⚠ AND WHAT A CLUSTER-BACKED CASE'S SIBLING HANDLERS HOLD. Every handler above is
+            // registered by concrete type and the host validates the container on build, so a
+            // handler whose constructor takes a family seam needs that seam here even in a suite
+            // that never posts to it. See IProviderCaseSource.ConfigureSilo for the case that found
+            // this.
+            TSource.ConfigureSilo(silo);
+
             silo.AddCyberCloudResourceManager();
         }
     }

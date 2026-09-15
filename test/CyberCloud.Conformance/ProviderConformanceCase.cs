@@ -459,4 +459,38 @@ public interface IProviderCaseSource {
     ///     </para>
     /// </remarks>
     static virtual IConvergedModule? ConvergedModule => null;
+
+    /// <summary>
+    ///     What the harness silo must hold beyond the harness's own doubles for this case's provider
+    ///     to be <i>constructible</i> — the seams a sibling type's action handlers take in their
+    ///     constructors. Nothing, for every case before <c>CyberCloud.Monitor/workspaces</c>.
+    /// </summary>
+    /// <param name="silo">The harness silo being built.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             WHY THIS EXISTS, AND WHY <see cref="ConvergedModule" /> COULD NOT CARRY IT.
+    ///         </b> The harness registers <i>every</i> action handler the case's provider declares
+    ///         into the silo container, by concrete type, because a long-running action is driven
+    ///         inside the silo and the registry stores a type — and the silo's host validates that
+    ///         container on build. Fifteen families' handlers took no constructor argument the
+    ///         harness did not already register; <c>CyberCloud.Monitor/workspaces/alertRules</c>'
+    ///         <c>listInstances</c> takes <c>IAlertControlPlane</c>, and that type is a sibling of
+    ///         the workspace under one provider. So the <b>workspace's</b> suite — a cluster-backed
+    ///         case, refused a module by name — failed at fixture start with a DI validation error
+    ///         naming a handler it never invokes. A module is one world per type; this is the wiring
+    ///         a family's <i>application module</i> would do in a host, and the harness has no
+    ///         application module.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <c>static virtual</c> with an empty default, and omitting it is not silent.</b>
+    ///         A case whose provider declares a handler with an unmet dependency fails every test in
+    ///         the class at fixture start, with the handler and the missing service named — which is
+    ///         exactly the failure that produced this member. Wiring only: nothing here decides
+    ///         whether the provider passed, which is the line <see cref="ProviderConformanceCase" />'s
+    ///         remarks draw.
+    ///     </para>
+    /// </remarks>
+    static virtual void ConfigureSilo(ISiloBuilder silo) { }
 }

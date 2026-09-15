@@ -146,7 +146,11 @@ public sealed class MonitorDeclarationTests {
         // ⚠ THE HALF THE DERIVED CHECK CANNOT MAKE, KEPT FROM THE TEST THAT HELD THE LISTS. Uniqueness
         // says the short name reaches this type; it does not say the short name is the word a person
         // would reach for, and only a literal can say that.
-        ProviderRegistry.Build([new MonitorProvider()]).Types.Single().Display.Alias.ShouldBe("workspace");
+        var types = ProviderRegistry.Build([new MonitorProvider()]).Types;
+        types.Single(x => x.Type == MonitorWorkspaces.Type).Display.Alias.ShouldBe("workspace");
+        // ⚠ `alert` and not `alertrule`, because `cyc monitor alert` is what a person types, and not
+        // `rule`, because a family whose second noun is `rule` is a family whose third will want it too.
+        types.Single(x => x.Type == MonitorAlertRules.Type).Display.Alias.ShouldBe("alert");
     }
 
     // ── The schema ─────────────────────────────────────────────────────────────────────────────

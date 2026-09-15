@@ -245,6 +245,71 @@ owed:
       renders nothing is worse than the absence.
     closes: An ingress with a source-range list, once the exposure axis exists platform-wide.
 
+  # ── workspaces/alertRules — #32 ─────────────────────────────────────────────────────────────
+  #
+  # ⚠ THE CHILD TYPE IS CHARTLESS AND CLUSTERLESS, SO ITS DEBTS ARE RECORDED ON ITS PARENT'S CHART.
+  # CyberCloud.Monitor/workspaces/alertRules converges a spec onto an evaluator grain and applies
+  # nothing to any cluster; there is no charts/managed/monitor-alert-rule for a conformance.yaml to
+  # sit in. The sending module's clusterless types record theirs in charts/bundle/bundle.yaml
+  # because that family has no chart at all; this family has one, and a rule's whole meaning is a
+  # query against the workspace this chart renders the tenancy for, so this is the file a reader
+  # looking for what an alert rule does not yet do will open.
+  - id: alert-rules-query-seam-is-refusing
+    says: >
+      No host registers an IAlertQuerySeam, so every alert rule in this tree is evaluated against
+      UnavailableAlertQuerySeam: the query is not run, the rule records the refusal as its lastError
+      and stays where it is — a store that does not answer neither fires nor resolves, by design,
+      and AlertEvaluatorTests pins that — and nobody is paged. ⚠ THIS IS THE LARGEST SINGLE GAP ON
+      THE TYPE and it is deliberately a refusal rather than a stub: a seam answering "no samples"
+      would report every rule ok forever. What the seam owes, so that whoever writes it starts from
+      the contract rather than from the interface's name: a MetricsQL /api/v1/query against the
+      query gateway under the workspace's accountID for `signal: metrics`, and a SQL query under
+      the workspace's database for `signal: logs`, BOTH resolved from the workspace's address —
+      the evaluator carries the canonical path, not the GUID, because a child's pass never learns
+      its parent's GUID — which means reading the row this chart renders, or the index; the
+      look-back honoured as a hard range; the cancellation token honoured, because the evaluator
+      sets it to QueryTimeout; and for `logs`, a refusal or a rewrite of any expression that names
+      a database, because a MetricsQL expression cannot choose an account and a SQL one can.
+    closes: >
+      An IAlertQuerySeam over the query gateway, registered by the silo host before
+      AddCyberCloudMonitorAlerting's TryAdd — and the metrics-round-trip assertion above extended to
+      "a rule over the written series fires", against a real VictoriaMetrics, which is the only place
+      the accountID isolation of the query half can be proved.
+  - id: alert-rules-one-instance-per-rule
+    says: >
+      A rule whose query returns several series — one per instance, which is what a MetricsQL query
+      over a workspace usually returns — fires ONE instance carrying the worst offending value, not
+      one per series. Azure fires per dimension. The schema has no array of objects (the remarks on
+      SchemaKind.Array), so an action group is one channel and a list of recipients, and an instance
+      is one line; per-series instances would need the labels on the wire as a shape the schema
+      cannot spell. The notification names the value that crossed the line and not which series
+      carried it.
+    closes: The api-version that grows the tree — the same api-version the sending module's multi-locale templates wait on.
+  - id: alert-rules-evaluator-key-borrows-the-resource-shape
+    says: >
+      IAlertEvaluatorGrain is keyed res/{guid:N} with a GUID derived from the WORKSPACE's canonical
+      path — MonitorAlertRules.EvaluatorIdFor — because a rule's reconcile pass knows its workspace by
+      name only, and asking the index is forbidden. The key borrows GrainKeys.Resource's shape for
+      something that is not a resource, which is the borrowing CommunicationGrainKeys records and
+      costs the same: a repair tool routing by GrainKeyKind would send this key to IResourceGrain,
+      and a workspace deleted and recreated under one name lands on one evaluator (harmless here:
+      its rules left with it, and their instances with them). The honest follow-up is the one that
+      module named — a shape of its own in GrainKeys, a Core change with a Core review — and it is
+      now owed by two families rather than one.
+    closes: A derived-key shape in GrainKeys, reviewed once for both families.
+  - id: alert-rules-are-not-driven-by-vmalert
+    says: >
+      docs/plan/16 § The stack names vmalert as the evaluator and cc.{tenant}.alerts as the path to a
+      notification grain. Neither is here: the evaluator is one grain per workspace on an Orleans
+      reminder (docs/plan/04 § Reminders, the fifth use), and § Alerts' landed section says why —
+      vmalert would have put a VMRule per workspace, an Alertmanager-webhook receiver and NATS in
+      front of the notification, three things that do not exist. What the reminder costs that
+      vmalert would not: evaluation runs on the control plane's silos, one query per rule per
+      interval, and the limits are the schema's and the grain's rather than the store's own. If the
+      catalogue's alert volume ever makes that the wrong trade, the seam to swap is IAlertQuerySeam
+      (vmalert as the thing that answers) and the reminder is what goes.
+    closes: Nothing, unless measured evaluation load says so; recorded because the plan says the other thing.
+
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
 #
 # ⚠ NO vcpu AND NO memory METER, because a workspace runs nothing. The one derived meter is storage,

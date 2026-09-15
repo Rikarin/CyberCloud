@@ -1,13 +1,8 @@
-// ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
-// global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
-// over the `Orleans.ErrorCode` this import would otherwise put back in play.
-
-using CyberCloud.Core;
-
 namespace CyberCloud.Providers.Monitor;
 
 /// <summary>
-///     Managed observability — one resource type, over the platform's own telemetry stores.
+///     Managed observability — a workspace over the platform's own telemetry stores, and the alert
+///     rules evaluated against it.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -170,9 +165,22 @@ namespace CyberCloud.Providers.Monitor;
 ///         period is two live credentials at once, which <c>ISecretWriter</c>'s mint-once rule
 ///         cannot hold — the same blocker <c>CyberCloud.Storage/accounts</c> records against
 ///         <c>regenerateKeys</c>, now on its second sighting and on a type where it decides a whole
-///         child rather than one action. No <c>collectors</c> and no <c>alertRules</c>: both are M2
-///         in docs/plan/16 and neither is in this row's scope. No <c>dataSources</c> body property,
-///         for the reason on <see cref="MonitorWorkspaces.ListKeysResponse" /> — it is an output.
+///         child rather than one action. No <c>collectors</c>: M2 in docs/plan/16 and the half of
+///         issue #32 this branch did not take. No <c>dataSources</c> body property, for the reason
+///         on <see cref="MonitorWorkspaces.ListKeysResponse" /> — it is an output.
+///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             AND <c>workspaces/alertRules</c> IS DECLARED (#32), WHICH MAKES THIS THE FIRST
+///             FAMILY WITH A CLUSTER-BACKED PARENT AND A CLUSTERLESS CHILD.
+///         </b> The paragraph above used to end "No <c>collectors</c> and no <c>alertRules</c>".
+///         A rule is a condition over the workspace's own stores, a severity and an action group
+///         naming a <c>CyberCloud.Communication/services</c> resource; it applies nothing to any
+///         cluster and converges onto <see cref="IAlertEvaluatorGrain" /> — one per workspace, on a
+///         reminder, the first grain in a provider's implementation assembly. Its remarks and
+///         <see cref="MonitorAlertRules" />' carry the argument; the type's own declaration below
+///         carries what it declares and does not.
 ///     </para>
 /// </remarks>
 public sealed class MonitorProvider : IResourceProvider {
@@ -269,7 +277,53 @@ public sealed class MonitorProvider : IResourceProvider {
             // objects and the tenancy is back with its retention and its accountID unchanged.
             .SupportsSoftDelete(SoftDeleteDays, purgeProtectionPointer: MonitorWorkspaces.PurgeProtectionPointer)
             .SupportsTags()
-            .RequiresCluster(MonitorWorkspaces.ClusterIdPointer);
+            .RequiresCluster(MonitorWorkspaces.ClusterIdPointer)
+            // ── workspaces/alertRules — #32 ─────────────────────────────────────────────────────
+            //
+            // ⚠ NO RequiresCluster AND NO Chart ON A CHILD WHOSE PARENT HAS BOTH, AND BOTH ABSENCES
+            // ARE THE DECLARATION. A rule applies nothing anywhere: it converges a spec onto its
+            // workspace's evaluator grain and the evaluator does the rest on a reminder. Declaring
+            // RequiresCluster would make the reconcile driver refuse a pass with no connection for a
+            // reconciler that never reads one, and the conformance suite would then read this type
+            // through the fake cluster and find nothing — ProviderConformanceCase.Objects' remarks
+            // say what that run would have proved. Clusterless, with an IConvergedModule, is the
+            // honest registration; test/CyberCloud.Conformance learnt the shape from the sending
+            // module and this is the first time it meets it under a cluster-backed parent.
+            //
+            // ⚠ ONE METER, THE COUNT. A rule draws no vCPU, memory, storage or address. What it
+            // costs the platform is a query per interval on a shared store, which is bounded by the
+            // three limits MonitorAlertRules records rather than by quota — a query is not a thing
+            // a subscription HOLDS, which is the argument CyberCloud.Communication.Contracts' .csproj
+            // makes about a message.
+            //
+            // ⚠ NO SupportsSoftDelete. A rule's history is what a window would protect, and the
+            // history is on the workspace's evaluator, which the workspace's own seven-day window
+            // already holds — a deleted rule under a live workspace is one PUT to recreate and its
+            // instances are an event log, not the tenant's only copy of anything.
+            .ResourceType(MonitorAlertRules.TypePath)
+            .ApiVersion(MonitorWorkspaces.V2026, MonitorAlertRules.Schema2026)
+            .Reconciler<MonitorAlertRuleReconciler>()
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            // ⚠ SYNCHRONOUS, WITH A HANDLER, AND IT REACHES A GRAIN FROM THE REQUEST PATH — the
+            // shape the sending module's four actions established. A long-running listInstances
+            // would answer 202 and re-run the reconciler, which for a read is nothing.
+            .Action(
+                MonitorAlertRules.ListInstancesAction,
+                ActionKind.Post,
+                "read",
+                response: MonitorAlertRules.ListInstancesResponse,
+                handler: typeof(MonitorAlertRuleListInstancesHandler)
+            )
+            .Display(
+                "Alert rule",
+                "Alert rules",
+                shortName: "alert",
+                summary: "A condition over the workspace's metrics or logs, evaluated on a schedule; when it "
+                + "holds for long enough the action group is told through a Communication service, and "
+                + "again when it stops."
+            )
+            .SupportsTags();
     }
 
     /// <summary>How long a deleted workspace stays recoverable.</summary>

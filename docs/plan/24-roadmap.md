@@ -174,7 +174,7 @@ target scale.
 | Registry | NuGet/npm/Maven feeds | 1.5 | #29 | |
 | Storage | File shares, backup vaults, customer-managed keys | 3.0 | #30 | |
 | Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | |
-| Observability | App Insights views, OTel collector service, managed Grafana, alerts | 3.0 | #32 | |
+| Observability | App Insights views, OTel collector service, managed Grafana, alerts | 3.0 | #32 | ◐ `Monitor/workspaces/alertRules` published 2026-09-15 (#32, the alerts half): a condition over the workspace's metrics or logs, a severity and an action group naming a `Communication/services` resource, evaluated by one grain per workspace on a reminder — [16 § Alerts](16-observability.md). ⚠ **The fourth noun of four**; App Insights views, the collector service and managed Grafana are not resource types yet, so the type list confirms nothing about the other three. ⚠ **What ◐ does not mean**: no host registers a real query seam, so every evaluation in this tree runs against the refusing default and moves nothing — `charts/managed/monitor-workspace/conformance.yaml § owed`, `alert-rules-query-seam-is-refusing` — and a notification reaches a carrier only where one is registered, which is the `Communication` row's own caveat one row down |
 | Communication | Channels, templates, suppression, delivery receipts | 2.0 | #33 | ✅ **SHIPPED 2026-09-15 (#33)**: `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions` — the tenant-facing face of the module that had carried the platform's OTPs since before any provider existed. ⚠ **Three of the four nouns are types and the fourth is not, deliberately**: a delivery receipt is per send, a send is an event rather than desired state, and the receipts come back on the `services` type's `status` action — [17 § `CyberCloud.Communication/services`](17-communication-and-email.md) says why a `messages` type would have had a PUT nothing could apply. ⚠ **The first clusterless family in the catalogue**, and the shared conformance suite grew a clusterless half to say what a green run over it proves. ⚠ **What ✅ does not mean here**: no carrier client ships — every channel resolves to the module's refusing seam, so a `send` refuses honestly — doc 17's sender-id registration flow has its grain and no resource surface, and the fourth noun has its read half only: `status` renders receipts and no HTTP ingress exists for a carrier to deliver one through, which lands with the first carrier because its signature is the callback's only authentication; `charts/bundle/bundle.yaml § owed` carries all three |
 | **Mail** | Postfix/Dovecot/Rspamd, domains, mailboxes, deliverability, minimal webmail | 3.5 | #34 | ◐ `Mail/domains` published (#34, 2026-09-12) with the chart under `charts/managed/mail`. ⚠ The first noun of five; mailboxes, deliverability and the webmail are not resource types yet, so the type list confirms nothing about the other four |
 | Security | Malware scanning | 1.5 | #35 | |
@@ -214,12 +214,14 @@ other — see [§ Running total](#running-total), which is where the consequence
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
 median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 
-⚠ **On "28 resource types": there are 27 today**, and nine of them are this phase's — the `Data` row's
-four, `Mail/domains`, and the `Communication` row's four. The other eighteen are counted, phase by
-phase, in [§ What has landed](#what-has-landed--recounted-2026-09-15) — which is also where to see that
-two of the 27 belong to phase 4 and one is phase 1's deliberately trivial sample. ⚠ The count is one
-short of the criterion and the criterion is not one type short of being met: "28 resource types" was
-written as a proxy for a catalogue, and four of the 27 are one family's children.
+⚠ **On "28 resource types": there are 28 today**, and ten of them are this phase's — the `Data` row's
+four, `Mail/domains`, the `Communication` row's four, and `Monitor/workspaces/alertRules`. The other
+eighteen are counted, phase by phase, in [§ What has landed](#what-has-landed--recounted-2026-09-15) —
+which is also where to see that two of the 28 belong to phase 4 and one is phase 1's deliberately
+trivial sample. ⚠ **The count now equals the criterion and the criterion is not met**: "28 resource
+types" was written as a proxy for a catalogue, five of the 28 are children of two families, and the
+three rows that reached the number are each one noun of several. Read the exit off the rows, not the
+total.
 
 ---
 
@@ -323,7 +325,8 @@ sitting in the machinery that gates citation honesty, and #78's review found a p
 counting its own paragraph. #45 said 22, and 22 was right until #34 published `Mail/domains` on 2026-09-12 without
 recounting here — the test this section describes went red and stayed red for three days, which is
 exactly the drift it exists to catch; 23 was right until #33 published the four `Communication` types
-on 2026-09-15, recounting in the same change; 27 is right. That is worth *establishing* rather than
+on 2026-09-15, recounting in the same change, and 27 until #32 published `Monitor/workspaces/alertRules`
+the same day, again recounting in the same change; 28 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
 The document, read directly:
@@ -331,7 +334,7 @@ The document, read directly:
 ```console
 $ grep -o '"x-cybercloud-resource-type": "[^"]*"' openapi/2026-08-01.json \
     | sed 's/.*: "//;s/"$//' | sort -u | wc -l
-27
+28
 ```
 
 and the build, from the other end — `./build.sh Architecture`'s **Generated surfaces** gate regenerates
@@ -339,7 +342,7 @@ every surface from `src/CyberCloud.ResourceManager/Registry/` and compares bytes
 registry's rather than the document's:
 
 ```text
-✔ Generated surfaces  Enforced  27 resource type(s) over 2 OpenAPI document(s), …
+✔ Generated surfaces  Enforced  28 resource type(s) over 2 OpenAPI document(s), …
 ```
 
 ⚠ **What would make this stale, said plainly so it can be checked rather than trusted:** any provider's
@@ -366,7 +369,7 @@ only.** No EM figure anywhere in this document is machine-checked — not a phas
 the 69.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
 heading is still what says when a person last read the rest.
 
-All 27, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
+All 28, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
 published document and asserts the two sets are equal, so an abbreviated `…/subnets` would be a name no
 test could match and the check would quietly become a check of nothing.
@@ -375,9 +378,9 @@ test could match and the check would quietly become a check of nothing.
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles` | 15 |
-| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions` | 9 |
+| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules` | 10 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
-| **Total** | | **27** |
+| **Total** | | **28** |
 
 ⚠ **`agentPools` is itself an ahead-of-phase landing that this table cannot show twice.** Phase 2's row
 names node pools, so it is counted as phase 2 here — but [01](01-azure-parity-catalogue.md) verdicts
@@ -417,7 +420,7 @@ this recount, and it is written down here so the next recount does not make it.
 | 0 — Prerequisites | ~~1.5~~ **1.1** | 1.1 | **0.4 ⊘** | Exact. Phase 0's heading *is* its row sum, so the dropped ADR-005 bump comes straight off |
 | 1 — Spine | 14 | 14.0 | — | Not reconciled here; only exit criterion 4 was checked |
 | 2 — M1 | 26 | 44.0 | **≥ 11.3 ✅** | 3.0 + 1.5 + 2.0 + 1.5 fully shipped rows, plus 3.3 of the `Network` row's split. Conservative: the partly-landed Managed Kubernetes (4.0) and Monitor (2.5) rows have no defensible split and are counted as zero. ⚠ Not conservative enough — the 3.0 row's ✅ means *published*, and #69 is open inside it; see below |
-| 3 — M2 | 28 | 38.4 | **6.4 ✅** | The whole `Data` row (4.4), and the whole `Communication` row (2.0, 2026-09-15). ⚠ `Mail`'s ◐ is counted as zero: one noun of five is published and the row has no defensible split |
+| 3 — M2 | 28 | 38.4 | **6.4 ✅** | The whole `Data` row (4.4), and the whole `Communication` row (2.0, 2026-09-15). ⚠ `Mail`'s ◐ is counted as zero: one noun of five is published and the row has no defensible split. `Observability`'s ◐ is counted as zero for the same reason — alerts are one noun of four, and the 3.0 has no per-noun split to read |
 | 4 — M3 | 20 | 16.9 priced, 4 items unpriced | **1.8 ✅, 0.6 ⊘** | MariaDB 0.8 + OpenSearch 1.0 shipped; Qdrant's 0.6 void |
 
 **Between 69.6 and 89.1 EM to M3** — where this section said **71.6–89.1** from 2026-09-06 to
