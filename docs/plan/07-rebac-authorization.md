@@ -99,6 +99,55 @@ holders may `PUT` or `DELETE` — `Rel("owner") & !Rel("suspended")`, which is A
 `read`. A `group` principal is written as the userset `group:{id}#member`, which is row two of the
 table above.
 
+**The read half is on the wire too (issue #86):** `GET {scope}/providers/CyberCloud.Authorization/roleAssignments`
+lists what is assigned at a scope — the tuples written on it and the ones inherited from its
+ancestors, which is `ICheckGrain.ListRoleAssignmentsAsync`'s view exactly, so a row appears only
+where the type's own rewrite actually inherits the role. It needs `read` on the scope and nothing
+per row: an assignment is a tuple *on* the scope rather than an object with tuples of its own, which
+is why Azure's `roleAssignments/read` sits in Reader, and why this listing — unlike
+[10](10-gateway-and-api.md) § Shape's resource collection — is never short for a reason the caller is
+not told. It is paged the way every collection of this API is (`$top`, `$skipToken`, `nextLink`),
+ordered and resumed by each assignment's address. ⚠ **An inherited row carries the ancestor's
+address, marked `inherited: true`.** `subscription:S#owner@user:U` is one assignment however many
+groups and resources it reaches, and its `id` is the one address a `GET` or a `DELETE` answers for
+it; rendering it at every scope that inherits it would mint addresses nothing serves.
+
+**The principal is checked against the directory before the tuple is written (issue #86).** Until
+then `IRoleAssignmentManager` wrote the tuple for any well-formed subject, so a typo granted to
+nobody and nothing could ever see it. The check goes through `IPrincipalDirectory`, a seam in
+`CyberCloud.ResourceManager.Contracts` shaped like `CallerContext` — a type and an id, never a
+`SubjectRef` — because `module-layering.txt` gives the resource manager no edge to identity and
+identity none back, and a directory lookup is the case that file says goes through a seam. The
+implementation that reads `IUserGrain`, `IServicePrincipalGrain`, `IManagedIdentityGrain` and
+`IGroupGrain` is the gateway's `GrainPrincipalDirectory`, in the one shipping assembly that references
+both sides; the resource manager's own default refuses, so a host that composes the manager and
+forgets the directory grants nothing rather than granting to anybody. Three consequences worth
+stating: the lookup is asked *after* `assignRole`, so a caller with no grant cannot learn which
+principal ids exist from the difference between two refusals; it is asked of the assignment's
+tenant through `ForTenant`, so a principal of another tenant is "does not exist" by construction
+([11](11-identity.md) § Sign-up and tenant creation — one user, one tenant); and a revoke does not
+ask, because a grant to a principal since deprovisioned must remain removable. The id must be the
+`N`-form GUID a token carries as `sub` — any other spelling names a subject no token presents and is
+refused rather than folded. `RoleAssignmentTests` drives all of it through the real grains.
+
+⚠ **The derived name, re-taken with the cost stated, and it stands (issue #86).** `PUT
+…/roleAssignments/{guid}` is what every ARM client emits — the SDKs, `az role assignment create`,
+and Terraform's `azurerm_role_assignment`, which mints a random UUID when `name` is unset. A
+Terraform provider for this platform ([01](01-azure-parity-catalogue.md) § K — Developer surfaces, [21](21-cli-and-sdks.md) § Other SDKs, issue #59)
+therefore cannot be Azure's provider with the host swapped: it computes the segment from
+`(roleDefinitionId, principalType, principalId)` before the `PUT`, as a Bicep template computes
+`guid(...)`, and reads state back through the `id` the response returned. That is a documented
+mapping in one generated file rather than a per-assignment record in the platform, which is the
+trade. **A client GUID cannot be accepted on `GET` or `DELETE` as an alias, and the reason is
+arithmetic**: a mapping from a client-chosen value to a tuple is either computed or stored; it cannot
+be computed, because the client chose the GUID at random and the tuple carries no trace of it; and
+stored, it is the role table this section argues against in every respect that matters — a durable
+grain per assignment, a grain-key shape, a write that lands beside the tuple write and has to be
+reasoned about when only one of the two does. Accepting a GUID on `PUT` alone, and answering with the
+derived `id`, would work for a client that reads back through the response, and is not done either:
+an address that accepts a name it will never serve a `GET` on teaches a client that the name is
+real. `RoleAssignmentName`'s remarks carry the same argument beside the code.
+
 ⚠ **The address reaches no generated surface, and that is #63's question asked a third time rather
 than a new one.** `CyberCloud.Authorization` is a reserved namespace — `ProviderRegistry.Build`
 refuses a provider that claims it, because on a resource group the assignment address is a

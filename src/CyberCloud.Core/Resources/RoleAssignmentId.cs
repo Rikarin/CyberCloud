@@ -24,6 +24,38 @@ namespace CyberCloud.Core.Resources;
 ///         name is what people want from this address anyway.
 ///     </para>
 ///     <para>
+///         ⚠
+///         <b>
+///             Re-taken with the cost stated (issue #86), and the decision stands: the name stays
+///             derived, and a client-minted GUID is accepted nowhere on this address.
+///         </b> The cost is the one an ARM client pays first. <c>PUT …/roleAssignments/{guid}</c>
+///         is what every one of them emits — the Azure SDKs, <c>az role assignment create</c>, and
+///         the Terraform <c>azurerm_role_assignment</c> resource, which mints a random UUID when its
+///         <c>name</c> is not set. A Terraform provider for this platform (issue #59, generated from
+///         the published document) therefore cannot be Azure's provider with the host swapped: it
+///         has to compute the segment from <c>(roleDefinitionId, principalType, principalId)</c>
+///         before the <c>PUT</c>, exactly as a Bicep template computes <c>guid(...)</c>, and it has
+///         to read state back through the <c>id</c> the response returned rather than through the
+///         name it chose. That is a documented mapping in one generated file, not a per-resource
+///         table in the platform, which is the trade being made.
+///     </para>
+///     <para>
+///         ⚠ <b>Why <c>GET</c> and <c>DELETE</c> cannot take a client GUID as an alias.</b> The
+///         question was whether the GUID could be accepted on the read and revoke paths and mapped to
+///         the derived name without a role table, and the answer is no, for a reason that is
+///         arithmetic rather than taste. A mapping from a client-chosen value to a tuple is either
+///         computed or stored. It cannot be computed: the client chose the GUID at random and the
+///         tuple carries no trace of it, so nothing on the platform can turn
+///         <c>…/roleAssignments/3f2a…</c> back into <c>reader-user-7f3c…</c>. It can only be
+///         stored, and a stored <c>guid → tuple</c> record is the role table in every respect that
+///         matters: a durable grain per assignment, a grain-key shape, a write that has to land
+///         beside the tuple write and be reasoned about when only one of the two does, and a delete
+///         that has to remove both. The reverse direction — accepting a GUID on <c>PUT</c> and
+///         answering with the derived <c>id</c> — would work for a client that reads back through the
+///         response, and it is not done either: an address that accepts a name it will never serve
+///         a <c>GET</c> on teaches a client that the name is real. One grammar, spelled once.
+///     </para>
+///     <para>
 ///         ⚠ <b>The spellings are the ReBAC ones, verbatim and matched ordinally.</b>
 ///         <see cref="PrincipalType" /> is a subject type as the tuple store spells it —
 ///         <c>user</c>, <c>servicePrincipal</c>, <c>managedIdentity</c>, <c>group</c> — and not a
@@ -167,9 +199,16 @@ public readonly record struct RoleAssignmentId(ScopeId Scope, ResourceId Resourc
     public const string TypeName = ProviderNamespace + "/" + TypeSegment;
 
     /// <summary>
+    ///     The three segments that follow a scope on the collection address:
+    ///     <c>/providers/CyberCloud.Authorization/roleAssignments</c>. The collection ends here;
+    ///     an assignment adds <c>/{name}</c> — <see cref="Suffix" />.
+    /// </summary>
+    public const string CollectionSuffix = "/providers/" + ProviderNamespace + "/" + TypeSegment;
+
+    /// <summary>
     ///     The four segments that follow the scope: <c>/providers/CyberCloud.Authorization/roleAssignments/</c>.
     /// </summary>
-    public const string Suffix = "/providers/" + ProviderNamespace + "/" + TypeSegment + "/";
+    public const string Suffix = CollectionSuffix + "/";
 
     /// <summary>
     ///     The two segments every address under the reserved namespace carries:
@@ -264,11 +303,12 @@ public readonly record struct RoleAssignmentId(ScopeId Scope, ResourceId Resourc
     ///         those can either.
     ///     </para>
     ///     <para>
-    ///         ⚠ A path that merely <i>contains</i> the suffix but does not end in a name — a
-    ///         collection address, or the suffix followed by nothing — is not a role assignment and
-    ///         is refused here rather than reinterpreted. There is no collection <c>GET</c> on this
-    ///         path yet; <c>ICheckGrain.ListRoleAssignmentsAsync</c> is the read and it is not on the
-    ///         wire.
+    ///         ⚠ A path that merely <i>contains</i> the suffix but does not end in a name — the
+    ///         collection, or the suffix followed by nothing — is not a role assignment and is refused
+    ///         here rather than reinterpreted. The collection is its own grammar,
+    ///         <see cref="RoleAssignmentCollectionId.ParsePath" />, and the router asks it second and
+    ///         only on a <c>GET</c>; the two are disjoint because one ends on
+    ///         <see cref="CollectionSuffix" /> and the other on a name after it.
     ///     </para>
     /// </remarks>
     public static Result<RoleAssignmentId> ParsePath(string? path) {
@@ -295,7 +335,8 @@ public readonly record struct RoleAssignmentId(ScopeId Scope, ResourceId Resourc
         if (name.Length == 0 || name.Contains('/', StringComparison.Ordinal)) {
             return Invalid(
                 $"'{path}' is not a role assignment path: '{Suffix}' must be followed by exactly one "
-                + "segment, the assignment's name."
+                + "segment, the assignment's name. The collection is "
+                + $"'{{scope}}{CollectionSuffix}' with no trailing '/', and it is read with GET only."
             );
         }
 
@@ -323,4 +364,155 @@ public readonly record struct RoleAssignmentId(ScopeId Scope, ResourceId Resourc
 
     static Result<RoleAssignmentId> Invalid(string message) =>
         Result<RoleAssignmentId>.Failure(ErrorCode.InvalidResourceId, message);
+}
+
+/// <summary>
+///     The address of the role assignments <i>at</i> a scope —
+///     <c>{scope}/providers/CyberCloud.Authorization/roleAssignments</c>, the collection a
+///     <see cref="RoleAssignmentId" /> is one member of. <c>GET</c> only.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠
+///         <b>
+///             Disjoint from <see cref="RoleAssignmentId" /> by where the path ends, and the
+///             router asks this grammar second.
+///         </b> An assignment ends on a name after <see cref="RoleAssignmentId.Suffix" />; the
+///         collection ends on <see cref="RoleAssignmentId.CollectionSuffix" /> itself. Neither
+///         parser accepts the other's path, so under the reserved namespace the order in which the
+///         router asks them changes only the <i>message</i> a malformed path gets — the assignment
+///         parser's, which is the one nearly every caller needs. The same arrangement
+///         <see cref="ResourceCollectionId" /> has with <see cref="ResourceId" />, for the same
+///         reason.
+///     </para>
+///     <para>
+///         ⚠ <b>A trailing <c>/</c> is refused, as it is on every other collection.</b>
+///         <c>…/roleAssignments/</c> is neither an assignment (no name) nor this (not the suffix's
+///         end), and it answers the assignment parser's <c>400</c>, which names both shapes.
+///     </para>
+///     <para>
+///         ⚠ <b>The scope carries the same two-member shape as the assignment's</b> —
+///         <see cref="Scope" /> or <see cref="Resource" />, exactly one set — and for the same reason
+///         <see cref="RoleAssignmentId" /> gives. What the collection lists is not only what is
+///         written here: an assignment inherited from an ancestor scope is reported at this one with
+///         <c>inherited</c> set, which is <c>ICheckGrain.ListRoleAssignmentsAsync</c>'s view put on
+///         the wire (docs/plan/07 § Azure RBAC, expressed in it).
+///     </para>
+/// </remarks>
+/// <param name="Scope">The scope, for a tenant, a subscription or a resource group. Default otherwise.</param>
+/// <param name="Resource">The resource, for a resource-scoped collection. Default otherwise.</param>
+public readonly record struct RoleAssignmentCollectionId(ScopeId Scope, ResourceId Resource) {
+    /// <summary>The collection on a tenant, a subscription or a resource group.</summary>
+    /// <param name="scope">The scope. ⚠ <see cref="ScopeKind.Unknown" /> is not a scope and throws.</param>
+    public static RoleAssignmentCollectionId OnScope(ScopeId scope) =>
+        scope.Kind == ScopeKind.Unknown
+            ? throw new ArgumentException(
+                "A role assignment collection needs a scope, and ScopeKind.Unknown is not one.",
+                nameof(scope)
+            )
+            : new(scope, default);
+
+    /// <summary>The collection on a resource.</summary>
+    /// <param name="resource">The resource. Its <see cref="ResourceId.Id" /> may still be unresolved.</param>
+    public static RoleAssignmentCollectionId OnResource(ResourceId resource) => new(default, resource);
+
+    /// <summary>The collection an assignment belongs to — <see cref="Member" />'s inverse.</summary>
+    /// <param name="assignment">The assignment.</param>
+    public static RoleAssignmentCollectionId Of(RoleAssignmentId assignment) =>
+        new(assignment.Scope, assignment.Resource);
+
+    /// <summary>Whether the scope is a resource rather than a tenant, a subscription or a group.</summary>
+    public bool IsResourceScoped => Scope.Kind == ScopeKind.Unknown;
+
+    /// <summary>The tenant, whichever of the two scope members carries it.</summary>
+    public Guid TenantId => IsResourceScoped ? Resource.TenantId : Scope.TenantId;
+
+    /// <summary>The scope's own path — everything before <see cref="RoleAssignmentId.CollectionSuffix" />.</summary>
+    public string ScopePath => IsResourceScoped ? Resource.Path : Scope.Path;
+
+    /// <summary>The full address.</summary>
+    public string Path => ScopePath + RoleAssignmentId.CollectionSuffix;
+
+    /// <summary>One assignment in this collection.</summary>
+    /// <param name="name">The assignment's name — the tuple.</param>
+    public RoleAssignmentId Member(RoleAssignmentName name) => new(Scope, Resource, name);
+
+    /// <summary>
+    ///     The same address with the tenant replaced — what the router does with the token's tenant.
+    /// </summary>
+    /// <param name="tenantId">The tenant from the token.</param>
+    public RoleAssignmentCollectionId WithTenant(Guid tenantId) =>
+        IsResourceScoped
+            ? this with { Resource = Resource with { TenantId = tenantId } }
+            : this with { Scope = Scope with { TenantId = tenantId } };
+
+    /// <summary>
+    ///     Parses a collection address. Returns <see langword="false" /> for anything that is not
+    ///     exactly one, and never throws.
+    /// </summary>
+    /// <param name="path">The candidate path. May be <see langword="null" />.</param>
+    /// <param name="id">The parsed address on success.</param>
+    public static bool TryParsePath(string? path, out RoleAssignmentCollectionId id) {
+        id = default;
+        var parsed = ParsePath(path);
+
+        if (parsed.IsFailure) {
+            return false;
+        }
+
+        id = parsed.GetValueOrThrow();
+        return true;
+    }
+
+    /// <summary>
+    ///     <see cref="TryParsePath" /> with an explanation that names the offending value.
+    /// </summary>
+    /// <param name="path">The candidate path.</param>
+    /// <remarks>
+    ///     The suffix must be the <b>end</b> of the path and is matched case-insensitively on its
+    ///     three literals, as <see cref="RoleAssignmentId.ParsePath" /> matches its four. The prefix
+    ///     before it goes to <see cref="ScopeId.ParsePath" /> and, failing that, to
+    ///     <see cref="ResourceId.ParsePath" />, so a scope address this cannot parse is one neither
+    ///     of those can either.
+    /// </remarks>
+    public static Result<RoleAssignmentCollectionId> ParsePath(string? path) {
+        if (string.IsNullOrEmpty(path)) {
+            return Invalid(
+                "A role assignment collection path is required. It looks like "
+                + "'{scope}" + RoleAssignmentId.CollectionSuffix + "', where the scope is a tenant, a "
+                + "subscription, a resource group or a resource — docs/plan/07 § Azure RBAC, expressed "
+                + "in it."
+            );
+        }
+
+        var suffix = RoleAssignmentId.CollectionSuffix;
+
+        if (path.Length <= suffix.Length || !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) {
+            return Invalid(
+                $"'{path}' is not a role assignment collection path: it does not end in '{suffix}' "
+                + "after a scope."
+            );
+        }
+
+        var scopePath = path[..^suffix.Length];
+
+        if (ScopeId.TryParsePath(scopePath, out var scope)) {
+            return Result<RoleAssignmentCollectionId>.Success(OnScope(scope));
+        }
+
+        var resource = ResourceId.ParsePath(scopePath);
+
+        return resource.TryGetError(out var resourceError)
+            ? Invalid(
+                $"'{scopePath}' — the scope of '{path}' — is neither a scope path nor a resource id "
+                + $"path. As a resource id path: {resourceError.Message}"
+            )
+            : Result<RoleAssignmentCollectionId>.Success(OnResource(resource.GetValueOrThrow()));
+    }
+
+    /// <inheritdoc />
+    public override string ToString() => Path;
+
+    static Result<RoleAssignmentCollectionId> Invalid(string message) =>
+        Result<RoleAssignmentCollectionId>.Failure(ErrorCode.InvalidResourceId, message);
 }

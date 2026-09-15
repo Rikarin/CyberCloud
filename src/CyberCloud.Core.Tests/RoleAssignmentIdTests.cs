@@ -223,7 +223,7 @@ public class RoleAssignmentIdTests {
     // ── Refusals under the namespace ───────────────────────────────────────────────────────────
 
     [Theory]
-    // No name at all — the collection, which is not served.
+    // No name at all — the collection, which is the OTHER grammar (RoleAssignmentCollectionId) and not this one.
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/")]
     // A segment after the name.
@@ -250,6 +250,89 @@ public class RoleAssignmentIdTests {
     [Fact]
     public void AnAssignmentOnAnUnknownScopeCannotBeBuilt() =>
         Should.Throw<ArgumentException>(() => RoleAssignmentId.OnScope(default, Reader));
+
+    // ── The collection (issue #86) ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void EveryScopeKindsCollectionRoundTripsAndIsTheMembersInverse() {
+        foreach (var assignment in EveryShape().Select(path => RoleAssignmentId.ParsePath(path).GetValueOrThrow())) {
+            var collection = RoleAssignmentCollectionId.Of(assignment);
+
+            collection.Path.ShouldBe(assignment.ScopePath + RoleAssignmentId.CollectionSuffix);
+            collection.TenantId.ShouldBe(assignment.TenantId);
+            collection.IsResourceScoped.ShouldBe(assignment.IsResourceScoped);
+
+            var parsed = RoleAssignmentCollectionId.ParsePath(collection.Path).GetValueOrThrow();
+            parsed.ShouldBe(collection);
+
+            // Member is Of's inverse: the collection plus the name is the assignment again.
+            parsed.Member(assignment.Name).ShouldBe(assignment);
+            parsed.Member(assignment.Name).Path.ShouldBe(assignment.Path);
+        }
+    }
+
+    [Fact]
+    public void TheTwoAssignmentGrammarsAreDisjoint() {
+        // ⚠ THE PROPERTY THE ROUTER'S ORDER RESTS ON. Under the reserved namespace it asks the
+        // assignment grammar and then the collection grammar; if either accepted the other's path
+        // the order would decide the route rather than the message, and that would be a precedence
+        // rule nobody wrote down.
+        foreach (var path in EveryShape()) {
+            RoleAssignmentCollectionId.TryParsePath(path, out _).ShouldBeFalse($"'{path}' parsed as a collection");
+
+            var collection = RoleAssignmentCollectionId.Of(RoleAssignmentId.ParsePath(path).GetValueOrThrow()).Path;
+            RoleAssignmentId.TryParsePath(collection, out _).ShouldBeFalse($"'{collection}' parsed as an assignment");
+            RoleAssignmentId.IsUnderNamespace(collection).ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void TheCollectionSuffixIsMatchedCaseInsensitivelyLikeEveryStructuralLiteral() {
+        var spelled = ScopeId.Group(Tenant, Subscription, "prod").Path + "/PROVIDERS/cybercloud.authorization/ROLEASSIGNMENTS";
+
+        var parsed = RoleAssignmentCollectionId.ParsePath(spelled).GetValueOrThrow();
+
+        parsed.Scope.ShouldBe(ScopeId.Group(Tenant, Subscription, "prod"));
+        parsed.Path.ShouldBe(ScopeId.Group(Tenant, Subscription, "prod").Path + RoleAssignmentId.CollectionSuffix);
+    }
+
+    [Fact]
+    public void WithTenantRewritesWhicheverScopeMemberOfTheCollectionIsSet() {
+        var other = Guid.Parse("99999999-0000-4000-8000-000000000009");
+
+        var onScope = RoleAssignmentCollectionId.OnScope(ScopeId.Subscription(Tenant, Subscription)).WithTenant(other);
+        onScope.TenantId.ShouldBe(other);
+        onScope.Scope.TenantId.ShouldBe(other);
+
+        var onResource = RoleAssignmentCollectionId.OnResource(Resource).WithTenant(other);
+        onResource.TenantId.ShouldBe(other);
+        onResource.Resource.TenantId.ShouldBe(other);
+    }
+
+    [Theory]
+    // A trailing slash — neither an assignment nor the collection.
+    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/")]
+    // A name after the suffix is an assignment, not the collection.
+    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice")]
+    // Another type under the reserved namespace.
+    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleDefinitions")]
+    // No scope in front of it.
+    [InlineData("/providers/CyberCloud.Authorization/roleAssignments")]
+    // A scope that is neither a scope nor a resource.
+    [InlineData("/tenants/{t}/subscriptions/providers/CyberCloud.Authorization/roleAssignments")]
+    // A resource collection is not a scope.
+    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Cache/redis/providers/CyberCloud.Authorization/roleAssignments")]
+    [InlineData("")]
+    public void AMalformedCollectionPathIsRefused(string template) {
+        var path = Fill(template);
+
+        RoleAssignmentCollectionId.TryParsePath(path, out _).ShouldBeFalse($"'{path}' was accepted as a collection");
+        RoleAssignmentCollectionId.ParsePath(path).Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
+    }
+
+    [Fact]
+    public void ACollectionOnAnUnknownScopeCannotBeBuilt() =>
+        Should.Throw<ArgumentException>(() => RoleAssignmentCollectionId.OnScope(default));
 
     static IEnumerable<string> EveryShape() {
         yield return RoleAssignmentId.OnScope(ScopeId.Tenant(Tenant), Reader).Path;

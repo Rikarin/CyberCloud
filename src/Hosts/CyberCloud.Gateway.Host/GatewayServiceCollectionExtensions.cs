@@ -3,6 +3,7 @@ using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
+using CyberCloud.Gateway.Host.Principals;
 using CyberCloud.Gateway.Host.RateLimiting;
 using CyberCloud.Gateway.Host.Regions;
 using CyberCloud.ResourceManager;
@@ -88,6 +89,14 @@ static class GatewayServiceCollectionExtensions {
         // docs/plan/10 § What the gateway must never do puts authorization in one place, inside the
         // resource manager, and a registration line is still a line that has to change when the
         // engine changes. GatewayIsolationTests reads this project's source for that name.
+        //
+        // ⚠ THE PRINCIPAL DIRECTORY GOES IN FIRST, AND THE ORDER IS THE WHOLE REGISTRATION.
+        // AddCyberCloudResourceManager TryAdds a refusing IPrincipalDirectory, so a line after it
+        // would leave the refusal in place and every PUT on a role assignment would answer 500
+        // naming this method. GrainPrincipalDirectory is the adapter over the identity grains that
+        // only a host referencing both assemblies can write — its remarks say why it is here and
+        // not in either module.
+        services.TryAddSingleton<IPrincipalDirectory, GrainPrincipalDirectory>();
         services.AddCyberCloudResourceManager();
         services.TryAddSingleton<IOperationReader, TenantScopedOperationReader>();
 

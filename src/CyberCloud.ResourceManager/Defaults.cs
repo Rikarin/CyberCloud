@@ -382,3 +382,49 @@ public sealed class UnavailableNamespaceInventory : INamespaceInventory {
             )
         );
 }
+
+/// <summary>
+///     The <see cref="IPrincipalDirectory" /> a host with no directory registers: it refuses, so
+///     every grant is refused.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Refuses rather than answering <c>true</c>, and rather than answering <c>false</c>.</b>
+///         A <c>true</c> is the behaviour issue #86 removed — a tuple written for any well-formed
+///         subject, a typo granting to nobody. A <c>false</c> would be a <c>400</c> telling a tenant
+///         owner that their own user does not exist, which sends them to the directory when the
+///         fault is in this host's composition. The failure names the missing call instead.
+///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             The <c>TryAdd</c> default for the reason <see cref="UnavailableSecretResolver" />
+///             is one.
+///         </b> The real implementation reads <c>IUserGrain</c> and its three siblings, which are
+///         <c>CyberCloud.Identity.Contracts</c> types this assembly does not reference —
+///         <c>module-layering.txt</c> gives the resource manager no edge to identity — so it lives in
+///         the host that references both (<c>GrainPrincipalDirectory</c>, in the gateway) and is
+///         registered there before <c>AddCyberCloudResourceManager</c> runs. A silo composes the
+///         manager too and never serves a grant, so this is what a silo keeps.
+///     </para>
+/// </remarks>
+public sealed class UnavailablePrincipalDirectory : IPrincipalDirectory {
+    /// <inheritdoc />
+    public Task<Result<bool>> ExistsAsync(
+        Guid tenantId,
+        string principalType,
+        string principalId,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<bool>.Failure(
+                ErrorCode.InternalError,
+                $"No principal directory is wired, so nothing can say whether '{principalType}:{principalId}' "
+                + $"exists in tenant {tenantId:D}, and no role can be granted. The host that serves role "
+                + "assignments registers IPrincipalDirectory before AddCyberCloudResourceManager — the "
+                + "gateway's is GrainPrincipalDirectory, over the identity grains. This refuses rather "
+                + "than granting on a guess: an assignment to a principal nobody checked is a tuple "
+                + "nothing can use and nothing can see (docs/plan/07 § Azure RBAC, expressed in it)."
+            )
+        );
+}

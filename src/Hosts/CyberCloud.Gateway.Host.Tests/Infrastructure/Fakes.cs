@@ -540,6 +540,59 @@ sealed class RecordingRoleAssignmentManager : IRoleAssignmentManager {
     /// <summary>What <see cref="RevokeAsync" /> answers. Default: the grant went.</summary>
     public Func<RoleAssignmentRequest, Result> OnRevoke { get; set; } = _ => Result.Success;
 
+    /// <summary>
+    ///     What <see cref="ListAsync" /> answers. Default: one direct row and one inherited from the
+    ///     tenant, with no next page.
+    /// </summary>
+    public Func<RoleAssignmentListRequest, Result<RoleAssignmentPage>> OnList { get; set; } =
+        request => Result<RoleAssignmentPage>.Success(Page(request));
+
+    /// <summary>Every collection request this manager was asked to list, in order.</summary>
+    public ConcurrentQueue<RoleAssignmentListRequest> Listings { get; } = new();
+
+    /// <inheritdoc />
+    public Task<Result<RoleAssignmentPage>> ListAsync(
+        RoleAssignmentListRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+        paths.Enqueue(request.Path);
+        callers.Enqueue(request.Caller);
+        Listings.Enqueue(request);
+        return Task.FromResult(OnList(request));
+    }
+
+    static RoleAssignmentPage Page(RoleAssignmentListRequest request) {
+        var collection = RoleAssignmentCollectionId.ParsePath(request.Path).GetValueOrThrow();
+        var direct = collection.Member(new("reader", "user", "7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d"));
+        var ancestor = RoleAssignmentId.OnScope(
+            ScopeId.Tenant(collection.TenantId),
+            new("owner", "user", "0a1b2c3d4e5f4a6b8c9d0e1f2a3b4c5d")
+        );
+
+        return new() {
+            Assignments = [
+                new() {
+                    Path = direct.Path,
+                    Name = direct.Name.Render(),
+                    Scope = direct.ScopePath,
+                    RoleDefinitionId = direct.Name.Role,
+                    PrincipalType = direct.Name.PrincipalType,
+                    PrincipalId = direct.Name.PrincipalId
+                },
+                new() {
+                    Path = ancestor.Path,
+                    Name = ancestor.Name.Render(),
+                    Scope = ancestor.ScopePath,
+                    RoleDefinitionId = ancestor.Name.Role,
+                    PrincipalType = ancestor.Name.PrincipalType,
+                    PrincipalId = ancestor.Name.PrincipalId,
+                    Inherited = true
+                }
+            ]
+        };
+    }
+
     /// <inheritdoc />
     public Task<Result<RoleAssignmentSnapshot>> AssignAsync(
         RoleAssignmentRequest request,

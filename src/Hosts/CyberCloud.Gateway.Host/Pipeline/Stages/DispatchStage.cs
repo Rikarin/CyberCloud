@@ -57,6 +57,7 @@ sealed class DispatchStage(
             RouteKind.Resource => await ResourceAsync(context, path, cancellationToken),
             RouteKind.Scope => await ScopeAsync(context, path, cancellationToken),
             RouteKind.RoleAssignment => await RoleAssignmentAsync(context, path, cancellationToken),
+            RouteKind.RoleAssignmentCollection => await RoleAssignmentCollectionAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
@@ -299,6 +300,64 @@ sealed class DispatchStage(
         return new() {
             StatusCode = snapshot.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
             Json = ResponseBodies.RoleAssignment(snapshot)
+        };
+    }
+
+    /// <summary>
+    ///     The role assignment collection <c>GET</c> — what is assigned at a scope, direct and
+    ///     inherited, paged. docs/plan/07 § Azure RBAC, expressed in it.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The same page parameters as a resource collection, read the same way and echoed
+    ///         into <c>nextLink</c> the same way</b> — <c>$top</c> parsed leniently, <c>$skipToken</c>
+    ///         passed through verbatim, and the caller's own <c>$top</c> in the link rather than the
+    ///         clamp, for the reasons <see cref="CollectionAsync" /> gives. A client that pages one
+    ///         collection of this API pages this one with no branch.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No check here, and no per-row filter here or anywhere.</b> Whether the caller
+    ///         may read the scope is <c>IRoleAssignmentManager.ListAsync</c>'s question, and its
+    ///         remarks say why one check on the scope is the whole of it.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> RoleAssignmentCollectionAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var query = context.Http.Request.Query;
+        var top = int.TryParse(query["$top"], CultureInfo.InvariantCulture, out var asked) ? asked : 0;
+
+        var listed = await roles.ListAsync(
+            new() {
+                // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+                Path = context.Route.CollectionPath,
+                Caller = context.Caller,
+                Top = top,
+                Continuation = query["$skipToken"].ToString()
+            },
+            cancellationToken
+        );
+
+        if (listed.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var page = listed.GetValueOrThrow();
+
+        return new() {
+            StatusCode = StatusCodes.Status200OK,
+            Json = ResponseBodies.RoleAssignments(
+                page,
+                GatewayRouterPaths.NextLink(
+                    options.PublicBaseUri,
+                    context.Route.CollectionPath,
+                    context.ApiVersion.Value,
+                    top,
+                    page.Continuation
+                )
+            )
         };
     }
 

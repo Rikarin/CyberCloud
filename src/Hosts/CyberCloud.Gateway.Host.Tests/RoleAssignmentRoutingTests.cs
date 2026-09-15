@@ -217,33 +217,154 @@ public sealed class RoleAssignmentRoutingTests {
         RoleAssignmentId.ParsePath(gateway.Roles.Paths.Single()).GetValueOrThrow().TenantId.ShouldBe(GatewayHarness.TenantA);
     }
 
-    // ── The shapes that still answer 400 ───────────────────────────────────────────────────────
+    // ── The collection (issue #86) ─────────────────────────────────────────────────────────────
+
+    static string CollectionOnGroup(Guid tenant) => GatewayHarness.GroupPath(tenant) + RoleAssignmentId.CollectionSuffix;
 
     [Fact]
-    public async Task TheCollectionIsNotServedAndIsRefusedByTheAssignmentGrammarRatherThanTheRegistry() {
+    public async Task TheCollectionIsServedByTheRoleAssignmentManagerAndNotTheRegistry() {
         // ⚠ A GET on …/roleAssignments with no name is, to the collection grammar, a COLLECTION of a
         // type the registry does not serve — and before the router asked
         // RoleAssignmentId.IsUnderNamespace first, that is exactly where it went: stage 6 answered
         // the canonical 404, which reads as "no such role assignments" and is really "no such
-        // route". Under the reserved namespace only the assignment grammar answers, and its answer
-        // is a 400 that names the missing segment. There is no collection read on this address yet;
-        // ICheckGrain.ListRoleAssignmentsAsync is the listing and it is not on the wire.
+        // route". Until #86 the answer under the namespace was a 400 naming the missing name; now
+        // the second grammar answers and the listing reaches IRoleAssignmentManager.ListAsync.
         var gateway = new GatewayHarness();
 
         var response = await gateway.SendAsync(
             "GET",
-            GatewayHarness.GroupPath(GatewayHarness.TenantA) + RoleAssignmentId.Suffix.TrimEnd('/'),
+            CollectionOnGroup(GatewayHarness.TenantA),
             gateway.Token(GatewayHarness.TenantA)
         );
 
-        response.Status.ShouldBe(StatusCodes.Status400BadRequest, response.Body);
-        response.Body.ShouldContain(RoleAssignmentId.Suffix);
-        gateway.Roles.Paths.ShouldBeEmpty();
-        gateway.Manager.Paths.ShouldBeEmpty();
+        response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
+        gateway.Roles.Paths.ShouldContain(CollectionOnGroup(GatewayHarness.TenantA));
+        gateway.Manager.Paths.ShouldBeEmpty("the resource manager was reached for a role assignment collection");
+        gateway.Scopes.Paths.ShouldBeEmpty("the scope manager was reached for a role assignment collection");
+    }
+
+    [Fact]
+    public async Task TheCollectionRendersEachRowAsAGetWouldAndMarksTheInheritedOne() {
+        // The fake answers one direct row and one inherited from the tenant. Each element must be
+        // the object a by-name GET renders — same envelope, same property names — plus `inherited`,
+        // and the inherited row's id and scope must be the ANCESTOR's, because that is the one
+        // address a GET or a DELETE answers for it.
+        var gateway = new GatewayHarness();
+
+        var response = await gateway.SendAsync(
+            "GET",
+            CollectionOnGroup(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
+
+        using var document = System.Text.Json.JsonDocument.Parse(response.Body);
+        var rows = document.RootElement.GetProperty("value").EnumerateArray().ToList();
+        rows.Count.ShouldBe(2);
+
+        var direct = rows[0];
+        direct.GetProperty("id").GetString().ShouldBe(OnGroup(GatewayHarness.TenantA));
+        direct.GetProperty("type").GetString().ShouldBe(RoleAssignmentId.TypeName);
+        direct.GetProperty("properties").GetProperty("inherited").GetBoolean().ShouldBeFalse();
+        direct.GetProperty("properties").GetProperty("scope").GetString().ShouldBe(GatewayHarness.GroupPath(GatewayHarness.TenantA));
+        direct.GetProperty("properties").GetProperty(RoleAssignmentBodyProperties.RoleDefinitionId).GetString().ShouldBe("reader");
+
+        var inherited = rows[1];
+        inherited.GetProperty("properties").GetProperty("inherited").GetBoolean().ShouldBeTrue();
+        inherited.GetProperty("properties").GetProperty("scope").GetString().ShouldBe($"/tenants/{GatewayHarness.TenantA:D}");
+        inherited.GetProperty("id").GetString().ShouldStartWith($"/tenants/{GatewayHarness.TenantA:D}" + RoleAssignmentId.Suffix);
+
+        document.RootElement.TryGetProperty("nextLink", out _).ShouldBeFalse("a last page carried a nextLink");
+    }
+
+    [Fact]
+    public async Task TheCollectionPassesTopAndSkipTokenThroughAndEchoesTopIntoTheNextLink() {
+        // ⚠ The same two obligations CollectionRoutingTests pins for a resource collection (#76):
+        // the page parameters reach the manager, and the caller's own $top — not the clamp — is in
+        // the link they are told to follow, with the continuation escaped.
+        var gateway = new GatewayHarness();
+        var next = OnGroup(GatewayHarness.TenantA);
+
+        gateway.Roles.OnList = request => Result<RoleAssignmentPage>.Success(
+            new() { Assignments = [], Continuation = next }
+        );
+
+        var response = await gateway.SendAsync(
+            "GET",
+            CollectionOnGroup(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            query: "api-version=" + OneTypeRegistry.TheVersion + "&$top=7&$skipToken=" + Uri.EscapeDataString("/tenants/x")
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
+
+        var listing = gateway.Roles.Listings.ShouldHaveSingleItem();
+        listing.Top.ShouldBe(7);
+        listing.Continuation.ShouldBe("/tenants/x");
+        listing.Path.ShouldBe(CollectionOnGroup(GatewayHarness.TenantA));
+
+        using var document = System.Text.Json.JsonDocument.Parse(response.Body);
+        var nextLink = document.RootElement.GetProperty("nextLink").GetString().ShouldNotBeNull();
+        nextLink.ShouldContain(CollectionOnGroup(GatewayHarness.TenantA) + "?api-version=");
+        nextLink.ShouldContain("&$top=7");
+        nextLink.ShouldEndWith("&$skipToken=" + Uri.EscapeDataString(next));
     }
 
     [Theory]
+    [InlineData("PUT")]
+    [InlineData("DELETE")]
+    [InlineData("PATCH")]
+    [InlineData("POST")]
+    public async Task AWriteOnTheCollectionIsABadRequestThatNamesTheAssignmentGrammar(string method) {
+        // ⚠ 400 and not 405, and not a fall-through into the assignment manager. An ARM client that
+        // emitted `PUT …/roleAssignments/{guid}` and lost the segment is the likeliest sender, and
+        // what it needs to read is that the grant is one assignment with a derived name.
+        var gateway = new GatewayHarness();
+
+        var response = await gateway.SendAsync(
+            method,
+            CollectionOnGroup(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            body: "{}"
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status400BadRequest, response.Body);
+        response.Body.ShouldContain("{role}-{principalType}-{principalId}");
+        gateway.Roles.Paths.ShouldBeEmpty("a write on the collection reached the manager");
+        gateway.Manager.Paths.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task TheCollectionInAnotherTenantIsNotFoundAndReachesNoManager() {
+        var gateway = new GatewayHarness();
+
+        var response = await gateway.SendAsync(
+            "GET",
+            CollectionOnGroup(GatewayHarness.TenantB),
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status404NotFound, response.Body);
+        gateway.Roles.Paths.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task TheCollectionAddressThatReachesTheManagerCarriesTheTokensTenant() {
+        var gateway = new GatewayHarness();
+
+        await gateway.SendAsync("GET", CollectionOnGroup(GatewayHarness.TenantA), gateway.Token(GatewayHarness.TenantA));
+
+        var listing = gateway.Roles.Listings.ShouldHaveSingleItem();
+        listing.Caller.TenantId.ShouldBe(GatewayHarness.TenantA);
+        RoleAssignmentCollectionId.ParsePath(listing.Path).GetValueOrThrow().TenantId.ShouldBe(GatewayHarness.TenantA);
+    }
+
+    // ── The shapes that still answer 400 ───────────────────────────────────────────────────────
+
+    [Theory]
     [InlineData("/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice")]
+    [InlineData("/providers/CyberCloud.Authorization/roleAssignments")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/somethingElse/x")]
     [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.Authorization/roleAssignments/reader-user-alice/extra")]

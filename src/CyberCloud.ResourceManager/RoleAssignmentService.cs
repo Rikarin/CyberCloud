@@ -54,11 +54,33 @@ namespace CyberCloud.ResourceManager;
 ///         This is asked once per grant, which § Caching across requests calls rare.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The principal is not looked up in the directory.</b> Azure refuses an assignment to
-///         a principal AAD does not know; this writes the tuple for any well-formed subject. The
-///         cost is a typo that grants to nobody, which the caller sees on the next <c>GET</c>; the
-///         alternative is a dependency from this seam on <c>CyberCloud.Identity</c>, which no other
-///         authorization path has. Owed to docs/plan/11 if it turns out to matter.
+///         ⚠
+///         <b>
+///             The principal is looked up in the directory, after the check and before the write
+///             (issue #86).
+///         </b> Azure refuses an assignment to a principal the directory does not know, and until
+///         #86 this wrote the tuple for any well-formed subject — a typo granted to nobody, and
+///         nothing could ever see it. The lookup goes through <see cref="IPrincipalDirectory" />
+///         rather than through <c>CyberCloud.Identity.Contracts</c>, which this assembly still does
+///         not reference; that seam's remarks carry the argument. Two things about its position:
+///         it is <i>after</i> <c>assignRole</c> so that a caller with no grant cannot use the
+///         difference between two refusals to learn which principal ids exist, and it is asked of
+///         the <b>assignment's</b> tenant, which is the caller's, so a principal from another tenant
+///         is "does not exist" by construction rather than by a comparison somebody could delete.
+///         The refusal is a <c>400</c> naming the principal, the same status the unknown-role and
+///         unknown-type refusals above it use, because the address is the caller's own and the
+///         caller has just proved they may grant here.
+///     </para>
+///     <para>
+///         ⚠ <b>A revoke does not ask the directory.</b> The goal of a <c>DELETE</c> is the absence
+///         of the tuple, and a tuple written before the check existed — or to a principal since
+///         deprovisioned — must remain revocable, or it is a grant nobody can remove.
+///     </para>
+///     <para>
+///         ⚠ <b>The collection is one check and no per-row filter</b> —
+///         <see cref="IRoleAssignmentManager.ListAsync" />'s remarks say why that is the opposite of
+///         a resource listing and still the right answer. What is shared with a resource listing is
+///         the paging rule: ordered by address, resumed after the last address served.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Every grain reference goes through <c>ForTenant</c>.</b> Held by the gateway, which
@@ -69,6 +91,7 @@ public sealed class RoleAssignmentService(
     IScopeAuthorizer scopes,
     IResourceAuthorizer resources,
     IRoleAssignmentStore store,
+    IPrincipalDirectory directory,
     IGrainFactory grains,
     ILogger<RoleAssignmentService> logger
 )
@@ -124,6 +147,42 @@ public sealed class RoleAssignmentService(
 
         if (permitted.TryGetError(out var denied)) {
             return Result<RoleAssignmentSnapshot>.Failure(denied);
+        }
+
+        var known = await directory.ExistsAsync(
+            assignment.TenantId,
+            assignment.Name.PrincipalType,
+            assignment.Name.PrincipalId,
+            cancellationToken
+        );
+
+        if (known.TryGetError(out var directoryError)) {
+            // ⚠ Refused, never granted on a guess. An unanswerable directory is an unwired seam or an
+            // unreachable grain, and either way the tuple this would write is one nothing checked.
+            logger.LogError(
+                "{Caller} asked to grant '{Role}' on '{Scope}' to {PrincipalType}:{PrincipalId}, and the "
+                + "directory could not say whether the principal exists: {Message}",
+                request.Caller,
+                assignment.Name.Role,
+                assignment.ScopePath,
+                assignment.Name.PrincipalType,
+                assignment.Name.PrincipalId,
+                directoryError.Message
+            );
+
+            return Result<RoleAssignmentSnapshot>.Failure(directoryError);
+        }
+
+        if (!known.GetValueOrThrow()) {
+            return Result<RoleAssignmentSnapshot>.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{assignment.Name.PrincipalType}:{assignment.Name.PrincipalId}' is not a principal in "
+                + $"tenant '{assignment.TenantId:D}', so nothing can be granted to it. A principal is a "
+                + "user, a service principal, a managed identity or a group that exists in the "
+                + "assignment's own tenant, named by the id its directory object carries — "
+                + "docs/plan/11 § The object model. A principal from another tenant is not one either: "
+                + "a user belongs to exactly one tenant (docs/plan/11 § Sign-up and tenant creation)."
+            );
         }
 
         var existed = await store.IsGrantedAsync(assignment, cancellationToken);
@@ -220,6 +279,55 @@ public sealed class RoleAssignmentService(
         return Result.Success;
     }
 
+    /// <inheritdoc />
+    public async Task<Result<RoleAssignmentPage>> ListAsync(
+        RoleAssignmentListRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var parsed = RoleAssignmentCollectionId.ParsePath(request.Path);
+        if (parsed.TryGetError(out var pathError)) {
+            return Result<RoleAssignmentPage>.Failure(pathError);
+        }
+
+        var resolved = await ResolveScopeAsync(parsed.GetValueOrThrow(), request.Caller);
+        if (resolved.TryGetError(out var resolveError)) {
+            return Result<RoleAssignmentPage>.Failure(resolveError);
+        }
+
+        var collection = resolved.GetValueOrThrow();
+
+        var allowed = await AuthorizeAsync(collection, Permissions.Read, request.Caller, false, cancellationToken);
+        if (allowed.TryGetError(out var denied)) {
+            return Result<RoleAssignmentPage>.Failure(denied);
+        }
+
+        var listed = await store.ListAsync(collection, cancellationToken);
+        if (listed.TryGetError(out var listError)) {
+            return Result<RoleAssignmentPage>.Failure(listError);
+        }
+
+        // ⚠ Ordered by address and resumed by address, which is the rule every collection of this
+        // API pages by (ListRequest.Continuation). The addresses are distinct — one tuple, one
+        // address — so "the first row after the token" is well defined, and a grant or a revoke
+        // between two pages moves only its own row.
+        var rows = listed.GetValueOrThrow()
+            .OrderBy(x => x.Path, StringComparer.Ordinal)
+            .Where(x => request.Continuation.Length == 0 || string.CompareOrdinal(x.Path, request.Continuation) > 0)
+            .Take(request.PageSize + 1)
+            .ToList();
+
+        var hasMore = rows.Count > request.PageSize;
+        if (hasMore) {
+            rows.RemoveAt(rows.Count - 1);
+        }
+
+        return Result<RoleAssignmentPage>.Success(
+            new() { Assignments = [.. rows], Continuation = hasMore ? rows[^1].Path : string.Empty }
+        );
+    }
+
     // ── Step 1: resolve ────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -280,24 +388,45 @@ public sealed class RoleAssignmentService(
             );
         }
 
-        var tenant = grains.ForTenant(assignment.TenantId.ToString("D", CultureInfo.InvariantCulture));
+        var scope = await ResolveScopeAsync(RoleAssignmentCollectionId.Of(assignment), request.Caller);
 
-        if (assignment.IsResourceScoped) {
+        return scope.TryGetError(out var scopeError)
+            ? Result<RoleAssignmentId>.Failure(scopeError)
+            : Result<RoleAssignmentId>.Success(scope.GetValueOrThrow().Member(assignment.Name));
+    }
+
+    /// <summary>
+    ///     The scope half of <see cref="ResolveAsync" />, shared with the collection: the tenant
+    ///     must be the caller's and the scope must exist — a resource as a confirmed index binding,
+    ///     which is also what supplies the id its ReBAC object is named by.
+    /// </summary>
+    /// <returns>The scope, with a resource's id resolved; or the canonical <c>404</c>.</returns>
+    async Task<Result<RoleAssignmentCollectionId>> ResolveScopeAsync(
+        RoleAssignmentCollectionId collection,
+        CallerContext caller
+    ) {
+        if (collection.TenantId != caller.TenantId) {
+            return NotFound<RoleAssignmentCollectionId>(collection.ScopePath);
+        }
+
+        var tenant = grains.ForTenant(collection.TenantId.ToString("D", CultureInfo.InvariantCulture));
+
+        if (collection.IsResourceScoped) {
             // docs/plan/06 § Identifiers: a parsed path yields Guid.Empty, and only a CONFIRMED
             // binding resolves — a name under an unexpired claim reads as "does not exist", which
             // is what it is, and a parked resource is not addressable here either.
             var bound = await tenant
-                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(assignment.Resource))
+                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(collection.Resource))
                 .ResolveAsync();
 
             return bound.IsFailure
-                ? NotFound<RoleAssignmentId>(assignment.ScopePath)
-                : Result<RoleAssignmentId>.Success(
-                    assignment with { Resource = assignment.Resource.WithId(bound.GetValueOrThrow()) }
+                ? NotFound<RoleAssignmentCollectionId>(collection.ScopePath)
+                : Result<RoleAssignmentCollectionId>.Success(
+                    collection with { Resource = collection.Resource.WithId(bound.GetValueOrThrow()) }
                 );
         }
 
-        var scope = assignment.Scope;
+        var scope = collection.Scope;
 
         var exists = scope.Kind switch {
             ScopeKind.Tenant => (await tenant
@@ -312,7 +441,9 @@ public sealed class RoleAssignmentService(
             _ => false
         };
 
-        return exists ? Result<RoleAssignmentId>.Success(assignment) : NotFound<RoleAssignmentId>(assignment.ScopePath);
+        return exists
+            ? Result<RoleAssignmentCollectionId>.Success(collection)
+            : NotFound<RoleAssignmentCollectionId>(collection.ScopePath);
     }
 
     // ── Step 2: check ──────────────────────────────────────────────────────────────────────────
@@ -328,9 +459,18 @@ public sealed class RoleAssignmentService(
         bool fullyConsistent,
         CancellationToken cancellationToken
     ) =>
-        assignment.IsResourceScoped
+        AuthorizeAsync(RoleAssignmentCollectionId.Of(assignment), permission, caller, fullyConsistent, cancellationToken);
+
+    Task<Result> AuthorizeAsync(
+        RoleAssignmentCollectionId scope,
+        string permission,
+        CallerContext caller,
+        bool fullyConsistent,
+        CancellationToken cancellationToken
+    ) =>
+        scope.IsResourceScoped
             ? resources.AuthorizeAsync(
-                assignment.Resource,
+                scope.Resource,
                 permission,
                 Permissions.Read,
                 caller,
@@ -338,7 +478,7 @@ public sealed class RoleAssignmentService(
                 cancellationToken
             )
             : scopes.AuthorizeAsync(
-                assignment.Scope,
+                scope.Scope,
                 permission,
                 Permissions.Read,
                 caller,
