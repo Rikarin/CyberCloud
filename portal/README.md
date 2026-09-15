@@ -54,8 +54,10 @@ from, for exactly this class of reason. It binds xUI's contributors, not xUI's c
 That is a real correction, and it does **not** move the pin. Re-evaluated, the surviving form of
 the input still points at 24: every `@xui/*` package at 2.2.4 was published from Node 24.18.0
 (`_nodeVersion` in the registry metadata), so 24 remains the runtime the library is built and
-tested on. It is now a _weak_ input where the decision claimed a strong one — it is corroboration,
-not a constraint — and with it demoted, the pin rests on the Node release calendar alone.
+tested on. (Re-checked at 3.0.0 on 2026-09-15: still no `engines` field in any of the 23 packages,
+all published from Node 24.20.0.) It is now a _weak_ input where the decision claimed a strong one
+— it is corroboration, not a constraint — and with it demoted, the pin rests on the Node release
+calendar alone.
 
 So: **24**, unchanged, because none of the four inputs reversed. Node 26 is still rejected on the
 one ground it was rejected on: it does not become LTS until 2026-10-20, and a platform's portal
@@ -95,31 +97,53 @@ the failure to prevent was never "built on the wrong Node" — that is allowed o
 
 ## The Angular pin
 
-**`@angular/*` is pinned to exactly `22.0.8`, and `@angular/cdk` to exactly `22.0.6`.**
+**`@angular/*` is pinned to exactly `22.0.8`, and `@angular/cdk` to exactly `22.0.6`.** ⚠ **Since
+`@xui/*` 3.0.0 those numbers are no longer forced by any peer.** They were, and the reason is kept
+here because it is the reason every xUI bump has to re-measure rather than reuse this table.
 
-docs/plan/02 § ADR-017 records the peer range as `@angular/*: 22` — "a **major range**" — and
-concludes the portal "is free within Angular 22.x". ⚠ **That is not true of every `@xui/*` package
-at 2.2.0**, and the exceptions are load-bearing:
+At `@xui/*` 2.2.x, docs/plan/02 § ADR-017's claim that the peer range is `@angular/*: 22` — "a
+major range" — was not true of every package. `@xui/panel-stack`, `popover`, `tooltip`,
+`breadcrumb` and `overflow-list` peered `"@angular/common": "22.0.8"` **exactly** (five packages;
+an earlier version of this table, measured at 2.2.0, listed four), and `@xui/echarts` peered
+`"@angular/cdk": "22.0.6"` — exact, and a different version again. `@angular/common@22.0.8` peers
+`"@angular/core": "22.0.8"` exactly, so one exact peer dragged the whole framework to a point
+release; with `@angular/*` at the then-head 22.1.1 and `strict-peer-dependencies=true`,
+`pnpm install` failed.
 
-| Package            | Peer                          | Note                                   |
-| ------------------ | ----------------------------- | -------------------------------------- |
-| `@xui/panel-stack` | `"@angular/common": "22.0.8"` | **Exact**, not `22`                    |
-| `@xui/popover`     | `"@angular/common": "22.0.8"` | Exact                                  |
-| `@xui/tooltip`     | `"@angular/common": "22.0.8"` | Exact                                  |
-| `@xui/breadcrumb`  | `"@angular/common": "22.0.8"` | Exact                                  |
-| `@xui/echarts`     | `"@angular/cdk": "22.0.6"`    | Exact, and a _different_ version again |
-| everything else    | `"@angular/*": "22"`          | The major range ADR-017 describes      |
+**Re-measured on 2026-09-15 from the registry for `@xui/*@3.0.0`** — all 22 packages the portal
+declares plus `@xui/echarts`, which the charts stub will need — with `npm view @xui/<pkg>@3.0.0
+peerDependencies`, and diffed against 2.2.4 package by package. Every peer that changed:
 
-`@angular/common@22.0.8` in turn peers `"@angular/core": "22.0.8"` exactly, so the whole framework
-follows. Four of those six packages are in the M1 shell, so this is not a corner case — with
-`@angular/*` at the 22.1.1 head and `strict-peer-dependencies=true`, `pnpm install` fails.
+| Package                                                            | Peer                               | 2.2.4    | 3.0.0                      |
+| ------------------------------------------------------------------ | ---------------------------------- | -------- | -------------------------- |
+| `panel-stack`, `popover`, `tooltip`, `breadcrumb`, `overflow-list` | `@angular/common`                  | `22.0.8` | `22`                       |
+| `echarts`                                                          | `@angular/cdk`                     | `22.0.6` | `22`                       |
+| the ten that already peered it (`breadcrumb` … `toast`)            | `@ng-icons/core`, `material-icons` | `34`     | `35`                       |
+| `icon`                                                             | `@ng-icons/core`                   | —        | `35`                       |
+| all 22                                                             | `@xui/*` on each other             | `2.2.4`  | `3.0.0` (exact, as before) |
 
-Pinning to 22.0.8/22.0.6 satisfies both the exact pins and the major ranges, and it is the version
-xUI's own checkout pins, so the portal is running what xUI is tested against. **`@ng-icons/*` is
-pinned to `34.0.0`** for the same reason: `@xui/*` peers `34` while the registry head is `35.0.1`.
+Nothing else moved: `clsx ^2.1.1` (`>=2.0.0` in `@xui/core`), `class-variance-authority ^0.7.1`,
+`rxjs ^7.8.0`, `luxon >=3.0.0` and `tailwind-merge >=3.0.0` peer exactly as they did at 2.2.4, and
+the portal's pins satisfy them. **No exact `@angular/*` peer survives in any of the 23 packages**;
+`pnpm install` under `strict-peer-dependencies` reported none unmet.
+
+**So why is the pin still 22.0.8/22.0.6?** Because moving Angular is a different change from
+moving xUI, and this one was xUI's. The gate is green at 22.0.8 under 3.0.0: the 3.0.0 bundles
+carry `version: "22.1.4"` partial-compilation stamps — xUI's checkout pins `@angular/* 22.1.4` and
+`@angular/cli 22.1.6` at the `v3.0.0` tag — with `minVersion` unchanged, and 22.0.8's linker
+accepts them. ⚠ **The earlier justification, "the version xUI's own checkout pins, so the portal
+is running what xUI is tested against", is no longer true and is no longer the reason.** xUI tests
+against 22.1.4. Whoever moves the pin has a free choice inside `22.x` for the first time; the
+principled target is what xUI tests against, not the registry head (22.1.6 framework / 22.1.8
+tooling on 2026-09-15). `pnpm-workspace.yaml`'s single-version comment and
+`libs/charts/src/index.ts`'s dependency note both point here and want the same edit when it
+happens.
+
+**`@ng-icons/*` is pinned to `35.1.0`**, the head of the `35` range `@xui/*@3.0.0` peers on. The
+registry head is `36.0.0`, which is out of range.
 
 The build tooling (`@angular/cli`, `@angular/build`, `@angular/ssr`) is pinned to 22.0.8 as well.
-It versions independently of the framework — the tooling head is 22.1.3 — but keeping the two in
+It versions independently of the framework — the tooling head is 22.1.8 — but keeping the two in
 step means one number to reason about.
 
 ## Gates

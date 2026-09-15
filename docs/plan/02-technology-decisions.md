@@ -9,7 +9,7 @@
 | Language | C# 14, `LangVersion=latest` | See [00](00-vision-and-principles.md) for the subset |
 | Solution | `CyberCloud.slnx` | Plus `.slnf` filters per area for fast IDE loads |
 | Packages | Central Package Management | `Directory.Packages.props`, no floating versions |
-| Frontend | Angular 22, Tailwind 4, zoneless, SSR | The library dictates the version, not the other way round — but ⚠ read it from **npm**, not from `~/Projects/Rikarin/xui`. xUI's CI bumps the published version without reflecting it back into the checkout. `@xui/* ^2.2.0`, peering `@angular/*: 22`. See ADR-017 |
+| Frontend | Angular 22, Tailwind 4, zoneless, SSR | The library dictates the version, not the other way round — but ⚠ read it from **npm**, not from `~/Projects/Rikarin/xui`. xUI's CI bumps the published version without reflecting it back into the checkout. `@xui/*` 3.0.0 since 2026-09-15, peering `@angular/*: 22`. See ADR-017 |
 | Node | ✅ **24 (Active LTS)** — decided 2026-08-11, **re-decided 2026-08-12, unchanged** | ⚠ Was "22 LTS", which is now **maintenance-only**. See the row below for the re-decision, which withdrew this row's strongest input |
 | Node — the withdrawn input | ⚠ **`@xui/*` does not pin Node at all** | This row said "**xUI itself pins `engines.node: 24.x`**, which is the strongest signal". ⚠ **That was read from `~/Projects/Rikarin/xui`, against this table's own standing rule one row above.** Re-checked on **npm** on 2026-08-12 across `2.2.0` (current at the decision) → `2.2.4` (current now), and against the unpacked `@xui/core@2.2.4` tarball, not just registry metadata: **no published `@xui/*` package carries an `engines` field.** The `24.x` is in xUI's development monorepo root `package.json` — it binds xUI's contributors, not its consumers. What survives is weaker and still points the same way: every `@xui/*` 2.2.4 was published from Node **24.18.0** (`_nodeVersion`), so 24 is the runtime the library is built on. Corroboration, not a constraint |
 | Node — the re-decision | ✅ **Still 24.** None of the four inputs reversed | With xUI demoted, the pin rests on the release calendar: Angular 22 permits `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0` (verified on npm for `@angular/core`, `cli` and `build` at 22.0.8), so Angular does not decide it; 22 is Maintenance, 24 is Active LTS, 26 is **Current**; the dev host runs 26.5.0 and is the **only** Node installed there, so the pin cannot be a local wall. 26 stays rejected on the single ground it was rejected on — a platform's portal should not build on a Current release. ⚠ **Dated expiry: 2026-10-20**, when 24 goes Maintenance and 26 becomes Active LTS — the exact condition that made "22 LTS" wrong, on a known date. Revisit by then; the move is `portal/.nvmrc`, `.node-version` and `engines`, nothing else |
@@ -833,7 +833,18 @@ The lesson generalises past this row: **reading one package's manifest is not re
 contract.** `@xui/*` is ~92 independently-published packages, and a claim about "the peers" has to be
 checked across the set the portal actually imports.
 
-So the portal depends on `@xui/* ^2.2.0` from the registry at a **pinned** Angular point release. The
+⚠ **CORRECTED A THIRD TIME, 2026-09-15: at `@xui/*` 3.0.0 the exact peers are gone.** Re-measured
+from the registry across all 22 packages the portal declares plus `@xui/echarts`, and diffed against
+2.2.4: `@angular/common` is `22` in the five packages that had it exact (`overflow-list` was a fifth
+the table above never listed — it was measured at 2.2.0), `@xui/echarts`'s `@angular/cdk` is `22`,
+and `@ng-icons/*` is `35`. Nothing else changed. The portal is, for the first time, actually free
+within Angular 22.x — and it **still pins `22.0.8`/`22.0.6`**, now because moving Angular is a
+separate change from moving xUI and the gate is green where it is, not because a peer says so. The
+3.0.0 bundles were compiled by Angular 22.1.4, which is what xUI's checkout pins at the `v3.0.0`
+tag; that is the principled target when the pin moves. `@ng-icons/* = 35.1.0`. The table and the
+reasoning live in portal/README.md § The Angular pin, and it is re-measured on every xUI bump.
+
+So the portal depends on `@xui/*` 3.0.0 (pinned exactly) from the registry at a **pinned** Angular point release. The
 "90 components, one npm package each" claim is confirmed — the checkout carries 92 libraries under
 `libs/ui`, and every component this plan names by hand (`data-table`, `dock-manager`, `omnibar`,
 `node-graph`, `splitter`, `code-block`, `rich-text-editor`, `date-range-picker`, `echarts`,
