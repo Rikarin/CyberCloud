@@ -33,8 +33,9 @@ partial class Build {
     AbsolutePath OpenApiDirectory => RootDirectory / "openapi";
 
     /// <summary>
-    ///     Where ADR-012's other three surfaces are checked in — the <c>cyc</c> verb tree, the .NET
-    ///     SDK and the portal form schemas.
+    ///     Where the derived surfaces are checked in — ADR-012's <c>cyc</c> verb tree, .NET SDK and
+    ///     portal form schemas, and since issue #40 the Python and Go SDKs beside them: five
+    ///     directories, each file its own row of the <c>Generated surfaces</c> gate.
     ///     <para>
     ///         ⚠ Tracked, for the same reason <c>openapi/</c> is: docs/plan/23 § The architecture
     ///         gates asks that all four "regenerate byte-identically", and a byte comparison needs a
@@ -44,7 +45,7 @@ partial class Build {
     ///     </para>
     ///     <para>
     ///         A separate root from <c>openapi/</c> because docs/plan/10 § Shape makes the gateway
-    ///         serve that directory as files, and these three are not served to anyone.
+    ///         serve that directory as files, and none of these five is served to anyone.
     ///     </para>
     /// </summary>
     AbsolutePath DerivedSurfacesDirectory => RootDirectory / "generated";

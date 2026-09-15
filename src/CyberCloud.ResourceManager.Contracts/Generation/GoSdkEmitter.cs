@@ -892,6 +892,18 @@ public static class GoSdkEmitter {
             var doc = Comment(action.Name) + " — permission '" + Comment(action.Permission) + "'."
                 + (action.Secret ? " ⚠ The response carries secret material." : string.Empty);
 
+            // ⚠ A purge ends the resource, so its Operation is BeginDelete's: Wait reads nothing, because
+            // the GET the resource-returning shape sends afterwards is a 404 for a purge that worked.
+            // Read off the document (DocumentAction.RemovesResource), never off the name here.
+            if (action.LongRunning && action.RemovesResource) {
+                built.Append("\n// Begin").Append(method).Append(" runs ").Append(doc).Append(" ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.\n")
+                    .Append("func (c *").Append(client).Append(") Begin").Append(method).Append("(ctx context.Context").Append(parameters).Append(content).Append(") (*Operation[struct{}], error) {\n")
+                    .Append("\tpath := ").Append(actionPath).Append('\n')
+                    .Append("\treturn begin[struct{}](ctx, c.transport, \"POST\", path, ").Append(body).Append(", \"\")\n}\n");
+
+                continue;
+            }
+
             if (action.LongRunning) {
                 built.Append("\n// Begin").Append(method).Append(" runs ").Append(doc).Append(" ⚠ Long-running: Wait resolves to the resource afterwards.\n")
                     .Append("func (c *").Append(client).Append(") Begin").Append(method).Append("(ctx context.Context").Append(parameters).Append(content).Append(") (*Operation[").Append(model).Append("Resource], error) {\n")

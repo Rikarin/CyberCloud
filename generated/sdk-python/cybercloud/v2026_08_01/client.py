@@ -308,11 +308,11 @@ class ContainerRegistryClient:
         raise_for_status(response)
         return ContainerRegistryListCredentialsResult.from_wire(wire_of(response))
 
-    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[ContainerRegistryResource]:
-        """purge — permission 'purge'. ⚠ Long-running: wait() resolves to the resource afterwards."""
+    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerRegistry/registries/{_segment(resource_name)}/purge"))
         raise_for_status(response)
-        return Operation(self._transport, response, ContainerRegistryResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.ContainerRegistry/registries/{_segment(resource_name)}")
+        return Operation(self._transport, response, _nothing, None)
 
     def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[ContainerRegistryResource]:
         """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""
@@ -464,11 +464,11 @@ class MariaDBServerClient:
         raise_for_status(response)
         return MariaDBServerListKeysResult.from_wire(wire_of(response))
 
-    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[MariaDBServerResource]:
-        """purge — permission 'purge'. ⚠ Long-running: wait() resolves to the resource afterwards."""
+    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.DBforMySQL/servers/{_segment(resource_name)}/purge"))
         raise_for_status(response)
-        return Operation(self._transport, response, MariaDBServerResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.DBforMySQL/servers/{_segment(resource_name)}")
+        return Operation(self._transport, response, _nothing, None)
 
     def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[MariaDBServerResource]:
         """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""
@@ -526,11 +526,11 @@ class PostgreSQLServerClient:
         raise_for_status(response)
         return PostgreSQLServerListKeysResult.from_wire(wire_of(response))
 
-    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[PostgreSQLServerResource]:
-        """purge — permission 'purge'. ⚠ Long-running: wait() resolves to the resource afterwards."""
+    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.DBforPostgreSQL/servers/{_segment(resource_name)}/purge"))
         raise_for_status(response)
-        return Operation(self._transport, response, PostgreSQLServerResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.DBforPostgreSQL/servers/{_segment(resource_name)}")
+        return Operation(self._transport, response, _nothing, None)
 
     def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[PostgreSQLServerResource]:
         """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""
@@ -820,11 +820,11 @@ class MonitorWorkspaceClient:
         raise_for_status(response)
         return MonitorWorkspaceListKeysResult.from_wire(wire_of(response))
 
-    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[MonitorWorkspaceResource]:
-        """purge — permission 'purge'. ⚠ Long-running: wait() resolves to the resource afterwards."""
+    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/purge"))
         raise_for_status(response)
-        return Operation(self._transport, response, MonitorWorkspaceResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}")
+        return Operation(self._transport, response, _nothing, None)
 
     def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[MonitorWorkspaceResource]:
         """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""
@@ -1208,11 +1208,11 @@ class StorageAccountClient:
         raise_for_status(response)
         return StorageAccountListKeysResult.from_wire(wire_of(response))
 
-    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[StorageAccountResource]:
-        """purge — permission 'purge'. ⚠ Long-running: wait() resolves to the resource afterwards."""
+    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Storage/accounts/{_segment(resource_name)}/purge"))
         raise_for_status(response)
-        return Operation(self._transport, response, StorageAccountResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Storage/accounts/{_segment(resource_name)}")
+        return Operation(self._transport, response, _nothing, None)
 
     def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[StorageAccountResource]:
         """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""

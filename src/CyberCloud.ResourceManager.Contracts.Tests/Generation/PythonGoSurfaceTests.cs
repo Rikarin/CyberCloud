@@ -292,10 +292,22 @@ public sealed class PythonGoSurfaceTests {
     ///     ⚠ <b>A read-only leaf inside a body is read and never written, on both.</b>
     /// </summary>
     /// <remarks>
-    ///     The write path refuses a read-only member rather than ignoring it, so a body read off a
-    ///     <c>GET</c> and sent back on a <c>PUT</c> would be refused for a member the caller never
-    ///     set. Python's <c>to_wire</c> leaves it out; Go's <c>MarshalJSON</c> clears it, which is
-    ///     the only way <c>encoding/json</c> can be told.
+    ///     <para>
+    ///         The write path refuses a read-only member rather than ignoring it, so a body read off a
+    ///         <c>GET</c> and sent back on a <c>PUT</c> would be refused for a member the caller never
+    ///         set. Python's <c>to_wire</c> leaves it out; Go's <c>MarshalJSON</c> clears it, which is
+    ///         the only way <c>encoding/json</c> can be told.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This shape exists only in fixture output.</b> No published type declares a
+    ///         read-only leaf inside its body — the envelope's read-only members are the envelope's —
+    ///         so the two compile gates never reach it, and the string assertions here are what the
+    ///         build checks. The fixture's packages were handed to <c>go vet</c>, <c>gofmt -l</c> and
+    ///         <c>mypy --strict</c> in containers on 2026-09-15, clean, and a round trip on each —
+    ///         read <c>"Succeeded"</c> off the wire, write the body, find no
+    ///         <c>provisioningState</c> in it — passed. Redo that when this emitter path changes; the
+    ///         gates will not.
+    ///     </para>
     /// </remarks>
     [Fact]
     public void AReadOnlyLeafIsReadAndNeverWritten() {
@@ -406,6 +418,53 @@ public sealed class PythonGoSurfaceTests {
         // to the URL itself: a bearer token must not follow an origin the response chose.
         PythonRuntime.ShouldContain("\"/operations/\" + urllib_parse.quote(self.id, safe=\"\")");
         GoRuntime.ShouldContain("\"/operations/\" + url.PathEscape(o.id)");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A purge's operation reads nothing when it succeeds, on both, and a restore's reads
+    ///     the resource.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Every long-running action used to come out as <c>Operation[{Model}Resource]</c>, whose
+    ///         <c>wait()</c> follows the <c>202</c> to the resource — and a purge removes the
+    ///         resource, docs/plan/08 § The write path, end to end, so the read that made the wait
+    ///         succeed was a <c>404</c> from a purge that had worked. Found by the fake-transport
+    ///         exercise over the checked-in package, not by a test, which is why this one exists:
+    ///         the shape is <c>begin_delete</c>'s, <c>Operation[None]</c> and
+    ///         <c>Operation[struct{}]</c>, with no resource path.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The registry here declares <c>restore</c> and <c>purge</c> itself, in the shape
+    ///         <c>ProviderBuilder.SoftDeleteActionsOf</c> synthesises them, because the fixture
+    ///         registry does not go through the builder and the Postgres fixture's window has no
+    ///         actions beside it. <c>DocumentReader</c> reads the purge off the document's
+    ///         <c>x-cybercloud-purge-permission</c> and the reserved name, not off any registry.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void APurgeResolvesToNothingOnBothAndARestoreToTheResource() {
+        var document = OpenApiEmitter.Emit(SoftDeleting(), ApiVersion.Parse(Fixtures.FirstVersion));
+        var actions = DocumentReader.TypesOf(document).ShouldHaveSingleItem().Actions;
+
+        actions.ShouldContain(x => x.Name == "purge" && x.LongRunning && x.RemovesResource);
+        actions.ShouldContain(x => x.Name == "restore" && x.LongRunning && !x.RemovesResource);
+
+        var python = PythonSdkEmitter.Emit(document)[PythonModule + "client.py"];
+        var go = GoSdkEmitter.Emit(document)[GoPackage + "client.go"];
+
+        python.ShouldContain("def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:");
+        Member(python, "    def begin_purge(").ShouldContain("return Operation(self._transport, response, _nothing, None)");
+        Member(python, "    def begin_purge(").ShouldNotContain("Resource.from_wire");
+        Member(python, "    def begin_purge(").ShouldContain("/purge\"");
+        python.ShouldContain("def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[PostgreSQLServerResource]:");
+        Member(python, "    def begin_restore(").ShouldContain("PostgreSQLServerResource.from_wire, ");
+
+        go.ShouldContain("BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {");
+        Member(go, "func (c *PostgreSQLServerClient) BeginPurge(").ShouldContain("/purge\"");
+        Member(go, "func (c *PostgreSQLServerClient) BeginPurge(").ShouldContain("return begin[struct{}](ctx, c.transport, \"POST\", path, nil, \"\")");
+        go.ShouldContain("BeginRestore(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[PostgreSQLServerResource], error) {");
+        Member(go, "func (c *PostgreSQLServerClient) BeginRestore(").ShouldContain("return begin[PostgreSQLServerResource](ctx, c.transport, \"POST\", path+\"/restore\", nil, path)");
     }
 
     /// <summary>
@@ -603,10 +662,45 @@ public sealed class PythonGoSurfaceTests {
         return source[start..(end < 0 ? source.Length : end + 1)];
     }
 
+    /// <summary>The text of one method, from its opening line to the blank line that ends it — a Python <c>def</c> or a Go <c>func</c>, both of which one blank line separates from the next.</summary>
+    static string Member(string source, string opening) {
+        var start = source.IndexOf(opening, StringComparison.Ordinal);
+        start.ShouldBeGreaterThanOrEqualTo(0, opening);
+
+        var end = source.IndexOf("\n\n", start, StringComparison.Ordinal);
+
+        return source[start..(end < 0 ? source.Length : end + 1)];
+    }
+
     static IEnumerable<string> Declarations(string source, string keyword) =>
         source.Split('\n')
             .Where(x => x.StartsWith(keyword, StringComparison.Ordinal))
             .Select(x => x[keyword.Length..].Split(' ')[0].TrimEnd(':', '{', ' '));
+
+    /// <summary>
+    ///     The Postgres server with the two actions <c>ProviderBuilder.SoftDeleteActionsOf</c> puts on
+    ///     a type that declares a window — the fixture registry never goes through the builder.
+    /// </summary>
+    static FakeRegistry SoftDeleting() =>
+        new() {
+            Namespaces = [Fixtures.Namespace],
+            Types = [
+                new ResourceTypeRegistration {
+                    Type = new(Fixtures.Namespace, "servers"),
+                    ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), Fixtures.ServerSchema())],
+                    Actions = [
+                        new(SoftDeletePolicy.RestoreAction, ActionKind.Post, "write", Secret: false) { LongRunning = true },
+                        new(SoftDeletePolicy.PurgeAction, ActionKind.Post, SoftDeletePolicy.DefaultPurgePermission, Secret: false) { LongRunning = true }
+                    ],
+                    Display = new("PostgreSQL server", "PostgreSQL servers", "postgres", "A managed Postgres."),
+                    ClusterIdPointer = ClusterPlacement.DefaultPointer,
+                    SoftDeleteDays = 7,
+                    PurgePermission = SoftDeletePolicy.DefaultPurgePermission,
+                    PurgeProtectionPointer = "/properties/enablePurgeProtection",
+                    RequiresCluster = true
+                }
+            ]
+        };
 
     /// <summary>A body with <c>mode</c> at two depths, both closed, and a leaf named <c>class</c>.</summary>
     static FakeRegistry Colliding() =>

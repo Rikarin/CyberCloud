@@ -94,9 +94,9 @@ static class Program {
                 Console.WriteLine(line);
             }
 
-            // ⚠ The other three read the documents this process just emitted, not the files on disk —
-            // docs/plan/21 § Generation's one hop. See OpenApiArtifacts.Documents for why reading the
-            // checked-in file back would let one drifted document seed three more.
+            // ⚠ The five derived surfaces read the documents this process just emitted, never the files on
+            // disk — docs/plan/21 § Generation's one hop. See OpenApiArtifacts.Documents for why reading the
+            // checked-in file back would let one drifted document seed five more.
             var surfaces = derived is { Length: > 0 }
                 ? DerivedSurfaces.Generate(OpenApiArtifacts.Documents(registry), derived, write)
                 : new DerivedReport([], []);

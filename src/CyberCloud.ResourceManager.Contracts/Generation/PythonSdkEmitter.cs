@@ -155,12 +155,13 @@ public static class PythonSdkEmitter {
         var scopes = DocumentReader.ScopesOf(document);
         var names = SdkEmitter.ModelNames(types);
         var module = PackageName + "/" + ModuleOf(version) + "/";
+        var models = Models(version, document, types, scopes, names);
 
         return ImmutableSortedDictionary.CreateRange(
             StringComparer.Ordinal,
             new Dictionary<string, string>(StringComparer.Ordinal) {
-                [module + "__init__.py"] = Index(version),
-                [module + "models.py"] = Models(version, document, types, scopes, names),
+                [module + "__init__.py"] = Index(version, Declared(models)),
+                [module + "models.py"] = models,
                 [module + "client.py"] = Client(version, document, types, scopes, names),
                 [module + "_runtime.py"] = Runtime(version)
             }
@@ -169,36 +170,59 @@ public static class PythonSdkEmitter {
 
     // ── __init__.py ────────────────────────────────────────────────────────────────────────────
 
-    static string Index(string version) =>
-        Head(version)
-        + "\"\"\"The CyberCloud API at api-version " + version + ", typed.\"\"\"\n"
-        + "\n"
-        + "from ._runtime import (\n"
-        + "    API_VERSION,\n"
-        + "    HttpTransport,\n"
-        + "    Operation,\n"
-        + "    Page,\n"
-        + "    Pager,\n"
-        + "    Request,\n"
-        + "    RequestFailedError,\n"
-        + "    Response,\n"
-        + "    Transport,\n"
-        + ")\n"
-        + "from .client import CyberCloudClient\n"
-        + "from .models import *  # noqa: F401,F403 — the models are the public surface\n"
-        + "\n"
-        + "__all__ = [\n"
-        + "    \"API_VERSION\",\n"
-        + "    \"CyberCloudClient\",\n"
-        + "    \"HttpTransport\",\n"
-        + "    \"Operation\",\n"
-        + "    \"Page\",\n"
-        + "    \"Pager\",\n"
-        + "    \"Request\",\n"
-        + "    \"RequestFailedError\",\n"
-        + "    \"Response\",\n"
-        + "    \"Transport\",\n"
-        + "]\n";
+    /// <summary>The ten names <c>_runtime</c> and <c>client</c> put on the subpackage.</summary>
+    static readonly ImmutableArray<string> RuntimeExports = [
+        "API_VERSION",
+        "CyberCloudClient",
+        "HttpTransport",
+        "Operation",
+        "Page",
+        "Pager",
+        "Request",
+        "RequestFailedError",
+        "Response",
+        "Transport"
+    ];
+
+    /// <summary>The subpackage's <c>__init__.py</c>: the runtime, the client and every model, re-exported by name.</summary>
+    /// <param name="version">The api-version the subpackage is for.</param>
+    /// <param name="models">Every name <c>models.py</c> declares, in its own <c>__all__</c> order.</param>
+    /// <remarks>
+    ///     ⚠ <b>The subpackage's <c>__all__</c> lists every model by name, not only the runtime
+    ///     ten.</b> <c>from .models import *</c> binds the models on the subpackage, and a named
+    ///     import of one works with or without this — but <c>from cybercloud.v2026_08_01 import *</c>
+    ///     exports exactly what the subpackage's own <c>__all__</c> lists, and the first cut listed
+    ///     ten names beside a comment calling the models "the public surface", so that import bound
+    ///     no model at all. mypy reads <c>__all__</c> as a literal list and not as
+    ///     <c>[*a, *models.__all__]</c>, so the list is written out rather than composed.
+    /// </remarks>
+    static string Index(string version, IEnumerable<string> models) {
+        var built = new StringBuilder(Head(version));
+
+        built.Append("\"\"\"The CyberCloud API at api-version ").Append(version).Append(", typed.\"\"\"\n\n")
+            .Append("from ._runtime import (\n")
+            .Append("    API_VERSION,\n")
+            .Append("    HttpTransport,\n")
+            .Append("    Operation,\n")
+            .Append("    Page,\n")
+            .Append("    Pager,\n")
+            .Append("    Request,\n")
+            .Append("    RequestFailedError,\n")
+            .Append("    Response,\n")
+            .Append("    Transport,\n")
+            .Append(")\n")
+            .Append("from .client import CyberCloudClient\n")
+            .Append("from .models import *  # noqa: F401,F403 — the models are the public surface, and __all__ below names each\n\n")
+            .Append("__all__ = [\n");
+
+        foreach (var name in RuntimeExports.Concat(models).OrderBy(x => x, StringComparer.Ordinal)) {
+            built.Append("    ").Append(Quote(name)).Append(",\n");
+        }
+
+        built.Append("]\n");
+
+        return built.ToString();
+    }
 
     // ── models.py ──────────────────────────────────────────────────────────────────────────────
 
@@ -1038,6 +1062,20 @@ public static class PythonSdkEmitter {
             var actionPath = PathExpression(type.Path + "/" + action.Name);
             var doc = Docstring(action.Name) + " — permission '" + Docstring(action.Permission) + "'."
                 + (action.Secret ? " ⚠ The response carries secret material." : string.Empty);
+
+            // ⚠ A purge ends the resource, so its Operation is a delete's: wait() resolves to None
+            // and reads nothing, because the GET the resource-returning shape would send afterwards
+            // is a 404 for a purge that worked. Read off the document (DocumentAction.RemovesResource),
+            // never off the name here.
+            if (action.LongRunning && action.RemovesResource) {
+                built.Append("\n    def begin_").Append(method).Append("(self, ").Append(parameters).Append(content).Append(") -> Operation[None]:\n")
+                    .Append("        \"\"\"").Append(doc).Append(" ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read.\"\"\"\n")
+                    .Append("        response = self._transport.send(Request(\"POST\", ").Append(actionPath).Append(body).Append("))\n")
+                    .Append("        raise_for_status(response)\n")
+                    .Append("        return Operation(self._transport, response, _nothing, None)\n");
+
+                continue;
+            }
 
             if (action.LongRunning) {
                 built.Append("\n    def begin_").Append(method).Append("(self, ").Append(parameters).Append(content).Append(") -> Operation[").Append(model).Append("Resource]:\n")

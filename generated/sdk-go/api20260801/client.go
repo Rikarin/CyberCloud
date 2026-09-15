@@ -335,10 +335,10 @@ func (c *ContainerRegistryClient) ListCredentials(ctx context.Context, tenantID,
 	return &result, nil
 }
 
-// BeginPurge runs purge — permission 'purge'. ⚠ Long-running: Wait resolves to the resource afterwards.
-func (c *ContainerRegistryClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[ContainerRegistryResource], error) {
-	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerRegistry/registries/" + segment(resourceName)
-	return begin[ContainerRegistryResource](ctx, c.transport, "POST", path+"/purge", nil, path)
+// BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
+func (c *ContainerRegistryClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.ContainerRegistry/registries/" + segment(resourceName) + "/purge"
+	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
 }
 
 // BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.
@@ -516,10 +516,10 @@ func (c *MariaDBServerClient) ListKeys(ctx context.Context, tenantID, subscripti
 	return &result, nil
 }
 
-// BeginPurge runs purge — permission 'purge'. ⚠ Long-running: Wait resolves to the resource afterwards.
-func (c *MariaDBServerClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[MariaDBServerResource], error) {
-	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.DBforMySQL/servers/" + segment(resourceName)
-	return begin[MariaDBServerResource](ctx, c.transport, "POST", path+"/purge", nil, path)
+// BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
+func (c *MariaDBServerClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.DBforMySQL/servers/" + segment(resourceName) + "/purge"
+	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
 }
 
 // BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.
@@ -589,10 +589,10 @@ func (c *PostgreSQLServerClient) ListKeys(ctx context.Context, tenantID, subscri
 	return &result, nil
 }
 
-// BeginPurge runs purge — permission 'purge'. ⚠ Long-running: Wait resolves to the resource afterwards.
-func (c *PostgreSQLServerClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[PostgreSQLServerResource], error) {
-	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.DBforPostgreSQL/servers/" + segment(resourceName)
-	return begin[PostgreSQLServerResource](ctx, c.transport, "POST", path+"/purge", nil, path)
+// BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
+func (c *PostgreSQLServerClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.DBforPostgreSQL/servers/" + segment(resourceName) + "/purge"
+	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
 }
 
 // BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.
@@ -937,10 +937,10 @@ func (c *MonitorWorkspaceClient) ListKeys(ctx context.Context, tenantID, subscri
 	return &result, nil
 }
 
-// BeginPurge runs purge — permission 'purge'. ⚠ Long-running: Wait resolves to the resource afterwards.
-func (c *MonitorWorkspaceClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[MonitorWorkspaceResource], error) {
-	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName)
-	return begin[MonitorWorkspaceResource](ctx, c.transport, "POST", path+"/purge", nil, path)
+// BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
+func (c *MonitorWorkspaceClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/purge"
+	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
 }
 
 // BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.
@@ -1399,10 +1399,10 @@ func (c *StorageAccountClient) ListKeys(ctx context.Context, tenantID, subscript
 	return &result, nil
 }
 
-// BeginPurge runs purge — permission 'purge'. ⚠ Long-running: Wait resolves to the resource afterwards.
-func (c *StorageAccountClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[StorageAccountResource], error) {
-	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Storage/accounts/" + segment(resourceName)
-	return begin[StorageAccountResource](ctx, c.transport, "POST", path+"/purge", nil, path)
+// BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
+func (c *StorageAccountClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Storage/accounts/" + segment(resourceName) + "/purge"
+	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
 }
 
 // BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.

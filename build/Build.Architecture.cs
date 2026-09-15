@@ -169,7 +169,7 @@ partial class Build {
         ("Generated SDK compiles",
             "every generated/sdk/{api-version}.cs is handed to Roslyn against the real CyberCloud.Sdk — the row above compares bytes, and byte-identical is not valid — and no type in it declares one [JsonPropertyName] twice, which compiles and does not serialise. Issues #73 and #79; not in docs/plan/23"),
         ("Generated Python SDK compiles",
-            "generated/sdk-python is handed to `python -m compileall`, and to `mypy --strict` when mypy is installed; ○ with the reason when python is not on PATH, never ✔. Issue #40; not in docs/plan/23"),
+            "generated/sdk-python is handed to `python -m compileall`, and to `mypy --strict` when mypy is installed; ○ with the reason when neither python nor python3 is on PATH, never ✔. Issue #40; not in docs/plan/23"),
         ("Generated Go SDK compiles",
             "generated/sdk-go is handed to `go vet ./...` and `gofmt -l`; ○ with the reason when go is not on PATH, never ✔. Issue #40; not in docs/plan/23"),
         ("Action handlers",
@@ -1586,7 +1586,8 @@ partial class Build {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>○ when <c>python</c> is off <c>PATH</c>, never ✔.</b> The row above this one
+    ///         ⚠ <b>○ when neither <c>python</c> nor <c>python3</c> is an interpreter on
+    ///         <c>PATH</c>, never ✔.</b> The row above this one
     ///         had to be added because a generated surface nothing consumed shipped four defect
     ///         families green; a Python package nothing interprets is the same state one language
     ///         over, and a row that said ✔ on a machine with no interpreter would be that state
@@ -1617,16 +1618,6 @@ partial class Build {
             return GateOutcome.From(Gate, 0, $"file(s) under generated/{PythonSdkDirectory}, so there was nothing to hand to an interpreter", []);
         }
 
-        if (GeneratedPackageSurface.Resolve("python", out var absent) is not { } python) {
-            return GateOutcome.From(
-                Gate,
-                0,
-                $"of {files.Count} file(s) under generated/{PythonSdkDirectory} checked — {absent}, so the package was "
-                + "not compiled. Install Python 3.10 or later and run again",
-                []
-            );
-        }
-
         var violations = new List<string>();
 
         // ⚠ Bytecode goes under artifacts/, never beside the sources: compileall writes __pycache__
@@ -1637,23 +1628,45 @@ partial class Build {
             ["PYTHONDONTWRITEBYTECODE"] = "1"
         };
 
-        // ⚠ Probed before it is used, because "on PATH" is not "runs": Windows ships a python.exe
-        // that opens the Store and exits 9009, and a gate that fed the package to it would report
-        // a compile failure about a machine with no interpreter.
-        var probe = GeneratedPackageSurface.Run(python, "--version", root, environment);
+        // ⚠ `python` first, then `python3`, and each is probed before it is used, because "on PATH"
+        // is not "runs" in either direction. Windows ships a python.exe AND a python3.exe that open
+        // the Store and exit 9009, so a gate that fed the package to the first name it found would
+        // report a compile failure about a machine with no interpreter; a Debian or Ubuntu runner
+        // ships only python3, so a gate that resolved one name would report ○ "install Python" on
+        // a machine that has it. The first name that answers --version is the interpreter.
+        Tool? python = null;
+        var version = string.Empty;
+        var interpreter = string.Empty;
+        var reasons = new List<string>();
 
-        if (probe.ExitCode != 0) {
+        foreach (var candidate in new[] { "python", "python3" }) {
+            if (GeneratedPackageSurface.Resolve(candidate, out var absent) is not { } found) {
+                reasons.Add(absent);
+                continue;
+            }
+
+            var probe = GeneratedPackageSurface.Run(found, "--version", root, environment);
+
+            if (probe.ExitCode != 0) {
+                reasons.Add($"`{candidate}` is on PATH and exited {probe.ExitCode} on --version, so it is not an interpreter");
+                continue;
+            }
+
+            python = found;
+            version = string.Join(" ", probe.Problems).Trim();
+            interpreter = candidate;
+            break;
+        }
+
+        if (python is null) {
             return GateOutcome.From(
                 Gate,
                 0,
-                $"of {files.Count} file(s) under generated/{PythonSdkDirectory} checked — `python` is on PATH and "
-                + $"exited {probe.ExitCode} on --version, so it is not an interpreter that can compile the package. "
-                + "Install Python 3.10 or later and run again",
+                $"of {files.Count} file(s) under generated/{PythonSdkDirectory} checked — {string.Join("; ", reasons)}, "
+                + "so the package was not compiled. Install Python 3.10 or later and run again",
                 []
             );
         }
-
-        var version = string.Join(" ", probe.Problems).Trim();
         var compiled = GeneratedPackageSurface.Run(python, $"-m compileall -q -f {root}", root, environment);
 
         if (compiled.ExitCode != 0) {
@@ -1696,7 +1709,7 @@ partial class Build {
             Gate,
             files.Count,
             $"file(s) under generated/{PythonSdkDirectory} declaring {classes} class(es), byte-compiled by "
-            + $"`python -m compileall` ({version})"
+            + $"`{interpreter} -m compileall` ({version})"
             + (typed
                 ? " and type-checked by `mypy --strict`"
                 : "; ⚠ mypy is not installed, so the types were not checked — `pip install mypy` closes that gap"),

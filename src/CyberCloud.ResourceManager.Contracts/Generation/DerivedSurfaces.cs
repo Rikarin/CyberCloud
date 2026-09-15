@@ -51,11 +51,11 @@ public sealed record DerivedReport(
 ///         compare against. <c>artifacts/</c> is gitignored, so a file written there has no previous
 ///         copy on a fresh clone and every run would report "new" — a gate that can only ever pass.
 ///         <see cref="OpenApiArtifacts.DirectoryName" /> is tracked for exactly this reason and these
-///         three follow it.
+///         five follow it.
 ///     </para>
 ///     <para>
 ///         <b>A separate root from <c>openapi/</c>, though.</b> docs/plan/10 § Shape makes the gateway
-///         serve <c>openapi/</c> as files; the CLI tree, the SDK source and the form schemas are not
+///         serve <c>openapi/</c> as files; the CLI tree, the three SDK sources and the form schemas are not
 ///         served to anyone over HTTP, and putting them in the directory the gateway publishes would
 ///         make the platform's public surface depend on which files a build step happened to leave
 ///         there.
@@ -78,11 +78,11 @@ public sealed record DerivedReport(
 ///     </para>
 /// </remarks>
 public static class DerivedSurfaces {
-    /// <summary>The directory, relative to the repository root, the three surfaces are checked in at.</summary>
+    /// <summary>The directory, relative to the repository root, the five surfaces are checked in at.</summary>
     public const string DirectoryName = "generated";
 
     /// <summary>
-    ///     Emits all three surfaces for every document, compares against what is checked in, and
+    ///     Emits all five surfaces for every document, compares against what is checked in, and
     ///     optionally writes.
     /// </summary>
     /// <param name="documents">The emitted per-version OpenAPI documents, keyed by api-version.</param>

@@ -361,7 +361,7 @@ registry would describe a member the published contract does not have, with no g
 | A model per schema | A `@dataclass` per object, nested as the wire is (the conventions table above); a `Literal[…]` alias per closed set, so a typo fails the type checker and a value a newer server adds to a read-only vocabulary still parses | A struct per object, one named struct per container; a `string` type with a constant per value, for the same two reasons |
 | One client per api-version | `CyberCloudClient(transport)` with a group per provider — `client.dbforpostgresql.servers`, `client.containerservice.managed_clusters_agent_pools` — the CLI's lower-cased group and the type path snake-cased | `NewClient(transport)` with `client.DBforPostgreSQL.Servers`, `client.ContainerService.ManagedClustersAgentPools` |
 | Request and response | `Request`/`Response` and a `Transport` protocol; `HttpTransport(endpoint, token)` over `urllib` | `Request`/`Response` and a `Transport` interface; `HTTPTransport{Endpoint, Token}` over `net/http` |
-| Operations polling | `begin_create_or_update`, `begin_update`, `begin_delete`, `begin_{action}` return an `Operation[T]`; `poll()` reads once, `wait(on_progress=…)` polls at the server's `Retry-After` until terminal, then reads the resource, or raises with the operation's error | `Begin*` return `*Operation[T]`; `Poll(ctx)`, `Wait(ctx, onProgress)` the same way, `ctx` cancelling the delay |
+| Operations polling | `begin_create_or_update`, `begin_update`, `begin_delete`, `begin_{action}` return an `Operation[T]`; `poll()` reads once, `wait(on_progress=…)` polls at the server's `Retry-After` until terminal, then reads the resource, or raises with the operation's error. ⚠ `begin_delete` and `begin_purge` are `Operation[None]` and read nothing: a purge removes the resource (docs/plan/08 § The write path, end to end), and the first cut's `wait()` raised `ResourceNotFound` from a purge that had worked | `Begin*` return `*Operation[T]`; `Poll(ctx)`, `Wait(ctx, onProgress)` the same way, `ctx` cancelling the delay. `BeginDelete` and `BeginPurge` are `*Operation[struct{}]`, for the same reason |
 | `$skipToken` paging | `list(…, top=…)` returns a `Pager[T]`: iterate the items, or `pages()` for `Page[T]` | `List(…, options)` returns `*Pager[T]`: `More()`, `NextPage(ctx)`, `All(ctx)` |
 | The same error shape | `CyberCloudError` (`code`, `message`, `target`, `details`) and `RequestFailedError(status, error)`; the poll of a Failed operation raises the same | `Error` and `*RequestFailedError{StatusCode, Err}`, `errors.As`-able, with `Code()` |
 | Scopes and operations | `client.tenants`, `client.subscriptions`, `client.resource_groups`, `client.operations` — from the document, no emitter change | `client.Tenants`, `client.Subscriptions`, `client.ResourceGroups`, `client.Operations` |
@@ -390,6 +390,13 @@ limitation with each other and it is recorded here rather than in three places.
 - **Packaging.** `pyproject.toml` and `go.mod` exist so `pip install -e` and `go vet` have something
   to read; neither package is published anywhere, which is the same state the TypeScript client is
   in.
+- **Go's initialism spelling.** A Go identifier derived from a wire name or a type path is
+  `Pascal` of it with only a trailing `Id` respelled `ID`, so the provider group holds
+  `PublicIpAddresses *PublicIPAddressClient` — the field from the path `publicIpAddresses`, the type
+  from the display name "Public IP address" — and models carry `Cpu`, `Url`, `Tls`, `Http`, `Api`,
+  `Sql`. Making them one spelling is golint's initialism table over every derived identifier —
+  fields, parameters, nested struct and closed-set type names, and the test that derives the
+  struct names — which is a naming decision for the package, not a fix, and is not made here.
 - **A hand-written test suite in either language.** The emitter's tests are
   `PythonGoSurfaceTests`, in C#, over the fixture document; the checked-in packages were exercised
   end to end against a fake transport by hand on 2026-09-15 — create → 202 → three polls with
@@ -398,8 +405,10 @@ limitation with each other and it is recorded here rather than in three places.
   checked in, because a test needs a runner and neither toolchain is a build prerequisite.
 
 **The gates.** `Generated surfaces` compares every file byte-for-byte as it does the other three.
-`Generated Python SDK compiles` hands `generated/sdk-python` to `python -m compileall` and, when
-mypy is installed, `mypy --strict`; `Generated Go SDK compiles` hands `generated/sdk-go` to
+`Generated Python SDK compiles` hands `generated/sdk-python` to `python -m compileall` — `python3`
+where only that name is on `PATH`, as on a Debian runner; each name is probed with `--version`
+first, because Windows ships both as Store shortcuts — and, when mypy is installed,
+`mypy --strict`; `Generated Go SDK compiles` hands `generated/sdk-go` to
 `go vet ./...` and `gofmt -l`. ⚠ **Both report ○ with the reason when their toolchain is off `PATH`,
 never ✔** — issue #73's lesson was a surface nothing consumed shipping green, and a tick on a machine
 with no interpreter is that lesson unlearned. On 2026-09-15 the Python row was ✔ over 231 classes
