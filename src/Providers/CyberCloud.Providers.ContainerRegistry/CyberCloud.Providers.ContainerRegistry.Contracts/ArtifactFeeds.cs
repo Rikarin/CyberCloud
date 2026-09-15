@@ -182,7 +182,7 @@ public static class ArtifactFeeds {
     ///     teardown lists this prefix and removes what it finds. A host that wrote outside the prefix
     ///     would leave bytes no teardown reaches, and a prefix that did not start with the tenant
     ///     would let one tenant's teardown list another's. The tenant is first for that reason and
-    ///     <c>ArtifactFeedTests.TheStoragePrefixStartsWithTheTenantAndEndsWithASlash</c> pins it.
+    ///     <c>ArtifactFeedDeclarationTests.TheStoragePrefixStartsWithTheTenantAndEndsWithASlash</c> pins it.
     /// </remarks>
     public static string StoragePrefix(Guid tenantId, Guid feedId) =>
         tenantId.ToString("N", CultureInfo.InvariantCulture) + "/" + feedId.ToString("N", CultureInfo.InvariantCulture) + "/";

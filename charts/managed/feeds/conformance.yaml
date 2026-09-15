@@ -55,8 +55,16 @@ assertions:
     says: >
       A second push of a version that exists is 409 on every protocol, and the first bytes stay —
       including a NuGet version spelled differently (`2.0.0.0`, another case) and an npm publish with
-      a different description. Maven's release paths are immutable and its metadata, checksums and
-      -SNAPSHOT directories are not, which is the default policy of every repository manager.
+      a different description. Maven's release paths are immutable, checksums and signatures beside a
+      release with them; its metadata and -SNAPSHOT directories are not, which is the default policy of
+      every repository manager. ⚠ Two more ways the first bytes could have gone, both found by the
+      review of #29 and both closed: an npm publish of a NEW version whose `_attachments` was keyed
+      with an EXISTING version's file name overwrote the existing tarball under its old shasum
+      (NpmProtocolTests.APublishWhoseAttachmentIsNamedForAnotherVersionIs400AndThatVersionsBytesStay —
+      the tarball's name is now derived from name and version and the attachment must agree); and two
+      CONCURRENT pushes of one version both passed the catalogue's check and wrote one key, so the
+      surviving entry's hash described the loser's bytes (ImmutablePublishTests — an immutable
+      artefact's key now carries its own SHA-256 and a losing claim removes its bytes).
   - id: an-unlist-keeps-the-version-restorable
     says: >
       `dotnet nuget delete` unlists: the version leaves search and the registration says listed=false,
@@ -178,6 +186,16 @@ owed:
       NuGet feed for an open-source project — is a property the type does not declare and a permission
       the ReBAC schema does not have: `read` for everybody is not a tuple. It is a schema decision
       before it is a feed one.
+  - id: helm-lint-package-and-syft-never-ran
+    says: >
+      helm is not on the machine that wrote this chart and syft is not either. values.schema.json was
+      produced by Build.Charts' own generator reached through a no-op helm stand-in, so `helm lint` and
+      `helm package` of charts/managed/feeds have never run — a chart that renders one NOTES.txt has
+      little for lint to find, and that is a guess until it runs. Build.Images publishes
+      CyberCloud.Registry.Feeds.Host like every host under src/Hosts, and its SBOM step needs syft;
+      that step has not run for this host on this machine. Both are owed to the first CI run with the
+      two tools installed, and neither is a reason to hold the type: the chart's value to the catalogue
+      is the conformance manifest, and this row is it.
   - id: the-hosts-object-store-and-the-silos-are-configured-twice
     says: >
       Both CyberCloud.Registry.Feeds.Host and CyberCloud.Silo.Host read CyberCloud:ObjectStorage, the

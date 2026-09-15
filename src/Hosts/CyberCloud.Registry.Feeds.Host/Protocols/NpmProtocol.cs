@@ -31,7 +31,9 @@ namespace CyberCloud.Registry.Feeds.Host.Protocols;
 ///     </para>
 ///     <para>
 ///         <b>Catalogue paths:</b> <c>npm/{name}/{version}</c> for each published version, with the
-///         manifest as its metadata and the tarball at <c>npm/{name}/-/{file}</c>; and
+///         manifest as its metadata and the tarball stored at <c>npm/{name}/-/{sha256}/{bare}-{version}.tgz</c>
+///         — the entry's <c>StoredAt</c>, which is where a download reads and the reason a
+///         second publish's bytes cannot land on a first's (<see cref="ImmutablePublish" />); and
 ///         <c>npm-tags/{name}</c> for the dist-tags, which change and are therefore a replaceable
 ///         entry rather than a field of an immutable one. The <c>dist.tarball</c> URL is computed
 ///         when the packument is served, never stored, because it names this host's origin.
@@ -135,7 +137,9 @@ public sealed class NpmProtocol(FeedAccess access, IObjectStore objects, FeedsOp
         }
 
         var context = resolved.GetValueOrThrow();
-        var body = await FeedResponses.ReadBodyAsync(http, options.MaxArtifactBytes * 2, http.RequestAborted);
+        // The whole document, base64 and all, which is why the server's limit is twice the cap; the
+        // decoded tarball is held to the cap itself below.
+        var body = await FeedResponses.ReadBodyAsync(http, options.MaxRequestBodyBytes, http.RequestAborted);
 
         if (body.TryGetError(out var unreadable)) {
             return FeedResponses.Refuse(unreadable, http);
@@ -181,8 +185,24 @@ public sealed class NpmProtocol(FeedAccess access, IObjectStore objects, FeedsOp
             return FeedResponses.Refuse(new(ErrorCode.InvalidRequestBody, "The attachment's 'data' is not base64."), http);
         }
 
-        if (tarball.Length > options.MaxArtifactBytes || !IsFileName(fileName)) {
-            return FeedResponses.Refuse(new(ErrorCode.InvalidRequestBody, $"The tarball is larger than this host accepts ({options.MaxArtifactBytes} bytes) or is misnamed."), http);
+        if (tarball.Length > options.MaxArtifactBytes) {
+            return FeedResponses.Refuse(new(ErrorCode.InvalidRequestBody, $"The tarball is larger than this host accepts ({options.MaxArtifactBytes} bytes)."), http);
+        }
+
+        // ⚠ THE ATTACHMENT'S NAME IS THE CALLER'S AND THE TARBALL'S IS NOT. The review of #29 published
+        // a new version whose attachment was named after an existing one and overwrote the existing
+        // version's bytes, because the name went straight into the object key. The tarball of
+        // {name}@{version} is `{bare}-{version}.tgz` — what registry.npmjs.org serves at
+        // `{name}/-/` — and a publish whose attachment says otherwise is not a publish of this
+        // version. libnpmpublish keys the attachment with the scope still on the name, so that
+        // spelling is accepted as the same thing; either way the name is derived and never stored.
+        var tarballName = TarballNameOf(name, version);
+
+        if (fileName != tarballName && fileName != $"{name}-{version}.tgz") {
+            return FeedResponses.Refuse(
+                new(ErrorCode.InvalidRequestBody, $"The attachment is named '{fileName}', and the tarball of {name}@{version} is '{tarballName}'. A publish carries the tarball of the version it publishes."),
+                http
+            );
         }
 
         var path = EntryPath(name, version);
@@ -194,7 +214,8 @@ public sealed class NpmProtocol(FeedAccess access, IObjectStore objects, FeedsOp
             );
         }
 
-        var tarballAt = $"{PathPrefix}{name}/-/{fileName}";
+        var sha256 = FeedResponses.Sha256Of(tarball);
+        var tarballAt = ImmutablePublish.StoredAt($"{PathPrefix}{name}/-", sha256, tarballName);
         var stored = await objects.PutAsync(context.StoragePrefix + tarballAt, tarball, "application/octet-stream", http.RequestAborted);
 
         if (stored.TryGetError(out var storeError)) {
@@ -206,20 +227,25 @@ public sealed class NpmProtocol(FeedAccess access, IObjectStore objects, FeedsOp
         manifest["dist"] = new JsonObject {
             ["shasum"] = Convert.ToHexStringLower(SHA1.HashData(tarball)),
             ["integrity"] = "sha512-" + Convert.ToBase64String(SHA512.HashData(tarball)),
-            ["fileName"] = fileName
+            ["fileName"] = tarballName
         };
 
-        var entry = await context.Catalogue.PutAsync(
+        // ⚠ The claim, not a put: a second publish of this version that raced past the check above
+        // loses here and takes its bytes with it — ImmutablePublish says why.
+        var entry = await ImmutablePublish.ClaimAsync(
+            context,
+            objects,
             new() {
                 Path = path,
                 StoredAt = tarballAt,
                 Size = tarball.Length,
-                Sha256 = FeedResponses.Sha256Of(tarball),
+                Sha256 = sha256,
                 ContentType = "application/octet-stream",
                 Metadata = manifest.ToJsonString(),
                 PublishedBy = context.Subject
             },
-            replace: false
+            [tarballAt],
+            http.RequestAborted
         );
 
         if (entry.TryGetError(out var catalogueError)) {
@@ -325,14 +351,15 @@ public sealed class NpmProtocol(FeedAccess access, IObjectStore objects, FeedsOp
             return Results.NotFound();
         }
 
+        // The file name is `{bare}-{version}.tgz` and nothing else, so the version is in it and the
+        // entry is one exact lookup — and an object under the prefix that no entry names (a publish
+        // that lost its claim, a half-finished one) is not reachable, because the bytes are read
+        // from the entry's StoredAt and from nowhere the URL spells.
+        var version = VersionOfTarball(name, file);
         var context = resolved.GetValueOrThrow();
+        var entry = version is null ? null : (await context.Catalogue.GetAsync(EntryPath(name, version))).ValueOrDefault;
 
-        // Only a tarball an entry names is served, so an object under the prefix that no version
-        // claims — a half-finished publish — is not reachable.
-        var listed = await context.Catalogue.ListAsync(PathPrefix + name + "/");
-        var claimed = listed.IsSuccess && listed.GetValueOrThrow().Any(x => x.StoredAt == $"{PathPrefix}{name}/-/{file}");
-
-        if (!claimed) {
+        if (entry is null) {
             return Results.NotFound();
         }
 
@@ -340,7 +367,7 @@ public sealed class NpmProtocol(FeedAccess access, IObjectStore objects, FeedsOp
             return Results.Ok();
         }
 
-        var read = await objects.GetAsync($"{context.StoragePrefix}{PathPrefix}{name}/-/{file}", http.RequestAborted);
+        var read = await objects.GetAsync(context.StoragePrefix + entry.StoredAt, http.RequestAborted);
 
         if (read.TryGetError(out var missing)) {
             return missing.Code == ErrorCode.ResourceNotFound ? Results.NotFound() : FeedResponses.Refuse(missing, http);
@@ -519,6 +546,22 @@ public sealed class NpmProtocol(FeedAccess access, IObjectStore objects, FeedsOp
     }
 
     static string EntryPath(string name, string version) => PathPrefix + name + "/" + version;
+
+    /// <summary>The tarball's file name — <c>{bare}-{version}.tgz</c>, the scope left off, as registry.npmjs.org spells it.</summary>
+    internal static string TarballNameOf(string name, string version) =>
+        $"{name[(name.IndexOf('/', StringComparison.Ordinal) + 1)..]}-{version}.tgz";
+
+    /// <summary>The version a tarball's file name carries for a package, or <see langword="null" /> when the name is not that package's.</summary>
+    internal static string? VersionOfTarball(string name, string file) {
+        var bare = name[(name.IndexOf('/', StringComparison.Ordinal) + 1)..];
+
+        if (!file.StartsWith(bare + "-", StringComparison.Ordinal) || !file.EndsWith(".tgz", StringComparison.Ordinal)) {
+            return null;
+        }
+
+        var version = file[(bare.Length + 1)..^4];
+        return IsVersion(version) ? version : null;
+    }
 
     /// <summary>The version segment of an entry path under a package — empty for a tarball path.</summary>
     static string VersionOf(string path, string name) {

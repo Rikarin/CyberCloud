@@ -108,6 +108,24 @@ public sealed class ProtocolGrammarTests {
     public void AnNpmNameFollowsNpmsOwnRule(string name, bool valid) => NpmProtocol.IsPackageName(name).ShouldBe(valid);
 
     [Theory]
+    [InlineData("left-pad", "1.3.0", "left-pad-1.3.0.tgz")]
+    [InlineData("@babel/core", "7.24.0", "core-7.24.0.tgz")]
+    [InlineData("@cyber/scoped", "0.1.0-rc.1+build.5", "scoped-0.1.0-rc.1+build.5.tgz")]
+    public void AnNpmTarballIsNamedAsTheRegistryServesIt(string name, string version, string file) {
+        NpmProtocol.TarballNameOf(name, version).ShouldBe(file);
+        NpmProtocol.VersionOfTarball(name, file).ShouldBe(version);
+    }
+
+    [Theory]
+    [InlineData("left-pad", "left-pad.tgz")]
+    [InlineData("left-pad", "right-pad-1.0.0.tgz")]
+    [InlineData("left-pad", "left-pad-1.0.0.tar.gz")]
+    [InlineData("@babel/core", "@babel/core-7.0.0.tgz")]
+    [InlineData("core", "core-.tgz")]
+    public void ATarballNameThatIsNotThisPackagesCarriesNoVersion(string name, string file) =>
+        NpmProtocol.VersionOfTarball(name, file).ShouldBeNull();
+
+    [Theory]
     [InlineData("dXNlcjpzZWNyZXQ=", "secret")] // user:secret
     [InlineData("OnRva2Vu", "token")] // :token — an empty username
     [InlineData("dXNlcjphOmI=", "a:b")] // user:a:b — the first colon is the separator

@@ -219,6 +219,57 @@ public sealed class NpmProtocolTests(FeedsHostFixture host) {
     }
 
     [Fact]
+    public async Task APublishWhoseAttachmentIsNamedForAnotherVersionIs400AndThatVersionsBytesStay() {
+        // ⚠ THE REVIEW'S PROBE, KEPT. Publish 1.0.0; then publish 1.0.1 with its attachment keyed
+        // `…-1.0.0.tgz`. Before the fix both were 201 and 1.0.0's tarball served 1.0.1's bytes
+        // under 1.0.0's shasum — every install of 1.0.0 failing integrity, forever.
+        var (first, firstTarball, firstFile) = TestPackages.Npm("cyber-overwrite", "1.0.0");
+        var (second, secondTarball, _) = TestPackages.Npm("cyber-overwrite", "1.0.1", "Named after the first.");
+        var misnamed = second.Replace("cyber-overwrite-1.0.1.tgz", firstFile, StringComparison.Ordinal);
+        misnamed.ShouldNotBe(second);
+
+        using var client = host.Client(host.Alice);
+
+        using (var response = await client.PutAsync(Base + "/cyber-overwrite", HttpAssertions.Json(first), Token)) {
+            response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.BodyAsync());
+        }
+
+        using (var response = await client.PutAsync(Base + "/cyber-overwrite", HttpAssertions.Json(misnamed), Token)) {
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            var body = await response.BodyAsync();
+            body.ShouldContain(firstFile);
+            body.ShouldContain("cyber-overwrite-1.0.1.tgz");
+        }
+
+        using (var response = await client.GetAsync(Base + "/cyber-overwrite/-/" + firstFile, Token)) {
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var served = await response.BytesAsync();
+            served.ShouldBe(firstTarball, "the first version's bytes were overwritten");
+            served.ShouldNotBe(secondTarball);
+        }
+
+        // And 1.0.1 is not there at all: a refused publish leaves nothing behind.
+        using (var response = await client.GetAsync(Base + "/cyber-overwrite", Token)) {
+            using var packument = JsonDocument.Parse(await response.BodyAsync());
+            packument.RootElement.GetProperty("versions").EnumerateObject().Select(x => x.Name).ShouldBe(["1.0.0"]);
+        }
+
+        // libnpmpublish keys the attachment with the scope still on the name; that spelling is the
+        // same tarball and is accepted.
+        var (scoped, scopedTarball, scopedFile) = TestPackages.Npm("@cyber/attached", "2.0.0");
+        var asLibnpmpublish = scoped.Replace("\"" + scopedFile + "\"", "\"@cyber/attached-2.0.0.tgz\"", StringComparison.Ordinal);
+        asLibnpmpublish.ShouldNotBe(scoped);
+
+        using (var response = await client.PutAsync(Base + "/@cyber%2Fattached", HttpAssertions.Json(asLibnpmpublish), Token)) {
+            response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.BodyAsync());
+        }
+
+        using (var response = await client.GetAsync(Base + "/@cyber/attached/-/" + scopedFile, Token)) {
+            (await response.BytesAsync()).ShouldBe(scopedTarball);
+        }
+    }
+
+    [Fact]
     public async Task AnNpmRouteOnTheNuGetFeedIs404() {
         using var client = host.Client(host.Alice);
         using var response = await client.GetAsync(FeedsHostFixture.Feed(FeedKind.Npm, FeedsHostFixture.NuGetFeed) + "/-/ping", Token);

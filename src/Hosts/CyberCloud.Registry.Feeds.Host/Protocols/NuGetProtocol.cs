@@ -99,12 +99,12 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
 
         var package = nuspec.GetValueOrThrow();
         var path = EntryPath(package.IdLower, package.Version.PathForm);
-        var nupkgAt = $"{path}/{package.IdLower}.{package.Version.PathForm}.nupkg";
-        var nuspecAt = $"{path}/{package.IdLower}.nuspec";
 
         // ⚠ The catalogue is asked FIRST, so a duplicate is refused before any byte is stored and a
-        // refused push leaves nothing behind. The bytes then go in before the entry, so an entry
-        // never names an object that is not there.
+        // serial second push leaves nothing behind. The bytes then go in before the entry, so an
+        // entry never names an object that is not there — under a key that carries their own hash,
+        // so a CONCURRENT second push cannot land on the first's bytes either; the claim at the end
+        // removes a loser's. ImmutablePublish says why the serial check alone was not enough.
         var taken = await context.Catalogue.GetAsync(path);
 
         if (taken.IsSuccess) {
@@ -115,6 +115,9 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
         }
 
         var content = bytes.GetValueOrThrow();
+        var sha256 = FeedResponses.Sha256Of(content);
+        var nupkgAt = ImmutablePublish.StoredAt(path, sha256, $"{package.IdLower}.{package.Version.PathForm}.nupkg");
+        var nuspecAt = NuspecBeside(nupkgAt, package.IdLower);
 
         var stored = await objects.PutAsync(context.StoragePrefix + nupkgAt, content, "application/octet-stream", http.RequestAborted);
 
@@ -128,18 +131,21 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
             return FeedResponses.Refuse(nuspecError, http);
         }
 
-        var entry = await context.Catalogue.PutAsync(
+        var entry = await ImmutablePublish.ClaimAsync(
+            context,
+            objects,
             new() {
                 Path = path,
                 StoredAt = nupkgAt,
                 Size = content.Length,
-                Sha256 = FeedResponses.Sha256Of(content),
+                Sha256 = sha256,
                 ContentType = "application/octet-stream",
                 Metadata = package.ToMetadataJson(),
                 Listed = true,
                 PublishedBy = context.Subject
             },
-            replace: false
+            [nupkgAt, nuspecAt],
+            http.RequestAborted
         );
 
         if (entry.TryGetError(out var catalogueError)) {
@@ -212,7 +218,7 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
             at = entry.GetValueOrThrow().StoredAt;
             contentType = "application/octet-stream";
         } else if (lowerFile == $"{idLower}.nuspec") {
-            at = $"{EntryPath(idLower, normalized)}/{idLower}.nuspec";
+            at = NuspecBeside(entry.GetValueOrThrow().StoredAt, idLower);
             contentType = "application/xml";
         } else {
             return Results.NotFound();
@@ -396,6 +402,9 @@ public sealed class NuGetProtocol(FeedAccess access, IObjectStore objects, Feeds
     }
 
     /// <summary>The package's bytes, from the multipart the client sends or from a raw body.</summary>
+    /// <summary>Where a version's <c>.nuspec</c> is: beside its <c>.nupkg</c>, in the same hash-named directory.</summary>
+    static string NuspecBeside(string nupkgAt, string idLower) => $"{ImmutablePublish.DirectoryOf(nupkgAt)}/{idLower}.nuspec";
+
     async Task<Result<byte[]>> ReadPackageAsync(HttpContext http) {
         if (http.Request.HasFormContentType) {
             var form = await http.Request.ReadFormAsync(http.RequestAborted);

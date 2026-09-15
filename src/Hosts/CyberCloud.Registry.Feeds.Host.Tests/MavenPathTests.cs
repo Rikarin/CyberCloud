@@ -24,11 +24,14 @@ public sealed class MavenPathTests {
 
     [Theory]
     [InlineData("io/x/1.0/x-1.0.jar", false)]
-    [InlineData("io/x/1.0/x-1.0.jar.sha1", true)]
-    [InlineData("io/x/1.0/x-1.0.jar.asc", true)]
+    [InlineData("io/x/1.0/x-1.0.jar.sha1", false)]
+    [InlineData("io/x/1.0/x-1.0.jar.asc", false)]
+    [InlineData("io/x/1.0/x-1.0.pom.sha512", false)]
     [InlineData("io/x/maven-metadata.xml", true)]
     [InlineData("io/x/maven-metadata.xml.md5", true)]
     [InlineData("io/x/1.0-SNAPSHOT/x-1.0-20260915.1-1.jar", true)]
-    public void OnlyAReleaseArtifactIsImmutable(string path, bool replaceable) =>
+    [InlineData("io/x/1.0-SNAPSHOT/x-1.0-20260915.1-1.jar.sha1", true)]
+    [InlineData("io/x/1.0-SNAPSHOT/maven-metadata.xml.sha1", true)]
+    public void AReleaseArtifactAndWhatIsBesideItAreImmutable(string path, bool replaceable) =>
         MavenProtocol.IsReplaceable(path).ShouldBe(replaceable);
 }

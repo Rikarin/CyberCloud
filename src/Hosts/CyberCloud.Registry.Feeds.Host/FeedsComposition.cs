@@ -7,6 +7,8 @@ using CyberCloud.Registry.Feeds.Host.Protocols;
 using CyberCloud.ResourceManager;
 using CyberCloud.ServiceDefaults;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -71,6 +73,16 @@ public static class FeedsComposition {
 
         builder.Services.AddSingleton(options);
         builder.Services.TryAddSingleton<IClock, SystemClock>();
+
+        // ── The server's own body limits, raised to the cap — FeedsOptions.MaxRequestBodyBytes ──
+        //
+        // ⚠ WITHOUT THESE TWO LINES THE CAP IS A NUMBER NOBODY REACHES. Kestrel answers 413 to any
+        // body over 30,000,000 bytes before a handler sees it, and ReadFormAsync stops a multipart
+        // body at 128 MiB; the 256 MiB the shipped appsettings.json promises was refused at 28.6 MiB
+        // with a message that named neither the cap nor the key. FeedsLimitsTests reads both limits
+        // back off the running host.
+        builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = options.MaxRequestBodyBytes);
+        builder.Services.Configure<FormOptions>(form => form.MultipartBodyLengthLimit = options.MaxRequestBodyBytes);
 
         // ── The resource manager, for ReadAsync and IResourceAuthorizer — docs/plan/07 ─────────
         //

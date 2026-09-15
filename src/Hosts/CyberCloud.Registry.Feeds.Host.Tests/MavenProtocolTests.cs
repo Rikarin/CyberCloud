@@ -79,7 +79,7 @@ public sealed class MavenProtocolTests(FeedsHostFixture host) {
     }
 
     [Fact]
-    public async Task AReleaseIsImmutableAndMetadataChecksumsAndSnapshotsAreNot() {
+    public async Task AReleaseAndItsChecksumsAreImmutableAndMetadataAndSnapshotsAreNot() {
         using var client = host.Client(host.Alice);
         var artifact = Base + "/io/cybercloud/immutable";
 
@@ -96,8 +96,22 @@ public sealed class MavenProtocolTests(FeedsHostFixture host) {
             (await response.BodyAsync()).ShouldBe("first");
         }
 
-        // Checksums and metadata are rewritten by every deploy.
-        foreach (var replaceable in new[] { "/2.0.0/immutable-2.0.0.jar.sha1", "/2.0.0/immutable-2.0.0.jar.md5", "/maven-metadata.xml", "/maven-metadata.xml.sha1" }) {
+        // ⚠ A release's checksum and signature are immutable WITH it — a rewritable .sha1 beside an
+        // immutable jar is a release only as immutable as its checksum, which the review of #29
+        // pointed out. The second PUT is 409 and the first checksum is what a resolver reads.
+        foreach (var beside in new[] { "/2.0.0/immutable-2.0.0.jar.sha1", "/2.0.0/immutable-2.0.0.jar.md5", "/2.0.0/immutable-2.0.0.jar.asc" }) {
+            using var first = await client.PutAsync(artifact + beside, Bytes("genuine"u8.ToArray()), Token);
+            first.StatusCode.ShouldBe(HttpStatusCode.Created, beside);
+
+            using var second = await client.PutAsync(artifact + beside, Bytes("substituted"u8.ToArray()), Token);
+            second.StatusCode.ShouldBe(HttpStatusCode.Conflict, beside);
+
+            using var read = await client.GetAsync(artifact + beside, Token);
+            (await read.BodyAsync()).ShouldBe("genuine", beside);
+        }
+
+        // Metadata and its checksums are rewritten by every deploy.
+        foreach (var replaceable in new[] { "/maven-metadata.xml", "/maven-metadata.xml.sha1" }) {
             using var first = await client.PutAsync(artifact + replaceable, Bytes("a"u8.ToArray()), Token);
             first.StatusCode.ShouldBe(HttpStatusCode.Created, replaceable);
 
@@ -108,11 +122,12 @@ public sealed class MavenProtocolTests(FeedsHostFixture host) {
             (await read.BodyAsync()).ShouldBe("b", replaceable);
         }
 
-        // A snapshot is replaceable throughout — that is what a snapshot is.
-        using (var first = await client.PutAsync(artifact + "/3.0.0-SNAPSHOT/immutable-3.0.0-20260915.101010-1.jar", Bytes("snap-1"u8.ToArray()), Token))
-        using (var second = await client.PutAsync(artifact + "/3.0.0-SNAPSHOT/immutable-3.0.0-20260915.101010-1.jar", Bytes("snap-2"u8.ToArray()), Token)) {
-            first.StatusCode.ShouldBe(HttpStatusCode.Created);
-            second.StatusCode.ShouldBe(HttpStatusCode.Created);
+        // A snapshot is replaceable throughout, checksums included — that is what a snapshot is.
+        foreach (var snapshot in new[] { "/3.0.0-SNAPSHOT/immutable-3.0.0-20260915.101010-1.jar", "/3.0.0-SNAPSHOT/immutable-3.0.0-20260915.101010-1.jar.sha1" }) {
+            using var first = await client.PutAsync(artifact + snapshot, Bytes("snap-1"u8.ToArray()), Token);
+            using var second = await client.PutAsync(artifact + snapshot, Bytes("snap-2"u8.ToArray()), Token);
+            first.StatusCode.ShouldBe(HttpStatusCode.Created, snapshot);
+            second.StatusCode.ShouldBe(HttpStatusCode.Created, snapshot);
         }
     }
 

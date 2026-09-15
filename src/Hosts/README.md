@@ -38,11 +38,17 @@ gateway is not allowed to reference one at all — only `.Contracts` and `.Appli
 ⚠ **The feeds host references one provider's `.Application` assembly where the silo and the
 gateway reference all of them** — `ContainerRegistry.Application`, which names it with
 `[assembly: OwningHost("CyberCloud.Registry.Feeds.Host")]` so the assembly-graph gate's rule 4 knows
-the reference is declared rather than a leak. It references
-that family's *implementation* only through the silo: the catalogue is `IFeedGrain` in the Contracts
-assembly, and `FeedsIsolationTests` pins that the host never sees `FeedGrain`, a Kubernetes client or
-an identity store. `HostCompositionTests` starts it against a real silo and asserts that the two agree
-about the feeds type, and that composing it without `CyberCloud:Feeds:Identity:Issuer` refuses.
+the reference is declared rather than a leak. ⚠ That `.Application` assembly references the family's
+*implementation*, and its module registers the provider — so `CyberCloud.Providers.ContainerRegistry`
+is loaded into the feeds process and its reconcilers are registered in its container, exactly as in
+the silo. What keeps the host from *running* any of it is that it is an Orleans client
+(`OrleansApplication.CreateClient`): no grain activates there, no reconcile driver runs there, and
+the catalogue is reached through `IFeedGrain` in the Contracts assembly. `FeedsIsolationTests` pins the
+compile-time half — the host's own AssemblyRef table names no `FeedGrain`, no Kubernetes client and no
+identity store — which is a statement about what the host's code can call, not about what its process
+loads; the review of #29 drew the line. `HostCompositionTests` starts it against a real silo and asserts
+that the two agree about the feeds type, and that composing it without
+`CyberCloud:Feeds:Identity:Issuer` refuses.
 
 `./build.sh Compile` then:
 

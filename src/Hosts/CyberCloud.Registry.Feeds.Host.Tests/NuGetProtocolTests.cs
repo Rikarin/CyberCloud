@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace CyberCloud.Registry.Feeds.Host.Tests;
@@ -245,9 +246,11 @@ public sealed class NuGetProtocolTests(FeedsHostFixture host) {
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         // ⚠ And the bytes are where the reconciler's teardown will look for them — under the
-        // feed's storage prefix, which is the contract between the host and the provider.
+        // feed's storage prefix, which is the contract between the host and the provider — in a
+        // directory named by their own hash, which is what keeps a racing second push off them.
+        var sha256 = Convert.ToHexStringLower(SHA256.HashData(nupkg));
         var stored = await host.Objects.ListAsync("", Token);
-        stored.GetValueOrThrow().ShouldContain(x => x.EndsWith("/nuget/cyber.raw/1.0.0/cyber.raw.1.0.0.nupkg", StringComparison.Ordinal));
-        stored.GetValueOrThrow().ShouldContain(x => x.EndsWith("/nuget/cyber.raw/1.0.0/cyber.raw.nuspec", StringComparison.Ordinal));
+        stored.GetValueOrThrow().ShouldContain(x => x.EndsWith($"/nuget/cyber.raw/1.0.0/{sha256}/cyber.raw.1.0.0.nupkg", StringComparison.Ordinal));
+        stored.GetValueOrThrow().ShouldContain(x => x.EndsWith($"/nuget/cyber.raw/1.0.0/{sha256}/cyber.raw.nuspec", StringComparison.Ordinal));
     }
 }

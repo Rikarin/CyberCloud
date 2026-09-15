@@ -22,12 +22,16 @@ namespace CyberCloud.Registry.Feeds.Host.Protocols;
 ///         document format to speak beyond the metadata's XML; the repository is the layout.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A release version is immutable; everything else is replaceable.</b> A second
-///         <c>PUT</c> of <c>org/x/y/1.0/y-1.0.jar</c> is <c>409</c>, which is what a repository
-///         manager's release policy says and what keeps a build reproducible. <c>maven-metadata.xml</c>
-///         and the checksum files beside anything are rewritten by every deploy and are replaceable
-///         by design, and a version directory ending in <c>-SNAPSHOT</c> is replaceable throughout —
-///         that is what a snapshot is.
+///         ⚠ <b>A release version is immutable, checksums included; everything else is replaceable.</b>
+///         A second <c>PUT</c> of <c>org/x/y/1.0/y-1.0.jar</c> is <c>409</c>, which is what a
+///         repository manager's release policy says and what keeps a build reproducible — and so is
+///         a second <c>PUT</c> of <c>y-1.0.jar.sha1</c> or <c>y-1.0.jar.asc</c>, because a release
+///         whose checksum can be rewritten is only as immutable as the checksum: the review of #29
+///         pointed out that a writer could make every resolver's verification of a released jar fail,
+///         or pass against a substituted signature, without touching the jar. A checksum or signature
+///         is therefore exactly as replaceable as the file it is beside. <c>maven-metadata.xml</c> and
+///         its checksums are rewritten by every deploy and are replaceable by design, and a version
+///         directory ending in <c>-SNAPSHOT</c> is replaceable throughout — that is what a snapshot is.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The path is caller-supplied and reaches the object store, so it is checked before
@@ -79,25 +83,35 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
         }
 
         var bytes = body.GetValueOrThrow();
-        var stored = await objects.PutAsync(context.StoragePrefix + entryPath, bytes, ContentTypeOf(path), http.RequestAborted);
+        var sha256 = FeedResponses.Sha256Of(bytes);
+
+        // A replaceable file lives at its own path and the last write wins, which is what replaceable
+        // means. A release file lives under its hash, so two concurrent deploys of one release cannot
+        // land on each other's bytes, and the claim below removes the loser's — ImmutablePublish.
+        var storedAt = replaceable
+            ? entryPath
+            : ImmutablePublish.StoredAt(ImmutablePublish.DirectoryOf(entryPath), sha256, path[(path.LastIndexOf('/') + 1)..]);
+
+        var stored = await objects.PutAsync(context.StoragePrefix + storedAt, bytes, ContentTypeOf(path), http.RequestAborted);
 
         if (stored.TryGetError(out var storeError)) {
             return FeedResponses.Refuse(storeError, http);
         }
 
-        var entry = await context.Catalogue.PutAsync(
-            new() {
-                Path = entryPath,
-                StoredAt = entryPath,
-                Size = bytes.Length,
-                Sha256 = FeedResponses.Sha256Of(bytes),
-                ContentType = ContentTypeOf(path),
-                PublishedBy = context.Subject
-            },
-            replace: replaceable
-        );
+        FeedEntry entry = new() {
+            Path = entryPath,
+            StoredAt = storedAt,
+            Size = bytes.Length,
+            Sha256 = sha256,
+            ContentType = ContentTypeOf(path),
+            PublishedBy = context.Subject
+        };
 
-        return entry.TryGetError(out var catalogueError)
+        var claimed = replaceable
+            ? await context.Catalogue.PutAsync(entry, replace: true)
+            : await ImmutablePublish.ClaimAsync(context, objects, entry, [storedAt], http.RequestAborted);
+
+        return claimed.TryGetError(out var catalogueError)
             ? FeedResponses.Refuse(catalogueError, http)
             : Results.StatusCode(StatusCodes.Status201Created);
     }
@@ -232,7 +246,11 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
         };
     }
 
-    /// <summary>Whether a deployed file may be deployed again — metadata, checksums, signatures, and anything in a snapshot version.</summary>
+    /// <summary>
+    ///     Whether a deployed file may be deployed again — metadata and anything in a snapshot
+    ///     version. A checksum or signature is as replaceable as the file it is beside, so a
+    ///     release's are not.
+    /// </summary>
     internal static bool IsReplaceable(string path) {
         var file = path[(path.LastIndexOf('/') + 1)..];
 
@@ -240,8 +258,12 @@ public sealed class MavenProtocol(FeedAccess access, IObjectStore objects, Feeds
             return true;
         }
 
-        if (ChecksumSuffixes.Any(x => file.EndsWith(x, StringComparison.Ordinal))) {
-            return true;
+        // ⚠ A checksum is not a file of its own here; it is a claim about the file beside it, and
+        // rewriting the claim over an immutable release is the hole the class remarks describe.
+        var checksum = ChecksumSuffixes.FirstOrDefault(x => file.EndsWith(x, StringComparison.Ordinal));
+
+        if (checksum is not null) {
+            return IsReplaceable(path[..^checksum.Length]);
         }
 
         var segments = path.Split('/');

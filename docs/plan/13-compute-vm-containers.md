@@ -100,8 +100,10 @@ at `2026-08-01` with an immutable `kind` of `nuget`, `npm` or `maven` — one fe
 because the three versioning models do not share a catalogue — and `CyberCloud.Registry.Feeds.Host`
 is the single service: NuGet v3 (service index, push, unlist, flat container, registration, search),
 the npm registry protocol (publish, packument, tarball, dist-tags) and the Maven layout (PUT/GET with
-release immutability, generated `maven-metadata.xml` and checksums). Artefacts go to the platform's
-object store under `{tenant}/{feed}/` through the `IObjectStore` seam ([15](15-storage-blob-file.md)'s
+release immutability — checksums and signatures beside a release included — generated
+`maven-metadata.xml` and checksums). Artefacts go to the platform's object store under
+`{tenant}/{feed}/`, an immutable artefact under a key that carries its own SHA-256 so two racing
+pushes of one version cannot land on each other's bytes, through the `IObjectStore` seam ([15](15-storage-blob-file.md)'s
 SeaweedFS behind Signature V4), the catalogue is a durable `FeedGrain` the provider owns, and every
 request carries the gateway's bearer token — as `Bearer`, as a Basic password, or in
 `X-NuGet-ApiKey`, because that is how the three clients send one — and is authorised through the

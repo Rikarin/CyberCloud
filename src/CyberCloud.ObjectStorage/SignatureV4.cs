@@ -20,7 +20,7 @@ namespace CyberCloud.ObjectStorage;
 ///         rule.</b> The general algorithm URI-encodes each path segment twice; S3's own examples —
 ///         <c>/test$file.text</c> — encode it once, and a signer that double-encoded would compute a
 ///         different canonical request from the one the service computes for the same bytes on the
-///         wire. <c>S3ObjectStoreSigningTests.ThePutExampleFromTheS3Documentation</c> is the vector
+///         wire. <c>SignatureV4Tests.ThePutObjectExampleFromTheS3Documentation</c> is the vector
 ///         that pins which one this is.
 ///     </para>
 ///     <para>
