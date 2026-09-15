@@ -15,6 +15,7 @@
 component: prometheus-operator-crds
 phase: 20
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.93.1/LICENSE
 install: helm
 repo: https://prometheus-community.github.io/helm-charts
 chart: prometheus-operator-crds

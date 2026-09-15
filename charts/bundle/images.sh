@@ -63,6 +63,9 @@ done
 # install.sh would run its argument parser and its roster loop; extracting the reader into a third
 # file would make the installer depend on a file that is not on any install path. The format is one
 # the Bundle gate already rejects anything outside of.
+# ⚠ THE RESOLVER IS THE EXCEPTION AND oci.sh SAYS WHY: a reader is a claim about the format, which
+# the gate pins for both scripts, whereas the token dance has to give the recorder and the refuser
+# one answer.
 
 key() {
     sed -n "s/^$2: *//p" "$1" | head -1 | tr -d '"'
@@ -175,63 +178,13 @@ workload_images() {
 
 # ── Resolving a tag to the digest a registry serves ───────────────────────────────────────────
 #
-# ⚠ curl and nothing else, for the reason install.sh gives about yq: the machine that has to answer
-# "what is this bundle about to pull" is frequently the machine that has nothing installed. This is
-# the OCI distribution token dance — an unauthenticated request for the challenge, a token from the
-# realm it names, then a HEAD whose Docker-Content-Digest header is the answer. Exercised firsthand
-# on 2026-09-03 against quay.io, ghcr.io, registry.k8s.io and docker.io.
-#
-# ⚠ `-L` on both requests, and it is not decoration: registry.k8s.io answers 307 and a resolver
-# without it reports every Kubernetes-hosted image as unresolvable — which reads as a broken pin.
+# ⚠ `digest_of` lives in oci.sh and is SOURCED, not copied, since issue #17: install.sh refuses to
+# install a component whose tag no longer serves the digest recorded here, so the recorder and the
+# refuser have to resolve the same way or a record written by one is a refusal by the other. oci.sh
+# carries the token dance, the `-L`, and the Accept header that makes the answer the INDEX digest.
 
-accept='application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json'
-
-digest_of() {
-    local ref="$1" registry repo tag host challenge realm service scope token headers digest
-
-    ref="${ref%%@*}"
-
-    if [[ "${ref##*/}" == *:* ]]; then
-        tag="${ref##*:}"
-        repo="${ref%:*}"
-    else
-        tag="latest"
-        repo="$ref"
-    fi
-
-    if [[ "${repo%%/*}" == *.* || "${repo%%/*}" == "localhost" ]]; then
-        registry="${repo%%/*}"
-        repo="${repo#*/}"
-    else
-        registry="docker.io"
-    fi
-
-    host="$registry"
-    if [[ "$registry" == "docker.io" ]]; then
-        host="registry-1.docker.io"
-        [[ "$repo" == */* ]] || repo="library/$repo"
-    fi
-
-    challenge=$(curl -sSL -o /dev/null -D - --max-time 60 "https://$host/v2/$repo/manifests/$tag" \
-        | tr -d '\r' | sed -n 's/^[Ww][Ww][Ww]-[Aa]uthenticate: *//p' | head -1)
-
-    token=""
-    if [[ "$challenge" == Bearer* ]]; then
-        realm=$(printf '%s' "$challenge" | sed -n 's/.*realm="\([^"]*\)".*/\1/p')
-        service=$(printf '%s' "$challenge" | sed -n 's/.*service="\([^"]*\)".*/\1/p')
-        scope=$(printf '%s' "$challenge" | sed -n 's/.*scope="\([^"]*\)".*/\1/p')
-        [[ -n "$scope" ]] || scope="repository:$repo:pull"
-        token=$(curl -sS --max-time 60 "$realm?service=$service&scope=$scope" \
-            | sed -n 's/.*"token"[: ]*"\([^"]*\)".*/\1/p')
-    fi
-
-    headers=$(curl -sSL -o /dev/null -D - --max-time 60 -H "Accept: $accept" \
-        ${token:+-H "Authorization: Bearer $token"} \
-        "https://$host/v2/$repo/manifests/$tag" | tr -d '\r')
-
-    digest=$(printf '%s' "$headers" | sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest: *//p' | head -1)
-    printf '%s' "$digest"
-}
+# shellcheck source=oci.sh
+. "$here/oci.sh"
 
 # ── The roster ────────────────────────────────────────────────────────────────────────────────
 

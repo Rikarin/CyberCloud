@@ -8,6 +8,7 @@
 component: rabbitmq-cluster-operator
 phase: 50
 licence: MPL-2.0
+licenceEvidence: https://raw.githubusercontent.com/rabbitmq/cluster-operator/v2.22.4/LICENSE.txt
 install: manifest
 release: v2.22.4
 manifest: https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.4/cluster-operator.yml

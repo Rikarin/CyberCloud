@@ -32,6 +32,7 @@
 component: cert-manager
 phase: 15
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/cert-manager/cert-manager/v1.21.1/LICENSE
 install: helm
 repo: https://charts.jetstack.io
 chart: cert-manager

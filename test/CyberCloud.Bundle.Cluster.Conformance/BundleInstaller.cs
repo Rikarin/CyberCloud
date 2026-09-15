@@ -296,6 +296,39 @@ public static class BundleInstaller {
         return null;
     }
 
+    /// <summary>
+    ///     The entries of a component's <c>images:</c> block, digest included, in file order.
+    /// </summary>
+    /// <param name="component">The component's directory name.</param>
+    /// <remarks>
+    ///     The same narrow reader <c>install.sh</c>'s <c>recorded()</c> awk is, for the reason
+    ///     <see cref="Pin" /> gives: the block opens at <c>images:</c>, every <c>  - </c> line under
+    ///     it is an entry, and any other line ends it.
+    /// </remarks>
+    public static IReadOnlyList<string> Images(string component) {
+        var images = new List<string>();
+        var inside = false;
+
+        foreach (var line in File.ReadLines(ComponentFile(component))) {
+            if (line.StartsWith("images:", StringComparison.Ordinal)) {
+                inside = true;
+                continue;
+            }
+
+            if (!inside) {
+                continue;
+            }
+
+            if (!line.StartsWith("  - ", StringComparison.Ordinal)) {
+                break;
+            }
+
+            images.Add(line[4..].Trim().Trim('"'));
+        }
+
+        return images;
+    }
+
     /// <summary>What a run of the installer did.</summary>
     /// <param name="ExitCode">Its exit code.</param>
     /// <param name="Output">Standard output and standard error, interleaved in arrival order.</param>
@@ -322,19 +355,49 @@ public static class BundleInstaller {
     ///     and the guard here is that the applying test passes a path and the dry-run test passes
     ///     none — a dry run executes nothing, so it has nothing to point anywhere.
     /// </remarks>
+    public static Task<Run> RunAsync(
+        string arguments,
+        string? kubeconfig,
+        CancellationToken cancellationToken
+    ) => RunAsync(Script, arguments, kubeconfig, cancellationToken);
+
+    /// <summary>
+    ///     Runs an <c>install.sh</c> that is not the checked-in one — a copy of <c>charts/bundle/</c>
+    ///     with one <c>component.yaml</c> sabotaged — with the given arguments.
+    /// </summary>
+    /// <param name="script">
+    ///     The installer to run. Its sibling <c>bundle.yaml</c>, <c>oci.sh</c> and component
+    ///     directories are what it reads, so pass the copy's <c>install.sh</c> and not the
+    ///     repository's.
+    /// </param>
+    /// <param name="arguments">Everything after the script path.</param>
+    /// <param name="kubeconfig">
+    ///     A kubeconfig file for the run to act against, or <see langword="null" /> for a run that
+    ///     touches no cluster.
+    /// </param>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     ⚠ <b>Forward slashes on Windows, and it is not cosmetic.</b> <c>install.sh</c> finds its
+    ///     directory with <c>dirname "${BASH_SOURCE[0]}"</c>, and a path handed to Git's bash with
+    ///     backslashes makes <c>dirname</c> answer <c>.</c> — so the script would read whatever
+    ///     <c>bundle.yaml</c> sits in the working directory, which for this harness is the
+    ///     repository root, where there is none. With slashes the MSYS runtime resolves
+    ///     <c>C:/…</c> and the script reads the copy it was pointed at.
+    /// </remarks>
     public static async Task<Run> RunAsync(
+        string script,
         string arguments,
         string? kubeconfig,
         CancellationToken cancellationToken
     ) {
-        var start = new ProcessStartInfo("bash") {
+        var start = new ProcessStartInfo(Bash ?? "bash") {
             WorkingDirectory = RepositoryRoot,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
         };
 
-        start.ArgumentList.Add(Script);
+        start.ArgumentList.Add(OperatingSystem.IsWindows() ? script.Replace('\\', '/') : script);
 
         foreach (var argument in arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
             start.ArgumentList.Add(argument);
@@ -373,7 +436,11 @@ public static class BundleInstaller {
         }
 
         lock (output) {
-            output.AppendLine(line);
+            // ⚠ '\n' and not AppendLine, which is "\r\n" on Windows. Every assertion in this assembly
+            // locates a component by the exact bytes "\n  <name>\n", and the first run of this
+            // harness on Windows (2026-09-15, once Bash resolved) failed all nineteen of them on the
+            // carriage return before reaching anything about the installer.
+            output.Append(line).Append('\n');
         }
     }
 
@@ -389,15 +456,78 @@ public static class BundleInstaller {
     ///     Whether a command answers on <c>PATH</c>, so a missing tool is a named skip rather than a
     ///     process-start exception.
     /// </summary>
-    /// <param name="command">The command.</param>
+    /// <param name="command">The command, without an extension.</param>
     /// <remarks>
-    ///     ⚠ Checks exactly what the phase under test needs and nothing else. Phase 15 is one
-    ///     <c>helm upgrade --install</c>, so <c>kubectl</c> is not required and is not checked — a
-    ///     precondition wider than the run is a suite that skips on a machine where it would have
-    ///     passed, which is the quieter half of the same failure as one that runs when it should not.
+    ///     <para>
+    ///         ⚠ Checks exactly what the phase under test needs and nothing else. Phase 15 is one
+    ///         <c>helm upgrade --install</c>, so <c>kubectl</c> is not required and is not checked —
+    ///         a precondition wider than the run is a suite that skips on a machine where it would
+    ///         have passed, which is the quieter half of the same failure as one that runs when it
+    ///         should not.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             <c>bash</c> is answered by <see cref="Bash" /> and not by a <c>PATH</c> walk,
+    ///             because on Windows the walk finds the wrong bash.
+    ///         </b> Until issue #17 this
+    ///         method did <c>File.Exists(dir/"bash")</c>, which never matches <c>bash.exe</c>, so
+    ///         every test in this assembly skipped on Windows — #74's closing comment records it as
+    ///         "the assembly skips wholesale on Windows". Adding <c>.exe</c> would have made it
+    ///         worse rather than better: measured on 2026-09-15, <c>Get-Command bash</c> resolves to
+    ///         <c>C:\WINDOWS\system32\bash.exe</c>, the WSL launcher, which runs a Linux distribution
+    ///         that may not exist and cannot see a <c>C:\</c> checkout as the path this harness
+    ///         passes. Other commands do get the <c>.exe</c> probe, since <c>helm.exe</c> and
+    ///         <c>kubectl.exe</c> are the same programs by another name.
+    ///     </para>
     /// </remarks>
     public static bool OnPath(string command) =>
+        string.Equals(command, "bash", StringComparison.Ordinal)
+            ? Bash is not null
+            : PathDirectories.Any(directory =>
+                File.Exists(Path.Combine(directory, command))
+                || (OperatingSystem.IsWindows() && File.Exists(Path.Combine(directory, command + ".exe")))
+            );
+
+    /// <summary>
+    ///     The bash that can run <c>install.sh</c>, or <see langword="null" /> when the machine has
+    ///     none.
+    /// </summary>
+    /// <remarks>
+    ///     On Windows this is Git for Windows' bash, found beside the <c>git.exe</c> on <c>PATH</c>
+    ///     (<c>Git\cmd\git.exe</c> sits next to <c>Git\bin\bash.exe</c>), and never the
+    ///     <c>bash.exe</c> a <c>PATH</c> walk finds first — see <see cref="OnPath" /> for why.
+    ///     Everywhere else it is <c>bash</c> if <c>PATH</c> has one.
+    /// </remarks>
+    public static string? Bash {
+        get {
+            if (!OperatingSystem.IsWindows()) {
+                return PathDirectories.Any(directory => File.Exists(Path.Combine(directory, "bash"))) ? "bash" : null;
+            }
+
+            foreach (var directory in PathDirectories) {
+                if (!File.Exists(Path.Combine(directory, "git.exe"))) {
+                    continue;
+                }
+
+                var root = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(directory));
+
+                if (root is null) {
+                    continue;
+                }
+
+                var bash = Path.Combine(root, "bin", "bash.exe");
+
+                if (File.Exists(bash)) {
+                    return bash;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    static string[] PathDirectories =>
         (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Any(directory => File.Exists(Path.Combine(directory, command)));
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
 }

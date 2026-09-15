@@ -10,7 +10,8 @@ build/
 ├── Build.Charts.cs           # helm lint/package/push, values.schema.json generation
 ├── Build.Images.cs           # container images, SBOM, cosign signatures
 ├── Build.Architecture.cs     # the gates in docs/plan/00 § Non-negotiables
-├── Build.Licence.cs          # ADR-011 scan over charts + images
+├── Build.Licence.cs          # ADR-011 scan over charts + images — the artefacts' licences, and syft over every image
+├── OciRegistry.cs            # the OCI distribution API: manifests and configs, for Build.Licence
 ├── Build.Portal.cs           # pnpm install/lint/test/build, performance budget, axe
 ├── Build.E2E.cs              # ─┐
 ├── Build.Chaos.cs            #  ├ against a real deployment; nightly and weekly, not per-PR
@@ -72,7 +73,7 @@ Restore ──► Compile ──┬──► Test
                       ├──► Chaos          (stub)
                       ├──► Load           (stub)
                       └──► Images ────────┐ (stub)
-Charts (stub) ────────────────────────────┴──► Licence (stub)
+Charts ───────────────────────────────────┴──► Licence
 Portal (stub)
 
 Publish (stub) ──► Test, Generate, Architecture, Portal, Licence

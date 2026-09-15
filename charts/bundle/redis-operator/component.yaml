@@ -19,6 +19,7 @@
 component: redis-operator
 phase: 50
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/spotahome/redis-operator/v1.3.0-rc1/LICENSE
 install: helm
 repo: https://spotahome.github.io/redis-operator
 chart: redis-operator

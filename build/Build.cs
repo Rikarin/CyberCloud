@@ -1,9 +1,10 @@
 // docs/plan/03 § build/ — the target graph. Everything a target actually does lives in a sibling
 // partial: Build.Compile.cs, Build.Test.cs, Build.Generate.cs, Build.Charts.cs, Build.Images.cs,
 // Build.Architecture.cs, Build.Licence.cs, Build.Portal.cs, Build.E2E.cs, Build.Chaos.cs,
-// Build.Load.cs, Build.Publish.cs. Three files are not partials of this class and are named for what
+// Build.Load.cs, Build.Publish.cs. Four files are not partials of this class and are named for what
 // they read rather than for a target: ArchitectureFacts.cs (assembly metadata), CoverageReport.cs
-// (Cobertura) and TargetPreconditions.cs (the shape of an honest block).
+// (Cobertura), OciRegistry.cs (image manifests and configs) and TargetPreconditions.cs (the shape of
+// an honest block).
 //
 // One partial per target, named after it. docs/plan/03 § Top level stopped at Build.Licence.cs and
 // has been extended to list all of them: doc 03's tree describes this directory, docs/plan/23
@@ -70,7 +71,7 @@ sealed partial class Build : NukeBuild {
     //                         ├──► Chaos          (blocks: no suite, no cluster)
     //                         ├──► Load           (blocks: no suite, no environment)
     //                         ├──► Charts ────────┐
-    //                         └──► Images ────────┴──► Licence (stub)
+    //                         └──► Images ────────┴──► Licence
     //   Portal
     //
     //   Publish ──► Test, Generate, Architecture, Portal, Licence   (blocks: no version, no feeds, no cyc)

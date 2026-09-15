@@ -9,6 +9,7 @@
 component: clickhouse-operator
 phase: 50
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.27.3/LICENSE
 
 # ⚠ NOT A CHART REPOSITORY. Altinity publishes the packaged chart as a GitHub release asset, so this
 # is `helm install <name> <url-to-tgz>` rather than `helm repo add`. The pin is therefore the release
@@ -115,9 +116,26 @@ values:
 # distribution API on 2026-09-05; the substitution of the third one is read off the chart's own
 # template rather than off a render. `./charts/bundle/images.sh --component clickhouse-operator` on a
 # machine with helm is what closes that gap, and it is the first thing to run over this change.
+#
+# ⚠ BOTH ALTINITY TAGS MOVED, AND THE FIRST RUN OF install.sh's DIGEST GATE IS WHAT FOUND THEM —
+# 2026-09-15, issue #17, the gate's first pass over the roster. `0.27.3` is a VERSIONED tag, which
+# bundle.yaml § owed, `a-tag-that-names-no-version-is-not-a-pin`, calls "a weak pin"; this is the
+# measurement of how weak. altinity/clickhouse-operator:0.27.3 recorded sha256:0520bfb8… on
+# 2026-09-03 and served sha256:251c4fda… twelve days later. Both digests were inspected before the
+# record was moved, through `docker buildx imagetools inspect` by digest, and the old one is still
+# fetchable that way: the old image was created 2026-08-12, the new one 2026-09-09; both are twenty
+# layers on gcr.io/distroless/static-debian13, both built with Go 1.26.5, both labelled
+# `version: unspecified_version`. So it is Altinity rebuilding the same release, not a different
+# release under the old number — and it is exactly the class of change nothing in this directory
+# would have seen before the gate existed. altinity/metrics-exporter:0.27.3 moved from
+# sha256:1e7c1d81… (created 2026-08-12) to sha256:6831ce24… in the same window; Docker Hub's
+# anonymous rate limit (429 on the config blob) stopped the second inspection, so its rebuild date is
+# inferred from its sibling rather than read. The record follows the tag because the alternative —
+# leaving the component refused until Altinity explains a rebuild — is a bundle that cannot install
+# ClickHouse over a change whose every readable property matches.
 images:
-  - altinity/clickhouse-operator:0.27.3@sha256:0520bfb8015dcb270f0600f542cad117e637cdcdc791bfd71b7964ff067d1589
-  - altinity/metrics-exporter:0.27.3@sha256:1e7c1d8167aad902513be37dcf7e439cf8a2564779a23008b8c81d879e71fb60
+  - altinity/clickhouse-operator:0.27.3@sha256:251c4fda281854c3adba6710098c637d076361282bf6ea4fc6a402dd93ef0e08
+  - altinity/metrics-exporter:0.27.3@sha256:6831ce244b81b9639740941a0fe8f0cfc534c4860b22ff0eb668307b6c1a3116
   - clastix/kubectl:v1.36.4@sha256:e0d36c70466434165766f9feda3a89550942b262696e0c40f60f8b2a6cc7df23
 
 notes: >

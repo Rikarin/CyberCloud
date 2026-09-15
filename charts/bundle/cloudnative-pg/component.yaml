@@ -8,6 +8,7 @@
 component: cloudnative-pg
 phase: 50
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/v1.30.0/LICENSE
 install: helm
 repo: https://cloudnative-pg.github.io/charts
 chart: cloudnative-pg

@@ -5,6 +5,7 @@
 component: kube-ovn
 phase: 10
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/kubeovn/kube-ovn/v1.16.2/LICENSE
 install: helm
 repo: https://kubeovn.github.io/kube-ovn
 chart: kube-ovn

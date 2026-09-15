@@ -382,8 +382,13 @@ public sealed class BundleInstallSelection {
                     );
                 }
             } else {
+                // ⚠ The COMMAND and not the word. Since issue #17 the dry run prints every recorded
+                // image under its component, and kamaji and clickhouse-operator both record a
+                // `clastix/kubectl` helper image — so the bare word appears under two helm
+                // components that run no kubectl at all. Every command a dry run would execute is
+                // printed as `would run: …`, so that prefix is what "ran kubectl" means here.
                 segment.ShouldNotContain(
-                    "kubectl",
+                    "would run: kubectl",
                     Case.Sensitive,
                     $"charts/bundle/install.sh ran kubectl for `{component}`, whose "
                     + $"component.yaml declares `install: {kind}`. A helm component's barrier is "

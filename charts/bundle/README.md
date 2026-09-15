@@ -49,12 +49,13 @@ if it ever inspects nothing.
 | `component` | always | The component name. Must equal the directory name |
 | `phase` | always | Install order. Must equal the phase `bundle.yaml` gives it |
 | `licence` | always | The upstream's SPDX identifier — ADR-011 |
+| `licenceEvidence` | always | The URL of the upstream's `LICENSE` at the pinned release. `Build.Licence` fetches and classifies it; the gate requires the URL to name the pin |
 | `install` | always | `helm`, `helm-archive` or `manifest` |
 | `source` | always | The URL that was read to resolve the pin |
 | `checked` | always | The ISO date it was read. Not in the future |
 | `serves` | unless `servesNoDefinitions` | The `group/version` pairs the component's definitions serve |
 | `servesNoDefinitions` | when `serves` is absent | Why this component installs no CustomResourceDefinition. At least 60 characters of prose |
-| `images` | unless `rendersNoWorkloadImages` | Every image the pinned artefact renders, as `repository:tag@sha256:…` |
+| `images` | unless `rendersNoWorkloadImages` | Every image the pinned artefact renders, as `repository:tag@sha256:…`. `install.sh` refuses the component when the tag no longer serves the digest, or when it is recorded `@unresolved` |
 | `rendersNoWorkloadImages` | when `images` is absent | Why this component renders no container. At least 60 characters of prose |
 | `requiredBy` | always | The charts and components that need it |
 | `repo`, `chart`, `version` | `install: helm` | Chart repository, chart name, chart version |
@@ -123,12 +124,22 @@ Two halves, enforced by two different things because only one of them is a prope
 ./charts/bundle/install.sh                        # apply, phase by phase
 ./charts/bundle/install.sh --phase 50             # one phase — which here is EIGHT components
 ./charts/bundle/install.sh --component kube-ovn   # one row. Repeatable
-./charts/bundle/install.sh --verify               # resolve every pin against its registry, apply nothing
+./charts/bundle/install.sh --verify               # resolve every pin and every image tag, apply nothing
 ```
 
 The script reads `bundle.yaml` and each `component.yaml`; it hard-codes no version. `--verify`
-answers the question this directory rots on — *does every pin still resolve* — without needing a
-cluster.
+answers the two questions this directory rots on — *does every pin still resolve*, and *does every
+image tag still serve the digest that was reviewed* — without needing a cluster.
+
+> ⚠ **The digest gate runs on every apply, not only under `--verify`, since issue #17.** Before a
+> component's first `helm` or `kubectl` line, `install.sh` resolves every image its `component.yaml`
+> records and refuses the component — ending the run, because a phase is a barrier — when a tag no
+> longer serves the recorded digest, or when an entry is recorded `@unresolved`. The refusal prints
+> both digests. A `--dry-run` checks the shape (every entry has a digest) and resolves nothing,
+> because its contract is that it needs no network. `test/CyberCloud.Bundle.Cluster.Conformance`
+> § `BundleImagePins` runs both refusals against sabotaged copies of this directory and reads them
+> off the script's own output, with a positive control over the real record so a gate that refused
+> everything could not pass.
 
 > ⚠ **`--phase` is not "one row", whatever the usage text used to say.** Phase 30 is two components,
 > phase 40 is four and phase 50 is eight, so fourteen of the nineteen could not be addressed
@@ -230,12 +241,29 @@ the OCI distribution API on 2026-09-05. The one that had moved was `bitnami/kube
 forty-eight hours since the record was written — see the `latest` note below, and
 `bundle.yaml` § owed, `a-tag-that-names-no-version-is-not-a-pin`, for what was done about it.
 
-> ⚠ **A record, not a pin, and being exact about that is the point.** The tag is still what reaches
-> the kubelet. This detects a tag that moved; it does not prevent one. Preventing it needs a values
-> override per chart and several charts have no digest key — `redis-operator/component.yaml`
-> documents that case: its template composes `repository:tag` and nothing else, so an `image.digest`
-> value would be a key that silently does nothing, which is worse than a tag because it reads as a
-> stronger pin than it is.
+**Thirty of thirty-two on 2026-09-15**, the first run of `install.sh --verify` after it learned to
+resolve images: both Altinity tags — `altinity/clickhouse-operator:0.27.3` and
+`altinity/metrics-exporter:0.27.3` — had been rebuilt upstream on 2026-09-09 under the same version
+number. Both digests were inspected before the record was moved; `clickhouse-operator/component.yaml`
+carries what was compared. That is a *versioned* tag moving, which is the measurement of how weak a
+weak pin is, and it is the class of change nothing here would have seen before the installer read
+the record.
+
+> ⚠ **A record the installer refuses to install against, since issue #17 — and still not a pin in
+> the values, and being exact about that is the point.** The tag is still what reaches the kubelet;
+> several charts have no digest key, and `redis-operator/component.yaml` documents that case: its
+> template composes `repository:tag` and nothing else, so an `image.digest` value would be a key that
+> silently does nothing. What changed is *when* a moved tag is caught: `install.sh` resolves every
+> recorded image immediately before the component's first `helm` or `kubectl` line and refuses the
+> component if any tag serves other bytes than the reviewed ones. Between that resolve and the
+> kubelet's pull the tag can still move — closing that window is a digest the chart can render, or
+> admission, which is #15. Until #17 the record was read by `images.sh` alone, and `images.sh` is a
+> script somebody has to remember to run.
+>
+> ⚠ **`@unresolved` is how to record an image on a machine that cannot reach its registry**, and it
+> is refused by the Bundle gate, by `install.sh --dry-run`, and by every apply, each naming the image
+> and the `images.sh --resolve` that fixes it. A pin nobody resolved is not a pin, and a record that
+> could hide that would be `imageDigest:` again.
 
 > ⚠ **The row that used to say redis-operator was the exception was wrong, and the correction is the
 > more useful half.** It pinned a *tag* and recorded an `imageDigest:` beside it whose own comment
@@ -264,10 +292,14 @@ forty-eight hours since the record was written — see the `latest` note below, 
 > owed**, and why the two untagged references in the Kamaji provider's CRD schema are deliberately
 > *not* counted here.
 
-The scan ADR-011 § Enforcement asks for is a different thing again, and `build/Build.Licence.cs`
-carries the measurement showing it cannot be written against the allow-list that ADR names: 76 of
-the 99 packaged components in `mcr.microsoft.com/dotnet/aspnet:10.0` declare GPL or LGPL, so the
-gate would fail on our own base image. Which list answers which question is issue #18's decision.
+The scan ADR-011 § Enforcement asks for is a different thing again, and since issue #17
+`build/Build.Licence.cs` runs it: the `LICENSE` each `licenceEvidence:` names, the chart's
+annotation and every image's licence label against the allow-list, and — with Syft — every package
+in every image against ADR-011's deny-list. It still carries the measurement that shaped it: 76 of
+the 99 packaged components in `mcr.microsoft.com/dotnet/aspnet:10.0` declare GPL or LGPL, so a scan
+that judged image *contents* by the offering allow-list would fail on our own base image. Which
+second list judges them is issue #18's decision, and the scan reports those counts without taking
+it. `charts/README.md` § Licences are a build gate has the two halves side by side.
 
 ## Verification, and its honest limit
 
@@ -365,7 +397,13 @@ assertion here that covers every row. What a dry run cannot answer is whether "i
 What *is* verified, on every build, by the Bundle gate:
 
 * every component's manifest is complete and its pin is in one place;
-* every declared licence is on ADR-011's allow-list;
+* every declared licence is on ADR-011's allow-list, and every `licenceEvidence:` URL names the
+  pinned release, so the weekly `Licence` scan reads the licence of the artefact the pin installs
+  and not of a branch;
+* no `images:` entry is recorded `@unresolved`. ⚠ Sabotage-verified on 2026-09-15 by replacing the
+  digest on `rabbitmq-cluster-operator`'s one image: the row goes red naming the entry and the
+  `images.sh --resolve` that fixes it, and `install.sh` refuses the component too —
+  `BundleImagePins` in `test/CyberCloud.Bundle.Cluster.Conformance` keeps that second refusal;
 * every group/version any managed chart renders is served by exactly one component;
 * every component either declares what it serves or argues, in prose, that it serves nothing —
   and never both. ⚠ Verified by sabotage on 2026-08-20 rather than by reading: removing

@@ -7,6 +7,7 @@
 component: containerized-data-importer
 phase: 30
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/kubevirt/containerized-data-importer/v1.66.0/LICENSE
 install: manifest
 release: v1.66.0
 

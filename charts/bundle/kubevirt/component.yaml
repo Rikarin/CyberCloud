@@ -10,6 +10,7 @@
 component: kubevirt
 phase: 30
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/kubevirt/kubevirt/v1.9.0/LICENSE
 install: manifest
 release: v1.9.0
 

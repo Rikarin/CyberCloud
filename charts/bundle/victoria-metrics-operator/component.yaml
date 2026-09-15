@@ -7,6 +7,7 @@
 component: victoria-metrics-operator
 phase: 60
 licence: Apache-2.0
+licenceEvidence: https://raw.githubusercontent.com/VictoriaMetrics/operator/v0.74.0/LICENSE
 install: helm
 repo: https://victoriametrics.github.io/helm-charts
 chart: victoria-metrics-operator
