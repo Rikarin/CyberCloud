@@ -188,6 +188,10 @@ public sealed class TenancyCluster : IAsyncLifetime {
     public IEmailIndexGrain EmailIndexGrain(Guid tenant, string email) =>
         For(tenant).GetGrain<IEmailIndexGrain>(GrainKeys.EmailIndex(tenant, email));
 
+    /// <summary>The client-id-index grain for a client id, in a tenant.</summary>
+    public IClientIndexGrain ClientIndexGrain(Guid tenant, string clientId) =>
+        For(tenant).GetGrain<IClientIndexGrain>(GrainKeys.ClientIndex(tenant, clientId));
+
     /// <summary>The shard map grain — null tenant, one worldwide.</summary>
     public IShardMapGrain ShardMapGrain() => Grains.GetGrain<IShardMapGrain>(GrainKeys.ShardMap());
 

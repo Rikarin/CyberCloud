@@ -79,6 +79,39 @@ OpenIddict handles the protocol, the signing and the discovery document. The sig
 ephemeral, which is the rotation story above left owed to the vault. `aud` is spelled once, as
 `AccessTokenPolicy.Audience`, and the gateway pins it.
 
+⚠ **The `client_id` → application index degraded mode requires has landed, which is the half #68
+closed toward the person's token path.** `IClientIndexGrain` (`CyberCloud.Tenancy.Contracts`) maps a
+`client_id` to its `applicationId` per tenant — keyed `idx/client/{sha256(tenantId + clientId)[..16]}`,
+the same shape as the email index — and `ApplicationGrain.CreateAsync` claims it before it writes, so
+two applications cannot share a `client_id` and an authorization request can resolve one to its
+registration without OpenIddict's own store (which degraded mode turns off). `ClientIndexTests` and
+`ApplicationRegistrationTests` pin it. The index is claimed in the order [06 § Two-phase
+create](06-tenancy-and-resource-model.md) fixes, and where that document sweeps a resource orphaned
+between the write and the confirm with a reaper reminder, `ApplicationGrain` settles itself on its
+next call instead — `ApplicationGrainState.ClientIdConfirmed` is the marker, and an orphan whose
+`client_id` another application has since taken is dropped rather than left as a second registration
+naming one id. **What that unblocks and what is still owed on the person's path** — none of it wired
+yet, so a person still has no token today, and #88 stays open until the story its closing criterion
+names runs end to end:
+
+- **The `/authorize` + `/token` authorization-code + PKCE handler**, resolving the `client_id`
+  through `IClientIndexGrain`, validating the `redirect_uri` against the registration, minting from
+  the cookie session (`IdentitySessionPrincipal`), consent-free for first-party clients, and opening
+  an `ISessionGrain` for the refresh chain.
+- **The refresh grant**, which OpenIddict issues only to a flow that granted `offline_access` and
+  which `ISessionGrain.RefreshAsync` already rotates with reuse detection — it needs the
+  authorization-code flow above to exist first.
+- **The signing key from the vault.** It is still ephemeral, so every restart invalidates every
+  token; the fix is `CyberCloud.Vault` through the seam docs/plan/18 names, generated once and stored
+  if absent, wired in `Identity.Host` beside `IClientSecretSeam` and `ITotpSecretSeam`.
+- **An HTTP surface that creates a service principal at a tenant** — `TenantOverHttpTests` still
+  creates one by grain.
+- **The person half of `TenantOverHttpTests`** — passkey sign-in on the identity host → auth-code →
+  token → `GET` through the gateway.
+- **Device authorization and token exchange (RFC 8693)** remain owed as before — the device flow
+  needs a verification page and a code store, and token exchange has `ITokenExchange` built and
+  waiting on `/token` to accept the grant.
+
 ## Credentials
 
 | Method | M | Implementation | Notes |

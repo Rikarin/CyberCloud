@@ -1,4 +1,5 @@
 using CyberCloud.Core.Contracts;
+using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Tests.Infrastructure;
 
@@ -35,7 +36,7 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
     [Fact]
     public async Task ARedirectUriMatchesWholeAndOrdinallyOrNotAtAll() {
         var application = cluster.Application(Guid.NewGuid());
-        (await application.CreateAsync(Valid())).IsSuccess.ShouldBeTrue();
+        (await application.CreateAsync(Valid("portal-redirect"))).IsSuccess.ShouldBeTrue();
 
         (await application.IsRegisteredRedirectUriAsync("https://app.example.com/callback"))
             .GetValueOrThrow()
@@ -160,7 +161,7 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
         // control-plane endpoint, so believing it would write one grain's state under another's
         // identity.
         var created = await application.CreateAsync(
-            Valid() with { ApplicationId = Guid.NewGuid(), TenantId = Guid.NewGuid() }
+            Valid("portal-identity") with { ApplicationId = Guid.NewGuid(), TenantId = Guid.NewGuid() }
         );
 
         var registration = created.GetValueOrThrow();
@@ -171,7 +172,7 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
     [Fact]
     public async Task ARegisteredClientIdSurvivesAnUpdateAndTheRestDoesNot() {
         var application = cluster.Application(Guid.NewGuid());
-        var created = (await application.CreateAsync(Valid("portal"))).GetValueOrThrow();
+        var created = (await application.CreateAsync(Valid("portal-update"))).GetValueOrThrow();
 
         var updated = await application.UpdateAsync(
             Valid("someone-elses-client-id") with {
@@ -184,7 +185,7 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
         // ⚠ The client id is the name other systems know this registration by, and an update that
         // could change it would let a tenant take over an identifier someone else's token was
         // issued to.
-        registration.ClientId.ShouldBe("portal");
+        registration.ClientId.ShouldBe("portal-update");
         registration.CreatedAt.ShouldBe(created.CreatedAt);
 
         registration.DisplayName.ShouldBe("The portal, renamed");
@@ -204,7 +205,7 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
         missing.IsSuccess.ShouldBeFalse("an application that does not exist allows nothing");
         missing.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
 
-        (await application.CreateAsync(Valid())).IsSuccess.ShouldBeTrue();
+        (await application.CreateAsync(Valid("portal-grant"))).IsSuccess.ShouldBeTrue();
 
         (await application.AllowsGrantAsync(GrantType.AuthorizationCode)).GetValueOrThrow().ShouldBeTrue();
         (await application.AllowsGrantAsync(GrantType.ClientCredentials))
@@ -215,19 +216,19 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
     [Fact]
     public async Task RegisteringTwiceIsAConflictAndLeavesTheFirstRegistrationAlone() {
         var application = cluster.Application(Guid.NewGuid());
-        (await application.CreateAsync(Valid("portal"))).IsSuccess.ShouldBeTrue();
+        (await application.CreateAsync(Valid("portal-twice"))).IsSuccess.ShouldBeTrue();
 
-        var again = await application.CreateAsync(Valid("portal-again"));
+        var again = await application.CreateAsync(Valid("portal-twice-again"));
         again.IsSuccess.ShouldBeFalse();
         again.Error!.Code.ShouldBe(ErrorCode.Conflict);
 
-        (await application.GetAsync()).GetValueOrThrow().ClientId.ShouldBe("portal");
+        (await application.GetAsync()).GetValueOrThrow().ClientId.ShouldBe("portal-twice");
     }
 
     [Fact]
     public async Task DeletingLeavesNothingBehindAndDeletingAgainIsNotFound() {
         var application = cluster.Application(Guid.NewGuid());
-        (await application.CreateAsync(Valid())).IsSuccess.ShouldBeTrue();
+        (await application.CreateAsync(Valid("portal-delete"))).IsSuccess.ShouldBeTrue();
 
         (await application.DeleteAsync()).IsSuccess.ShouldBeTrue();
 
@@ -248,7 +249,7 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
     public async Task ARegistrationIsNotVisibleToAnotherTenant() {
         var applicationId = Guid.NewGuid();
 
-        (await cluster.Application(applicationId).CreateAsync(Valid())).IsSuccess.ShouldBeTrue();
+        (await cluster.Application(applicationId).CreateAsync(Valid("portal-tenant"))).IsSuccess.ShouldBeTrue();
 
         // Same application GUID, different tenant. ADR-002 makes the tenant part of the grain
         // identity, so this is a different entity and has no registration.
@@ -268,5 +269,88 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
 
         created.IsSuccess.ShouldBeFalse("whitespace is not a client id");
         created.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+    }
+
+    /// <summary>Client ids <c>GrainKeys.EnsureValidClientId</c> refuses, one per rule.</summary>
+    public static TheoryData<string> ClientIdsNoKeyCanCarry =>
+        new() { "my portal", " portal", "portal\n", "por\ttal", new string('a', GrainKeys.MaxClientIdLength + 1) };
+
+    [Theory]
+    [MemberData(nameof(ClientIdsNoKeyCanCarry))]
+    public async Task AClientIdTheIndexCannotCarryIsABadRequestAndNotAThrow(string clientId) {
+        // ⚠ THE REVIEW OF #88 FOUND EVERY ONE OF THESE THROWING OUT OF THE GRAIN CALL. Validate only
+        // asked IsNullOrWhiteSpace, and GrainKeys.ClientIndex — reached one line later to build the
+        // index key — refuses internal white space, a control character and more than 254
+        // characters by throwing. A throw out of a grain is an exception at the caller rather than a
+        // Result, so a body the tenant typed turned into a 500 instead of the 400 it is.
+        var application = cluster.Application(Guid.NewGuid());
+
+        var created = await application.CreateAsync(Valid(clientId));
+
+        created.IsSuccess.ShouldBeFalse($"'{clientId}' is a client id no index key can carry");
+        created.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+        (await application.GetAsync()).IsSuccess.ShouldBeFalse("a refused create leaves nothing behind");
+    }
+
+    [Fact]
+    public async Task DeletingAnApplicationWhoseClientIdTheIndexNoLongerHoldsStillDeletesIt() {
+        // The shape docs/plan/06 § Two-phase create leaves behind when a silo dies between the write
+        // and the confirm: the registration is durable, the lease expires, and a second application
+        // takes the client id. From the outside that is an index entry that names another
+        // application while this one's state still says the id is its own — reproduced here by
+        // releasing the binding behind the first application's back, which is what an expired
+        // lease amounts to.
+        var first = cluster.Application(Guid.NewGuid());
+        var firstId = (await first.CreateAsync(Valid("orphaned-client"))).GetValueOrThrow().ApplicationId;
+        (await cluster.ClientIndex("orphaned-client").ReleaseAsync(firstId)).IsSuccess.ShouldBeTrue();
+
+        var secondId = Guid.NewGuid();
+        (await cluster.Application(secondId).CreateAsync(Valid("orphaned-client"))).IsSuccess.ShouldBeTrue();
+
+        // ⚠ THE DELETE MUST SUCCEED, AND THE SECOND APPLICATION MUST KEEP THE ID. A release refused
+        // because the index names somebody else is the index saying this registration is reachable
+        // by its GUID and nothing else; refusing the delete on top of that would leave it that way
+        // for good. Handing the id away instead would be worse — that is the second application's
+        // live registration.
+        var deleted = await first.DeleteAsync();
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+        (await first.GetAsync()).IsSuccess.ShouldBeFalse("the orphan is gone");
+
+        (await cluster.ClientIndex("orphaned-client").ResolveAsync())
+            .GetValueOrThrow()
+            .ShouldBe(secondId, "the delete of an orphan must not release a binding it does not own");
+        (await cluster.Application(secondId).GetAsync()).IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task TwoApplicationsCannotShareAClientIdInOneTenantButCanAcrossTenants() {
+        // ⚠ THE GUARANTEE THE CLIENT INDEX ADDS, AND THE ONE THE AUTHORIZATION-CODE FLOW RELIES ON.
+        // Two registrations sharing a client_id in one tenant is two applications an authorization
+        // request cannot tell apart; ApplicationGrain.CreateAsync claims IClientIndexGrain before it
+        // writes, so the second create is a 409. Across tenants the id is free, because the index is
+        // per tenant — docs/plan/11 § Protocol.
+        (await cluster.Application(Guid.NewGuid()).CreateAsync(Valid("shared-client")))
+            .IsSuccess.ShouldBeTrue();
+
+        var second = await cluster.Application(Guid.NewGuid()).CreateAsync(Valid("shared-client"));
+        second.IsSuccess.ShouldBeFalse("a second application took a client id already registered in this tenant");
+        second.Error!.Code.ShouldBe(ErrorCode.ResourceAlreadyExists);
+
+        // The same client id in another tenant is a different index entry and free to take.
+        (await cluster.Application(Guid.NewGuid(), IdentityCluster.OtherTenant).CreateAsync(Valid("shared-client")))
+            .IsSuccess.ShouldBeTrue("a client id is unique per tenant, not globally");
+    }
+
+    [Fact]
+    public async Task DeletingAnApplicationFreesItsClientIdForReuse() {
+        // ⚠ Delete releases the index before dropping the state, so the client id is immediately
+        // reusable — otherwise a mistyped registration would burn a client id for good.
+        var first = cluster.Application(Guid.NewGuid());
+        (await first.CreateAsync(Valid("reusable-client"))).IsSuccess.ShouldBeTrue();
+        (await first.DeleteAsync()).IsSuccess.ShouldBeTrue();
+
+        (await cluster.Application(Guid.NewGuid()).CreateAsync(Valid("reusable-client")))
+            .IsSuccess.ShouldBeTrue("a released client id must be free for another application to take");
     }
 }

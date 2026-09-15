@@ -33,9 +33,12 @@ CyberCloud.Tenancy.ResourceGroupGrain
 CyberCloud.Tenancy.QuotaGrain
 
 # The indexes. Rebuildable in principle by scanning every tenant, which is exactly the operation
-# that is impossible during the incident where you need them.
+# that is impossible during the incident where you need them. The client index maps an OAuth
+# client_id to its application — docs/plan/11 § Protocol — and losing it would let a second
+# application claim a client_id a token was already issued to.
 CyberCloud.Tenancy.ResourceIndexGrain
 CyberCloud.Tenancy.EmailIndexGrain
+CyberCloud.Tenancy.ClientIndexGrain
 
 # ── Authorization — docs/plan/07 ───────────────────────────────────────────────────────────────
 # The ReBAC tuples and both of their indexes. These are the answer to "who may do what": losing a

@@ -523,6 +523,52 @@ public class GrainKeysTests {
         }
     }
 
+    // ── The client index: hash(tenantId + clientId), per tenant, case-sensitive ───────────────
+
+    [Fact]
+    public void ClientUniquenessIsPerTenant() {
+        // docs/plan/11 § Protocol — a client_id is unique within a tenant, so `portal` in two
+        // tenants is two distinct index entries, exactly as the email index is per tenant.
+        var a = GrainKeys.ClientIndex(Tenant, "portal");
+        var b = GrainKeys.ClientIndex(Subscription, "portal");
+
+        a.ShouldNotBe(b);
+        a.ShouldStartWith("idx/client/");
+        b.ShouldStartWith("idx/client/");
+    }
+
+    [Fact]
+    public void AClientIdIsCaseSensitiveUnlikeAnEmail() {
+        // ⚠ An OAuth client_id is an opaque identifier compared byte for byte. Folding its case the
+        // way the email index folds an address would merge two ids the protocol keeps apart.
+        GrainKeys.ClientIndex(Tenant, "Portal").ShouldNotBe(GrainKeys.ClientIndex(Tenant, "portal"));
+    }
+
+    [Fact]
+    public void TheClientIndexShapeRoundTripsToItsDigest() {
+        var key = GrainKeys.ClientIndex(Tenant, "cyc");
+
+        var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.ClientIndex);
+        parsed.Digest.Length.ShouldBe(GrainKeys.DigestLength);
+        parsed.Id.ShouldBe(Guid.Empty);
+        parsed.ToString().ShouldBe(key);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("with\nnewline")]
+    [InlineData("with space")]
+    [InlineData("  padded  ")]
+    [InlineData("tab\tin")]
+    public void AClientIdAKeyCannotCarryIsRefused(string clientId) {
+        // ⚠ The newline is the digest separator; the rest are invisible in a log and turn one
+        // identifier into two. EnsureValidClientId refuses them, and the builder throws.
+        GrainKeys.EnsureValidClientId(clientId).IsFailure.ShouldBeTrue();
+        Should.Throw<ArgumentException>(() => GrainKeys.ClientIndex(Tenant, clientId));
+    }
+
     // ── The email index: hash(tenantId + normalized email), per tenant ────────────────────────
 
     [Fact]

@@ -406,3 +406,111 @@ public sealed class EmailIndexGrain(
         return outcome;
     }
 }
+
+/// <summary>
+///     <see cref="IClientIndexGrain" /> — Index, Durable, key <c>idx/client/{digest}</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ The same state machine as <see cref="EmailIndexGrain" /> over a different digest — a client
+///     id claim and an email claim differ only in what is hashed into the key. See that grain.
+/// </remarks>
+public sealed class ClientIndexGrain(
+    [PersistentState("index", StorageTiers.Durable)]
+    IPersistentState<IndexState> state,
+    IClock clock
+)
+    : Grain, IClientIndexGrain {
+    Guid tenantId;
+    string digest = string.Empty;
+
+    /// <inheritdoc />
+    public override Task OnActivateAsync(CancellationToken cancellationToken) {
+        tenantId = TenancyGrainKeys.TenantOf(this);
+        digest = TenancyGrainKeys.Decode(this, GrainKeyKind.ClientIndex).Digest;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<IndexEntry>> TryClaimAsync(string clientId, Guid applicationId) {
+        if (applicationId == Guid.Empty) {
+            return Result<IndexEntry>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A claim binds a client id to an application and Guid.Empty is not one."
+            );
+        }
+
+        var validated = GrainKeys.EnsureValidClientId(clientId);
+        if (validated.TryGetError(out var invalid)) {
+            return Result<IndexEntry>.Failure(invalid);
+        }
+
+        var value = validated.GetValueOrThrow();
+        var expected = GrainKeys.ClientIndex(tenantId, value);
+
+        if (!string.Equals(expected, GrainKeys.ClientIndexPrefix + digest, StringComparison.Ordinal)) {
+            return Result<IndexEntry>.Failure(
+                ErrorCode.InvalidGrainKey,
+                $"'{value}' in tenant {tenantId:D} hashes to '{expected}' and this grain is "
+                + $"'{GrainKeys.ClientIndexPrefix + digest}'. A client id is unique per tenant "
+                + "(docs/plan/11 § Protocol), so the tenant is part of the digest."
+            );
+        }
+
+        var claimed = IndexClaimMachine.TryClaim(state.State.Entry, applicationId, value, clock.UtcNow, $"'{value}'");
+
+        return await PersistAsync(claimed);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<IndexEntry>> ConfirmAsync(Guid applicationId) =>
+        await PersistAsync(IndexClaimMachine.Confirm(state.State.Entry, applicationId, clock.UtcNow, Describe()));
+
+    /// <inheritdoc />
+    public async Task<Result> ReleaseAsync(Guid applicationId) =>
+        (await PersistAsync(IndexClaimMachine.Release(state.State.Entry, applicationId, clock.UtcNow, Describe())))
+        .ToResult();
+
+    /// <inheritdoc />
+    public Task<Result<IndexEntry>> GetAsync() =>
+        Task.FromResult(Result<IndexEntry>.Success(IndexClaimMachine.Effective(state.State.Entry, clock.UtcNow)));
+
+    /// <inheritdoc />
+    public Task<Result<Guid>> ResolveAsync() {
+        var entry = IndexClaimMachine.Effective(state.State.Entry, clock.UtcNow);
+
+        return Task.FromResult(
+            entry.State == IndexEntryState.Confirmed
+                ? Result<Guid>.Success(entry.BoundTo)
+                : Result<Guid>.Failure(
+                    ErrorCode.ResourceNotFound,
+                    $"{Describe()} resolves to nothing: it is {entry.State}."
+                )
+        );
+    }
+
+    /// <inheritdoc />
+    public Task DeactivateAsync() {
+        DeactivateOnIdle();
+        return Task.CompletedTask;
+    }
+
+    string Describe() =>
+        state.State.Entry.IndexedValue is { Length: > 0 } value
+            ? $"'{value}'"
+            : $"Index entry '{GrainKeys.ClientIndexPrefix + digest}'";
+
+    async Task<Result<IndexEntry>> PersistAsync(Result<IndexEntry> outcome) {
+        if (outcome.TryGetError(out _)) {
+            return outcome;
+        }
+
+        var entry = outcome.GetValueOrThrow();
+        if (entry == state.State.Entry) {
+            return outcome;
+        }
+
+        state.State.Entry = entry;
+        await state.WriteStateAsync();
+        return outcome;
+    }
+}

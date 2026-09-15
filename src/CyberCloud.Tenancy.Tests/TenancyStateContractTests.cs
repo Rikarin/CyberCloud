@@ -143,9 +143,9 @@ public sealed class TenancyStateContractTests {
             .ToList();
 
         grains.Count.ShouldBe(
-            8,
+            9,
             "the tenancy grains: tenant, subscription, resource group, resource index, email "
-            + "index, tenant directory, shard map, quota."
+            + "index, client index, tenant directory, shard map, quota."
         );
 
         foreach (var grain in grains) {
