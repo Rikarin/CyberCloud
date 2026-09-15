@@ -451,11 +451,27 @@ public interface IResourceReconciler {
     ///         the platform destroys a tenant's data and the wrong volume has no recovery.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>This member is <i>not</i> called on a soft delete</b>, which is the whole
+    ///         ⚠ <b>The manager does <i>not</i> call this on a soft delete</b>, which is the whole
     ///         separation: <c>OperationGrain.ConvergedAsync</c> reaches the reclaim only on the
     ///         branch a hard delete and a purge share, and a soft delete returns one branch above it
     ///         at <c>ParkAsync</c>. The claims surviving that teardown are what a restore restores
     ///         from.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             A provider whose OPERATOR owns its claims calls this itself, on every teardown,
+    ///             because for it "surviving the teardown" is not free — issue #69.
+    ///         </b> CloudNativePG stamps a controller reference on every claim it creates, so the
+    ///         garbage collector removes them with the <c>Cluster</c> unless the reference is cleared
+    ///         first. <c>PostgresServerReconciler.DeleteAsync</c> names its claims through this
+    ///         member — listed under the operator's own label with
+    ///         <see cref="RetainedVolume.Listed" />, because their serials cannot be predicted — and
+    ///         hands them to <see cref="VolumeCustody.DetachAsync" /> before it deletes anything;
+    ///         its <c>ReconcileAsync</c> hands them back through
+    ///         <see cref="VolumeCustody.AdoptAsync" /> when it re-creates the <c>Cluster</c>. The
+    ///         manager's use of this member is unchanged: the purge still asks, and still destroys
+    ///         what it is told.
     ///     </para>
     ///     <para>
     ///         ⚠

@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.ResourceManager.Reconcile;
@@ -136,7 +135,7 @@ public static class VolumeReclaimer {
         var verified = ImmutableArray.CreateBuilder<RetainedVolume>(volumes.Length);
 
         foreach (var volume in volumes) {
-            if (Addressable(volume, context) is { } addressError) {
+            if (volume.CheckAddress(context) is { } addressError) {
                 return ReconcileOutcome.Failed(addressError, false);
             }
 
@@ -150,7 +149,7 @@ public static class VolumeReclaimer {
                 return ReconcileOutcome.Failed(readError, true);
             }
 
-            if (Owned(volume, read.GetValueOrThrow().Json, context) is { } ownershipError) {
+            if (volume.CheckOwnership(read.GetValueOrThrow().Json, context) is { } ownershipError) {
                 return ReconcileOutcome.Failed(ownershipError, false);
             }
 
@@ -214,134 +213,9 @@ public static class VolumeReclaimer {
         return ReconcileOutcome.Converged;
     }
 
-    /// <summary>
-    ///     Whether the claim is even addressable as one of this resource's volumes, or the refusal
-    ///     that says why not.
-    /// </summary>
-    /// <remarks>
-    ///     ⚠ <b>The namespace check is the one that matters most and is the cheapest.</b> A namespace
-    ///     is per resource group per cluster, so a claim outside <see cref="ReconcileContext.Namespace" />
-    ///     belongs to a different resource group and possibly a different tenant. Nothing a provider
-    ///     can compute from its own desired body should ever land outside it, and the one bug that
-    ///     would — a name built from a field a caller controls — is exactly the one that reaches
-    ///     another tenant's disks.
-    /// </remarks>
-    static Error? Addressable(RetainedVolume volume, ReconcileContext context) {
-        if (volume.Claim is null || volume.Claim.Name.Length == 0) {
-            return new(
-                ErrorCode.InternalError,
-                $"'{context.Id.Path}' declared a retained volume with no name. A purge acts only on "
-                + "claims it can address, and refuses rather than guessing."
-            );
-        }
-
-        if (volume.Claim.Kind != RetainedVolume.ClaimKind) {
-            return new(
-                ErrorCode.InternalError,
-                $"'{context.Id.Path}' declared '{volume.Claim.Name}' as a retained volume of kind "
-                + $"'{volume.Claim.Kind}'. A purge removes {RetainedVolume.ClaimKind.Kind}s and "
-                + "nothing else — a teardown is what removes workloads, and it has already run."
-            );
-        }
-
-        if (!string.Equals(volume.Claim.Namespace, context.Namespace, StringComparison.Ordinal)) {
-            return new(
-                ErrorCode.InternalError,
-                $"'{context.Id.Path}' declared a retained volume '{volume.Claim.Name}' in namespace "
-                + $"'{volume.Claim.Namespace}' and the resource lives in '{context.Namespace}'. A "
-                + "namespace is one resource group on one cluster, so a claim outside it belongs to "
-                + "somebody else and this purge will not touch it."
-            );
-        }
-
-        if (volume.OwnedBy is null || volume.OwnedBy.IsEmpty) {
-            return new(
-                ErrorCode.InternalError,
-                $"'{context.Id.Path}' declared '{volume.Claim.Name}' as a retained volume with no "
-                + "ownership labels. A claim named without evidence is a name, and a purge that acts "
-                + "on a name is how the wrong tenant's disk goes — see RetainedVolume.OwnedBy."
-            );
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    ///     Whether the object the API server is holding really is the resource's, or the refusal that
-    ///     says which label disagreed.
-    /// </summary>
-    /// <remarks>
-    ///     ⚠ <b>Read from the STORED object, never from the document we would have written.</b> The
-    ///     claim was created by the <c>StatefulSet</c> controller and not by this platform, so the
-    ///     only thing that can say whom it belongs to is what the API server has. Checking a rendered
-    ///     copy would be checking our own arithmetic twice.
-    /// </remarks>
-    static Error? Owned(RetainedVolume volume, string json, ReconcileContext context) {
-        JsonNode? root;
-
-        try {
-            root = JsonNode.Parse(json);
-        } catch (JsonException error) {
-            return new(
-                ErrorCode.InternalError,
-                $"The API server's copy of '{volume.Claim}' did not parse as JSON, so its ownership "
-                + $"cannot be checked and it will not be removed: {error.Message}"
-            );
-        }
-
-        var metadata = root?["metadata"] as JsonObject;
-        var labels = metadata?["labels"] as JsonObject;
-
-        // ⚠ ABSENT IS NOT EMPTY. A claim with no labels at all is not one this platform's
-        // volumeClaimTemplate produced — Kubernetes copies the set's selector onto every claim it
-        // creates — so it is somebody else's object wearing a name we predicted.
-        if (labels is null) {
-            return new(
-                ErrorCode.InternalError,
-                $"'{volume.Claim}' carries no labels, so nothing connects it to '{context.Id.Path}'. "
-                + "A claim created from this resource's volumeClaimTemplate carries the set's "
-                + "selector; this one does not, so it belongs to something else and the purge "
-                + "refuses it."
-            );
-        }
-
-        var stored = metadata?["namespace"]?.GetValue<string>();
-
-        if (stored is { Length: > 0 } && !string.Equals(stored, context.Namespace, StringComparison.Ordinal)) {
-            return new(
-                ErrorCode.InternalError,
-                $"'{volume.Claim}' came back from the API server in namespace '{stored}' rather than "
-                + $"'{context.Namespace}'. The purge refuses a claim it did not address."
-            );
-        }
-
-        foreach (var (key, expected) in volume.OwnedBy) {
-            var actual = labels[key] switch {
-                JsonValue value when value.TryGetValue<string>(out var text) => text,
-                null => null,
-                var other => other.ToString()
-            };
-
-            if (actual is null) {
-                return new(
-                    ErrorCode.InternalError,
-                    $"'{volume.Claim}' does not carry '{key}', which '{context.Id.Path}' says every "
-                    + "claim of its own carries. The purge refuses a volume it cannot prove it owns."
-                );
-            }
-
-            if (!string.Equals(actual, expected, StringComparison.Ordinal)) {
-                return new(
-                    ErrorCode.InternalError,
-                    $"'{volume.Claim}' carries '{key}={actual}' and '{context.Id.Path}' owns only "
-                    + $"claims carrying '{key}={expected}'. Something else in this namespace has the "
-                    + "name this purge predicted, so the purge stops rather than destroying it."
-                );
-            }
-        }
-
-        return null;
-    }
+    // ⚠ The two guards this class used to hold — Addressable and Owned — are RetainedVolume.CheckAddress
+    // and RetainedVolume.CheckOwnership now, because VolumeCustody runs the same checks before a
+    // detach and an adopt, and a guard written twice is a guard that drifts.
 
     /// <summary>The smallest object a delete command will accept.</summary>
     static string Placeholder(string name) =>

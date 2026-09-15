@@ -93,6 +93,22 @@ public interface IKubeApiClient : IDisposable {
     );
 
     /// <summary>
+    ///     Replaces an object's <c>metadata.ownerReferences</c> with one controller, or with nothing.
+    /// </summary>
+    /// <param name="target">The dependent.</param>
+    /// <param name="owner">The controller to write, or <see langword="null" /> to clear the list.</param>
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <returns>
+    ///     Success, or <see cref="ErrorCode.ResourceNotFound" /> when there is no such object. ⚠ A
+    ///     JSON merge patch, never an apply — <c>IKubeClusterConnection.SetOwnerAsync</c> says why.
+    /// </returns>
+    Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
     ///     Every namespaced kind this cluster serves, one version per group — API discovery.
     /// </summary>
     /// <param name="cancellationToken">The caller's token.</param>

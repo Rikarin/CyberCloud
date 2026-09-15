@@ -143,4 +143,90 @@ public static class KubeJson {
                     && JsonNode.DeepEquals(actual, expected);
         }
     }
+
+    /// <summary>The object's <c>metadata.uid</c>, or empty when the document carries none.</summary>
+    /// <param name="document">An object as the API server returned it.</param>
+    /// <remarks>
+    ///     ⚠ Empty rather than a throw, because the one document that legitimately has no uid is the
+    ///     one a provider rendered and has not applied yet — and a caller comparing uids treats empty
+    ///     as "not identified", which is the safe reading.
+    /// </remarks>
+    public static string UidOf(JsonNode? document) =>
+        (document as JsonObject)?["metadata"] is JsonObject metadata
+        && metadata["uid"] is JsonValue value
+        && value.TryGetValue<string>(out var uid)
+            ? uid
+            : string.Empty;
+
+    /// <summary>
+    ///     The owner reference marked <c>controller: true</c>, or <see langword="null" /> when the
+    ///     object has no controller.
+    /// </summary>
+    /// <param name="document">An object as the API server returned it.</param>
+    /// <remarks>
+    ///     <para>
+    ///         Kubernetes allows at most one controller per object and any number of plain owners.
+    ///         This reads the controller only, because it is the one an operator indexes on —
+    ///         CloudNativePG's <c>getManagedPVCs</c> lists claims by
+    ///         <c>metav1.GetControllerOf</c>, so a claim whose controller entry is gone is a claim
+    ///         the operator no longer sees, whatever other owners it keeps.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ An entry with no <c>uid</c> is not a controller. The garbage collector treats such
+    ///         a reference as pointing at nothing, and a caller that took it for an identity would
+    ///         be comparing against the empty string.
+    ///     </para>
+    /// </remarks>
+    public static OwnerRef? ControllerOf(JsonNode? document) {
+        if ((document as JsonObject)?["metadata"] is not JsonObject metadata
+            || metadata["ownerReferences"] is not JsonArray owners) {
+            return null;
+        }
+
+        foreach (var owner in owners.OfType<JsonObject>()) {
+            if (owner["controller"] is not JsonValue flag || !flag.TryGetValue<bool>(out var controller) || !controller) {
+                continue;
+            }
+
+            var reference = new OwnerRef {
+                ApiVersion = Text(owner["apiVersion"]),
+                Kind = Text(owner["kind"]),
+                Name = Text(owner["name"]),
+                Uid = Text(owner["uid"])
+            };
+
+            return reference.IsComplete ? reference : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Whether the object names any owner at all — controller or not.
+    /// </summary>
+    /// <param name="document">An object as the API server returned it.</param>
+    /// <remarks>
+    ///     The garbage collector follows every entry, not only the controller, so "may this object
+    ///     outlive a delete" is this question rather than <see cref="ControllerOf" />'s.
+    /// </remarks>
+    public static bool HasOwners(JsonNode? document) =>
+        (document as JsonObject)?["metadata"] is JsonObject metadata
+        && metadata["ownerReferences"] is JsonArray { Count: > 0 };
+
+    /// <summary>The <c>metadata.ownerReferences</c> entry an <see cref="OwnerRef" /> renders as.</summary>
+    /// <param name="owner">The owner.</param>
+    public static JsonObject OwnerReference(OwnerRef owner) {
+        ArgumentNullException.ThrowIfNull(owner);
+
+        return new JsonObject {
+            ["apiVersion"] = owner.ApiVersion,
+            ["kind"] = owner.Kind,
+            ["name"] = owner.Name,
+            ["uid"] = owner.Uid,
+            ["controller"] = true
+        };
+    }
+
+    static string Text(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : string.Empty;
 }

@@ -155,7 +155,61 @@ owed:
       a rendering one. Closing it also wants one run against a real cluster per allowed value, which
       is what `extensions-are-the-allow-list` above already asks for and nothing yet runs.
   - id: the-recovery-window-is-hollow-because-cloudnativepg-owns-its-claims
+    status: closed
+    closed: 2026-09-15
     says: >
+      ⚠ CLOSED BY #69 — THE TEARDOWN DETACHES THE CLAIMS AND THE RESTORE ADOPTS THEM — AND THE
+      FINDING IS KEPT BECAUSE THE SHAPE OF THE FIX IS NOT THE SHAPE THE ROW BELOW PREDICTED. The
+      third answer it lists (withdraw the window) was refused on the row's own argument: this is the
+      window a tenant most expects to work. The second (snapshot before teardown) needs a
+      VolumeSnapshot class and controller the bundle does not pin and a Cluster spec on the restore
+      that differs from the stored body, which breaks the byte-for-byte restore docs/plan/08 § Soft
+      delete promises. The first was taken, and it is TWO moves rather than the one the row names.
+      PostgresServerReconciler.DeleteAsync now applies `cnpg.io/reconciliationLoop: disabled`, lists
+      the claims by the operator's own `cnpg.io/cluster={name}` label (IKubeClusterConnection.ListAsync,
+      added for it), clears every owner reference through VolumeCustody.DetachAsync
+      (IKubeClusterConnection.SetOwnerAsync — a JSON merge patch, because server-side apply cannot
+      remove an entry another manager wrote), and only then deletes the Pooler and the Cluster.
+      ⚠ THE SECOND MOVE IS THE ONE `--keep-pvc` NEVER NEEDED, AND WITHOUT IT THE RESTORE IS AN initdb
+      BESIDE THE DATA RATHER THAN OVER IT. Read against v1.30.0: `getManagedPVCs` lists a cluster's
+      claims by CONTROLLER REFERENCE (`internal/controller/cluster_controller.go`, the
+      `.metadata.controller` field index over `IsOwnedByCluster`), so a detached claim is one the
+      operator has never heard of. A re-created Cluster sees no claims, `createPrimaryInstance` takes
+      serial 1, `CreateInstancePVCs` reads AlreadyExists as success (`create.go`), and the initdb job
+      runs `EnsureTargetDirectoriesDoNotExist` (`pkg/management/postgres/initdb.go`), which finds a
+      valid control file and RENAMES the data directory aside before initialising a fresh one. So
+      ReconcileAsync, when it finds labelled claims and no Cluster, creates the Cluster carrying the
+      pause annotation (checked first thing in `ClusterReconciler.reconcile`), reads its uid back,
+      writes a controller reference naming that uid onto every claim (VolumeCustody.AdoptAsync), and
+      releases the pause with the ordinary apply. The operator then classifies the claims as dangling
+      — a `ready` claim with no pod and no job (`status.go`'s classifyPVC) — and
+      `ensureInstancesAreCreated` re-creates the pods over them. ⚠ NOT `cnpg.io/pvcStatus: detached`:
+      that is what `--keep-pvc` stamps, and `hasUnknownStatus` makes the operator IGNORE a claim
+      carrying it, which is the opposite of what a restore needs. The claims keep `ready`.
+      ⚠ WHAT THE SUITES PROVE, AND THE ONE THING THEY CANNOT. PostgresReconcilerTests pins the order
+      (pause, every detach, then the deletes — as one event sequence, because three lists cannot say
+      which came first), the fail-closed halves (a teardown that cannot list or cannot detach deletes
+      nothing and retries; a conflict on the pause is ignored, because the pause is courtesy and the
+      detach is correctness), the adoption naming the uid the API server answered, and that the
+      claims are listed under the label and never counted off the body — serials 1 and 3, because a
+      failover leaves exactly that. VolumeCustodyTests makes the guard fire before any write.
+      ProviderConformanceTests.TheClaimsATeardownKeepsSurviveItAndTheFinalTeardownRemovesThem no
+      longer skips this family: FakeKubeCluster now issues uids and garbage-collects a dependent with
+      its owner by uid, the case plants CloudNativePG's claims owned by the applied Cluster, and it
+      asserts they survive the soft delete with no owner, belong to the restored Cluster's NEW uid
+      after the restore, and are gone after the purge. Sabotage-tested on 2026-09-15: skipping the
+      detach turns that one case red at the survival assertion; skipping the adopt turns it red at
+      the controller assertion; nothing else moves. ⚠ WHAT IS STILL OWED IS THE OPERATOR'S HALF.
+      No suite in this repository can watch CloudNativePG elect a primary over reattached claims whose
+      status it has never held — the cluster-backed lane starts a bare k3s with no operator (#2).
+      Read against v1.30.0, that path is `reconcileTargetPrimaryFromPods` with an empty
+      TargetPrimary: the reattached primary's instance manager shuts it down as a former primary
+      (`reconcileOldPrimary`), the operator marks a failover, and the most advanced instance is
+      elected — the ordinary failover machinery, and it is READ rather than observed. A run against a
+      cluster with the operator installed, deleting and restoring a server with rows in it, is what
+      turns this row's "closed" into evidence; until then `connect-in-cluster` above and this row
+      share the same missing operator.
+      ── The finding, as recorded before the fix ────────────────────────────────────────────────
       ⚠ THIS TYPE DOES NOT LEAK ITS VOLUMES, AND THE REASON IT DOES NOT IS WORSE THAN THE LEAK.
       Issue #65 lists CyberCloud.DBforPostgreSQL/servers among the three operator-delegated types
       whose claims a purge leaves behind, alongside DBforMySQL/servers and Storage/accounts. Read

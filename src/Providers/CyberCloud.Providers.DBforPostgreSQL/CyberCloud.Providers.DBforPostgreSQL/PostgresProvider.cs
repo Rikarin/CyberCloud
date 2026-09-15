@@ -68,8 +68,13 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         ⚠ <b>What a restored server gets back, and it is the whole reason the answer is yes.</b> The
 ///         teardown runs, so the <c>Cluster</c> and its pods go; what it does not remove is what a restore
 ///         is made of. Deleting a CloudNativePG <c>Cluster</c> leaves the
-///         <c>PersistentVolumeClaim</c>s its instances were given, so the tables are still on disk; the
-///         resource grain keeps the body the create wrote, so the restore re-applies it byte for byte; and
+///         <c>PersistentVolumeClaim</c>s its instances were given <b>only because the teardown takes the
+///         operator's controller reference off each of them first</b> — the operator stamps one, and the
+///         garbage collector would otherwise remove the claims with the <c>Cluster</c>, before the window
+///         began (issue #69, and <c>PostgresServerReconciler</c>'s remarks) — so the tables are still on
+///         disk; the resource grain keeps the body the create wrote, so the restore re-applies it byte
+///         for byte, and hands the claims back to the <c>Cluster</c> it creates before the operator sees
+///         it; and
 ///         the committed quota is held rather than returned, so a restore cannot fail against an allowance
 ///         the tenant has spent in the meantime. A tenant who drops production here is charged for the
 ///         disks for seven days and can have the database back, which is the trade docs/plan/06 named.

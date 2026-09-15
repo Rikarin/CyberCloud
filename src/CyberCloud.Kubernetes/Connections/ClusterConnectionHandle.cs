@@ -60,4 +60,21 @@ public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId
         CancellationToken cancellationToken = default
     ) =>
         Grain.ListNamespaceAsync(ns);
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) =>
+        Grain.ListAsync(kind, ns, labelSelector);
+
+    /// <inheritdoc />
+    public Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) =>
+        Grain.SetOwnerAsync(target, owner);
 }

@@ -91,6 +91,19 @@ public sealed class RecordingApiClient : IKubeApiClient {
     ) =>
         Task.FromResult(Result.Success);
 
+    /// <summary>Every ownership change, in order — the target and the owner written, or <see langword="null" /> for a detach.</summary>
+    public List<(ObjectRef Target, OwnerRef? Owner)> OwnerChanges { get; } = [];
+
+    /// <inheritdoc />
+    public Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) {
+        OwnerChanges.Add((target, owner));
+        return Task.FromResult(Result.Success);
+    }
+
     /// <summary>
     ///     The kinds <see cref="DiscoverNamespacedKindsAsync" /> answers with, or the refusal it
     ///     answers with instead.

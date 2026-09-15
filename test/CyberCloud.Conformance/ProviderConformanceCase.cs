@@ -206,6 +206,25 @@ public sealed record ProviderConformanceCase {
     ///         that does not contain it. Most types return an empty array, and returning it is a
     ///         statement rather than a formality.
     ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The claims an operator creates and OWNS belong here too, and naming the owner is
+    ///             what makes the shared claims case follow them — issue #69.
+    ///         </b> CloudNativePG stamps a controller reference on every
+    ///         <c>PersistentVolumeClaim</c> it creates, so a soft delete that removed the
+    ///         <c>Cluster</c> without detaching them would lose them to the garbage collector. A
+    ///         family whose operator does that declares the claims as it would any operator-written
+    ///         object, with <c>metadata.ownerReferences</c> naming the owner by <c>apiVersion</c>,
+    ///         <c>kind</c> and <c>name</c> and an <b>empty</b> <c>uid</c>: the harness fills in the
+    ///         uid the fake issued for the object the reconciler applied — the operator's
+    ///         <c>SetAsOwnedBy</c>, done by the harness because it holds the object the operator
+    ///         would read — and refuses by name when no such object was applied.
+    ///         <c>ProviderConformanceTests.TheClaimsATeardownKeepsSurviveItAndTheFinalTeardownRemovesThem</c>
+    ///         then asserts the claims survive the soft delete with no owner, belong to the restored
+    ///         object's new uid after the restore, and are gone after the purge. A family that
+    ///         declares no such claim is skipped there, and the skip says what it did not find.
+    ///     </para>
     /// </remarks>
     public required Func<ResourceId, string, ImmutableArray<(ObjectRef Target, string Json)>>
         OperatorWritten { get; init; }

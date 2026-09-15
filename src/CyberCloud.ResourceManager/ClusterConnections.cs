@@ -92,18 +92,21 @@ public sealed class GrainClusterConnectionFactory(IGrainFactory grains) : IClust
 ///         forwards, and the duplication is the cycle's cost.
 ///     </b> That type cannot be reached from here
 ///     without <c>CyberCloud.ResourceManager -&gt; CyberCloud.Kubernetes</c> becoming a two-way edge.
-///     The forwarding is mechanical and the interface is four methods wide, which is what makes
+///     The forwarding is mechanical and the interface is six methods wide, which is what makes
 ///     paying it cheaper than merging two modules — and <see cref="IKubeClusterConnection" /> is
 ///     deliberately smaller than the grain for exactly this reason.
 ///     <para>
 ///         ⚠
 ///         <b>
-///             <c>ListNamespaceAsync</c> is overridden here rather than left to the interface's
-///             fail-closed default, and forgetting to would have been invisible.
-///         </b> The default refuses,
+///             <c>ListNamespaceAsync</c>, <c>ListAsync</c> and <c>SetOwnerAsync</c> are overridden
+///             here rather than left to the interface's fail-closed defaults, and forgetting one
+///             would have been invisible.
+///         </b> Each default refuses,
 ///         so a resource-group delete would report "this connection cannot enumerate a namespace"
 ///         against the one connection type that can — a refusal, so nothing would be destroyed, but
-///         also a feature that never works in production and works in every test.
+///         also a feature that never works in production and works in every test. The other two
+///         are the same shape one step later: a PostgreSQL teardown that could not list or detach
+///         its claims would fail rather than lose them, and would fail only in production.
 ///     </para>
 /// </remarks>
 /// <param name="grains">The grain factory.</param>
@@ -139,4 +142,21 @@ sealed class GrainClusterConnection(IGrainFactory grains, Guid clusterId) : IKub
         CancellationToken cancellationToken = default
     ) =>
         Grain.ListNamespaceAsync(ns);
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) =>
+        Grain.ListAsync(kind, ns, labelSelector);
+
+    /// <inheritdoc />
+    public Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) =>
+        Grain.SetOwnerAsync(target, owner);
 }

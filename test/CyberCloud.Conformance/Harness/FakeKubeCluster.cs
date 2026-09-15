@@ -11,10 +11,9 @@ namespace CyberCloud.Conformance.Harness;
 ///     <para>
 ///         ⚠ <b>What this does not prove, stated first so it is not assumed.</b> It is a dictionary,
 ///         not Kubernetes. It does not validate a manifest, does not run admission, does not do
-///         field-level server-side-apply ownership, does not garbage-collect an
-///         <c>ownerReference</c>, and its <see cref="ApplyResult.Conflict" /> is a switch a test
-///         flips rather than a field another manager took. Everything that needs a real API server
-///         lives in <c>CyberCloud.Cluster.Conformance</c>, which runs the same
+///         field-level server-side-apply ownership, and its <see cref="ApplyResult.Conflict" /> is
+///         a switch a test flips rather than a field another manager took. Everything that needs a
+///         real API server lives in <c>CyberCloud.Cluster.Conformance</c>, which runs the same
 ///         <c>ProviderConformanceCase</c> against a k3s container — including the conflict, which is
 ///         there produced by a second field manager and the API server's own 409 rather than by
 ///         <see cref="ConflictOn" />.
@@ -35,6 +34,22 @@ namespace CyberCloud.Conformance.Harness;
 ///         reconciler really rendered — docs/plan/23 § The architecture gates' <c>Labels</c> row asks
 ///         for exactly that, "asserted against real output", and until a provider existed there was no
 ///         real output to assert against.
+///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             It DOES issue a <c>metadata.uid</c> and it DOES garbage-collect a dependent with its
+///             owner, because issue #69 was invisible without both.
+///         </b> CloudNativePG stamps a controller reference on every claim it creates, and the
+///         collector removes the claim with the <c>Cluster</c> — before a recovery window starts.
+///         A fake that echoed applies and deleted only what it was told to delete could not show a
+///         claim dying, so the shared conformance case over that family reported a window it never
+///         exercised. <see cref="DeleteAsync" /> now follows <c>ownerReferences</c> by uid the way
+///         the collector does — background and foreground cascade remove the dependents, orphan
+///         strips the reference — and <see cref="ApplyAsync" /> mints a uid on create and keeps it
+///         across updates, so a reconciler that reads one back to adopt a claim reads a real one.
+///         <see cref="RemoveBehindTheirBack" /> deliberately does not cascade: it models a hand
+///         edit the reconciler must notice and repair, and the drift cases plant nothing owned.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -143,9 +158,19 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     ///     namespace reclaim has to find and which no apply of ours ever created.
     /// </remarks>
     public void MutateBehindTheirBack(ObjectRef target, string json) {
-        objects[Key(target)] = json;
+        objects[Key(target)] = WithUid(json, Key(target));
         addresses[Key(target)] = target;
     }
+
+    /// <summary>The stored object's <c>metadata.uid</c>, or empty when it is not there.</summary>
+    /// <param name="target">Which object.</param>
+    public string UidOf(ObjectRef target) =>
+        objects.TryGetValue(Key(target), out var json) ? KubeJson.UidOf(JsonNode.Parse(json)) : string.Empty;
+
+    /// <summary>The stored object's controller, or <see langword="null" /> when it has none or is not there.</summary>
+    /// <param name="target">Which object.</param>
+    public OwnerRef? ControllerOf(ObjectRef target) =>
+        objects.TryGetValue(Key(target), out var json) ? KubeJson.ControllerOf(JsonNode.Parse(json)) : null;
 
     /// <inheritdoc />
     public Task<Result<ApplyOutcome>> ApplyAsync(
@@ -207,7 +232,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         // ⚠ A BUILT-IN OBJECT IS STORED WITHOUT ITS EMPTY COLLECTIONS, AND THAT IS THE ONE PLACE THIS
         // STOPS BEING AN ECHO. A custom resource is echoed, because that is what a real API server
         // does to one. See DropEmptyCollections' remarks.
-        objects[key] = DropEmptyCollections(command.Target, command.Body);
+        objects[key] = WithUid(DropEmptyCollections(command.Target, command.Body), key);
         hashes[key] = command.ReconcileHash;
         addresses[key] = command.Target;
 
@@ -260,12 +285,188 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         hashes.TryRemove(key, out _);
         addresses.TryRemove(key, out _);
 
-        return Task.FromResult(
-            objects.TryRemove(key, out _)
-                ? Result.Success
-                : Result.Failure(ErrorCode.ResourceNotFound, $"'{command.Target}' is not in cluster {clusterId:D}.")
-        );
+        if (!objects.TryRemove(key, out var removed)) {
+            return Task.FromResult(
+                Result.Failure(ErrorCode.ResourceNotFound, $"'{command.Target}' is not in cluster {clusterId:D}.")
+            );
+        }
+
+        // ⚠ THE GARBAGE COLLECTOR'S HALF, and the reason a soft-deleted PostgreSQL server's claims
+        // can be seen to die here. A dependent is found by the uid in its ownerReferences, never by
+        // name — an owner re-created under the same name has a new uid and inherits nothing.
+        Collect(KubeJson.UidOf(JsonNode.Parse(removed)), command.Target.Namespace, policy);
+
+        return Task.FromResult(Result.Success);
     }
+
+    /// <summary>
+    ///     What the garbage collector does when an owner goes: removes every dependent naming its
+    ///     uid, recursively, or under <see cref="CascadePolicy.Orphan" /> strips the reference and
+    ///     leaves the dependent standing.
+    /// </summary>
+    void Collect(string ownerUid, string ns, CascadePolicy policy) {
+        if (ownerUid.Length == 0) {
+            return;
+        }
+
+        foreach (var (key, target) in addresses.ToArray()) {
+            if (!string.Equals(target.Namespace, ns, StringComparison.Ordinal)
+                || !objects.TryGetValue(key, out var json)
+                || JsonNode.Parse(json) is not JsonObject root
+                || root["metadata"] is not JsonObject metadata
+                || metadata["ownerReferences"] is not JsonArray owners) {
+                continue;
+            }
+
+            var names = owners.OfType<JsonObject>()
+                .Any(owner => owner["uid"] is JsonValue value && value.TryGetValue<string>(out var uid) && uid == ownerUid);
+
+            if (!names) {
+                continue;
+            }
+
+            if (policy == CascadePolicy.Orphan) {
+                var kept = new JsonArray();
+                foreach (var owner in owners.OfType<JsonObject>()) {
+                    if (owner["uid"] is not JsonValue value || !value.TryGetValue<string>(out var uid) || uid != ownerUid) {
+                        kept.Add(owner.DeepClone());
+                    }
+                }
+
+                if (kept.Count == 0) {
+                    metadata.Remove("ownerReferences");
+                } else {
+                    metadata["ownerReferences"] = kept;
+                }
+
+                objects[key] = root.ToJsonString();
+                continue;
+            }
+
+            hashes.TryRemove(key, out _);
+            addresses.TryRemove(key, out _);
+            objects.TryRemove(key, out _);
+            Collect(KubeJson.UidOf(root), ns, policy);
+        }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     One kind under one selector, which is the shape a provider uses to find the claims an
+    ///     operator created for it. Every selector pair must match a label exactly; an empty selector
+    ///     is refused, as the production lister refuses it.
+    /// </remarks>
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(kind);
+
+        if (string.IsNullOrEmpty(labelSelector)) {
+            return Task.FromResult(
+                Result<IReadOnlyList<KubeObjectSummary>>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"A selected listing of {kind} in '{ns}' was asked for with no selector."
+                )
+            );
+        }
+
+        var wanted = labelSelector.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2))
+            .ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
+
+        var found = new List<KubeObjectSummary>();
+
+        foreach (var (key, target) in addresses) {
+            // ⚠ Group, version and kind, not the whole record: a caller's plural need not match
+            // the one the object was applied under for it to be the same REST resource.
+            if (target.Kind.ApiVersion != kind.ApiVersion
+                || target.Kind.Kind != kind.Kind
+                || !string.Equals(target.Namespace, ns, StringComparison.Ordinal)
+                || !objects.TryGetValue(key, out var json)) {
+                continue;
+            }
+
+            var labels = LabelsOf(json);
+
+            if (wanted.All(pair => labels.TryGetValue(pair.Key, out var value) && value == pair.Value)) {
+                found.Add(new() { Kind = target.Kind, Namespace = ns, Name = target.Name, Labels = labels });
+            }
+        }
+
+        return Task.FromResult(Result<IReadOnlyList<KubeObjectSummary>>.Success(found));
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     The merge patch as the API server would hold it: the list replaced by the one owner, or
+    ///     the key removed. Nothing else on the object moves.
+    /// </remarks>
+    public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (!objects.TryGetValue(Key(target), out var json) || JsonNode.Parse(json) is not JsonObject root) {
+            return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{target}' is not in cluster {clusterId:D}."));
+        }
+
+        if (root["metadata"] is not JsonObject metadata) {
+            metadata = [];
+            root["metadata"] = metadata;
+        }
+
+        if (owner is null) {
+            metadata.Remove("ownerReferences");
+        } else {
+            metadata["ownerReferences"] = new JsonArray(KubeJson.OwnerReference(owner));
+        }
+
+        objects[Key(target)] = root.ToJsonString();
+        return Task.FromResult(Result.Success);
+    }
+
+    static Dictionary<string, string> LabelsOf(string json) {
+        var labels = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (JsonNode.Parse(json) is JsonObject root
+            && root["metadata"] is JsonObject metadata
+            && metadata["labels"] is JsonObject written) {
+            foreach (var (name, value) in written) {
+                labels[name] = value?.GetValue<string>() ?? string.Empty;
+            }
+        }
+
+        return labels;
+    }
+
+    /// <summary>
+    ///     The body with a <c>metadata.uid</c>: the one the store already holds for this key, else the
+    ///     one the body brought, else a fresh one — what a real API server does on every create and
+    ///     preserves on every update.
+    /// </summary>
+    string WithUid(string json, string key) {
+        if (JsonNode.Parse(json) is not JsonObject root) {
+            return json;
+        }
+
+        if (root["metadata"] is not JsonObject metadata) {
+            metadata = [];
+            root["metadata"] = metadata;
+        }
+
+        var existing = objects.TryGetValue(key, out var previous) ? KubeJson.UidOf(JsonNode.Parse(previous)) : string.Empty;
+
+        if (existing.Length > 0) {
+            metadata["uid"] = existing;
+        } else if (KubeJson.UidOf(root).Length == 0) {
+            metadata["uid"] = $"{clusterId:N}-{Interlocked.Increment(ref minted).ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        }
+
+        return root.ToJsonString();
+    }
+
+    int minted;
 
     /// <inheritdoc />
     /// <remarks>
@@ -292,17 +493,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
                 continue;
             }
 
-            var labels = new Dictionary<string, string>(StringComparer.Ordinal);
-
-            if (JsonNode.Parse(json) is JsonObject root
-                && root["metadata"] is JsonObject metadata
-                && metadata["labels"] is JsonObject written) {
-                foreach (var (name, value) in written) {
-                    labels[name] = value?.GetValue<string>() ?? string.Empty;
-                }
-            }
-
-            found.Add(new() { Kind = target.Kind, Namespace = ns, Name = target.Name, Labels = labels });
+            found.Add(new() { Kind = target.Kind, Namespace = ns, Name = target.Name, Labels = LabelsOf(json) });
         }
 
         return Task.FromResult(Result<IReadOnlyList<KubeObjectSummary>>.Success(found));

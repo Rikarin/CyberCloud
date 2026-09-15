@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Security.Authentication;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
@@ -336,6 +337,68 @@ public sealed class KubeApiClient(
             return refused.Error!.Code == ErrorCode.ResourceNotFound
                 ? Result.Success
                 : Result.Failure(refused.Error);
+        } catch (Exception ex) when (IsTransport(ex)) {
+            return Result.Failure(Unreachable(ex));
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (owner is { IsComplete: false }) {
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{target}' cannot be owned by '{owner}': an owner reference needs apiVersion, kind, "
+                + "name and uid, and one of them is empty. The uid is read back from the API server, "
+                + "never predicted."
+            );
+        }
+
+        // ⚠ A MERGE PATCH ON metadata.ownerReferences, AND `null` IS THE WHOLE POINT OF THE DETACH.
+        // RFC 7386: a null member removes the key, and an array replaces the array. Server-side apply
+        // could add an entry beside the operator's and could never remove the operator's — the entry
+        // belongs to the manager that wrote it — so this is the one patch type that reaches it.
+        var body = new JsonObject {
+            ["metadata"] = new JsonObject {
+                ["ownerReferences"] = owner is null
+                    ? null
+                    : new JsonArray(KubeJson.OwnerReference(owner))
+            }
+        };
+
+        var patch = new V1Patch(body.ToJsonString(), V1Patch.PatchType.MergePatch);
+
+        try {
+            using var response = target.IsClusterScoped
+                ? await client.CustomObjects.PatchClusterCustomObjectWithHttpMessagesAsync(
+                    patch,
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Kind.Plural,
+                    target.Name,
+                    cancellationToken: cancellationToken
+                )
+                    .ConfigureAwait(false)
+                : await client.CustomObjects.PatchNamespacedCustomObjectWithHttpMessagesAsync(
+                    patch,
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Namespace,
+                    target.Kind.Plural,
+                    target.Name,
+                    cancellationToken: cancellationToken
+                )
+                    .ConfigureAwait(false);
+
+            return Result.Success;
+        } catch (HttpOperationException ex) {
+            var refused = Refuse<KubeObject>(ex, target, owner is null ? "detach" : "adopt");
+            return Result.Failure(refused.Error!);
         } catch (Exception ex) when (IsTransport(ex)) {
             return Result.Failure(Unreachable(ex));
         }

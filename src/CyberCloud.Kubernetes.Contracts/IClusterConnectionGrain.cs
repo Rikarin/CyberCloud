@@ -115,6 +115,34 @@ public interface IClusterConnectionGrain : IGrainWithStringKey {
     Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(string ns);
 
     /// <summary>
+    ///     The objects of one kind in one namespace matching a label selector — one REST path,
+    ///     paged until the API server says the list is complete.
+    /// </summary>
+    /// <param name="kind">The kind to list.</param>
+    /// <param name="ns">The namespace to list in.</param>
+    /// <param name="labelSelector">The selector. ⚠ Refused when empty — see <c>IKubeClusterConnection.ListAsync</c>.</param>
+    /// <remarks>
+    ///     ⚠ <b>On the reconcile path, unlike <see cref="ListNamespaceAsync" />, and cheap enough to
+    ///     be.</b> One kind under one selector is one call per page, which is what a teardown pays to
+    ///     learn which claims an operator gave the resource it is about to remove.
+    /// </remarks>
+    [Alias("ListSelected")]
+    Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(GroupVersionKind kind, string ns, string labelSelector);
+
+    /// <summary>
+    ///     Makes <paramref name="owner" /> the one controller of <paramref name="target" />, or
+    ///     clears every owner reference when it is <see langword="null" />.
+    /// </summary>
+    /// <param name="target">The dependent.</param>
+    /// <param name="owner">The controller to write, or <see langword="null" /> to detach.</param>
+    /// <remarks>
+    ///     The grain-side half of <c>IKubeClusterConnection.SetOwnerAsync</c>, which says why a
+    ///     merge patch and not an apply.
+    /// </remarks>
+    [Alias("SetOwner")]
+    Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner);
+
+    /// <summary>
     ///     Establishes (or joins) the shared informer for a kind, filtered by
     ///     <see cref="KubeLabels.ManagedBySelector" />.
     /// </summary>

@@ -2,6 +2,7 @@ using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.DBforPostgreSQL.Contracts;
+using CyberCloud.ResourceManager.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -58,6 +59,14 @@ public sealed class PostgresCase : IProviderCaseSource {
             // `bootstrap.initdb.secret`, so the operator generates the owner's password itself. It is
             // not in `Objects` above because that member is what the reconciler is judged on having
             // APPLIED, and applying this one would be the defect rather than the fixture.
+            // ⚠ AND THE CLAIMS, OWNED BY THE CLUSTER — issue #69. CloudNativePG creates each
+            // instance's PersistentVolumeClaims itself and stamps a controller reference on every one,
+            // so the shared suite's fake garbage-collects them with the Cluster unless the teardown
+            // detached them first. Serials 1 and 3 rather than 1 and 2, because a failover replaced
+            // instance 2 and the serial only ever moves forward — a claim named off the replica count
+            // would miss serial 3, and the suite's follow-through would then pass over a claim the
+            // reconciler never touched. The owner's uid is left empty: the harness fills in the one
+            // the fake issued for the applied Cluster, which is what SetAsOwnedBy reads.
             OperatorWritten = (id, ns) => [
                 (KubeSecret.Ref(ns, PostgresServers.CredentialSecretName(id.Name)),
                     OperatorSecret.Json(
@@ -66,13 +75,65 @@ public sealed class PostgresCase : IProviderCaseSource {
                             (PostgresServers.UsernameKey, "app"),
                             (PostgresServers.PasswordKey, "a-generated-password")
                         ]
-                    ))
+                    )),
+                Claim(ns, id.Name, serial: 1, wal: false),
+                Claim(ns, id.Name, serial: 1, wal: true),
+                Claim(ns, id.Name, serial: 3, wal: false),
+                Claim(ns, id.Name, serial: 3, wal: true)
             ],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return PostgresServers.Matches(match.ObjectJson, desired.RootElement);
             }
         };
+
+    /// <summary>
+    ///     One claim as CloudNativePG v1.30.0 builds it — <c>pkg/reconciler/persistentvolumeclaim/build.go</c>:
+    ///     the calculator's labels, the serial and status annotations, the cluster label
+    ///     <c>SetInheritedData</c> adds, and a controller reference to the <c>Cluster</c> whose uid
+    ///     the harness resolves.
+    /// </summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="cluster">The <c>Cluster</c>'s name, which is the resource's.</param>
+    /// <param name="serial">The instance serial the operator assigned.</param>
+    /// <param name="wal">Whether this is the <c>-wal</c> claim rather than the data claim.</param>
+    static (ObjectRef Target, string Json) Claim(string ns, string cluster, int serial, bool wal) {
+        var instance = $"{cluster}-{serial.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        var name = wal ? instance + "-wal" : instance;
+
+        var metadata = new JsonObject {
+            ["name"] = name,
+            ["namespace"] = ns,
+            ["labels"] = new JsonObject {
+                [PostgresServers.ClaimLabel] = cluster,
+                ["cnpg.io/instanceName"] = instance,
+                ["cnpg.io/pvcRole"] = wal ? "PG_WAL" : "PG_DATA",
+                ["app.kubernetes.io/managed-by"] = "cloudnative-pg",
+                ["app.kubernetes.io/name"] = "cloudnative-pg",
+                ["app.kubernetes.io/component"] = "database"
+            },
+            ["annotations"] = new JsonObject {
+                ["cnpg.io/nodeSerial"] = serial.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["cnpg.io/pvcStatus"] = "ready"
+            },
+            ["ownerReferences"] = new JsonArray(
+                KubeJson.OwnerReference(PostgresServers.ClusterOwner(cluster, uid: string.Empty))
+            )
+        };
+
+        var target = new ObjectRef { Kind = RetainedVolume.ClaimKind, Namespace = ns, Name = name };
+
+        return (target,
+            new JsonObject {
+                ["apiVersion"] = "v1",
+                ["kind"] = "PersistentVolumeClaim",
+                ["metadata"] = metadata,
+                ["spec"] = new JsonObject {
+                    ["accessModes"] = new JsonArray("ReadWriteOnce"),
+                    ["resources"] = new JsonObject { ["requests"] = new JsonObject { ["storage"] = "20Gi" } }
+                }
+            }.ToJsonString());
+    }
 
     /// <summary>A valid body with the required data-volume size removed.</summary>
     /// <param name="body">A valid body.</param>

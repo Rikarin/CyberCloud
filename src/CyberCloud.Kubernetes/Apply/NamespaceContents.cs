@@ -114,7 +114,7 @@ public static class NamespaceContents {
                 var value = page.GetValueOrThrow();
 
                 foreach (var item in value.Items) {
-                    if (Read(item, kind, ns) is { } summary) {
+                    if (Summarize(item, kind, ns) is { } summary) {
                         found.Add(summary);
                     }
 
@@ -151,7 +151,7 @@ public static class NamespaceContents {
     ///     placeholder name, would put a refusal message in front of an operator naming an object
     ///     that does not exist.
     /// </remarks>
-    static KubeObjectSummary? Read(string json, GroupVersionKind kind, string ns) {
+    internal static KubeObjectSummary? Summarize(string json, GroupVersionKind kind, string ns) {
         JsonDocument document;
 
         try {

@@ -600,6 +600,23 @@ window. The teardown is not one of them.
 - **The disks.** Deleting a `StatefulSet` does not delete the `PersistentVolumeClaim`s its
   `volumeClaimTemplate` created, which is Kubernetes' own behaviour rather than any provider's. A
   registry's images, its metadata database and its job queue are all still there.
+  ⚠ **That sentence is true of a family that renders its own set and was FALSE of every operator
+  that owns its claims, and the most valuable window in the catalogue was the one it was false for
+  (#69).** CloudNativePG creates a server's claims itself and stamps a controller reference on
+  every one — `build.go`'s `.WithClusterInheritance(cluster)` → `SetAsOwnedBy(Controller: true)` —
+  so the garbage collector removed the data, WAL and tablespace claims with the `Cluster`, before
+  the window began, and a restore came back to an `initdb`. Kubernetes' behaviour leaves the disks
+  only when nothing names an owner; a provider whose operator names one has to take the reference
+  off first. `PostgresServerReconciler.DeleteAsync` now does what `kubectl cnpg destroy --keep-pvc`
+  does by hand — pauses the operator, lists the claims by the operator's own `cnpg.io/cluster`
+  label, clears their owner references through `VolumeCustody.DetachAsync`, and only then deletes —
+  and `ReconcileAsync` does the reverse on a restore, because a detached claim is one the operator
+  no longer indexes: the `Cluster` is created paused, its uid is read back, the claims are handed to
+  it through `VolumeCustody.AdoptAsync`, and the pause is released. The primitives are
+  `IKubeClusterConnection.ListAsync` and `SetOwnerAsync`, and the guard is the reclaimer's, moved to
+  `RetainedVolume.CheckOwnership` so both directions run it. What no suite here can observe is the
+  operator reattaching the re-owned claims, because the cluster-backed lane runs no operator (#2);
+  `charts/managed/postgres/conformance.yaml § owed` holds that.
 - **The desired state.** `CompleteDeleteAsync` is what clears a resource grain and a soft delete does
   not call it, so the body the create wrote is still exactly what a restore applies — byte for byte,
   with no caller supplying anything.
@@ -660,12 +677,27 @@ claims belong to an operator cannot name them.** Of the five types declaring a w
 apply a CloudNativePG `Cluster`, a `MariaDB` and a `Seaweed` respectively, and nothing in this
 repository records how those operators name the claims they create — so their purges still leave their
 disks, and each closes its own by writing the naming rule down and declaring it.
+⚠ **Closed for all three by #65 and #69, and the three closings are not the same shape, which is
+the part worth keeping.** The mariadb and seaweedfs operators render `StatefulSet`s with
+`volumeClaimTemplate`s underneath their CRs, so those claims are computable and survive on their own —
+#65 wrote the naming rules down (`storage-{name}-{i}` *and* `galera-{name}-{i}`; `mount0-{name}-volume-{i}` and the
+doubled `{name}-filer-{name}-filer-0`). CloudNativePG's are neither: the operator names them from a
+serial it alone advances, so a failover leaves `main-1` and `main-3`, and a rule off the replica
+count would name `main-2`. That type **lists** rather than predicts —
+`IKubeClusterConnection.ListAsync` under the operator's own `cnpg.io/cluster` label, through
+`RetainedVolume.Listed` — and it had the opposite problem from a leak: its claims did not survive at
+all (the disks bullet above). ⚠ **`CyberCloud.DocumentDB/accounts` renders the same CloudNativePG
+`Cluster` independently and has the same operator-owned shape, and declares no window**, so its
+hard delete's garbage collection is correct today; the day it declares one it takes the same
+detach-and-adopt path, and `charts/managed/ferretdb/conformance.yaml § owed` records that precisely.
 ⚠ **`CyberCloud.Monitor/workspaces` is not in that list and that is a finding rather than an
 omission:** it renders a `ConfigMap`, a `Secret` and a `VMUser` and creates no claim at all, so this
-gap never applied to it. And **a set scaled down before it was deleted leaves the claims of the
-ordinals it shed**, which the desired body cannot name — probing past the replica count would mean
-deleting objects nothing in the desired state accounts for, with the guard as the only thing between
-that and a tenant's data.
+gap never applied to it, and #69's examination confirmed it — nothing it applies carries or receives
+an owner reference to anything it deletes. And **a set scaled down before it was deleted leaves the
+claims of the ordinals it shed**, which the desired body cannot name — probing past the replica
+count would mean deleting objects nothing in the desired state accounts for, with the guard as the
+only thing between that and a tenant's data. ⚠ The listing shape closes this too for the one type
+that lists, and for no other: a claim the operator labelled is found whatever its serial.
 
 And **nothing swept an expired window** — the sentence below is kept as it was written, because the
 two paragraphs after it are the answer and they only read as answers beside the question. An entry
@@ -723,7 +755,9 @@ claims this section leaves owed are now leaked on a schedule rather than only wh
 purge, for `DBforMySQL/servers` and `Storage/accounts`; and the hollow window issue #69 finds on
 `DBforPostgreSQL/servers` now ends on schedule with nobody in the loop. Neither is a reason to hold
 every window open for ever — that trades a disk for a name and a committed quota held permanently —
-and both are owed to their own sections.
+and both are owed to their own sections. ⚠ **Both have since closed** — #65 named the two operators'
+claims and #69 made the third's survive its teardown — so what the sweeper now ends on schedule is a
+window with something in it, and a purge that removes exactly that.
 
 **Decided: committed quota is NOT returned on delete for a soft-deletable type. It is returned on
 purge.** ⚠ **This is the decision most easily got wrong from Azure by analogy, because Azure does

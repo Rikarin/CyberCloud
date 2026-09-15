@@ -295,3 +295,30 @@ owed:
       neither did listKeys — ISecretWriter has shipped, so a user resource this platform creates is
       the one place here a mint would be right: the role would not exist until this platform made it,
       so the password would be one PostgreSQL was given rather than one it never accepted.
+  - id: the-claims-are-cloudnativepgs-and-a-window-here-would-be-hollow-until-it-detaches-them
+    says: >
+      ⚠ EXAMINED FOR #69 AND RECORDED RATHER THAN CHANGED, BECAUSE THIS TYPE DECLARES NO WINDOW. It
+      renders the same CloudNativePG Cluster charts/managed/postgres does — independently,
+      src/Providers/README.md § Hard rule — so it has the same shape #69 found there: the operator
+      creates every instance's PersistentVolumeClaims itself and stamps a controller reference on
+      each (`build.go`'s `.WithClusterInheritance(cluster)` → `SetAsOwnedBy(Controller: true)`), so
+      deleting the Cluster has Kubernetes garbage-collect the data and WAL claims with it. With no
+      SupportsSoftDelete declared, that is the CORRECT outcome of a hard delete: the claims go with
+      the account, nothing leaks, and DocumentDbAccountReconciler is right to take the
+      RetainedVolumesAsync default. ⚠ THE DAY THIS TYPE DECLARES A WINDOW, THAT SAME BEHAVIOUR IS THE
+      HOLLOW WINDOW, and the declaration alone would ship it: a soft delete runs the same teardown,
+      the collector empties the claims before the window starts, and a restore comes back to an
+      initdb — worse, to CloudNativePG's initdb renaming the tenant's data directory aside. The path
+      exists and is not Postgres-specific: pause the operator (`cnpg.io/reconciliationLoop:
+      disabled`), list the claims under `cnpg.io/cluster={name}` (IKubeClusterConnection.ListAsync),
+      clear their owner references before the delete (VolumeCustody.DetachAsync), name them from
+      RetainedVolumesAsync through RetainedVolume.Listed so a purge removes them, and on the restore
+      create the Cluster paused, read its uid back and hand the claims to it
+      (VolumeCustody.AdoptAsync) before releasing the pause — PostgresServerReconciler is the worked
+      example, and ProviderConformanceTests.TheClaimsATeardownKeepsSurviveItAndTheFinalTeardownRemovesThem
+      follows a family's operator-owned claims through the soft delete, the restore and the purge
+      once its case declares them in OperatorWritten. ⚠ A window declared here WITHOUT that is what
+      the shared case now catches: this family declares no claims in OperatorWritten, so the case
+      skips it today and its skip message names exactly this gap. Declaring the claims is the first
+      half of declaring the window, and it is the half that turns the case from a skip into a test.
+    closes: SupportsSoftDelete on this type, with the four moves above and the claims in PostgresCase's shape in DocumentDbCase.OperatorWritten.
