@@ -117,6 +117,57 @@ public sealed record KubeObject {
 }
 
 /// <summary>
+///     The one object that controls another — what Kubernetes writes as the <c>controller: true</c>
+///     entry of <c>metadata.ownerReferences</c>, and what its garbage collector follows.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠
+///         <b>
+///             Identity is the <see cref="Uid" />, and the name is only how a reader finds the
+///             object to compare it with.
+///         </b> The garbage collector looks an owner up by kind and name and then compares
+///         <c>uid</c>; an owner that exists under the right name with a different uid counts as
+///         absent, and the dependent goes. That is the whole reason a re-created object cannot
+///         inherit its predecessor's dependents by name — and the reason
+///         <c>IKubeClusterConnection.SetOwnerAsync</c> takes one of these rather than an
+///         <see cref="ObjectRef" />: a caller that has not read the uid back has not identified an
+///         owner.
+///     </para>
+///     <para>
+///         Rendered as <c>{apiVersion, kind, name, uid, controller: true}</c> and nothing else.
+///         <c>blockOwnerDeletion</c> is left unset on purpose: it makes a foreground delete of the
+///         owner wait for the dependent, and the one caller that sets ownership through this type is
+///         handing a claim to an operator that never sets it either.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Kubernetes.OwnerRef")]
+public sealed record OwnerRef {
+    /// <summary>The owner's <c>apiVersion</c>, as its <see cref="GroupVersionKind.ApiVersion" /> spells it.</summary>
+    [Id(0)]
+    public string ApiVersion { get; init; } = string.Empty;
+
+    /// <summary>The owner's kind.</summary>
+    [Id(1)]
+    public string Kind { get; init; } = string.Empty;
+
+    /// <summary>The owner's name. Always in the dependent's own namespace.</summary>
+    [Id(2)]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>The owner's <c>metadata.uid</c>, read back from the API server.</summary>
+    [Id(3)]
+    public string Uid { get; init; } = string.Empty;
+
+    /// <summary>Whether every part an owner reference needs is present.</summary>
+    public bool IsComplete => ApiVersion.Length > 0 && Kind.Length > 0 && Name.Length > 0 && Uid.Length > 0;
+
+    /// <inheritdoc />
+    public override string ToString() => $"{Kind}/{Name} ({Uid})";
+}
+
+/// <summary>
 ///     One object found by a listing, reduced to what a caller can decide with: what it is, what it
 ///     is called, and what it is labelled.
 /// </summary>

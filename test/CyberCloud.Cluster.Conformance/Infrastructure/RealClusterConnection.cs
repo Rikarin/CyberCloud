@@ -101,6 +101,25 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
         CancellationToken cancellationToken = default
     ) =>
         NamespaceContents.ListAsync(api, clusterId, ns, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) =>
+        SelectedContents.ListAsync(api, clusterId, kind, ns, labelSelector, cancellationToken);
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ Against a real API server this is the merge patch itself, so a run of the shared claims
+    ///     case here would show the owner reference going and coming back on a real
+    ///     <c>PersistentVolumeClaim</c>. What it still cannot show is CloudNativePG reattaching the
+    ///     claim, because the k3s the lane starts has no operator installed (#2).
+    /// </remarks>
+    public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) =>
+        api.SetOwnerAsync(target, owner, cancellationToken);
 }
 
 /// <summary>Hands the reconcile driver the one real connection a harness owns.</summary>

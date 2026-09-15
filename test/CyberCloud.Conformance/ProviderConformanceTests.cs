@@ -619,9 +619,34 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         earlier and is the reason this test is not filed under soft delete.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>A family that renders no <c>volumeClaimTemplate</c> SKIPS and says so.</b> Most of
-    ///         the catalogue owns no disk, and a test that iterated an empty collection and reported
+    ///         ⚠
+    ///         <b>
+    ///             The claims an OPERATOR creates take the same round trip, and the fake's garbage
+    ///             collector is what makes that round trip a test — issue #69.
+    ///         </b> CloudNativePG creates a server's claims itself and stamps a controller
+    ///         reference on each, so a teardown that deletes the <c>Cluster</c> without detaching
+    ///         them loses them to the collector before the window starts, and a restore that
+    ///         re-creates the <c>Cluster</c> without adopting them leaves the operator blind to
+    ///         them. A family declares such claims through
+    ///         <see cref="ProviderConformanceCase.OperatorWritten" /> — a
+    ///         <c>PersistentVolumeClaim</c> naming its owner by kind and name — and the harness plants
+    ///         them owned by the object the reconciler applied, with the uid the fake issued. The
+    ///         soft arm then asserts three things a template-made claim never needed: that the
+    ///         claim is still there (the collector would have taken it), that it names no owner
+    ///         (the one it named is gone), and after the restore that its controller is the
+    ///         <c>Cluster</c> the restore created — by uid, because that is how the operator finds
+    ///         it and how the collector decides whether it lives.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A family that renders no <c>volumeClaimTemplate</c> and declares no
+    ///         operator-owned claim SKIPS, and the skip names the gap it leaves.</b> Most of the
+    ///         catalogue owns no disk, and a test that iterated an empty collection and reported
     ///         success would be the vacuous green this suite's own vacuity guard exists to refuse.
+    ///         But a skip is also how this case hid #69 for as long as it did: a family whose
+    ///         operator owns its claims rendered no template, was skipped correctly, and advertised a
+    ///         window nothing had exercised. So the skip now says which of the two it did not find,
+    ///         and what a family whose operator creates claims owes this case before its window is
+    ///         evidence rather than a declaration.
     ///     </para>
     /// </remarks>
     [Fact]
@@ -634,21 +659,45 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var accepted = (await CreateAsync("keeps-disks")).GetValueOrThrow();
         await ConvergeAsync(accepted);
 
-        var claims = ClaimsOf(Cluster.World.Applied);
+        var templated = ClaimsOf(Cluster.World.Applied);
 
-        if (claims.Count == 0) {
+        // ⚠ The operator's claims, owned by the object the reconciler applied — see the remarks. Every
+        // owner is resolved to a uid the fake issued, so the collector below can find the dependents
+        // exactly as the real one would.
+        var operatorOwned = PlantOperatorObjects(accepted.Resource.Id, "keeps-disks")
+            .Where(x => x.Target.Kind == RetainedVolume.ClaimKind)
+            .ToList();
+
+        if (templated.Count == 0 && operatorOwned.Count == 0) {
             Assert.Skip(
-                $"SKIPPED — {Case.DisplayName} renders no volumeClaimTemplate, so its teardown keeps "
-                + "no volumes and there is nothing for a purge to remove. Asserting over an empty "
-                + "collection would report a green this family did not earn."
+                $"SKIPPED — {Case.DisplayName} renders no volumeClaimTemplate and declares no "
+                + "operator-owned PersistentVolumeClaim in OperatorWritten, so this case has no claim "
+                + "to follow through a teardown. That is the right answer for a family that owns no "
+                + "disk. ⚠ It is the WRONG answer for a family whose operator creates claims and "
+                + "stamps an owner reference on them — CloudNativePG does — because then a soft "
+                + "delete garbage-collects the data before the window starts and nothing here can see "
+                + "it (issue #69). Such a family declares its claims in OperatorWritten, naming the "
+                + "owner by kind and name, and this case then follows them through the soft delete, "
+                + "the restore and the purge."
             );
         }
 
+        var claims = templated.Concat(operatorOwned).ToList();
+
         // ⚠ The StatefulSet controller's job, done by hand because this cluster has no controllers.
         // The name and the labels both come from the applied document — see the remarks.
-        foreach (var (target, json) in claims) {
+        foreach (var (target, json) in templated) {
             Cluster.World.MutateBehindTheirBack(target, json);
             Cluster.World.Holds(target).ShouldBeTrue();
+        }
+
+        foreach (var (target, _) in operatorOwned) {
+            // A claim planted as owned must read back as owned, or the survival assertion below
+            // would pass for a claim the collector was never going to take.
+            var controller = Cluster.World.ControllerOf(target);
+            controller.ShouldNotBeNull($"'{target}' was declared operator-owned and was planted with no controller");
+            Cluster.World.UidOf(new() { Kind = KindOf(controller), Namespace = target.Namespace, Name = controller.Name })
+                .ShouldBe(controller.Uid, $"'{target}' names an owner the reconciler did not apply");
         }
 
         var deleted = await DeleteAsync("keeps-disks");
@@ -681,7 +730,59 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day window. "
                     + "The claims are the data a restore hands back; removing them makes the window an "
                     + "advertisement."
+                    + (operatorOwned.Any(x => x.Target == target)
+                        ? " This claim was owned by the object the teardown deleted, so the garbage "
+                          + "collector took it with its owner — the teardown has to detach the claim "
+                          + "BEFORE it deletes, which is what kubectl cnpg destroy --keep-pvc does by "
+                          + "hand. docs/plan/08 § Soft delete, issue #69."
+                        : string.Empty)
                 );
+        }
+
+        foreach (var (target, _) in operatorOwned) {
+            Cluster.World.ControllerOf(target)
+                .ShouldBeNull(
+                    $"'{target}' survived the soft delete and still names a controller. The object it "
+                    + "names is gone, so a real collector would have removed this claim; the fake's "
+                    + "did not only because the reference was written after the delete."
+                );
+        }
+
+        // ── And the restore's half, for a claim the operator has to be able to find again ──────
+        if (operatorOwned.Count > 0) {
+            var restored = await RestoreAsync("keeps-disks");
+            restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+
+            var back = await ConvergeAsync(restored.GetValueOrThrow());
+            back.State.ShouldBe(OperationState.Succeeded, $"the restore ended {back.State}: {back.Error?.Message}");
+
+            foreach (var (target, json) in operatorOwned) {
+                var declared = KubeJson.ControllerOf(JsonNode.Parse(json))!;
+                var owner = new ObjectRef { Kind = KindOf(declared), Namespace = target.Namespace, Name = declared.Name };
+                var controller = Cluster.World.ControllerOf(target);
+
+                controller.ShouldNotBeNull(
+                    $"'{target}' has no controller after the restore. An operator that indexes its "
+                    + "claims by controller reference cannot see this one, so it would bootstrap a "
+                    + "fresh primary beside the tenant's data rather than over it."
+                );
+
+                controller.Uid.ShouldBe(
+                    Cluster.World.UidOf(owner),
+                    $"'{target}' names '{controller}' and the restored {owner.Kind.Kind} '{owner.Name}' "
+                    + "has a different uid. The collector compares uids, so this claim is owned by "
+                    + "nothing and goes on the next sweep."
+                );
+            }
+
+            // Back into the window, so the purge below ends it the way a tenant's would.
+            var again = await DeleteAsync("keeps-disks");
+            again.IsSuccess.ShouldBeTrue(again.Error?.Message);
+            (await ConvergeAsync(again.GetValueOrThrow())).State.ShouldBe(OperationState.Succeeded);
+
+            foreach (var (target, _) in operatorOwned) {
+                Cluster.World.Holds(target).ShouldBeTrue($"'{target}' did not survive the second soft delete");
+            }
         }
 
         // ── And the purge's half: ending the window ends the disks ──────────────────────────────
@@ -1759,13 +1860,86 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///     <see cref="ProviderConformanceCase.OperatorWritten" />. A no-op for every type that has
     ///     none, which is most of them.
     /// </remarks>
-    protected void PlaceOperatorObjects(Guid resourceId, string name) {
+    protected void PlaceOperatorObjects(Guid resourceId, string name) => PlantOperatorObjects(resourceId, name);
+
+    /// <summary>
+    ///     <see cref="PlaceOperatorObjects" />, handing back what it planted with every owner
+    ///     reference resolved to the uid the fake holds for the named object.
+    /// </summary>
+    /// <param name="resourceId">The resource's GUID.</param>
+    /// <param name="name">Its name.</param>
+    /// <remarks>
+    ///     ⚠ <b>The resolution is the operator's <c>SetAsOwnedBy</c>, done here because the harness
+    ///     holds the object the operator would read.</b> A case cannot know a uid the fake has not
+    ///     issued yet, so it names the owner by kind and name and leaves <c>uid</c> empty; an owner
+    ///     the fake does not hold fails the placement by name rather than planting a reference to
+    ///     nothing — which the collector would read as "owner gone" and act on.
+    /// </remarks>
+    protected List<(ObjectRef Target, string Json)> PlantOperatorObjects(Guid resourceId, string name) {
         var address = AddressOf(resourceId, name);
+        var planted = new List<(ObjectRef, string)>();
 
         foreach (var (target, json) in Case.OperatorWritten(address, ReconcileDriver.NamespaceFor(address))) {
-            Cluster.World.MutateBehindTheirBack(target, json);
+            var resolved = WithResolvedOwners(target, json);
+            Cluster.World.MutateBehindTheirBack(target, resolved);
+            planted.Add((target, resolved));
         }
+
+        return planted;
     }
+
+    string WithResolvedOwners(ObjectRef target, string json) {
+        if (JsonNode.Parse(json) is not JsonObject root
+            || root["metadata"] is not JsonObject metadata
+            || metadata["ownerReferences"] is not JsonArray owners) {
+            return json;
+        }
+
+        foreach (var owner in owners.OfType<JsonObject>()) {
+            if (owner["uid"]?.GetValue<string>() is { Length: > 0 }) {
+                continue;
+            }
+
+            var kind = new GroupVersionKind {
+                Group = ApiGroup(owner["apiVersion"]?.GetValue<string>() ?? string.Empty),
+                Version = ApiVersionOf(owner["apiVersion"]?.GetValue<string>() ?? string.Empty),
+                Kind = owner["kind"]?.GetValue<string>() ?? string.Empty
+            };
+
+            var candidate = Cluster.World.Applied.Select(x => x.Target)
+                .FirstOrDefault(x => x.Kind.Kind == kind.Kind
+                    && x.Kind.Group == kind.Group
+                    && x.Name == owner["name"]?.GetValue<string>()
+                    && x.Namespace == target.Namespace);
+
+            var uid = candidate is null ? string.Empty : Cluster.World.UidOf(candidate);
+
+            uid.ShouldNotBeEmpty(
+                $"{Case.DisplayName} declares '{target}' as owned by {kind.Kind} '{owner["name"]}', "
+                + "and the fake holds no such object. An operator-written object names an owner the "
+                + "reconciler applied, or it is not this resource's."
+            );
+
+            owner["uid"] = uid;
+        }
+
+        return root.ToJsonString();
+    }
+
+    static string ApiGroup(string apiVersion) => apiVersion.Contains('/') ? apiVersion[..apiVersion.IndexOf('/')] : string.Empty;
+
+    static string ApiVersionOf(string apiVersion) => apiVersion.Contains('/') ? apiVersion[(apiVersion.IndexOf('/') + 1)..] : apiVersion;
+
+    /// <summary>The kind an owner reference names, with the plural the fake's store keys on.</summary>
+    /// <remarks>
+    ///     ⚠ The plural is looked up among the objects the reconciler applied, because an owner
+    ///     reference does not carry one and the fake addresses by the full
+    ///     <see cref="GroupVersionKind" />.
+    /// </remarks>
+    GroupVersionKind KindOf(OwnerRef owner) =>
+        Cluster.World.Applied.Select(x => x.Target.Kind)
+            .FirstOrDefault(x => x.Kind == owner.Kind && x.ApiVersion == owner.ApiVersion)
+        ?? new() { Group = ApiGroup(owner.ApiVersion), Version = ApiVersionOf(owner.ApiVersion), Kind = owner.Kind };
 
     /// <summary>A fresh reconciler, built the way the container builds one.</summary>
     /// <remarks>

@@ -495,6 +495,245 @@ public sealed class PostgresReconcilerTests {
         PostgresServers.Matches("not json at all", desired.RootElement).ShouldBeFalse();
     }
 
+    // ── The claims' custody — issue #69 ────────────────────────────────────────────────────────
+    //
+    // ⚠ What these prove and what they cannot. CloudNativePG creates a server's claims itself and
+    // stamps a controller reference on each, so the Cluster's deletion garbage-collects them; the
+    // teardown has to take the reference off first, and a restore has to put a fresh one on before
+    // the operator's first pass. The RecordingConnection below models ownership as the API server
+    // holds it and nothing more: it does not garbage-collect (FakeKubeCluster does, and the shared
+    // conformance case is where the survival across a soft delete is asserted), and it is not the
+    // operator, so what the operator does with a re-owned claim is read from v1.30.0's source and
+    // recorded on the reconciler rather than observed here.
+
+    [Fact]
+    public async Task ATeardownPausesTheOperatorAndDetachesEveryClaimBeforeItDeletesAnything() {
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+
+        // ⚠ Serials 1 and 3, not 1 and 2: a failover replaced instance 2, which is the shape a name
+        // predicted from the replica count would miss. And the operator's own labels, because the
+        // selector is the operator's label and not one this platform wrote.
+        var context = Context(connection, desired.RootElement);
+        var owner = PostgresServers.ClusterOwner("observed", connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed")));
+        var claims = FailedOverClaims
+            .Select(name => PlantClaim(connection, context.Namespace, name, "observed", owner))
+            .ToList();
+
+        connection.Events.Clear();
+
+        var torn = await new PostgresServerReconciler(new FixedClock())
+            .DeleteAsync(context, TestContext.Current.CancellationToken);
+
+        torn.IsConverged.ShouldBeTrue(torn.ToString());
+
+        // The order, as one sequence: the pause, then every detach, then the deletes.
+        var firstDelete = connection.Events.FindIndex(x => x.StartsWith("delete:", StringComparison.Ordinal));
+        firstDelete.ShouldBeGreaterThan(0);
+        connection.Events[0].ShouldBe("apply:Cluster/observed(paused)");
+        connection.Events.Take(firstDelete).Count(x => x.StartsWith("detach:", StringComparison.Ordinal)).ShouldBe(4);
+        connection.Events.Skip(firstDelete).ShouldBe(["delete:Pooler/observed-pooler", "delete:Cluster/observed"]);
+
+        foreach (var claim in claims) {
+            connection.Objects.ContainsKey(RecordingConnection.Key(claim)).ShouldBeTrue($"'{claim}' is gone");
+            connection.ControllerOf(claim).ShouldBeNull($"'{claim}' still names the Cluster that was deleted");
+        }
+    }
+
+    [Fact]
+    public async Task ASecondTeardownPassOverAGoneClusterDetachesNothingAndConverges() {
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        var context = Context(connection, desired.RootElement);
+        PlantClaim(connection, context.Namespace, "observed-1", "observed", owner: null);
+
+        var torn = await new PostgresServerReconciler(new FixedClock())
+            .DeleteAsync(context, TestContext.Current.CancellationToken);
+
+        torn.IsConverged.ShouldBeTrue(torn.ToString());
+        connection.OwnerChanges.ShouldBeEmpty();
+        connection.Applied.ShouldBeEmpty("a teardown over an absent Cluster applied a pause to nothing");
+    }
+
+    [Fact]
+    public async Task ATeardownThatCannotListItsClaimsDeletesNothingAndRetries() {
+        // ⚠ The fail-closed half. "I could not find out which claims are mine" must never become
+        // "there are none", because the delete that follows would take them all.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+
+        connection.RefuseLists = ErrorCode.InternalError;
+
+        var torn = await new PostgresServerReconciler(new FixedClock())
+            .DeleteAsync(Context(connection, desired.RootElement), TestContext.Current.CancellationToken);
+
+        torn.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        torn.Retryable.ShouldBeTrue();
+        connection.Deleted.ShouldBeEmpty("the Cluster was deleted with its claims unaccounted for");
+    }
+
+    [Fact]
+    public async Task ATeardownThatCannotDetachAClaimDeletesNothingAndRetries() {
+        var connection = new RecordingConnection { RefuseOwnerChanges = ErrorCode.Conflict };
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+
+        var context = Context(connection, desired.RootElement);
+        var owner = PostgresServers.ClusterOwner("observed", connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed")));
+        var claim = PlantClaim(connection, context.Namespace, "observed-1", "observed", owner);
+
+        var torn = await new PostgresServerReconciler(new FixedClock())
+            .DeleteAsync(context, TestContext.Current.CancellationToken);
+
+        torn.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        torn.Retryable.ShouldBeTrue("the API server not accepting a patch is not a reason to give the claim up");
+        torn.Error!.Message.ShouldContain("observed-1");
+        connection.Deleted.ShouldBeEmpty("the Cluster was deleted while a claim still named it");
+        connection.ControllerOf(claim).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task AConflictOnThePauseDoesNotBlockTheTeardown() {
+        // ⚠ The pause is courtesy and the detach is correctness. A tenant's own controller holding a
+        // field of the Cluster makes the pause conflict, and a delete the tenant cannot perform
+        // because of their own edit would be worse than one status line in their event stream.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+
+        var context = Context(connection, desired.RootElement);
+        var owner = PostgresServers.ClusterOwner("observed", connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed")));
+        var claim = PlantClaim(connection, context.Namespace, "observed-1", "observed", owner);
+
+        connection.ConflictField = ".spec.instances";
+
+        var torn = await new PostgresServerReconciler(new FixedClock())
+            .DeleteAsync(context, TestContext.Current.CancellationToken);
+
+        torn.IsConverged.ShouldBeTrue(torn.ToString());
+        connection.ControllerOf(claim).ShouldBeNull();
+        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(["Pooler", "Cluster"]);
+    }
+
+    [Fact]
+    public async Task ARestoreCreatesTheClusterPausedHandsItTheClaimsAndThenReleasesTheOperator() {
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        var context = Context(connection, desired.RootElement);
+
+        // The world a soft delete leaves: the claims, labelled by the operator and owned by nobody.
+        var claims = FailedOverClaims
+            .Select(name => PlantClaim(connection, context.Namespace, name, "observed", owner: null))
+            .ToList();
+
+        var back = await Reconcile(connection, desired.RootElement);
+
+        back.IsConverged.ShouldBeTrue(back.ToString());
+
+        var applies = connection.Events.Where(x => x.StartsWith("apply:Cluster", StringComparison.Ordinal)).ToList();
+        applies.First().ShouldBe("apply:Cluster/observed(paused)", "the operator saw the Cluster before the claims were its");
+        applies.Last().ShouldBe("apply:Cluster/observed", "the operator was never released");
+
+        var adoptions = connection.Events.Where(x => x.StartsWith("adopt:", StringComparison.Ordinal)).ToList();
+        adoptions.Count.ShouldBe(4);
+        connection.Events.IndexOf(adoptions[^1]).ShouldBeLessThan(connection.Events.IndexOf(applies.Last()));
+
+        var uid = connection.UidOf(PostgresServers.ClusterRef(context.Namespace, "observed"));
+        uid.ShouldNotBeEmpty();
+
+        foreach (var claim in claims) {
+            var controller = connection.ControllerOf(claim);
+            controller.ShouldNotBeNull($"'{claim}' was not handed to the new Cluster");
+            controller.Uid.ShouldBe(uid, "the owner reference names a uid the API server did not issue");
+            controller.Kind.ShouldBe("Cluster");
+        }
+
+        PostgresServers.IsPaused(connection.Objects[RecordingConnection.Key(PostgresServers.ClusterRef(context.Namespace, "observed"))])
+            .ShouldBeFalse("a converged restore left the operator paused");
+    }
+
+    [Fact]
+    public async Task AFreshCreateWithNoRetainedClaimsNeverPausesAndASteadyPassNeverLists() {
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+
+        connection.Events.ShouldNotContain(x => x.EndsWith("(paused)", StringComparison.Ordinal));
+        connection.OwnerChanges.ShouldBeEmpty();
+        connection.Lists.Count.ShouldBe(1, "a create with no Cluster asks once whether a previous life left claims");
+
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+
+        connection.Lists.Count.ShouldBe(1, "a pass over a running Cluster listed claims it has no reason to look for");
+    }
+
+    [Fact]
+    public async Task RetainedVolumesAreTheClaimsTheOperatorLabelledAndNotACountOffTheBody() {
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        var context = Context(connection, desired.RootElement);
+
+        PlantClaim(connection, context.Namespace, "observed-1", "observed", owner: null);
+        PlantClaim(connection, context.Namespace, "observed-3-wal", "observed", owner: null);
+        // Somebody else's server in the same namespace, wearing a name a pattern would match.
+        PlantClaim(connection, context.Namespace, "observed-2", "other", owner: null);
+
+        var retained = await new PostgresServerReconciler(new FixedClock())
+            .RetainedVolumesAsync(context, TestContext.Current.CancellationToken);
+
+        retained.IsSuccess.ShouldBeTrue(retained.Error?.Message);
+        retained.GetValueOrThrow().Select(x => x.Claim.Name).Order().ShouldBe(["observed-1", "observed-3-wal"]);
+        retained.GetValueOrThrow().ShouldAllBe(x => x.OwnedBy[PostgresServers.ClaimLabel] == "observed");
+        connection.Lists.ShouldHaveSingleItem().Selector.ShouldBe("cnpg.io/cluster=observed");
+
+        var blind = await new PostgresServerReconciler(new FixedClock())
+            .RetainedVolumesAsync(Context(null, desired.RootElement), TestContext.Current.CancellationToken);
+
+        blind.IsFailure.ShouldBeTrue("with no cluster to ask, an empty answer would converge a purge over disks that are still there");
+    }
+
+    /// <summary>
+    ///     The claims of a two-instance server that has failed over once: serials 1 and 3, each with
+    ///     its WAL volume. ⚠ Not 1 and 2 — the gap is the point, because a name predicted from the
+    ///     replica count would miss serial 3.
+    /// </summary>
+    static readonly string[] FailedOverClaims = ["observed-1", "observed-1-wal", "observed-3", "observed-3-wal"];
+
+    /// <summary>Plants a claim as CloudNativePG creates one: its labels, its serial, and its controller.</summary>
+    static ObjectRef PlantClaim(RecordingConnection connection, string ns, string name, string cluster, OwnerRef? owner) {
+        var target = new ObjectRef { Kind = RetainedVolume.ClaimKind, Namespace = ns, Name = name };
+
+        var metadata = new JsonObject {
+            ["name"] = name,
+            ["namespace"] = ns,
+            ["labels"] = new JsonObject {
+                [PostgresServers.ClaimLabel] = cluster,
+                ["cnpg.io/instanceName"] = name.EndsWith("-wal", StringComparison.Ordinal) ? name[..^4] : name,
+                ["cnpg.io/pvcRole"] = name.EndsWith("-wal", StringComparison.Ordinal) ? "PG_WAL" : "PG_DATA",
+                ["app.kubernetes.io/managed-by"] = "cloudnative-pg"
+            },
+            ["annotations"] = new JsonObject { ["cnpg.io/pvcStatus"] = "ready" }
+        };
+
+        if (owner is not null) {
+            metadata["ownerReferences"] = new JsonArray(KubeJson.OwnerReference(owner));
+        }
+
+        connection.Plant(
+            target,
+            new JsonObject { ["apiVersion"] = "v1", ["kind"] = "PersistentVolumeClaim", ["metadata"] = metadata }.ToJsonString()
+        );
+
+        return target;
+    }
+
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
 
     /// <summary>The apply order a pass must keep — the Pooler references the Cluster by name.</summary>
@@ -583,7 +822,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
     public bool Suspend { get; init; }
 
     /// <summary>The field another manager owns, or empty.</summary>
-    public string ConflictField { get; init; } = string.Empty;
+    public string ConflictField { get; set; } = string.Empty;
 
     /// <summary>Whether an apply reports success and stores nothing — the clause-4 trap.</summary>
     public bool SwallowApplies { get; init; }
@@ -638,13 +877,34 @@ sealed class RecordingConnection : IKubeClusterConnection {
         }
 
         if (!SwallowApplies) {
-            Objects[Key(command.Target)] = command.Body;
+            // ⚠ A uid, minted on create and kept across updates, because the restore path reads the
+            // Cluster's uid back to name it as the claims' owner — and a double that echoed the
+            // applied body would hand it an empty one. The real API server issues one on every create.
+            var body = JsonNode.Parse(command.Body)!.AsObject();
+            var metadata = body["metadata"]!.AsObject();
+            var existed = Objects.TryGetValue(Key(command.Target), out var previous);
+            var uid = existed ? KubeJson.UidOf(JsonNode.Parse(previous!)) : string.Empty;
+            metadata["uid"] = uid.Length > 0 ? uid : $"uid-{Interlocked.Increment(ref minted)}";
+            Objects[Key(command.Target)] = body.ToJsonString();
+            Events.Add(
+                $"apply:{command.Target.Kind.Kind}/{command.Target.Name}"
+                + (command.Annotations.ContainsKey(PostgresServers.PauseAnnotation) ? "(paused)" : string.Empty)
+            );
         }
 
         return Task.FromResult(
             Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target })
         );
     }
+
+    int minted;
+
+    /// <summary>Every write in the order it happened — applies, ownership changes and deletes together.</summary>
+    /// <remarks>
+    ///     ⚠ The order is the assertion for the teardown: a detach after a delete would lose the
+    ///     race with the garbage collector, and three separate lists cannot say which came first.
+    /// </remarks>
+    public List<string> Events { get; } = [];
 
     public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(target);
@@ -667,6 +927,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
         if (removed) {
             Deleted.Add(command.Target);
+            Events.Add($"delete:{command.Target.Kind.Kind}/{command.Target.Name}");
         }
 
         return Task.FromResult(
@@ -674,6 +935,116 @@ sealed class RecordingConnection : IKubeClusterConnection {
                 ? Result.Success
                 : Result.Failure(ErrorCode.ResourceNotFound, $"'{command.Target}' is not here.")
         );
+    }
+
+    /// <summary>Every ownership change, in order: the claim and the owner written, or <see langword="null" /> for a detach.</summary>
+    public List<(ObjectRef Target, OwnerRef? Owner)> OwnerChanges { get; } = [];
+
+    /// <summary>The kind and name of every object listed by selector, in order, with the selector asked for.</summary>
+    public List<(GroupVersionKind Kind, string Selector)> Lists { get; } = [];
+
+    /// <summary>
+    ///     When set, every <see cref="ListAsync" /> fails with this code — the cluster refusing or
+    ///     not answering the one question a teardown has to ask before it deletes.
+    /// </summary>
+    public ErrorCode? RefuseLists { get; set; }
+
+    /// <summary>
+    ///     Plants an object as an operator would — labels, annotations and owner reference as given,
+    ///     never through the apply path.
+    /// </summary>
+    public void Plant(ObjectRef target, string json) => Objects[Key(target)] = json;
+
+    /// <summary>The stored object's <c>metadata.uid</c>, or empty.</summary>
+    public string UidOf(ObjectRef target) =>
+        Objects.TryGetValue(Key(target), out var json) ? KubeJson.UidOf(JsonNode.Parse(json)) : string.Empty;
+
+    /// <summary>The stored object's controller, or <see langword="null" />.</summary>
+    public OwnerRef? ControllerOf(ObjectRef target) =>
+        Objects.TryGetValue(Key(target), out var json) ? KubeJson.ControllerOf(JsonNode.Parse(json)) : null;
+
+    /// <summary>
+    ///     ⚠ Overrides the interface's fail-closed default, and the default is why the first run of
+    ///     this suite after the teardown learned to detach went 14 red: a double that cannot list
+    ///     answers "cannot list", and a teardown that cannot list its claims must not delete.
+    /// </summary>
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(kind);
+        Lists.Add((kind, labelSelector));
+
+        if (RefuseLists is { } refusal) {
+            return Task.FromResult(
+                Result<IReadOnlyList<KubeObjectSummary>>.Failure(refusal, $"Cluster {ClusterId:D} did not answer the list.")
+            );
+        }
+
+        var wanted = labelSelector.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2))
+            .ToDictionary(x => x[0], x => x.Length > 1 ? x[1] : string.Empty, StringComparer.Ordinal);
+
+        var found = new List<KubeObjectSummary>();
+
+        foreach (var (key, json) in Objects) {
+            var parts = key.Split('/', 3);
+
+            if (parts[0] != kind.Kind || parts[1] != ns) {
+                continue;
+            }
+
+            var labels = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            if (JsonNode.Parse(json) is JsonObject root
+                && root["metadata"] is JsonObject metadata
+                && metadata["labels"] is JsonObject written) {
+                foreach (var (name, value) in written) {
+                    labels[name] = value?.GetValue<string>() ?? string.Empty;
+                }
+            }
+
+            if (wanted.All(pair => labels.TryGetValue(pair.Key, out var value) && value == pair.Value)) {
+                found.Add(new() { Kind = kind, Namespace = ns, Name = parts[2], Labels = labels });
+            }
+        }
+
+        return Task.FromResult(Result<IReadOnlyList<KubeObjectSummary>>.Success(found));
+    }
+
+    /// <summary>When set, every ownership change fails with this code and changes nothing.</summary>
+    public ErrorCode? RefuseOwnerChanges { get; init; }
+
+    /// <summary>The merge patch, as the API server would hold it: the list replaced, or the key gone.</summary>
+    public Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(target);
+        OwnerChanges.Add((target, owner));
+
+        if (RefuseOwnerChanges is { } refusal) {
+            return Task.FromResult(Result.Failure(refusal, $"Cluster {ClusterId:D} did not accept the change to '{target}'."));
+        }
+
+        if (!Objects.TryGetValue(Key(target), out var json) || JsonNode.Parse(json) is not JsonObject root) {
+            return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{target}' is not here."));
+        }
+
+        Events.Add($"{(owner is null ? "detach" : "adopt")}:{target.Name}");
+
+        if (root["metadata"] is not JsonObject metadata) {
+            metadata = [];
+            root["metadata"] = metadata;
+        }
+
+        if (owner is null) {
+            metadata.Remove("ownerReferences");
+        } else {
+            metadata["ownerReferences"] = new JsonArray(KubeJson.OwnerReference(owner));
+        }
+
+        Objects[Key(target)] = root.ToJsonString();
+        return Task.FromResult(Result.Success);
     }
 
     /// <summary>

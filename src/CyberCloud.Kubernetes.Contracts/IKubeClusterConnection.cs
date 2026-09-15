@@ -149,4 +149,113 @@ public interface IKubeClusterConnection {
                 + "from."
             )
         );
+
+    /// <summary>
+    ///     The objects of one kind in one namespace that carry a label selector — the
+    ///     "select" that <c>RetainedVolume</c>'s remarks said no member could do.
+    /// </summary>
+    /// <param name="kind">The kind to list. One REST path, so one round trip per page.</param>
+    /// <param name="ns">The namespace to list in.</param>
+    /// <param name="labelSelector">
+    ///     A Kubernetes label selector, for example <c>cnpg.io/cluster=main</c>. ⚠ Never empty:
+    ///     an empty selector is <see cref="ListNamespaceAsync" />'s job for one kind, and a caller
+    ///     that wants everything of a kind should say so there rather than here, where every caller
+    ///     is looking for <i>its own</i> objects.
+    /// </param>
+    /// <param name="cancellationToken">The caller's budget.</param>
+    /// <returns>Every matching object, or the failure that stopped the listing. Never a partial page.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Added by the first provider whose operator names the claims it creates, and
+    ///             not before.
+    ///         </b> A <c>StatefulSet</c>'s claims are computable from the desired body —
+    ///         <c>{volume}-{set}-{ordinal}</c> — so <c>RetainedVolumesAsync</c> could name them
+    ///         without asking the cluster. CloudNativePG's are not: an instance replaced after a
+    ///         failover takes the next serial, so a two-instance server may own <c>main-1</c> and
+    ///         <c>main-4</c>, and a provider that predicted <c>main-1</c> and <c>main-2</c> would
+    ///         detach one claim and let the other go. What every one of those claims carries is the
+    ///         operator's own <c>cnpg.io/cluster</c> label, and this is how a provider asks for
+    ///         them.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Fails by default, for the reason <see cref="ListNamespaceAsync" /> does.</b> A
+    ///         connection that answered an empty list here would tell a teardown "there are no claims
+    ///         to detach", and the operator's garbage collector would then remove the ones that were
+    ///         there. Every double that does not really list inherits a refusal; the production
+    ///         handle and the conformance fake override it.
+    ///     </para>
+    /// </remarks>
+    Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<IReadOnlyList<KubeObjectSummary>>.Failure(
+                ErrorCode.InternalError,
+                $"This cluster connection ({GetType().Name}) cannot list {kind?.Kind} by selector "
+                + $"'{labelSelector}' in namespace '{ns}' on cluster {ClusterId:D}. It fails rather "
+                + "than answering an empty list: an empty list is the answer that tells a teardown "
+                + "there is nothing to detach, and the claims it did not see are then "
+                + "garbage-collected with their owner."
+            )
+        );
+
+    /// <summary>
+    ///     Makes <paramref name="owner" /> the one controller of <paramref name="target" />, or —
+    ///     with <see langword="null" /> — leaves <paramref name="target" /> with no owner at all.
+    /// </summary>
+    /// <param name="target">The dependent. A namespaced object in the owner's namespace.</param>
+    /// <param name="owner">
+    ///     The controller to write, read back from the API server so that its
+    ///     <see cref="OwnerRef.Uid" /> is real; or <see langword="null" /> to clear every owner
+    ///     reference the object carries.
+    /// </param>
+    /// <param name="cancellationToken">The caller's budget.</param>
+    /// <returns>
+    ///     Success once the API server holds the new ownership, or
+    ///     <see cref="ErrorCode.ResourceNotFound" /> when there is no such object.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         <b>This is <c>kubectl cnpg destroy --keep-pvc</c>'s primitive, made available to a
+    ///         reconciler.</b> An operator that creates its own claims stamps a controller reference
+    ///         onto each, and the garbage collector removes the claim the moment the controller
+    ///         goes — before a recovery window has started. Clearing the reference first is what
+    ///         lets the claim outlive its <c>Cluster</c>; writing a fresh one on the restore is what
+    ///         lets the operator find it again, because it indexes its claims by controller.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             A metadata patch and not a server-side apply, because apply cannot do this.
+    ///         </b> <c>ownerReferences</c> is a map-typed list keyed on <c>uid</c>, and server-side
+    ///         apply removes an entry only when the manager that owns it applies without it. The
+    ///         entry an operator wrote belongs to the operator's manager, so this platform's manager
+    ///         can add entries beside it and can never take it away. A JSON merge patch replaces
+    ///         the whole list, under whichever manager sends it, which is the only spelling that
+    ///         reaches an entry somebody else wrote.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Fails by default.</b> A double that reported success and changed nothing would
+    ///         let a teardown believe its claims were detached while the garbage collector took them,
+    ///         which is the defect this member exists to close.
+    ///     </para>
+    /// </remarks>
+    Task<Result> SetOwnerAsync(
+        ObjectRef target,
+        OwnerRef? owner,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result.Failure(
+                ErrorCode.InternalError,
+                $"This cluster connection ({GetType().Name}) cannot change who owns '{target}' on "
+                + $"cluster {ClusterId:D}. It fails rather than pretending: a claim that was "
+                + "reported detached and was not is garbage-collected with its owner."
+            )
+        );
 }

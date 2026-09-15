@@ -123,8 +123,48 @@ public static class PostgresServers {
     ///     for <i>"resources carrying data (Vault, Storage, databases)"</i>, and a managed PostgreSQL
     ///     cluster is the third of those. What the window preserves is what the teardown leaves: the
     ///     instances' <c>PersistentVolumeClaim</c>s, the stored body, and the committed quota.
+    ///     <para>
+    ///         ⚠ <b>The claims are left only because the teardown detaches them first.</b>
+    ///         CloudNativePG stamps a controller reference on every claim it creates, and the
+    ///         garbage collector removes them with the <c>Cluster</c>; until
+    ///         <c>PostgresServerReconciler.DeleteAsync</c> cleared that reference ahead of the delete,
+    ///         this constant advertised a window whose restore came back to an <c>initdb</c> —
+    ///         issue #69, and <c>charts/managed/postgres/conformance.yaml § owed</c>.
+    ///     </para>
     /// </remarks>
     public const int SoftDeleteDays = 7;
+
+    /// <summary>
+    ///     The label CloudNativePG stamps on every claim it creates for a cluster, carrying the
+    ///     cluster's name — <c>utils.ClusterLabelName</c>, written by
+    ///     <c>SetInheritedData</c>'s <c>LabelClusterName</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ This and not <c>cnpg.io/instanceName</c>, because the instance names are the thing the
+    ///     provider cannot predict: a failover replaces instance 2 with instance 3, and the serial
+    ///     only ever moves forward. The cluster label is the same on all of them and is what
+    ///     <see cref="ClaimSelector" /> asks the API server for.
+    /// </remarks>
+    public const string ClaimLabel = "cnpg.io/cluster";
+
+    /// <summary>
+    ///     The annotation that stops CloudNativePG reconciling a <c>Cluster</c> while it carries
+    ///     <see cref="PausedValue" /> — <c>utils.ReconciliationLoopAnnotationName</c>, checked first
+    ///     thing in <c>ClusterReconciler.reconcile</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Applied around the two moments the operator must not be looking.</b> A restore
+    ///     creates the <c>Cluster</c> and then hands it the retained claims; the operator's first
+    ///     pass is milliseconds behind the create, sees no claims of its own yet, and would start a
+    ///     fresh primary whose <c>initdb</c> moves the tenant's data directory aside. A teardown
+    ///     detaches the claims and then deletes the <c>Cluster</c>; an operator pass in that gap
+    ///     would see a cluster with no claims and register it unrecoverable. Neither window is a
+    ///     place the operator has anything useful to do, so it is told to wait.
+    /// </remarks>
+    public const string PauseAnnotation = "cnpg.io/reconciliationLoop";
+
+    /// <summary>The value of <see cref="PauseAnnotation" /> that pauses the operator.</summary>
+    public const string PausedValue = "disabled";
 
     /// <summary>The field manager the apply runs under — ADR-013's stable per-provider name.</summary>
     public const string FieldManager = "cybercloud/cybercloud.dbforpostgresql";
@@ -174,6 +214,43 @@ public static class PostgresServers {
     /// <summary>CloudNativePG's <c>Pooler</c> — PgBouncer in front of the cluster.</summary>
     public static GroupVersionKind PoolerKind { get; } =
         new() { Group = "postgresql.cnpg.io", Version = "v1", Kind = "Pooler", Plural = "poolers" };
+
+    /// <summary>The labels every claim CloudNativePG created for a server carries, and the selector's pairs.</summary>
+    /// <param name="name">The resource's own name, which is the <c>Cluster</c>'s.</param>
+    public static ImmutableDictionary<string, string> ClaimOwnership(string name) {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        return ImmutableDictionary<string, string>.Empty.Add(ClaimLabel, name);
+    }
+
+    /// <summary>The selector that lists a server's claims: <c>cnpg.io/cluster={name}</c>.</summary>
+    /// <param name="name">The resource's own name.</param>
+    public static string ClaimSelector(string name) => RetainedVolume.Selector(ClaimOwnership(name));
+
+    /// <summary>
+    ///     The owner reference a claim carries when the <c>Cluster</c> it belongs to has this uid —
+    ///     the shape <c>utils.SetAsOwnedBy</c> writes, with <c>controller: true</c> and nothing else.
+    /// </summary>
+    /// <param name="name">The <c>Cluster</c>'s name.</param>
+    /// <param name="uid">Its <c>metadata.uid</c>, read back from the API server.</param>
+    public static OwnerRef ClusterOwner(string name, string uid) =>
+        new() { ApiVersion = ClusterKind.ApiVersion, Kind = ClusterKind.Kind, Name = name, Uid = uid };
+
+    /// <summary>Whether a <c>Cluster</c> read back from the API server is carrying the pause.</summary>
+    /// <param name="objectJson">The object's JSON, as returned.</param>
+    public static bool IsPaused(string objectJson) {
+        JsonNode? parsed;
+        try {
+            parsed = JsonNode.Parse(objectJson);
+        } catch (JsonException) {
+            return false;
+        }
+
+        return (parsed as JsonObject)?["metadata"] is JsonObject metadata
+            && metadata["annotations"] is JsonObject annotations
+            && annotations[PauseAnnotation] is JsonValue value
+            && value.TryGetValue<string>(out var text)
+            && string.Equals(text, PausedValue, StringComparison.Ordinal);
+    }
 
     // ── The two constraint vocabularies the chart cannot spell ─────────────────────────────────
     //

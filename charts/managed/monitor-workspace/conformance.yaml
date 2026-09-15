@@ -217,6 +217,26 @@ owed:
       same three objects through OperationKind.Restore, and the conformance experiment above asserts
       all three halves: the write path closed, no stray drive reopening it, and the restore putting
       it back.
+  - id: nothing-here-owns-a-claim-so-the-window-is-not-hollow
+    status: closed
+    closed: 2026-09-15
+    says: >
+      ⚠ EXAMINED FOR #69, WHICH ASKED THAT EVERY TYPE DECLARING A WINDOW BE CHECKED FOR THE SHAPE
+      THAT MADE CyberCloud.DBforPostgreSQL/servers' WINDOW HOLLOW: an operator that creates the
+      resource's PersistentVolumeClaims and stamps a controller reference on them, so the teardown's
+      delete garbage-collects the data before the window starts. This row does not have that shape,
+      and the reason is recorded so the next examination starts from evidence. The reconciler applies
+      a ConfigMap, a Secret and a VMUser and nothing else; none of the three is a claim, none owns a
+      claim, and the operator that acts on the VMUser (victoria-metrics-operator) creates no claim on
+      its behalf — it rewrites vmauth's configuration. The data a workspace holds lives in the shared
+      VictoriaMetrics and ClickHouse stores the row is a tenancy IN, under their own retention, and no
+      teardown of this row's three objects can reach it. So what the soft delete tears down is the
+      write path, what the window holds is the name, the stored body, the committed quota and the
+      data's retention clock, and a restore re-applying the three objects hands back exactly what was
+      taken — which `soft-delete-was-withdrawn-and-is-declared-again` above already measured.
+      ⚠ AND THE SHARED CASE SKIPS THIS FAMILY, CORRECTLY: it renders no volumeClaimTemplate and
+      declares no operator-owned claim, and the skip message now names both, so a reader of the run
+      sees why rather than a green with nothing behind it.
   - id: no-external-endpoint
     says: >
       Every endpoint listKeys returns is in-cluster. docs/plan/12 § Cross-cutting decisions requires an

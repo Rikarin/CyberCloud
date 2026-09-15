@@ -402,6 +402,81 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
     }
 
     /// <inheritdoc />
+    public async Task<Result<IReadOnlyList<KubeObjectSummary>>> ListAsync(
+        GroupVersionKind kind,
+        string ns,
+        string labelSelector
+    ) {
+        // ⚠ The tenancy check first, before any argument is looked at — the same rule
+        // ListNamespaceAsync states, and the probe in ClusterConnectionTenancyTests calls this
+        // with a default GroupVersionKind and empty strings expecting a refusal rather than a throw.
+        var allowed = EnsureCallerMayReach(nameof(ListAsync));
+        if (allowed.IsFailure) {
+            return Refused<IReadOnlyList<KubeObjectSummary>>(allowed);
+        }
+
+        if (kind is null || !kind.IsComplete) {
+            return Result<IReadOnlyList<KubeObjectSummary>>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"A selected listing on cluster {clusterId:D} was asked for with an incomplete kind "
+                + $"'{kind}'. A list is one REST path, and the path needs the group, version and "
+                + "plural to be built."
+            );
+        }
+
+        var client = await ClientAsync(CancellationToken.None);
+        if (client.TryGetError(out var connectError)) {
+            return Result<IReadOnlyList<KubeObjectSummary>>.Failure(connectError);
+        }
+
+        var outcome = await SelectedContents.ListAsync(
+            client.GetValueOrThrow(),
+            clusterId,
+            kind,
+            ns,
+            labelSelector,
+            CancellationToken.None
+        );
+
+        await RecordReachabilityAsync(Answered(outcome.Error));
+
+        return outcome;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner) {
+        var allowed = EnsureCallerMayReach(nameof(SetOwnerAsync));
+        if (allowed.TryGetError(out var refusal)) {
+            return Result.Failure(refusal);
+        }
+
+        if (target is null || target.Name.Length == 0 || !target.Kind.IsComplete) {
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"An ownership change on cluster {clusterId:D} was asked for against '{target}', "
+                + "which does not address an object."
+            );
+        }
+
+        if (health.Current.State == ClusterHealthState.Degraded) {
+            // The delete's rule, because this runs on the teardown path just ahead of one: a
+            // teardown whose detach cannot reach the cluster must retry, not conclude.
+            return Result.Failure(ErrorCode.OperationInProgress, health.Current.Message);
+        }
+
+        var client = await ClientAsync(CancellationToken.None);
+        if (client.TryGetError(out var connectError)) {
+            return Result.Failure(connectError);
+        }
+
+        var outcome = await client.GetValueOrThrow()
+            .SetOwnerAsync(target, owner, CancellationToken.None);
+
+        await RecordReachabilityAsync(Answered(outcome.Error));
+        return outcome;
+    }
+
+    /// <inheritdoc />
     public async Task<Result<InformerLease>> WatchAsync(GroupVersionKind kind, string labelSelector) {
         ArgumentNullException.ThrowIfNull(kind);
 
