@@ -88,10 +88,15 @@ public interface IObjectRelationsGrain : IGrainWithStringKey {
 ///         <c>Check</c> is still correct.
 ///     </para>
 ///     <para>
-///         ⚠ <b>M1 has no <c>ListObjects</c>.</b> docs/plan/07 § Effort and sequencing puts it at
-///         M2. This grain is built now because the write path is two-grain now, and retrofitting a
-///         reverse index over tuples written without one means a backfill. <see cref="ListAsync" />
-///         is the seam <c>ListObjects</c> will start from; there is no reverse rewrite walk yet.
+///         ⚠ <b>This is what <c>ListObjects</c> reads, and the only thing on that path that
+///         reads it is the walk.</b> docs/plan/07 § Effort and sequencing put <c>ListObjects</c> at
+///         M2 and this grain was built in M1 because the write path was two-grain from the start —
+///         retrofitting a reverse index over tuples written without one means a backfill.
+///         <see cref="IListObjectsGrain" /> starts from <see cref="ListAsync" /> for the subject and
+///         hops through the same method for every userset and every parent it reaches. So an entry
+///         missing here is exactly the miss the paragraph above describes: the object is hidden
+///         from a listing until the sweeper replays the write, and never shown to a caller who may
+///         not see it.
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Authorization.ISubjectRelationsGrain")]

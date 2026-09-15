@@ -48,10 +48,23 @@ public static class AuthorizationMetrics {
             "Checks denied because the breadth cap was reached. ⚠ Each one may be a wrong deny."
         );
 
+    static readonly Counter<long> ListObjectsCounter =
+        Source.CreateCounter<long>("cybercloud.authz.list_objects", "{walk}", "ListObjects walks evaluated.");
+
+    static readonly Counter<long> ListObjectsCapCounter =
+        Source.CreateCounter<long>(
+            "cybercloud.authz.list_objects_cap_exceeded",
+            "{walk}",
+            "ListObjects walks that reached the object cap and returned nothing. ⚠ Each one is a "
+            + "caller whose listing fell back to a Check per member, or to nothing."
+        );
+
     static long checks;
     static long cacheHits;
     static long depthCapExceeded;
     static long breadthCapExceeded;
+    static long listObjects;
+    static long listObjectsCapExceeded;
 
     /// <summary>How many checks have been evaluated in this process.</summary>
     public static long Checks => Interlocked.Read(ref checks);
@@ -68,6 +81,25 @@ public static class AuthorizationMetrics {
 
     /// <summary>How many were denied because a node reached <c>AuthorizationLimits.MaxBreadth</c>.</summary>
     public static long BreadthCapExceeded => Interlocked.Read(ref breadthCapExceeded);
+
+    /// <summary>How many <c>ListObjects</c> walks have run in this process.</summary>
+    public static long ListObjects => Interlocked.Read(ref listObjects);
+
+    /// <summary>
+    ///     How many of them reached <c>AuthorizationLimits.MaxListObjects</c> and answered nothing.
+    ///     ⚠ A rising one is a subject the projection should be serving — docs/plan/07 § ListObjects.
+    /// </summary>
+    public static long ListObjectsCapExceeded => Interlocked.Read(ref listObjectsCapExceeded);
+
+    internal static void RecordListObjects() {
+        Interlocked.Increment(ref listObjects);
+        ListObjectsCounter.Add(1);
+    }
+
+    internal static void RecordListObjectsCap() {
+        Interlocked.Increment(ref listObjectsCapExceeded);
+        ListObjectsCapCounter.Add(1);
+    }
 
     internal static void RecordCheck() {
         Interlocked.Increment(ref checks);

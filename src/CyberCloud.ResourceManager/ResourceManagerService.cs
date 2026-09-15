@@ -279,14 +279,27 @@ public sealed class ResourceManagerService(
             .Take(request.PageSize)
             .ToArray();
 
-        // ── Step 3, once per member ────────────────────────────────────────────────────────────
+        // ── Step 3, once per page — and once per member when the engine cannot answer ──────────
         //
-        // ⚠ THE FILTER, AND IT IS THE WHOLE SECURITY PROPERTY OF THIS METHOD. docs/plan/07 § What is
-        // not built puts ListObjects at M2, so there is no way to ask the engine which resources a
-        // caller may read; the only question available is "may this caller read THIS resource",
-        // asked once per candidate. A listing without it returns the names of resources the caller
-        // has no permission on — the enumeration oracle the enforcement seam answers 404 to prevent
-        // one resource at a time, handed back wholesale.
+        // ⚠ THE FILTER, AND IT IS THE WHOLE SECURITY PROPERTY OF THIS METHOD. A listing without it
+        // returns the names of resources the caller has no permission on — the enumeration oracle
+        // the enforcement seam answers 404 to prevent one resource at a time, handed back wholesale.
+        //
+        // ⚠ ONE ListObjects FOR THE PAGE, SCOPED TO WHAT THE MEMBERS HANG OFF. docs/plan/07
+        // § ListObjects is built (issue #37): the engine is asked which resources under the group —
+        // or under the parent resource, for a nested collection — this caller may read, and the
+        // page is intersected with the answer. Issue #10 costed the alternative honestly: "one
+        // ICheckGrain call per member examined, to a distinct activation keyed on that resource's
+        // GUID … a cold group pays an activation and a hot-tier read per member". The walk reads the
+        // caller's index, the groups they are in and the chain down to the scope, and no member's.
+        //
+        // ⚠ THE PER-MEMBER Check IS STILL HERE, AS THE FALLBACK AND NOT BEHIND A FLAG. The engine
+        // declines to answer when the walk passes its object cap or when it fails, and each of
+        // those has to become "ask per member" rather than "show nothing": an empty page for a
+        // group whose engine is down is indistinguishable from an empty group. So the loop below is
+        // the same loop this method shipped with, reached only when CollectionVisibility says the
+        // question was not answered — ReBacResourceAuthorizer.ListReadableAsync's remarks list the
+        // ways.
         //
         // ⚠ BOTH PERMISSIONS ARE THE READ PERMISSION, so every refusal is a 404 that never reaches
         // the caller: it is a member that is not in the page. There is no third case for a GET, and
@@ -298,7 +311,8 @@ public sealed class ResourceManagerService(
         // which is a different question with a different answer, and one that answers "yes" for
         // every member of a group the caller holds any role on. That is the failure this comment
         // exists to stop somebody re-introducing: it would look like a working filter and would
-        // filter nothing.
+        // filter nothing. The ListObjects scope is the same object, and the same trap: it is
+        // "which resources UNDER the group", never "may the caller read the group".
         //
         // ⚠ NOT fullyConsistent. docs/plan/07 § Consistency reserves that for "deletion, key export,
         // billing changes, anything where a stale allow is a real incident"; a read is not on that
@@ -306,18 +320,35 @@ public sealed class ResourceManagerService(
         // the cost of a page unbounded in the one dimension MaxPageSize was chosen to bound.
         var visible = new List<ResourceGroupMember>(candidates.Length);
 
-        foreach (var member in candidates) {
-            var authorized = await authorizer.AuthorizeAsync(
-                collection.Member(NameOf(member.CanonicalPath)).WithId(member.ResourceId),
-                found.Registration.ReadPermission,
+        var parentResourceId = await ParentResourceIdOfAsync(tenant, collection);
+
+        var readable = parentResourceId is { } parent && candidates.Length > 0
+            ? await authorizer.ListReadableAsync(
+                collection,
+                parent,
+                [.. candidates.Select(x => x.ResourceId)],
                 found.Registration.ReadPermission,
                 request.Caller,
-                false,
                 cancellationToken
-            );
+            )
+            : CollectionVisibility.Unanswered;
 
-            if (authorized.IsSuccess) {
-                visible.Add(member);
+        if (readable.IsAnswered) {
+            visible.AddRange(candidates.Where(x => readable.Visible.Contains(x.ResourceId)));
+        } else {
+            foreach (var member in candidates) {
+                var authorized = await authorizer.AuthorizeAsync(
+                    collection.Member(NameOf(member.CanonicalPath)).WithId(member.ResourceId),
+                    found.Registration.ReadPermission,
+                    found.Registration.ReadPermission,
+                    request.Caller,
+                    false,
+                    cancellationToken
+                );
+
+                if (authorized.IsSuccess) {
+                    visible.Add(member);
+                }
             }
         }
 
@@ -369,6 +400,28 @@ public sealed class ResourceManagerService(
         var probe = collection.Member("a").CanonicalPath;
 
         return probe[..^1];
+    }
+
+    /// <summary>
+    ///     The object a collection's members hang off, for the engine's scope: <see cref="Guid.Empty" />
+    ///     for a top-level collection, whose members' <c>parent</c> edge names the resource group;
+    ///     the parent resource's GUID for a nested one; or <see langword="null" /> when that parent
+    ///     does not resolve.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A parent that does not resolve is a fallback, not a refusal.</b> Children can outlive
+    ///     a deleted parent (docs/plan/08 § Deleting a parent resource that has children), and their
+    ///     collection is still listable — by the per-member <c>Check</c>, which needs no scope. A
+    ///     <c>404</c> here would hide members whose own reads answer <c>200</c>.
+    /// </remarks>
+    async Task<Guid?> ParentResourceIdOfAsync(TenantGrainFactory tenant, ResourceCollectionId collection) {
+        if (collection.Member("a").Parent is not { } parent) {
+            return Guid.Empty;
+        }
+
+        var bound = await tenant.GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(parent)).ResolveAsync();
+
+        return bound.IsSuccess ? bound.GetValueOrThrow() : null;
     }
 
     /// <summary>The resource's own name — the last segment of its path.</summary>

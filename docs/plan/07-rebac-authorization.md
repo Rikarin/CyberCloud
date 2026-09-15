@@ -367,6 +367,24 @@ costs more than it saves. `group#member` and `role#assignee` are indexed; a user
 only once it exceeds 64 members or 2 levels of nesting, and it is dropped back when it shrinks. That
 threshold is a tuned constant with a metric on it, not a guess frozen in code.
 
+⚠ **STATUS (issue #37): not built, and what stands in its place is stated so the next attempt starts
+from it.** `ListObjects` landed without this index. What it reads instead is the reverse index of
+§ Storage's second row — `ISubjectRelationsGrain`, per subject, one hop — which the tuple store already
+writes on every tuple write and delete, journalled and swept, so it cannot drift from the forward half
+by more than the window `TupleStoreGrain`'s remarks describe. The walk closes membership itself, one
+grain read per userset it passes through, which for a user in a handful of groups nested a level or two
+deep is a handful of reads and is why M1's argument for shipping without the index still holds.
+Two things were found on the way that the paragraphs above do not say. First, the index this section
+describes — per userset, its members, closed — is the *other* direction from what `ListObjects`
+starts from; the walk wants *per subject, every userset it is in, closed*, and maintaining that
+incrementally needs both directions, because a write against a userset has to find the subjects it
+reaches through the members set. Second, "incremental" has to survive a **delete**, and a delete of a
+nested-group edge can only be applied by recomputing the closure of every subject that had a path
+through it — bounded by the member set, which is the fan-out the threshold above exists to cap. The
+seam the index will stand behind is `IReverseRelationReader`; the rebuilder, the stream, the version
+comparison § Staleness requires and `IMembershipIndex`'s `TryTestMembershipAsync` on the `Check` side
+are all still owed, and `NoMembershipIndex` is still what a silo runs.
+
 ## ListObjects — the expensive one
 
 "Which resource groups can Alice read?" is not `Check` run repeatedly; it is the reverse direction, and
@@ -390,6 +408,45 @@ resource-changed stream and carries a denormalized access column recomputed from
 relation changes. That is: **the fast list is a projection; `ListObjects` is what maintains it.**
 Getting this the wrong way round — serving the portal's list page directly from `ListObjects` — is the
 single most likely performance mistake in this subsystem and it is named here for that reason.
+
+⚠ **BUILT (issue #37), and the signature above is not the one that shipped, for the reason `Check`'s
+was not.** `IListObjectsGrain`, key `rel/list/{type}/{id}` — the twenty-second `GrainKeyKind`, keyed by
+the **subject**, because that is where the walk starts and because a listing is a question about one
+caller. The subject is the key rather than a parameter, the rest travels in a `ListObjectsRequest`,
+and the answer is a `ListObjectsPage` with the objects ordered by id, a continuation naming the last
+one returned, and the tenant token the walk ran at. `ListObjectsEvaluator` is the algorithm above as
+three rules over reached `(object, name)` pairs — a tuple naming the subject reaches its object, a
+userset the subject is in reaches everything written against it, `Rel(x)` and `From(ts, c)` carry a
+reached pair to the names computed from it — and it is exact for union rewrites. **"Each page is
+`Check`-verified" is paid only when it is owed**: the walk records whether any rewrite it crossed was
+an intersection or an exclusion, and re-runs every candidate through `CheckEvaluator` only then. On
+`CyberCloudSchema` that is `assignRole` and `purge`; the `read` path is never verified.
+`ListObjectsPropertyTests` holds the walk to a brute force over the reference evaluator on 2 000
+generated graphs, every type and name, and demands that at least a twentieth of them verify.
+
+⚠ **The bound the section above does not name is the one that made the resource list affordable.**
+The warning about serving a list page from an unscoped walk is exactly right, and `ListObjectsRequest.Within`
+is what turns the walk into something a list page *can* be served from: it restricts the answer to
+objects at or below one object in the `parent` hierarchy — and, more to the point, restricts the
+*walk*. Descending from an ancestor of the scope follows only the next object on the chain toward it;
+descending below the scope stops at `WithinDepth`; an object at the requested depth is not expanded at
+all. So `ReBacResourceAuthorizer.ListReadableAsync` asks for the resources under the group at depth 1
+and the walk reads the caller's own index, the groups they are in and the chain down to the group —
+and never a member's grain. #10's honest cost, *"one `ICheckGrain` call per member examined, to a
+distinct activation keyed on that resource's GUID"*, is the fallback now, taken when the walk passes
+`AuthorizationLimits.MaxListObjects` (10 000 objects, past which the page is empty and says so) or
+fails, because "nothing readable" is the one answer a listing may never fake. Scoping makes two
+assumptions, both recorded on the request type, both failing in the direction that hides rather than
+shows: the chain is a chain, and no userset is formed on an object the pruned walk never expands. The
+platform writes one `parent` per resource and forms usersets on groups only, so both hold here.
+
+⚠ **What is still not built is the Leopard side of this section, and the seam for it is one
+interface.** The walk reads `ISubjectRelationsGrain` through `IReverseRelationReader`, one grain per
+subject object it visits; a reader that answered a subject's transitively closed userset membership in
+one read would satisfy that interface unchanged and make the userset hop unnecessary. Nothing
+implements it, no key shape is declared for it — `rel/idx/…` stays absent from `GrainKeys` for the
+reason given there — and the resource-graph access column this section says `ListObjects` maintains
+is not maintained by anything yet. See § The Leopard index below.
 
 ## The enforcement seam
 

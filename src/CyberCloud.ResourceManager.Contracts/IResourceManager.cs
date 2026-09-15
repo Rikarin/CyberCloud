@@ -72,24 +72,26 @@ public interface IResourceManager {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The filter is not optional and it is a <c>Check</c> per member.</b> ReBAC's
-    ///         <c>ListObjects</c> is M2 (docs/plan/07 § What is not built), so there is no way to ask
-    ///         the engine "which resources may this caller read"; the only question available is
-    ///         "may this caller read <i>this</i> resource", asked once per candidate. Without it a
-    ///         listing is a way to read the names of resources the caller has no permission on —
-    ///         which is precisely the enumeration oracle § The enforcement seam answers <c>404</c>
-    ///         to prevent one resource at a time, handed back wholesale.
+    ///         ⚠ <b>The filter is not optional, and it is one <c>ListObjects</c> per page with a
+    ///         <c>Check</c> per member as the fallback.</b> Without it a listing is a way to read the
+    ///         names of resources the caller has no permission on — which is precisely the
+    ///         enumeration oracle § The enforcement seam answers <c>404</c> to prevent one resource
+    ///         at a time, handed back wholesale. docs/plan/07 § ListObjects is built (issue #37):
+    ///         <see cref="IResourceAuthorizer.ListReadableAsync" /> asks the engine which resources
+    ///         under the object the page's members hang off this caller may read, and the page is
+    ///         intersected with the answer.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What that costs, honestly.</b> One <c>ICheckGrain</c> call per member examined,
-    ///         each to a distinct activation keyed on that resource's GUID, plus one resource read
-    ///         per member that survives the filter. There is no batching to hide behind:
-    ///         <c>CheckGrain</c>'s cache is per object, so a cold group pays an activation and a
-    ///         hot-tier state read per member and a warm one still pays a grain call per member. That
-    ///         is why <see cref="ListRequest.MaxPageSize" /> exists and is a cap rather than a hint:
-    ///         it makes the cost of one request bounded by the platform instead of chosen by the
-    ///         caller. At a 500-resource group the answer is five pages, not one request that fans
-    ///         out five hundred ways.
+    ///         ⚠ <b>What it used to cost, and what the fallback still costs.</b> One <c>ICheckGrain</c>
+    ///         call per member examined, each to a distinct activation keyed on that resource's GUID,
+    ///         plus one resource read per member that survives the filter — a cold group paid an
+    ///         activation and a hot-tier state read per member. The walk reads the caller's own
+    ///         index, the groups they are in and the chain down to the group, and touches no
+    ///         member's grain. That path is taken again whenever the engine declines to answer —
+    ///         a walk past its object cap, a store that is down — because "nothing readable" is the
+    ///         one answer a listing may never fake. <see cref="ListRequest.MaxPageSize" /> stays a
+    ///         cap rather than a hint for the same reason it was one: it bounds the fallback, and
+    ///         it bounds the resource reads that follow the filter either way.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The group's membership is the enumeration source, and nothing else can be.</b>
@@ -471,6 +473,65 @@ public interface IResourceAuthorizer {
         bool fullyConsistent = false,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>
+    ///     Which of a collection's members the caller may read, asked once for the collection rather
+    ///     than once per member — docs/plan/07 § ListObjects, the half of the model that lets
+    ///     <see cref="IResourceManager.ListAsync" /> stop running a check per member.
+    /// </summary>
+    /// <param name="collection">The collection being listed.</param>
+    /// <param name="parentResourceId">
+    ///     The GUID of the parent resource for a nested collection, or <see cref="Guid.Empty" /> for
+    ///     a top-level one, whose members hang off the resource group. It is what the engine scopes
+    ///     the walk to, so a wrong value here does not leak — it lists nothing.
+    /// </param>
+    /// <param name="candidates">The members on the page, by GUID. The answer is a subset of these.</param>
+    /// <param name="readPermission">The permission a read needs, from the registry.</param>
+    /// <param name="caller">Who is asking.</param>
+    /// <param name="cancellationToken">Cancels the listing.</param>
+    /// <returns>
+    ///     <see cref="CollectionVisibility.IsAnswered" /> with the readable subset, or
+    ///     <see cref="CollectionVisibility.Unanswered" /> when the engine could not answer within its
+    ///     bounds — ⚠ in which case the caller asks <see cref="AuthorizeAsync" /> once per member,
+    ///     which is the path this method exists to replace and remains the fallback. Never a
+    ///     refusal: a member the caller may not read is one that is not in the answer.
+    /// </returns>
+    Task<CollectionVisibility> ListReadableAsync(
+        ResourceCollectionId collection,
+        Guid parentResourceId,
+        IReadOnlyCollection<Guid> candidates,
+        string readPermission,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    );
+}
+
+/// <summary>
+///     What <see cref="IResourceAuthorizer.ListReadableAsync" /> concluded: the readable subset, or
+///     that the question was not answered and has to be asked per member.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Two states rather than a nullable set</b>, so that "answered, and nothing is readable"
+///     and "not answered" cannot be confused — the first is an empty page and the second is a
+///     fallback, and a caller that treated one as the other would either leak a whole group or
+///     hide one.
+/// </remarks>
+public sealed record CollectionVisibility {
+    /// <summary>The engine did not answer; ask per member.</summary>
+    public static CollectionVisibility Unanswered { get; } = new();
+
+    /// <summary>Whether <see cref="Visible" /> is an answer.</summary>
+    public bool IsAnswered { get; private init; }
+
+    /// <summary>The readable members. Meaningless unless <see cref="IsAnswered" />.</summary>
+    public IReadOnlySet<Guid> Visible { get; private init; } = ImmutableHashSet<Guid>.Empty;
+
+    /// <summary>An answer: exactly these members are readable.</summary>
+    /// <param name="visible">The readable members' GUIDs.</param>
+    public static CollectionVisibility Of(IEnumerable<Guid> visible) {
+        ArgumentNullException.ThrowIfNull(visible);
+        return new() { IsAnswered = true, Visible = visible.ToImmutableHashSet() };
+    }
 }
 
 /// <summary>

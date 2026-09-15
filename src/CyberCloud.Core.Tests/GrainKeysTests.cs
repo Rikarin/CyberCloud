@@ -22,10 +22,10 @@ public class GrainKeysTests {
         Resource
     );
 
-    // ── The four ReBAC shapes — docs/plan/07 § Storage ─────────────────────────────────────────
+    // ── The five ReBAC shapes — docs/plan/07 § Storage and § ListObjects ───────────────────────
 
     /// <summary>
-    ///     The four <c>rel/</c> shapes, each with the kind it must decode to.
+    ///     The five <c>rel/</c> shapes, each with the kind it must decode to.
     /// </summary>
     /// <remarks>
     ///     Kept as a member rather than inline so that adding a shape means adding a row here, which
@@ -36,8 +36,25 @@ public class GrainKeysTests {
             { GrainKeys.ObjectRelations("resourceGroup", "prod"), GrainKeyKind.ObjectRelations },
             { GrainKeys.SubjectRelations("user", "alice"), GrainKeyKind.SubjectRelations },
             { GrainKeys.CheckCache("resourceGroup", "prod"), GrainKeyKind.CheckCache },
-            { GrainKeys.TupleStore(Tenant), GrainKeyKind.TupleStore }
+            { GrainKeys.TupleStore(Tenant), GrainKeyKind.TupleStore },
+            { GrainKeys.ListObjects("user", "alice"), GrainKeyKind.ListObjects }
         };
+
+    [Fact]
+    public void TheListObjectsShapeSharesTheReverseIndexTailAndIsStillADifferentKey() {
+        // docs/plan/07 § ListObjects starts "from ISubjectRelationsGrain for the subject", so the
+        // two keys carry the same subject — and must never be the same activation, or a listing
+        // would hold the durable reverse index for its whole walk (GrainKeys.ListObjects' remarks).
+        GrainKeys.ListObjects("user", "alice").ShouldBe("rel/list/user/alice");
+        GrainKeys.ListObjects("user", "alice").ShouldNotBe(GrainKeys.SubjectRelations("user", "alice"));
+
+        var parsed = GrainKeys.Parse(GrainKeys.ListObjects("user", "alice")).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.ListObjects);
+        parsed.ObjectType.ShouldBe("user");
+        parsed.ObjectId.ShouldBe("alice");
+        parsed.ToString().ShouldBe("rel/list/user/alice");
+    }
 
     // ── The eight shapes docs/plan/06 § Grain keys specifies ────────────────────────────────────────
 
@@ -920,6 +937,7 @@ public class GrainKeysTests {
     [InlineData("rel/store", "the store key needs a tenant")]
     [InlineData("rel/store/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f", "the D form is not the N form")]
     [InlineData("rel/check/resourceGroup", "three segments is not a check key")]
+    [InlineData("rel/list/user", "three segments is not a list-objects key")]
     [InlineData("rel/nope/resourceGroup/prod", "an unknown authorization shape")]
     public void AMalformedRelationKeyIsRefused(string key, string why) =>
         GrainKeys.Parse(key).IsFailure.ShouldBeTrue($"'{key}' — {why}");
@@ -932,10 +950,10 @@ public class GrainKeysTests {
         Dictionary<string, GrainKeyKind> seen = new(StringComparer.Ordinal);
 
         foreach (var type in new[] { "resourceGroup", "user", "group", "sub", "res", "idx", "rel" }) {
-            foreach (var id in new[] { "prod", "rg", "path", "email", "store", "obj", "check" }) {
+            foreach (var id in new[] { "prod", "rg", "path", "email", "store", "obj", "check", "list" }) {
                 foreach (var key in new[] {
                              GrainKeys.ObjectRelations(type, id), GrainKeys.SubjectRelations(type, id),
-                             GrainKeys.CheckCache(type, id)
+                             GrainKeys.CheckCache(type, id), GrainKeys.ListObjects(type, id)
                          }) {
                     var kind = GrainKeys.Parse(key).GetValueOrThrow().Kind;
 

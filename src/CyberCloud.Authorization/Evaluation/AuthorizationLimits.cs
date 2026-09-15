@@ -41,6 +41,28 @@ public sealed record AuthorizationLimits {
     /// <summary>docs/plan/07 § Check: "breadth cap 1 000 per level".</summary>
     public int MaxBreadth { get; init; } = 1_000;
 
+    /// <summary>
+    ///     The most <b>distinct objects</b> a <c>ListObjects</c> walk may reach before it gives up —
+    ///     docs/plan/07 § ListObjects: "It is paged, capped, and it is not a search API."
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Counted across every type the walk passes through, not only the type being listed,
+    ///         because the cost is the walk and the walk reaches its intermediates too. The number
+    ///         is not in the document; 10 000 is what a subscription of a hundred groups of a
+    ///         hundred resources comes to, and a subject whose reach is wider than that is exactly
+    ///         the one § ListObjects says must be served from the projection rather than from a
+    ///         walk.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Past the cap the walk returns nothing, not the part it found</b> — see
+    ///         <c>ListObjectsOutcome.ObjectCapExceeded</c>. The depth cap is <see cref="MaxDepth" />
+    ///         here as it is for <c>Check</c>: an object more than twelve hops from the subject is
+    ///         one <c>Check</c> would deny, so a listing that stops there agrees with it.
+    ///     </para>
+    /// </remarks>
+    public int MaxListObjects { get; init; } = 10_000;
+
     /// <summary>The document's numbers. The only instance production uses.</summary>
     public static AuthorizationLimits Default { get; } = new();
 }
