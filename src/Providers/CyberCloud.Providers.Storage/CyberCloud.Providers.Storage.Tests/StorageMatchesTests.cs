@@ -166,4 +166,72 @@ public sealed class StorageMatchesTests {
         StorageAccounts.Matches("{}", desired.RootElement).ShouldBeFalse();
         StorageAccounts.Matches("{\"kind\":\"ConfigMap\",\"spec\":{}}", desired.RootElement).ShouldBeFalse();
     }
+
+    // ── The share's claim, which is the first BUILT-IN kind the catalogue compares a quantity on ──
+
+    [Theory]
+    [InlineData("1024Mi", "1Gi")]
+    [InlineData("1.5Gi", "1536Mi")]
+    [InlineData("1000M", "1G")]
+    [InlineData("1.5", "1500m")]
+    [InlineData("2048Ki", "2Mi")]
+    public void ACanonicalisedSizeStillMatches(string asked, string canonical) {
+        // ⚠ THE API SERVER REWRITES THE STRING AND A CRD DOES NOT. Every spelling on the left is
+        // admitted by KubeQuantity.Pattern, and apimachinery stores a PersistentVolumeClaim's request
+        // as the spelling on the right. A byte compare between them never converges: the reconciler
+        // reports "does not yet carry the desired spec" every five seconds forever, and the
+        // observation says "drifted" about a claim that is exactly what was asked for. The bucket's
+        // string compare never met this because a custom resource's quantity is stored as sent —
+        // which is why every earlier test in this provider used canonical sizes and nothing noticed.
+        using var desired = JsonDocument.Parse(StorageFileShares.Body(ClusterId, quotaSize: asked));
+
+        var read = JsonNode.Parse(StorageFileShares.ClaimJson(Ns, ShareId, desired.RootElement))!.AsObject();
+        read["kind"] = "PersistentVolumeClaim";
+        read["spec"]!["resources"]!["requests"]!["storage"] = canonical;
+
+        StorageFileShares.Matches(read.ToJsonString(), ShareId, Ns, desired.RootElement)
+            .ShouldBeTrue(
+                $"a claim asked for as '{asked}' and stored by the API server as '{canonical}' read back "
+                + "as drifted. That share never leaves InProgress while being exactly right."
+            );
+    }
+
+    [Theory]
+    [InlineData("10Gi", "10G")]
+    [InlineData("1Gi", "1023Mi")]
+    [InlineData("100Gi", "200Gi")]
+    public void ADifferentSizeIsStillReported(string asked, string stored) {
+        // The other half: comparing by value must not become comparing by nothing. 10G is 7% short of
+        // 10Gi, and a claim a tenant's own tooling resized away from the body is drift.
+        using var desired = JsonDocument.Parse(StorageFileShares.Body(ClusterId, quotaSize: asked));
+
+        var read = JsonNode.Parse(StorageFileShares.ClaimJson(Ns, ShareId, desired.RootElement))!.AsObject();
+        read["kind"] = "PersistentVolumeClaim";
+        read["spec"]!["resources"]!["requests"]!["storage"] = stored;
+
+        StorageFileShares.Matches(read.ToJsonString(), ShareId, Ns, desired.RootElement).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void AClaimWithNoRequestAtAllIsReported() {
+        using var desired = JsonDocument.Parse(StorageFileShares.Body(ClusterId));
+
+        var read = JsonNode.Parse(StorageFileShares.ClaimJson(Ns, ShareId, desired.RootElement))!.AsObject();
+        read["kind"] = "PersistentVolumeClaim";
+        read["spec"]!.AsObject().Remove("resources");
+
+        StorageFileShares.Matches(read.ToJsonString(), ShareId, Ns, desired.RootElement).ShouldBeFalse();
+    }
+
+    const string Ns = "22222222-2222-4222-8222-222222222222-prod";
+
+    static readonly ResourceId ShareId = new(
+        Guid.Parse("11111111-1111-4111-8111-111111111111"),
+        Guid.Parse("22222222-2222-4222-8222-222222222222"),
+        "prod",
+        StorageFileShares.Type,
+        "home",
+        Guid.Parse("33333333-3333-4333-8333-333333333333"),
+        "media"
+    );
 }

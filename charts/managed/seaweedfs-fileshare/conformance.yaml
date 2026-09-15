@@ -16,6 +16,9 @@ chart: seaweedfs-fileshare
 
 # Objects the reconciler must have applied once the resource reports Succeeded.
 #
+# ⚠ NOT LISTED: the PersistentVolume. The provisioner creates it, not this platform; the teardown
+# labels it so a later pass can find it, and that is the only write this type makes to it.
+#
 # ⚠ TWO, AND THE FIRST IS SHARED WITH EVERY OTHER SHARE OF THE ACCOUNT. A SeaweedCSIDriver is one per
 # filer (`--filer=` is a plugin argument, not a StorageClass parameter), so it is the account's; every
 # share applies it, and the last share out removes it. With one share per suite run "last out" is
@@ -47,9 +50,11 @@ labels:
     - cybercloud.io/api-version
     - cybercloud.io/managed-by
     # ⚠ THE EIGHTH, AND THE DELETE DEPENDS ON IT. StorageFileShareReconciler lists the claims in the
-    # namespace carrying this label for this account to decide whether the driver still has a user.
-    # None of the seven names the account, and `{account}-{share}` cannot be split back when both
-    # halves contain hyphens. Carried through WithLabels so it passes the same syntax check.
+    # namespace carrying this label for this account to decide whether the driver still has a user,
+    # and the PersistentVolumes carrying it cluster-wide to decide whether the driver still has a
+    # released volume to reclaim. None of the seven names the account, and `{account}-{share}` cannot
+    # be split back when both halves contain hyphens. Carried through WithLabels so it passes the
+    # same syntax check.
     - storage.cybercloud.io/account
   values:
     cybercloud.io/resource-type: cybercloud.storage_accounts_fileshares
@@ -74,6 +79,22 @@ assertions:
       mount — untouched; deleting the last share removes it. A reconciler that removed the driver on
       every delete would unmount the sibling's data under a running pod, which is the assertion
       StorageFileShareReconcilerTests.DeletingOneShareOfTwoLeavesTheDriverForTheOther pins.
+  - id: the-driver-outlives-the-released-volume
+    says: >
+      Deleting the account's last share removes the driver only after the share's PersistentVolume is
+      gone. A claim's NotFound is not the end of its data: the volume goes Released, and the CSI
+      external-provisioner — a container in the driver's controller Deployment — is what then calls
+      DeleteVolume and removes it. A delete that removed the driver on the claim's NotFound would,
+      whenever the volume was still Released, take away the one process able to reclaim it, and the
+      volume and its filer directory under /fileshares would stay forever: untracked, unbilled and
+      removable only by hand, which is the state reclaimPolicy Delete was chosen to rule out. So the
+      teardown reads the claim's spec.volumeName BEFORE deleting the claim, labels the volume through
+      the same builder as everything else — once the claim is gone nothing on the cluster names the
+      volume, and a stateless reconciler cannot remember it — and every later pass lists the
+      account's labelled volumes and waits until the listing is empty.
+      StorageFileShareReconcilerTests.TheDriverWaitsForTheReleasedVolumeToBeReclaimed pins it against
+      a volume that is never reclaimed. ⚠ Found by #30's review; the first version of this type
+      removed the driver on the claim's NotFound.
   - id: a-share-is-not-a-bucket
     says: >
       A share never appears in the account's S3 bucket list. The StorageClass's parentDir is
@@ -156,9 +177,29 @@ owed:
       Every share applies the account's driver on every pass, so ADR-013's resource-id label on it
       names whichever share reconciled last. A drift scan keyed on resource id attributes the driver
       to that share; nothing is wrong on the cluster, but "which resource owns this object" has two
-      answers for the first time in the catalogue. Closing it is a label the account's GUID could go
-      in — ResourceId.Parent carries no GUID, so a child cannot write it — or the account rendering
-      the driver itself once it can know it has shares.
+      answers for the first time in the catalogue. ⚠ AND THE RE-APPLY IS NOT THE NO-OP THE FIRST
+      VERSION OF THIS ROW IMPLIED. The builder stamps the applying share's resource id, so two shares
+      of one account rewrite the driver's metadata.labels on every alternating pass — a real write, a
+      bumped resourceVersion and an operator reconcile each time — and once the last-applying share
+      is deleted with siblings remaining, the driver carries a resource id no grain owns until a
+      sibling reconciles again, which a drift scan reports as an orphan ("nothing is metering them")
+      for that long. Reading first and applying only on drift was tried and the k3s-backed suite
+      refused it: a rival field manager's edit of the driver's tenant-id label has to CONFLICT on the
+      next pass, and a reconciler that leaves a spec-matching driver alone never re-asserts its
+      labels, so a tenant's edit of billing attribution became silence. The churn is the price of
+      that re-assertion. Closing it is a label the account's GUID could go in — ResourceId.Parent
+      carries no GUID, so a child cannot write it — or the account rendering the driver itself once
+      it can know it has shares.
+  - id: per-share-backup-policy
+    says: >
+      docs/plan/15 § File storage's last bullet: "Snapshots and per-share backup policy through the
+      same Velero binding as everything else". Nothing here binds a share to anything — no snapshot,
+      no schedule, no property — and the account's `backup` row in charts/managed/seaweedfs records
+      why there is no destination for one either: every SeaweedFS backup route lands in an object
+      store, and the only one this platform has is the account itself. A share's bytes are a directory
+      in the account's filer, so its backup is a subset of the account's, and both wait on
+      CyberCloud.RecoveryServices/vaults (`backup-vaults` on the account). Recorded so that the bullet
+      is a debt with a name rather than a sentence nobody checked.
   - id: no-recovery-window
     says: >
       No SupportsSoftDelete, and unlike the bucket this is a gap rather than a decision. A bucket's

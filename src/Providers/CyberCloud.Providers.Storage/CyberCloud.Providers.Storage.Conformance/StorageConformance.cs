@@ -260,11 +260,17 @@ public sealed class StorageFileShareCase : IProviderCaseSource {
             CreateReconciler = clock => new StorageFileShareReconciler(clock),
             Type = StorageFileShares.Type,
             ApiVersion = StorageFileShares.V2026,
-            Body = cluster => StorageFileShares.Body(cluster),
+            // ⚠ A NON-CANONICAL SIZE ON PURPOSE. 102400Mi is 100Gi, and a real API server stores a
+            // PersistentVolumeClaim's request in canonical form — it reads back as `100Gi`. The fake
+            // stores what it was sent, so only the cluster-backed lifecycle meets the rewrite; there,
+            // MatchesDesired against this body is what proves the reconciler converges on a claim the
+            // API server respelled, which a byte compare never did. Every other case in this provider
+            // uses a canonical size, and that is exactly why nothing noticed.
+            Body = cluster => StorageFileShares.Body(cluster, quotaSize: "102400Mi"),
             // ⚠ Changes `quota.size`, which is the ONLY tenant-facing leaf and the one the claim
-            // carries verbatim as `spec.resources.requests.storage`. Larger, not smaller: a shrink is
-            // refused by the API server (a claim's request may not decrease) and the update test
-            // would then be asserting a refusal rather than an update.
+            // carries as `spec.resources.requests.storage`. Larger, not smaller: a shrink is refused
+            // by the API server (a claim's request may not decrease) and the update test would then
+            // be asserting a refusal rather than an update.
             ChangedBody = cluster => StorageFileShares.Body(cluster, quotaSize: "200Gi"),
             // Drops the required `/properties/quota/size`.
             InvalidBody = cluster => WithoutQuotaSize(StorageFileShares.Body(cluster)),

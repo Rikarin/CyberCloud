@@ -254,6 +254,112 @@ public sealed class StorageFileShareReconcilerTests {
         connection.Objects.Keys.ShouldContain(x => x.StartsWith("SeaweedCSIDriver/", StringComparison.Ordinal));
     }
 
+    // ── The volume, which outlives the claim ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task TheDriverWaitsForTheReleasedVolumeToBeReclaimed() {
+        // ⚠ THE ORPHAN THE REVIEW FOUND. With reclaimPolicy Delete the CSI external-provisioner — a
+        // container in the driver's controller Deployment — is what removes a released volume and its
+        // filer directory. A delete that removed the driver the moment the claim read NotFound would,
+        // whenever the volume was still Released, take away the one process able to reclaim it, and
+        // /fileshares/pvc-… would stay forever: untracked, unbilled, removable only by hand.
+        var connection = new RecordingConnection();
+        var address = Address("home", "media", TenantA, SubscriptionA);
+        var reconciler = new StorageFileShareReconciler(new FixedClock());
+
+        using var body = JsonDocument.Parse(StorageFileShares.Body(ClusterId));
+
+        await Pass(reconciler, connection, address, body.RootElement);
+
+        // The provisioner's work, done by hand: bind the claim to a volume that exists.
+        var ns = ReconcileDriver.NamespaceFor(address);
+        var claimKey = RecordingConnection.Key(StorageFileShares.ClaimRef(ns, address));
+        connection.Objects[claimKey] = StorageFileShares.WithBoundVolume(connection.Objects[claimKey], "pvc-0f7d2c1e");
+
+        var volumeKey = RecordingConnection.Key(StorageFileShares.VolumeRef("pvc-0f7d2c1e"));
+        connection.Objects[volumeKey] = "{\"kind\":\"PersistentVolume\",\"metadata\":{\"name\":\"pvc-0f7d2c1e\"},\"spec\":{\"claimRef\":{\"name\":\"media-home\"}}}";
+
+        // Three passes with the volume never reclaimed: the claim goes, the driver does not.
+        for (var pass = 0; pass < 3; pass++) {
+            var outcome = await reconciler.DeleteAsync(Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+
+            outcome.Kind.ShouldBe(ReconcileOutcomeKind.InProgress, $"pass {pass} did not wait for the released volume");
+        }
+
+        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(["PersistentVolumeClaim"]);
+        connection.Objects.ShouldContainKey(
+            RecordingConnection.Key(StorageFileShares.DriverRef(ns, address)),
+            "the driver was removed while its volume was still Released — the volume and its filer "
+            + "directory are now nobody's, because the controller that would have reclaimed them went "
+            + "with the driver"
+        );
+
+        // ⚠ And the volume carries the labels now, which is the ONLY reason a later pass — a
+        // different silo, a different process, no memory of pass one — could still find it.
+        var volume = JsonNode.Parse(connection.Objects[volumeKey])!.AsObject();
+        volume["metadata"]!["labels"]!["storage.cybercloud.io/account"]!.GetValue<string>().ShouldBe("media");
+        volume["metadata"]!["labels"]![KubeLabels.ResourceType]!.GetValue<string>().ShouldBe("cybercloud.storage_accounts_fileshares");
+        connection.Applied.Single(x => x.Target.Kind.Kind == "PersistentVolume").Target.Namespace.ShouldBeEmpty("a volume is cluster-scoped");
+
+        // The provisioner finishes. The next pass finds no volume and removes the driver.
+        connection.Objects.TryRemove(volumeKey, out _).ShouldBeTrue();
+
+        (await reconciler.DeleteAsync(Context(connection, address, body.RootElement), TestContext.Current.CancellationToken))
+            .ShouldBe(ReconcileOutcome.Converged);
+
+        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(["PersistentVolumeClaim", "SeaweedCSIDriver"]);
+        connection.Objects.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task TheVolumeIsLabelledBeforeTheClaimIsDeletedAndAFailedLabelKeepsTheClaim() {
+        // ⚠ ORDER. Once the claim is gone nothing on the cluster names the volume, so a label write
+        // that failed AFTER the delete would leave exactly the orphan the write exists to prevent.
+        // A refused label fails the pass with the claim still standing, and the next pass tries again.
+        var connection = new RecordingConnection();
+        var address = Address("home", "media", TenantA, SubscriptionA);
+        var reconciler = new StorageFileShareReconciler(new FixedClock());
+
+        using var body = JsonDocument.Parse(StorageFileShares.Body(ClusterId));
+
+        await Pass(reconciler, connection, address, body.RootElement);
+
+        var ns = ReconcileDriver.NamespaceFor(address);
+        var claimKey = RecordingConnection.Key(StorageFileShares.ClaimRef(ns, address));
+        connection.Objects[claimKey] = StorageFileShares.WithBoundVolume(connection.Objects[claimKey], "pvc-0f7d2c1e");
+        connection.Objects[RecordingConnection.Key(StorageFileShares.VolumeRef("pvc-0f7d2c1e"))] = "{\"kind\":\"PersistentVolume\"}";
+
+        connection.FailApplies = true;
+
+        var outcome = await reconciler.DeleteAsync(Context(connection, address, body.RootElement), TestContext.Current.CancellationToken);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        connection.Deleted.ShouldBeEmpty("the claim was deleted with its volume unlabelled");
+        connection.Objects.ShouldContainKey(claimKey);
+    }
+
+    [Fact]
+    public async Task AClaimThatNeverBoundHasNoVolumeToWaitFor() {
+        // A Pending claim — the shared suite's shape, and the cluster suite's, where no driver runs —
+        // deletes in one pass: nothing to label, nothing listed, driver gone.
+        var connection = new RecordingConnection();
+        var address = Address("home", "media", TenantA, SubscriptionA);
+        var reconciler = new StorageFileShareReconciler(new FixedClock());
+
+        using var body = JsonDocument.Parse(StorageFileShares.Body(ClusterId));
+
+        await Pass(reconciler, connection, address, body.RootElement);
+
+        (await reconciler.DeleteAsync(Context(connection, address, body.RootElement), TestContext.Current.CancellationToken))
+            .ShouldBe(ReconcileOutcome.Converged);
+
+        connection.Applied.ShouldAllBe(x => x.Target.Kind.Kind != "PersistentVolume");
+        connection.Listed.Count.ShouldBe(2, "claims, then volumes");
+        connection.Listed[1].ShouldContain("storage.cybercloud.io/account=media");
+        connection.Listed[1].ShouldContain(KubeLabels.SubscriptionId + "=" + KubeLabels.GuidValue(SubscriptionA));
+        connection.Listed[1].ShouldContain(KubeLabels.ResourceGroup + "=prod");
+    }
+
     [Fact]
     public async Task DeletingAShareLeavesItsAccountAlone() {
         var connection = new RecordingConnection();
@@ -299,6 +405,36 @@ public sealed class StorageFileShareReconcilerTests {
 
         await Pass(reconciler, connection, address, body.RootElement);
         connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray().ShouldBe(first);
+    }
+
+    [Fact]
+    public async Task TheDriverIsReappliedOnEveryPassAndCarriesTheLastApplyingSharesId() {
+        // ⚠ THE CHURN, PINNED RATHER THAN HIDDEN. Two shares of one account rewrite the driver's
+        // labels on every alternating pass, because the builder stamps the applying share's resource
+        // id. Reading first and applying only on drift was tried and the k3s-backed suite refused it:
+        // a rival field manager's edit of the driver's tenant-id label must CONFLICT on the next pass
+        // (ADR-013), and a reconciler that left a spec-matching driver alone never re-asserted its
+        // labels, so the tenant's edit of billing attribution became silence. The write is the price
+        // of the re-assertion; conformance.yaml § owed `the-driver-carries-one-shares-labels` records
+        // what it costs.
+        var connection = new RecordingConnection();
+        var reconciler = new StorageFileShareReconciler(new FixedClock());
+
+        var home = Address("home", "media", TenantA, SubscriptionA);
+        var scratch = Address("scratch", "media", TenantA, SubscriptionA);
+
+        using var body = JsonDocument.Parse(StorageFileShares.Body(ClusterId));
+
+        await Pass(reconciler, connection, home, body.RootElement);
+        await Pass(reconciler, connection, scratch, body.RootElement);
+        await Pass(reconciler, connection, home, body.RootElement);
+
+        connection.Applied.Count(x => x.Target.Kind.Kind == "SeaweedCSIDriver").ShouldBe(3);
+
+        var ns = ReconcileDriver.NamespaceFor(home);
+        var stored = JsonNode.Parse(connection.Objects[RecordingConnection.Key(StorageFileShares.DriverRef(ns, home))])!;
+        stored["metadata"]!["labels"]![KubeLabels.ResourceId]!.GetValue<string>()
+            .ShouldBe(KubeLabels.GuidValue(home.Id), "the driver names a share other than the one that applied it last");
     }
 
     [Fact]

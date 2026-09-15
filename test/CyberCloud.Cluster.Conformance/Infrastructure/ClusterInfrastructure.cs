@@ -1,4 +1,5 @@
 using CyberCloud.ServiceDefaults.Storage;
+using System.Text;
 using Testcontainers.K3s;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
@@ -77,6 +78,45 @@ public static class ClusterInfrastructure {
     /// </summary>
     public const string K3sImage = "rancher/k3s:v1.35.7-k3s1";
 
+    /// <summary>
+    ///     Where the kubelet reads drop-in configuration inside the k3s container, and the one drop-in
+    ///     this harness puts there.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A KUBELET AT 1.35 REFUSES TO START ON A CGROUP v1 HOST, AND DOCKER DESKTOP ON
+    ///         WINDOWS IS ONE.</b> KEP-4569 moved cgroup v1 into maintenance, and from 1.35 the
+    ///         kubelet's <c>failCgroupV1</c> defaults to <c>true</c>: the container comes up, the
+    ///         kubelet logs <i>"kubelet is configured to not run on a host using cgroup v1"</i>, and
+    ///         k3s shuts down. Testcontainers then reports <c>ContainerNotRunningException</c>, every
+    ///         test in every cluster-backed suite skips, and the skips read as if Docker were absent.
+    ///         That is how the file-share lifecycle and silo-kill suites went unexecuted on the machine
+    ///         that wrote them — #30's review found 21 skips and 3 passes.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The flag is gone; only the config field is left.</b> <c>--fail-cgroup-v1=false</c>
+    ///         as a <c>--kubelet-arg</c> is refused at 1.35 (<i>"unknown flag"</i>, measured). What
+    ///         works is a <c>KubeletConfiguration</c> drop-in in the directory k3s already passes as
+    ///         <c>--config-dir</c>, and the file must end in <c>.conf</c> — the kubelet ignores any
+    ///         other suffix without a word, which cost one probe. On a cgroup v2 host the field is
+    ///         simply true-by-default-and-irrelevant, so the drop-in is unconditional.
+    ///     </para>
+    /// </remarks>
+    public const string KubeletDropInPath = "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf";
+
+    /// <summary>The drop-in's content. See <see cref="KubeletDropInPath" />.</summary>
+    public const string KubeletDropIn =
+        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n";
+
+    /// <summary>
+    ///     A k3s builder on <see cref="K3sImage" /> that comes up on a cgroup v1 host as well as a
+    ///     v2 one. Every k3s under <c>test/</c> goes through here;
+    ///     <c>CyberCloud.Kubernetes.Tests.Infrastructure.K3sFixture</c> cannot reference this assembly
+    ///     and carries the same two lines beside its own copy of the pin.
+    /// </summary>
+    public static K3sBuilder K3s() =>
+        new K3sBuilder(K3sImage).WithResourceMapping(Encoding.UTF8.GetBytes(KubeletDropIn), KubeletDropInPath);
+
     /// <summary>The PostgreSQL image, matching <c>CyberCloud.ServiceDefaults.Tests</c>'s durable shards.</summary>
     public const string PostgresImage = "postgres:17-alpine";
 
@@ -141,7 +181,7 @@ public static class ClusterInfrastructure {
         // ⚠ Taken BEFORE the containers, and released only when the process exits. See the remarks.
         ClusterSlot.Acquire();
 
-        var k3s = new K3sBuilder(K3sImage).Build();
+        var k3s = K3s().Build();
 
         var postgres = new PostgreSqlBuilder(PostgresImage)
             .WithDatabase("cybercloud")

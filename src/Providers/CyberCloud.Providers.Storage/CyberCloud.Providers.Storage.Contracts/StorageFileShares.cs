@@ -49,10 +49,12 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///         <c>StorageAccountReconciler</c> because a driver is a controller Deployment plus a node
 ///         DaemonSet plus a mount DaemonSet on <b>every node</b>, and an account with no shares
 ///         should not pay for one. So the first share of an account applies the driver, every share
-///         re-applies it (server-side apply of a document that is a pure function of the account, so
-///         it is a no-op), and the <i>last</i> share out removes it — see
-///         <c>StorageFileShareReconciler.DeleteAsync</c> for how "last" is decided without the
-///         platform being able to enumerate children.
+///         re-applies it (server-side apply of a document that is a pure function of the account —
+///         ⚠ not a no-op, because the builder stamps the applying share's labels; see
+///         <c>StorageFileShareReconciler</c> for why it is applied anyway), and the <i>last</i> share
+///         out removes it — see <c>StorageFileShareReconciler.DeleteAsync</c> for how "last" is
+///         decided without the platform being able to enumerate children, and for why the driver
+///         waits for the released volume as well as for the sibling claims.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The share's <c>quota.size</c> is enforced, and the thing that enforces it is the
@@ -147,6 +149,35 @@ public static class StorageFileShares {
     public static GroupVersionKind CsiDriverKind { get; } =
         new() { Group = "seaweed.seaweedfs.com", Version = "v1", Kind = "SeaweedCSIDriver", Plural = "seaweedcsidrivers" };
 
+    /// <summary>
+    ///     The <c>core/v1</c> <c>PersistentVolume</c> the provisioner binds a share's claim to — read
+    ///     and labelled by the delete, never rendered.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE VOLUME OUTLIVES THE CLAIM, AND THE DRIVER MUST OUTLIVE THE VOLUME.</b> Deleting
+    ///         a claim releases its volume; with <c>reclaimPolicy: Delete</c> the CSI external-provisioner
+    ///         then calls <c>DeleteVolume</c> on the controller plugin and removes the
+    ///         <c>PersistentVolume</c> — and that provisioner runs in the <c>SeaweedCSIDriver</c>'s
+    ///         controller Deployment. A delete that removed the driver the moment the claim read
+    ///         <c>NotFound</c> would, whenever the volume was still <c>Released</c>, take away the one
+    ///         process able to reclaim it: the volume and the filer directory <c>/fileshares/pvc-…</c>
+    ///         then stay forever, which is the untracked, unbilled state <see cref="DriverJson" /> chose
+    ///         <c>Delete</c> over <c>Retain</c> to avoid.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Cluster-scoped and not this platform's to create</b> — the provisioner writes it,
+    ///         with no labels of this platform's. So <c>StorageFileShareReconciler.DeleteAsync</c> reads
+    ///         the claim's <c>spec.volumeName</c> <i>before</i> deleting the claim and stamps the eight
+    ///         labels onto the volume through the same builder every rendered object goes through. That
+    ///         is the only state a later pass has: once the claim is gone nothing else names the volume,
+    ///         and a stateless reconciler cannot remember it. The labelled volume is then listed, by
+    ///         account, until it is gone, and only then does the driver go.
+    ///     </para>
+    /// </remarks>
+    public static GroupVersionKind VolumeKind { get; } =
+        new() { Group = "", Version = "v1", Kind = "PersistentVolume", Plural = "persistentvolumes" };
+
     /// <summary>The one access mode a share is mounted with.</summary>
     /// <remarks>
     ///     ⚠ <b>The whole point of the type, and checked in the driver's source rather than assumed.</b>
@@ -174,8 +205,9 @@ public static class StorageFileShares {
     ///     <i>resource</i>; nothing among them says which account a claim is in, and the object name
     ///     — <c>{account}-{share}</c> — cannot be split back unambiguously when account and share
     ///     names both contain hyphens. <c>StorageFileShareReconciler.DeleteAsync</c> lists the claims
-    ///     carrying this label to decide whether the account's driver still has a user. Carried through
-    ///     <c>WithLabels</c>, so it goes through the same syntax check the seven do.
+    ///     carrying this label to decide whether the account's driver still has a user, and the
+    ///     volumes carrying it to decide whether the driver still has something to reclaim. Carried
+    ///     through <c>WithLabels</c>, so it goes through the same syntax check the seven do.
     /// </remarks>
     public const string AccountLabel = "storage.cybercloud.io/account";
 
@@ -282,6 +314,15 @@ public static class StorageFileShares {
     /// <param name="id">The share's address.</param>
     public static ObjectRef DriverRef(string ns, ResourceId id) =>
         new() { Kind = CsiDriverKind, Namespace = ns, Name = DriverObjectName(AccountOf(id)) };
+
+    /// <summary>The volume a bound claim names — cluster-scoped, so no namespace.</summary>
+    /// <param name="volumeName">The name off the claim's <c>spec.volumeName</c>, never empty.</param>
+    /// <exception cref="ArgumentException"><paramref name="volumeName" /> is empty.</exception>
+    public static ObjectRef VolumeRef(string volumeName) {
+        ArgumentException.ThrowIfNullOrEmpty(volumeName);
+
+        return new() { Kind = VolumeKind, Namespace = string.Empty, Name = volumeName };
+    }
 
     // ── The body shape ────────────────────────────────────────────────────────────────────────
 
@@ -495,6 +536,19 @@ public static class StorageFileShares {
     ///         comparing</b>: a claim whose class was rewritten is a share provisioned by another
     ///         account's driver, on another account's filer, under this share's resource id.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE SIZE IS COMPARED AS A NUMBER, BECAUSE THE API SERVER REWRITES THE STRING.</b>
+    ///         A <c>PersistentVolumeClaim</c> is a built-in kind, and apimachinery canonicalises every
+    ///         <c>resource.Quantity</c> it stores: <c>1024Mi</c> reads back as <c>1Gi</c>, <c>1.5Gi</c>
+    ///         as <c>1536Mi</c>, <c>1000M</c> as <c>1G</c>, and a suffix-less <c>1.5</c> as
+    ///         <c>1500m</c>. Every one of those is admitted by <see cref="Schema2026" />'s pattern, and
+    ///         a byte-for-byte compare against any of them never converges — the reconciler reports
+    ///         "does not yet carry the desired spec" every five seconds forever and the observation
+    ///         says "drifted" about a claim that is exactly right. The bucket never met this because a
+    ///         CRD stores a quantity string as sent. <see cref="KubeQuantity.TryParse" /> is the one
+    ///         parser the platform has, and <c>StorageMatchesTests.ACanonicalisedSizeStillMatches</c>
+    ///         holds each spelling above against its canonical form.
+    ///     </para>
     /// </remarks>
     public static bool Matches(string objectJson, ResourceId id, string ns, JsonElement desired) {
         JsonNode? parsed;
@@ -523,8 +577,22 @@ public static class StorageFileShares {
         spec["accessModes"] is JsonArray modes
         && modes.Any(x => x?.GetValue<string>() == AccessMode)
         && spec["storageClassName"]?.GetValue<string>() == DriverNameOf(ns, account)
-        && ((spec["resources"] as JsonObject)?["requests"] as JsonObject)?["storage"]?.GetValue<string>()
-        == QuotaSize(desired);
+        && SameQuantity(
+            ((spec["resources"] as JsonObject)?["requests"] as JsonObject)?["storage"]?.GetValue<string>(),
+            QuotaSize(desired)
+        );
+
+    /// <summary>Whether two quantity strings name the same number of bytes.</summary>
+    /// <remarks>
+    ///     ⚠ Falls back to the strings when either side is not a quantity this platform parses. The
+    ///     desired side always is — the schema's pattern is <see cref="KubeQuantity.Pattern" /> — so
+    ///     the fallback is reached only by a read-back the API server spelled in a form the platform's
+    ///     grammar refuses, and equality on the string is then the honest answer rather than a guess.
+    /// </remarks>
+    static bool SameQuantity(string? read, string desired) =>
+        KubeQuantity.TryParse(read, out var readBytes) && KubeQuantity.TryParse(desired, out var desiredBytes)
+            ? readBytes == desiredBytes
+            : read == desired;
 
     static bool MatchesDriver(JsonObject spec, string ns, string account) =>
         (spec["seaweedRef"] as JsonObject)?["name"]?.GetValue<string>() == account

@@ -9,14 +9,26 @@ namespace CyberCloud.Providers.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>THE DRIVER IS SHARED AND THIS RECONCILER STILL APPLIES IT ON EVERY PASS.</b> A
-///         <c>SeaweedCSIDriver</c> is one per filer, so every share of an account renders the same
-///         document — <see cref="StorageFileShares.DriverJson" /> is a pure function of the account
-///         and the namespace — and server-side apply of an unchanged document is a no-op. What the
-///         re-apply buys is drift correction: a driver a well-meant <c>kubectl</c> pointed at another
-///         filer is put back by the next share that reconciles. What it costs is that the seven
-///         labels on the driver name whichever share applied it last, which is recorded at
-///         <c>conformance.yaml § owed</c>, <c>the-driver-carries-one-shares-labels</c>.
+///         ⚠ <b>THE DRIVER IS SHARED AND THIS RECONCILER STILL APPLIES IT ON EVERY PASS — AND THAT
+///         APPLY IS NOT THE NO-OP IT LOOKS LIKE.</b> A <c>SeaweedCSIDriver</c> is one per filer, so
+///         every share of an account renders the same document —
+///         <see cref="StorageFileShares.DriverJson" /> is a pure function of the account and the
+///         namespace — but the builder injects the <i>applying</i> share's resource-id label, so two
+///         shares of one account take turns rewriting the driver's <c>metadata.labels</c>: a real
+///         write, a bumped <c>resourceVersion</c> and an operator reconcile on every alternating
+///         pass, and after the last-applying share is deleted a driver whose resource-id names no
+///         grain until a sibling reconciles again. Recorded at <c>conformance.yaml § owed</c>,
+///         <c>the-driver-carries-one-shares-labels</c>.
+///     </para>
+///     <para>
+///         ⚠ <b>Reading first and applying only on drift was tried, and the real API server refused
+///         it.</b> <c>StorageFileShareLifecycleConformance</c> — the k3s-backed suite — failed two
+///         ways: the lifecycle asserts that every object of a converged resource carries <i>that</i>
+///         resource's id, and the conflict case plants a rival field manager on the driver's
+///         <c>tenant-id</c> label and expects the next pass to <i>conflict</i>. A reconciler that
+///         left a spec-matching driver alone never re-asserted ownership of its labels, so a tenant's
+///         hand edit of billing attribution became silence rather than a drift event with a name —
+///         ADR-013's whole point. The churn is the price of that re-assertion, and it is paid.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The driver goes first and the claim second, because a claim against a class that does
@@ -44,8 +56,8 @@ namespace CyberCloud.Providers.Storage;
 ///             <see cref="IClock" />. <c>StorageFileShareReconcilerTests</c> asserts both halves.
 ///         </item>
 ///         <item>
-///             <b>Bounded.</b> Two applies, two reads, on the caller's token. The delete adds one
-///             listing.
+///             <b>Bounded.</b> Two applies, two reads, on the caller's token. The delete is at most
+///             two reads, one apply, two deletes and two listings.
 ///         </item>
 ///         <item>
 ///             <b>Observes, never assumes.</b> <see cref="ReconcileOutcome.Converged" /> follows a
@@ -158,6 +170,29 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
     ///         it until the pod is gone, and this reports <c>InProgress</c> for as long as that takes.
     ///         That is the tenant's pod and the tenant's decision, and the reminder keeps asking.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>AND THE VOLUME, WHICH OUTLIVES THE CLAIM AND IS RECLAIMED BY THE DRIVER THIS IS
+    ///         ABOUT TO REMOVE.</b> A claim's <c>NotFound</c> is not the end of its data: the
+    ///         <c>PersistentVolume</c> goes <c>Released</c>, and the CSI external-provisioner — a
+    ///         container in the driver's controller Deployment — is what then calls
+    ///         <c>DeleteVolume</c> and removes it. Removing the driver first cascades that Deployment
+    ///         away with the volume still <c>Released</c>, and the volume and its filer directory stay
+    ///         forever: untracked, unbilled and removable only by hand, which is the state
+    ///         <c>reclaimPolicy: Delete</c> was chosen to rule out. So the claim is <i>read</i> before it
+    ///         is deleted, its <c>spec.volumeName</c> is followed to the volume, and the volume is
+    ///         labelled through the same builder as everything else — because once the claim is gone
+    ///         nothing on the cluster names the volume, and clause 2 leaves this reconciler nothing to
+    ///         remember it with. Every later pass then lists volumes by account and waits until the
+    ///         listing is empty before the driver goes. See <see cref="StorageFileShares.VolumeKind" />.
+    ///         <c>StorageFileShareReconcilerTests.TheDriverWaitsForTheReleasedVolumeToBeReclaimed</c>
+    ///         holds it against a volume that is never reclaimed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The label write happens <i>before</i> the claim delete and a failure there fails the
+    ///         pass: a claim deleted with its volume unlabelled is the orphan this paragraph exists to
+    ///         prevent, and one more pass costs nothing. A volume that is already gone, or a claim that
+    ///         never bound, has nothing to label and skips straight on.
+    ///     </para>
     /// </remarks>
     public async Task<ReconcileOutcome> DeleteAsync(
         ReconcileContext context,
@@ -169,6 +204,39 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
 
         var account = StorageFileShares.AccountOf(context.Id);
         var claimRef = StorageFileShares.ClaimRef(context.Namespace, context.Id);
+
+        // ── The volume, labelled while the claim can still name it ─────────────────────────────
+        var bound = await cluster.GetAsync(claimRef, cancellationToken);
+
+        if (bound.TryGetError(out var boundError) && boundError.Code != ErrorCode.ResourceNotFound) {
+            return ReconcileOutcome.FromFailure(boundError);
+        }
+
+        if (bound.IsSuccess && StorageFileShares.VolumeNameOf(bound.GetValueOrThrow().Json) is { Length: > 0 } volumeName) {
+            var volumeRef = StorageFileShares.VolumeRef(volumeName);
+            var volume = await cluster.GetAsync(volumeRef, cancellationToken);
+
+            if (volume.TryGetError(out var volumeError) && volumeError.Code != ErrorCode.ResourceNotFound) {
+                return ReconcileOutcome.FromFailure(volumeError);
+            }
+
+            if (volume.IsSuccess) {
+                context.Log.Report("deleting", $"labelling volume '{volumeName}' so the driver waits for its reclaim");
+
+                // ⚠ Metadata only. The provisioner owns the spec, and a server-side apply that named
+                // any of it would conflict; labels under this manager's keys merge beside theirs.
+                var labelled = await Apply(context, cluster, StorageFileShares.VolumeKind, Placeholder(volumeName), string.Empty)
+                    .ApplyAsync(cancellationToken);
+
+                if (labelled.TryGetError(out var labelError)) {
+                    return ReconcileOutcome.FromFailure(labelError);
+                }
+
+                if (Unfinished(context, labelled.GetValueOrThrow(), "the share's volume") is { } stalled) {
+                    return stalled;
+                }
+            }
+        }
 
         context.Log.Report("deleting", $"deleting the claim of '{context.Id.Name}'");
 
@@ -213,6 +281,36 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
             );
 
             return ReconcileOutcome.Converged;
+        }
+
+        // ── The volumes, which the driver's own controller is still reclaiming ─────────────────
+        var volumes = await cluster.ListAsync(
+            StorageFileShares.VolumeKind,
+            string.Empty,
+            KubeLabels.ResourceType + "=" + KubeLabels.ResourceTypeValue(StorageFileShares.Type)
+            + "," + KubeLabels.SubscriptionId + "=" + KubeLabels.GuidValue(context.Id.SubscriptionId)
+            + "," + KubeLabels.ResourceGroup + "=" + context.Id.ResourceGroup
+            + "," + StorageFileShares.AccountLabel + "=" + account,
+            cancellationToken
+        );
+
+        if (volumes.TryGetError(out var volumeListError)) {
+            // ⚠ Same rule as the claims: a listing this platform cannot make is not "none".
+            return ReconcileOutcome.FromFailure(volumeListError);
+        }
+
+        if (volumes.GetValueOrThrow().Count > 0) {
+            context.Log.Report(
+                "deleting",
+                $"the claim of '{context.Id.Name}' is gone; {volumes.GetValueOrThrow().Count} released "
+                + $"volume(s) of account '{account}' are still being reclaimed by its CSI driver"
+            );
+
+            return ReconcileOutcome.InProgress(
+                $"{volumes.GetValueOrThrow().Count} released volume(s) of account '{account}' are still "
+                + "being reclaimed, and the driver that reclaims them stays until they are gone",
+                TimeSpan.FromSeconds(5)
+            );
         }
 
         var driverRef = StorageFileShares.DriverRef(context.Namespace, context.Id);
@@ -276,22 +374,41 @@ public sealed class StorageFileShareReconciler(IClock clock) : IResourceReconcil
     ];
 
     /// <summary>A command over one of this share's objects, carrying the account label.</summary>
+    /// <param name="context">The pass.</param>
+    /// <param name="cluster">The connection the command writes to.</param>
+    /// <param name="kind">The object's kind.</param>
+    /// <param name="json">The object, as rendered.</param>
+    /// <param name="ns">
+    ///     The namespace to address, or <see cref="string.Empty" /> for a cluster-scoped object. Defaults
+    ///     to the resource's own, which is where everything but the volume lives.
+    /// </param>
     /// <remarks>
     ///     ⚠ <see cref="StorageFileShares.AccountLabel" /> goes through <c>WithLabels</c> on the driver
-    ///     as well as on the claim. The delete only lists claims, but a driver that says which account
-    ///     it serves is one <c>kubectl get</c> away from being placed, which a digest in its name is not.
+    ///     and the volume as well as on the claim. The delete lists claims <i>and</i> volumes by it,
+    ///     and a driver that says which account it serves is one <c>kubectl get</c> away from being
+    ///     placed, which a digest in its name is not.
     /// </remarks>
-    static IKubeCommandBuilder Apply(ReconcileContext context, IKubeClusterConnection cluster, GroupVersionKind kind, string json) =>
+    static IKubeCommandBuilder Apply(
+        ReconcileContext context,
+        IKubeClusterConnection cluster,
+        GroupVersionKind kind,
+        string json,
+        string? ns = null
+    ) =>
         KubeCommand.For(cluster)
             .WithTenantId(context.Id.TenantId)
             .WithResourceId(context.Id)
-            .InNamespace(context.Namespace)
+            .InNamespace(ns ?? context.Namespace)
             .WithKind(kind)
             .WithApiVersion(context.ApiVersion)
             .WithLabels((StorageFileShares.AccountLabel, StorageFileShares.AccountOf(context.Id)))
             .ObjectJson(json);
 
-    /// <summary>The smallest object a delete command will accept — a name and nothing else.</summary>
+    /// <summary>
+    ///     The smallest object a delete command will accept — a name and nothing else. Also the whole
+    ///     of what the volume is applied with: the builder adds the labels, and the provisioner keeps
+    ///     the spec.
+    /// </summary>
     static string Placeholder(string name) =>
         new JsonObject { ["metadata"] = new JsonObject { ["name"] = name } }.ToJsonString();
 

@@ -665,21 +665,29 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // owner is resolved to a uid the fake issued, so the collector below can find the dependents
         // exactly as the real one would.
         //
-        // ⚠ SPLIT ON WHETHER THE CASE DECLARED AN OWNER, AND THE SECOND HALF IS NEWER. A claim a
-        // dynamic provisioner BINDS — CyberCloud.Storage/accounts/fileShares' ReadWriteMany claim,
-        // which the reconciler applies and the CSI external-provisioner then writes spec.volumeName
-        // onto — is planted through OperatorWritten so the action handler has a bound claim to read,
-        // and it names no owner because in the real world nothing owns it. Asking such a claim for a
+        // ⚠ SPLIT ON WHAT A PROVISIONER WRITES, AND THE SECOND HALF IS NEWER. A claim a dynamic
+        // provisioner BINDS — CyberCloud.Storage/accounts/fileShares' ReadWriteMany claim, which the
+        // reconciler applies and the CSI external-provisioner then writes spec.volumeName onto — is
+        // planted through OperatorWritten so the action handler has a bound claim to read, and it
+        // names no owner because in the real world nothing owns it. Asking such a claim for a
         // controller would refuse the real shape; not following it through the teardown would let a
-        // reconciler leave its own claim behind. So an unowned planted claim joins `claims` — gone
-        // after a hard delete, kept through a soft one, gone at the purge — and is exempt from the
-        // three controller assertions, which are about the collector and a collector never touches it.
+        // reconciler leave its own claim behind. So a planted claim carrying spec.volumeName joins
+        // `claims` — gone after a hard delete, kept through a soft one, gone at the purge — and is
+        // exempt from the three controller assertions, which are about the collector and a collector
+        // never touches it.
+        //
+        // ⚠ The split used to be "has a controller reference or not", and that relaxed an assertion
+        // for every provider: an operator-owned fixture that FORGOT its owner reference was quietly
+        // routed down the weaker path instead of failing "was declared operator-owned and was planted
+        // with no controller". Keying on the provisioner's own field keeps that failure loud — a
+        // planted claim with neither a volume nor a controller is a fixture that is wrong, and it
+        // says so below.
         var planted = PlantOperatorObjects(accepted.Resource.Id, "keeps-disks")
             .Where(x => x.Target.Kind == RetainedVolume.ClaimKind)
             .ToList();
 
-        var operatorOwned = planted.Where(x => KubeJson.ControllerOf(JsonNode.Parse(x.Json)) is not null).ToList();
-        var provisionerBound = planted.Except(operatorOwned).ToList();
+        var provisionerBound = planted.Where(x => VolumeNameOf(x.Json).Length > 0).ToList();
+        var operatorOwned = planted.Except(provisionerBound).ToList();
 
         if (templated.Count == 0 && planted.Count == 0) {
             Assert.Skip(
@@ -829,6 +837,14 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///     claim it creates. A claim planted from anywhere else would be this suite deciding what a
     ///     provider owns.
     /// </remarks>
+    /// <summary>
+    ///     The volume a planted claim is bound to, or empty — the field a dynamic provisioner writes
+    ///     and an operator's controller-owned claim never carries at plant time.
+    /// </summary>
+    static string VolumeNameOf(string claimJson) =>
+        ((JsonNode.Parse(claimJson) as JsonObject)?["spec"] as JsonObject)?["volumeName"]?.GetValue<string>()
+        ?? string.Empty;
+
     static List<(ObjectRef Target, string Json)> ClaimsOf(IEnumerable<KubeCommand> applied) {
         var claims = new List<(ObjectRef, string)>();
 

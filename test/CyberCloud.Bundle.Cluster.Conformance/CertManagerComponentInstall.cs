@@ -166,7 +166,7 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
             // holds a cluster at a time. ClusterSlot's remarks have the reasoning.
             ClusterSlot.Acquire();
 
-            var k3s = new K3sBuilder(ClusterInfrastructure.K3sImage).Build();
+            var k3s = ClusterInfrastructure.K3s().Build();
             container = k3s;
 
             await k3s.StartAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
