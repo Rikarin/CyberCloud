@@ -302,6 +302,16 @@ promise instead, and both client emitters type the members as present because of
 the three `202`s, a running and a failed operation, a scope — against the document emitted from the
 same registry.
 
+⚠ **The promise in the extension is guarded by the [§ OpenAPI](#openapi) gate, and for one day it was
+not.** That gate treats every `x-` key as prose, and a name dropped from `x-cybercloud-read-required`
+is not prose: it turns a TypeScript `readonly etag: string` into an optional for every consumer,
+which is a narrowed type. `OpenApiCompatibility` now compares that list as the set it is and reports
+a lost name as `read-required-removed`; a name added widens the read and is fine. The review that
+found the gap also found the .NET half of the promise undelivered — the stand-in declared the five
+members and populated none, so `Id` was empty on every resource it produced. The hand-written half
+now reads the same bytes twice, once as `ResourceEnvelope<TProvisioningState>` and once as the body,
+and `EnvelopeTests` reads all five back off a `GET`, a list element and an operation's value.
+
 ⚠ **The .NET `{Model}Resource` said `Id` and nothing else until #85**, and the TypeScript one said
 `id`, `name`, `type` and `properties`; both were literals in the emitter, and the portal typed
 `provisioningState`, `location`, `etag` and `tags` by hand in `resource-verbs.ts`. The hand-written

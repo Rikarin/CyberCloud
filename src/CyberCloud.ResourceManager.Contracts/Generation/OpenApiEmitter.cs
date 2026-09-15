@@ -146,6 +146,17 @@ public static class OpenApiEmitter {
     ///         know the five by heart.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>And the promise is guarded, which an <c>x-</c> key is not by default.</b>
+    ///         <see cref="OpenApiCompatibility" /> reads every extension as prose — a hint a
+    ///         generator may change freely — and this one is the exception: a name dropped from
+    ///         <see cref="ReadRequiredExtension" /> narrows a member both clients type as present,
+    ///         which is what docs/plan/21 § OpenAPI forbids, so the gate reports it as
+    ///         <see cref="OpenApiCompatibility.ReadRequiredRemoved" />. Until the 2026-09-15 review
+    ///         of issue #85 it did not, and a regeneration that emptied the list passed.
+    ///         <c>OpenApiEmitterTests.DroppingAReadPromiseIsABreakingChangeAndAddingOneIsNot</c> is
+    ///         the pin.
+    ///     </para>
+    ///     <para>
     ///         Public for the reason <see cref="ScopeSchema" /> is: the two client emitters read the
     ///         component back by name.
     ///     </para>
@@ -1392,17 +1403,32 @@ public static class OpenApiEmitter {
     ///     <para>
     ///         ⚠ <b>The <c>202</c> has a body, and until issue #85 the document declared none.</b>
     ///         <c>DispatchStage.Accepted</c> writes <c>ResponseBodies.Resource</c> for every verb —
-    ///         a <c>DELETE</c> and a long-running action included — so the resource comes back in
-    ///         the state the write left it, <c>provisioningState</c> and all. A client that wants
-    ///         the etag of what it just wrote does not have to poll to learn it.
+    ///         a <c>DELETE</c> and a long-running action included — so the resource comes back as
+    ///         the manager holds it once the write is accepted: <c>Creating</c> after a <c>PUT</c>
+    ///         that made it, <c>Updating</c> after one that changed it or a <c>PATCH</c>,
+    ///         <c>Deleting</c> after a <c>DELETE</c>. A client that wants the etag of what it just
+    ///         wrote does not have to poll to learn it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A long-running action's <c>202</c> carries whatever the read after the start
+    ///         returned, and that read can fail.</b> <c>ResourceManagerService.ActionAsync</c>
+    ///         starts the operation, then reads the resource, and serves an empty snapshot when the
+    ///         read does not succeed — a body with no <c>location</c>, which this schema requires,
+    ///         and a <c>provisioningState</c> of <c>Unknown</c>, which its enum omits. The
+    ///         description below therefore does not promise a state for an action, and the empty
+    ///         snapshot is a manager gap the 2026-09-15 review of issue #85 recorded rather than
+    ///         one this document can describe: the fix is on the manager's side, not a looser
+    ///         schema.
     ///     </para>
     /// </remarks>
     static JsonObject Accepted(string component) =>
         new JsonObject {
             ["202"] = new JsonObject {
                 ["description"] =
-                    "Accepted. The body is the resource as the write left it — Creating, Updating or "
-                    + "Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation "
+                    "Accepted. The body is the resource as the manager holds it now that the write is "
+                    + "accepted — provisioningState says which write is in flight: Creating, Updating "
+                    + "or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, "
+                    + "which serves the read that followed its start. Poll the Azure-AsyncOperation "
                     + "target until the status is terminal.",
                 ["content"] = new JsonObject {
                     ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", component) }

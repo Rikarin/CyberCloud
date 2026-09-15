@@ -65,15 +65,32 @@ public sealed partial class WidgetData {
 ///     EmitterContract.cs § 1: the SDK sets <c>IsAotCompatible</c>, so a reflective
 ///     <c>JsonSerializer.Deserialize&lt;T&gt;</c> is IL2026 and a build failure.
 /// </summary>
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+/// <remarks>
+///     ⚠ <c>UseStringEnumConverter</c> and the <see cref="ResourceEnvelope{TProvisioningState}" />
+///     entry are what the read envelope costs the context — the 2026-09-15 review of issue #85.
+///     The envelope's <c>provisioningState</c> is a string on the wire and an enum on
+///     <see cref="WidgetResource" />, and only this option makes the source generator read the
+///     <c>[JsonStringEnumMemberName]</c> the emitter puts on every member; the closed instantiation
+///     has to be declared here rather than in <c>SdkJsonContext</c> because it names this file's
+///     enum. Drop either and every read fails to parse, which <c>EnvelopeTests</c> would report.
+/// </remarks>
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, UseStringEnumConverter = true)]
 [JsonSerializable(typeof(WidgetData))]
 [JsonSerializable(typeof(WidgetListPage))]
+[JsonSerializable(typeof(ResourceEnvelope<ProvisioningState>), TypeInfoPropertyName = "WidgetEnvelope")]
 public partial class WidgetJsonContext : JsonSerializerContext;
 
 /// <summary>A page of a list response.</summary>
+/// <remarks>
+///     ⚠ The elements are left as <see cref="JsonElement" /> rather than typed, because each one is
+///     read twice — <see cref="WidgetResource.Read(CyberCloudClientContext, JsonElement)" /> says
+///     why — and a page typed as <c>IReadOnlyList&lt;WidgetData&gt;</c> is a page that has already
+///     dropped the envelope. It was that until the 2026-09-15 review of issue #85, and
+///     <c>GetAll</c> yielded bodies with no id.
+/// </remarks>
 public sealed partial class WidgetListPage {
     [JsonPropertyName("value")]
-    public IReadOnlyList<WidgetData> Value { get; init; } = [];
+    public IReadOnlyList<JsonElement> Value { get; init; } = [];
 
     [JsonPropertyName("nextLink")]
     public string? NextLink { get; init; }
@@ -109,9 +126,12 @@ public sealed partial class WidgetResource {
     // ⚠ THE READ ENVELOPE, FROM THE DOCUMENT — issue #85. SdkEmitter emits one member per leaf of
     // the Resource component the type's schema allOf's (openapi/2026-08-01.json § Resource): the
     // five the gateway serves beside the body, each with its wire name, initialised rather than
-    // `required` because the hand-written half sets them from a response after construction. Until
-    // that issue the emitted class declared `Id` alone, from a literal, and the document described
-    // none of the five. Mirrored here rather than described, for the header's reason.
+    // `required` because the hand-written half sets them from a response after construction —
+    // `Read` below is that half, and until the 2026-09-15 review of the issue it did not exist:
+    // the five were declared, every call site built the resource from the body alone, and Id was
+    // string.Empty on every resource the stand-in ever produced. Until the issue itself the
+    // emitted class declared `Id` alone, from a literal, and the document described none of the
+    // five. Mirrored here rather than described, for the header's reason.
     [JsonPropertyName("etag")]
     public string Etag { get; init; } = string.Empty;
 
@@ -128,6 +148,42 @@ public sealed partial class WidgetResource {
     public string Type { get; init; } = string.Empty;
 
     public required WidgetData Data { get; init; }
+
+    /// <summary>
+    ///     Reads one served resource — a <c>GET</c> <c>200</c>, a list element or the <c>GET</c>
+    ///     that follows an operation — into the envelope and the body.
+    /// </summary>
+    /// <param name="context">The client context the resource keeps.</param>
+    /// <param name="served">The resource object, exactly as <c>ResponseBodies.Resource</c> wrote it.</param>
+    /// <remarks>
+    ///     ⚠ <b>The hand-written half's one way to make a resource from a response, and the same
+    ///     bytes are read twice.</b> The wire is flat and the SDK is not — the remarks on
+    ///     <see cref="ResourceEnvelope{TProvisioningState}" /> carry the argument — so the element is
+    ///     deserialised once as the envelope and once as <see cref="WidgetData" />, and each read
+    ///     ignores the other's members. The URL is the envelope's <c>id</c>, which the document
+    ///     describes as "also the URL it was read from", so a list element gets the same URL a
+    ///     <c>GET</c> of it would.
+    /// </remarks>
+    public static WidgetResource Read(CyberCloudClientContext context, JsonElement served) {
+        var envelope = JsonSerializer.Deserialize(served, WidgetJsonContext.Default.WidgetEnvelope)!;
+        var data = JsonSerializer.Deserialize(served, WidgetJsonContext.Default.WidgetData)!;
+
+        return new WidgetResource(context, new Uri(context.Endpoint, envelope.Id), data) {
+            Id = envelope.Id,
+            Name = envelope.Name,
+            Type = envelope.Type,
+            ProvisioningState = envelope.ProvisioningState,
+            Etag = envelope.Etag
+        };
+    }
+
+    /// <inheritdoc cref="Read(CyberCloudClientContext, JsonElement)" />
+    /// <param name="content">A response body that is one resource object.</param>
+    public static WidgetResource Read(CyberCloudClientContext context, ReadOnlyMemory<byte> content) {
+        using var document = JsonDocument.Parse(content);
+
+        return Read(context, document.RootElement);
+    }
 }
 
 /// <summary>
@@ -162,18 +218,13 @@ public enum ProvisioningState {
 /// </summary>
 public sealed partial class WidgetOperationSource : IOperationSource<WidgetResource> {
     readonly CyberCloudClientContext context;
-    readonly Uri uri;
 
-    public WidgetOperationSource(CyberCloudClientContext context, Uri uri) {
+    public WidgetOperationSource(CyberCloudClientContext context) {
         this.context = context;
-        this.uri = uri;
     }
 
-    public ValueTask<WidgetResource> CreateResultAsync(Response response, CancellationToken cancellationToken) {
-        var data = JsonSerializer.Deserialize(response.Content.Span, WidgetJsonContext.Default.WidgetData)!;
-
-        return ValueTask.FromResult(new WidgetResource(context, uri, data));
-    }
+    public ValueTask<WidgetResource> CreateResultAsync(Response response, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(WidgetResource.Read(context, response.Content));
 }
 
 /// <summary>The widgets of one resource group.</summary>
@@ -196,9 +247,7 @@ public sealed partial class WidgetCollection {
             throw CyberCloudClientContext.CreateFailure(response);
         }
 
-        var data = JsonSerializer.Deserialize(response.Content.Span, WidgetJsonContext.Default.WidgetData)!;
-
-        return Response.FromValue(new WidgetResource(context, new Uri(context.Endpoint, Path(name)), data), response);
+        return Response.FromValue(WidgetResource.Read(context, response.Content), response);
     }
 
     /// <summary>The <c>GetIfExists</c> shape — a <c>404</c> is an answer, not an exception.</summary>
@@ -217,9 +266,7 @@ public sealed partial class WidgetCollection {
             throw CyberCloudClientContext.CreateFailure(response);
         }
 
-        var data = JsonSerializer.Deserialize(response.Content.Span, WidgetJsonContext.Default.WidgetData)!;
-
-        return Response.FromValue(new WidgetResource(context, new Uri(context.Endpoint, Path(name)), data), response);
+        return Response.FromValue(WidgetResource.Read(context, response.Content), response);
     }
 
     public async Task<Operation<WidgetResource>> CreateOrUpdateAsync(
@@ -243,7 +290,7 @@ public sealed partial class WidgetCollection {
         }
 
         var operation = new Operation<WidgetResource>(
-            new WidgetOperationSource(context, uri),
+            new WidgetOperationSource(context),
             context,
             uri,
             response,
@@ -257,8 +304,8 @@ public sealed partial class WidgetCollection {
         return operation;
     }
 
-    public AsyncPageable<WidgetData> GetAll(CancellationToken cancellationToken = default) =>
-        AsyncPageable<WidgetData>.Create(
+    public AsyncPageable<WidgetResource> GetAll(CancellationToken cancellationToken = default) =>
+        AsyncPageable<WidgetResource>.Create(
             async (continuationToken, pageSizeHint, token) => {
                 using var request = continuationToken is null
                     ? context.CreateRequest(HttpMethod.Get, $"{scope}/providers/CyberCloud.Sample/widgets")
@@ -272,7 +319,11 @@ public sealed partial class WidgetCollection {
 
                 var page = JsonSerializer.Deserialize(response.Content.Span, WidgetJsonContext.Default.WidgetListPage)!;
 
-                return new Page<WidgetData>(page.Value, page.NextLink, response);
+                return new Page<WidgetResource>(
+                    [.. page.Value.Select(element => WidgetResource.Read(context, element))],
+                    page.NextLink,
+                    response
+                );
             },
             cancellationToken
         );

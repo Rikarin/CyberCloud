@@ -323,7 +323,7 @@ public sealed class PageableTests {
         Responses.Json(
             HttpStatusCode.OK,
             $$"""
-              {"value":[{"location":"{{name}}"}]{{(nextLink is null ? "" : $",\"nextLink\":\"{nextLink}\"")}}}
+              {"value":[{{TestClient.WidgetNamed(name, location: name)}}]{{(nextLink is null ? "" : $",\"nextLink\":\"{nextLink}\"")}}}
               """
         );
 
@@ -341,7 +341,7 @@ public sealed class PageableTests {
         var seen = new List<(string Location, int RequestsSoFar)>();
 
         await foreach (var widget in client.Widgets().GetAll(Cancel.Token)) {
-            seen.Add((widget.Location, transport.RequestCount));
+            seen.Add((widget.Data.Location, transport.RequestCount));
         }
 
         seen.Select(x => x.Location).ShouldBe(["one", "two", "three"]);
@@ -360,7 +360,7 @@ public sealed class PageableTests {
 
         using var client = TestClient.Create(transport);
 
-        var pages = new List<Page<WidgetData>>();
+        var pages = new List<Page<WidgetResource>>();
 
         await foreach (var page in client.Widgets().GetAll(Cancel.Token).AsPages()) {
             pages.Add(page);
@@ -386,7 +386,7 @@ public sealed class PageableTests {
         var locations = new List<string>();
 
         await foreach (var widget in client.Widgets().GetAll(Cancel.Token)) {
-            locations.Add(widget.Location);
+            locations.Add(widget.Data.Location);
         }
 
         locations.ShouldBe(["one", "two"]);

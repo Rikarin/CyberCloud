@@ -71,6 +71,15 @@ namespace CyberCloud.Sdk;
 ///                 them after; <c>ProvisioningState</c> is a file-level enum emitted once from
 ///                 the same component. Until that issue the class declared <c>Id</c> alone, from
 ///                 a literal, and the document described none of the five the gateway serves.
+///                 ⚠ <b>"Sets them after" is a duty, and the 2026-09-15 review found it unmet:</b>
+///                 the stand-in declared the five and every call site built the resource from
+///                 the body alone, so <c>Id</c> was <c>string.Empty</c> on every resource it
+///                 produced. The mechanism is <see cref="ResourceEnvelope{TProvisioningState}" />:
+///                 the same bytes read once as the envelope and once as <c>{Type}Data</c>, through
+///                 the generated <c>JsonSerializerContext</c> with <c>UseStringEnumConverter</c>,
+///                 and the resource built from both — <c>WidgetResource.Read</c> in the stand-in
+///                 is the shape, and <c>EnvelopeTests</c> reads all five back off a <c>GET</c>, a
+///                 list element and an operation's value.
 ///                 ⚠
 ///                 <b>
 ///                     <c>Data</c> is <c>required</c>, so a hand-written constructor that assigns it

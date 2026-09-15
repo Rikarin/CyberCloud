@@ -524,7 +524,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -594,7 +594,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -654,7 +654,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -992,7 +992,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1062,7 +1062,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1122,7 +1122,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1422,7 +1422,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1492,7 +1492,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1552,7 +1552,7 @@
         "description": "A deleted CyberCloud.ContainerRegistry/registries is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1752,7 +1752,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1835,7 +1835,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2152,7 +2152,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2222,7 +2222,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2282,7 +2282,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2434,7 +2434,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2569,7 +2569,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2639,7 +2639,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2699,7 +2699,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3024,7 +3024,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3094,7 +3094,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3154,7 +3154,7 @@
         "description": "A deleted CyberCloud.DBforMySQL/servers is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3355,7 +3355,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3438,7 +3438,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3652,7 +3652,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3722,7 +3722,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3782,7 +3782,7 @@
         "description": "A deleted CyberCloud.DBforPostgreSQL/servers is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3984,7 +3984,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4067,7 +4067,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4281,7 +4281,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4351,7 +4351,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4411,7 +4411,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4745,7 +4745,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4815,7 +4815,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4875,7 +4875,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5139,7 +5139,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5209,7 +5209,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5269,7 +5269,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5569,7 +5569,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5639,7 +5639,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5699,7 +5699,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6031,7 +6031,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6101,7 +6101,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6161,7 +6161,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6493,7 +6493,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6563,7 +6563,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6623,7 +6623,7 @@
         "description": "A deleted CyberCloud.Monitor/workspaces is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6806,7 +6806,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6889,7 +6889,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7103,7 +7103,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7173,7 +7173,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7233,7 +7233,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7540,7 +7540,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7610,7 +7610,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7670,7 +7670,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7994,7 +7994,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8064,7 +8064,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8124,7 +8124,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8478,7 +8478,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8548,7 +8548,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8608,7 +8608,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8944,7 +8944,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9014,7 +9014,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9074,7 +9074,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9386,7 +9386,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9456,7 +9456,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9516,7 +9516,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9826,7 +9826,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9896,7 +9896,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9956,7 +9956,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10397,7 +10397,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10467,7 +10467,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10527,7 +10527,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10760,7 +10760,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10830,7 +10830,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10890,7 +10890,7 @@
         "description": "A deleted CyberCloud.Storage/accounts is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11095,7 +11095,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11178,7 +11178,7 @@
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11392,7 +11392,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11462,7 +11462,7 @@
         },
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11522,7 +11522,7 @@
         "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
-            "description": "Accepted. The body is the resource as the write left it — Creating, Updating or Deleting — and the poll target is in the headers. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
             "content": {
               "application/json": {
                 "schema": {

@@ -575,19 +575,28 @@ public sealed class OpenApiEmitterTests {
     }
 
     /// <summary>
-    ///     ⚠ <b>The envelope is an addition over the document that lacked it, and the compatibility
-    ///     gate says so.</b>
+    ///     ⚠ <b>Every piece the envelope added is something the compatibility gate would refuse to
+    ///     take away.</b>
     /// </summary>
     /// <remarks>
-    ///     The document published before issue #85 is reconstructed by taking the envelope back out
-    ///     — the <c>allOf</c>, the five members, the <c>202</c> bodies, the three operation members
-    ///     and the component — and diffed against what the emitter produces now, in both
-    ///     directions. Forwards is empty, which is the verdict <c>./build.sh Generate</c> gave over
-    ///     the real checked-in file; backwards is not, which is what makes the forwards verdict a
-    ///     finding rather than a diff that finds nothing. It is also the reason the read schema is
-    ///     the write schema with <c>readOnly</c> members rather than a <c>{Type}.Resource</c> the
-    ///     <c>200</c> points at: moving that <c>$ref</c> is a changed scalar, and
-    ///     <see cref="OpenApiCompatibility" /> refuses every one of those.
+    ///     <para>
+    ///         The document published before issue #85 is reconstructed by taking the envelope back
+    ///         out — the <c>allOf</c>, the five members, the <c>202</c> bodies, the three operation
+    ///         members, the read promise and the component — and the emitter's current output is
+    ///         diffed against it. Every rule reported is a removal: the gate sees each piece as
+    ///         contract, so a later regeneration that dropped any of them fails
+    ///         <c>./build.sh Generate</c>. That is the argument for the shape — the read schema is
+    ///         the write schema with <c>readOnly</c> members rather than a <c>{Type}.Resource</c>
+    ///         the <c>200</c> points at, because moving that <c>$ref</c> is a changed scalar and
+    ///         <see cref="OpenApiCompatibility" /> refuses every one of those.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The forwards diff is a subset against its superset and is empty by
+    ///         construction</b> — the 2026-09-15 review's point. It is kept as the statement that
+    ///         the gate reads an addition as an addition, not as evidence that master's document
+    ///         was one: that verdict was <c>./build.sh Generate</c>'s over the real checked-in
+    ///         predecessor, "0 breaking change(s)", and no test can reproduce it without that file.
+    ///     </para>
     /// </remarks>
     [Fact]
     public void TheEnvelopeIsAnAdditionUnderTheCompatibilityGate() {
@@ -624,6 +633,55 @@ public sealed class OpenApiEmitterTests {
         }
 
         OpenApiCompatibility.Diff(before, now).ShouldBeEmpty();
-        OpenApiCompatibility.Diff(now, before).Select(x => x.Rule).Distinct().ShouldBe([OpenApiCompatibility.Removed]);
+
+        // The component and the members go as `removed`; the read promise OperationStatus lost goes
+        // as its own rule, because the gate compares that list as the set it is — see below.
+        var backwards = OpenApiCompatibility.Diff(now, before);
+
+        backwards.Select(x => x.Rule).Distinct().Order(StringComparer.Ordinal)
+            .ShouldBe([OpenApiCompatibility.ReadRequiredRemoved, OpenApiCompatibility.Removed]);
+        backwards.Count(x => x.Rule == OpenApiCompatibility.ReadRequiredRemoved).ShouldBe(5);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The read promise is guarded, and until the 2026-09-15 review of issue #85 it was
+    ///     not.</b> <c>x-cybercloud-read-required</c> is where the five members' "always present"
+    ///     lives, because <c>required</c> cannot say it on a schema that also validates a write —
+    ///     and the gate treated every <c>x-</c> key as prose, so a regeneration that dropped
+    ///     <c>etag</c> from the list narrowed <c>readonly etag: string</c> to optional for every
+    ///     TypeScript consumer and passed with zero breaking changes.
+    /// </summary>
+    [Fact]
+    public void DroppingAReadPromiseIsABreakingChangeAndAddingOneIsNot() {
+        var now = Emit(Fixtures.Postgres());
+        var envelope = "/components/schemas/" + OpenApiEmitter.ResourceEnvelopeSchema;
+
+        var narrowed = (JsonObject)now.DeepClone();
+        var promised = narrowed["components"]!["schemas"]![OpenApiEmitter.ResourceEnvelopeSchema]![OpenApiEmitter.ReadRequiredExtension]!.AsArray();
+        promised.Remove(promised.Single(x => DocumentReader.Text(x) == "etag"));
+
+        var breaking = OpenApiCompatibility.Diff(now, narrowed);
+
+        breaking.ShouldHaveSingleItem();
+        breaking[0].Rule.ShouldBe(OpenApiCompatibility.ReadRequiredRemoved);
+        breaking[0].JsonPointer.ShouldBe(envelope + "/" + OpenApiEmitter.ReadRequiredExtension);
+        breaking[0].Detail.ShouldContain("'etag' was promised on every read");
+
+        // The extension disappearing altogether is every name it carried, not one "removed" for the
+        // key: the gate's output has to say what the clients lose.
+        var stripped = (JsonObject)now.DeepClone();
+        stripped["components"]!["schemas"]![OpenApiEmitter.OperationStatusSchema]!.AsObject().Remove(OpenApiEmitter.ReadRequiredExtension);
+
+        OpenApiCompatibility.Diff(now, stripped)
+            .Select(x => x.Detail[1..x.Detail.IndexOf('\'', 1)])
+            .ShouldBe(["id", "percentComplete", "progress", "startTime", "status"]);
+
+        // A promise added widens the read; a client generated against the old document null-checked
+        // something that is now guaranteed, which is safe. Every other x- key is still prose.
+        var widened = (JsonObject)now.DeepClone();
+        widened["components"]!["schemas"]![OpenApiEmitter.ResourceEnvelopeSchema]![OpenApiEmitter.ReadRequiredExtension]!.AsArray().Add("location");
+        widened["paths"]![ServerPath]!["get"]!["x-cybercloud-permission"] = "Something.Else/read";
+
+        OpenApiCompatibility.Diff(now, widened).ShouldBeEmpty();
     }
 }

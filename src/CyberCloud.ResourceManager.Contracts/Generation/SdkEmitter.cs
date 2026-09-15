@@ -841,6 +841,17 @@ public static class SdkEmitter {
     ///     the hand-written half constructs a resource from a response and sets them after the
     ///     fact, and initialised because CS8618 is a warning the <c>Generated SDK compiles</c> gate
     ///     does not see.
+    ///     <para>
+    ///         ⚠ <b>Declaring the five is half of the promise, and the 2026-09-15 review found the
+    ///         other half missing.</b> The <c>[JsonPropertyName]</c> emitted on each member reaches
+    ///         no serializer — this emitter writes no <c>JsonSerializerContext</c> — so the members
+    ///         are populated only if the hand-written half reads the envelope off the response and
+    ///         assigns them. It does so through <c>ResourceEnvelope&lt;TProvisioningState&gt;</c> in
+    ///         <c>CyberCloud.Sdk</c>, and <c>CyberCloud.Sdk.Tests/StandIn/WidgetStandIn.cs</c> is
+    ///         the instance: <c>WidgetResource.Read</c> deserialises the same bytes once as the
+    ///         envelope and once as the body. EmitterContract.cs § 1's <c>{Type}Resource</c> row
+    ///         states the duty.
+    ///     </para>
     /// </remarks>
     static void AppendResource(StringBuilder built, DocumentType type, string model) {
         var envelope = DocumentReader.LeavesOf(type.Envelope);

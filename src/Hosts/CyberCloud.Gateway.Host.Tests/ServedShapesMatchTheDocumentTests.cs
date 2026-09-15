@@ -85,12 +85,28 @@ public sealed class ServedShapesMatchTheDocumentTests {
         page.RootElement.GetProperty("value").GetArrayLength().ShouldBe(1);
     }
 
+    /// <summary>
+    ///     ⚠ The state in each row is the one the real manager reports for that verb —
+    ///     <c>ResourceGrain.BeginDeleteAsync</c> sets <c>Deleting</c> before it snapshots — and the
+    ///     substitute is told to report it, so that the assertion is on a state the document's enum
+    ///     has to admit rather than on the substitute's default. Until the 2026-09-15 review of
+    ///     issue #85 all three rows asserted <c>Creating</c>, which was the double's, and a document
+    ///     whose enum lacked <c>Deleting</c> would have passed.
+    /// </summary>
     [Theory]
-    [InlineData("PUT", "put")]
-    [InlineData("PATCH", "patch")]
-    [InlineData("DELETE", "delete")]
-    public async Task AWriteValidatesAgainstThe202(string method, string operation) {
+    [InlineData("PUT", "put", ProvisioningState.Creating)]
+    [InlineData("PATCH", "patch", ProvisioningState.Updating)]
+    [InlineData("DELETE", "delete", ProvisioningState.Deleting)]
+    public async Task AWriteValidatesAgainstThe202(string method, string operation, ProvisioningState state) {
         var gateway = new GatewayHarness();
+
+        gateway.Manager.OnWrite = request => Result<WriteAccepted>.Success(
+            new() {
+                OperationId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                RetryAfterSeconds = 10,
+                Resource = ProjectedSnapshot.Of(request.Path, provisioningState: state)
+            }
+        );
 
         var response = await gateway.SendAsync(
             method,
@@ -104,7 +120,7 @@ public sealed class ServedShapesMatchTheDocumentTests {
         // The 202 carries the resource as the write left it, and the document says so — it declared
         // no content at all until issue #85.
         Conforms(response.Body, ResponseSchema(ResourceTemplate, operation, "202"));
-        response.Body.ShouldContain("\"provisioningState\":\"Creating\"");
+        response.Body.ShouldContain($"\"provisioningState\":\"{state}\"");
     }
 
     [Fact]
