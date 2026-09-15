@@ -33,7 +33,10 @@ public sealed record MembershipIndexSnapshot {
     /// <summary>
     ///     The schema version the closures were computed under, or <c>0</c> when nothing has been
     ///     written yet. A closure depends on the schema only through which relations are direct-only,
-    ///     so a slice stamped with another version is one the reader must not trust.
+    ///     so a slice stamped with another version is one the reader must not trust — and an
+    ///     unwritten one is not an empty closure either, because the tuples it should close over may
+    ///     be older than the index. Both are rebuilt from the tuples before anything derives from
+    ///     them; see <c>MembershipIndexGrain</c>.
     /// </summary>
     [Id(1)]
     public int SchemaVersion { get; init; }

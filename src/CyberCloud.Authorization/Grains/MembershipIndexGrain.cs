@@ -19,11 +19,41 @@ namespace CyberCloud.Authorization.Grains;
 ///         rather than half here and half there.
 ///     </para>
 ///     <para>
+///         ⚠ <b>An incremental change never lands on a slice that is not yet a closure under this
+///         schema.</b> A slice with <see cref="MembershipIndexState.SchemaVersion" /> <c>0</c> has
+///         never been written, and the tuples it should close over may be older than the index —
+///         an upgrade, or a restore of the forward rows without these — so a union applied to it
+///         and stamped with this version would be a closure that omits every one of them, for good:
+///         the review of issue #37 wrote a nesting edge over such a slice and the group's existing
+///         members were denied permanently. A slice stamped with another version is not a closure
+///         under this schema either. <see cref="ApplyAsync" /> therefore rebuilds the slice from
+///         the forward and reverse indexes first — the same recomputation <see cref="RebuildAsync" />
+///         offers by hand — and applies the change on top. A rebuild is a whole-slice replacement
+///         (<see cref="MembershipIndexChange.Reset" />) and is exempt, or it would rebuild itself
+///         forever. <c>MembershipIndexGrainTests.RowsThatPredateTheIndexAreWalkedAndThenBackfilledByTheFirstWriteThatTouchesThem</c>
+///         drives it over rows written without the index.
+///     </para>
+///     <para>
 ///         ⚠ <b>Nothing on the write path reads this grain's neighbours from inside it.</b>
 ///         <see cref="RebuildAsync" /> reads the forward and reverse indexes and writes its own
 ///         state only; an index grain that reached into other index grains would be a call into
 ///         an activation the store may be writing at that moment, which is the re-entrancy shape
-///         every grain in this assembly avoids.
+///         every grain in this assembly avoids. The reverse reader a rebuild is handed carries an
+///         index reader, but <see cref="MembershipIndexMaintainer.RebuildAsync" /> reads entries
+///         only and never asks it for a closure — which is what keeps the rebuild inside
+///         <see cref="ApplyAsync" /> from calling this very activation.
+///     </para>
+///     <para>
+///         ⚠ <b>A change computed under another schema version is refused, and during a rolling
+///         upgrade that bumps the version this is a write that fails at step 6.</b> docs/plan/04
+///         § Failure and upgrade has silos of version N and N+1 coexisting; a tuple write whose
+///         <c>TupleStoreGrain</c> is on an N silo computes an N change, and an index grain on an
+///         N+1 silo cannot apply it, so the caller gets this refusal after the forward and reverse
+///         halves have landed. The journal entry stays pending and <c>ITupleStoreGrain.SweepAsync</c>
+///         replays it once the fleet has converged; until then the index is behind the forward
+///         half for that tuple, which is the deny direction. The check cache rides the same window
+///         by keying on the schema version; the index has no per-version copy to key on, and
+///         docs/plan/07 § The Leopard index records the window as owed.
 ///     </para>
 /// </remarks>
 [DurableStateRationale(
@@ -67,6 +97,67 @@ public sealed class MembershipIndexGrain(
 
         var changed = false;
 
+        if (!change.Reset && state.State.SchemaVersion != change.SchemaVersion) {
+            // ⚠ Unwritten or stale — not a closure under this schema. Rebuild first; see the
+            // remarks on this class. The stamp alone makes this a change worth persisting.
+            AuthorizationMetrics.RecordIndexRebuild();
+
+            var rebuilt = await RebuildChangeAsync();
+            if (rebuilt.TryGetError(out var rebuildError)) {
+                return Result<bool>.Failure(rebuildError);
+            }
+
+            changed = Apply(rebuilt.GetValueOrThrow());
+        }
+
+        changed |= Apply(change);
+
+        if (changed) {
+            await state.WriteStateAsync();
+        }
+
+        return Result<bool>.Success(changed);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<MembershipIndexSnapshot>> RebuildAsync() {
+        var rebuilt = await RebuildChangeAsync();
+        if (rebuilt.TryGetError(out var error)) {
+            return Result<MembershipIndexSnapshot>.Failure(error);
+        }
+
+        var applied = await ApplyAsync(rebuilt.GetValueOrThrow());
+        return applied.TryGetError(out var applyError)
+            ? Result<MembershipIndexSnapshot>.Failure(applyError)
+            : Result<MembershipIndexSnapshot>.Success(Snapshot());
+    }
+
+    /// <inheritdoc />
+    public Task DeactivateAsync() {
+        DeactivateOnIdle();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Both closures recomputed from the forward and reverse indexes, as a whole-slice replacement.</summary>
+    async Task<Result<MembershipIndexChange>> RebuildChangeAsync() {
+        var maintainer = new MembershipIndexMaintainer(
+            schema,
+            new GrainRelationReader(GrainFactory, tenantId, false),
+            new GrainReverseRelationReader(
+                GrainFactory,
+                tenantId,
+                new MembershipIndexReader(schema, new GrainMembershipIndexStore(GrainFactory, tenantId))
+            ),
+            new GrainMembershipIndexStore(GrainFactory, tenantId)
+        );
+
+        return await maintainer.RebuildAsync(self, CancellationToken.None);
+    }
+
+    /// <summary>Applies a validated change to the state in memory and reports whether anything moved.</summary>
+    bool Apply(MembershipIndexChange change) {
+        var changed = false;
+
         if (change.Reset) {
             changed = state.State.Members.Count > 0 || state.State.Usersets.Count > 0;
             state.State.Members.Clear();
@@ -94,41 +185,7 @@ public sealed class MembershipIndexGrain(
             changed = true;
         }
 
-        if (changed) {
-            await state.WriteStateAsync();
-        }
-
-        return Result<bool>.Success(changed);
-    }
-
-    /// <inheritdoc />
-    public async Task<Result<MembershipIndexSnapshot>> RebuildAsync() {
-        var maintainer = new MembershipIndexMaintainer(
-            schema,
-            new GrainRelationReader(GrainFactory, tenantId, false),
-            new GrainReverseRelationReader(
-                GrainFactory,
-                tenantId,
-                new MembershipIndexReader(schema, new GrainMembershipIndexStore(GrainFactory, tenantId))
-            ),
-            new GrainMembershipIndexStore(GrainFactory, tenantId)
-        );
-
-        var rebuilt = await maintainer.RebuildAsync(self, CancellationToken.None);
-        if (rebuilt.TryGetError(out var error)) {
-            return Result<MembershipIndexSnapshot>.Failure(error);
-        }
-
-        var applied = await ApplyAsync(rebuilt.GetValueOrThrow());
-        return applied.TryGetError(out var applyError)
-            ? Result<MembershipIndexSnapshot>.Failure(applyError)
-            : Result<MembershipIndexSnapshot>.Success(Snapshot());
-    }
-
-    /// <inheritdoc />
-    public Task DeactivateAsync() {
-        DeactivateOnIdle();
-        return Task.CompletedTask;
+        return changed;
     }
 
     MembershipIndexSnapshot Snapshot() =>
@@ -203,7 +260,9 @@ public sealed class MembershipIndexGrain(
                 ErrorCode.SchemaInvalid,
                 $"The change was computed under schema version {change.SchemaVersion} and this silo runs "
                 + $"version {schema.Version}. A closure is only a closure under the schema that decided "
-                + "which relations are direct-only, so the two must agree — docs/plan/07 § The Leopard index."
+                + "which relations are direct-only, so the two must agree — docs/plan/07 § The Leopard index. "
+                + "During a rolling upgrade the tuple stays journalled and the sweeper applies it once "
+                + "every silo runs one version."
             );
         }
 

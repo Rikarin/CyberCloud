@@ -33,11 +33,16 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         evaluator denies that path too, so the two agree.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A slice stamped with another schema version is not read at all.</b> The closure
-///         depends on the schema only through which relations are direct-only, and a slice
-///         computed under another version may have followed edges this one would not. Such a
-///         slice answers "walk it" here and nothing on the listing side; the maintainer rebuilds
-///         it the next time a write touches it.
+///         ⚠ <b>A slice that was never written, or was written under another schema version, is
+///         not read at all.</b> Both come back with a <see cref="MembershipIndexSnapshot.SchemaVersion" />
+///         that is not this schema's — <c>0</c> for one no write has touched — and neither is a
+///         closure over the tuples as they stand: the first says nothing about tuples that predate
+///         the index, which is every tuple in a tenant that was upgraded to it or restored without
+///         it, and the second may have followed edges this schema would not. Reading an unwritten
+///         slice as an empty, complete closure was the review finding on issue #37: every
+///         pre-existing group membership was an authoritative <c>false</c>. Such a slice answers
+///         "walk it" here and nothing on the listing side, whose walk still hops the groups the
+///         old way; the maintainer rebuilds it from the tuples the next time a write touches it.
 ///     </para>
 /// </remarks>
 public sealed class MembershipIndexReader : IMembershipIndex {
@@ -151,7 +156,7 @@ public sealed class MembershipIndexReader : IMembershipIndex {
         return true;
     }
 
-    /// <summary>A slice as read, with <see cref="Slice.Snapshot" /> null for one stamped with another schema version.</summary>
+    /// <summary>A slice as read, with <see cref="Slice.Snapshot" /> null for one unwritten or stamped with another schema version.</summary>
     async ValueTask<Result<Slice>> SliceAsync(ObjectRef subjectObject, CancellationToken cancellationToken) {
         if (slices.TryGetValue(subjectObject, out var cached)) {
             return Result<Slice>.Success(new(cached));
@@ -164,8 +169,9 @@ public sealed class MembershipIndexReader : IMembershipIndex {
             return Result<Slice>.Failure(error);
         }
 
+        // ⚠ SchemaVersion 0 is "never written", not "written and empty" — see the remarks.
         var snapshot = read.GetValueOrThrow();
-        var usable = snapshot.SchemaVersion == 0 || snapshot.SchemaVersion == schema.Version ? snapshot : null;
+        var usable = snapshot.SchemaVersion == schema.Version ? snapshot : null;
 
         slices[subjectObject] = usable;
         return Result<Slice>.Success(new(usable));

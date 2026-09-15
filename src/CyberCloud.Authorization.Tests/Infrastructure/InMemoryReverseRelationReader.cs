@@ -23,7 +23,11 @@ namespace CyberCloud.Authorization.Tests.Infrastructure;
 ///         <see cref="InMemoryMembershipIndexStore" />, so the closure the walk reads here is the
 ///         closure the write path would have produced, not a brute force standing in for it. The
 ///         property tests therefore hold the write path to the reference evaluator on every graph
-///         they generate, as well as the walk.
+///         they generate, as well as the walk. Both readers hold the whole tuple set while the
+///         index is built, so the first write to touch a slice rebuilds it over every tuple, as
+///         the store's remarks say it must, and the writes after it are the unions;
+///         <c>MembershipIndexPropertyTests</c> is where the unions are held to the brute force
+///         one tuple at a time.
 ///     </para>
 /// </remarks>
 public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
@@ -66,6 +70,7 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
         }
 
         var maintainer = new MembershipIndexMaintainer(schema, new InMemoryRelationReader(all), this, Store);
+        Store.Rebuild = maintainer.RebuildAsync;
 
         foreach (var tuple in all) {
             var applied = maintainer.ApplyWriteAsync(tuple, CancellationToken.None).AsTask().GetAwaiter().GetResult();
@@ -75,6 +80,10 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
         }
 
         Index = new(schema, Store);
+
+        // Building the index read this reader's entries — the rebuilds of first-touched slices do.
+        // The counter is the walk's, and the walk has not started.
+        Reads = 0;
     }
 
     /// <summary>Builds a reader from the tuple grammar, closed under <see cref="CyberCloudSchema" />.</summary>
@@ -86,6 +95,20 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
     /// <param name="tuples">Tuples as <c>object#relation@subject</c>.</param>
     public static InMemoryReverseRelationReader Parse(AuthorizationSchema schema, params string[] tuples) =>
         new(schema, tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow()));
+
+    /// <summary>
+    ///     Drops a tuple's reverse entry — <c>TupleStoreGrain</c>'s step 5 of a delete, so a test
+    ///     that ran the index step of a delete through <see cref="Store" /> can list through the
+    ///     store it recomputed rather than through a fresh one.
+    /// </summary>
+    /// <param name="tuple">The tuple being deleted.</param>
+    public void Remove(RelationTuple tuple) {
+        ArgumentNullException.ThrowIfNull(tuple);
+
+        if (bySubject.TryGetValue(tuple.Subject.Object, out var entries)) {
+            entries.Remove(new() { Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation });
+        }
+    }
 
     /// <inheritdoc />
     public ValueTask<Result<IReadOnlyList<SubjectIndexEntry>>> ReadAsync(

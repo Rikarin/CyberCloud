@@ -39,6 +39,15 @@ public sealed record ListObjectsEvaluation {
     ///     denies as <c>CheckOutcome.DepthCapExceeded</c>.
     /// </summary>
     public bool DepthCapHit { get; init; }
+
+    /// <summary>
+    ///     Whether some pair was reachable only through a userset <c>Check</c> would not expand —
+    ///     the 1 001st it would have to walk on one node, or one the index answers against the
+    ///     subject — and was left unreached. As with <see cref="DepthCapHit" />, the objects
+    ///     returned are exactly the ones <c>Check</c> allows; the ones left out are the ones it
+    ///     denies, as <c>CheckOutcome.BreadthCapExceeded</c> for the first kind.
+    /// </summary>
+    public bool BreadthCapHit { get; init; }
 }
 
 /// <summary>
@@ -107,20 +116,28 @@ public sealed record ListObjectsEvaluation {
 ///         its members' closures are inside it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The breadth cap, and what it does and does not close.</b> The walk gives up when
-///         one userset it passes through has been granted on more than <c>MaxBreadth</c> objects
-///         — the reverse of <c>Check</c>'s cap on the usersets it expands at one node — and
-///         answers <see cref="ListObjectsOutcome.BreadthCapExceeded" /> with no objects, for the
-///         reason the other caps answer nothing. Usersets the index reached are not counted: an
-///         index read is not an expansion, and <c>CheckEvaluator</c> does not count an
-///         index-answered userset either, so for indexed usersets the two evaluators now agree
-///         past the cap where they used to part. What the cap does not do is mirror <c>Check</c>'s
-///         node for a userset the index does not cover: that node's fan-out is the number of
-///         usersets on one object, which the reverse walk cannot see without a forward read per
-///         reached pair, and a subject granted through the 1 001st <i>unindexed</i> userset on one
-///         object is still listed here and refused there. On <c>CyberCloudSchema</c> every userset
-///         the platform writes is indexed. The tupleset rule's fan-out — a group's resources — is
-///         the answer's size and is bounded by <c>MaxListObjects</c> instead.
+///         ⚠ <b><c>Check</c>'s breadth cap is mirrored where the walk crosses the node it caps,
+///         and the mirror is asked of the same index in the same order.</b> <c>Check</c> at
+///         <c>(o, r)</c> walks through the userset subjects of <c>o#r</c> in the order the forward
+///         index holds them, skips every one the index answers, and gives up after expanding
+///         <c>MaxBreadth</c> of the rest — so a subject that is in <c>o#r</c> only through the
+///         1 001st unanswered userset is refused. The userset-subject rule below is that node
+///         crossed backwards: reaching <c>(o2, r2)</c> from <c>U</c> is a derivation <c>Check</c>
+///         accepts only if it would expand <c>U</c> there. <see cref="CheckWouldExpandAsync" />
+///         asks the index about <c>U</c> exactly as <c>Check</c> does — a subject's slice the
+///         seed already read, so a userset the index closed costs nothing more — and only when
+///         the index declines does it read <c>o2</c>'s tuples and count, in <c>Check</c>'s order,
+///         the unanswered usersets before <c>U</c>. A derivation <c>Check</c> would cut is not
+///         reached, and <see cref="ListObjectsEvaluation.BreadthCapHit" /> says so, which is the
+///         reading <c>DepthCapHit</c> already has: the answer is still exactly what <c>Check</c>
+///         allows. What this costs is one forward read per object reached through a userset the
+///         index could not answer, and index tests only at a node with more than
+///         <c>MaxBreadth</c> userset subjects. On <c>CyberCloudSchema</c> every userset the platform
+///         writes is indexed, so a listing over a written index pays neither. The cap this
+///         replaced counted something else — the objects one userset is granted on, which is the
+///         answer's size and is bounded by <c>MaxListObjects</c> — and a group granted on more
+///         than a thousand objects anywhere in the tenant made every scoped listing by its members
+///         fall back to the per-member check the walk exists to replace.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Scoping is a bound on the walk, not only a filter on the answer.</b> With
@@ -158,11 +175,13 @@ public sealed class ListObjectsEvaluator {
     readonly Dictionary<ObjectRef, int?> below = [];
     readonly HashSet<ObjectRef> placing = [];
 
+    SubjectRef subject = new();
     ObjectRef? within;
     int? withinDepth;
 
     bool approximate;
     bool depthCapHit;
+    bool breadthCapHit;
     Error? readFailure;
     string capDetail = string.Empty;
     ListObjectsOutcome cap = ListObjectsOutcome.Complete;
@@ -173,8 +192,10 @@ public sealed class ListObjectsEvaluator {
     /// <param name="reverseReader">Where the reverse index and the Leopard index come from — the walk itself.</param>
     /// <param name="limits">The caps. <c>null</c> means <see cref="AuthorizationLimits.Default" />.</param>
     /// <param name="membershipIndex">
-    ///     The index as the verifying <see cref="CheckEvaluator" /> consults it. <c>null</c> means
-    ///     verification walks every userset.
+    ///     The index as <see cref="CheckEvaluator" /> consults it — for verification, and for the
+    ///     mirror of its breadth cap. <c>null</c> means neither has an index, and
+    ///     <c>ListObjectsGrain</c> hands in the reader the reverse reader already holds, so a
+    ///     slice is read once for all three.
     /// </param>
     public ListObjectsEvaluator(
         AuthorizationSchema schema,
@@ -217,6 +238,7 @@ public sealed class ListObjectsEvaluator {
             return Result<ListObjectsEvaluation>.Failure(invalid);
         }
 
+        this.subject = subject;
         within = request.Within;
         withinDepth = request.Within is null ? null : request.WithinDepth;
 
@@ -260,7 +282,8 @@ public sealed class ListObjectsEvaluator {
                     ReverseReads = reverse.Reads,
                     ForwardReads = forward.Reads,
                     IndexReads = reverse.IndexReads,
-                    DepthCapHit = depthCapHit
+                    DepthCapHit = depthCapHit,
+                    BreadthCapHit = breadthCapHit
                 }
             );
         }
@@ -320,7 +343,8 @@ public sealed class ListObjectsEvaluator {
                 ForwardReads = forward.Reads,
                 IndexReads = reverse.IndexReads,
                 Verified = approximate,
-                DepthCapHit = depthCapHit
+                DepthCapHit = depthCapHit,
+                BreadthCapHit = breadthCapHit
             }
         );
     }
@@ -473,9 +497,9 @@ public sealed class ListObjectsEvaluator {
             return;
         }
 
-        // Rule 2 — userset subject: every tuple o2#r2@target#name. Bounded per pair: the mirror of
-        // Check's cap on the usersets one node expands, see the remarks on this class.
-        var expansions = 0;
+        // Rule 2 — userset subject: every tuple o2#r2@target#name — unless Check, at (o2, r2),
+        // would have given up before expanding this userset. See the remarks on this class.
+        var userset = SubjectRef.Userset(target.Type, target.Id, name);
 
         foreach (var entry in entries) {
             if (!string.Equals(entry.SubjectRelation, name, StringComparison.Ordinal)
@@ -483,17 +507,13 @@ public sealed class ListObjectsEvaluator {
                 continue;
             }
 
-            if (++expansions > limits.MaxBreadth) {
-                cap = ListObjectsOutcome.BreadthCapExceeded;
-                capDetail =
-                    target
-                    + "#"
-                    + name
-                    + " is granted on more than "
-                    + limits.MaxBreadth.ToString(CultureInfo.InvariantCulture)
-                    + " objects";
+            if (!await CheckWouldExpandAsync(entry.Object, entry.Relation, userset, cancellationToken).ConfigureAwait(false)) {
+                if (readFailure is not null) {
+                    return;
+                }
 
-                return;
+                breadthCapHit = true;
+                continue;
             }
 
             Reach(entry.Object, entry.Relation, depth + 1);
@@ -529,6 +549,74 @@ public sealed class ListObjectsEvaluator {
                 Reach(entry.Object, member.Name, childDepth);
             }
         }
+    }
+
+    /// <summary>
+    ///     Whether <c>Check</c>, evaluating <c>This</c> on <paramref name="target" />#<paramref name="relation" />
+    ///     for the subject, would expand <paramref name="userset" /> rather than answer it from the
+    ///     index or give up before reaching it — <c>CheckEvaluator</c>'s direct-node loop, run over
+    ///     the same tuples in the same order, without the recursion.
+    /// </summary>
+    /// <remarks>
+    ///     <c>true</c> also when the index answers the userset, or any userset before it, in the
+    ///     subject's favour: <c>Check</c> returns <c>true</c> there without expanding anything.
+    ///     <c>false</c> when the index says the subject is not in the userset — a closure the walk
+    ///     contradicts is one a write that died before its index step left behind, and <c>Check</c>
+    ///     takes the index's word, so this does too — or when the userset sits past the
+    ///     <c>MaxBreadth</c> unanswered usersets <c>Check</c> is willing to expand, or when the
+    ///     forward index no longer holds the tuple the reverse entry came from.
+    /// </remarks>
+    async ValueTask<bool> CheckWouldExpandAsync(ObjectRef target, string relation, SubjectRef userset, CancellationToken cancellationToken) {
+        var own = await membershipIndex.TryTestMembershipAsync(userset, subject, cancellationToken).ConfigureAwait(false);
+        if (own is { } answered) {
+            return answered;
+        }
+
+        var snapshot = await ForwardAsync(target, cancellationToken).ConfigureAwait(false);
+        if (snapshot is null) {
+            return false;
+        }
+
+        var subjects = snapshot.Subjects(relation);
+        if (subjects.Contains(subject)) {
+            // A concrete match, which Check takes before it looks at any userset.
+            return true;
+        }
+
+        var candidates = subjects.Where(static x => x.IsUserset).ToList();
+        if (candidates.Count <= limits.MaxBreadth) {
+            // Check cannot run out of budget on this node, whatever the index says about the rest.
+            return candidates.Contains(userset);
+        }
+
+        // ⚠ CheckEvaluator.EvaluateDirectAsync, step for step: an answered userset costs no
+        // budget, an unanswered one costs one, and the first unanswered one past the budget is
+        // where Check stops looking — a userset the index would have answered after that point
+        // is never consulted, and neither is it here.
+        var expansions = 0;
+
+        foreach (var candidate in candidates) {
+            if (candidate == userset) {
+                return expansions < limits.MaxBreadth;
+            }
+
+            var answer = await membershipIndex.TryTestMembershipAsync(candidate, subject, cancellationToken).ConfigureAwait(false);
+            if (answer == true) {
+                return true;
+            }
+
+            if (answer is not null) {
+                continue;
+            }
+
+            if (expansions == limits.MaxBreadth) {
+                return false;
+            }
+
+            expansions++;
+        }
+
+        return false;
     }
 
     /// <summary>

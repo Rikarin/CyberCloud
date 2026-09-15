@@ -56,12 +56,21 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         recomputation, and the second application changes nothing.
 ///     </para>
 ///     <para>
-///         ⚠ <b>A slice stamped with another schema version is rebuilt before it is used.</b>
-///         Which relations are direct-only is the schema's to say, so a closure computed under
-///         version 2 is not a closure under version 3. The maintainer notices on read and
-///         recomputes that slice from the tuples first; readers refuse such a slice outright.
-///         What nobody does is find the slices a schema bump left behind that no write has since
-///         touched — see docs/plan/07 § The Leopard index for what that owes.
+///         ⚠ <b>A slice that was never written, or was written under another schema version, is
+///         rebuilt from the tuples before anything is derived from it or added to it.</b> An
+///         unwritten slice is not an empty closure: the tuples it should close over may predate
+///         the index — every tuple in a tenant upgraded to it, or restored without it — and a union
+///         computed over nothing and stamped with this schema version would be a closure that
+///         omits them for good, which is what the review of issue #37 found a nesting edge doing
+///         to a group's pre-existing members. A slice stamped with another version is not a
+///         closure under this one either, because which relations are direct-only is the
+///         schema's to say. So the two ends of an edge are rebuilt here (<see cref="CurrentAsync" />)
+///         before their usersets and members are read, and every other slice a change lands on is
+///         rebuilt by the store it lands on — <c>MembershipIndexGrain.ApplyAsync</c>, and the
+///         in-memory store the tests run — before the change is applied. That is the backfill,
+///         done lazily and one slice at a time; readers refuse such a slice until it happens. What
+///         nobody does is find the slices no write has touched — see docs/plan/07 § The Leopard
+///         index for what that owes.
 ///     </para>
 /// </remarks>
 public sealed class MembershipIndexMaintainer {
@@ -289,15 +298,19 @@ public sealed class MembershipIndexMaintainer {
         return Result<(List<SubjectRef>, List<SubjectRef>)>.Success((above, below));
     }
 
-    /// <summary>A slice as of this schema version — rebuilt first if it was written under another.</summary>
+    /// <summary>
+    ///     A slice as of this schema version — rebuilt from the tuples first if it was never
+    ///     written or was written under another version. See the remarks on this type.
+    /// </summary>
     async ValueTask<Result<MembershipIndexSnapshot>> CurrentAsync(ObjectRef subjectObject, CancellationToken cancellationToken) {
         var read = await store.ReadAsync(subjectObject, cancellationToken).ConfigureAwait(false);
         if (read.TryGetError(out var error)) {
             return Result<MembershipIndexSnapshot>.Failure(error);
         }
 
-        var snapshot = read.GetValueOrThrow();
-        if (snapshot.SchemaVersion == 0 || snapshot.SchemaVersion == schema.Version) {
+        // ⚠ SchemaVersion 0 is "never written", and an unwritten end must not be read as having
+        // nothing above or below it.
+        if (read.GetValueOrThrow().SchemaVersion == schema.Version) {
             return read;
         }
 

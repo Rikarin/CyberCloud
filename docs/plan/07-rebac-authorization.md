@@ -415,15 +415,31 @@ that shipped. Each difference is a decision, and the reasons are here.**
   `U` and everything above it from the tuples, and subtracts from the usersets of `S` and everything
   below it whatever those recomputations no longer reach. Both are idempotent, which is what lets the
   sweeper replay a half-applied change.
-- **`Check` counts an index-answered userset against no cap, and the walk grew the breadth cap it
-  was missing.** § Check step 5's "breadth 1 000 per level" counts expansions, and an index read is
-  a set test; so a subject granted through the 1 001st indexed group on one object is allowed. The
-  reverse walk gives up when one userset it passes through is granted on more than 1 000 objects —
-  `ListObjectsOutcome.BreadthCapExceeded`, no objects, the caller falls back — and does not count
-  usersets the index reached. For indexed usersets the two evaluators now agree past the caps where
-  they used to part; for a userset the index does not cover, the walk still cannot see `Check`'s node
-  and the permissive gap `ListObjectsEvaluator`'s remarks record is unchanged. On `CyberCloudSchema`
-  every userset the platform writes is indexed.
+- **`Check` counts an index-answered userset against no cap, and the walk mirrors the cap where it
+  crosses the node `Check` caps.** § Check step 5's "breadth 1 000 per level" counts expansions, and
+  an index read is a set test; so a subject granted through the 1 001st indexed group on one object
+  is allowed. The reverse walk, reaching an object through a userset, asks the same index the same
+  question `Check` asks at that node — and only when the index declines does it read the object's
+  tuples and count, in `Check`'s order, the unanswered usersets before this one. A derivation
+  `Check` would cut is not reached, the answer stays exact, and `ListObjectsEvaluation.BreadthCapHit`
+  says a pair was left out — the reading `DepthCapHit` already has. ⚠ The first cut at this (the
+  branch as reviewed) capped the transpose — the objects one userset is granted on — so a group
+  granted on more than 1 000 objects anywhere in the tenant made every scoped listing by its members
+  fall back to the per-member check; that outcome value is gone from `ListObjectsOutcome`, which is
+  back to three. On `CyberCloudSchema` every userset the platform writes is indexed, so a listing
+  over a written index pays nothing for the mirror.
+- **An unwritten slice is not an empty closure, and the backfill is lazy.** A slice's
+  `SchemaVersion` is `0` until a write touches it, and the tuples it should close over may predate
+  the index — every tuple in a tenant upgraded to it, or restored without its index rows. The
+  review of issue #37 found the reader taking such a slice as complete and answering an
+  authoritative `false` for every pre-existing group membership, and the maintainer closing a new
+  nesting edge over it into a slice, stamped current, that omitted the group's existing members for
+  good. Now `MembershipIndexReader` refuses an unwritten slice the way it refuses a stale one —
+  "walk it", and nothing on the listing side, whose walk still hops the groups — and every path
+  that would derive from or add to such a slice rebuilds it from the two indexes first:
+  `MembershipIndexMaintainer` for the two ends of an edge, `MembershipIndexGrain.ApplyAsync` for
+  every other slice a change lands on. So the first write that touches an object backfills its
+  slice, and until then the index says nothing about it.
 - **`FullyConsistent` never reads the index.** Its contract is the durable rows themselves, and a
   closure derived from them by a write that may not have seen a restore or a repair is what that mode
   exists to bypass; it walks with `NoMembershipIndex`, which is now that mode's and the in-memory
@@ -435,11 +451,18 @@ is one slice write per subject below it, in the write path, with `IndexWrites` a
 watch before deciding where the threshold goes. The **roaring bitmap** and the per-tenant subject
 dictionary are not built: a slice is a JSON list of `SubjectRef`s, so a ten-thousand-member group is
 a ten-thousand-entry row. A **tenant-wide rebuild** is not built: `IMembershipIndexGrain.RebuildAsync`
-recomputes one slice from the two other indexes, the maintainer rebuilds a slice it finds stamped with
-another `SchemaVersion` before using it, and readers refuse such a slice — but nothing enumerates a
-tenant's subject objects, so a schema bump that changes which relations are direct-only leaves
-untouched slices unindexed until a write reaches them. And the **resource-graph access column**
-§ ListObjects says the walk maintains is still maintained by nothing.
+recomputes one slice from the two other indexes, the maintainer and the grain rebuild a slice they
+find unwritten or stamped with another `SchemaVersion` before deriving from it or adding to it, and
+readers refuse such a slice — but nothing enumerates a tenant's subject objects, so both an upgrade
+that brings the index to a tenant with tuples and a schema bump that changes which relations are
+direct-only leave untouched slices unindexed, and walked, until a write reaches them. A **rolling
+upgrade that bumps the schema version** has a window the check cache does not: `MembershipIndexGrain`
+refuses a change computed under another version, so a tuple write whose store runs version N and
+whose index grain runs N+1 fails at step 6, after both halves landed; the journal keeps the entry,
+the index is behind the forward half for that tuple — the deny direction — and the sweeper applies
+it once the fleet converges. The check cache keys on the schema version and rides the window; the
+index has no per-version copy to key on. And the **resource-graph access column** § ListObjects says
+the walk maintains is still maintained by nothing.
 
 ## ListObjects — the expensive one
 

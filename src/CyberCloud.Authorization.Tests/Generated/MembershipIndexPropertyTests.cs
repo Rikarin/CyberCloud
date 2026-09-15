@@ -28,6 +28,14 @@ namespace CyberCloud.Authorization.Tests.Generated;
 ///         is the sweeper's replay, and the closure must not move.
 ///     </para>
 ///     <para>
+///         ⚠ <b>Every slice is unwritten until the first mutation reaches it, and that first
+///         mutation is a rebuild over the tuples present.</b> The store refuses to apply a union
+///         to an unwritten slice for the reason <c>MembershipIndexGrain</c> does — the tuples may
+///         predate the index — so a share of what this test holds to the brute force is the
+///         rebuild path, and the rest is the unions on slices the rebuild stamped. The counter at
+///         the end says both ran.
+///     </para>
+///     <para>
 ///         ⚠ <b>Deletes have to actually shrink something, or the recompute path is untested.</b>
 ///         The counters at the end demand that a share of deletes removed a member from some
 ///         closure — a generator whose deletes only ever touched leaves would pass the equality and
@@ -43,6 +51,8 @@ public sealed class MembershipIndexPropertyTests {
         var steps = 0;
         var shrinkingDeletes = 0;
         var nestedGraphs = 0;
+        var rebuilds = 0;
+        var unions = 0;
 
         for (var seed = 0; seed < Graphs; seed++) {
             var graph = RandomGraphs.Generate(seed);
@@ -90,6 +100,9 @@ public sealed class MembershipIndexPropertyTests {
                 steps++;
             }
 
+            rebuilds += store.Rebuilds;
+            unions += store.Unions;
+
             // ── Then everything goes, and the index must be empty ─────────────────────────────
             foreach (var tuple in present.ToList()) {
                 await ApplyDeleteAsync(graph.Schema, present, store, tuple);
@@ -106,6 +119,8 @@ public sealed class MembershipIndexPropertyTests {
         }
 
         steps.ShouldBeGreaterThan(Graphs * 10, "the mutation sequences are too short to mean anything");
+        rebuilds.ShouldBeGreaterThan(Graphs, "fewer than one slice per graph was rebuilt on first touch — the backfill path is untested");
+        unions.ShouldBeGreaterThan(Graphs, "fewer than one union per graph landed on a written slice — the incremental path is untested");
         nestedGraphs.ShouldBeGreaterThan(Graphs / 4, "fewer than a quarter of graphs nest one userset in another — the closure is barely transitive");
         shrinkingDeletes.ShouldBeGreaterThan(Graphs, "fewer than one delete per graph removed a member — recompute-on-delete is untested");
     }
@@ -147,8 +162,13 @@ public sealed class MembershipIndexPropertyTests {
         applied.IsSuccess.ShouldBeTrue(applied.Error?.Message);
     }
 
-    static MembershipIndexMaintainer Maintainer(AuthorizationSchema schema, List<RelationTuple> present, InMemoryMembershipIndexStore store) =>
-        new(schema, new InMemoryRelationReader(present), new EntriesOnlyReader(present), store);
+    static MembershipIndexMaintainer Maintainer(AuthorizationSchema schema, List<RelationTuple> present, InMemoryMembershipIndexStore store) {
+        // The store rebuilds an unwritten slice through the maintainer of the mutation that
+        // reached it — over `present`, which is the tuple set the grain's rebuild would read.
+        MembershipIndexMaintainer maintainer = new(schema, new InMemoryRelationReader(present), new EntriesOnlyReader(present), store);
+        store.Rebuild = maintainer.RebuildAsync;
+        return maintainer;
+    }
 
     // ── The brute force ───────────────────────────────────────────────────────────────────────
 

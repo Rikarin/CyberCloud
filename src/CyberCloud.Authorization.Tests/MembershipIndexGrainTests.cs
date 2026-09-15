@@ -23,7 +23,7 @@ namespace CyberCloud.Authorization.Tests;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Each test owns a tenant</b>, for the reason every other class in this suite does.
-///         Tenant indexes 600–609 are this file's.
+///         Tenant indexes 600–609 are this file's; 600–608 are taken.
 ///     </para>
 /// </remarks>
 [Collection(AuthorizationSuite.Name)]
@@ -114,13 +114,20 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
         var scope = ObjectRef.Of(ObjectTypes.ResourceGroup, "i4-rg");
         await cluster.WriteAsync(tenant, "resourceGroup:i4-rg#reader@group:i4-g#member");
 
+        // ⚠ bob first, so that i4-g's slice is a written, complete closure. A slice no write has
+        // touched is "walk it", not "empty" — and the walk would find alice in the forward half
+        // the interrupted write landed. The deny this test pins is the closure's, and it takes a
+        // closure to make it.
+        await cluster.WriteAsync(tenant, "group:i4-g#member@user:bob");
+
         cluster.Interceptor.Armed = true;
         await Should.ThrowAsync<Exception>(() => cluster.Store(tenant).WriteAsync(RelationTuple.Parse("group:i4-g#member@user:alice").GetValueOrThrow()));
 
         (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBeEmpty("the write died before step 6");
+        (await ReadAsync(tenant, ObjectRef.Of(ObjectTypes.Group, "i4-g"))).MembersOf(Relations.Member).ShouldBe([SubjectRef.Of(ObjectTypes.User, "bob")]);
 
         var before = await cluster.Check(tenant, scope).CheckAsync(Permissions.Read, Alice, Consistency.MinimizeLatency);
-        before.GetValueOrThrow().Allowed.ShouldBeFalse("the index is complete for i4-g and says alice is not in it — fail-closed");
+        before.GetValueOrThrow().Allowed.ShouldBeFalse("i4-g's closure is complete and does not hold alice — fail-closed");
 
         var swept = (await cluster.Store(tenant).SweepAsync()).GetValueOrThrow();
         swept.Repaired.ShouldBe(1);
@@ -201,6 +208,46 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
     }
 
     [Fact]
+    public async Task RowsThatPredateTheIndexAreWalkedAndThenBackfilledByTheFirstWriteThatTouchesThem() {
+        // ⚠ THE REVIEW FINDING ON ISSUE #37, against the real grains. The forward and reverse
+        // halves are written straight to their grains — the rows an upgrade to the index, or a
+        // restore without its rows, leaves behind — and no slice exists. Then a check must walk,
+        // not take an empty slice as a complete "no"; and the first write through the store that
+        // touches those objects must rebuild their slices from the rows rather than close the new
+        // edge over nothing and stamp the result current.
+        var tenant = AuthorizationCluster.Tenant(608);
+        var scope = ObjectRef.Of(ObjectTypes.ResourceGroup, "i9-rg");
+        var eng = ObjectRef.Of(ObjectTypes.Group, "i9-eng");
+        var top = ObjectRef.Of(ObjectTypes.Group, "i9-top");
+
+        await WriteHalvesAsync(tenant, "resourceGroup:i9-rg#reader@group:i9-eng#member");
+        await WriteHalvesAsync(tenant, "group:i9-eng#member@user:alice");
+
+        (await ReadAsync(tenant, eng)).SchemaVersion.ShouldBe(0, "no write through the store has touched the group");
+        (await ReadAsync(tenant, Alice.Object)).SchemaVersion.ShouldBe(0);
+
+        var walked = await cluster.Check(tenant, scope).CheckAsync(Permissions.Read, Alice, Consistency.MinimizeLatency);
+        walked.GetValueOrThrow().Allowed.ShouldBeTrue("an unwritten slice is 'walk it', and the walk finds alice in the rows");
+
+        // The first write that touches eng: a nesting edge, through the store.
+        var token = await cluster.WriteAsync(tenant, "group:i9-top#member@group:i9-eng#member");
+
+        var topSlice = await ReadAsync(tenant, top);
+        topSlice.SchemaVersion.ShouldBe(CyberCloudSchema.SchemaVersion);
+        topSlice.MembersOf(Relations.Member).ShouldBe([Member("i9-eng"), Alice], ignoreOrder: true, "the pre-existing member is in the new closure, not only the edge");
+
+        var engSlice = await ReadAsync(tenant, eng);
+        engSlice.SchemaVersion.ShouldBe(CyberCloudSchema.SchemaVersion);
+        engSlice.MembersOf(Relations.Member).ShouldBe([Alice]);
+        engSlice.UsersetsOf(Relations.Member).ShouldBe([Member("i9-top")]);
+
+        (await ReadAsync(tenant, Alice.Object)).UsersetsOf(string.Empty).ShouldBe([Member("i9-eng"), Member("i9-top")], ignoreOrder: true, "alice's slice was unwritten when the union reached it and was rebuilt first");
+
+        var after = await cluster.Check(tenant, scope).CheckAsync(Permissions.Read, Alice, Consistency.AtLeastAsFresh(token));
+        after.GetValueOrThrow().Allowed.ShouldBeTrue("the backfilled closures say what the rows say");
+    }
+
+    [Fact]
     public async Task AChangeComputedUnderAnotherSchemaVersionIsRefused() {
         var tenant = AuthorizationCluster.Tenant(607);
 
@@ -218,6 +265,19 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
         for (var i = 1; i < depth; i++) {
             await cluster.WriteAsync(tenant, $"group:{prefix}-g{i + 1}#member@group:{prefix}-g{i}#member");
         }
+    }
+
+    /// <summary>
+    ///     Writes a tuple's forward and reverse halves straight to their grains, past the store —
+    ///     the rows a tenant has before the index exists for it.
+    /// </summary>
+    async Task WriteHalvesAsync(Guid tenant, string text) {
+        var tuple = RelationTuple.Parse(text).GetValueOrThrow();
+
+        (await cluster.Objects(tenant, tuple.Object).WriteAsync(tuple.Relation, tuple.Subject)).IsSuccess.ShouldBeTrue();
+        (await cluster.SubjectIndex(tenant, tuple.Subject)
+                .AddAsync(new() { Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation }))
+            .IsSuccess.ShouldBeTrue();
     }
 
     async Task<MembershipIndexSnapshot> ReadAsync(Guid tenant, ObjectRef subjectObject) {

@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace CyberCloud.Authorization.Contracts;
 
 /// <summary>
-///     What a <c>ListObjects</c> concluded, beyond the objects it returned. ⚠ <b>Four outcomes,
+///     What a <c>ListObjects</c> concluded, beyond the objects it returned. ⚠ <b>Three outcomes,
 ///     not one, for the reason <see cref="CheckOutcome" /> has four.</b>
 /// </summary>
 /// <remarks>
@@ -14,6 +14,15 @@ namespace CyberCloud.Authorization.Contracts;
 ///     whose reach is that wide. <c>ReBacResourceAuthorizer</c> falls back to a <c>Check</c> per
 ///     member; a portal would page the resource-graph projection docs/plan/07 § ListObjects says is
 ///     the fast list.
+///     <para>
+///         ⚠ <b>There is no breadth outcome, and there was one for a day.</b> <c>Check</c>'s
+///         breadth cap is per node — the usersets it will expand on one object — and the walk
+///         mirrors it where it crosses that node by not reaching what <c>Check</c> would cut,
+///         the way it already handles the depth cap: the page stays exact and complete.
+///         A value <c>4</c> that capped something else — the objects one userset is granted on —
+///         shipped on the issue #37 branch, was reviewed out before it merged, and is burned here
+///         rather than in <c>build/wire</c> because it never crossed a released boundary.
+///     </para>
 /// </remarks>
 [Alias("CyberCloud.Authorization.ListObjectsOutcome")]
 public enum ListObjectsOutcome {
@@ -34,16 +43,7 @@ public enum ListObjectsOutcome {
     ///     returned</b>, because an object past the cap is one <c>Check</c> would deny and the ones
     ///     before it may depend on it.
     /// </summary>
-    DepthCapExceeded = 3,
-
-    /// <summary>
-    ///     One userset the walk passed through has been granted on more objects than
-    ///     <c>AuthorizationLimits.MaxBreadth</c> allows the walk to expand. <b>No objects are
-    ///     returned.</b> The bound is the walk's own fan-out per level — the mirror of the cap
-    ///     <c>Check</c> puts on the usersets it expands at one node — and usersets the Leopard index
-    ///     answers are not counted against it, because an index read is not an expansion.
-    /// </summary>
-    BreadthCapExceeded = 4
+    DepthCapExceeded = 3
 }
 
 /// <summary>
