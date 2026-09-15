@@ -133,6 +133,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IUserGrain` | `user/{userId:N}` |
 | `IManagedIdentityGrain` | `mi/{managedIdentityId:N}` — [11 § Managed identity](11-identity.md) |
 | `IEmailIndexGrain` | `idx/email/{sha256(tenantId + normalizedEmail)[..16]}` |
+| `IClientIndexGrain` | `idx/client/{sha256(tenantId + clientId)[..16]}` — [11 § Protocol](11-identity.md) |
 | `IOperationGrain` | `op/{operationId:N}` |
 | `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
 | `ITenantDirectoryGrain` | *(null tenant)* `platform/tenant-directory` |
@@ -166,8 +167,8 @@ Resource grains are keyed by GUID, not by path, so a rename is a metadata update
 migration. The path index is a separate grain, and the two are updated in one flow with the index
 claimed first — [§ Two-phase create](#two-phase-create).
 
-Three things about the two `idx/` rows that the earlier version of this table got wrong, and that
-matter because a wrong index key is a wrong *uniqueness* answer:
+Three things about the first two `idx/` rows that the earlier version of this table got wrong, and
+that matter because a wrong index key is a wrong *uniqueness* answer:
 
 - **`idx/path/` hashes `canonicalPath`, never `path`** — the ⚠ under [§ Identifiers](#identifiers)
   explains why. The table used to say `path`, which is the spelling that defeats two-phase create.
@@ -183,9 +184,16 @@ matter because a wrong index key is a wrong *uniqueness* answer:
   equivalence every mail provider implements. Non-ASCII passes through uncased, so `Ä@x` and `ä@x`
   are two entries — a *missed* duplicate, which is the safe direction to be wrong in.
 
-⚠ **`[..16]` is sixteen hex characters — 64 bits — not sixteen bytes.** Both index keys are scoped
-*within a tenant*, so the birthday bound is over one tenant's entries: at 1 000 000 resources in a
-single tenant the collision probability is ~3 × 10⁻⁸, and a tenant that large is already an outlier
+The third `idx/` row, `idx/client/`, is the email row's shape over a `client_id` — the tenant id in
+the digest for the same per-tenant reason — with one deliberate difference: **the `client_id` is not
+case-folded.** An OAuth `client_id` is an opaque identifier compared byte for byte, so folding it
+would merge two ids the protocol keeps apart; `GrainKeys.EnsureValidClientId` refuses only what a key
+cannot carry (empty, over 254, leading or trailing white space, control or white-space characters)
+and changes nothing. Its consumer is [11 § Protocol](11-identity.md).
+
+⚠ **`[..16]` is sixteen hex characters — 64 bits — not sixteen bytes.** All three index keys are
+scoped *within a tenant*, so the birthday bound is over one tenant's entries: at 1 000 000 resources
+in a single tenant the collision probability is ~3 × 10⁻⁸, and a tenant that large is already an outlier
 ([07 § ListObjects](07-rebac-authorization.md) sizes the big case at 200 000). A collision is a
 correctness bug — two names claiming one index grain — so if that margin is ever judged too thin,
 widen to 32 characters. It is a one-line change *before* anything ships and a re-key afterwards.

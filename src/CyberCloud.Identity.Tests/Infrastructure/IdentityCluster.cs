@@ -464,6 +464,14 @@ public sealed class IdentityCluster : IAsyncLifetime {
         return For(id).GetGrain<IEmailIndexGrain>(GrainKeys.EmailIndex(id, email));
     }
 
+    /// <summary>The real per-tenant client-id index — the one <c>ApplicationGrain</c> claims.</summary>
+    /// <param name="clientId">The <c>client_id</c>.</param>
+    /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
+    public IClientIndexGrain ClientIndex(string clientId, Guid? tenant = null) {
+        var id = tenant ?? Tenant;
+        return For(id).GetGrain<IClientIndexGrain>(GrainKeys.ClientIndex(id, clientId));
+    }
+
     /// <summary>
     ///     Creates a user the way sign-up does: claim the index, create the user, confirm the claim.
     /// </summary>

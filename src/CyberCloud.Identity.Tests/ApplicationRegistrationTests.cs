@@ -1,4 +1,5 @@
 using CyberCloud.Core.Contracts;
+using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Tests.Infrastructure;
 
@@ -268,6 +269,58 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
 
         created.IsSuccess.ShouldBeFalse("whitespace is not a client id");
         created.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+    }
+
+    /// <summary>Client ids <c>GrainKeys.EnsureValidClientId</c> refuses, one per rule.</summary>
+    public static TheoryData<string> ClientIdsNoKeyCanCarry =>
+        new() { "my portal", " portal", "portal\n", "por\ttal", new string('a', GrainKeys.MaxClientIdLength + 1) };
+
+    [Theory]
+    [MemberData(nameof(ClientIdsNoKeyCanCarry))]
+    public async Task AClientIdTheIndexCannotCarryIsABadRequestAndNotAThrow(string clientId) {
+        // ⚠ THE REVIEW OF #88 FOUND EVERY ONE OF THESE THROWING OUT OF THE GRAIN CALL. Validate only
+        // asked IsNullOrWhiteSpace, and GrainKeys.ClientIndex — reached one line later to build the
+        // index key — refuses internal white space, a control character and more than 254
+        // characters by throwing. A throw out of a grain is an exception at the caller rather than a
+        // Result, so a body the tenant typed turned into a 500 instead of the 400 it is.
+        var application = cluster.Application(Guid.NewGuid());
+
+        var created = await application.CreateAsync(Valid(clientId));
+
+        created.IsSuccess.ShouldBeFalse($"'{clientId}' is a client id no index key can carry");
+        created.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+        (await application.GetAsync()).IsSuccess.ShouldBeFalse("a refused create leaves nothing behind");
+    }
+
+    [Fact]
+    public async Task DeletingAnApplicationWhoseClientIdTheIndexNoLongerHoldsStillDeletesIt() {
+        // The shape docs/plan/06 § Two-phase create leaves behind when a silo dies between the write
+        // and the confirm: the registration is durable, the lease expires, and a second application
+        // takes the client id. From the outside that is an index entry that names another
+        // application while this one's state still says the id is its own — reproduced here by
+        // releasing the binding behind the first application's back, which is what an expired
+        // lease amounts to.
+        var first = cluster.Application(Guid.NewGuid());
+        var firstId = (await first.CreateAsync(Valid("orphaned-client"))).GetValueOrThrow().ApplicationId;
+        (await cluster.ClientIndex("orphaned-client").ReleaseAsync(firstId)).IsSuccess.ShouldBeTrue();
+
+        var secondId = Guid.NewGuid();
+        (await cluster.Application(secondId).CreateAsync(Valid("orphaned-client"))).IsSuccess.ShouldBeTrue();
+
+        // ⚠ THE DELETE MUST SUCCEED, AND THE SECOND APPLICATION MUST KEEP THE ID. A release refused
+        // because the index names somebody else is the index saying this registration is reachable
+        // by its GUID and nothing else; refusing the delete on top of that would leave it that way
+        // for good. Handing the id away instead would be worse — that is the second application's
+        // live registration.
+        var deleted = await first.DeleteAsync();
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+        (await first.GetAsync()).IsSuccess.ShouldBeFalse("the orphan is gone");
+
+        (await cluster.ClientIndex("orphaned-client").ResolveAsync())
+            .GetValueOrThrow()
+            .ShouldBe(secondId, "the delete of an orphan must not release a binding it does not own");
+        (await cluster.Application(secondId).GetAsync()).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]

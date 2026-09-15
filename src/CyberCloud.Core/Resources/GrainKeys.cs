@@ -307,7 +307,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-two shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The twenty-three shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -319,9 +319,11 @@ public readonly record struct GrainKey {
 ///             does not"
 ///         </i> exist — it does now, so the row is here; the twenty-first is
 ///         <see cref="ExpirySweeper" />, the thing that reads that registry on a clock, which
-///         docs/plan/07 § Azure RBAC left owed as <i>"the caller of the mechanism"</i>; and the
+///         docs/plan/07 § Azure RBAC left owed as <i>"the caller of the mechanism"</i>; the
 ///         twenty-second is <see cref="ListObjects" />, docs/plan/07 § ListObjects' grain, which
-///         that document declares as a method and never gives a key to.
+///         that document declares as a method and never gives a key to; and the twenty-third is
+///         <see cref="ClientIndex" />, the <c>client_id</c> index docs/plan/11 § Protocol names,
+///         whose row docs/plan/06 § Grain keys carries beside the other two <c>idx/</c> keys.
 ///         See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
@@ -330,12 +332,13 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-two was twenty-one, was twenty, was nineteen, and was eight before that, and
-///             the count is re-derived rather than incremented.
+///             Twenty-three was twenty-two, was twenty-one, was twenty, was nineteen, and was eight
+///             before that, and the count is re-derived rather than incremented.
 ///         </b> Counted on 2026-09-15 off
 ///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-two members, of which <see cref="ListObjects" /> is the one added
-///         that day. It goes stale the moment a
+///         is not a key — twenty-three members, of which <see cref="ListObjects" /> and
+///         <see cref="ClientIndex" /> are the two added that day; this sentence said twenty-two
+///         for a review round after the second of them landed. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
 ///         docs/plan/06's <i>table</i>, and it stopped being the size of this type eleven shapes ago.
@@ -394,7 +397,7 @@ public readonly record struct GrainKey {
 ///                 <see cref="ClientIndex" />
 ///             </term>
 ///             <description>
-///                 <c>idx/client/{sha256(tenantId + clientId)[..16]}</c> — not in docs/plan/06's table
+///                 <c>idx/client/{sha256(tenantId + clientId)[..16]}</c> — docs/plan/11 § Protocol
 ///             </description>
 ///         </item>
 ///         <item>
@@ -1247,8 +1250,8 @@ public static class GrainKeys {
     ///             The tenant id is in the digest as well as in the qualification, exactly as
     ///             <see cref="EmailIndex" /> puts it there, and for the same reason.
     ///         </b> A
-    ///         <c>client_id</c> is unique <i>within</i> a tenant — docs/plan/11 § Sign-up and tenant
-    ///         creation and <see cref="Application" />'s remarks — so <c>portal</c> in two tenants is
+    ///         <c>client_id</c> is unique <i>within</i> a tenant — docs/plan/11 § Protocol and
+    ///         <see cref="Application" />'s remarks — so <c>portal</c> in two tenants is
     ///         two distinct entries. A key read outside its qualification still says which tenant it
     ///         belongs to, which is the property that matters in a repair tool or an audit export.
     ///     </para>

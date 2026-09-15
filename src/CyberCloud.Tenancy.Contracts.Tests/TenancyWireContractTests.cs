@@ -126,6 +126,7 @@ public sealed class TenancyWireContractTests {
     /// </remarks>
     static readonly (string Type, string Alias)[] Aliases = [
         // Grain interfaces.
+        ("IClientIndexGrain", "CyberCloud.Tenancy.IClientIndexGrain"),
         ("IEmailIndexGrain", "CyberCloud.Tenancy.IEmailIndexGrain"),
         ("IQuotaGrain", "CyberCloud.Tenancy.IQuotaGrain"),
         ("IResourceGroupGrain", "CyberCloud.Tenancy.IResourceGroupGrain"),

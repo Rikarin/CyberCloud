@@ -85,8 +85,14 @@ closed toward the person's token path.** `IClientIndexGrain` (`CyberCloud.Tenanc
 the same shape as the email index — and `ApplicationGrain.CreateAsync` claims it before it writes, so
 two applications cannot share a `client_id` and an authorization request can resolve one to its
 registration without OpenIddict's own store (which degraded mode turns off). `ClientIndexTests` and
-`ApplicationRegistrationTests` pin it. **What that unblocks and what is still owed on the person's
-path** — none of it wired yet, so a person still has no token today:
+`ApplicationRegistrationTests` pin it. The index is claimed in the order [06 § Two-phase
+create](06-tenancy-and-resource-model.md) fixes, and where that document sweeps a resource orphaned
+between the write and the confirm with a reaper reminder, `ApplicationGrain` settles itself on its
+next call instead — `ApplicationGrainState.ClientIdConfirmed` is the marker, and an orphan whose
+`client_id` another application has since taken is dropped rather than left as a second registration
+naming one id. **What that unblocks and what is still owed on the person's path** — none of it wired
+yet, so a person still has no token today, and #88 stays open until the story its closing criterion
+names runs end to end:
 
 - **The `/authorize` + `/token` authorization-code + PKCE handler**, resolving the `client_id`
   through `IClientIndexGrain`, validating the `redirect_uri` against the registration, minting from

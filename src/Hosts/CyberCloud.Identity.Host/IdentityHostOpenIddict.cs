@@ -124,9 +124,10 @@ public static class IdentityHostOpenIddict {
     ///             Degraded mode, which is ADR-015's "we own the stores" applied to the protocol
     ///             layer.
     ///         </b> OpenIddict's built-in request validation goes through its core managers, and a
-    ///         manager needs a store implementation per object type — an application store with a
-    ///         <c>client_id</c> index this tenancy does not have yet, a token store, an
-    ///         authorization store. Without them the server threw <i>"The core services must be
+    ///         manager needs a store implementation per object type — an application store (the
+    ///         <c>client_id</c> index it would read through, <c>IClientIndexGrain</c>, exists now;
+    ///         the store over it does not), a token store, an authorization store. Without them the
+    ///         server threw <i>"The core services must be
     ///         registered"</i> on the first token request, which is the state this host shipped in
     ///         for as long as nothing called <c>/token</c>. The degraded mode turns those checks off
     ///         and requires a custom validator per endpoint instead; <see cref="DegradedModeHandlers" />

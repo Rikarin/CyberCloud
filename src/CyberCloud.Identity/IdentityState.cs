@@ -212,6 +212,20 @@ public sealed class ApplicationGrainState {
     /// <summary>The registration, or <see langword="null" /> before <c>CreateAsync</c>.</summary>
     [Id(0)]
     public ApplicationRegistration? Registration { get; set; }
+
+    /// <summary>
+    ///     Whether the client-id index holds a confirmed binding for <see cref="Registration" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>false</c> is the window docs/plan/06 § Two-phase create names — the registration is
+    ///     written and the index claim is not yet confirmed — made durable, so the grain can tell a
+    ///     create that finished from one whose silo died between the write and the confirm. Nothing
+    ///     sweeps an orphaned application by reminder the way a per-subscription reaper sweeps a
+    ///     resource; the grain settles itself on its next call instead, and this flag is what it
+    ///     reads to decide whether there is anything to settle.
+    /// </remarks>
+    [Id(1)]
+    public bool ClientIdConfirmed { get; set; }
 }
 
 /// <summary><c>ServicePrincipalGrain</c>'s durable state.</summary>
