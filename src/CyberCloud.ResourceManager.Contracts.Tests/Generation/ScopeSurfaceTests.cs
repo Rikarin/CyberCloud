@@ -276,4 +276,119 @@ public sealed class ScopeSurfaceTests {
 
         failure.Message.ShouldContain(CliEmitter.ScopeGroupName);
     }
+
+    // ── The two collections — #63's answer applied a second time ───────────────────────────────
+
+    /// <summary>
+    ///     ⚠
+    ///     <b>
+    ///         A scope collection is read as a collection <i>on</i> a scope, never as a fourth or
+    ///         fifth scope.
+    ///     </b>
+    /// </summary>
+    /// <remarks>
+    ///     Both collection items carry <c>x-cybercloud-scope</c>, because a surface has to find
+    ///     which kind a page holds — and that is exactly the key <c>DocumentReader.ScopesOf</c>
+    ///     reads a scope by. Without the second discriminator the subscription collection would
+    ///     read as a second <c>subscription</c> scope: <c>CliEmitter</c> writes
+    ///     <c>commands[kind]</c> twice and keeps the last, and the create verb goes with it. The
+    ///     same failure the resource collection had before <c>x-cybercloud-collection</c> existed,
+    ///     one grammar over.
+    /// </remarks>
+    [Fact]
+    public void AScopeCollectionIsReadAsACollectionOnItsScopeAndNotAsAScope() {
+        var document = Document;
+        var scopes = DocumentReader.ScopesOf(document);
+
+        scopes.Select(x => x.Kind).ShouldBe(["tenant", "subscription", "resourceGroup"]);
+
+        scopes.Single(x => x.Kind == "subscription").CollectionPath.ShouldBe(OpenApiEmitter.SubscriptionCollectionPathTemplate);
+        scopes.Single(x => x.Kind == "resourceGroup").CollectionPath.ShouldBe(OpenApiEmitter.ResourceGroupCollectionPathTemplate);
+
+        // ⚠ The tenant has none, and the absence is the contract: the only tenant a request can
+        // address is its own, so there is nothing to enumerate.
+        scopes.Single(x => x.Kind == "tenant").CollectionPath.ShouldBe("");
+
+        // The paging pair, read off the document rather than assumed — the same two a resource
+        // collection declares, so cyc's --top and --skip-token are one flag pair everywhere.
+        scopes.Single(x => x.Kind == "subscription").CollectionQuery
+            .Select(x => x.Name)
+            .ShouldBe(["$skipToken", "$top", "api-version"]);
+    }
+
+    /// <summary>
+    ///     ⚠ <b><c>cyc scope subscription list</c> and <c>cyc scope resource-group list</c> exist,
+    ///     page, and name no scope of their own.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The collection path ends on the parent, so the verb's flags are the ancestors' profile
+    ///     flags plus the paging pair — no <c>--name</c>, or the host would have a flag that binds
+    ///     to no placeholder. <c>DerivedSurfaceTests.EveryPlaceholderInAVerbsPathIsFilledByExactlyOneOfItsFlags</c>
+    ///     holds every verb to that; this pins the two verbs by name so a regression that dropped
+    ///     them would fail here rather than pass an invariant over a smaller tree.
+    /// </remarks>
+    [Fact]
+    public void ScopeListVerbsExist() {
+        var commands = CliEmitter.Emit(Document)["groups"]![CliEmitter.ScopeGroupName]!["commands"]!.AsObject();
+
+        var subscriptions = commands["subscription"]!["verbs"]!["list"]!;
+        subscriptions["path"]!.GetValue<string>().ShouldBe(OpenApiEmitter.SubscriptionCollectionPathTemplate);
+        subscriptions["method"]!.GetValue<string>().ShouldBe("GET");
+        subscriptions["paged"]!.GetValue<bool>().ShouldBeTrue();
+        subscriptions["longRunning"]!.GetValue<bool>().ShouldBeFalse();
+        subscriptions["pageFlags"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldBe(["--all"]);
+
+        Flags(subscriptions).ShouldBe(["--skip-token", "--tenant", "--top"]);
+
+        var groups = commands["resource-group"]!["verbs"]!["list"]!;
+        groups["path"]!.GetValue<string>().ShouldBe(OpenApiEmitter.ResourceGroupCollectionPathTemplate);
+        Flags(groups).ShouldBe(["--skip-token", "--subscription", "--tenant", "--top"]);
+
+        // ⚠ --subscription on the resource-group list is the profile-backed ancestor flag and not
+        // the scope's own required --name: a group's subscription is context, its name is not.
+        groups["flags"]!.AsArray()
+            .Single(x => x!["name"]!.GetValue<string>() == "--subscription")!["required"]!
+            .GetValue<bool>()
+            .ShouldBeFalse();
+
+        commands["tenant"]!["verbs"]!.AsObject().ShouldNotContainKey("list");
+
+        static List<string> Flags(JsonNode verb) =>
+            [.. verb["flags"]!.AsArray().Select(x => x!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The four SDKs page the two collections, and none of them pages a tenant list.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The .NET method is a partial declaration over <c>AsyncPageable&lt;ScopeResource&gt;</c>,
+    ///     as a resource collection's <c>GetAllAsync</c> is; the TypeScript one returns
+    ///     <c>Page&lt;ScopeResource&gt;</c> through the same <c>pageQuery</c>; Python and Go reuse
+    ///     their <c>Pager</c>. Each is asserted on the signature the caller types, because that is
+    ///     the surface the contract names.
+    /// </remarks>
+    [Fact]
+    public void EverySdkListsTheTwoCollectionsAndNoTenantList() {
+        var document = Document;
+
+        var sdk = SdkEmitter.Emit(document);
+        sdk.ShouldContain("public partial AsyncPageable<ScopeResource> ListSubscriptionsAsync(\n        string tenantId,");
+        sdk.ShouldContain("public partial AsyncPageable<ScopeResource> ListResourceGroupsAsync(\n        string tenantId,\n        string subscriptionId,");
+        sdk.ShouldContain("public const string SubscriptionCollectionPathTemplate = \"" + OpenApiEmitter.SubscriptionCollectionPathTemplate + "\";");
+        sdk.ShouldNotContain("ListTenantsAsync");
+
+        var client = TypeScriptEmitter.Emit(document)["src/client.ts"];
+        client.ShouldContain("listSubscriptions(tenantId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>>");
+        client.ShouldContain("listResourceGroups(tenantId: string, subscriptionId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>>");
+        client.ShouldNotContain("listTenants(");
+
+        var python = PythonSdkEmitter.Emit(document)["cybercloud/v2026_08_01/client.py"];
+        python.ShouldContain("def list(self, tenant_id: str, *, top: Optional[int] = None) -> Pager[ScopeResource]:");
+        python.ShouldContain("def list(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[ScopeResource]:");
+
+        var go = GoSdkEmitter.Emit(document)["api20260801/client.go"];
+        go.ShouldContain("func (c *SubscriptionsClient) List(tenantID string, options *ListOptions) *Pager[ScopeResource] {");
+        go.ShouldContain("func (c *ResourceGroupsClient) List(tenantID, subscriptionID string, options *ListOptions) *Pager[ScopeResource] {");
+        go.ShouldNotContain("func (c *TenantsClient) List(");
+    }
 }

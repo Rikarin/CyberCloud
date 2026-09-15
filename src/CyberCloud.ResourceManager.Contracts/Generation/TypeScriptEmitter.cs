@@ -999,6 +999,26 @@ public static class TypeScriptEmitter {
             .Append(PathExpression(scope.Path))
             .Append(" });\n  }\n\n");
 
+        if (scope.CollectionPath.Length > 0) {
+            // Emitted only when the document declares the collection, as a resource type's `list`
+            // is — the tenant has none. The same Page<T> and pageQuery a resource listing uses.
+            var collectionPlaceholders = DocumentReader.PlaceholdersOf(scope.CollectionPath);
+
+            built.Append("  /** One page of the ")
+                .Append(Comment(scope.DisplayPlural.ToLowerInvariant()))
+                .Append(" the caller may read. ⚠ A short page never means \"that is all there is\". */\n")
+                .Append("  list")
+                .Append(name)
+                .Append("s(")
+                .Append(string.Join(", ", collectionPlaceholders.Select(x => Camel(x) + ": string")))
+                .Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
+                .Append("page: PageRequest = {}")
+                .Append("): Promise<ApiResponse<Page<ScopeResource>>> {\n")
+                .Append("    return this.transport.send<Page<ScopeResource>>({ method: 'GET', path: ")
+                .Append(PathExpression(scope.CollectionPath))
+                .Append(", query: CyberCloudApi.pageQuery(page) });\n  }\n\n");
+        }
+
         if (!scope.Creatable) {
             // ⚠ Said in the generated file, because a class with one method reads the same whether
             // the create was decided against or forgotten.

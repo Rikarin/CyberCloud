@@ -284,19 +284,64 @@ static class ResponseBodies {
         var buffer = new System.Buffers.ArrayBufferWriter<byte>(256);
 
         using (var writer = new Utf8JsonWriter(buffer)) {
-            writer.WriteStartObject();
-            writer.WriteString("id", scope.Path);
-            writer.WriteString("name", scope.Name);
-            writer.WriteString("type", scope.Type);
+            WriteScope(writer, scope);
+        }
 
-            if (scope.Location.Length > 0) {
-                writer.WriteString("location", scope.Location);
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    ///     Renders a page of scopes — a tenant's subscriptions or a subscription's resource groups —
+    ///     in the same <c>{ "value": [ … ], "nextLink": … }</c> shape as <see cref="Collection" />.
+    /// </summary>
+    /// <param name="page">The page the scope manager built.</param>
+    /// <param name="nextLink">The absolute next-page URL, or empty when there is no next page.</param>
+    /// <remarks>
+    ///     ⚠ Each element is the same object <see cref="Scope" /> writes, member for member — one
+    ///     writer for both, for the reason <see cref="Collection" /> shares <c>WriteResource</c> —
+    ///     and <c>nextLink</c> is omitted rather than written empty. There is no <c>count</c>, and
+    ///     here the omission is the oracle again: the page holds what the caller may read, and a
+    ///     subscription id leaks more than a resource name because it is the billing boundary.
+    /// </remarks>
+    public static string ScopeCollection(ScopeListPage page, string nextLink) {
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(nextLink);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            writer.WriteStartObject();
+            writer.WritePropertyName("value");
+            writer.WriteStartArray();
+
+            foreach (var scope in page.Items) {
+                WriteScope(writer, scope);
+            }
+
+            writer.WriteEndArray();
+
+            if (nextLink.Length > 0) {
+                writer.WriteString("nextLink", nextLink);
             }
 
             writer.WriteEndObject();
         }
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>The one scope object, written into whichever document is being built.</summary>
+    static void WriteScope(Utf8JsonWriter writer, ScopeSnapshot scope) {
+        writer.WriteStartObject();
+        writer.WriteString("id", scope.Path);
+        writer.WriteString("name", scope.Name);
+        writer.WriteString("type", scope.Type);
+
+        if (scope.Location.Length > 0) {
+            writer.WriteString("location", scope.Location);
+        }
+
+        writer.WriteEndObject();
     }
 
     /// <summary>

@@ -209,6 +209,61 @@ public sealed class OpenApiEmitterTests {
             .ShouldBe("#/components/schemas/OperationStatus");
     }
 
+    /// <summary>
+    ///     ⚠
+    ///     <b>
+    ///         The two scope collections are in every document, GET only, discriminated by both
+    ///         scope extensions, and their page is one shared envelope over the one scope schema.
+    ///     </b>
+    /// </summary>
+    /// <remarks>
+    ///     #63's answer applied a second time: a collection routed by hand and left out of the
+    ///     document would put two addresses the gateway serves where the compatibility gate cannot
+    ///     see them break. Asserted on the empty registry, because the collections come from no
+    ///     provider and must not depend on one.
+    /// </remarks>
+    [Fact]
+    public void ScopeCollectionsAreEmittedWithTheScopeExtension() {
+        var document = Emit(Fixtures.Empty);
+        var paths = document["paths"]!.AsObject();
+
+        OpenApiStructure.Validate(document).ShouldBeEmpty();
+
+        foreach (var (template, kind, typeName) in new[] {
+                     (OpenApiEmitter.SubscriptionCollectionPathTemplate, "subscription", ScopeTypeNames.Subscription),
+                     (OpenApiEmitter.ResourceGroupCollectionPathTemplate, "resourceGroup", ScopeTypeNames.ResourceGroup)
+                 }) {
+            var item = paths[template]!.AsObject();
+
+            item[OpenApiEmitter.ScopeExtension]!.GetValue<string>().ShouldBe(kind);
+            item["x-cybercloud-scope-type"]!.GetValue<string>().ShouldBe(typeName);
+            item[OpenApiEmitter.ScopeCollectionExtension]!.GetValue<bool>().ShouldBeTrue();
+
+            // GET and nothing else: a scope is created by PUT at its own address, and a write here
+            // would be a second create whose id the platform chose.
+            item.Select(x => x.Key).Where(x => !x.StartsWith("x-", StringComparison.Ordinal)).Order(StringComparer.Ordinal)
+                .ShouldBe(["get", "parameters"]);
+
+            item["get"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["$ref"]!
+                .GetValue<string>()
+                .ShouldBe("#/components/schemas/" + OpenApiEmitter.ScopeListSchema);
+
+            // The paging pair, by wire name — a gateway ignores a query parameter it does not
+            // recognise, so a misspelling here is a 200 holding page one, for ever.
+            item["parameters"]!.AsArray()
+                .Select(x => x!["name"]?.GetValue<string>())
+                .Where(x => x is not null)
+                .ShouldBe(["$top", "$skipToken"]);
+        }
+
+        // One page component for both, over the one scope schema — its `value` is a Scope, and
+        // nextLink is optional so a client tests for another page rather than for "".
+        var page = document["components"]!["schemas"]![OpenApiEmitter.ScopeListSchema]!;
+        page["properties"]!["value"]!["items"]!["$ref"]!.GetValue<string>().ShouldBe("#/components/schemas/" + OpenApiEmitter.ScopeSchema);
+        page["required"]!.AsArray().Select(x => x!.GetValue<string>()).ShouldBe(["value"]);
+        page["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
+    }
+
     // ── The one error body — docs/plan/08 § Errors ─────────────────────────────────────────────
 
     [Fact]
@@ -357,15 +412,17 @@ public sealed class OpenApiEmitterTests {
 
         OpenApiStructure.Validate(document).ShouldBeEmpty();
 
-        // Two resource paths, two collection paths, /operations/{operationId} and the three scope
-        // paths. ⚠ The count was 3 until a type gained a collection path and 5 until the scope API
-        // reached the document (issue #63); it is asserted at all because a path that silently
-        // replaced another would leave the document valid and one provider missing, which is the
-        // failure `paths[key] = …` makes invisible.
-        document["paths"]!.AsObject().Count.ShouldBe(8);
+        // Two resource paths, two collection paths, /operations/{operationId}, the three scope
+        // paths and the two scope collections. ⚠ The count was 3 until a type gained a collection
+        // path, 5 until the scope API reached the document (issue #63) and 8 until the scope
+        // collections did; it is asserted at all because a path that silently replaced another
+        // would leave the document valid and one provider missing, which is the failure
+        // `paths[key] = …` makes invisible.
+        document["paths"]!.AsObject().Count.ShouldBe(10);
 
-        // ⚠ And the three that came from no provider are named, not just counted. A count of 8 is
-        // also what a document with three duplicated collection paths would have.
+        // ⚠ And the three that came from no provider are named, not just counted — and the two
+        // collections read as collections on those three, never as a fourth and fifth scope. A
+        // count of 10 is also what a document with duplicated collection paths would have.
         DocumentReader.ScopesOf(document)
             .Select(x => x.Kind)
             .ShouldBe(["tenant", "subscription", "resourceGroup"]);

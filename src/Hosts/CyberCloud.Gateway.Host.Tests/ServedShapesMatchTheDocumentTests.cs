@@ -190,6 +190,50 @@ public sealed class ServedShapesMatchTheDocumentTests {
     }
 
     /// <summary>
+    ///     ⚠ Both scope collections validate against the one <c>Scope.List</c> page, and each
+    ///     element against the one <c>Scope</c> — the same schema a by-id read validates against,
+    ///     which is what makes "an element is what a GET renders" a documented promise.
+    /// </summary>
+    [Theory]
+    [InlineData(OpenApiEmitter.SubscriptionCollectionPathTemplate, ScopeKind.Subscription)]
+    [InlineData(OpenApiEmitter.ResourceGroupCollectionPathTemplate, ScopeKind.ResourceGroup)]
+    public async Task AScopeCollectionValidatesAgainstTheScopeList200(string template, ScopeKind kind) {
+        var gateway = new GatewayHarness();
+
+        var path = template
+            .Replace("{tenantId}", GatewayHarness.TenantA.ToString("D"), StringComparison.Ordinal)
+            .Replace("{subscriptionId}", GatewayHarness.Subscription.ToString("D"), StringComparison.Ordinal);
+
+        gateway.Scopes.OnList = request => Result<ScopeListPage>.Success(
+            new() {
+                Items = [
+                    new() {
+                        Path = kind == ScopeKind.Subscription
+                            ? GatewayHarness.SubscriptionPath(GatewayHarness.TenantA)
+                            : GatewayHarness.GroupPath(GatewayHarness.TenantA),
+                        Kind = kind,
+                        Name = kind == ScopeKind.Subscription ? "Default" : "prod",
+                        Type = ScopeTypeNames.Of(kind),
+                        Location = kind == ScopeKind.Subscription ? "" : "eu-central"
+                    }
+                ],
+                Continuation = "page-2"
+            }
+        );
+
+        var response = await gateway.SendAsync("GET", path, gateway.Token(GatewayHarness.TenantA));
+
+        response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
+        Conforms(response.Body, ResponseSchema(template, "get", "200"));
+
+        // The element is validated by the page's `items`; this asserts the page had one to validate,
+        // and that the link the client follows was there to be followed.
+        using var page = JsonDocument.Parse(response.Body);
+        page.RootElement.GetProperty("value").GetArrayLength().ShouldBe(1);
+        page.RootElement.GetProperty("nextLink").GetString().ShouldNotBeNullOrEmpty();
+    }
+
+    /// <summary>
     ///     ⚠ The validator refuses what it is meant to refuse. A body carrying a member no schema
     ///     names is the exact defect of issue #85, and a check that passed it would be this whole
     ///     class printing ticks over nothing.

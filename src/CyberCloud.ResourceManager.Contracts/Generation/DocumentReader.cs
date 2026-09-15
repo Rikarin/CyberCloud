@@ -125,6 +125,16 @@ public sealed record DocumentType(
 /// <param name="Creatable">Whether the document declares a <c>PUT</c>.</param>
 /// <param name="Component">The create body's component key, or <c>""</c>.</param>
 /// <param name="Body">The create body schema, or empty.</param>
+/// <param name="CollectionPath">
+///     The URL template that lists scopes of this kind under their parent — a tenant's
+///     subscriptions, a subscription's resource groups — or <c>""</c> when the document declares
+///     none. ⚠ Empty for the tenant, and the absence is the contract: there is no tenant
+///     collection, because the only tenant a request can address is its own.
+/// </param>
+/// <param name="CollectionQuery">
+///     The query parameters the collection accepts, ordered by name — <c>$top</c> and
+///     <c>$skipToken</c> — or empty when there is no collection.
+/// </param>
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>A scope is not a <see cref="DocumentType" /> and must not be made one.</b> It has no
@@ -147,8 +157,14 @@ public sealed record DocumentScope(
     JsonObject Display,
     bool Creatable,
     string Component,
-    JsonObject Body
+    JsonObject Body,
+    string CollectionPath = "",
+    ImmutableArray<DocumentQueryParameter> CollectionQuery = default
 ) {
+    /// <summary>The collection's query parameters, never a default array.</summary>
+    public ImmutableArray<DocumentQueryParameter> CollectionQuery { get; init; } =
+        CollectionQuery.IsDefault ? [] : CollectionQuery;
+
     /// <summary>The display name, which the emitter guarantees is present.</summary>
     public string DisplayName => Text(Display["name"]);
 
@@ -342,7 +358,14 @@ public static class DocumentReader {
         var found = new List<DocumentScope>();
 
         foreach (var path in paths) {
+            // ⚠ TWO PATH SHAPES CARRY x-cybercloud-scope AND ONLY ONE OF THEM IS A SCOPE. A
+            // collection carries the extension too — it has to, so a surface can find which kind it
+            // lists — and without the second test it would read as a second scope of the same kind:
+            // CliEmitter writes commands[kind] twice and keeps the last, FormsEmitter replaces the
+            // create form with one that has no body, and DerivedSurfaces' scope count is off by
+            // two. The same split TypesOf makes on x-cybercloud-collection, for the same reason.
             if (path.Value is not JsonObject item
+                || Flag(item[ScopeCollectionExtension])
                 || Text(item[ScopeExtension]) is not { Length: > 0 } kind) {
                 continue;
             }
@@ -350,6 +373,8 @@ public static class DocumentReader {
             var component = ComponentOf(
                 item["put"]?["requestBody"]?["content"]?["application/json"]?["schema"]?["$ref"]
             );
+
+            var collection = ScopeCollectionOf(paths, document, kind);
 
             found.Add(
                 new(
@@ -362,12 +387,49 @@ public static class DocumentReader {
                     // declares the write.
                     item["put"] is JsonObject,
                     component,
-                    (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? []
+                    (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? [],
+                    collection.Path,
+                    collection.Query
                 )
             );
         }
 
         return [.. found.OrderBy(x => x.Path, StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    ///     The extension a scope collection path item carries beside <see cref="ScopeExtension" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <see cref="OpenApiEmitter.ScopeCollectionExtension" />'s, for the reason
+    ///     <see cref="ScopeExtension" /> is the emitter's.
+    /// </remarks>
+    public const string ScopeCollectionExtension = OpenApiEmitter.ScopeCollectionExtension;
+
+    /// <summary>
+    ///     The collection path declared for one scope kind and the query it accepts, or
+    ///     <c>("", [])</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Matched on the kind and the collection flag and not on a path prefix, for the reason
+    ///     <see cref="CollectionOf" /> gives: a collection's path is strictly shorter than the
+    ///     item's, and the reverse prefix test would hand the resource-group item the subscription
+    ///     collection, whose path it starts with.
+    /// </remarks>
+    static (string Path, ImmutableArray<DocumentQueryParameter> Query) ScopeCollectionOf(
+        JsonObject paths,
+        JsonObject document,
+        string kind
+    ) {
+        foreach (var path in paths) {
+            if (path.Value is JsonObject item
+                && Flag(item[ScopeCollectionExtension])
+                && string.Equals(Text(item[ScopeExtension]), kind, StringComparison.Ordinal)) {
+                return (path.Key, QueryOf(item, document));
+            }
+        }
+
+        return (string.Empty, []);
     }
 
     /// <summary>

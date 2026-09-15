@@ -131,6 +131,46 @@ public interface IScopeManager {
     Task<Result<ScopeSnapshot>> ReadAsync(ScopeRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Lists the scopes under one parent — a tenant's subscriptions, or a subscription's resource
+    ///     groups. <c>GET</c> on a scope collection path.
+    /// </summary>
+    /// <param name="request">The request, carrying the <i>parent's</i> path.</param>
+    /// <param name="cancellationToken">Cancels the listing.</param>
+    /// <returns>
+    ///     A page of the scopes the caller may read. ⚠ An empty page and a page short of
+    ///     <see cref="ScopeListRequest.PageSize" /> both mean "that is what you may see", never
+    ///     "that is all there is" — see <see cref="ScopeListPage" />. The resource-group collection
+    ///     answers <see cref="ErrorCode.ResourceNotFound" /> for a subscription the caller cannot
+    ///     read, which is the same answer as for one that does not exist, on purpose.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The resource collection's shape, applied to scopes.</b> The parent grain's own
+    ///         listing is the enumeration source — <c>ITenantGrain.ListSubscriptionsAsync</c> or
+    ///         <c>ISubscriptionGrain.ListResourceGroupsAsync</c>, the lists <see cref="CreateAsync" />
+    ///         maintains — ordered ordinally and paged by <see cref="ScopeListRequest.Continuation" />;
+    ///         then one <see cref="IScopeAuthorizer.ListReadableAsync" /> for the page, with
+    ///         <see cref="IScopeAuthorizer.AuthorizeAsync" /> once per member as the fallback when
+    ///         the engine declines; then each survivor read through the same path
+    ///         <see cref="ReadAsync" /> takes, so an element of the page is byte-for-byte what a
+    ///         <c>GET</c> of that scope renders. docs/plan/07 § ListObjects filtered by <c>read</c>
+    ///         is Azure's <c>GET /subscriptions</c> semantics: what the caller holds any role on.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The two collections differ in one check, and the difference is the oracle
+    ///         rule.</b> The subscription collection has no parent check at all: its parent is the
+    ///         tenant the token names, whose existence is not news to the caller, and a tenant owner
+    ///         is not required — a caller holding <c>reader</c> on one subscription sees that one.
+    ///         The resource-group collection checks <c>read</c> on the subscription first and
+    ///         answers the canonical <c>404</c> on refusal, because an empty page under a
+    ///         subscription the caller may not see would confirm the subscription exists, and a
+    ///         subscription id "is exactly as enumerable as a resource name and leaks more"
+    ///         (<see cref="CreateAsync" />).
+    ///     </para>
+    /// </remarks>
+    Task<Result<ScopeListPage>> ListAsync(ScopeListRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Creates a tenant. <b>The bootstrap path, and it is deliberately not reachable over HTTP.</b>
     /// </summary>
     /// <param name="request">Who the tenant is, where it lives, and who will own it.</param>
@@ -278,6 +318,36 @@ public interface IScopeAuthorizer {
     /// </remarks>
     Task<Result> AuthorizePlatformAsync(
         string permission,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    ///     Which of a scope collection's members the caller may read, asked once for the collection
+    ///     rather than once per member — docs/plan/07 § ListObjects, the half of the model
+    ///     <see cref="IResourceAuthorizer.ListReadableAsync" /> already uses for a resource
+    ///     collection, asked about subscriptions or resource groups instead.
+    /// </summary>
+    /// <param name="parent">
+    ///     The scope the members hang off — the tenant of a subscription collection, the
+    ///     subscription of a resource-group collection. It is what the engine scopes the walk to, so
+    ///     a wrong value here does not leak; it lists nothing.
+    /// </param>
+    /// <param name="candidates">The members on the page. The answer is a subset of these.</param>
+    /// <param name="readPermission">The permission a read needs.</param>
+    /// <param name="caller">Who is asking.</param>
+    /// <param name="cancellationToken">Cancels the listing.</param>
+    /// <returns>
+    ///     <see cref="ScopeCollectionVisibility.IsAnswered" /> with the readable subset, or
+    ///     <see cref="ScopeCollectionVisibility.Unanswered" /> when the engine could not answer
+    ///     within its bounds — ⚠ in which case the caller asks <see cref="AuthorizeAsync" /> once
+    ///     per member, which is the path this method exists to replace and remains the fallback.
+    ///     Never a refusal: a member the caller may not read is one that is not in the answer.
+    /// </returns>
+    Task<ScopeCollectionVisibility> ListReadableAsync(
+        ScopeId parent,
+        IReadOnlyList<ScopeId> candidates,
+        string readPermission,
         CallerContext caller,
         CancellationToken cancellationToken = default
     );
