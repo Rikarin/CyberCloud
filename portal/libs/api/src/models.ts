@@ -305,6 +305,348 @@ export interface CacheRedisListKeysResult {
   port: number;
 }
 
+/** Communication service. A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send. */
+export interface CommunicationServicesData {
+  /** The region the service is billed in. */
+  location: string;
+  /** The service's own settings. */
+  properties?: {
+    /** The locale a send is rendered in when the request names none — a BCP 47 tag such as cs-CZ. Empty falls back to en, then to whichever body the template has first. */
+    defaultLocale?: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Communication service, as the API returns it. */
+export interface CommunicationServicesResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.Communication/services';
+  readonly properties?: CommunicationServicesData['properties'];
+}
+
+/** The values /channel accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesCheckSuppressionContentChannel =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** The parameters of checkSuppression. */
+export interface CommunicationServicesCheckSuppressionContent {
+  /** The channel the address would be sent on. */
+  channel: CommunicationServicesCheckSuppressionContentChannel;
+  /** The address, in any spelling. */
+  destination: string;
+}
+
+/** What checkSuppression returns. */
+export interface CommunicationServicesCheckSuppressionResult {
+  /** The carrier's, the recipient's or the operator's words. */
+  note?: string;
+  /** Why, when it is: hardBounce, complaint, optOut or manualBlock. */
+  reason?: string;
+  /** Whether a send to it would be refused. */
+  suppressed: boolean;
+  /** When it was suppressed. */
+  suppressedAt?: string;
+}
+
+/** The parameters of listSuppressions. */
+export interface CommunicationServicesListSuppressionsContent {
+  /** One of sms, whatsapp, email, push or voice, or empty for every channel. */
+  channel?: string;
+}
+
+/** What listSuppressions returns. */
+export interface CommunicationServicesListSuppressionsResult {
+  /** How many entries are on the list. */
+  count: number;
+  /** Every entry, oldest first, one line each: '{channel} {destination} {reason} {suppressedAt}: {note}'. */
+  entries: string[];
+}
+
+/** The values /channel accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesSendContentChannel =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** The parameters of send. */
+export interface CommunicationServicesSendContent {
+  /** The template's arguments, one name=value per element. */
+  arguments?: string[];
+  /** The message text, when no template is named. */
+  body?: string;
+  /** Which channel to send on. */
+  channel: CommunicationServicesSendContentChannel;
+  /** The caller's key for this message. A retry carrying the same key returns the message already sent and calls no carrier; derive it from the thing being notified about, never from the attempt. */
+  idempotencyKey: string;
+  /** The locale to render in, or empty for the service's default. */
+  locale?: string;
+  /** The name of a template under this service to render, or empty to send body as written. WhatsApp requires one. */
+  template?: string;
+  /** Which version of the template, or 0 for the newest one a send may use. */
+  templateVersion?: number;
+  /** The recipient — an E.164 number for sms, whatsapp and voice, an address for email, a device token for push. */
+  to: string;
+}
+
+/** The values /channel accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesSendResultChannel =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** The values /status accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesSendResultStatus =
+  | 'queued'
+  | 'dispatched'
+  | 'delivered'
+  | 'failed'
+  | 'refused';
+
+/** What send returns. */
+export interface CommunicationServicesSendResult {
+  /** The channel it went on. */
+  channel: CommunicationServicesSendResultChannel;
+  /** What the carrier charged, once it said. */
+  cost?: number;
+  /** The currency of cost. */
+  currency?: string;
+  /** The last thing the platform or the carrier said about it. */
+  detail?: string;
+  /** When a carrier accepted it. Absent until then. */
+  dispatchedAt?: string;
+  /** The platform's id for the message. */
+  messageId: string;
+  /** Which carrier implementation served it. */
+  provider?: string;
+  /** The carrier's own id, once it has one. */
+  providerMessageId?: string;
+  /** When the platform accepted it. */
+  queuedAt: string;
+  /** How many delivery receipts have arrived. */
+  receiptCount: number;
+  /** Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'. */
+  receipts?: string[];
+  /** When it was delivered, failed or refused. Absent until then. */
+  settledAt?: string;
+  /** Where the message is in its life. */
+  status: CommunicationServicesSendResultStatus;
+  /** The recipient, normalized. */
+  to: string;
+}
+
+/** The parameters of status. */
+export interface CommunicationServicesStatusContent {
+  /** The key the message was sent under. */
+  idempotencyKey: string;
+}
+
+/** The values /channel accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesStatusResultChannel =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** The values /status accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesStatusResultStatus =
+  | 'queued'
+  | 'dispatched'
+  | 'delivered'
+  | 'failed'
+  | 'refused';
+
+/** What status returns. */
+export interface CommunicationServicesStatusResult {
+  /** The channel it went on. */
+  channel: CommunicationServicesStatusResultChannel;
+  /** What the carrier charged, once it said. */
+  cost?: number;
+  /** The currency of cost. */
+  currency?: string;
+  /** The last thing the platform or the carrier said about it. */
+  detail?: string;
+  /** When a carrier accepted it. Absent until then. */
+  dispatchedAt?: string;
+  /** The platform's id for the message. */
+  messageId: string;
+  /** Which carrier implementation served it. */
+  provider?: string;
+  /** The carrier's own id, once it has one. */
+  providerMessageId?: string;
+  /** When the platform accepted it. */
+  queuedAt: string;
+  /** How many delivery receipts have arrived. */
+  receiptCount: number;
+  /** Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'. */
+  receipts?: string[];
+  /** When it was delivered, failed or refused. Absent until then. */
+  settledAt?: string;
+  /** Where the message is in its life. */
+  status: CommunicationServicesStatusResultStatus;
+  /** The recipient, normalized. */
+  to: string;
+}
+
+/** The values /properties/account accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesChannelsAccount =
+  | 'platform'
+  | 'tenant';
+
+/** The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesChannelsKind =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** Communication channel. One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day. */
+export interface CommunicationServicesChannelsData {
+  /** The region the channel is billed in. */
+  location: string;
+  /** The channel's own settings. */
+  properties?: {
+    /** Whose carrier account pays. platform is marked up and needs no setup; tenant is the tenant's own contract, reached through accountRef and authRef. */
+    account?: CommunicationServicesChannelsAccount;
+    /** For account: tenant — the vault handle of the account identifier (a Twilio account SID, a Meta business account id), as path#field. */
+    accountRef?: string;
+    /** For account: tenant — the vault handle of the authenticating value (an auth token, a bearer, an access secret), as path#field. */
+    authRef?: string;
+    /** Whether sending on this channel is allowed at all. The kill switch: turning it off keeps the configuration and refuses every send. */
+    enabled?: boolean;
+    /** What one message is expected to cost, in currency, reserved before dispatch. Set it to the most expensive destination the channel sends to; an estimate that is too low turns the spend limit into a suggestion. */
+    estimatedUnitCost?: number;
+    /** Which channel this configures. One service holds one configuration per kind. */
+    kind: CommunicationServicesChannelsKind;
+    /** What the channel may send and spend per UTC day. */
+    limits?: {
+      /** ISO 4217, for the spend limit and the refusal that names it. */
+      currency?: string;
+      /** The most messages this channel dispatches in one UTC day. Zero — the default — means none: a channel with no limit is a channel that cannot send, on purpose. */
+      maxMessagesPerDay?: number;
+      /** The most this channel spends in one UTC day, in currency. Zero means none. */
+      maxSpendPerDay?: number;
+    };
+    /** Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind. */
+    provider?: string;
+    /** The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet. */
+    signingRef?: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Communication channel, as the API returns it. */
+export interface CommunicationServicesChannelsResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.Communication/services/channels';
+  readonly properties?: CommunicationServicesChannelsData['properties'];
+}
+
+/** The values /properties/channel accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesSuppressionsChannel =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** Suppression. An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources. */
+export interface CommunicationServicesSuppressionsData {
+  /** The region the suppression is billed in. */
+  location: string;
+  /** The suppression's own settings. */
+  properties?: {
+    /** The channel the address is blocked on. Suppression is per channel: an email bounce says nothing about a phone number. */
+    channel: CommunicationServicesSuppressionsChannel;
+    /** The address, in any spelling. Normalized before it is stored, so two spellings of one address are one entry. */
+    destination: string;
+    /** Why, in the tenant's words. What a support case reads. */
+    note?: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Suppression, as the API returns it. */
+export interface CommunicationServicesSuppressionsResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.Communication/services/suppressions';
+  readonly properties?: CommunicationServicesSuppressionsData['properties'];
+}
+
+/** The values /properties/channel accepts. ⚠ Closed: the write path refuses anything else. */
+export type CommunicationServicesTemplatesChannel =
+  | 'sms'
+  | 'whatsapp'
+  | 'email'
+  | 'push'
+  | 'voice';
+
+/** Message template. A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants. */
+export interface CommunicationServicesTemplatesData {
+  /** The region the template is billed in. */
+  location: string;
+  /** The template's own settings. */
+  properties?: {
+    /** The message text. A {name} is replaced by the argument of that name, left to right, and a substituted value is never re-scanned. */
+    body: string;
+    /** Which channel the body is written for. A WhatsApp body is not an email body, and the channel decides whether carrier pre-approval is consulted at all. */
+    channel: CommunicationServicesTemplatesChannel;
+    /** The BCP 47 tag the body is written in. One locale per template; a second language is a second template. */
+    locale?: string;
+    /** The placeholders a send may supply. An unsupplied one is left as written, so a tenant testing the template sees it. */
+    optionalVariables?: string[];
+    /** The subject line, for channels that have one. Placeholders are substituted here too. */
+    subject?: string;
+    /** The placeholders a send must supply. A send missing one is refused before any carrier is called. */
+    variables?: string[];
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Message template, as the API returns it. */
+export interface CommunicationServicesTemplatesResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.Communication/services/templates';
+  readonly properties?: CommunicationServicesTemplatesData['properties'];
+}
+
+/** The parameters of render. */
+export interface CommunicationServicesTemplatesRenderContent {
+  /** The arguments, one name=value per element. A missing required variable is refused, naming every missing one at once. */
+  arguments?: string[];
+}
+
+/** What render returns. */
+export interface CommunicationServicesTemplatesRenderResult {
+  /** The body, substituted. */
+  body: string;
+  /** The locale it was rendered in. */
+  locale: string;
+  /** The subject, substituted. */
+  subject: string;
+}
+
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
 export type ContainerRegistryRegistriesPreset =
   | 's1.2xlarge'

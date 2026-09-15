@@ -1782,6 +1782,76 @@ M2 · 3.5 EM. Dovecot, Postfix and Rspamd, per tenant, on five core kinds.
   a mail domain that cannot start. It is `charts/managed/mail/conformance.yaml § owed`,
   `the-images-do-not-exist`, and it is the reason no green here may be read as "managed mail works".
 
+### What the fifteenth provider measured
+
+`CyberCloud.Communication/services` and its three children — `channels`, `templates`,
+`suppressions` — [17 § `CyberCloud.Communication/services`](../../docs/plan/17-communication-and-email.md),
+M2 · 2.0 EM. The tenant-facing face of the module that had carried the platform's OTPs since before
+any provider existed, and **the first clusterless family in the catalogue**.
+
+- **⚠ "A PROVIDER WITH NO CLUSTER AT ALL" HAD BEEN PROMISED SINCE THE FIRST PROVIDER AND HAD NEVER
+  BEEN BUILT, AND THE PROMISE WAS HALF TRUE.** [08 § What the resource manager deliberately does not
+  do](../../docs/plan/08-resource-manager.md) requires the manager to work for one, and it does:
+  `ReconcileContext.Cluster` arrives `null`, the driver skips the namespace, the write path passes
+  `Guid.Empty` for the cluster, and nothing in `src/CyberCloud.ResourceManager` changed. The half that
+  was not true was the *suite*. `ProviderConformanceCase.Objects` said an empty list makes the
+  cluster-facing half skip itself, and it could skip — but everything the suite knew how to *read*
+  was `FakeKubeCluster`, so a clusterless run would have skipped every world-facing assertion and
+  reported green over a reconciler that wrote nowhere. `test/CyberCloud.Conformance` was touched for
+  the first time since `MatchContext`: `IConvergedModule` is a second kind of world — is it there,
+  does it match, remove it, corrupt it, host it — and every world-facing assertion now branches on
+  it. Two skip loudly (an admission refusal and a dropped connection are a cluster's answers), one
+  asserts *absence* rather than skipping (the seven labels, because the Labels gate reads a skipped
+  test as a failed suite), and the rest read the module around the reconciler exactly as they read
+  the fake cluster. `ProviderConformanceTests.AClusterlessTypeSuppliesTheModuleItConvergesOnto` is
+  the calibration in both directions.
+- **⚠ THE RECONCILER CANNOT LEARN ITS PARENT'S GUID, AND THE ANSWER CHANGED HOW THE MODULE IS
+  KEYED.** A `channels` resource converges onto its *service's* grain, and `ReconcileContext.Id`
+  knows the parent by name only. Asking the resource index would be a provider calling the index,
+  which [08 § The reconcile loop](../../docs/plan/08-resource-manager.md) forbids. So
+  `CommunicationGrainKeys.ResourceIdFor` derives a resource-shaped grain's id from the resource's
+  canonical *address*, and the service's own reconciler uses the same function so parent and child
+  agree by construction. The consequence turned out to be the one docs/plan/17 wants: a service
+  deleted and recreated under the same name lands on the same suppression list, so a tenant cannot
+  clear the list by recreating the service. The consequence an operator has to know is that
+  `SiloIdentityOptions.ServiceId` is now that derived id.
+- **⚠ A RECONCILER THAT CONVERGES GRAINS WANTS AN `IGrainFactory`, AND DID NOT GET ONE.** Every
+  provider's `.csproj` before this one says a reconciler is a plain singleton and not a grain, so a
+  `GetGrain` in one needs a hand-written `ForTenant` (CC1006). The module had already solved it for
+  identity: `IMessageSender` is an interface in `.Contracts`, implemented once over a grain factory
+  with the qualification in one place. `ICommunicationControlPlane` is the same shape for the control
+  plane, and the provider's implementation assembly takes no Orleans hosting package. What that cost:
+  the *gateway* now registers both seams (`AddCyberCloudCommunicationClient`), because a synchronous
+  action runs in its process and four of this family's five reach a grain. `HostCompositionTests`
+  resolves both in both hosts.
+- **⚠ THE SCHEMA MODEL HAS NO ARRAY OF OBJECTS, AND IT SHAPED THREE DECISIONS.** A template is one
+  locale; a send is an action rather than a `messages` type; a receipt is a text line. Each is argued
+  where it sits (`CommunicationTemplates`, `CommunicationServices.SendAction`,
+  `CommunicationServices.MessageResponse`) and each is the honest shape rather than a workaround —
+  the `messages` type in particular would have had a PUT whose second body the grain refuses by
+  design. The one that is genuinely owed to a later api-version is the multi-locale template.
+- **⚠ A SUPPRESSION RESOURCE MUST NEVER DOWNGRADE A COMPLAINT, AND THE GRAIN ALONE DID NOT SAY SO.**
+  `ISuppressionListGrain.SuppressAsync` updates the reason on an address already listed — correct for
+  a carrier's webhook, and a trap for a resource: PUT a manual block over a complaint, DELETE the
+  resource, and the recipient is un-unsubscribed by two ordinary operations. The reconciler reads
+  before it writes and leaves a stronger entry alone; the delete releases only a manual block and
+  *succeeds* over anything else, because a resource stuck in `Deleting` protects nothing the grain is
+  not already protecting. `SuppressionEnforcementTests` pins both halves through a real send against
+  a real list, and both were sabotage-tested: the check moved below the dispatch turned five of seven
+  red; the delete releasing regardless turned the complaint test red on the second send.
+- **⚠ THE SUITE'S LEFTOVERS MATTER FOR A MODULE AND NEVER DID FOR A CLUSTER.** Every test starts with
+  a reset that empties the fake cluster; nothing empties a grain. A type with a per-parent uniqueness
+  rule — one configuration per channel kind, owned by one resource — refused the second test's
+  resource because the first test's still held the kind. `IConvergedModule.Reset` exists for that,
+  and it is the second place this family taught the harness something no provider had had to think
+  about.
+- **What a green run proves, bounded by what does not exist:** no carrier client, so every channel
+  resolves to the module's refusing seam and a `send` refuses honestly; no `senders` type; no inbound
+  forwarding; no cluster-backed harness for the silo-kill criterion, because
+  `test/CyberCloud.Cluster.Conformance` refuses a case with no objects by name. All four are in
+  `charts/bundle/bundle.yaml § owed`, because a family with no chart has no `conformance.yaml` to
+  carry them.
+
 ## Namespaces
 
 Every namespaced object this platform applies lands in `{subscriptionId:N}-{resourceGroup}`, derived
@@ -2163,6 +2233,13 @@ authorization, quota and audit sit. `Build.Architecture` fails the build on a vi
 
 What a provider *may* reference is `module-layering.txt`, which is rule 7: `CyberCloud.Core`,
 `CyberCloud.Kubernetes`, `CyberCloud.ResourceManager` and `CyberCloud.Tenancy`, and nothing else. A
-line between two providers cannot be added there — rule 2 refuses what rule 7 would grant.
+line between two providers cannot be added there — rule 2 refuses what rule 7 would grant. ⚠ **One
+family has a fifth line, and it is the exception that says what the rule is for.**
+`CyberCloud.Providers.Communication -> CyberCloud.Communication` exists because that family's four
+resource types *are* the sending module's grains; the grains could not move into the provider, because
+`CyberCloud.Identity` reaches them for every OTP and rule 2 forbids identity reaching a provider.
+`module-layering.txt` carries the argument beside the line. It is not a precedent for a provider
+reaching a platform module because it is convenient — it is the shape a tenant-facing surface over an
+already-built module has to take, and the next one should be argued the same way in the same file.
 
 A provider is not registered in the platform bundle until it passes the conformance suite.

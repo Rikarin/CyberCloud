@@ -45,13 +45,13 @@ namespace CyberCloud.Hosts.Tests;
 /// </remarks>
 public sealed class HostCompositionTests {
     /// <summary>
-    ///     The fifteen provider namespaces both hosts must serve, spelled out rather than counted.
+    ///     The sixteen provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
     /// <remarks>
     ///     ⚠
     ///     <b>
     ///         The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
-    ///         fifteen.
+    ///         fifteen, and <c>CyberCloud.Communication</c> made it sixteen.
     ///     </b> The list is what the test reads and the list was right; the number beside it
     ///     was three behind, which is the ordinary fate of a count written next to the thing it
     ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
@@ -66,6 +66,7 @@ public sealed class HostCompositionTests {
     static readonly string[] EveryProviderNamespace = [
         "CyberCloud.Analytics",
         "CyberCloud.Cache",
+        "CyberCloud.Communication",
         "CyberCloud.ContainerRegistry",
         "CyberCloud.ContainerService",
         "CyberCloud.DBforMySQL",
@@ -102,6 +103,32 @@ public sealed class HostCompositionTests {
                 + "no specialised silo roles.\" A namespace missing here is a provider whose resource "
                 + "types nothing in production reconciles."
             );
+    }
+
+    /// <summary>
+    ///     ⚠ Both hosts hold the two seams <c>CyberCloud.Communication/services</c>' synchronous
+    ///     actions reach the sending domain through.
+    /// </summary>
+    /// <remarks>
+    ///     A synchronous action runs inside <c>ResourceManagerService</c>, which in production is the
+    ///     gateway's process — so the gateway, which hosts no grain, still has to be able to
+    ///     construct <c>IMessageSender</c> and <c>ICommunicationControlPlane</c> over its cluster
+    ///     client. <c>AddCyberCloudCommunicationClient</c> is the one line that provides them, and
+    ///     this is the test that fails when a host loses it: the handlers are registered by
+    ///     concrete type, so without the seams the first <c>send</c> would be a resolution error on
+    ///     the request path rather than anything a start-up check could see.
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsResolveTheSeamsTheCommunicationActionsHold() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        foreach (var host in new[] { gateway.Services, silo.Services }) {
+            host.GetService<CyberCloud.Communication.Contracts.IMessageSender>()
+                .ShouldNotBeNull("a host with no IMessageSender cannot serve `send` or `status`");
+            host.GetService<CyberCloud.Communication.Contracts.ICommunicationControlPlane>()
+                .ShouldNotBeNull("a host with no ICommunicationControlPlane cannot serve `checkSuppression` or `listSuppressions`");
+        }
     }
 
     /// <summary>

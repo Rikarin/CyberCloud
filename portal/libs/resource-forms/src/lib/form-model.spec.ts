@@ -28,6 +28,8 @@ describe('buildForm — one control per covered pointer', () => {
     'xui-sku',
     'xui-chip-input',
     'xui-subnet',
+    'xui-numeric-input',
+    'xui-secret-ref',
     'xui-group'
   ];
 

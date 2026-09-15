@@ -465,9 +465,17 @@ public sealed class MessageGrain(
             return Result<RenderedMessage>.Failure(noVersion);
         }
 
+        // The service's default locale fills in only when the request names none, so a caller that
+        // says which locale it wants is never overridden — CommunicationService.DefaultLocale.
+        var locale = request.Locale;
+        if (string.IsNullOrWhiteSpace(locale)) {
+            var described = await service.DescribeAsync();
+            locale = described.TryGetValue(out var snapshot) ? snapshot.DefaultLocale : string.Empty;
+        }
+
         return TemplateRenderer.Render(
             version.GetValueOrThrow(),
-            request.Locale,
+            locale,
             request.Arguments.IsDefault ? [] : request.Arguments
         );
     }

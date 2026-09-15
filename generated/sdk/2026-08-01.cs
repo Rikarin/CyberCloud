@@ -662,6 +662,970 @@ public sealed partial class ValkeyCacheCollection {
     public partial AsyncPageable<ValkeyCacheResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Communication/services.</summary>
+/// <remarks>A sending service — SMS, WhatsApp, email, push and voice through the platform's carrier accounts or the tenant's own — with per-channel spend limits, versioned templates, a suppression list honoured before every dispatch, and delivery receipts per send.</remarks>
+public sealed partial class CommunicationServiceData {
+
+    /// <summary>The region the service is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The service's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The service's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The locale a send is rendered in when the request names none — a BCP 47 tag such as cs-CZ. Empty falls back to en, then to whichever body the template has first.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("defaultLocale")]
+        public string? DefaultLocale { get; set; }
+    }
+}
+
+/// <summary>One Communication service, and the operations on it.</summary>
+public sealed partial class CommunicationServiceResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required CommunicationServiceData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<CommunicationServiceResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<CommunicationServiceResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        CommunicationServiceData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum CheckSuppressionContentChannel {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>sms</summary>
+        [JsonStringEnumMemberName("sms")]
+        Sms = 1,
+
+        /// <summary>whatsapp</summary>
+        [JsonStringEnumMemberName("whatsapp")]
+        Whatsapp = 2,
+
+        /// <summary>email</summary>
+        [JsonStringEnumMemberName("email")]
+        Email = 3,
+
+        /// <summary>push</summary>
+        [JsonStringEnumMemberName("push")]
+        Push = 4,
+
+        /// <summary>voice</summary>
+        [JsonStringEnumMemberName("voice")]
+        Voice = 5
+    }
+
+    /// <summary>The parameters of checkSuppression.</summary>
+    public sealed partial class CheckSuppressionContent {
+
+        /// <summary>The channel the address would be sent on.</summary>
+        [JsonPropertyName("channel")]
+        public required CheckSuppressionContentChannel Channel { get; set; }
+
+        /// <summary>The address, in any spelling.</summary>
+        [JsonPropertyName("destination")]
+        public required string Destination { get; set; }
+    }
+
+    /// <summary>What checkSuppression returns.</summary>
+    public sealed partial class CheckSuppressionResult {
+
+        /// <summary>The carrier's, the recipient's or the operator's words.</summary>
+        [JsonPropertyName("note")]
+        public string? Note { get; set; }
+
+        /// <summary>Why, when it is: hardBounce, complaint, optOut or manualBlock.</summary>
+        [JsonPropertyName("reason")]
+        public string? Reason { get; set; }
+
+        /// <summary>Whether a send to it would be refused.</summary>
+        [JsonPropertyName("suppressed")]
+        public required bool Suppressed { get; set; }
+
+        /// <summary>When it was suppressed.</summary>
+        [JsonPropertyName("suppressedAt")]
+        public DateTimeOffset? SuppressedAt { get; set; }
+    }
+
+    /// <summary>CheckSuppression. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<CheckSuppressionResult>> CheckSuppressionAsync(
+        CheckSuppressionContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of listSuppressions.</summary>
+    public sealed partial class ListSuppressionsContent {
+
+        /// <summary>One of sms, whatsapp, email, push or voice, or empty for every channel.</summary>
+        [JsonPropertyName("channel")]
+        public string? Channel { get; set; }
+    }
+
+    /// <summary>What listSuppressions returns.</summary>
+    public sealed partial class ListSuppressionsResult {
+
+        /// <summary>How many entries are on the list.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>Every entry, oldest first, one line each: '{channel} {destination} {reason} {suppressedAt}: {note}'.</summary>
+        [JsonPropertyName("entries")]
+        public IList<string> Entries { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListSuppressions. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListSuppressionsResult>> ListSuppressionsAsync(
+        ListSuppressionsContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum SendContentChannel {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>sms</summary>
+        [JsonStringEnumMemberName("sms")]
+        Sms = 1,
+
+        /// <summary>whatsapp</summary>
+        [JsonStringEnumMemberName("whatsapp")]
+        Whatsapp = 2,
+
+        /// <summary>email</summary>
+        [JsonStringEnumMemberName("email")]
+        Email = 3,
+
+        /// <summary>push</summary>
+        [JsonStringEnumMemberName("push")]
+        Push = 4,
+
+        /// <summary>voice</summary>
+        [JsonStringEnumMemberName("voice")]
+        Voice = 5
+    }
+
+    /// <summary>The parameters of send.</summary>
+    public sealed partial class SendContent {
+
+        /// <summary>The template's arguments, one name=value per element.</summary>
+        [JsonPropertyName("arguments")]
+        public IList<string> Arguments { get; set; } = new List<string>();
+
+        /// <summary>The message text, when no template is named.</summary>
+        [JsonPropertyName("body")]
+        public string? Body { get; set; }
+
+        /// <summary>Which channel to send on.</summary>
+        [JsonPropertyName("channel")]
+        public required SendContentChannel Channel { get; set; }
+
+        /// <summary>The caller's key for this message. A retry carrying the same key returns the message already sent and calls no carrier; derive it from the thing being notified about, never from the attempt.</summary>
+        [JsonPropertyName("idempotencyKey")]
+        public required string IdempotencyKey { get; set; }
+
+        /// <summary>The locale to render in, or empty for the service's default.</summary>
+        [JsonPropertyName("locale")]
+        public string? Locale { get; set; }
+
+        /// <summary>The name of a template under this service to render, or empty to send body as written. WhatsApp requires one.</summary>
+        [JsonPropertyName("template")]
+        public string? Template { get; set; }
+
+        /// <summary>Which version of the template, or 0 for the newest one a send may use.</summary>
+        [JsonPropertyName("templateVersion")]
+        public long? TemplateVersion { get; set; }
+
+        /// <summary>The recipient — an E.164 number for sms, whatsapp and voice, an address for email, a device token for push.</summary>
+        [JsonPropertyName("to")]
+        public required string To { get; set; }
+    }
+
+    /// <summary>The values /channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum SendResultChannel {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>sms</summary>
+        [JsonStringEnumMemberName("sms")]
+        Sms = 1,
+
+        /// <summary>whatsapp</summary>
+        [JsonStringEnumMemberName("whatsapp")]
+        Whatsapp = 2,
+
+        /// <summary>email</summary>
+        [JsonStringEnumMemberName("email")]
+        Email = 3,
+
+        /// <summary>push</summary>
+        [JsonStringEnumMemberName("push")]
+        Push = 4,
+
+        /// <summary>voice</summary>
+        [JsonStringEnumMemberName("voice")]
+        Voice = 5
+    }
+
+    /// <summary>The values /status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum SendResultStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>queued</summary>
+        [JsonStringEnumMemberName("queued")]
+        Queued = 1,
+
+        /// <summary>dispatched</summary>
+        [JsonStringEnumMemberName("dispatched")]
+        Dispatched = 2,
+
+        /// <summary>delivered</summary>
+        [JsonStringEnumMemberName("delivered")]
+        Delivered = 3,
+
+        /// <summary>failed</summary>
+        [JsonStringEnumMemberName("failed")]
+        Failed = 4,
+
+        /// <summary>refused</summary>
+        [JsonStringEnumMemberName("refused")]
+        Refused = 5
+    }
+
+    /// <summary>What send returns.</summary>
+    public sealed partial class SendResult {
+
+        /// <summary>The channel it went on.</summary>
+        [JsonPropertyName("channel")]
+        public required SendResultChannel Channel { get; set; }
+
+        /// <summary>What the carrier charged, once it said.</summary>
+        [JsonPropertyName("cost")]
+        public double? Cost { get; set; }
+
+        /// <summary>The currency of cost.</summary>
+        [JsonPropertyName("currency")]
+        public string? Currency { get; set; }
+
+        /// <summary>The last thing the platform or the carrier said about it.</summary>
+        [JsonPropertyName("detail")]
+        public string? Detail { get; set; }
+
+        /// <summary>When a carrier accepted it. Absent until then.</summary>
+        [JsonPropertyName("dispatchedAt")]
+        public DateTimeOffset? DispatchedAt { get; set; }
+
+        /// <summary>The platform's id for the message.</summary>
+        [JsonPropertyName("messageId")]
+        public required Guid MessageId { get; set; }
+
+        /// <summary>Which carrier implementation served it.</summary>
+        [JsonPropertyName("provider")]
+        public string? Provider { get; set; }
+
+        /// <summary>The carrier's own id, once it has one.</summary>
+        [JsonPropertyName("providerMessageId")]
+        public string? ProviderMessageId { get; set; }
+
+        /// <summary>When the platform accepted it.</summary>
+        [JsonPropertyName("queuedAt")]
+        public required DateTimeOffset QueuedAt { get; set; }
+
+        /// <summary>How many delivery receipts have arrived.</summary>
+        [JsonPropertyName("receiptCount")]
+        public required long ReceiptCount { get; set; }
+
+        /// <summary>Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'.</summary>
+        [JsonPropertyName("receipts")]
+        public IList<string> Receipts { get; set; } = new List<string>();
+
+        /// <summary>When it was delivered, failed or refused. Absent until then.</summary>
+        [JsonPropertyName("settledAt")]
+        public DateTimeOffset? SettledAt { get; set; }
+
+        /// <summary>Where the message is in its life.</summary>
+        [JsonPropertyName("status")]
+        public required SendResultStatus Status { get; set; }
+
+        /// <summary>The recipient, normalized.</summary>
+        [JsonPropertyName("to")]
+        public required string To { get; set; }
+    }
+
+    /// <summary>Send. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<SendResult>> SendAsync(
+        SendContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of status.</summary>
+    public sealed partial class StatusContent {
+
+        /// <summary>The key the message was sent under.</summary>
+        [JsonPropertyName("idempotencyKey")]
+        public required string IdempotencyKey { get; set; }
+    }
+
+    /// <summary>The values /channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum StatusResultChannel {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>sms</summary>
+        [JsonStringEnumMemberName("sms")]
+        Sms = 1,
+
+        /// <summary>whatsapp</summary>
+        [JsonStringEnumMemberName("whatsapp")]
+        Whatsapp = 2,
+
+        /// <summary>email</summary>
+        [JsonStringEnumMemberName("email")]
+        Email = 3,
+
+        /// <summary>push</summary>
+        [JsonStringEnumMemberName("push")]
+        Push = 4,
+
+        /// <summary>voice</summary>
+        [JsonStringEnumMemberName("voice")]
+        Voice = 5
+    }
+
+    /// <summary>The values /status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum StatusResultStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>queued</summary>
+        [JsonStringEnumMemberName("queued")]
+        Queued = 1,
+
+        /// <summary>dispatched</summary>
+        [JsonStringEnumMemberName("dispatched")]
+        Dispatched = 2,
+
+        /// <summary>delivered</summary>
+        [JsonStringEnumMemberName("delivered")]
+        Delivered = 3,
+
+        /// <summary>failed</summary>
+        [JsonStringEnumMemberName("failed")]
+        Failed = 4,
+
+        /// <summary>refused</summary>
+        [JsonStringEnumMemberName("refused")]
+        Refused = 5
+    }
+
+    /// <summary>What status returns.</summary>
+    public sealed partial class StatusResult {
+
+        /// <summary>The channel it went on.</summary>
+        [JsonPropertyName("channel")]
+        public required StatusResultChannel Channel { get; set; }
+
+        /// <summary>What the carrier charged, once it said.</summary>
+        [JsonPropertyName("cost")]
+        public double? Cost { get; set; }
+
+        /// <summary>The currency of cost.</summary>
+        [JsonPropertyName("currency")]
+        public string? Currency { get; set; }
+
+        /// <summary>The last thing the platform or the carrier said about it.</summary>
+        [JsonPropertyName("detail")]
+        public string? Detail { get; set; }
+
+        /// <summary>When a carrier accepted it. Absent until then.</summary>
+        [JsonPropertyName("dispatchedAt")]
+        public DateTimeOffset? DispatchedAt { get; set; }
+
+        /// <summary>The platform's id for the message.</summary>
+        [JsonPropertyName("messageId")]
+        public required Guid MessageId { get; set; }
+
+        /// <summary>Which carrier implementation served it.</summary>
+        [JsonPropertyName("provider")]
+        public string? Provider { get; set; }
+
+        /// <summary>The carrier's own id, once it has one.</summary>
+        [JsonPropertyName("providerMessageId")]
+        public string? ProviderMessageId { get; set; }
+
+        /// <summary>When the platform accepted it.</summary>
+        [JsonPropertyName("queuedAt")]
+        public required DateTimeOffset QueuedAt { get; set; }
+
+        /// <summary>How many delivery receipts have arrived.</summary>
+        [JsonPropertyName("receiptCount")]
+        public required long ReceiptCount { get; set; }
+
+        /// <summary>Every delivery receipt, oldest first, one line each: '{occurredAt} {status} {providerStatus}: {detail}'.</summary>
+        [JsonPropertyName("receipts")]
+        public IList<string> Receipts { get; set; } = new List<string>();
+
+        /// <summary>When it was delivered, failed or refused. Absent until then.</summary>
+        [JsonPropertyName("settledAt")]
+        public DateTimeOffset? SettledAt { get; set; }
+
+        /// <summary>Where the message is in its life.</summary>
+        [JsonPropertyName("status")]
+        public required StatusResultStatus Status { get; set; }
+
+        /// <summary>The recipient, normalized.</summary>
+        [JsonPropertyName("to")]
+        public required string To { get; set; }
+    }
+
+    /// <summary>Status. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<StatusResult>> StatusAsync(
+        StatusContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Communication services in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class CommunicationServiceCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Communication/services";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Communication service.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<CommunicationServiceResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        CommunicationServiceData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Communication service by name.</summary>
+    public partial Task<Response<CommunicationServiceResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Communication services in this group, paged.</summary>
+    public partial AsyncPageable<CommunicationServiceResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/account accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum CommunicationChannelAccount {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>platform</summary>
+    [JsonStringEnumMemberName("platform")]
+    Platform = 1,
+
+    /// <summary>tenant</summary>
+    [JsonStringEnumMemberName("tenant")]
+    Tenant = 2
+}
+
+/// <summary>The values /properties/kind accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum CommunicationChannelKind {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>sms</summary>
+    [JsonStringEnumMemberName("sms")]
+    Sms = 1,
+
+    /// <summary>whatsapp</summary>
+    [JsonStringEnumMemberName("whatsapp")]
+    Whatsapp = 2,
+
+    /// <summary>email</summary>
+    [JsonStringEnumMemberName("email")]
+    Email = 3,
+
+    /// <summary>push</summary>
+    [JsonStringEnumMemberName("push")]
+    Push = 4,
+
+    /// <summary>voice</summary>
+    [JsonStringEnumMemberName("voice")]
+    Voice = 5
+}
+
+/// <summary>The body of a CyberCloud.Communication/services/channels.</summary>
+/// <remarks>One channel a service sends on: which carrier, whose account pays, and what it may send and spend per day.</remarks>
+public sealed partial class CommunicationChannelData {
+
+    /// <summary>The region the channel is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The channel's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The channel's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Whose carrier account pays. platform is marked up and needs no setup; tenant is the tenant's own contract, reached through accountRef and authRef.</summary>
+        /// <remarks>Defaults to "platform" when left unset.</remarks>
+        [JsonPropertyName("account")]
+        public CommunicationChannelAccount? Account { get; set; }
+
+        /// <summary>For account: tenant — the vault handle of the account identifier (a Twilio account SID, a Meta business account id), as path#field.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("accountRef")]
+        public string? AccountRef { get; set; }
+
+        /// <summary>For account: tenant — the vault handle of the authenticating value (an auth token, a bearer, an access secret), as path#field.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("authRef")]
+        public string? AuthRef { get; set; }
+
+        /// <summary>Whether sending on this channel is allowed at all. The kill switch: turning it off keeps the configuration and refuses every send.</summary>
+        /// <remarks>Defaults to true when left unset.</remarks>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>What one message is expected to cost, in currency, reserved before dispatch. Set it to the most expensive destination the channel sends to; an estimate that is too low turns the spend limit into a suggestion.</summary>
+        /// <remarks>Defaults to 0 when left unset.</remarks>
+        [JsonPropertyName("estimatedUnitCost")]
+        public double? EstimatedUnitCost { get; set; }
+
+        /// <summary>Which channel this configures. One service holds one configuration per kind.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("kind")]
+        public required CommunicationChannelKind Kind { get; set; }
+
+        /// <summary>What the channel may send and spend per UTC day.</summary>
+        [JsonPropertyName("limits")]
+        public LimitsData? Limits { get; set; }
+
+        /// <summary>Which carrier implementation serves it — twilio, meta-cloud, ses — or empty for the one the platform registers for the kind.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("provider")]
+        public string? Provider { get; set; }
+
+        /// <summary>The vault handle of the carrier's webhook-signing value, when it signs its callbacks. A receipt that cannot be verified is data from the internet.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("signingRef")]
+        public string? SigningRef { get; set; }
+
+        /// <summary>What the channel may send and spend per UTC day.</summary>
+        public sealed partial class LimitsData {
+
+            /// <summary>ISO 4217, for the spend limit and the refusal that names it.</summary>
+            /// <remarks>Defaults to "EUR" when left unset.</remarks>
+            [JsonPropertyName("currency")]
+            public string? Currency { get; set; }
+
+            /// <summary>The most messages this channel dispatches in one UTC day. Zero — the default — means none: a channel with no limit is a channel that cannot send, on purpose.</summary>
+            /// <remarks>Defaults to 0 when left unset.</remarks>
+            [JsonPropertyName("maxMessagesPerDay")]
+            public long? MaxMessagesPerDay { get; set; }
+
+            /// <summary>The most this channel spends in one UTC day, in currency. Zero means none.</summary>
+            /// <remarks>Defaults to 0 when left unset.</remarks>
+            [JsonPropertyName("maxSpendPerDay")]
+            public double? MaxSpendPerDay { get; set; }
+        }
+    }
+}
+
+/// <summary>One Communication channel, and the operations on it.</summary>
+public sealed partial class CommunicationChannelResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required CommunicationChannelData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<CommunicationChannelResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<CommunicationChannelResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        CommunicationChannelData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Communication channels in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class CommunicationChannelCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Communication/services/channels";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/channels";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Communication channel.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<CommunicationChannelResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string servicesName, string name,
+        CommunicationChannelData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Communication channel by name.</summary>
+    public partial Task<Response<CommunicationChannelResource>> GetAsync(string servicesName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Communication channels in one parent, paged.</summary>
+    public partial AsyncPageable<CommunicationChannelResource> GetAllAsync(string servicesName, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum SuppressionChannel {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>sms</summary>
+    [JsonStringEnumMemberName("sms")]
+    Sms = 1,
+
+    /// <summary>whatsapp</summary>
+    [JsonStringEnumMemberName("whatsapp")]
+    Whatsapp = 2,
+
+    /// <summary>email</summary>
+    [JsonStringEnumMemberName("email")]
+    Email = 3,
+
+    /// <summary>push</summary>
+    [JsonStringEnumMemberName("push")]
+    Push = 4,
+
+    /// <summary>voice</summary>
+    [JsonStringEnumMemberName("voice")]
+    Voice = 5
+}
+
+/// <summary>The body of a CyberCloud.Communication/services/suppressions.</summary>
+/// <remarks>An address a service must never send to, placed by the tenant. Bounces, complaints and opt-outs join the same list on their own and are not resources.</remarks>
+public sealed partial class SuppressionData {
+
+    /// <summary>The region the suppression is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The suppression's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The suppression's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The channel the address is blocked on. Suppression is per channel: an email bounce says nothing about a phone number.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("channel")]
+        public required SuppressionChannel Channel { get; set; }
+
+        /// <summary>The address, in any spelling. Normalized before it is stored, so two spellings of one address are one entry.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("destination")]
+        public required string Destination { get; set; }
+
+        /// <summary>Why, in the tenant's words. What a support case reads.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("note")]
+        public string? Note { get; set; }
+    }
+}
+
+/// <summary>One Suppression, and the operations on it.</summary>
+public sealed partial class SuppressionResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required SuppressionData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<SuppressionResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<SuppressionResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        SuppressionData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Suppressions in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class SuppressionCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Communication/services/suppressions";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/suppressions";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Suppression.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<SuppressionResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string servicesName, string name,
+        SuppressionData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Suppression by name.</summary>
+    public partial Task<Response<SuppressionResource>> GetAsync(string servicesName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Suppressions in one parent, paged.</summary>
+    public partial AsyncPageable<SuppressionResource> GetAllAsync(string servicesName, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MessageTemplateChannel {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>sms</summary>
+    [JsonStringEnumMemberName("sms")]
+    Sms = 1,
+
+    /// <summary>whatsapp</summary>
+    [JsonStringEnumMemberName("whatsapp")]
+    Whatsapp = 2,
+
+    /// <summary>email</summary>
+    [JsonStringEnumMemberName("email")]
+    Email = 3,
+
+    /// <summary>push</summary>
+    [JsonStringEnumMemberName("push")]
+    Push = 4,
+
+    /// <summary>voice</summary>
+    [JsonStringEnumMemberName("voice")]
+    Voice = 5
+}
+
+/// <summary>The body of a CyberCloud.Communication/services/templates.</summary>
+/// <remarks>A named, versioned message body with typed variables. Every change appends a version; a send names the template and the version it wants.</remarks>
+public sealed partial class MessageTemplateData {
+
+    /// <summary>The region the template is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The template's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The template's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The message text. A {name} is replaced by the argument of that name, left to right, and a substituted value is never re-scanned.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("body")]
+        public required string Body { get; set; }
+
+        /// <summary>Which channel the body is written for. A WhatsApp body is not an email body, and the channel decides whether carrier pre-approval is consulted at all.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("channel")]
+        public required MessageTemplateChannel Channel { get; set; }
+
+        /// <summary>The BCP 47 tag the body is written in. One locale per template; a second language is a second template.</summary>
+        /// <remarks>Defaults to "en" when left unset.</remarks>
+        [JsonPropertyName("locale")]
+        public string? Locale { get; set; }
+
+        /// <summary>The placeholders a send may supply. An unsupplied one is left as written, so a tenant testing the template sees it.</summary>
+        [JsonPropertyName("optionalVariables")]
+        public IList<string> OptionalVariables { get; set; } = new List<string>();
+
+        /// <summary>The subject line, for channels that have one. Placeholders are substituted here too.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("subject")]
+        public string? Subject { get; set; }
+
+        /// <summary>The placeholders a send must supply. A send missing one is refused before any carrier is called.</summary>
+        [JsonPropertyName("variables")]
+        public IList<string> Variables { get; set; } = new List<string>();
+    }
+}
+
+/// <summary>One Message template, and the operations on it.</summary>
+public sealed partial class MessageTemplateResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required MessageTemplateData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<MessageTemplateResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<MessageTemplateResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        MessageTemplateData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of render.</summary>
+    public sealed partial class RenderContent {
+
+        /// <summary>The arguments, one name=value per element. A missing required variable is refused, naming every missing one at once.</summary>
+        [JsonPropertyName("arguments")]
+        public IList<string> Arguments { get; set; } = new List<string>();
+    }
+
+    /// <summary>What render returns.</summary>
+    public sealed partial class RenderResult {
+
+        /// <summary>The body, substituted.</summary>
+        [JsonPropertyName("body")]
+        public required string Body { get; set; }
+
+        /// <summary>The locale it was rendered in.</summary>
+        [JsonPropertyName("locale")]
+        public required string Locale { get; set; }
+
+        /// <summary>The subject, substituted.</summary>
+        [JsonPropertyName("subject")]
+        public required string Subject { get; set; }
+    }
+
+    /// <summary>Render. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<RenderResult>> RenderAsync(
+        RenderContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Message templates in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class MessageTemplateCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Communication/services/templates";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Communication/services/{servicesName}/templates";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Message template.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<MessageTemplateResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string servicesName, string name,
+        MessageTemplateData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Message template by name.</summary>
+    public partial Task<Response<MessageTemplateResource>> GetAsync(string servicesName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Message templates in one parent, paged.</summary>
+    public partial AsyncPageable<MessageTemplateResource> GetAllAsync(string servicesName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum ContainerRegistryPreset {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

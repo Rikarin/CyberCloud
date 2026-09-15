@@ -253,6 +253,24 @@ public sealed record ChannelConfiguration {
     /// </summary>
     [Id(6)]
     public Guid SenderId { get; init; }
+
+    /// <summary>
+    ///     The <c>CyberCloud.Communication/services/{service}/channels/{name}</c> resource that owns
+    ///     this configuration, or empty for one written without a resource behind it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A service holds one configuration per <see cref="ChannelKind" />, and this is what
+    ///     stops two resources from fighting over it.</b> The tenant-facing provider declares the
+    ///     kind as a body property rather than as the resource's name — the shared conformance
+    ///     suite names resources itself, so a name that had to spell the kind would fail every
+    ///     provider's suite — which means two <c>channels</c> resources can both say
+    ///     <c>kind: email</c>. Without an owner the second would silently overwrite the first and the
+    ///     two reconcilers would take turns; with one, the second is refused by name before it
+    ///     writes anything. Appended as a new <c>[Id]</c>, so a configuration written before it
+    ///     existed reads back as unowned and behaves exactly as it did.
+    /// </remarks>
+    [Id(7)]
+    public Guid OwnerResourceId { get; init; }
 }
 
 /// <summary>One argument for a template parameter.</summary>
@@ -712,6 +730,27 @@ public sealed record SuppressionEntry {
     /// <summary>What happened, in the carrier's or the operator's words.</summary>
     [Id(4)]
     public string Note { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     The <c>CyberCloud.Communication/services/{service}/suppressions/{name}</c> resource that
+    ///     placed this entry, or empty for one nobody's resource wrote — a carrier's receipt, an
+    ///     inbound <c>STOP</c>, or a manual block written before this field existed.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A manual block is one entry, and this is what says whose it is.</b> Without it, two
+    ///     <c>suppressions</c> resources naming one address both read the entry as theirs, and the
+    ///     delete of either releases it while the other still declares the address blocked — and
+    ///     this family is clusterless, so no drift scan ever puts it back (docs/plan/08 § The
+    ///     reconcile loop's scan is per cluster). The same arrangement as
+    ///     <see cref="ChannelConfiguration.OwnerResourceId" />: the provider refuses the second
+    ///     resource by name before it writes, and releases only what it owns. Only a
+    ///     <see cref="SuppressionReason.ManualBlock" /> ever carries an owner; the other three
+    ///     reasons are statements by the carrier or the recipient, and no resource speaks for those.
+    ///     Appended as a new <c>[Id]</c>, so an entry written before it existed reads back as unowned
+    ///     and the first resource to name it adopts it.
+    /// </remarks>
+    [Id(5)]
+    public Guid OwnerResourceId { get; init; }
 }
 
 /// <summary>Whether an address is suppressed, and the entry if it is.</summary>
@@ -809,6 +848,18 @@ public sealed record CommunicationService {
     /// <summary>When it was created.</summary>
     [Id(4)]
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>
+    ///     The locale a send is rendered in when the request names none. Empty means the renderer's
+    ///     own chain — <c>en</c>, then whichever body is first.
+    /// </summary>
+    /// <remarks>
+    ///     A BCP 47 tag such as <c>cs-CZ</c>. <c>IMessageGrain.SendAsync</c> reads it only when
+    ///     <see cref="SendRequest.Locale" /> is blank, so a caller that says which locale it wants is
+    ///     never overridden by the service's default.
+    /// </remarks>
+    [Id(5)]
+    public string DefaultLocale { get; init; } = string.Empty;
 }
 
 /// <summary>

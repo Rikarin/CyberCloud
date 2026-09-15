@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ TestCluster, AND NO k3s — this family has no cluster to test against. What is here is what
+      only THIS provider can be wrong about, and the list has one entry above every other:
+      A SUPPRESSED ADDRESS IS NEVER HANDED TO A CARRIER, for the tenant's own sends and for the
+      platform's, through the seam the platform's own OTPs use. The shared suite converges resources;
+      it never sends. SuppressionEnforcementTests sends, against a real silo with the module wired as
+      production wires it and an in-memory carrier standing in for Twilio, and it was sabotage-tested.
+
+      ⚠ IN-MEMORY STORAGE, the same deviation from ADR-018 every TestCluster in this tree makes, for
+      the same reason and with the same cost — see test/CyberCloud.Conformance's .csproj.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.csproj"/>
+        <!-- The grains the reconcilers converge onto, hosted here the way the silo host hosts them. -->
+        <ProjectReference Include="../../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

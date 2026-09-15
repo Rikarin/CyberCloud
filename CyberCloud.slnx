@@ -498,6 +498,24 @@
         <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Tests/CyberCloud.Providers.Mail.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Conformance/CyberCloud.Providers.Mail.Conformance.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.Cluster.Conformance/CyberCloud.Providers.Mail.Cluster.Conformance.csproj" />
+
+        <!--
+          The fifteenth provider family — CyberCloud.Communication/services and its three children,
+          the tenant-facing face of the module that has carried the platform's OTPs and alerts since
+          before any provider existed. docs/plan/17 § `CyberCloud.Communication/services`, "M2 · 2.0 EM".
+
+          ⚠ THE FIRST CLUSTERLESS FAMILY. No type declares RequiresCluster, none names a chart, none
+          renders an object; what a reconciler converges is grain state in CyberCloud.Communication,
+          reached through ICommunicationControlPlane. It is also the first family with a line in
+          module-layering.txt beyond the four every provider may have — and no
+          .Cluster.Conformance project, because test/CyberCloud.Cluster.Conformance refuses a case
+          with no objects by name (charts/bundle/bundle.yaml § owed says what that leaves unchecked).
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Contracts/CyberCloud.Providers.Communication.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Application/CyberCloud.Providers.Communication.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Tests/CyberCloud.Providers.Communication.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Conformance/CyberCloud.Providers.Communication.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />

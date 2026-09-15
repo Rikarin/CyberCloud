@@ -23,10 +23,12 @@ export type FieldControl =
   | 'xui-sku'
   | 'xui-chip-input'
   | 'xui-subnet'
+  | 'xui-numeric-input'
+  | 'xui-secret-ref'
   | 'xui-group';
 
 /** The JSON Schema type behind a field. */
-export type FieldType = 'string' | 'integer' | 'boolean' | 'object' | 'array';
+export type FieldType = 'string' | 'integer' | 'number' | 'boolean' | 'object' | 'array';
 
 /** One allowed value of a closed set, with the label the portal shows for it. */
 export interface FieldChoice {

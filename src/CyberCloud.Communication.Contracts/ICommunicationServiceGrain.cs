@@ -70,6 +70,44 @@ public interface ICommunicationServiceGrain : IGrainWithStringKey {
     /// <summary>Every channel configured, in configuration order.</summary>
     Task<Result<ImmutableArray<ChannelConfiguration>>> ListChannelsAsync();
 
+    /// <summary>Removes a channel's configuration, so nothing can send on it.</summary>
+    /// <param name="channel">The channel.</param>
+    /// <returns>
+    ///     Success when the channel is gone — including when it was never there. ⚠ Idempotent by
+    ///     design, because the caller is a reconciler's delete path, which runs again after a silo
+    ///     dies between the removal and its own bookkeeping.
+    /// </returns>
+    Task<Result> RemoveChannelAsync(ChannelKind channel);
+
+    /// <summary>
+    ///     Sets the locale a send is rendered in when the request names none. Empty clears it.
+    /// </summary>
+    /// <param name="locale">A BCP 47 tag such as <c>cs-CZ</c>, or empty.</param>
+    Task<Result<CommunicationService>> SetDefaultLocaleAsync(string locale);
+
+    /// <summary>Forgets a template name, so a send can no longer reach it.</summary>
+    /// <param name="name">The name a send references.</param>
+    /// <param name="templateId">
+    ///     The template resource the name is expected to point at. ⚠ A name that points elsewhere is
+    ///     left alone and the call still succeeds: a reconciler tearing down one resource must not
+    ///     unregister the resource that legitimately took its name over.
+    /// </param>
+    Task<Result> UnregisterTemplateAsync(string name, Guid templateId);
+
+    /// <summary>
+    ///     Takes the service out of use: every channel is removed and every template name forgotten,
+    ///     so a send through it refuses before reaching a carrier.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The suppression list is not touched, and that is the point of retiring rather than
+    ///     deleting.</b> <see cref="ISuppressionListGrain" /> shares this key and is the one record
+    ///     the tenant must not be able to clear by deleting and recreating the service —
+    ///     <see cref="CommunicationGrainKeys.ResourceIdFor" /> says why the recreated service lands
+    ///     on the same key. The template grains keep their versions for the same reason: a carrier's
+    ///     approval is attached to a body, and the body is evidence.
+    /// </remarks>
+    Task<Result> RetireAsync();
+
     /// <summary>Records that a template name belongs to a template resource.</summary>
     /// <param name="name">The name a send references.</param>
     /// <param name="templateId">The template child resource's GUID.</param>

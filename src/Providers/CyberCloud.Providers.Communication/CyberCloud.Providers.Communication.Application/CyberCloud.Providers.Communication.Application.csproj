@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects: "ABP application services the gateway
+      routes to".
+
+      ⚠ IT HOLDS THE ABP MODULE AND NO APPLICATION SERVICE. Every verb these four types have — PUT,
+      GET, DELETE, and the five POST actions — is a generic resource-manager verb the gateway routes
+      from the provider registry (ADR-012).
+
+      ⚠ WHAT THIS MODULE DOES NOT REGISTER, AND WHY THE HOST HAS TO: the two client-side seams the
+      action handlers hold — IMessageSender and ICommunicationControlPlane — live in
+      CyberCloud.Communication, and registering them is AddCyberCloudCommunicationClient(). A provider
+      module may not reference that assembly (module-layering.txt grants this family the .Contracts
+      edge and nothing more), so the gateway calls it in GatewayServiceCollectionExtensions and the
+      silo gets it through AddCyberCloudCommunication(). HostCompositionTests is what notices if either
+      stops.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Communication.Contracts/CyberCloud.Providers.Communication.Contracts.csproj"/>
+        <!--
+          ⚠ THE IMPLEMENTATION ASSEMBLY, AND THIS LINE IS WHAT MAKES THE MODULE WORTH LOADING.
+          docs/plan/03 § Providers: "each registers its resource types into CyberCloud.ResourceManager".
+          Rule 5 keeps the gateway off the implementation assembly and it still holds: the gateway
+          references THIS project, binds the module type, and binds nothing from the implementation.
+        -->
+        <ProjectReference Include="../CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

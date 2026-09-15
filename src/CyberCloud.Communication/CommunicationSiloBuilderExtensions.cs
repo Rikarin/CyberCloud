@@ -36,9 +36,43 @@ public static class CommunicationSiloBuilderExtensions {
                 services.AddSingleton<IChannelProvider, UnavailableVoiceProvider>();
 
                 services.TryAddSingleton<IChannelProviderRegistry, ChannelProviderRegistry>();
-                services.TryAddSingleton<IMessageSender, GrainMessageSender>();
                 services.TryAddSingleton<IWebhookRouter, WebhookRouter>();
+
+                services.AddCyberCloudCommunicationClient();
             }
         );
+    }
+
+    /// <summary>
+    ///     Registers the two client-side seams — <see cref="IMessageSender" /> and
+    ///     <see cref="ICommunicationControlPlane" /> — over whatever <c>IGrainFactory</c> the
+    ///     container holds.
+    /// </summary>
+    /// <param name="services">The container being built.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="services" /> is null.</exception>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The gateway calls this and the silo gets it through
+    ///         <see cref="AddCyberCloudCommunication" />, and the split is the whole reason it is a
+    ///         separate method.</b> Both seams are constructed over an <c>IGrainFactory</c> and take
+    ///         grain <i>references</i>, so they work identically behind a cluster client and inside
+    ///         a silo — but the gateway is a client and hosts no grain, so the silo overload's carrier
+    ///         seams, registry and webhook router would be dead weight there.
+    ///     </para>
+    ///     <para>
+    ///         Why the gateway needs them at all: <c>CyberCloud.Providers.Communication</c>'s
+    ///         synchronous actions — <c>send</c>, <c>status</c>, <c>checkSuppression</c>,
+    ///         <c>listSuppressions</c> — run inside <c>ResourceManagerService</c> on the request
+    ///         path, which is the gateway's process (docs/plan/08 § The write path, end to end), and
+    ///         their handlers hold these two interfaces.
+    ///     </para>
+    /// </remarks>
+    public static IServiceCollection AddCyberCloudCommunicationClient(this IServiceCollection services) {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton<IMessageSender, GrainMessageSender>();
+        services.TryAddSingleton<ICommunicationControlPlane, GrainCommunicationControlPlane>();
+
+        return services;
     }
 }

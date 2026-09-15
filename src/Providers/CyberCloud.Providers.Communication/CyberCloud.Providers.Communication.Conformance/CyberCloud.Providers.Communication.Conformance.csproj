@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised".
+
+      ⚠ THE FIRST CLUSTERLESS FAMILY, AND THE FIRST WHOSE REGISTRATION HAD TO TEACH THE SUITE A
+      SECOND KIND OF WORLD. Fourteen families before this one handed the suite a list of Kubernetes
+      objects and a function over their JSON; this one hands it a module — IConvergedModule, which
+      answers the same five questions (is it there, does it match, remove it, corrupt it, host it) of
+      CyberCloud.Communication's grains. test/CyberCloud.Conformance was touched for it, deliberately
+      and for the first time since the case record gained MatchContext: the alternative was a green
+      run over a reconciler that wrote nowhere, which is the failure the suite exists to make
+      impossible.
+
+      ⚠ IT REFERENCES CyberCloud.Communication — THE IMPLEMENTATION — AND A TEST PROJECT MAY. The
+      harness silo has to HOST the grains the reconcilers converge onto, and the extension that
+      registers them lives in the implementation assembly. Rule 7 is about the shipped graph
+      (Build.Architecture excludes test projects, and says why).
+
+      ⚠ THIS PROJECT IS COUNTED BY THE Labels ARCHITECTURE GATE, and on this family that gate reads
+      "no object was applied" rather than "every object is labelled" — see the clusterless branch of
+      EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations for why it asserts instead
+      of skipping.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -37,6 +37,16 @@ namespace CyberCloud.Identity.Tests;
 ///         (memory grain storage, no Testcontainers) that this project's <c>.csproj</c> already
 ///         records.
 ///     </para>
+///     <para>
+///         ⚠ <b>And the real suppression list, because the platform's codes travel the tenant's
+///         path.</b> docs/plan/17 § The parts that are actually the work has suppression
+///         <i>"honoured before dispatch"</i>, and issue #33 warns that the platform's own transactional
+///         mail fails with it. <c>CyberCloud.Providers.Communication.Tests.SuppressionEnforcementTests</c>
+///         drives the tenant's sends against the list; this suite is the only place that sends a
+///         one-time code through <see cref="CommunicationOtpDelivery" /> to a suppressed address, so
+///         <see cref="ACodeForASuppressedDestinationIsRefusedBeforeTheCarrier" /> is what pins the
+///         platform's half rather than inferring it from the tenant's.
+///     </para>
 /// </remarks>
 [Collection(OtpDeliverySuite.Name)]
 public sealed class OtpDeliveryTests(OtpDeliveryCluster cluster) {
@@ -230,6 +240,34 @@ public sealed class OtpDeliveryTests(OtpDeliveryCluster cluster) {
         cluster.Email.Calls.ShouldBe(1);
     }
 
+    // ── The suppression list, honored for the platform's own codes ───────────────────────────
+
+    [Fact]
+    public async Task ACodeForASuppressedDestinationIsRefusedBeforeTheCarrier() {
+        cluster.Reset();
+
+        // A recipient who replied STOP — the entry a carrier's inbound would have written through
+        // IWebhookRouter, placed directly because the property under test is the adapter's path
+        // and not the router's. ⚠ Its own number: the fixture's list outlives one test, and the
+        // number every other test sends to must stay clear.
+        (await cluster.SuppressionList.SuppressAsync(ChannelKind.Sms, "+420777000111", SuppressionReason.OptOut, "STOP", Guid.Empty))
+            .IsSuccess.ShouldBeTrue();
+
+        var refused = await cluster.Delivery.DeliverAsync(Sms(NewUser(), "424242") with { Destination = "+420777000111" }, Ct);
+
+        refused.IsFailure.ShouldBeTrue("a one-time code was sent to a number that opted out");
+        refused.Error!.Code.ShouldBe(ErrorCode.PolicyViolation);
+
+        // ⚠ THE ASSERTION THAT MATTERS. A refusal that came back after the carrier was called would
+        // pass the two lines above and be exactly the failure docs/plan/17 describes.
+        cluster.Sms.Calls.ShouldBe(0, "the carrier was called for a suppressed number");
+
+        // And the list is the reason rather than a broken channel: the same code to a clear number
+        // goes out through the same adapter.
+        (await cluster.Delivery.DeliverAsync(Sms(NewUser(), "424242"), Ct)).IsSuccess.ShouldBeTrue();
+        cluster.Sms.Calls.ShouldBe(1);
+    }
+
     [Fact]
     public async Task TheUnwiredDefaultFailsAndNamesTheMissingCall() {
         // ⚠ The seam's contract, kept honest from this side: an OTP factor that reported delivery
@@ -304,6 +342,15 @@ public sealed class OtpDeliveryCluster : IAsyncLifetime {
             .GetGrain<IMessageGrain>(
                 CommunicationGrainKeys.Message(ServiceId, CommunicationOtpDelivery.IdempotencyKeyFor(delivery))
             );
+
+    /// <summary>
+    ///     The platform service's suppression list — the grain <c>MessageGrain.DispatchAsync</c>
+    ///     checks before it resolves a carrier, reached the way <c>WebhookRouter</c> reaches it.
+    /// </summary>
+    public ISuppressionListGrain SuppressionList =>
+        cluster.GrainFactory
+            .ForTenant(PlatformTenant.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ISuppressionListGrain>(CommunicationGrainKeys.Service(ServiceId));
 
     /// <summary>Forgets both carriers. Called at the top of every test that counts calls.</summary>
     public void Reset() {

@@ -18,7 +18,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
 
         (await cluster.Suppression(service)
-                .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.Complaint, "marked as spam"))
+                .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.Complaint, "marked as spam", Guid.Empty))
             .IsSuccess.ShouldBeTrue();
 
         var refused = await cluster.SendAsync(
@@ -43,7 +43,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
 
         _ = await cluster.Suppression(service)
-            .SuppressAsync(ChannelKind.Sms, "+420 777 123 456", SuppressionReason.OptOut, "STOP");
+            .SuppressAsync(ChannelKind.Sms, "+420 777 123 456", SuppressionReason.OptOut, "STOP", Guid.Empty);
 
         var refused = await cluster.SendAsync(
             CommunicationCluster.Tenant,
@@ -76,7 +76,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
             );
 
         _ = await cluster.Suppression(service)
-            .SuppressAsync(ChannelKind.Email, "alice@example.com", SuppressionReason.HardBounce, "550");
+            .SuppressAsync(ChannelKind.Email, "alice@example.com", SuppressionReason.HardBounce, "550", Guid.Empty);
 
         // An email bounce says nothing about a phone number, and vice versa.
         var sms = await cluster.SendAsync(
@@ -97,7 +97,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var theirs = await cluster.NewServiceAsync(tenant: CommunicationCluster.OtherTenant);
 
         _ = await cluster.Suppression(mine)
-            .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.OptOut, "STOP");
+            .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.OptOut, "STOP", Guid.Empty);
 
         var otherTenant = await cluster.SendAsync(
             CommunicationCluster.OtherTenant,
@@ -116,12 +116,12 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
 
         var first = await cluster.Suppression(service)
-            .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.OptOut, "STOP");
+            .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.OptOut, "STOP", Guid.Empty);
 
         TestClock.Instance.Advance(TimeSpan.FromHours(2));
 
         var again = await cluster.Suppression(service)
-            .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.OptOut, "STOP again");
+            .SuppressAsync(ChannelKind.Sms, "+420777123456", SuppressionReason.OptOut, "STOP again", Guid.Empty);
 
         again.IsSuccess.ShouldBeTrue("a carrier redelivers its webhooks and a handset re-sends STOP");
         again.GetValueOrThrow()
@@ -140,8 +140,8 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
         var list = cluster.Suppression(service);
 
-        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000001", SuppressionReason.Complaint, "spam");
-        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000002", SuppressionReason.OptOut, "STOP");
+        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000001", SuppressionReason.Complaint, "spam", Guid.Empty);
+        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000002", SuppressionReason.OptOut, "STOP", Guid.Empty);
 
         foreach (var number in new[] { "+420777000001", "+420777000002" }) {
             var refused = await list.ReleaseAsync(ChannelKind.Sms, number, "customer asked us to");
@@ -162,7 +162,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
         var list = cluster.Suppression(service);
 
-        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000003", SuppressionReason.HardBounce, "unknown");
+        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000003", SuppressionReason.HardBounce, "unknown", Guid.Empty);
         (await list.ReleaseAsync(ChannelKind.Sms, "+420777000003", "typo corrected")).IsSuccess.ShouldBeTrue();
 
         var sent = await cluster.SendAsync(
@@ -179,7 +179,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
         var list = cluster.Suppression(service);
 
-        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000004", SuppressionReason.ManualBlock, "abuse hold");
+        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000004", SuppressionReason.ManualBlock, "abuse hold", Guid.Empty);
 
         (await list.ReleaseAsync(ChannelKind.Sms, "+420777000004", "  ")).Error!
             .Code
@@ -192,8 +192,8 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
         var list = cluster.Suppression(service);
 
-        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000005", SuppressionReason.OptOut, "STOP");
-        _ = await list.SuppressAsync(ChannelKind.Email, "bob@example.com", SuppressionReason.Complaint, "spam");
+        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000005", SuppressionReason.OptOut, "STOP", Guid.Empty);
+        _ = await list.SuppressAsync(ChannelKind.Email, "bob@example.com", SuppressionReason.Complaint, "spam", Guid.Empty);
 
         (await list.CountAsync()).GetValueOrThrow().ShouldBe(2);
         (await list.ListAsync(ChannelKind.Sms)).GetValueOrThrow().Length.ShouldBe(1);
@@ -206,7 +206,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
 
         (await cluster.Suppression(service)
-                .SuppressAsync(ChannelKind.Sms, "+420777000006", SuppressionReason.Unknown, string.Empty))
+                .SuppressAsync(ChannelKind.Sms, "+420777000006", SuppressionReason.Unknown, string.Empty, Guid.Empty))
             .Error!
             .Code
             .ShouldBe(ErrorCode.InvalidRequestBody);
@@ -218,7 +218,7 @@ public sealed class SuppressionTests(CommunicationCluster cluster) {
         var service = await cluster.NewServiceAsync();
         var list = cluster.Suppression(service);
 
-        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000007", SuppressionReason.HardBounce, "unknown");
+        _ = await list.SuppressAsync(ChannelKind.Sms, "+420777000007", SuppressionReason.HardBounce, "unknown", Guid.Empty);
 
         var refused = await cluster.SendAsync(
             CommunicationCluster.Tenant,

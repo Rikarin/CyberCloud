@@ -179,7 +179,7 @@ target scale.
 | Storage | File shares, backup vaults, customer-managed keys | 3.0 | #30 | |
 | Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | |
 | Observability | App Insights views, OTel collector service, managed Grafana, alerts | 3.0 | #32 | |
-| Communication | Channels, templates, suppression, delivery receipts | 2.0 | #33 | |
+| Communication | Channels, templates, suppression, delivery receipts | 2.0 | #33 | ✅ **SHIPPED 2026-09-15 (#33)**: `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions` — the tenant-facing face of the module that had carried the platform's OTPs since before any provider existed. ⚠ **Three of the four nouns are types and the fourth is not, deliberately**: a delivery receipt is per send, a send is an event rather than desired state, and the receipts come back on the `services` type's `status` action — [17 § `CyberCloud.Communication/services`](17-communication-and-email.md) says why a `messages` type would have had a PUT nothing could apply. ⚠ **The first clusterless family in the catalogue**, and the shared conformance suite grew a clusterless half to say what a green run over it proves. ⚠ **What ✅ does not mean here**: no carrier client ships — every channel resolves to the module's refusing seam, so a `send` refuses honestly — doc 17's sender-id registration flow has its grain and no resource surface, and the fourth noun has its read half only: `status` renders receipts and no HTTP ingress exists for a carrier to deliver one through, which lands with the first carrier because its signature is the callback's only authentication; `charts/bundle/bundle.yaml § owed` carries all three |
 | **Mail** | Postfix/Dovecot/Rspamd, domains, mailboxes, deliverability, minimal webmail | 3.5 | #34 | ◐ `Mail/domains` published (#34, 2026-09-12) with the chart under `charts/managed/mail`. ⚠ The first noun of five; mailboxes, deliverability and the webmail are not resource types yet, so the type list confirms nothing about the other four |
 | Security | Malware scanning | 1.5 | #35 | |
 | Fabric | ⚠ Agent-initiated cluster connections (BYO behind NAT) | 1.5 | #36 | |
@@ -218,10 +218,12 @@ other — see [§ Running total](#running-total), which is where the consequence
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
 median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 
-⚠ **On "28 resource types": there are 22 today**, and four of them are this phase's `Data` row. The
-other eighteen are counted, phase by phase, in
-[§ What has landed](#what-has-landed--recounted-2026-09-15) — which is also where to see that two of the
-22 belong to phase 4 and one is phase 1's deliberately trivial sample.
+⚠ **On "28 resource types": there are 27 today**, and nine of them are this phase's — the `Data` row's
+four, `Mail/domains`, and the `Communication` row's four. The other eighteen are counted, phase by
+phase, in [§ What has landed](#what-has-landed--recounted-2026-09-15) — which is also where to see that
+two of the 27 belong to phase 4 and one is phase 1's deliberately trivial sample. ⚠ The count is one
+short of the criterion and the criterion is not one type short of being met: "28 resource types" was
+written as a proxy for a catalogue, and four of the 27 are one family's children.
 
 ---
 
@@ -324,7 +326,8 @@ pinned counts in this tree have gone stale more than once and recently — #81 w
 sitting in the machinery that gates citation honesty, and #78's review found a pinned `grep` that was
 counting its own paragraph. #45 said 22, and 22 was right until #34 published `Mail/domains` on 2026-09-12 without
 recounting here — the test this section describes went red and stayed red for three days, which is
-exactly the drift it exists to catch; 23 is right. That is worth *establishing* rather than
+exactly the drift it exists to catch; 23 was right until #33 published the four `Communication` types
+on 2026-09-15, recounting in the same change; 27 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
 
 The document, read directly:
@@ -332,7 +335,7 @@ The document, read directly:
 ```console
 $ grep -o '"x-cybercloud-resource-type": "[^"]*"' openapi/2026-08-01.json \
     | sed 's/.*: "//;s/"$//' | sort -u | wc -l
-23
+27
 ```
 
 and the build, from the other end — `./build.sh Architecture`'s **Generated surfaces** gate regenerates
@@ -340,7 +343,7 @@ every surface from `src/CyberCloud.ResourceManager/Registry/` and compares bytes
 registry's rather than the document's:
 
 ```text
-✔ Generated surfaces  Enforced  23 resource type(s) over 2 OpenAPI document(s), …
+✔ Generated surfaces  Enforced  27 resource type(s) over 2 OpenAPI document(s), …
 ```
 
 ⚠ **What would make this stale, said plainly so it can be checked rather than trusted:** any provider's
@@ -364,10 +367,10 @@ to 22 and nothing else — a table listing all 22 correct names with phase 2 rea
 reading 5 passed every assertion in it. The assertion now exists (#45's review); the sentence above is
 what it does rather than what it was hoped to do. ⚠ **And "arithmetic" means this table's arithmetic
 only.** No EM figure anywhere in this document is machine-checked — not a phase heading, not a row, not
-the 71.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
+the 69.6–89.1 — and the test cannot see the `Landed` column's *judgement* at all. The date in this
 heading is still what says when a person last read the rest.
 
-All 23, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
+All 27, against the phase that planned them. ⚠ **Written out in full, with only the `CyberCloud.`
 prefix dropped, because this table is machine-checked** — `RoadmapReconciliationTests` reads it and the
 published document and asserts the two sets are equal, so an abbreviated `…/subnets` would be a name no
 test could match and the check would quietly become a check of nothing.
@@ -376,9 +379,9 @@ test could match and the check would quietly become a check of nothing.
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
 | 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles` | 15 |
-| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains` | 5 |
+| 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions` | 9 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
-| **Total** | | **23** |
+| **Total** | | **27** |
 
 ⚠ **`agentPools` is itself an ahead-of-phase landing that this table cannot show twice.** Phase 2's row
 names node pools, so it is counted as phase 2 here — but [01](01-azure-parity-catalogue.md) verdicts
@@ -418,28 +421,29 @@ this recount, and it is written down here so the next recount does not make it.
 | 0 — Prerequisites | ~~1.5~~ **1.1** | 1.1 | **0.4 ⊘** | Exact. Phase 0's heading *is* its row sum, so the dropped ADR-005 bump comes straight off |
 | 1 — Spine | 14 | 14.0 | — | Not reconciled here; only exit criterion 4 was checked |
 | 2 — M1 | 26 | 44.0 | **≥ 11.3 ✅** | 3.0 + 1.5 + 2.0 + 1.5 fully shipped rows, plus 3.3 of the `Network` row's split. Conservative: the partly-landed Managed Kubernetes (4.0) and Monitor (2.5) rows have no defensible split and are counted as zero. ⚠ Not conservative enough — the 3.0 row's ✅ means *published*, and #69 is open inside it; see below |
-| 3 — M2 | 28 | 38.4 | **4.4 ✅** | The whole `Data` row |
+| 3 — M2 | 28 | 38.4 | **6.4 ✅** | The whole `Data` row (4.4), and the whole `Communication` row (2.0, 2026-09-15). ⚠ `Mail`'s ◐ is counted as zero: one noun of five is published and the row has no defensible split |
 | 4 — M3 | 20 | 16.9 priced, 4 items unpriced | **1.8 ✅, 0.6 ⊘** | MariaDB 0.8 + OpenSearch 1.0 shipped; Qdrant's 0.6 void |
 
-**Between 71.6 and 89.1 EM to M3** — where this section said **~90** until 2026-09-06. ⚠ **The range is
-the finding, not a hedge**, and it is narrower than the old single number was honest.
+**Between 69.6 and 89.1 EM to M3** — where this section said **71.6–89.1** from 2026-09-06 to
+2026-09-15, and **~90** before that. ⚠ **The range is the finding, not a hedge**, and it is narrower
+than the old single number was honest.
 
 The arithmetic, once, so it can be checked: the plan's own 89.5 loses phase 0's dropped 0.4 outright,
-which gives **89.1**. Against that sit 11.3 + 4.4 + 1.8 = **17.5 EM of rows whose every named type is
+which gives **89.1**. Against that sit 11.3 + 6.4 + 1.8 = **19.5 EM of rows whose every named type is
 published**. Work that is finished takes zero time on *any* path, so it can only make the remaining
 critical path shorter — but by **at most** its own size, and by **at least** nothing, and this document
-does not say which of its rows were on the critical path in the first place. 89.1 − 17.5 = **71.6** is
+does not say which of its rows were on the critical path in the first place. 89.1 − 19.5 = **69.6** is
 therefore the floor and 89.1 the ceiling.
 
-⚠ **That 17.5 said "rows that are finished" until 2026-09-06, and this document's own annotations do not
+⚠ **That figure — 17.5 until 2026-09-15, 19.5 since — said "rows that are finished" until 2026-09-06, and this document's own annotations do not
 support the word.** [§ How to read the `Landed` column](#how-to-read-the-landed-column) defines ✅ as no
 more than *a published resource type in `openapi/2026-08-01.json` for every type the row names* — and
-one ✅ row inside the 17.5 carries a live defect three tables above: **Postgres · Valkey · NATS**, 3.0 EM,
+one ✅ row inside it carries a live defect three tables above: **Postgres · Valkey · NATS**, 3.0 EM,
 where #69 is open against the first because the seven-day recovery window returns an `initdb`. A
 published type is not a working restore, and the same caution that counted Managed Kubernetes (4.0) and
 Monitor (2.5) as **zero** should not have skipped a row this page had already qualified. ⚠ **The floor
 survives and it is worth saying why rather than leaving it to be re-derived:** subtracting *more* than
-is truly finished can only push the result *down*, so 71.6 remains a valid lower bound — it is simply a
+is truly finished can only push the result *down*, so 69.6 remains a valid lower bound — it is simply a
 weaker one than it looked, and the ✅ column is a claim about the published document rather than about
 the feature.
 
@@ -450,7 +454,7 @@ headings rather than a fact about them** — [§ Phase 3](#phase-3--m2-a-catalog
 now records the competing one: 28 and 20 are [01 § Summary of scope](01-azure-parity-catalogue.md)'s M2
 and M3 milestone totals exactly, so the headings may be a top-down budget that the bottom-up rows were
 never inside. Either way the gap was invisible while nothing had shipped and is load-bearing the moment
-anything does, and either way it is the reason 17.5 EM of completed work cannot simply be subtracted.
+anything does, and either way it is the reason 19.5 EM of completed work cannot simply be subtracted.
 **Closing the range is a scheduling exercise on the first reading — say which rows are on the path — and
 a re-estimate on the second.**
 
@@ -472,7 +476,7 @@ names, and four more phase-4 items — the policy engine, the resource graph API
 policies — carry no estimate at all. So the figure is wrong in **both** directions at once, which is the
 state a total reaches when it is only ever corrected downward.
 
-At 4–5 engineers that is **roughly 14–22 months** — 71.6 ÷ 5 = 14.3 at the fast end, 89.1 ÷ 4 = 22.3 at
+At 4–5 engineers that is **roughly 14–22 months** — 69.6 ÷ 5 = 13.9 at the fast end, 89.1 ÷ 4 = 22.3 at
 the slow one. ⚠ The old line said *"roughly 18–20 months"* for 89.5 EM, and 89.5 ÷ 4 is 22.4: **the
 upper end was already understated by more than two months before any of this reconciliation**, because
 it was carried over rather than divided. That is the same failure as the stale phase rows above, in the

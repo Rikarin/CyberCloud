@@ -51,6 +51,7 @@ export function sampleFor(field: FormField): unknown {
     case 'boolean':
       return field.default === undefined ? true : !field.default;
     case 'integer':
+    case 'number':
       return field.minimum ?? field.maximum ?? field.default ?? 1;
     case 'array': {
       const candidates = [field.placeholder, field.default, choices.map(c => c.value)].filter(

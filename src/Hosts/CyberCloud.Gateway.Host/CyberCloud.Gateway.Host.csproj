@@ -125,6 +125,14 @@
           refusing seams stay, which is a supported shape.
         -->
         <ProjectReference Include="../../CyberCloud.Vault/CyberCloud.Vault.csproj"/>
+        <!--
+          docs/plan/17's sending domain, for the same reason CyberCloud.Vault is here: four of
+          CyberCloud.Communication/services' synchronous actions — send, status, checkSuppression,
+          listSuppressions — are served inside ResourceManagerService.ActionAsync in THIS process, and
+          their handlers hold the module's two client-side seams. AddCyberCloudCommunicationClient
+          registers them over this host's cluster client; nothing here hosts a grain.
+        -->
+        <ProjectReference Include="../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
     </ItemGroup>
 
     <!--
@@ -146,6 +154,7 @@
     <ItemGroup Label="The provider modules — docs/plan/03 § Assembly graph rules, rule 5">
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Application/CyberCloud.Providers.Communication.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Application/CyberCloud.Providers.ContainerRegistry.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Application/CyberCloud.Providers.ContainerService.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Application/CyberCloud.Providers.DBforMySQL.Application.csproj"/>
