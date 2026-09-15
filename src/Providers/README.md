@@ -1773,7 +1773,30 @@ platform.
 
 **What landed on this pass: `virtualNetworks/natGateways`.** `peerings` is **owed on the platform**,
 `dnsZones` and `vpnGateways` remain owed on the substrate, `routeTables` remains refused, and
-`applicationGateways` and flow logs are #31's untouched halves.
+`applicationGateways` and flow logs are #31's other two nouns — **so #31 stays open**, with each of
+the two measured and recorded rather than left as a sentence:
+
+- **`applicationGateways` is owed on a controller the bundle does not carry** —
+  `charts/managed/haproxy/conformance.yaml § owed`,
+  `application-gateway-is-not-an-http-mode-of-this-proxy`. `charts/bundle` installs Kube-OVN as the
+  CNI and no Envoy Gateway, no Cilium and no Gateway API definitions, so the first deliverable is a
+  bundle component plus the comparison ADR-019 § Consequence for Envoy Gateway asks for. What was
+  read firsthand for the chart that follows: the proxy has to sit inside the tenant's subnet, which
+  for a controller-managed Envoy is `provider.kubernetes.deploy.type: GatewayNamespace` plus the
+  `logical_switch`/`ip_pool` annotations through an `EnvoyProxy` pod template; backends are bare
+  addresses through Envoy Gateway's `Backend` extension, off by default; routes are one child
+  resource each, because an `HTTPRoute` is its own object attaching by `parentRefs` — the one place
+  the substrate's object model dodges the array-of-objects refusal instead of hitting it; and the
+  WAF is an `EnvoyExtensionPolicy` loading `coraza-proxy-wasm`.
+- **Flow logs have nothing to render, and are not a `Network` type at all** —
+  `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `flow-logs-have-nothing-to-render`. The
+  bundle installs no Cilium and so no Hubble; read at v1.16.2, `SubnetSpec`'s 41 fields export no
+  flow, `acls[]` has no log field, and the OVN ACLs Kube-OVN does log (NetworkPolicy's — behind
+  `ENABLE_NP`, off — AdminNetworkPolicy's, and a `private` subnet's default drop; never a security
+  group's) land in each node's `ovn-controller` log. Mirroring copies packets to a node NIC, and
+  OVS's IPFIX is per-node `ovs-vsctl` state on nodes ADR-020 gives no shell. A flow log is a
+  collector plus docs/plan/16's pipeline plus a query view, which docs/plan/01 files under
+  `CyberCloud.Monitor` at M3.
 
 ### What the fourteenth provider measured
 

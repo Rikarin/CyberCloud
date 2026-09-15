@@ -53,7 +53,7 @@ assertions:
       collisions the shared harness cannot build.
   - id: a-ready-rule-is-not-drift
     says: >
-      A rule the controller has finalized, labelled and marked ready converges and stays converged.
+      A rule the controller has finalized, labeled, and marked ready converges and stays converged.
       ⚠ handleAddOvnSnatRule patches two labels, one annotation, a finalizer and the status onto an
       object this provider applied — and, uniquely in this family, NEVER writes back to `.spec`. So
       NatGateways.Matches is containment for the metadata and verbatim on the three spec fields, and a

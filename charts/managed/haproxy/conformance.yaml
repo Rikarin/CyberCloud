@@ -215,3 +215,48 @@ owed:
       (`http-request use-service prometheus-exporter` on its own listener), and adding it means a
       second bind, a PodMonitor, and a decision about whether a tenant's proxy metrics are the
       tenant's or the platform's. None of that is a reason to ship a dashboard that scrapes nothing.
+  - id: application-gateway-is-not-an-http-mode-of-this-proxy
+    says: >
+      ⚠ docs/plan/14 § Application gateway — `CyberCloud.Network/applicationGateways`, M2, 2.0 EM — IS
+      OWED ON #31, AND THE SHAPE IT HAS TO TAKE WAS MEASURED HERE BEFORE ANYTHING WAS BUILT, because
+      the tempting way to ship it is `mode http` on this chart and LoadBalancers.HaproxyConfig says
+      why that is refused: a second, quieter L7 product with no routes, no TLS and no WAF. Five facts,
+      each read rather than assumed. (1) THE CONTROLLER IS NOT INSTALLED. charts/bundle/bundle.yaml's
+      phase 10 is Kube-OVN, alone: no Cilium, no Envoy Gateway, no Gateway API definitions. So the
+      first deliverable is a bundle component — ADR-011's licence reading included; Envoy Gateway and
+      Coraza are both Apache-2.0 — and the measured comparison ADR-019 § Consequence for Envoy
+      Gateway asks for against Cilium's own Gateway API implementation, before a chart. (2) THE PROXY
+      HAS TO SIT INSIDE THE TENANT'S SUBNET, for `the-proxy-is-inside-the-tenants-network`'s reason,
+      and the pod is not this platform's to annotate: Envoy Gateway creates the Envoy Deployment for a
+      Gateway itself, in its own namespace by default; `provider.kubernetes.deploy.type:
+      GatewayNamespace` (read at v1.9.1) moves it into the Gateway's namespace, which is
+      ReconcileDriver.NamespaceFor's, and the `logical_switch` and `ip_pool` annotations go through
+      an EnvoyProxy resource's pod template. Every object this type renders is then owned by a
+      CONTROLLER — a Gateway, an EnvoyProxy, an HTTPRoute, a Backend, an EnvoyExtensionPolicy — which
+      is charts/managed/postgres' shape rather than this chart's, and the cluster-backed suite shows
+      none of it for the reason charts/managed/kube-ovn-vpc's
+      `the-cluster-backed-suite-proves-less-than-it-looks` gives. (3) BACKENDS ARE ADDRESSES, for
+      `backends-are-addresses-and-not-resource-ids`' reason: a tenant VPC has no Service and no DNS.
+      Gateway API's `backendRefs` name a Service unless told otherwise, and the way to a bare address
+      is Envoy Gateway's `gateway.envoyproxy.io/v1alpha1 Backend` with `spec.endpoints[].ip` — an
+      extension that is OFF by default, `extensionApis.enableBackend: true`, "due to security
+      considerations": a Backend can point a proxy at anything reachable from the proxy's network
+      namespace, which is exactly why (2) is a requirement and not a preference. (4) ROUTES ARE ONE
+      CHILD RESOURCE EACH — `applicationGateways/{name}/routes/{name}` — and this is the one place in
+      the family where the substrate's object model DODGES charts/managed/kube-ovn-vpc's
+      `static-routes-are-not-expressible` rather than hitting it: an HTTPRoute is its own object,
+      attaching to its Gateway by `parentRefs`, so a child renders a whole object of its own and
+      nothing co-owns the parent — the peering blocker does not apply. The Gateway's own
+      `spec.listeners[]` is still an array, and a fixed pair (one HTTP, one HTTPS) from scalar
+      properties is what fits. (5) THE WAF IS AN EnvoyExtensionPolicy loading coraza-proxy-wasm
+      (`wasm[].code.type: Image`, or `HTTP` with a sha256), targeting the Gateway, with the CRS rule
+      set and paranoia level as that plugin's configuration — so the wasm image needs the digest
+      discipline charts/bundle's `images:` lists have, not a moving tag. ⚠ TLS: cert-manager is in
+      the bundle (phase 15), so ACME issuance is real; "an uploaded certificate from Vault" is not,
+      because CyberCloud.KeyVault/vaults is not one of the published types, and an upload is
+      ReconcileContext's ISecretResolver until it is. ⚠ AND IT IS PRIVATE TO THE VPC UNTIL THE
+      INBOUND ATTACHMENT LANDS, exactly as this row is — `nothing-can-be-reached-from-outside-the-vpc`
+      above and charts/managed/kube-ovn-eip's `only-a-nat-gateway-can-be-given-an-address` — and it
+      is as much a single point of failure as `one-proxy-is-a-single-point-of-failure` says, since N
+      Envoy replicas are N subnet addresses with no VIP to share. None of this is a chart; all of it
+      is what a chart would have to know.

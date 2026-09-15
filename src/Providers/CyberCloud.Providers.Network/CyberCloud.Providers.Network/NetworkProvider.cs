@@ -293,8 +293,15 @@ namespace CyberCloud.Providers.Network;
 ///     </list>
 ///     <para>
 ///         ⚠ <b>NO <c>applicationGateways</c> OR <c>privateEndpoints</c>, AND NO FLOW LOGS.</b> The
-///         first and the third are #31's other two nouns and stay owed there; docs/plan/14 puts
-///         <c>privateEndpoints</c> at M3.
+///         first and the third are #31's other two nouns and stay owed there, each measured before
+///         it was left: <c>applicationGateways</c> at
+///         <c>charts/managed/haproxy/conformance.yaml § owed</c>,
+///         <c>application-gateway-is-not-an-http-mode-of-this-proxy</c> — the L7 controller is not
+///         in <c>charts/bundle</c>, the proxy has to be inside the tenant's subnet, backends are
+///         addresses, routes are one child each, and the WAF is an <c>EnvoyExtensionPolicy</c> —
+///         and flow logs at <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
+///         <c>flow-logs-have-nothing-to-render</c>, which is why they are not a type under this
+///         namespace at all. docs/plan/14 puts <c>privateEndpoints</c> at M3.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE SHORT NAMES HAVE TO STAY CLEAR OF THIS GROUP'S KEY AND OF EACH OTHER, AND OF

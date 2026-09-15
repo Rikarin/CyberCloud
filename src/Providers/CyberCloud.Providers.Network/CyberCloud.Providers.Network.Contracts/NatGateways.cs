@@ -42,7 +42,7 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         </b> <c>NetworkSubnets.Schema2026</c> declares <c>natOutgoing</c>, described as
 ///         <i>"whether workloads in this subnet reach the internet through source NAT"</i>. Read
 ///         firsthand in <c>pkg/daemon/gateway.go</c> at <c>v1.16.2</c>, <c>isSubnetNeedNat</c> requires
-///         <c>subnet.Spec.Vpc == c.config.ClusterRouter</c> — the node-side masquerade honours the
+///         <c>subnet.Spec.Vpc == c.config.ClusterRouter</c> — the node-side masquerade honors the
 ///         flag <b>only for subnets of the default VPC</b>, and every subnet this provider renders binds
 ///         to a tenant's own <c>Vpc</c>. So on this platform <c>natOutgoing</c> is a control the
 ///         substrate ignores, which <c>NetworkSubnets</c>' own remarks call <i>"the worst of the three

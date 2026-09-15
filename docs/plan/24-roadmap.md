@@ -91,18 +91,21 @@ Architecture`'s **Generated surfaces** gate regenerates every surface from the p
 compares bytes, which is what makes "and drift fails the build" a fact rather than an intention:
 
 ```text
-✔ Generated surfaces  Enforced  22 resource type(s) over 2 OpenAPI document(s), 3 derived file(s) —
+✔ Generated surfaces  Enforced  24 resource type(s) over 2 OpenAPI document(s), 3 derived file(s) —
   the cyc verb tree, the .NET SDK and the portal forms — and 6 file(s) of the portal's TypeScript
   client, all regenerated and compared byte-for-byte
-✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 140 type(s), each compiled on its
-  own against CyberCloud.Sdk — 170 partial member(s) accepted as declared-but-not-implemented
+✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 255 type(s), each compiled on its
+  own against CyberCloud.Sdk — 183 partial member(s) accepted as declared-but-not-implemented
 ```
 
 ⚠ **The second gate is younger than the first and exists because the first was not enough** (#73): a
 byte-comparison proves the emitter is deterministic and proves nothing about whether what it emitted is
 valid C#. ⚠ And "compiles" is still short of "packaged" — #79 is open against fourteen duplicate wire
-names in that same SDK, and the 170 partial members are the hand-written half that does not exist yet
-([21 § Generation](21-cli-and-sdks.md)).
+names in that same SDK, and the 183 partial members are the hand-written half that does not exist yet
+([21 § Generation](21-cli-and-sdks.md)). ⚠ These two lines were pinned by #45 at 22 types and had not been
+re-pasted since — two recounts went by and left them reading 22 — so they are what the gate printed
+on 2026-09-15, and [§ What has landed](#what-has-landed--recounted-2026-09-15) holds the copy a test
+reads; this one nothing does.
 
 ⚠ **Criteria 1, 2, 3 and 5 are not marked here, and the reason is the reason for the whole `Landed`
 convention:** the published type list can say that `CyberCloud.Sample/widgets` exists, and it cannot say
@@ -119,7 +122,7 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Item | EM | Doc | Landed |
 |---|---|---|---|
 | Identity: OpenIddict, users/groups/apps/SPs, passkeys, TOTP, sign-up flow, sessions | 4.8 | [11](11-identity.md) | — [01](01-azure-parity-catalogue.md) gives this row a module and no resource type, so nothing in the type list is evidence either way |
-| Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 22. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
+| Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 24. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
 | Gateway: pipeline, auth, rate limits, region proxy, SignalR hubs, LRO endpoints | 4.2 | [10](10-gateway-and-api.md) | — no resource type. ⚠ #68 is an open **blocker**: the deployed gateway registers no `ICallerContextResolver` and 500s on every request, which is a different failure from "not written" and a worse one to read a green table over |
 | **Managed Kubernetes** (CAPI + Kamaji + KubeVirt) + node pools + credentials | 4.0 | [09](09-kubernetes-fabric.md), [13](13-compute-vm-containers.md) | ◐ `ContainerService/managedClusters` and `…/agentPools` both published; **the third noun in this row is the one that is owed.** The descriptor writes `kube-secret://{namespace}/{cluster}-kubeconfig#value` and nothing resolves that scheme, so the first call through an attached connection fails on the credential — `charts/managed/kubernetes/conformance.yaml` § `the-cluster-this-creates-is-not-connectable`. #24 is open behind it: no bootable node image for a Kubernetes minor worth offering |
 | Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 24 |
@@ -173,7 +176,7 @@ target scale.
 | Compute | VMs + disks + images, scale sets, container instances | 3.8 | #28 | |
 | Registry | NuGet/npm/Maven feeds | 1.5 | #29 | |
 | Storage | File shares, backup vaults, customer-managed keys | 3.0 | #30 | |
-| Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | ◐ `Network/virtualNetworks/natGateways` published (#31, 2026-09-15), on the router's own `OvnSnatRule` naming the address `publicIpAddresses` already renders rather than on the `VpcNatGateway` pod [14](14-networking.md) names — and it is the first thing on the platform that attaches a public address to anything. ⚠ **Peering is ⛔ blocked inside this repository, and the blocker is the platform's apply path rather than the substrate alone.** A Kube-OVN peering is two entries on two `Vpc` specs, both atomic lists (the `routeTables` refusal, twice over), and `KubeCommandBuilder` stamps every apply with the *applying* resource's ADR-013 labels — so a child writing its parent's object is a `FieldManagerConflict` on `resource-id`, `resource-type` and `reconcile-hash` by construction. Two resources cannot own one Kubernetes object on this platform today; what would close it is in `src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network/NetworkProvider.cs` and `charts/managed/kube-ovn-vpc/conformance.yaml § owed`. Application gateway + WAF and flow logs are untouched. ⚠ The 3.6 is [14 § Effort](14-networking.md)'s 2.0 + 0.8 + 0.8; what landed is the NAT half of the 0.8 line, so no EM is claimed for this row |
+| Network | Application gateway + WAF, NAT, peering, flow logs | 3.6 | #31 | ◐ `Network/virtualNetworks/natGateways` published (#31, 2026-09-15), on the router's own `OvnSnatRule` naming the address `publicIpAddresses` already renders rather than on the `VpcNatGateway` pod [14](14-networking.md) names — and it is the first thing on the platform that attaches a public address to anything. ⚠ **Peering is ⛔ blocked inside this repository, and the blocker is the platform's apply path rather than the substrate alone.** A Kube-OVN peering is two entries on two `Vpc` specs, both atomic lists (the `routeTables` refusal, twice over), and `KubeCommandBuilder` stamps every apply with the *applying* resource's ADR-013 labels — so a child writing its parent's object is a `FieldManagerConflict` on `resource-id`, `resource-type` and `reconcile-hash` by construction. Two resources cannot own one Kubernetes object on this platform today; what would close it is in `src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network/NetworkProvider.cs` and `charts/managed/kube-ovn-vpc/conformance.yaml § owed`. ⚠ **#31 stays open: one noun of four landed, and the other three are owed rows rather than a sentence.** Application gateway + WAF is measured and owed at `charts/managed/haproxy/conformance.yaml § owed`, `application-gateway-is-not-an-http-mode-of-this-proxy` — the L7 controller is not in `charts/bundle` at all, so its first deliverable is a bundle component and [ADR-019](02-technology-decisions.md)'s comparison, not a chart. Flow logs are measured and owed at `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `flow-logs-have-nothing-to-render` — the bundle installs no Cilium and so no Hubble, the substrate's CRDs export no flow, and [01](01-azure-parity-catalogue.md) files the deliverable under `CyberCloud.Monitor` at M3 rather than here. ⚠ The 3.6 is [14 § Effort](14-networking.md)'s 2.0 + 0.8 + 0.8; what landed is the NAT half of the 0.8 line, so no EM is claimed for this row |
 | Observability | App Insights views, OTel collector service, managed Grafana, alerts | 3.0 | #32 | |
 | Communication | Channels, templates, suppression, delivery receipts | 2.0 | #33 | |
 | **Mail** | Postfix/Dovecot/Rspamd, domains, mailboxes, deliverability, minimal webmail | 3.5 | #34 | ◐ `Mail/domains` published (#34, 2026-09-12) with the chart under `charts/managed/mail`. ⚠ The first noun of five; mailboxes, deliverability and the webmail are not resource types yet, so the type list confirms nothing about the other four |
@@ -324,6 +327,21 @@ recounting here — the test this section describes went red and stayed red for 
 exactly the drift it exists to catch; 23 was right until #31 published `Network/virtualNetworks/natGateways`
 on 2026-09-15 and recounted in the same commit, which is what the test is for; 24 is right. That is worth *establishing* rather than
 assuming, and it is cheap to establish twice because two independent producers can be asked for it.
+
+⚠ **Two branches recounted to 24 on the same day from the same 23, and only one of them can be
+right after the other merges.** #31 counts `Network/virtualNetworks/natGateways`; #30's branch
+counts `Storage/accounts/fileShares`, in this same paragraph, the phase-3 row below, and the phase-3
+exit paragraph above. Whichever merges second lands on a master that already has 24 and is itself
+the 25th. ⚠ And the merge was run rather than imagined — `git merge-tree --write-tree` over the two
+branches — and it conflicts on the *prose* and not on the *numbers*: the phase-3 row, this
+paragraph, the exit paragraph and the two M2 rows conflict, while the pinned `24` under the command,
+the gate line, "All 24" and the **Total** row were changed identically on both sides and merge
+clean — at 24, which is then wrong. Resolve it by re-running the command, not by picking a side:
+every count in this section, the phase-3 row and its Total, the phase-3 exit paragraph, the gate
+line quoted under phase 2's criterion 4, and the three rows that say "the 24" in prose (managed
+identity, Vault, tenancy) all move to 25 together. `RoadmapReconciliationTests` fails on the table,
+the Total and the pinned number if that is skipped; the prose it cannot see is why the list is
+written out here.
 
 The document, read directly:
 
@@ -480,7 +498,7 @@ The estimate is load-bearing on two assumptions, both stated so they could be ch
 have now been checked**:
 
 1. **That the operator selections in [12](12-managed-data-services.md) hold up without a fork —
-   holding, with one exception that is worse than a fork.** All 21 charts under `charts/managed/` carry
+   holding, with one exception that is worse than a fork.** All 23 charts under `charts/managed/` carry
    the `SOURCE` file [R4](25-risks-and-open-questions.md) asks for and every one of them records
    `vendored: none`: nothing upstream has been forked, because nothing upstream has been copied — these
    charts render somebody else's CRDs and were written here. ⚠ The exception is Qdrant, and it fails the

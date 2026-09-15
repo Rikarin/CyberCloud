@@ -4412,7 +4412,7 @@ public sealed partial class SubnetData {
         [JsonPropertyName("enableDhcp")]
         public bool? EnableDhcp { get; set; }
 
-        /// <summary>Whether the fabric's node gateway masquerades this subnet's outbound traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: Kube-OVN honours it only for subnets of its default VPC, and every subnet here is in a tenant's own. It stays because the api-version is published. Outbound access for a subnet is a natGateways resource, which translates the subnet to a public IP address you hold.</summary>
+        /// <summary>Whether the fabric's node gateway masquerades this subnet's outbound traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: Kube-OVN honors it only for subnets of its default VPC, and every subnet here is in a tenant's own. It stays because the api-version is published. Outbound access for a subnet is a natGateways resource, which translates the subnet to a public IP address you hold.</summary>
         /// <remarks>Defaults to false when left unset.</remarks>
         [JsonPropertyName("natOutgoing")]
         public bool? NatOutgoing { get; set; }

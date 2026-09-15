@@ -268,4 +268,33 @@ owed:
       or "hand-write one when there is no operator to ask". A Vpc HAS NO POD. The metrics that matter
       for tenant networking are per-flow and come from Hubble into ClickHouse — docs/plan/14
       § Observability — which is a pipeline rather than a scrape, and it is docs/plan/16's rather than
-      this provider's.
+      this provider's. ⚠ And "come from Hubble" is a plan, not a cluster: the row below says what the
+      bundle actually installs.
+  - id: flow-logs-have-nothing-to-render
+    says: >
+      ⚠ docs/plan/14 § Observability's flow logs — 0.8 EM with the troubleshooting views, #31's
+      fourth noun — ARE OWED, AND NOT AS A TYPE UNDER CyberCloud.Network, because on this substrate
+      there is no object for one to render. That was established rather than assumed, in four
+      readings. (1) charts/bundle/bundle.yaml installs Kube-OVN as the CNI and nothing else at phase
+      10 — no Cilium — so a bundle-built cluster has no Hubble, and whether Hubble would see
+      OVN-switched tenant traffic on a cluster that did carry both is UNMEASURED; docs/plan/14's
+      "Hubble flow logs into ClickHouse" is a design and not yet a datapath. (2) The substrate's CRDs
+      carry no flow export. Read at v1.16.2: SubnetSpec has 41 fields and none of them exports a
+      flow; `acls[]` is `{direction, priority, match, action}` with no log field; Vpc has nothing
+      either. (3) What Kube-OVN DOES log is OVN ACL `log=true` on three kinds of rule — NetworkPolicy
+      (UpdateIngressACLOps/UpdateEgressACLOps, behind ENABLE_NP, which ADR-019 turns off),
+      AdminNetworkPolicy and ClusterNetworkPolicy, and a `private: true` subnet's default drop
+      (SetLogicalSwitchPrivate, severity warning) — and NEVER a security group's: UpdateSgACL,
+      newSgRuleACL, CreateSgDenyAllACL and CreateSgBaseACL set none. Those lines land in each node's
+      `ovn-controller` log, which is a platform log, not a tenant's. (4) The rest is packets rather
+      than flows: `--enable-mirror` on kube-ovn-cni is node-wide and `ovn.kubernetes.io/mirror:
+      "true"` is per pod, and both copy frames to a node NIC (`mirror0`) for tcpdump; OVS's own
+      IPFIX/NetFlow/sFlow on br-int is per-node `ovs-vsctl` state that the chart does not expose and
+      ADR-020's Talos nodes give no shell to set. ⚠ SO A `flowLogs` RESOURCE WOULD BE
+      `route-tables-have-no-object` AGAIN: a type that answers 202 and converges nothing. What it IS:
+      a collector the bundle does not carry (Hubble, with a measurement that it sees OVN traffic, or
+      OVS IPFIX, with a per-node configuration seam the platform does not have), docs/plan/16's
+      pipeline into ClickHouse keyed by ADR-013's tenant label, and a query surface — docs/plan/01
+      files it under CyberCloud.Monitor at M3, "Flow logs from Cilium/Hubble", and that is where it
+      belongs. ⚠ The one flow-shaped signal a tenant can be given today without any of that is the
+      `private` subnet's drop log, and it is on the wrong side of the tenant boundary.

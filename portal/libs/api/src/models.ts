@@ -1552,7 +1552,7 @@ export interface NetworkVirtualNetworksSubnetsData {
     clusterId: string;
     /** Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container. */
     enableDhcp?: boolean;
-    /** Whether the fabric's node gateway masquerades this subnet's outbound traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: Kube-OVN honours it only for subnets of its default VPC, and every subnet here is in a tenant's own. It stays because the api-version is published. Outbound access for a subnet is a natGateways resource, which translates the subnet to a public IP address you hold. */
+    /** Whether the fabric's node gateway masquerades this subnet's outbound traffic. Off by default. ⚠ ON A TENANT VIRTUAL NETWORK THIS FLAG DOES NOTHING: Kube-OVN honors it only for subnets of its default VPC, and every subnet here is in a tenant's own. It stays because the api-version is published. Outbound access for a subnet is a natGateways resource, which translates the subnet to a public IP address you hold. */
     natOutgoing?: boolean;
     /** Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all. */
     private?: boolean;
