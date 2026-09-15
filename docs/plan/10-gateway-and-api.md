@@ -69,6 +69,28 @@ written. ⚠ The tenant path carries a `GET` and no `PUT`, and the absence is em
 stage 3 below resolves the request's tenant from the token, so a create route could not authenticate,
 and documenting one would have generated a `cyc` verb that fails every time it is used.
 
+**The scope collections are the third scope grammar, and #63's answer applied a second time.**
+`GET /tenants/{t}/subscriptions` and `GET /tenants/{t}/subscriptions/{s}/resourceGroups` — the
+item address one segment short, three or five segments, no `/providers/` — route as
+`RouteKind.ScopeCollection`, tried after the item grammar and only on a `GET`, and reach
+`IScopeManager.ListAsync`, which is the resource collection's shape one level up: the parent grain's
+own index (`ITenantGrain.ListSubscriptionsAsync`, `ISubscriptionGrain.ListResourceGroupsAsync`)
+ordered ordinally and cut by `$top`/`$skipToken`, one `ListObjects` for the page filtered by `read`
+([07](07-rebac-authorization.md) § ListObjects — Azure's `GET /subscriptions` semantics, what the
+caller holds any role on), a `Check` per member when the engine declines, and each survivor rendered
+by the by-id read so an element of `{ "value": [ … ], "nextLink": … }` is byte-for-byte what a `GET`
+of that scope returns. The two collections differ in one check: the subscription collection asks
+nothing about the tenant — a caller holding `reader` on one subscription sees that one — and the
+resource-group collection answers the canonical `404` for a subscription the caller cannot read,
+because an empty page under it would confirm the subscription exists. A `PUT`, `PATCH`, `POST` or
+`DELETE` on either path is a `400` that names the item address a scope is created at; there is no
+`/tenants` collection, because the only tenant a request can address is its own. Both are emitted
+through the same scope source as the items — `x-cybercloud-scope` plus
+`x-cybercloud-scope-collection` — so `cyc scope subscription list`, `cyc scope resource-group list`,
+the three SDKs' list methods and the portal's generated client all learn them from the document. A
+collection routed by hand and left out of it would recreate the state #63 closed: an address the
+gateway serves where the compatibility gate cannot see it break.
+
 **The role assignment API is an extension address on every scope and on every resource, and it is a
 third component behind the same door.** `GET`, `PUT` and `DELETE` on
 `{scope}/providers/CyberCloud.Authorization/roleAssignments/{name}` reach `IRoleAssignmentManager`
@@ -240,7 +262,7 @@ that slept through a deploy catches up rather than showing stale state forever.
 
 | Caller | Credential | Notes |
 |---|---|---|
-| Portal | Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie scoped to the identity host | Access token never in `localStorage` |
+| Portal | Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie scoped to the identity host | Access token never in `localStorage`. The cookie is `__Host-cyc-refresh`, `SameSite=Lax`, and the identity host both writes it and reads it back only when the request's `Origin` is one of the portal's registered redirect-URI origins — `Lax` lets a same-site subdomain's `POST` carry it, and a top-level cross-site form `POST` would have its `Set-Cookie` honoured whatever `SameSite` says; the `Origin` check is what refuses both ([11 § Protocol](11-identity.md#protocol)) |
 | CLI | Device code, or client credentials for CI | Token cached in the OS keychain |
 | SDK | `TokenCredential` — the Azure SDK shape, so the mental model transfers | |
 | Service principal | Client credentials, or a certificate | |

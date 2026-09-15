@@ -3,12 +3,17 @@ using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.Host.Api;
 using CyberCloud.Identity.Host.Credentials;
+using CyberCloud.Identity.Host.SignUp;
 using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
+using CyberCloud.ResourceManager;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace CyberCloud.Identity.Host;
 
@@ -82,6 +87,33 @@ public static class IdentityHostServices {
         services.TryAddSingleton<IClientSecretSeam, UnavailableClientSecrets>();
         services.TryAddSingleton<TokenApi>();
 
+        // ── The interactive grants ─────────────────────────────────────────────────────────────
+        //
+        // The tenant a request names, resolved through the platform directory; the two static
+        // first-party registrations and the resolver that consults them before a tenant's index;
+        // the /authorize decision; and the development key file that IdentityHostKeys reads. Each
+        // is TryAdd so a test can hand the handlers a double at the seam — a client resolver over a
+        // dictionary, say — without a cluster behind it.
+        services.TryAddSingleton<TenantHint>();
+        services.TryAddSingleton<FirstPartyClients>();
+        services.TryAddSingleton<IClientResolver, ClientResolver>();
+        services.TryAddSingleton<AuthorizeApi>();
+        services.TryAddSingleton<DevelopmentKeyFile>();
+
+        // ⚠ The data-protection key ring follows the signing keys onto disk when a development key
+        // directory is configured, and for the same reason: it protects the session cookie and the
+        // passkey-challenge cookie, and a ring that dies with the process signs everybody out on
+        // restart just as an ephemeral signing key does. DevelopmentKeyFile's constructor is what
+        // refuses the directory outside Development, so this configure cannot run there.
+        services.AddDataProtection();
+        services.AddOptions<KeyManagementOptions>()
+            .Configure<DevelopmentKeyFile, ILoggerFactory>((keys, file, loggers) => {
+                    if (file.IsConfigured) {
+                        keys.XmlRepository = new FileSystemXmlRepository(new DirectoryInfo(file.DataProtectionDirectory), loggers);
+                    }
+                }
+            );
+
         // ── WebAuthn ───────────────────────────────────────────────────────────────────────────
         //
         // ⚠ The relying-party id and the origin list are the whole of a passkey's phishing
@@ -99,6 +131,26 @@ public static class IdentityHostServices {
         services.TryAddSingleton<IPasskeyService, Fido2PasskeyService>();
         services.TryAddSingleton<PasskeyChallengeCookie>();
         services.TryAddSingleton<SignInApi>();
+
+        // ── Self-serve sign-up — docs/plan/11 § Sign-up and tenant creation ──────────────────────
+        //
+        // ⚠ THE RESOURCE MANAGER, IN THE IDENTITY HOST, AND AFTER THE IDENTITY REGISTRATIONS. Sign-up
+        // ends by creating a tenant, a subscription and a resource group, and the seam that creates
+        // them is IScopeManager — docs/plan/06 § The hierarchy — whose registration lives in one
+        // place for the reason ResourceManagerSiloBuilderExtensions gives: it names the authorization
+        // engine, and a second copy of that list is a second place to forget the IScopeAuthorizer. The
+        // feeds host is the precedent for a client host making this one call. It is a TryAdd list, so
+        // it comes AFTER the identity registrations above: IClock and IPasswordHasher are ours and
+        // must stay ours, and the manager's own IClock default would otherwise win by ordering.
+        //
+        // What it registers and never resolves here — DriftScanner, ReconcileDriver, the provider
+        // registry — is the same arrangement the gateway lives with, and an IProviderRegistry with no
+        // provider is never asked for by anything on the scope path.
+        services.AddCyberCloudResourceManager();
+
+        services.TryAddSingleton<SignUpTicketCookie>();
+        services.TryAddSingleton<SignUpOrchestrator>();
+        services.TryAddSingleton<SignUpApi>();
 
         return services;
     }

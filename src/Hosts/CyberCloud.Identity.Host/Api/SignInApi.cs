@@ -3,11 +3,10 @@ using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
+using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.SignIn;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Orleans.Multitenant;
-using System.Globalization;
 using System.Security.Claims;
 
 namespace CyberCloud.Identity.Host.Api;
@@ -51,6 +50,17 @@ public sealed record SignInApiResult(
 ///         project.
 ///     </para>
 ///     <para>
+///         ⚠ <b>Which tenant is decided once, at the first factor, and read back everywhere
+///         else.</b> The three first-factor requests carry a <c>tenant</c> hint that
+///         <see cref="TenantHint" /> resolves through the platform directory before any per-tenant
+///         grain is touched — an unknown value is <see cref="Reject" /> with no grain call, because
+///         a grain keyed from an unauthenticated caller's string is an activation table filled by
+///         whoever is probing. The cookie is stamped with the result, the passkey ticket carries it
+///         between <c>begin</c> and <c>complete</c>, and the second-factor endpoints read it off the
+///         cookie through <see cref="IdentitySessionPrincipal.TenantId" /> — so no later request
+///         can move a session between tenants.
+///     </para>
+///     <para>
 ///         <b>Where the uniformity actually comes from.</b> The enumeration and timing hardening is
 ///         <see cref="SignInService" />'s — the lockout gate before any grain call, the dummy
 ///         Argon2id verification on the no-such-user branch, the fixed timing floor. This class must
@@ -74,11 +84,10 @@ public sealed class SignInApi(
     IGrainFactory grains,
     IPasskeyService passkeys,
     ITotpSecretSeam totpSecrets,
-    IOptions<IdentityHostOptions> options,
+    TenantHint tenants,
     IClock clock,
     ILogger<SignInApi> logger
 ) {
-    readonly IdentityHostOptions options = options.Value;
 
     /// <summary>
     ///     What <c>POST /api/signin/begin</c> offers, for every address.
@@ -161,75 +170,25 @@ public sealed class SignInApi(
         // added by whoever edits this method next.
         var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
 
+        // ⚠ Answered before SignInService and its timing floor, so an unknown tenant is faster than a
+        // wrong password. That is a deliberate trade: a slug is a tenant's public name (docs/plan/11
+        // § Hosts gives tenants subdomains), and the alternative — running the floor against a
+        // tenant that does not exist — would activate lockout and index grains in a tenant named by
+        // the caller, which is the amplifier docs/plan/11 § Credentials forbids.
+        if (await tenants.ResolveAsync(request?.Tenant, cancellationToken) is not { } tenantId) {
+            IdentityLog.SignInRefused(logger, Guid.Empty, "unknown-tenant", string.Empty);
+            return Reject(returnUrl);
+        }
+
         var outcome = await signIn.SignInWithPasswordAsync(
-            options.TenantId,
+            tenantId,
             request?.Email ?? string.Empty,
             request?.Password ?? string.Empty,
             context,
             cancellationToken
         );
 
-        return Complete(outcome, returnUrl);
-    }
-
-    /// <summary>
-    ///     <c>POST /api/signup</c> — self-serve sign-up.
-    /// </summary>
-    /// <param name="request">The address and where to go afterwards.</param>
-    /// <param name="cancellationToken">Cancels the lookup, including its timing pad.</param>
-    /// <returns>
-    ///     Always <see cref="UniformFailures.SignUp" />, with <c>succeeded: false</c> — the page
-    ///     renders the message and ignores the flag.
-    /// </returns>
-    /// <remarks>
-    ///     <para>
-    ///         ⚠ <b>THIS DOES NOT CREATE ANYTHING, AND THE RESPONSE IS STILL THE RIGHT ONE.</b>
-    ///         docs/plan/11 § Sign-up and tenant creation makes self-serve sign-up "email + passkey →
-    ///         verify → create tenant → create default subscription and resource group → seed ReBAC →
-    ///         optionally provision an in-house cluster", explicitly "a long-running operation with a
-    ///         step list". None of that is built.
-    ///     </para>
-    ///     <para>
-    ///         ⚠
-    ///         <b>
-    ///             The step that gates all of it — mailing the address to verify it — is no longer
-    ///             the blocker, and this paragraph used to say it was.
-    ///         </b> It read that nothing in the
-    ///         tree called <c>IOtpDeliverySeam.DeliverAsync</c> and that no host registered an
-    ///         implementation. Both were true and neither is now: <c>IUserGrain.IssueOtpAsync</c>
-    ///         mints, records and delivers a code, and <see cref="OtpPurpose.Enrolment" /> is the
-    ///         purpose for proving control of an address. What is missing is the <b>user</b> — a
-    ///         code is issued <i>by a user's grain</i>, to an address that grain already holds as
-    ///         verified, and a self-serve sign-up has neither yet. So the verification step needs
-    ///         the two-phase create of docs/plan/06 § Two-phase create in front of it, which is the
-    ///         long-running operation above rather than a mail. <see cref="OtpPolicy" /> is where
-    ///         the destination rule is argued.
-    ///     </para>
-    ///     <para>
-    ///         What <i>is</i> built here is the shape, and the shape is the part with a security
-    ///         property attached: the answer and its timing are identical for a free address and a
-    ///         taken one, because "the mail that follows is what differs, and it goes to the address
-    ///         either way". <c>RequestPasswordResetAsync</c> is the same arrangement for the same
-    ///         reason. Wiring the long-running operation later must not change what this returns.
-    ///     </para>
-    /// </remarks>
-    public async Task<SignInApiResult> SignUpAsync(
-        SignUpRequest? request,
-        CancellationToken cancellationToken = default
-    ) {
-        var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
-
-        // Resolves the address and records an unknown-address probe, on the uniform timing floor.
-        // ⚠ The result is deliberately not branched on.
-        _ = await signIn.RequestPasswordResetAsync(
-            options.TenantId,
-            request?.Email ?? string.Empty,
-            cancellationToken
-        );
-
-        IdentityLog.SignUpRequested(logger, options.TenantId);
-
-        return new(new(false, false, returnUrl, UniformFailures.SignUp));
+        return Complete(tenantId, outcome, returnUrl);
     }
 
     /// <summary>
@@ -257,22 +216,29 @@ public sealed class SignInApi(
 
         // ⚠ A malformed address takes the same path as a well-formed unknown one: an empty
         // credential list, a real challenge. The empty string is safe as the ticket's address because
-        // completion re-resolves it and finds nothing.
+        // completion re-resolves it and finds nothing. An unknown tenant takes the same path for the
+        // same reason — the ticket then names no tenant, and completion refuses it.
         var address = normalized.IsSuccess ? normalized.GetValueOrThrow() : string.Empty;
+        var tenantId = await tenants.ResolveAsync(request?.Tenant, cancellationToken);
 
-        var credentials = address.Length == 0 || await ResolveAsync(address, cancellationToken) is not { } userId
-            ? []
-            : await ListPasskeysAsync(userId);
+        var credentials = address.Length == 0
+            || tenantId is null
+            || await ResolveAsync(tenantId.Value, address, cancellationToken) is not { } userId
+                ? []
+                : await ListPasskeysAsync(tenantId.Value, userId);
 
         var challenge = await passkeys.BeginAssertionAsync(credentials);
         if (challenge.TryGetError(out var error)) {
-            IdentityLog.PasskeyChallengeRefused(logger, options.TenantId, error.Message);
+            IdentityLog.PasskeyChallengeRefused(logger, tenantId ?? Guid.Empty, error.Message);
             return null;
         }
 
         var issued = challenge.GetValueOrThrow();
 
-        return (new(issued.OptionsJson), new(issued.OptionsJson, address, issued.ExpiresAt));
+        return (
+            new(issued.OptionsJson),
+            new(issued.OptionsJson, tenantId is null ? string.Empty : address, issued.ExpiresAt, tenantId ?? Guid.Empty)
+        );
     }
 
     /// <summary>
@@ -294,27 +260,33 @@ public sealed class SignInApi(
     ) {
         var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
 
-        if (ticket is null || ticket.Email.Length == 0 || string.IsNullOrEmpty(request?.AssertionJson)) {
-            IdentityLog.PasskeyAssertionRefused(logger, options.TenantId, "no-challenge");
+        // ⚠ A registration ticket is "no challenge" here. PasskeyChallengeKind says why the two
+        // ceremonies must not answer each other's cookie.
+        if (ticket is null
+            || ticket.Kind != PasskeyChallengeKind.Assertion
+            || ticket.Email.Length == 0
+            || string.IsNullOrEmpty(request?.AssertionJson)) {
+            IdentityLog.PasskeyAssertionRefused(logger, ticket?.TenantId ?? Guid.Empty, "no-challenge");
             return Reject(returnUrl);
         }
 
-        var userId = await ResolveAsync(ticket.Email, cancellationToken);
+        var tenantId = ticket.TenantId;
+        var userId = await ResolveAsync(tenantId, ticket.Email, cancellationToken);
         if (userId is null) {
-            IdentityLog.PasskeyAssertionRefused(logger, options.TenantId, "unknown-address");
+            IdentityLog.PasskeyAssertionRefused(logger, tenantId, "unknown-address");
             return Reject(returnUrl);
         }
 
         var credentialId = PasskeyAssertion.CredentialIdOf(request.AssertionJson);
         if (credentialId is null) {
-            IdentityLog.PasskeyAssertionRefused(logger, options.TenantId, "malformed-assertion");
+            IdentityLog.PasskeyAssertionRefused(logger, tenantId, "malformed-assertion");
             return Reject(returnUrl);
         }
 
         // ⚠ By the user id already resolved, not by the address again. Resolving twice would be a
         // second email-index activation on an unauthenticated path for a value this method already
         // holds — and the two lookups could disagree if the address were reassigned between them.
-        var enrolled = await ListPasskeysAsync(userId.Value);
+        var enrolled = await ListPasskeysAsync(tenantId, userId.Value);
         var credential = enrolled.FirstOrDefault(x => string.Equals(
                 x.CredentialId,
                 credentialId,
@@ -323,7 +295,7 @@ public sealed class SignInApi(
         );
 
         if (credential is null) {
-            IdentityLog.PasskeyAssertionRefused(logger, options.TenantId, "credential-not-enrolled");
+            IdentityLog.PasskeyAssertionRefused(logger, tenantId, "credential-not-enrolled");
             return Reject(returnUrl);
         }
 
@@ -337,30 +309,30 @@ public sealed class SignInApi(
             // ⚠ The library's message names "wrong origin" against "bad signature" against "unknown
             // attestation format". It goes to the log and NOT to the response — Fido2PasskeyService's
             // own remarks say so, because in a body it is an oracle.
-            IdentityLog.PasskeyAssertionRefused(logger, options.TenantId, error.Message);
+            IdentityLog.PasskeyAssertionRefused(logger, tenantId, error.Message);
             return Reject(returnUrl);
         }
 
         // ⚠ The counter check is the cloned-authenticator signal and it is the grain's, not this
         // host's: it is the only single-threaded place per user, so it is the only place that can
         // answer without a race.
-        var recorded = await Tenant()
+        var recorded = await Tenant(tenantId)
             .GetGrain<IUserGrain>(GrainKeys.User(userId.Value))
             .RecordPasskeyAssertionAsync(credentialId, verified.GetValueOrThrow());
 
         if (recorded.TryGetError(out _) || !recorded.GetValueOrThrow()) {
-            IdentityLog.PasskeyAssertionRefused(logger, options.TenantId, "signature-counter-regressed");
+            IdentityLog.PasskeyAssertionRefused(logger, tenantId, "signature-counter-regressed");
             return Reject(returnUrl);
         }
 
         var outcome = await signIn.OpenSessionAsync(
-            options.TenantId,
+            tenantId,
             userId.Value,
             AuthenticationMethod.Passkey,
             context
         );
 
-        return Complete(outcome, returnUrl);
+        return Complete(tenantId, outcome, returnUrl);
     }
 
     /// <summary>
@@ -387,15 +359,16 @@ public sealed class SignInApi(
     ) {
         var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
 
-        if (IdentitySessionPrincipal.UserId(principal) is not { } userId) {
+        if (IdentitySessionPrincipal.UserId(principal) is not { } userId
+            || IdentitySessionPrincipal.TenantId(principal) is not { } tenantId) {
             return Reject(returnUrl);
         }
 
-        var user = Tenant().GetGrain<IUserGrain>(GrainKeys.User(userId));
+        var user = Tenant(tenantId).GetGrain<IUserGrain>(GrainKeys.User(userId));
 
         var enrollment = await user.GetTotpAsync();
         if (enrollment.TryGetError(out _)) {
-            IdentityLog.SecondFactorRefused(logger, options.TenantId, userId, "totp-not-enrolled");
+            IdentityLog.SecondFactorRefused(logger, tenantId, userId, "totp-not-enrolled");
             return Reject(returnUrl);
         }
 
@@ -404,19 +377,19 @@ public sealed class SignInApi(
             // ⚠ Reached in every host in this repository today — see UnavailableTotpSecrets. The
             // sentence naming the missing wiring goes to the log; the caller gets the uniform
             // failure, because "the vault is down" is not a fact an unauthenticated caller may learn.
-            IdentityLog.SecondFactorRefused(logger, options.TenantId, userId, vaultError.Message);
+            IdentityLog.SecondFactorRefused(logger, tenantId, userId, vaultError.Message);
             return Reject(returnUrl);
         }
 
         var verification = TotpAuthenticator.Verify(secret.GetValueOrThrow(), request?.Code, clock.UtcNow);
         if (!verification.IsValid) {
-            IdentityLog.SecondFactorRefused(logger, options.TenantId, userId, "totp-rejected");
+            IdentityLog.SecondFactorRefused(logger, tenantId, userId, "totp-rejected");
             return Reject(returnUrl);
         }
 
         var claimed = await user.ClaimTotpCounterAsync(verification.Counter);
         if (claimed.TryGetError(out _) || !claimed.GetValueOrThrow()) {
-            IdentityLog.SecondFactorRefused(logger, options.TenantId, userId, "totp-replayed");
+            IdentityLog.SecondFactorRefused(logger, tenantId, userId, "totp-replayed");
             return Reject(returnUrl);
         }
 
@@ -467,21 +440,22 @@ public sealed class SignInApi(
 
         var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
 
-        if (IdentitySessionPrincipal.UserId(principal) is not { } userId) {
+        if (IdentitySessionPrincipal.UserId(principal) is not { } userId
+            || IdentitySessionPrincipal.TenantId(principal) is not { } tenantId) {
             // No session at all, which .RequireAuthorization() makes unreachable over HTTP. The
             // uniform sign-in failure rather than OtpSent, because there is nothing to send a code to
             // and answering "on its way" would be a lie the page would act on.
             return Reject(returnUrl);
         }
 
-        var issued = await Tenant()
+        var issued = await Tenant(tenantId)
             .GetGrain<IUserGrain>(GrainKeys.User(userId))
             .IssueOtpAsync(OtpPurpose.SignIn, CredentialKind.EmailOtp);
 
         if (issued.TryGetError(out var refused)) {
-            IdentityLog.OtpNotSent(logger, options.TenantId, userId, refused.Message);
+            IdentityLog.OtpNotSent(logger, tenantId, userId, refused.Message);
         } else {
-            IdentityLog.OtpIssued(logger, options.TenantId, userId, OtpPurpose.SignIn, CredentialKind.EmailOtp);
+            IdentityLog.OtpIssued(logger, tenantId, userId, OtpPurpose.SignIn, CredentialKind.EmailOtp);
         }
 
         return new(new(false, true, returnUrl, UniformFailures.OtpSent));
@@ -515,16 +489,17 @@ public sealed class SignInApi(
 
         var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
 
-        if (IdentitySessionPrincipal.UserId(principal) is not { } userId) {
+        if (IdentitySessionPrincipal.UserId(principal) is not { } userId
+            || IdentitySessionPrincipal.TenantId(principal) is not { } tenantId) {
             return Reject(returnUrl);
         }
 
-        var redeemed = await Tenant()
+        var redeemed = await Tenant(tenantId)
             .GetGrain<IUserGrain>(GrainKeys.User(userId))
             .RedeemOtpAsync(OtpPurpose.SignIn, request?.Code ?? string.Empty);
 
         if (redeemed.TryGetError(out _) || !redeemed.GetValueOrThrow()) {
-            IdentityLog.SecondFactorRefused(logger, options.TenantId, userId, "email-otp-rejected");
+            IdentityLog.SecondFactorRefused(logger, tenantId, userId, "email-otp-rejected");
             return Reject(returnUrl);
         }
 
@@ -552,20 +527,21 @@ public sealed class SignInApi(
 
         var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
 
-        if (IdentitySessionPrincipal.UserId(principal) is not { } userId) {
+        if (IdentitySessionPrincipal.UserId(principal) is not { } userId
+            || IdentitySessionPrincipal.TenantId(principal) is not { } tenantId) {
             return Reject(returnUrl);
         }
 
-        var redeemed = await Tenant()
+        var redeemed = await Tenant(tenantId)
             .GetGrain<IUserGrain>(GrainKeys.User(userId))
             .RedeemRecoveryCodeAsync(request?.Code ?? string.Empty);
 
         if (redeemed.TryGetError(out _) || !redeemed.GetValueOrThrow()) {
-            IdentityLog.SecondFactorRefused(logger, options.TenantId, userId, "recovery-code-rejected");
+            IdentityLog.SecondFactorRefused(logger, tenantId, userId, "recovery-code-rejected");
             return Reject(returnUrl);
         }
 
-        IdentityLog.RecoveryCodeBurnt(logger, options.TenantId, userId);
+        IdentityLog.RecoveryCodeBurnt(logger, tenantId, userId);
 
         return Promoted(principal, returnUrl, AuthenticationMethod.RecoveryCode);
     }
@@ -577,7 +553,7 @@ public sealed class SignInApi(
     /// </summary>
     static SignInApiResult Reject(string returnUrl) => new(new(false, false, returnUrl, UniformFailures.SignIn));
 
-    SignInApiResult Complete(Result<SignInOutcome> outcome, string returnUrl) {
+    static SignInApiResult Complete(Guid tenantId, Result<SignInOutcome> outcome, string returnUrl) {
         if (outcome.TryGetError(out _)) {
             return Reject(returnUrl);
         }
@@ -592,7 +568,7 @@ public sealed class SignInApi(
         // remarks carry the argument for one stamped cookie over two cookies.
         return new(
             new(true, value.SecondFactorRequired, returnUrl, string.Empty),
-            IdentitySessionPrincipal.Build(options.TenantId, value)
+            IdentitySessionPrincipal.Build(tenantId, value)
         );
     }
 
@@ -618,8 +594,8 @@ public sealed class SignInApi(
             IdentitySessionPrincipal.Promote(principal, method)
         );
 
-    async Task<IReadOnlyList<PasskeyCredential>> ListPasskeysAsync(Guid userId) {
-        var listed = await Tenant().GetGrain<IUserGrain>(GrainKeys.User(userId)).ListPasskeysAsync();
+    async Task<IReadOnlyList<PasskeyCredential>> ListPasskeysAsync(Guid tenantId, Guid userId) {
+        var listed = await Tenant(tenantId).GetGrain<IUserGrain>(GrainKeys.User(userId)).ListPasskeysAsync();
 
         // ⚠ An empty list on failure rather than a distinguishable error. A user whose grain could
         // not be read must look exactly like a user with no passkey enrolled, which in turn must
@@ -628,14 +604,16 @@ public sealed class SignInApi(
         return listed.IsSuccess ? listed.GetValueOrThrow() : [];
     }
 
-    // ⚠ Through SignInService rather than IEmailIndexGrain directly, which keeps that grain
-    // interface — and CyberCloud.Tenancy.Contracts with it — out of this host's assembly graph. See
-    // that method's remarks for the conditions under which calling it is not an enumeration oracle.
-    Task<Guid?> ResolveAsync(string address, CancellationToken cancellationToken) =>
-        signIn.ResolveAddressAsync(options.TenantId, address, cancellationToken);
+    // ⚠ Through SignInService rather than IEmailIndexGrain directly. The host now references
+    // CyberCloud.Tenancy.Contracts for the directory and the client index (TenantHint,
+    // ClientResolver), so the assembly-graph reason this used to give is gone; what remains is that
+    // method's remarks on the conditions under which calling it is not an enumeration oracle, and
+    // one address-resolution path rather than two.
+    Task<Guid?> ResolveAsync(Guid tenantId, string address, CancellationToken cancellationToken) =>
+        signIn.ResolveAddressAsync(tenantId, address, cancellationToken);
 
     // ⚠ TenantGrainFactory and not IGrainFactory, deliberately — CC1006's discriminator is the TYPE
     // rather than the syntax, so widening this helper would erase exactly what the analyzer reads and
     // turn every call above back into an unqualified reference. SignInService carries the same note.
-    TenantGrainFactory Tenant() => grains.ForTenant(options.TenantId.ToString("D", CultureInfo.InvariantCulture));
+    TenantGrainFactory Tenant(Guid tenantId) => grains.ForTenant(TenantHint.Qualifier(tenantId));
 }

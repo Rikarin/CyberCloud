@@ -672,6 +672,8 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         RecordingChangeSink.Reset();
         ScriptedInterestAuthorizer.Reset();
         RecordingClusterRegistrar.Reset();
+        SwitchableScopeAuthorizer.Reset();
+        ScriptedListObjectsGrain.Reset();
         TestClock.Instance.Reset();
     }
 

@@ -16,8 +16,9 @@ using System.Text;
 namespace CyberCloud.Identity.Host.Tests;
 
 /// <summary>
-///     The token endpoint's decisions — <see cref="TokenApi" /> — without a cluster, a vault or a
-///     <c>TestServer</c>.
+///     The token endpoint's decisions — <see cref="TokenApi" /> — for the client-credentials grant:
+///     without a cluster, a vault or a <c>TestServer</c>. The code and refresh grants are the other
+///     half of this class, in <c>TokenApiTests.Grants.cs</c>, over real session grains.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -29,12 +30,13 @@ namespace CyberCloud.Identity.Host.Tests;
 ///     </para>
 ///     <para>
 ///         What is not here: the signed token. Minting needs OpenIddict's server pipeline and a key,
-///         and the test that reads a real one is <c>CyberCloud.AppHost.Tests</c>'
-///         <c>TenantOverHttpTests</c>, which takes it from the running host and hands it to the
-///         gateway.
+///         and the tests that read a real one are <c>GrantsOverHttpTests</c>, from this host on a
+///         socket, and <c>CyberCloud.AppHost.Tests</c>' <c>TenantOverHttpTests</c>, which hands one
+///         to the gateway.
 ///     </para>
 /// </remarks>
-public sealed class TokenApiTests {
+[Collection(IdentityHostSuite.Name)]
+public sealed partial class TokenApiTests(IdentityHostFixture fixture) {
     static readonly Guid Tenant = SignInApiHarness.Tenant;
     static readonly Guid PrincipalId = Guid.Parse("7c0e3b52-1d4f-4a8b-9e6c-2f1a0b3c4d5e");
     static readonly SecretRef Credential = new() { Path = "tenants/t/sp/ci", Field = "secret" };
@@ -144,7 +146,7 @@ public sealed class TokenApiTests {
         new(
             grains,
             secrets,
-            Options.Create(new IdentityHostOptions { TenantId = Tenant }),
+            SignInApiHarness.Hint(grains),
             new SystemClock(),
             logger ?? new CapturingLogger()
         );

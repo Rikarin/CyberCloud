@@ -114,6 +114,11 @@ public static class IdentityComposition {
     public static WebApplication MapIdentityHost(this WebApplication app) {
         ArgumentNullException.ThrowIfNull(app);
 
+        // ⚠ CORS before authentication, because /token is served INSIDE UseAuthentication —
+        // OpenIddict's handler answers it there — and the CORS middleware has to have seen the
+        // endpoint's policy and answered any preflight before that happens. No default policy: only
+        // the endpoints that carry RequireCors(FirstPartyClients.CorsPolicy) get headers at all.
+        app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
 

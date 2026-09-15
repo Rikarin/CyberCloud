@@ -135,6 +135,20 @@ public static class IdentitySessionPrincipal {
             ? id
             : null;
 
+    /// <summary>The tenant this principal signed into, or <see langword="null" />.</summary>
+    /// <param name="principal">The principal from the cookie, or <see langword="null" />.</param>
+    /// <remarks>
+    ///     ⚠ The cookie is the only place the second-factor endpoints and <c>/authorize</c> read the
+    ///     tenant from. The tenant a request named was resolved and checked once, when the first
+    ///     factor was presented; every later step reads what that check stamped, so a caller cannot
+    ///     present a second factor in one tenant against a session opened in another.
+    /// </remarks>
+    public static Guid? TenantId(ClaimsPrincipal? principal) =>
+        principal?.Identity?.IsAuthenticated == true
+        && Guid.TryParse(principal.FindFirst(AccessTokenClaims.TenantId)?.Value, out var id)
+            ? id
+            : null;
+
     /// <summary>The session this principal names, or <see langword="null" />.</summary>
     /// <param name="principal">The principal from the cookie, or <see langword="null" />.</param>
     public static Guid? SessionId(ClaimsPrincipal? principal) =>
@@ -177,4 +191,26 @@ public static class AuthenticationMethodNames {
     /// <summary>The <c>amr</c> spelling of <paramref name="method" />.</summary>
     /// <param name="method">The method.</param>
     public static string Of(AuthenticationMethod method) => Names.TryGetValue(method, out var name) ? name : "none";
+
+    /// <summary>
+    ///     The method behind an <c>amr</c> value this host wrote, or <see langword="null" /> for a
+    ///     value it did not.
+    /// </summary>
+    /// <param name="name">The <c>amr</c> value, as the cookie carries it.</param>
+    /// <remarks>
+    ///     ⚠ Lossy where the spelling is: <c>otp</c> is written for both
+    ///     <see cref="AuthenticationMethod.Totp" /> and <see cref="AuthenticationMethod.EmailOtp" />,
+    ///     and reads back as the latter, because a delivered code is the one second factor that works
+    ///     on a host without a vault. <c>swk</c> is written for both a passkey and a client
+    ///     credential and reads back as the passkey, which is the only one a cookie can hold. The
+    ///     access token's <c>amr</c> spells either the same way, so nothing on the wire changes.
+    /// </remarks>
+    public static AuthenticationMethod? Parse(string? name) =>
+        name switch {
+            "pwd" => AuthenticationMethod.Password,
+            "swk" => AuthenticationMethod.Passkey,
+            "otp" => AuthenticationMethod.EmailOtp,
+            "rc" => AuthenticationMethod.RecoveryCode,
+            _ => null
+        };
 }

@@ -24,6 +24,13 @@ namespace CyberCloud.AppHost;
 ///     </para>
 /// </remarks>
 public static class CyberCloudTopology {
+    /// <summary>
+    ///     <c>CyberCloud:Identity:SelfServeSignUp</c>, as an environment variable — the silo's
+    ///     <c>PlatformBootstrapTask.SelfServeSignUpKey</c> and the identity host's
+    ///     <c>IdentityHostOptions.SelfServeSignUp</c> both read it.
+    /// </summary>
+    public const string SelfServeSignUpVariable = "CyberCloud__Identity__SelfServeSignUp";
+
     /// <summary>Declares every resource of the local platform on <paramref name="builder" />.</summary>
     /// <param name="builder">A fresh builder; nothing is expected to be on it yet.</param>
     public static void Compose(IDistributedApplicationBuilder builder) {
@@ -228,6 +235,13 @@ public static class CyberCloudTopology {
             .WithReference(nats)
             .WithObjectStore()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
+            // ⚠ Self-serve sign-up is a decision three processes have to agree on, and this is the first
+            // of the three. On a silo it makes PlatformBootstrapTask write the platform:root#operator
+            // grant sign-up creates tenants under; on the identity host it opens /api/signup/*. Both
+            // silos carry it because either may be the one that starts first, and the task is
+            // idempotent. There is no MTA on this run (#93): the enrolment code goes to the silo's
+            // console instead — DevelopmentOtpDelivery, read in the dashboard.
+            .WithEnvironment(SelfServeSignUpVariable, "true")
             .WithOrleansPorts(CyberCloudResources.SiloOnePort, CyberCloudResources.SiloOneGatewayPort)
             // ⚠ The endpoint is declared, not inherited. Aspire reads a project's endpoints from its
             // launchSettings.json, and this host deliberately has none: it is launched by Aspire, by
@@ -247,6 +261,7 @@ public static class CyberCloudTopology {
             .WithReference(nats)
             .WithObjectStore()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
+            .WithEnvironment(SelfServeSignUpVariable, "true")
             .WithOrleansPorts(CyberCloudResources.SiloTwoPort, CyberCloudResources.SiloTwoGatewayPort)
             .WithEnvironment(
                 "CyberCloud__Cluster__LocalhostPrimarySiloPort",
@@ -269,11 +284,18 @@ public static class CyberCloudTopology {
         //
         // ⚠ THREE FIXED PORTS, AND THE ISSUER IS WHY. The gateway and the feeds host validate a bearer
         // token against exactly the issuer they were configured with — JwksCallerContextResolver refuses a
-        // discovery document whose `issuer` differs — and the identity host, given no Issuer, infers it
-        // from the request it is asked on. So `http://localhost:5101` has to be one string on three sides;
-        // CyberCloudResources.IdentityIssuer is that string, and the port it names is pinned rather than
-        // allocated so that it can be. The gateway's port is pinned for the portal's proxy file (below),
-        // and the feeds host's for `dotnet nuget push`, which wants a URL a person can type.
+        // discovery document whose `issuer` differs — so `http://localhost:5101` has to be one string on
+        // three sides; CyberCloudResources.IdentityIssuer is that string, and the port it names is pinned
+        // rather than allocated so that it can be. The gateway's port is pinned for the portal's proxy
+        // file (below), and the feeds host's for `dotnet nuget push`, which wants a URL a person can type.
+        //
+        // ⚠ THE IDENTITY HOST IS HANDED THE ISSUER TOO, BECAUSE ITS REQUESTS ARRIVE ON TWO ORIGINS. Left
+        // to infer it, OpenIddict stamps every token with the origin of the request that minted it — and
+        // a person's /authorize is resumed through the identity app's dev server (4201), which proxies it
+        // here with its own Host header. The first run of the dev-run story minted an authorization code
+        // under `http://localhost:4201/` and /token on 5101 refused it with OpenIddict's ID2088, "the
+        // issuer associated to the specified token is not valid", with every host healthy. One explicit
+        // issuer is one key set, one discovery document and one `iss`, whichever origin asked.
         //
         // ⚠ ALL THREE ARE ORLEANS CLIENTS AND WAIT ON SILO 1 — see AsOrleansClient. None waits on k3s, for
         // the reason the silos do not.
@@ -286,6 +308,27 @@ public static class CyberCloudTopology {
             // would be refused with "origin not allowed" and nothing in that message names this line.
             // `localhost` is a secure context to every browser, so plain http is fine for the ceremony.
             .WithEnvironment("CyberCloud__Identity__Origins__0", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            // The same string the gateway and the feeds host validate against — see the issuer note above.
+            .WithEnvironment("CyberCloud__Identity__Issuer", CyberCloudResources.IdentityIssuer)
+            // The third of the three (see silo-one), plus the region a signed-up tenant is homed to and
+            // its default resource group is placed in. `local` is the region this laptop is.
+            .WithEnvironment(SelfServeSignUpVariable, "true")
+            .WithEnvironment("CyberCloud__Identity__DefaultRegion", CyberCloudResources.DefaultRegion)
+            // ⚠ THE KEYS PERSIST UNDER THIS DIRECTORY, AND ONLY BECAUSE THIS IS DEVELOPMENT. Signing and
+            // encryption keys and the data-protection ring go to .identity/ beside .k3s/ and .seaweedfs/
+            // (all three gitignored), so a restart of the identity host does not sign every portal tab
+            // out — an ephemeral encryption key would refuse every refresh cookie, with an invalid_grant
+            // that reads as a session bug. DevelopmentKeyFile refuses this setting in any other
+            // environment and names the vault seam that replaces it.
+            .WithEnvironment("CyberCloud__Identity__DevelopmentKeyDirectory", Path.Combine(builder.AppHostDirectory, ".identity"))
+            // An unauthenticated /authorize sends the person to the identity app's dev server, whose proxy
+            // forwards the resumed /authorize back here with the cookie. In production the pages are
+            // built into this host and this stays empty.
+            .WithEnvironment("CyberCloud__Identity__SignInPageBaseUri", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            // The portal's registration: where a code may be sent and where the browser lands after
+            // sign-out. The CORS origin for /token is derived from the first — FirstPartyClients.
+            .WithEnvironment("CyberCloud__Identity__Clients__Portal__RedirectUris__0", $"http://localhost:{CyberCloudResources.PortalPort.ToString(CultureInfo.InvariantCulture)}/auth/callback")
+            .WithEnvironment("CyberCloud__Identity__Clients__Portal__PostLogoutRedirectUris__0", $"http://localhost:{CyberCloudResources.PortalPort.ToString(CultureInfo.InvariantCulture)}/")
             .WithHttpEndpoint(CyberCloudResources.IdentityPort, isProxied: false)
             .WithHttpHealthCheck("/health")
             .WaitFor(siloOne);

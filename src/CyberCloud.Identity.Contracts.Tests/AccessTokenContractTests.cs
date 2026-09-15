@@ -264,12 +264,11 @@ public sealed class AccessTokenContractTests {
         // it only does if there is one string.
         UniformFailures.SignIn.ShouldNotBeNullOrWhiteSpace();
         UniformFailures.PasswordReset.ShouldNotBeNullOrWhiteSpace();
-        UniformFailures.SignUp.ShouldNotBeNullOrWhiteSpace();
 
-        // ⚠ And none of them may say whether the account exists.
-        foreach (var message in new[] {
-                     UniformFailures.SignIn, UniformFailures.PasswordReset, UniformFailures.SignUp
-                 }) {
+        // ⚠ And none of them may say whether the account exists. (Sign-up no longer has a uniform
+        // string: /api/signup/begin answers `{ sent: true }` for every address — SignUpApi — and the
+        // property is the shape rather than a sentence.)
+        foreach (var message in new[] { UniformFailures.SignIn, UniformFailures.PasswordReset }) {
             message.ShouldNotContain("no such", Case.Insensitive);
             message.ShouldNotContain("not found", Case.Insensitive);
             message.ShouldNotContain("does not exist", Case.Insensitive);

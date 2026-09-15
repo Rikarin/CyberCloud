@@ -53,6 +53,12 @@ public static class CyberCloudResources {
     /// </summary>
     public const string PlatformShard = "platform00";
 
+    /// <summary>
+    ///     The region a self-serve sign-up homes its tenant to and places its default resource group
+    ///     in. This laptop is one region, and this is its name.
+    /// </summary>
+    public const string DefaultRegion = "local";
+
     /// <summary>Silo 1's silo-to-silo port. Also the cluster's primary-silo endpoint.</summary>
     public const int SiloOnePort = 11111;
 
@@ -108,9 +114,9 @@ public static class CyberCloudResources {
     ///     <para>
     ///         The identity host's port is also its <b>issuer</b>: the gateway and the feeds host
     ///         validate tokens against exactly the origin they were configured with, and the
-    ///         identity host infers its <c>iss</c> from the request — so <c>http://localhost:5101</c>
-    ///         has to be the same string on every side. Choosing the port here is what makes it one
-    ///         string rather than three.
+    ///         identity host is handed the same string as its <c>iss</c> — so <c>http://localhost:5101</c>
+    ///         has to be the same string on every side and the port it names has to be the one the
+    ///         host listens on. Choosing the port here is what makes it one string rather than three.
     ///     </para>
     /// </remarks>
     public const int GatewayPort = 5100;

@@ -485,6 +485,53 @@ sealed class RecordingScopeManager : IScopeManager {
             + "different one, so a tenant-create route cannot exist without breaching that boundary."
         );
 
+    /// <summary>
+    ///     Every parent path a collection listing was asked about, in order.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Separate from <see cref="Paths" /> for the reason <c>RecordingResourceManager.Collections</c>
+    ///     is: the manager is addressed at the <i>parent</i> — a tenant or a subscription — whose
+    ///     path is also a valid item address, so a test looking in <see cref="Paths" /> could not
+    ///     tell a listing from a read of the parent.
+    /// </remarks>
+    public ConcurrentQueue<string> Collections { get; } = new();
+
+    /// <summary>Every list request as it arrived, in order — for <c>$top</c> and <c>$skipToken</c> assertions.</summary>
+    public ConcurrentQueue<ScopeListRequest> ListRequests { get; } = new();
+
+    /// <summary>What <see cref="ListAsync" /> answers. Default: one subscription under the parent.</summary>
+    public Func<ScopeListRequest, Result<ScopeListPage>> OnList { get; set; } =
+        request => Result<ScopeListPage>.Success(
+            new() {
+                Items = [
+                    new() {
+                        Path = request.ParentPath + "/subscriptions/" + GatewayHarness.Subscription.ToString("D"),
+                        Kind = ScopeKind.Subscription,
+                        Name = "Default",
+                        Type = ScopeTypeNames.Subscription
+                    }
+                ]
+            }
+        );
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>This side of the seam proves routing and nothing else</b>, as the resource fake's
+    ///     <c>ListAsync</c> does: which members a page holds is <c>ScopeManagerService.ListAsync</c>'s
+    ///     question, asserted in <c>CyberCloud.ResourceManager.Tests.ScopeManagerServiceTests</c>.
+    /// </remarks>
+    public Task<Result<ScopeListPage>> ListAsync(
+        ScopeListRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+        Collections.Enqueue(request.ParentPath);
+        ListRequests.Enqueue(request);
+        callers.Enqueue(request.Caller);
+
+        return Task.FromResult(OnList(request));
+    }
+
     /// <summary>What <see cref="DeleteAsync" /> answers. Default: the group went.</summary>
     public Func<ScopeRequest, Result> OnDelete { get; set; } = _ => Result.Success;
 

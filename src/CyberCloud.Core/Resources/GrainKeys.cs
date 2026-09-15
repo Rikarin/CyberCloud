@@ -113,6 +113,12 @@ public enum GrainKeyKind {
     ManagedIdentity,
 
     /// <summary>
+    ///     <c>ISignUpGrain</c> — <c>signup/{signupId:N}</c>, qualified by the <b>platform</b> tenant.
+    ///     See <see cref="GrainKeys.SignUp" />.
+    /// </summary>
+    SignUp,
+
+    /// <summary>
     ///     <c>IParkedResourceRegistryGrain</c> — <c>parked/{subscriptionId:N}/rg/{name}</c>,
     ///     docs/plan/08 § Soft delete. See <see cref="GrainKeys.ParkedResourceRegistry" /> for why a
     ///     second shape addresses the same resource group <see cref="ResourceGroup" /> already does.
@@ -296,6 +302,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.ServicePrincipal => GrainKeys.ServicePrincipal(Id),
             GrainKeyKind.Session => GrainKeys.Session(Id),
             GrainKeyKind.ManagedIdentity => GrainKeys.ManagedIdentity(Id),
+            GrainKeyKind.SignUp => GrainKeys.SignUp(Id),
             GrainKeyKind.ParkedResourceRegistry => GrainKeys.ParkedResourceRegistry(Id, Name),
             GrainKeyKind.ExpirySweeper => GrainKeys.ExpirySweeper(Id, Name),
             GrainKeyKind.ListObjects => GrainKeys.ListObjects(ObjectType, ObjectId),
@@ -316,7 +323,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-four shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The twenty-five shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -334,8 +341,11 @@ public readonly record struct GrainKey {
 ///         <see cref="MembershipIndex" />, docs/plan/07 § Storage's third row, which this type
 ///         kept out until issue #37 put a grain behind it; and the twenty-fourth is
 ///         <see cref="ClientIndex" />, the <c>client_id</c> index docs/plan/11 § Protocol names,
-///         whose row docs/plan/06 § Grain keys carries beside the other two <c>idx/</c> keys.
-///         See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         whose row docs/plan/06 § Grain keys carries beside the other two <c>idx/</c> keys; and
+///         the twenty-fifth is <see cref="SignUp" />, the pre-tenant state of a self-serve sign-up
+///         docs/plan/11 § Sign-up and tenant creation describes, which is the one identity shape
+///         qualified by the platform tenant rather than by the tenant it belongs to — because the
+///         tenant it belongs to is what it creates. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -343,15 +353,16 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-three was twenty-two, was twenty-one, was twenty, was nineteen, and was eight
-///             before that, and the count is re-derived rather than incremented.
+///             Twenty-four was twenty-three, was twenty-two, was twenty-one, was twenty, was
+///             nineteen, and was eight before that, and the count is re-derived rather than
+///             incremented.
 ///         </b> Counted on 2026-09-15 off
 ///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-four members, of which <see cref="ListObjects" />,
-///         <see cref="MembershipIndex" /> and <see cref="ClientIndex" /> are the three added that
-///         day — on three branches (#37, #88 and the ListObjects half of #37) that each counted
-///         itself and not the others, which is why the merge is where this sentence was last
-///         reread. It goes stale the moment a
+///         is not a key — twenty-five members, of which <see cref="SignUp" /> is the one added for
+///         self-serve sign-up (#88) on top of the twenty-four the same day's merge of three branches
+///         (#37, #88 and the ListObjects half of #37) had counted, each branch having counted itself
+///         and not the others, which is why the merge is where this sentence was last reread before
+///         this. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
 ///         docs/plan/06's <i>table</i>, and it stopped being the size of this type thirteen shapes ago.
@@ -507,6 +518,15 @@ public readonly record struct GrainKey {
 ///         </item>
 ///         <item>
 ///             <term>
+///                 <see cref="SignUp" />
+///             </term>
+///             <description>
+///                 <c>signup/{signupId:N}</c> — <b>hot tier, platform tenant</b>, docs/plan/11 § Sign-up
+///                 and tenant creation
+///             </description>
+///         </item>
+///         <item>
+///             <term>
 ///                 <see cref="ParkedResourceRegistry" />
 ///             </term>
 ///             <description>
@@ -578,7 +598,7 @@ public readonly record struct GrainKey {
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
 ///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
-///         <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>, <c>tenant</c>, <c>platform</c>) and
+///         <c>signup</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>, <c>tenant</c>, <c>platform</c>) and
 ///         its segment count, and the only caller-controlled component
 ///         — the resource group name, in <see cref="ResourceGroup" />, in
 ///         <see cref="ParkedResourceRegistry" /> and in <see cref="ExpirySweeper" />, which are all
@@ -615,6 +635,9 @@ public static class GrainKeys {
 
     /// <summary><c>mi/</c> — a managed identity, docs/plan/11 § Managed identity.</summary>
     public const string ManagedIdentityPrefix = "mi/";
+
+    /// <summary><c>signup/</c> — a self-serve sign-up in progress, docs/plan/11 § Sign-up and tenant creation.</summary>
+    public const string SignUpPrefix = "signup/";
 
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
@@ -1203,6 +1226,35 @@ public static class GrainKeys {
     public static string ManagedIdentity(Guid managedIdentityId) => ManagedIdentityPrefix + N(managedIdentityId);
 
     /// <summary>
+    ///     <c>signup/{signupId:N}</c> — <c>ISignUpGrain</c>, docs/plan/11 § Sign-up and tenant
+    ///     creation. <b>Hot tier</b>, and qualified by the <b>platform</b> tenant.
+    /// </summary>
+    /// <param name="signupId">The sign-up. Random, minted by the identity host at <c>begin</c>.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Keyed by a random id and never by the address, and that is the trap worth naming.</b>
+    ///         The obvious key is the email address, because that is what arrives on
+    ///         <c>/api/signup/begin</c>. It is wrong twice: a key any stranger can compose puts an
+    ///         attacker in charge of which activation a request creates, on an unauthenticated path
+    ///         at volume — the amplifier docs/plan/11 § Credentials names; and a sign-up reachable by
+    ///         address is a global email index, which docs/plan/11 § Sign-up and tenant creation
+    ///         refuses outright. The id rides in a data-protected cookie the identity host issues at
+    ///         <c>begin</c>, so only the browser that started a sign-up can name it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The platform tenant, because the tenant does not exist yet.</b> The sign-up is
+    ///         what creates it. Every other identity grain is qualified by the tenant it belongs to;
+    ///         this one is qualified by <see cref="Guid.Empty" /> and holds the pre-allocated id of
+    ///         the tenant it will become — <c>SignUpDescriptor.TenantId</c>.
+    ///     </para>
+    ///     <para>
+    ///         <b>Cardinality</b> is one activation per sign-up attempt, and the activation is short:
+    ///         the grain forgets itself fifteen minutes after <c>begin</c>.
+    ///     </para>
+    /// </remarks>
+    public static string SignUp(Guid signupId) => SignUpPrefix + N(signupId);
+
+    /// <summary>
     ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
@@ -1555,7 +1607,7 @@ public static class GrainKeys {
                 + "'sub/{id}/rg/{name}', 'parked/{id}/rg/{name}', 'sweep/{id}/rg/{name}', "
                 + "'res/{id}', 'user/{id}', "
                 + "'op/{id}', 'cluster/{id}', "
-                + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', "
+                + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', 'signup/{id}', "
                 + "'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'idx/client/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}', 'rel/list/{type}/{id}' or "
@@ -1653,13 +1705,14 @@ public static class GrainKeys {
             "sp" => GrainKeyKind.ServicePrincipal,
             "session" => GrainKeyKind.Session,
             "mi" => GrainKeyKind.ManagedIdentity,
+            "signup" => GrainKeyKind.SignUp,
             _ => GrainKeyKind.None
         };
 
         if (kind == GrainKeyKind.None) {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
-                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi' or 'platform'. "
+                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup' or 'platform'. "
                 + "The prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "
                 + "docs/plan/11 § The object model."
             );

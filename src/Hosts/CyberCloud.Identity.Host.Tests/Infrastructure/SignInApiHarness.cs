@@ -3,6 +3,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.Host.Api;
+using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -61,11 +62,27 @@ public static class SignInApiHarness {
             grains,
             new RefusingPasskeyService(),
             new UnavailableTotpSecrets(),
-            Options.Create(new IdentityHostOptions { TenantId = Tenant }),
+            Hint(grains),
             new SystemClock(),
             NullLogger<SignInApi>.Instance
         );
     }
+
+    /// <summary>
+    ///     A tenant hint whose fallback is <see cref="Tenant" />, over a factory that refuses.
+    /// </summary>
+    /// <param name="grains">The factory. ⚠ A request that names a tenant would reach the directory through it.</param>
+    /// <remarks>
+    ///     ⚠ The tenant is configured explicitly, so a request that names none resolves without a
+    ///     grain call — which is what keeps <see cref="RefusingGrainFactory" /> satisfied on every
+    ///     path these suites drive, and is also the one arrangement in which a hint costs nothing.
+    /// </remarks>
+    public static TenantHint Hint(IGrainFactory? grains = null) =>
+        new(
+            grains ?? new RefusingGrainFactory(),
+            Options.Create(new IdentityHostOptions { TenantId = Tenant }),
+            TestEnvironment.Production
+        );
 }
 
 /// <summary>

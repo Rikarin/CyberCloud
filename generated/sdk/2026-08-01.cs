@@ -7912,6 +7912,16 @@ public sealed partial class ScopeClient {
         string subscriptionId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The collection URL template ListSubscriptionsAsync pages.</summary>
+    public const string SubscriptionCollectionPathTemplate = "/tenants/{tenantId}/subscriptions";
+
+    /// <summary>The subscriptions the caller may read, paged.</summary>
+    /// <remarks>⚠ A short page never means "that is all there is": the page holds
+    /// what the caller may read and the envelope carries no count.</remarks>
+    public partial AsyncPageable<ScopeResource> ListSubscriptionsAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Creates one subscription, or returns the existing one unchanged.</summary>
     /// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: this converges before it
     /// returns. Repeating it with the same address is a success — 201 the first time
@@ -7933,6 +7943,17 @@ public sealed partial class ScopeClient {
         string tenantId,
         string subscriptionId,
         string resourceGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListResourceGroupsAsync pages.</summary>
+    public const string ResourceGroupCollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups";
+
+    /// <summary>The resource groups the caller may read, paged.</summary>
+    /// <remarks>⚠ A short page never means "that is all there is": the page holds
+    /// what the caller may read and the envelope carries no count.</remarks>
+    public partial AsyncPageable<ScopeResource> ListResourceGroupsAsync(
+        string tenantId,
+        string subscriptionId,
         CancellationToken cancellationToken = default);
 
     /// <summary>Creates one resource group, or returns the existing one unchanged.</summary>

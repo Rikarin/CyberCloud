@@ -6,22 +6,55 @@ using System.Text.Json.Serialization;
 
 namespace CyberCloud.Identity.Host.Api;
 
+/// <summary>Which WebAuthn ceremony a <see cref="PasskeyChallengeTicket" /> was issued for.</summary>
+/// <remarks>
+///     ⚠ <b>On the ticket so the two ceremonies cannot answer each other's challenge.</b> A
+///     registration challenge presented to <c>/api/signin/passkey/complete</c> would be verified as
+///     an assertion against options that never named a credential, and an assertion challenge
+///     presented to <c>/api/signup/complete</c> would be verified as an attestation of a key the
+///     server never asked to be created. Both fail inside the library today; the kind makes them
+///     fail here, by name, before the library is asked — and keeps failing if the library's checks
+///     ever loosen.
+/// </remarks>
+public enum PasskeyChallengeKind {
+    /// <summary>A sign-in — <c>navigator.credentials.get()</c>.</summary>
+    Assertion = 0,
+
+    /// <summary>An enrolment — <c>navigator.credentials.create()</c>.</summary>
+    Registration = 1
+}
+
 /// <summary>
-///     What was issued to the browser when a passkey assertion began.
+///     What was issued to the browser when a passkey ceremony began.
 /// </summary>
-/// <param name="OptionsJson">The WebAuthn request options, exactly as the library produced them.</param>
+/// <param name="OptionsJson">The WebAuthn options, exactly as the library produced them.</param>
 /// <param name="Email">
 ///     The normalized address the challenge was issued for. ⚠ Carried so completion cannot be
 ///     answered on behalf of a different account than the one <c>begin</c> was called with.
 /// </param>
 /// <param name="ExpiresAt">When it stops being accepted.</param>
+/// <param name="TenantId">
+///     The tenant <c>begin</c> resolved the request's hint to. ⚠ Carried for the same reason the
+///     address is: <c>complete</c> takes no <c>tenant</c> of its own, so the assertion is verified
+///     against the tenant the challenge was issued for and cannot be redirected to another. A
+///     sign-up ticket carries the platform tenant (<c>Guid.Empty</c>): the tenant it will enrol
+///     into does not exist yet.
+/// </param>
+/// <param name="Kind">
+///     Which ceremony. Defaults to <see cref="PasskeyChallengeKind.Assertion" />, which is what
+///     every sign-in ticket is; sign-up issues <see cref="PasskeyChallengeKind.Registration" />.
+/// </param>
 public sealed record PasskeyChallengeTicket(
     [property: JsonPropertyName("o")]
     string OptionsJson,
     [property: JsonPropertyName("e")]
     string Email,
     [property: JsonPropertyName("x")]
-    DateTimeOffset ExpiresAt
+    DateTimeOffset ExpiresAt,
+    [property: JsonPropertyName("t")]
+    Guid TenantId = default,
+    [property: JsonPropertyName("k")]
+    PasskeyChallengeKind Kind = PasskeyChallengeKind.Assertion
 );
 
 /// <summary>

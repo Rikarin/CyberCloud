@@ -801,6 +801,18 @@ public static class GoSdkEmitter {
             .Append("func (c *").Append(name).Append(") Get(ctx context.Context").Append(parameters).Append(") (*ScopeResource, error) {\n")
             .Append(Read("GET", PathExpression(scope.Path), "nil", "ScopeResource"));
 
+        if (scope.CollectionPath.Length > 0) {
+            // Emitted only when the document declares the collection, as a resource type's List is
+            // — the tenant has none. The same Pager a resource listing walks, over ScopeResource.
+            var collectionParameters = Parameters(DocumentReader.PlaceholdersOf(scope.CollectionPath));
+
+            built.Append("\n// List pages through the ").Append(Comment(scope.DisplayPlural.ToLowerInvariant()))
+                .Append(" the caller may read. ⚠ A short page never means \"that is all there is\".\n")
+                .Append("func (c *").Append(name).Append(") List(").Append(collectionParameters.TrimStart(',', ' ')).Append(collectionParameters.Length > 0 ? ", " : string.Empty).Append("options *ListOptions) *Pager[ScopeResource] {\n")
+                .Append("\tpath := ").Append(PathExpression(scope.CollectionPath)).Append('\n')
+                .Append("\treturn newPager[ScopeResource](c.transport, path, options)\n}\n");
+        }
+
         if (!scope.Creatable) {
             built.Append("\n// ⚠ There is no Create, and the absence is the contract: a request's tenant is resolved from its\n")
                 .Append("// token, so a call creating another tenant is refused before routing runs.\n");

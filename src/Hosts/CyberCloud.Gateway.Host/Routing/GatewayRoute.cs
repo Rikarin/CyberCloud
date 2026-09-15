@@ -40,6 +40,27 @@ enum RouteKind {
     Scope,
 
     /// <summary>
+    ///     A collection of scopes — a tenant's subscriptions at <c>/tenants/{t}/subscriptions</c>,
+    ///     or a subscription's resource groups at <c>/tenants/{t}/subscriptions/{s}/resourceGroups</c>.
+    ///     <c>GET</c> only. docs/plan/10 § Shape.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Tried after <see cref="Scope" /> and only on a <c>GET</c></b>, as
+    ///     <see cref="Collection" /> is tried after <see cref="Resource" /> and
+    ///     for the same reason: the grammars are disjoint — an item is 2, 4 or 6 segments and a
+    ///     collection 3 or 5 — so the order decides only which message a malformed path gets, and
+    ///     a write on the collection path is a <c>400</c> that names the item address a scope is
+    ///     created at. <c>ScopeCollectionRoutingTests</c> pins both halves.
+    ///     <para>
+    ///         ⚠ <b>Separate from <see cref="Scope" /> for the reason <see cref="Collection" /> is
+    ///         separate from <see cref="Resource" />:</b> the two are different addresses, decided
+    ///         by the path and never by the method. Both go to <c>IScopeManager</c>; this one to
+    ///         its <c>ListAsync</c>, which filters by what the caller may read and pages.
+    ///     </para>
+    /// </remarks>
+    ScopeCollection,
+
+    /// <summary>
     ///     A role assignment — <c>{scope}/providers/CyberCloud.Authorization/roleAssignments/{name}</c>,
     ///     on a tenant, a subscription, a resource group or a resource. <c>GET</c>, <c>PUT</c> and
     ///     <c>DELETE</c>. docs/plan/07 § Azure RBAC, expressed in it.
@@ -172,6 +193,10 @@ enum RouteKind {
 ///     The collection, for <see cref="RouteKind.RoleAssignmentCollection" />. ⚠ Its tenant is the
 ///     <i>token's</i> too, rebuilt the same way.
 /// </param>
+/// <param name="Scopes">
+///     The collection, for <see cref="RouteKind.ScopeCollection" />. ⚠ Its tenant is the
+///     <i>token's</i> too, rebuilt through the parent scope.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -181,7 +206,8 @@ readonly record struct GatewayRoute(
     ScopeId Scope = default,
     ResourceCollectionId Collection = default,
     RoleAssignmentId RoleAssignment = default,
-    RoleAssignmentCollectionId RoleAssignments = default
+    RoleAssignmentCollectionId RoleAssignments = default,
+    ScopeCollectionId Scopes = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -202,10 +228,16 @@ readonly record struct GatewayRoute(
         };
 
     /// <summary>The collection address dispatch uses — rebuilt, carrying the token's tenant.</summary>
+    /// <remarks>
+    ///     ⚠ For a <see cref="RouteKind.ScopeCollection" /> this is the collection's own path — what
+    ///     a <c>nextLink</c> is built from — and not the parent's, which is what the manager takes;
+    ///     <see cref="Scopes" /> carries the parent for dispatch.
+    /// </remarks>
     public string CollectionPath =>
         Kind switch {
             RouteKind.Collection => Collection.Path,
             RouteKind.RoleAssignmentCollection => RoleAssignments.Path,
+            RouteKind.ScopeCollection => Scopes.Path,
             _ => ""
         };
 }
@@ -396,10 +428,60 @@ static class GatewayRouter {
             );
         }
 
+        // ── A scope collection, after the item and only on a GET. ───────────────────────────────
+        //
+        // ⚠ THE THIRD SCOPE GRAMMAR, AND THE ORDER IS FREE HERE TOO: an item is 2, 4 or 6 segments
+        // and a collection is 3 or 5, so nothing parses as both — ScopeCollectionIdTests sweeps it.
+        // What the order decides is the message, and the item parser's is the one nearly every
+        // caller needs.
+        //
+        // ⚠ A WRITE ON THE COLLECTION PATH IS A 400 THAT NAMES THE ITEM ADDRESS, and it is checked
+        // here rather than left to fall through: on a PUT the path would otherwise reach the
+        // resource parser, whose "not a resource path" sentence sends a client that dropped the
+        // subscription id from `PUT /tenants/{t}/subscriptions/{s}` to look at the wrong grammar.
+        // 400 and not 405, for the reason the resource collection gives: a 405 says the address
+        // exists and the verb does not, which is one more fact than a malformed write earns.
+        if (ScopeCollectionId.TryParsePath(path, out var scopes)) {
+            if (!HttpMethods.IsGet(method)) {
+                return Result<GatewayRoute>.Failure(ErrorCode.InvalidResourceId, ScopeCollectionWriteRefusal(scopes));
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    RouteKind.ScopeCollection,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // ⚠ NAMED, for the reason every other optional address kind is: five of them
+                    // now, and the positional form would put a collection into Scope and compile.
+                    // The token's tenant, never the path's — rebuilt through the parent.
+                    Scopes: scopes with { Parent = scopes.Parent with { TenantId = tenantId } }
+                )
+            );
+        }
+
         return string.Equals(method, HttpMethods.Post, StringComparison.Ordinal)
             ? ResolveAction(path, tenantId)
             : ResolveResource(path, method, tenantId);
     }
+
+    /// <summary>
+    ///     The sentence a write on a scope collection path answers with: where the door is.
+    /// </summary>
+    /// <param name="collection">The collection the write addressed.</param>
+    /// <remarks>
+    ///     ⚠ Public so the test that pins it reads the same string rather than a retyped one. The
+    ///     address is the item template one segment below the collection, which is the URL a client
+    ///     that dropped the id from a <c>PUT</c> most needs to read back.
+    /// </remarks>
+    public static string ScopeCollectionWriteRefusal(ScopeCollectionId collection) =>
+        collection.MemberKind == ScopeKind.Subscription
+            ? "A subscription is created by PUT at its own address, /tenants/{t}/subscriptions/{s}. "
+            + "The collection is read with GET only — docs/plan/10 § Shape."
+            : "A resource group is created by PUT at its own address, "
+            + "/tenants/{t}/subscriptions/{s}/resourceGroups/{rg}. The collection is read with GET "
+            + "only — docs/plan/10 § Shape.";
 
     /// <summary>
     ///     A non-<c>POST</c> path is a resource or a collection, and the path alone says which.

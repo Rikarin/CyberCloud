@@ -7,6 +7,7 @@ using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Sample.Contracts;
+using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.Tenancy.Contracts;
 using Microsoft.AspNetCore.Builder;
@@ -249,6 +250,31 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             .GetString()
             .ShouldBe(ScopeId.Subscription(Tenant, Subscription).Path);
 
+        // ── Step 1b: list it. The subscription collection, filtered by the real engine. ─────────
+        //
+        // ⚠ A THIRD SCOPE GRAMMAR, NOT THE ITEM ROUTE MINUS A SEGMENT. GET /tenants/{t}/subscriptions
+        // resolves to RouteKind.ScopeCollection, dispatches to IScopeManager.ListAsync, and its page
+        // is what ListObjects says this caller may read — walked from the subscription's parent
+        // edge to the tenant owner tuple this file wrote by grain. So a list that answered from the
+        // same code as a GET, or that skipped the filter, would pass CyberCloud.Gateway.Host.Tests
+        // and fail here, which is this file's thesis at the one address that is also an
+        // enumeration oracle.
+        var subscriptions = await GetAsync(ScopeCollectionId.SubscriptionsOf(Tenant).Path, cancellationToken);
+
+        subscriptions.Status.ShouldBe(HttpStatusCode.OK, "the subscription collection is not readable: " + subscriptions.Body);
+
+        var listedSubscriptions = Json(subscriptions.Body).GetProperty("value").EnumerateArray().ToList();
+
+        listedSubscriptions.Select(x => x.GetProperty("id").GetString())
+            .ShouldBe(
+                [ScopeId.Subscription(Tenant, Subscription).Path],
+                "the tenant holds exactly one subscription, owned through the tenant grant, and the "
+                + "listing did not return exactly it. Body: " + subscriptions.Body
+            );
+
+        listedSubscriptions[0].GetProperty("name").GetString().ShouldBe("over http");
+        listedSubscriptions[0].GetProperty("type").GetString().ShouldBe(ScopeTypeNames.Subscription);
+
         // ── Step 2: the resource group. ─────────────────────────────────────────────────────────
         var group = await PutAsync(
             ScopeId.Group(Tenant, Subscription, ResourceGroup).Path,
@@ -262,6 +288,23 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             + "created over the same connection: "
             + group.Body
         );
+
+        // ── Step 2b: list it. The resource-group collection, behind a read check on its parent. ─
+        var groups = await GetAsync(ScopeCollectionId.ResourceGroupsOf(Tenant, Subscription).Path, cancellationToken);
+
+        groups.Status.ShouldBe(HttpStatusCode.OK, "the resource-group collection is not readable: " + groups.Body);
+
+        var listedGroups = Json(groups.Body).GetProperty("value").EnumerateArray().ToList();
+
+        listedGroups.Select(x => x.GetProperty("id").GetString())
+            .ShouldBe(
+                [ScopeId.Group(Tenant, Subscription, ResourceGroup).Path],
+                "the subscription holds exactly one resource group and the listing did not return "
+                + "exactly it. Body: " + groups.Body
+            );
+
+        listedGroups[0].GetProperty("name").GetString().ShouldBe(ResourceGroup);
+        listedGroups[0].GetProperty("location").GetString().ShouldBe("eu-central");
 
         // ── Step 3: the resource. 202, with both headers docs/plan/10 requires. ─────────────────
         var accepted = await PutAsync(Address.Path, SampleWidgets.Body(Cluster), cancellationToken);
@@ -504,8 +547,13 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     ///     <para>
     ///         ⚠ <b>What is still owed.</b> This does not call <c>CreateTenantAsync</c> itself, which
     ///         would drive the shard assignment and this ordering through the platform rather than
-    ///         beside it; that needs a <c>platform:root#operator</c> grant in the platform tenant and
-    ///         a shard map this topology does not seed.
+    ///         beside it. The two things that used to make that impossible — a
+    ///         <c>platform:root#operator</c> grant in the platform tenant and a seeded shard map —
+    ///         are now the silo's <c>PlatformBootstrapTask</c>'s, run at start when
+    ///         <c>CyberCloud:Identity:SelfServeSignUp</c> is on, which this topology sets; the
+    ///         person half — sign-up through <c>/api/signup/*</c>, then the code and the token — is
+    ///         what drives it, and it is <see cref="PersonOverHttpTests" />, against the AppHost's
+    ///         own identity host and gateway rather than the two this file builds.
     ///     </para>
     /// </remarks>
     async Task BootstrapTenantAsync(CancellationToken cancellationToken) {

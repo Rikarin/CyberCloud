@@ -113,9 +113,52 @@ const [acme, initech] = await Promise.all([
   }).then(async r => ({ status: r.status, headers: r.headers, body: await r.text() }))
 ]);
 
+/**
+ * The sign-in callback, rendered on the server with an authorization code in its query and a
+ * PKCE cookie on the request — the one route whose query string is a credential (RFC 6749
+ * § 4.1.2). Two tenants at once, as above. The page must render its "signing in" state, touch no
+ * `window`, make no request to the identity host, and echo neither the code nor the cookie: the
+ * exchange is the browser's, after hydration, with the cookie the server never holds.
+ */
+const [acmeCallback, initechCallback] = await Promise.all([
+  fetch(`${base}/auth/callback?code=acme-authorization-code&state=acme-state`, {
+    headers: { cookie: 'cyc-pkce=acme-state.acme-verifier.%2Fsubscriptions; cyc-tenant=acme-tenant' }
+  }).then(async r => ({ status: r.status, headers: r.headers, body: await r.text() })),
+  fetch(`${base}/auth/callback?code=initech-authorization-code&state=initech-state`, {
+    headers: { cookie: 'cyc-pkce=initech-state.initech-verifier.%2Fsubscriptions; cyc-tenant=initech-tenant' }
+  }).then(async r => ({ status: r.status, headers: r.headers, body: await r.text() }))
+]);
+
 check('both concurrent renders succeed', () => {
   assert.equal(acme.status, 200);
   assert.equal(initech.status, 200);
+});
+
+check('the sign-in callback renders on the server with no token and no window access', () => {
+  // A component that reached for `window`, `location` or `fetch` during the render would throw
+  // and the engine would answer 500 — so 200 with the shell's "signing in" state is the assertion
+  // that it touched nothing. The code and the cookie are in the request; neither may be in the
+  // response.
+  for (const [label, page] of [
+    ['acme', acmeCallback],
+    ['initech', initechCallback]
+  ]) {
+    assert.equal(page.status, 200, `${label}: the callback did not render on the server`);
+    assert.match(page.body, /Signing you in/, `${label}: the callback did not render its signing-in state`);
+    assert.ok(!page.body.includes('authorization-code'), `${label}: the authorization code reached the rendered HTML`);
+    assert.ok(!page.body.includes('-verifier'), `${label}: the PKCE verifier reached the rendered HTML`);
+    assert.ok(!page.body.includes('-tenant'), `${label}: the tenant cookie reached the rendered HTML`);
+    assert.ok(!/could not be completed/i.test(page.body), `${label}: the server tried to complete the sign-in`);
+  }
+});
+
+check('two concurrent callback renders with different tenants share nothing', () => {
+  assert.equal(
+    acmeCallback.body,
+    initechCallback.body,
+    'the two callback renders differ, which means request identity reached the server render'
+  );
+  assert.match(acmeCallback.headers.get('cache-control') ?? '', /no-store/, 'the callback render is cacheable');
 });
 
 check('neither rendered page carries the other request’s tenant', () => {

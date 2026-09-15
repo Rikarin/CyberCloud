@@ -15,8 +15,14 @@ namespace CyberCloud.Identity.Credentials;
 ///     returns as soon as two characters differ, so the time it takes reveals how many leading
 ///     characters were right — which turns a 128-bit recovery code into ten sequential
 ///     sixteen-way guesses. This is not theoretical for a handle that is checked once per refresh.
+///     <para>
+///         Public for one caller outside the module: the identity host's <c>TokenApi</c> opens a
+///         token session at a code exchange and digests the client's address the way
+///         <c>SignInService.OpenSessionAsync</c> does, so a device list shows one spelling of the
+///         same fact whichever path opened the session.
+///     </para>
 /// </remarks>
-static class CredentialDigest {
+public static class CredentialDigest {
     /// <summary>The SHA-256 of <paramref name="value" />, base64url, unpadded.</summary>
     /// <param name="value">What to hash. UTF-8 encoded first.</param>
     /// <remarks>

@@ -6,6 +6,8 @@ using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace CyberCloud.Identity;
 
@@ -171,6 +173,52 @@ public static class IdentitySiloBuilderExtensions {
             ServiceDescriptor.Singleton<IOtpDeliverySeam>(services => new CommunicationOtpDelivery(
                     services.GetRequiredService<IMessageSender>(),
                     route
+                )
+            )
+        );
+
+        return builder;
+    }
+
+    /// <summary>
+    ///     Points <see cref="IOtpDeliverySeam" /> at the silo's log — <see cref="DevelopmentOtpDelivery" />
+    ///     — when, and only when, <paramref name="environment" /> is Development.
+    /// </summary>
+    /// <param name="builder">The silo being composed.</param>
+    /// <param name="environment">The host's environment, which decides everything.</param>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A no-op outside Development, and the constructor refuses a second time.</b> The
+    ///         decision is made here, at composition, so a production silo keeps whatever it had —
+    ///         <see cref="UnavailableOtpDelivery" /> unless <see cref="AddCommunicationOtpDelivery" />
+    ///         ran — and <see cref="DevelopmentOtpDelivery" />'s own constructor throws if anything
+    ///         ever registers it anyway. Two gates rather than one, because the second is the one a
+    ///         wrong <c>IHostEnvironment</c> double in a test cannot get past.
+    ///         <c>OtpSeamWiringTests.ADevelopmentSiloWithNoRouteLogsItsCodes</c> and
+    ///         <c>OtpSeamWiringTests.AProductionSiloWithNoRouteKeepsTheRefusingSeam</c> drive both
+    ///         branches.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A configured route still wins.</b> <c>SiloIdentityComposition.AddSiloIdentity</c>
+    ///         calls this only when <c>CyberCloud:Identity:OtpDelivery</c> is unset; a developer who
+    ///         wires a real communication service on their laptop gets real delivery, not a log
+    ///         line. <c>Replace</c>, for the descriptor-count reason
+    ///         <see cref="AddCommunicationOtpDelivery" /> gives.
+    ///     </para>
+    /// </remarks>
+    public static ISiloBuilder AddDevelopmentOtpDelivery(this ISiloBuilder builder, IHostEnvironment environment) {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(environment);
+
+        if (!environment.IsDevelopment()) {
+            return builder;
+        }
+
+        builder.Services.Replace(
+            ServiceDescriptor.Singleton<IOtpDeliverySeam>(services => new DevelopmentOtpDelivery(
+                    environment,
+                    services.GetRequiredService<ILogger<DevelopmentOtpDelivery>>()
                 )
             )
         );

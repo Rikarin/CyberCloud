@@ -1,5 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { XuiButton } from '@xui/button';
+import { XuiPopover } from '@xui/popover';
 import { XuiSelect } from '@xui/select';
+import { AuthFlow } from '../auth/auth-flow';
+import { AuthSession } from '../auth/auth-session';
 import { SubscriptionRef, TenantContextStore, TenantRef } from '../context/tenant-context';
 
 /**
@@ -23,11 +27,16 @@ import { SubscriptionRef, TenantContextStore, TenantRef } from '../context/tenan
  *   i18n, theming makes WCAG 2.2 AA a gate.
  * - Nothing here is optimistic. The selects reflect `TenantContextStore`, which is set from what
  *   the API returned; there is no local "assume it worked" path.
+ *
+ * The account menu at the end of the bar reads `AuthSession`: the name and address are the
+ * id_token's claims — labels, not authority, see `decodeJwtPayload` — and "Sign out" is
+ * `AuthFlow.signOut`, a full-page trip to the identity host's `/logout`. It renders only once a
+ * token has been accepted, so the server render carries no account at all (docs/plan/20 § SSR).
  */
 @Component({
   selector: 'cc-context-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [XuiSelect],
+  imports: [XuiSelect, XuiButton, XuiPopover],
   host: {
     class: 'flex items-center gap-3 px-4 h-12 border-b border-border bg-surface shrink-0',
     role: 'region',
@@ -67,10 +76,58 @@ import { SubscriptionRef, TenantContextStore, TenantRef } from '../context/tenan
       already show it; this exists for the users who cannot see them.
     -->
     <span class="sr-only" aria-live="polite">{{ announcement() }}</span>
+
+    @if (session.account(); as account) {
+      <button
+        xuiButton
+        class="ms-auto"
+        type="button"
+        variant="ghost"
+        size="sm"
+        interactionKind="click"
+        [xuiPopover]="accountMenu"
+        [attr.aria-label]="accountLabel()"
+      >
+        {{ account.name ?? account.email ?? account.subjectId }}
+      </button>
+
+      <ng-template #accountMenu>
+        <div class="w-72 max-w-[90vw]" role="group" [attr.aria-label]="accountPanelLabel">
+          <div class="border-border border-b px-3 py-2">
+            <p class="text-sm font-medium">{{ account.name ?? account.subjectId }}</p>
+            @if (account.email; as email) {
+              <p class="text-foreground-muted text-xs">{{ email }}</p>
+            }
+          </div>
+          <div class="p-2">
+            <button
+              xuiButton
+              class="w-full"
+              type="button"
+              variant="outline"
+              size="sm"
+              (click)="onSignOut()"
+              i18n="@@shell.account.signOut"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </ng-template>
+    }
   `
 })
 export class ContextBar {
   protected readonly store = inject(TenantContextStore);
+  protected readonly session = inject(AuthSession);
+  private readonly auth = inject(AuthFlow);
+
+  protected readonly accountPanelLabel = $localize`:@@shell.account.panel:Account`;
+  protected readonly accountLabel = computed(() => {
+    const account = this.session.account();
+    const who = account?.name ?? account?.email ?? account?.subjectId ?? '';
+    return $localize`:@@shell.account.trigger:Account menu, ${who}:who:`;
+  });
 
   protected readonly regionLabel = $localize`:@@shell.contextBar.region:Tenant and subscription context`;
   protected readonly tenantLabel = $localize`:@@shell.contextBar.tenantLabel:Select tenant`;
@@ -96,5 +153,9 @@ export class ContextBar {
 
   protected onSubscription(subscription: SubscriptionRef | null): void {
     if (subscription !== null) this.store.selectSubscription(subscription.id);
+  }
+
+  protected onSignOut(): void {
+    this.auth.signOut();
   }
 }

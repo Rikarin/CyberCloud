@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { authGuard } from '@cybercloud/shell';
 
 /**
  * ⚠ **Every route is lazy.** docs/plan/20 § Performance budget: "Route-level code splitting is
@@ -30,56 +31,79 @@ import { Routes } from '@angular/router';
  * **The access page is a `/access` suffix on every scope that has a blade** — the subscription,
  * the resource group, and the resource — because a role assignment is an extension address on
  * every scope (docs/plan/10 § Shape) and the page is the same page with a different scope.
+ *
+ * ⚠ **`authGuard` on every route but `auth/callback`.** docs/plan/10 § Authentication inputs:
+ * the portal holds an access token in memory and nothing else, so a route reached with none
+ * either refreshes from the identity host's cookie or leaves for `/authorize`. The callback is
+ * the one route that runs *without* a token by definition — it is where the token comes from —
+ * and a guard on it would send the person back to sign in from the page that completes the
+ * sign-in. The `**` route is guarded too: an unknown address should not tell an anonymous
+ * visitor what the portal looks like.
  */
 export const appRoutes: Routes = [
   {
+    path: 'auth/callback',
+    loadComponent: () => import('../pages/auth/callback').then(m => m.AuthCallback),
+    title: 'Signing in'
+  },
+  {
     path: '',
     pathMatch: 'full',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/home/home').then(m => m.Home),
     title: 'Cyber Cloud'
   },
   {
     path: 'subscriptions',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/scopes/subscriptions').then(m => m.Subscriptions),
     title: 'Subscriptions'
   },
   {
     path: 'subscriptions/:subscriptionId',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/scopes/subscription-blade').then(m => m.SubscriptionBlade),
     title: 'Subscription'
   },
   {
     path: 'subscriptions/:subscriptionId/access',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
     title: 'Access'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/scopes/resource-groups').then(m => m.ResourceGroups),
     title: 'Resource groups'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/scopes/resource-group-blade').then(m => m.ResourceGroupBlade),
     title: 'Resource group'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/access',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
     title: 'Access'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/resources',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/resources/resource-list').then(m => m.ResourceList),
     title: 'Resources'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/create/:provider/:type',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/resources/resource-create').then(m => m.ResourceCreate),
     title: 'Create'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/create/:provider/:type/:childType',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/resources/resource-create').then(m => m.ResourceCreate),
     title: 'Create'
   },
@@ -88,39 +112,47 @@ export const appRoutes: Routes = [
     // runtime — docs/plan/20 § Performance budget: "Schemas are fetched per type, cached, and
     // versioned by the api-version".
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:name',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/resources/resource-blade').then(m => m.ResourceBlade)
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:name/edit',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/resources/resource-edit').then(m => m.ResourceEdit),
     title: 'Edit'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:name/access',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
     title: 'Access'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:parent/:childType/:name',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/resources/resource-blade').then(m => m.ResourceBlade)
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:parent/:childType/:name/edit',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/resources/resource-edit').then(m => m.ResourceEdit),
     title: 'Edit'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:parent/:childType/:name/access',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
     title: 'Access'
   },
   {
     path: 'operations/:operationId',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/operations/operation-view').then(m => m.OperationView),
     title: 'Operation'
   },
   {
     path: '**',
+    canActivate: [authGuard],
     loadComponent: () => import('../pages/not-found/not-found').then(m => m.NotFound),
     title: 'Not found'
   }

@@ -9,7 +9,7 @@ portal/
 ├── libs/api/                        # GENERATED TypeScript client from OpenAPI — never hand-edited
 ├── libs/resource-forms/             # the schema → xUI form renderer (ADR-012), over generated/forms
 ├── libs/resource-forms-overrides/   # hand-written forms that replace the generated one, by type+version
-├── libs/shell/                      # navigation, breadcrumbs, resource blades, the omnibar
+├── libs/shell/                      # navigation, breadcrumbs, resource blades, the omnibar, sign-in
 └── libs/charts/                     # metric/log views over @xui/echarts — stub
 ```
 
@@ -221,24 +221,47 @@ The apps run through Aspire's JavaScript hosting with `install: false` — run
 `pnpm install --frozen-lockfile` here once first — and with whatever `node` is on `PATH`, which
 § Node above says has to be 24.
 
+## Sign-in
+
+docs/plan/10 § Authentication inputs, the Portal row: "Authorization Code + PKCE → access token in
+memory, refresh in an `HttpOnly` cookie scoped to the identity host … Access token never in
+`localStorage`." `libs/shell/src/lib/auth` is that row, and each part is where it is for a reason:
+
+| Part                            | What it does                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IDENTITY_ISSUER`               | `<meta name="cyc-identity-issuer">` in `index.html` — `http://localhost:5101` on the dev run. One issuer for every tenant; the tenant rides in the token's `tid`                                                                                                                                                                                           |
+| `AuthFlow.beginSignIn`          | Mints a PKCE pair (`pkce.ts`, checked against RFC 7636's appendix B vector), keeps `{state}.{verifier}.{returnTo}` in the `cyc-pkce` cookie — `Path=/auth/callback`, ten minutes — and leaves for `{issuer}/authorize` with `tenant=` from the `cyc-tenant` cookie when one is remembered                                                                  |
+| `/auth/callback`                | The one route without `authGuard`. `AuthFlow.completeCallback` checks the state, POSTs the code and verifier to `{issuer}/token` as a raw cross-origin `fetch` with credentials — never `HttpClient`, never proxied — and `AuthSession.accept` puts the access token in `AccessTokenStore`, the person in the account menu, and the tenant in `cyc-tenant` |
+| `TENANT_CONTEXT_SOURCE`         | The app's `PlatformTenantContextSource`: `GET /api/tenants/{tid}` and the subscriptions collection, into `TenantContextStore.loadFromToken`. The shell asks; the app answers, because the generated client is the app's                                                                                                                                    |
+| `TokenRefresher`                | `grant_type=refresh_token&client_id=cyc-portal` with **no `refresh_token` field** — the host keeps it in `__Host-cyc-refresh` on its own origin. Armed at `exp − 60 s`, single-flight, and on a refusal it clears the store and begins a sign-in                                                                                                           |
+| `authGuard`                     | Token in memory → pass; none → one refresh (a reload still holds the cookie) → pass; else leave for `/authorize` with the requested URL as the return path. On the server it passes and touches nothing                                                                                                                                                    |
+| `accessTokenInterceptor`        | Bearer on same-origin calls only; on a 401, one refresh and one retry                                                                                                                                                                                                                                                                                      |
+| The account menu (`ContextBar`) | `name`/`email` from the id_token — labels, never authority (`decodeJwtPayload`) — and "Sign out", which forgets the token and leaves for `{issuer}/logout`. The `cyc-tenant` hint stays                                                                                                                                                                    |
+
+⚠ **Two cookies and no web storage.** The lint rule bans `localStorage` and `sessionStorage`
+outright and `auth-flow.spec.ts` spies on both through the whole flow; a cookie is what is left, and
+a path-scoped one is the better fit for the verifier anyway. Both are written with `Secure` — real
+browsers accept that on `http://localhost`, jsdom does not, so the suites substitute
+`MemoryCookieJar` from `@cybercloud/shell/testing` rather than relaxing the attribute.
+
 ## The pages, and what each one calls
 
 Issue #22's M1 pages, each a lazy route over the generated client (`libs/api`) and the generated
 form document (`generated/forms/{apiVersion}.json`, staged into `/forms/` by `scripts/sync-forms.mjs`
 before every build and serve):
 
-| Route                                                          | Page                  | Calls                                                                                                                                       |
-| -------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/subscriptions`                                               | list + create         | `createSubscription` — the list is `TenantContextStore`, because the API has no list endpoint                                               |
-| `/subscriptions/{s}`                                           | subscription blade    | `getSubscription`                                                                                                                           |
-| `…/resourceGroups`                                             | create + open by name | `createResourceGroup` — no list endpoint, and the empty state says so                                                                       |
-| `…/resourceGroups/{g}`                                         | resource group blade  | `getResourceGroup`, plus a create and a list link per top-level type from the form document                                                 |
-| `…/resourceGroups/{g}/resources?type=`                         | resource list         | `list{Type}` (#10), paged by `$skipToken`                                                                                                   |
-| `…/resourceGroups/{g}/create/{ns}/{type}[/{child}]`            | create blade          | the generated form, then `createOrUpdate{Type}` → the operation view                                                                        |
-| `…/providers/{ns}/{type}/{name}`                               | resource blade        | `get{Type}`; delete is `delete{Type}` after the name is typed back → the operation view                                                     |
-| `…/providers/{ns}/{type}/{name}/edit`                          | edit blade            | `get{Type}`, then a full `createOrUpdate{Type}` with the immutable fields locked and still sent                                             |
-| `/operations/{id}?then=`                                       | operation view        | `getOperation`, polled until terminal; every poll feeds `NotificationsStore`                                                                |
-| `/subscriptions/{s}/access`, `…/{g}/access`, `…/{name}/access` | access page           | `RoleAssignmentsApi` — `PUT`/`GET`/`DELETE {scope}/providers/CyberCloud.Authorization/roleAssignments/{name}` (#70), by hand; no list (#86) |
+| Route                                                          | Page                 | Calls                                                                                                                                                                   |
+| -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/subscriptions`                                               | list + create        | `GET /tenants/{t}/subscriptions` through `ScopeCollections` (a delegation to the generated `listSubscriptions`), then `createSubscription`                              |
+| `/subscriptions/{s}`                                           | subscription blade   | `getSubscription`                                                                                                                                                       |
+| `…/resourceGroups`                                             | list + create + open | `GET …/subscriptions/{s}/resourceGroups` through `ScopeCollections`, then `createResourceGroup`; open by name stays for a group the caller may act in but not enumerate |
+| `…/resourceGroups/{g}`                                         | resource group blade | `getResourceGroup`, plus a create and a list link per top-level type from the form document                                                                             |
+| `…/resourceGroups/{g}/resources?type=`                         | resource list        | `list{Type}` (#10), paged by `$skipToken`                                                                                                                               |
+| `…/resourceGroups/{g}/create/{ns}/{type}[/{child}]`            | create blade         | the generated form, then `createOrUpdate{Type}` → the operation view                                                                                                    |
+| `…/providers/{ns}/{type}/{name}`                               | resource blade       | `get{Type}`; delete is `delete{Type}` after the name is typed back → the operation view                                                                                 |
+| `…/providers/{ns}/{type}/{name}/edit`                          | edit blade           | `get{Type}`, then a full `createOrUpdate{Type}` with the immutable fields locked and still sent                                                                         |
+| `/operations/{id}?then=`                                       | operation view       | `getOperation`, polled until terminal; every poll feeds `NotificationsStore`                                                                                            |
+| `/subscriptions/{s}/access`, `…/{g}/access`, `…/{name}/access` | access page          | `RoleAssignmentsApi` — `PUT`/`GET`/`DELETE {scope}/providers/CyberCloud.Authorization/roleAssignments/{name}` (#70), by hand; no list (#86)                             |
 
 ⚠ **The verb names are derived from the form's `title`**, exactly as `TypeScriptEmitter` derives
 them from the type's display name, and `apps/portal/src/app/api/resource-verbs.spec.ts` asserts the
@@ -257,10 +280,11 @@ emitter learns the address, the three methods become delegations. The page grant
 revokes; it cannot list, because the collection answers 400 (#86), and its table holds only what it
 granted or checked in the visit, labelled as exactly that.
 
-⚠ **Every page renders a "no tenant" state on a fresh portal.** Nothing populates
-`TenantContextStore` until the token exchange lands (docs/plan/11's M2 work), so the pages say so
-rather than calling the API with no tenant. `apps/portal/src/pages/pages.spec.ts` signs a tenant in
-and drives each page against a recorded platform.
+⚠ **Every page renders a "no tenant" state until the sign-in has loaded one.** `TenantContextStore`
+is filled by `AuthFlow.ensureContext` once a token is accepted — from the callback, or from the
+reload path's refresh — and until then the pages say so rather than calling the API with no tenant.
+`apps/portal/src/pages/pages.spec.ts` signs a tenant in and drives each page against a recorded
+platform; `a11y.spec.ts` audits every route in the state before that.
 
 ## Gates
 
@@ -269,13 +293,13 @@ Every one of these fails the build rather than warning. `pnpm gates` runs them i
 which invokes this chain rather than restating it. Locally that target runs `pnpm verify` instead,
 which is `gates` without the Node wall; see § Node above for why that asymmetry is deliberate.
 
-| Gate           | Command          | What it enforces                                                                                                                                      |
-| -------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node           | `pnpm node:gate` | The pin above, in CI only                                                                                                                             |
-| Lint           | `pnpm lint`      | `ChangeDetectorRef` and web storage are **banned identifiers**; `OnPush` is mandatory; every template string carries an `i18n` marker                 |
-| Tests          | `pnpm test`      | Components, stores, axe on every route and on every generated form, the pages against a recorded platform, the conventions suite, and the Angular pin |
-| Build + budget | `pnpm build`     | The production build, then `scripts/bundle-budget.mjs`                                                                                                |
-| SSR isolation  | `pnpm test:ssr`  | `scripts/ssr-isolation.test.mjs`, run by `pnpm build` once the bundle exists                                                                          |
+| Gate           | Command          | What it enforces                                                                                                                                                                                |
+| -------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node           | `pnpm node:gate` | The pin above, in CI only                                                                                                                                                                       |
+| Lint           | `pnpm lint`      | `ChangeDetectorRef` and web storage are **banned identifiers**; `OnPush` is mandatory; every template string carries an `i18n` marker                                                           |
+| Tests          | `pnpm test`      | Components, stores, the sign-in flow against a fake `/token`, axe on every route and on every generated form, the pages against a recorded platform, the conventions suite, and the Angular pin |
+| Build + budget | `pnpm build`     | The production build, then `scripts/bundle-budget.mjs`                                                                                                                                          |
+| SSR isolation  | `pnpm test:ssr`  | `scripts/ssr-isolation.test.mjs`, run by `pnpm build` once the bundle exists                                                                                                                    |
 
 ### The performance budget
 
@@ -284,12 +308,18 @@ gzips the emitted files and compares real bytes rather than the builder's estima
 
 | Metric                       | Budget   | Actual       |
 | ---------------------------- | -------- | ------------ |
-| Initial JS, gzipped          | < 250 KB | **190.7 KB** |
-| Largest route chunk, gzipped | < 120 KB | **9.7 KB**   |
+| Initial JS, gzipped          | < 250 KB | **195.2 KB** |
+| Largest route chunk, gzipped | < 120 KB | **10.0 KB**  |
 
 Measured by the script itself on 2026-09-15 at the pins § The Angular pin describes, with the access
-page (#22) among the lazy chunks; the builder's own "estimated transfer size" column is smaller
-(179.3 KB) and is not what the gate compares.
+page (#22) among the lazy chunks and the sign-in flow (§ Sign-in) in the shell chunk — 4.5 KB of
+the initial set, measured against the same build without it; the builder's own "estimated transfer
+size" column is smaller (182.8 KB) and is not what the gate compares.
+
+⚠ **`TENANT_CONTEXT_SOURCE` is provided through a dynamic import, and the budget is why.** Its
+implementation reaches `PlatformApi`, which is the whole generated client, and a `useClass` provider
+in `app.config.ts` put the client's 150 methods in the initial bundle — 8 KB gzipped, measured — where
+`platform-api.ts` promises they are not. The factory imports the class on the first `load` instead.
 
 ⚠ The script also fails when the build emits **no** lazy chunk at all, because that means the lazy
 routes have been inlined and docs/plan/20's "Route-level code splitting is mandatory" has quietly
@@ -315,7 +345,10 @@ carrying different tenants, different session cookies and different bearer token
 neither render carries the other's tenant, that the two documents are identical (so no request
 identity reached the render at all), that no token or cookie appears in either, that
 `Cache-Control` is `no-store, private` and `Vary` includes `Cookie`, and that no shipped browser
-bundle writes to web storage.
+bundle writes to web storage. A second pair of requests renders `/auth/callback` with an
+authorization code in the query and a PKCE cookie on the request, and asserts the server rendered
+its "signing in" state without the code, the verifier or the tenant reaching the output — the
+exchange is the browser's, after hydration.
 
 It is a Node test against real HTTP rather than a Jest suite on purpose: the property is about the
 deployed process's bytes and response headers, not about an Angular API call.
@@ -327,7 +360,7 @@ M1 is the shell. Everything below is named in docs/plan/20 and deliberately abse
 | Not built                                             | What it needs before it can be                                                                                                                                                                                                                                                                                                                           | Where it is specified                                             |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | **Region, cluster, storage-class and subnet pickers** | Endpoints that list them. The form renderer exists (`libs/resource-forms`, over `generated/forms/{apiVersion}.json`, fetched at runtime and never imported) and renders those four widgets as inputs carrying the schema's own pattern and example until the API can answer what a picker would offer                                                    | docs/plan/20 § The shape that makes 100 resource types affordable |
-| **A subscription or resource-group list**             | A collection route at tenant or subscription scope. #63 gave the scope API a `GET` and a `PUT` by id and nothing that enumerates, so the subscriptions page lists what the sign-in grants and the resource-groups page says "no list endpoint yet" and opens one by name                                                                                 | docs/plan/10 § Shape                                              |
+| **`/userinfo`**                                       | The identity host does not map it yet. The account menu reads `name` and `email` from the id_token the code exchange returns, so a name changed after sign-in shows on the next sign-in rather than the next refresh                                                                                                                                     | docs/plan/11 § Hosts                                              |
 | **Quota and usage, the cloud-terminal surface**       | Endpoints. Nothing in `openapi/{apiVersion}.json` serves quota or usage (docs/plan/22 is M2), and `Terminal/consoles`' `connect` answers a WebSocket address the portal has no `xterm.js` host for yet                                                                                                                                                   | #22                                                               |
 | **A role-assignment list**                            | `GET {scope}/providers/CyberCloud.Authorization/roleAssignments` — the collection answers 400 today, and what is assigned at a scope lives only on `ICheckGrain`'s role-assignment view. The access page grants, checks and revokes by name and says so in its empty state; when the collection lands it loads into the same table                       | #86                                                               |
 | **Principal validation on a grant**                   | A directory the platform can ask. It accepts any well-formed id of a closed principal type and writes the tuple, so the access page checks the id's shape (`RelationNaming.IdPattern`) and no more, and its field hint says the id is the directory's — a typo grants something nobody can use                                                           | #86, the third point                                              |

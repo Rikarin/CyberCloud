@@ -154,18 +154,48 @@ public sealed class AppHostTopologyTests {
         gateway["CyberCloud__Gateway__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer);
         feeds["CyberCloud__Feeds__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer);
 
-        // ⚠ The identity host infers its issuer from the request, so the only way the string above
-        // is the string it announces is if it listens on exactly that port. An Issuer handed to it
-        // explicitly would also work; an Issuer handed to it that DIFFERED from the port would be a
-        // discovery document the gateway refuses, with both hosts healthy.
-        identity.ShouldNotContainKey("CyberCloud__Identity__Issuer", "inferred, so that the port is the one place the origin is decided");
+        // ⚠ The identity host is handed the issuer rather than inferring it, and the string has to
+        // name the port it listens on. Inference was the first shape, and it held until /authorize
+        // was proxied through the identity app's dev server: a request resumed through 4201 minted
+        // a code under `http://localhost:4201/`, and /token on 5101 refused it (OpenIddict ID2088)
+        // with every host healthy — CyberCloudTopology's issuer note. An Issuer that DIFFERED from
+        // the port would be a discovery document the gateway refuses, just as quietly.
+        identity["CyberCloud__Identity__Issuer"].ShouldBe(CyberCloudResources.IdentityIssuer, "one issuer, whichever origin the request arrived on");
         new Uri(CyberCloudResources.IdentityIssuer).Port.ShouldBe(CyberCloudResources.IdentityPort);
+
+        // ⚠ The person's path, pinned on the identity host's side: where an unauthenticated
+        // /authorize sends the person (the identity app's dev server, which proxies the resumed
+        // request back), where the portal's code may be sent (which is also the CORS origin for
+        // /token), and where the keys persist so a restart does not sign everybody out.
+        identity["CyberCloud__Identity__SignInPageBaseUri"].ShouldBe($"http://localhost:{CyberCloudResources.IdentityAppPort}");
+        identity["CyberCloud__Identity__Clients__Portal__RedirectUris__0"].ShouldBe($"http://localhost:{CyberCloudResources.PortalPort}/auth/callback");
+        identity["CyberCloud__Identity__Clients__Portal__PostLogoutRedirectUris__0"].ShouldBe($"http://localhost:{CyberCloudResources.PortalPort}/");
+        identity["CyberCloud__Identity__DevelopmentKeyDirectory"].ShouldBe(Path.Combine(RepositoryRoot, "src", "Hosts", "CyberCloud.AppHost", ".identity"));
 
         foreach (var (name, environment) in new[] { (CyberCloudResources.Gateway, gateway), (CyberCloudResources.Feeds, feeds), (CyberCloudResources.Identity, identity) }) {
             environment["CyberCloud__Cluster__LocalhostGatewayPort"]
                 .ShouldBe(CyberCloudResources.SiloOneGatewayPort.ToString(), $"{name} is an Orleans client of silo 1 — AsOrleansClient");
             environment["DOTNET_ENVIRONMENT"].ShouldBe("Development", $"{name} would otherwise choose Kubernetes membership under Aspire.Hosting.Testing — WithOrleansPorts' remarks");
         }
+    }
+
+    [Fact]
+    public async Task SelfServeSignUpIsOneDecisionOnAllThreeSides() {
+        var built = Model();
+
+        // ⚠ Three processes read CyberCloud:Identity:SelfServeSignUp and they have to agree: the
+        // silos' PlatformBootstrapTask writes the platform:root#operator grant sign-up creates
+        // tenants under only when it is on, and the identity host opens /api/signup/* only when it
+        // is on. A host with it on beside silos with it off refuses every completion with
+        // "something went wrong" — IdentityHostOptions.SelfServeSignUp.
+        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Identity }) {
+            var environment = await built.EnvironmentOf(name);
+            environment[CyberCloudTopology.SelfServeSignUpVariable].ShouldBe("true", $"{name} is one of the three");
+        }
+
+        // And the region a signed-up tenant is homed to, without which the first create step refuses.
+        var identity = await built.EnvironmentOf(CyberCloudResources.Identity);
+        identity["CyberCloud__Identity__DefaultRegion"].ShouldBe(CyberCloudResources.DefaultRegion);
     }
 
     [Fact]
@@ -219,7 +249,11 @@ public sealed class AppHostTopologyTests {
     public void TheIdentityAppProxyForwardsToTheIdentityHostOnItsPinnedPort() {
         var proxy = ReadProxy(Path.Combine("apps", "identity", "proxy.conf.json"));
 
-        foreach (var path in new[] { "/api", "/connect", "/.well-known" }) {
+        // ⚠ /authorize and /logout, and no /connect: the sign-in page resumes the OIDC request by
+        // navigating to the relative /authorize its returnUrl carries, and only a proxy entry makes
+        // that reach the host on 5101 with the cookie. /connect was an entry for a path that never
+        // existed — the endpoints are at the root, IdentityHostOpenIddict says where.
+        foreach (var path in new[] { "/api", "/authorize", "/logout", "/.well-known" }) {
             proxy.ShouldContainKey(path);
             TargetPortOf(proxy[path]).ShouldBe(CyberCloudResources.IdentityPort, $"the identity app's {path} is the identity host — CyberCloudResources.IdentityPort");
         }

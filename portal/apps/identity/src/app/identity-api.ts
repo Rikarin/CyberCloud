@@ -71,6 +71,69 @@ export interface SignInResultResponse {
   message: string;
 }
 
+/** What `POST /api/signup/begin` answers — the same thing for every address. */
+export interface SignUpBeginResponse {
+  /** Always `true`. A malformed address, a taken one and a free one all produce it. */
+  sent: true;
+
+  /** Where to go afterwards — a same-origin path, already sanitized by the server. */
+  returnUrl: string;
+}
+
+/** What `POST /api/signup/verify` answers. */
+export interface SignUpVerifyResponse {
+  /** Whether the address is now proven. One `false` for every way of being wrong. */
+  verified: boolean;
+}
+
+/**
+ * The credential a sign-up completes with — one of two shapes.
+ *
+ * ⚠ For a passkey the challenge it answers is in the server's cookie, never here; for a password
+ * the secret travels in the body, never in a query string — `signInWithPassword` says why.
+ */
+export type SignUpCredential = { kind: 'passkey'; attestationJson: string } | { kind: 'password'; password: string };
+
+/** What `POST /api/signup/complete` answers. */
+export interface SignUpCompleteResponse {
+  /** Whether the tenant exists and the caller is signed into it. */
+  succeeded: boolean;
+
+  /** The new tenant, or empty on failure. */
+  tenantId: string;
+
+  /**
+   * Where to go next — on success, the original `/authorize` request with `tenant=<new tenant>`
+   * set. ⚠ Sanitized again on this side inside `NAVIGATE`, for the reason `SignInResultResponse`
+   * gives.
+   */
+  returnUrl: string;
+
+  /**
+   * What to render on failure, verbatim.
+   *
+   * ⚠ Distinguishable, and rendered as it arrives — "verify your address first", "that organisation
+   * name is taken", the naming rule's own sentence, the password rule's own sentence, or
+   * "something went wrong". By this point the person has proven an address and the answers are
+   * about their own input, which is why this surface may say more than the sign-in surface does.
+   */
+  message: string;
+}
+
+/**
+ * What every `/api/signup/*` call answers while sign-up is closed on a deployment — a body, not a
+ * status, so a page renders one sentence and a probe learns nothing.
+ */
+export interface SignUpClosedResponse {
+  succeeded: false;
+  message: string;
+}
+
+/** Whether an answer is the closed-surface shape rather than the endpoint's own. */
+export function signUpIsClosed(response: object): response is SignUpClosedResponse {
+  return 'succeeded' in response && response.succeeded === false && 'message' in response;
+}
+
 /**
  * The identity host's JSON endpoints, as this app calls them.
  *
@@ -90,9 +153,11 @@ export class IdentityApi {
    * Asks which credentials to offer for an address.
    *
    * @param email The address typed. Sent as-is; the server normalizes it.
+   * @param tenant The tenant to sign into — see {@link signInWithPassword}. Carried here so the
+   * three first-factor calls send one shape; the server reads nothing from this endpoint's body.
    */
-  begin(email: string): Observable<SignInBeginResponse> {
-    return this.#http.post<SignInBeginResponse>('/api/signin/begin', { email });
+  begin(email: string, tenant?: string): Observable<SignInBeginResponse> {
+    return this.#http.post<SignInBeginResponse>('/api/signin/begin', { email, tenant });
   }
 
   /**
@@ -102,24 +167,85 @@ export class IdentityApi {
    * in the server's access log, in the browser's history, and in the `Referer` of the next
    * navigation — three places docs/plan/00 § Non-negotiables' "secrets are handles" discipline says
    * a credential must never be.
+   *
+   * ⚠ **The tenant names where to sign in, and an address alone names nothing.** docs/plan/11
+   * § Sign-up and tenant creation refuses a global email index, so the same address may exist in
+   * two tenants and the server has to be told which. It arrives on the `/authorize` request that
+   * sent the person here (`tenant=<id or slug>` in the return URL) or is typed as the organisation;
+   * `undefined` leaves it to the server's fallback. An unknown value is the uniform failure — the
+   * server looks it up in the platform directory and touches nothing in a tenant that does not
+   * exist.
+   *
+   * @param tenant A tenant id or slug, or `undefined`.
    */
-  signInWithPassword(email: string, password: string, returnUrl: string): Observable<SignInResultResponse> {
+  signInWithPassword(
+    email: string,
+    password: string,
+    returnUrl: string,
+    tenant?: string
+  ): Observable<SignInResultResponse> {
     return this.#http.post<SignInResultResponse>('/api/signin/password', {
       email,
       password,
-      returnUrl
+      returnUrl,
+      tenant
     });
   }
 
   /**
-   * Starts a self-serve sign-up.
+   * Starts a self-serve sign-up — step one of three. docs/plan/11 § Sign-up and tenant creation.
    *
-   * @returns Always the same shape, whether or not the address was free — docs/plan/11 § Sign-up
-   * and tenant creation. The mail that follows is what differs, and it goes to the address either
-   * way.
+   * ⚠ Answers `sent: true` whether the address was free, taken or not an address at all, on the
+   * server's timing floor, and sets the `__Host-cyc-signup` ticket cookie this app cannot read.
+   * Everything that follows is authenticated by that cookie: the browser that began a sign-up is
+   * the only thing that can continue it. While sign-up is closed on a deployment the answer is
+   * `{ succeeded: false, message }` instead, which `signUpIsClosed` recognises.
    */
-  signUp(email: string, returnUrl: string): Observable<SignInResultResponse> {
-    return this.#http.post<SignInResultResponse>('/api/signup', { email, returnUrl });
+  signUpBegin(email: string, returnUrl: string): Observable<SignUpBeginResponse | SignUpClosedResponse> {
+    return this.#http.post<SignUpBeginResponse | SignUpClosedResponse>('/api/signup/begin', { email, returnUrl });
+  }
+
+  /**
+   * Answers the enrolment code — step two.
+   *
+   * ⚠ Which sign-up is answering comes from the ticket cookie, never from this body. A wrong code,
+   * an expired one and one whose five guesses are spent are one `false`.
+   */
+  signUpVerify(code: string): Observable<SignUpVerifyResponse | SignUpClosedResponse> {
+    return this.#http.post<SignUpVerifyResponse | SignUpClosedResponse>('/api/signup/verify', { code });
+  }
+
+  /**
+   * Asks for a WebAuthn registration challenge — the passkey half of step three.
+   *
+   * ⚠ The challenge goes into the same protected cookie the sign-in ceremony uses, stamped as a
+   * registration so neither endpoint can answer the other's. The options are handed to
+   * `navigator.credentials.create()` without being rebuilt — `passkey.ts`.
+   */
+  signUpPasskeyBegin(displayName: string): Observable<PasskeyBeginResponse | SignUpClosedResponse> {
+    return this.#http.post<PasskeyBeginResponse | SignUpClosedResponse>('/api/signup/passkey/begin', { displayName });
+  }
+
+  /**
+   * Creates everything — step three's last call.
+   *
+   * ⚠ The address, the ids and the proof come from the ticket and the server's own record, never
+   * from here: this body carries what the person chose and their credential, and nothing else.
+   * On `succeeded` the response's `returnUrl` is the original `/authorize` request with
+   * `tenant=<new tenant>` set, and the page leaves for it through `NAVIGATE`.
+   */
+  signUpComplete(
+    displayName: string,
+    organizationName: string,
+    credential: SignUpCredential,
+    returnUrl: string
+  ): Observable<SignUpCompleteResponse> {
+    return this.#http.post<SignUpCompleteResponse>('/api/signup/complete', {
+      displayName,
+      organizationName,
+      credential,
+      returnUrl
+    });
   }
 
   /**
@@ -131,9 +257,11 @@ export class IdentityApi {
    * guess.
    *
    * @param email The address typed. Sent as-is; the server normalizes it.
+   * @param tenant The tenant to sign into — see {@link signInWithPassword}. The server carries it in
+   * the challenge ticket, so `completePasskey` needs none.
    */
-  beginPasskey(email: string): Observable<PasskeyBeginResponse> {
-    return this.#http.post<PasskeyBeginResponse>('/api/signin/passkey/begin', { email });
+  beginPasskey(email: string, tenant?: string): Observable<PasskeyBeginResponse> {
+    return this.#http.post<PasskeyBeginResponse>('/api/signin/passkey/begin', { email, tenant });
   }
 
   /**

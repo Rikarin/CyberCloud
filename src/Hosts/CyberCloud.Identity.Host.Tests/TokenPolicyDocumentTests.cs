@@ -136,11 +136,15 @@ public sealed class TokenPolicyDocumentTests {
         // ⚠ THE INVARIANT OnRedirectToLogin DEPENDS ON. A script-called endpoint mapped outside
         // `/api` receives a 302 to a login page instead of a 401, which every caller then fails to
         // parse — see UnauthenticatedApiCallsGet401Tests, which asserts the other half of the pair.
-        // The navigable exceptions are named here so adding another is a decision. /token is the
-        // third: it is OpenIddict's passthrough, reached only after the server has validated the
-        // request, and it never authorizes — a cookie has nothing to say to it, so the redirect
-        // rule that the /api prefix exists for cannot apply.
-        var navigable = new[] { "/health/live", "/.well-known/cybercloud-token-policy", IdentityHostOpenIddict.TokenPath };
+        // The navigable exceptions are named here so adding another is a decision. The three OIDC
+        // passthroughs are the last three: OpenIddict hands each a request it has already validated,
+        // /token never authorizes (a cookie has nothing to say to it), and /authorize and /logout
+        // are navigations by definition — a person arrives at them by redirect, and a 302 to the
+        // sign-in page is exactly what an unauthenticated /authorize answers.
+        var navigable = new[] {
+            "/health/live", "/.well-known/cybercloud-token-policy", IdentityHostOpenIddict.TokenPath,
+            IdentityHostOpenIddict.AuthorizationPath, IdentityHostOpenIddict.EndSessionPath
+        };
 
         var mapped = Endpoints()
             .OfType<RouteEndpoint>()
@@ -169,8 +173,9 @@ public sealed class TokenPolicyDocumentTests {
         // these, and a rename on one side of that pair produces a 404 at runtime rather than a build
         // error — the same hazard the [JsonPropertyName] attributes on the request records exist for.
         foreach (var route in new[] {
-                     "/api/signin/begin", "/api/signin/password", "/api/signup", "/api/signin/passkey/begin",
-                     "/api/signin/passkey/complete"
+                     "/api/signin/begin", "/api/signin/password", "/api/signin/passkey/begin",
+                     "/api/signin/passkey/complete", "/api/signup/begin", "/api/signup/verify",
+                     "/api/signup/passkey/begin", "/api/signup/complete"
                  }) {
             mapped.ShouldContain(route, $"the identity page calls {route}");
         }
@@ -186,10 +191,32 @@ public sealed class TokenPolicyDocumentTests {
         }
 
         mapped.ShouldContain(IdentityHostOpenIddict.TokenPath, "the token passthrough must have a handler behind it");
+        mapped.ShouldContain(IdentityHostOpenIddict.AuthorizationPath, "the authorization passthrough must have a handler behind it");
+        mapped.ShouldContain(IdentityHostOpenIddict.EndSessionPath, "the end-session passthrough must have a handler behind it");
 
         Route(IdentityHostOpenIddict.TokenPath)
             .Metadata.GetMetadata<HttpMethodMetadata>()!
             .HttpMethods.ShouldBe([HttpMethods.Post]);
+
+        // Navigations, both of them: a person arrives by redirect, and a POST /authorize would be
+        // the form-post response mode this server does not offer.
+        Route(IdentityHostOpenIddict.AuthorizationPath)
+            .Metadata.GetMetadata<HttpMethodMetadata>()!
+            .HttpMethods.ShouldBe([HttpMethods.Get]);
+
+        Route(IdentityHostOpenIddict.EndSessionPath)
+            .Metadata.GetMetadata<HttpMethodMetadata>()!
+            .HttpMethods.ShouldBe([HttpMethods.Get]);
+
+        // ⚠ The two the portal calls cross-origin carry the first-party CORS policy, and nothing
+        // else does — an /api endpoint with CORS headers would let a page on the portal's origin
+        // drive the sign-in surface with the cookie attached.
+        foreach (var route in mapped) {
+            var expected = route == IdentityHostOpenIddict.TokenPath || route == IdentityHostOpenIddict.EndSessionPath;
+
+            (Route(route).Metadata.GetMetadata<Microsoft.AspNetCore.Cors.Infrastructure.ICorsMetadata>() is not null)
+                .ShouldBe(expected, $"{route} carries CORS metadata it should{(expected ? "" : " not")}");
+        }
     }
 
     [Fact]

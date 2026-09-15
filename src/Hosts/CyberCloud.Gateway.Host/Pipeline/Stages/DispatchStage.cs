@@ -56,6 +56,7 @@ sealed class DispatchStage(
             RouteKind.Operation => await OperationAsync(context, path, cancellationToken),
             RouteKind.Resource => await ResourceAsync(context, path, cancellationToken),
             RouteKind.Scope => await ScopeAsync(context, path, cancellationToken),
+            RouteKind.ScopeCollection => await ScopeCollectionAsync(context, path, cancellationToken),
             RouteKind.RoleAssignment => await RoleAssignmentAsync(context, path, cancellationToken),
             RouteKind.RoleAssignmentCollection => await RoleAssignmentCollectionAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
@@ -220,6 +221,70 @@ sealed class DispatchStage(
         return new() {
             StatusCode = snapshot.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
             Json = ResponseBodies.Scope(snapshot)
+        };
+    }
+
+    /// <summary>
+    ///     The scope collection <c>GET</c> — a tenant's subscriptions or a subscription's resource
+    ///     groups, paged and filtered to what the caller may read. docs/plan/10 § Shape.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The same page parameters as a resource collection, read the same way and
+    ///         echoed into <c>nextLink</c> the same way</b> — <c>$top</c> parsed leniently and used
+    ///         twice (#76), <c>$skipToken</c> passed through verbatim — for the reasons
+    ///         <see cref="CollectionAsync" /> gives. A client that pages one collection of this API
+    ///         pages this one with no branch.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The manager takes the <i>parent's</i> path and the link is built from the
+    ///         <i>collection's</i>.</b> A scope collection has no grain, so
+    ///         <c>IScopeManager.ListAsync</c> is addressed at the tenant or subscription whose
+    ///         listing it reads; the <c>nextLink</c> has to be the URL the caller requested, which
+    ///         is the collection's. Both come off the rebuilt route, carrying the token's tenant.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No check here and no filter here</b>, for the reason no other dispatch has one:
+    ///         which members the page holds is the manager's question, behind the one seam.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> ScopeCollectionAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var query = context.Http.Request.Query;
+        var top = int.TryParse(query["$top"], CultureInfo.InvariantCulture, out var asked) ? asked : 0;
+
+        var listed = await scopes.ListAsync(
+            new() {
+                // ⚠ The rebuilt parent path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+                ParentPath = context.Route.Scopes.Parent.Path,
+                Caller = context.Caller,
+                Top = top,
+                Continuation = query["$skipToken"].ToString()
+            },
+            cancellationToken
+        );
+
+        if (listed.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var page = listed.GetValueOrThrow();
+
+        return new() {
+            StatusCode = StatusCodes.Status200OK,
+            Json = ResponseBodies.ScopeCollection(
+                page,
+                GatewayRouterPaths.NextLink(
+                    options.PublicBaseUri,
+                    context.Route.CollectionPath,
+                    context.ApiVersion.Value,
+                    top,
+                    page.Continuation
+                )
+            )
         };
     }
 

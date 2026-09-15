@@ -74,6 +74,26 @@
         <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
         <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
         <ProjectReference Include="../../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+        <!--
+          ⚠ THE RESOURCE MANAGER, FOR ONE SEAM: IScopeManager. docs/plan/11 § Sign-up and tenant
+          creation ends a self-serve sign-up by creating a tenant, a subscription and a resource group,
+          and IScopeManager.CreateTenantAsync's own remarks say sign-up "ends by calling something
+          exactly like this method with a platform-operator identity of its own". SignUp/SignUpOrchestrator
+          is that caller, and AddCyberCloudResourceManager() is the one registration that supplies the
+          seam beside its authorizer — the feeds host takes the same reference for the same call.
+
+          A host is outside docs/plan/03 § Assembly graph rules' module layering, and rules 4 and 5 are
+          untouched: no *.Application module joins IdentityHostModule and no provider implementation is
+          loaded. What this host gains is the client-side scope path and nothing that reconciles.
+        -->
+        <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!--
+          The platform tenant directory (TenantHint resolves the `tenant` a request names through
+          it, before any per-tenant grain is touched) and the per-tenant client index (ClientResolver
+          reaches a tenant's application registrations through it). Both are contracts, reached as
+          grains; nothing from CyberCloud.Tenancy itself is referenced.
+        -->
+        <ProjectReference Include="../../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">

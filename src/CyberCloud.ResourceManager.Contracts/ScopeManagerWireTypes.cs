@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace CyberCloud.ResourceManager.Contracts;
 
 /// <summary>
@@ -210,4 +212,150 @@ public static class ScopeTypeNames {
             ScopeKind.ResourceGroup => ResourceGroup,
             _ => ""
         };
+}
+
+/// <summary>
+///     A request to list the scopes under one parent — a tenant's subscriptions or a subscription's
+///     resource groups. The collection <c>GET</c> of docs/plan/10 § Shape, for scopes.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Not a <see cref="ListRequest" />, for the reason <see cref="ScopeRequest" /> is not
+///         a <see cref="WriteRequest" />.</b> A <see cref="ListRequest" /> carries an api-version
+///         that selects a projection and a path <c>ResourceCollectionId.ParsePath</c> reads; a
+///         scope has no projection and its collection path fails that parser by design. Reusing it
+///         would be a request whose own field names a parser that refuses it.
+///     </para>
+///     <para>
+///         ⚠ <b><see cref="Top" /> is a cap this endpoint enforces and not a hint</b>, as it is on
+///         a resource listing: the page is one <c>ListObjects</c> plus a grain read per member that
+///         survives it, and a <c>Check</c> per member when the engine declines to answer. The cap
+///         is higher than <see cref="ListRequest.MaxPageSize" /> because a scope page costs less —
+///         every member is one small record in one activation, with no api-version projection and
+///         no body — and because the portal's context picker loads a tenant's whole subscription
+///         list in one call and a tenant's scope tree is bounded by the organisation rather than
+///         by its workloads. The two numbers are <c>ListObjectsRequest</c>'s, so the one
+///         <c>ListObjects</c> a page asks for is never asked for fewer objects than the page holds.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.ScopeListRequest")]
+public sealed record ScopeListRequest {
+    /// <summary>The largest page this endpoint will build, whatever <see cref="Top" /> asks for.</summary>
+    public const int MaxPageSize = 1_000;
+
+    /// <summary>The page size used when <see cref="Top" /> is zero.</summary>
+    public const int DefaultPageSize = 100;
+
+    /// <summary>
+    ///     The path of the scope whose children are listed: a tenant for the subscription
+    ///     collection, a subscription for the resource-group collection.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The parent's path and not the collection's, because the collection has no grain and the
+    ///     parent does — <c>ScopeCollectionId</c>'s remarks. It is the path the gateway
+    ///     <i>rebuilt</i> from the token's tenant, never the one off the wire, and the manager
+    ///     compares the tenant again regardless — the same second defence <see cref="ScopeRequest.Path" />
+    ///     describes.
+    /// </remarks>
+    [Id(0)]
+    public string ParentPath { get; init; } = string.Empty;
+
+    /// <summary>Who is asking.</summary>
+    [Id(1)]
+    public CallerContext Caller { get; init; } = new();
+
+    /// <summary>
+    ///     How many scopes to examine. Zero means <see cref="DefaultPageSize" />; anything above
+    ///     <see cref="MaxPageSize" /> is clamped to it rather than refused.
+    /// </summary>
+    [Id(2)]
+    public int Top { get; init; }
+
+    /// <summary>
+    ///     Where to resume, from a previous page's <see cref="ScopeListPage.Continuation" />, or
+    ///     empty for the first page.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Named <c>Continuation</c> and not <c>ContinuationToken</c> for <c>CC1005</c>'s sake —
+    ///     <see cref="ListRequest.Continuation" /> carries the argument. The value is the last member
+    ///     examined on the previous page — a subscription id in the <c>N</c> form, or a group name —
+    ///     and paging resumes at the next member that sorts after it ordinally, so a scope created
+    ///     or deleted between pages cannot make the walk skip or repeat an unrelated member.
+    /// </remarks>
+    [Id(3)]
+    public string Continuation { get; init; } = string.Empty;
+
+    /// <summary>The page size this request actually gets.</summary>
+    public int PageSize =>
+        Top switch {
+            <= 0 => DefaultPageSize,
+            > MaxPageSize => MaxPageSize,
+            _ => Top
+        };
+}
+
+/// <summary>
+///     One page of a scope collection <c>GET</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>A page holds only what the caller may read, and a filtered-out member leaves no
+///     trace</b> — no count, no gap, no marker — for the reason <see cref="ResourceListPage" />
+///     gives: any of the three is the enumeration oracle docs/plan/07 § The enforcement seam closes
+///     by answering <c>404</c> rather than <c>403</c>, and a subscription id leaks more than a
+///     resource name because it is the billing boundary. So a page can be short, or empty, and
+///     still carry a continuation; a client stops when the continuation comes back empty and never
+///     when a page is smaller than it asked for.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.ScopeListPage")]
+public sealed record ScopeListPage {
+    /// <summary>
+    ///     The scopes, each exactly as <see cref="IScopeManager.ReadAsync" /> would render it,
+    ///     ordered by subscription id (<c>N</c> form) or group name, ordinally.
+    /// </summary>
+    [Id(0)]
+    public IReadOnlyList<ScopeSnapshot> Items { get; init; } = [];
+
+    /// <summary>
+    ///     What to pass as <see cref="ScopeListRequest.Continuation" /> for the next page, or empty
+    ///     when the walk reached the end of the parent's listing.
+    /// </summary>
+    [Id(1)]
+    public string Continuation { get; init; } = string.Empty;
+
+    /// <summary>Whether there is another page.</summary>
+    public bool HasMore => Continuation.Length > 0;
+}
+
+/// <summary>
+///     What <see cref="IScopeAuthorizer.ListReadableAsync" /> concluded: the readable subset, or
+///     that the question was not answered and has to be asked per member.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>A sibling of <see cref="CollectionVisibility" /> rather than a reuse of it, because a
+///     resource group has no GUID.</b> That type's <c>Visible</c> is a set of resource GUIDs; a
+///     subscription has one, a resource group is addressed by <c>{subscriptionId:N}-{name}</c> and
+///     never by a GUID, so the only value both scope collections can be keyed on is the
+///     <see cref="ScopeId" /> itself. The two-state shape is kept exactly — "answered, and nothing
+///     is readable" and "not answered" must never be one value, because the first is an empty page
+///     and the second is a fallback, and a caller that confused them would leak a whole collection
+///     or hide one.
+/// </remarks>
+public sealed record ScopeCollectionVisibility {
+    /// <summary>The engine did not answer; ask per member.</summary>
+    public static ScopeCollectionVisibility Unanswered { get; } = new();
+
+    /// <summary>Whether <see cref="Visible" /> is an answer.</summary>
+    public bool IsAnswered { get; private init; }
+
+    /// <summary>The readable members. Meaningless unless <see cref="IsAnswered" />.</summary>
+    public IReadOnlySet<ScopeId> Visible { get; private init; } = ImmutableHashSet<ScopeId>.Empty;
+
+    /// <summary>An answer: exactly these members are readable.</summary>
+    /// <param name="visible">The readable scopes.</param>
+    public static ScopeCollectionVisibility Of(IEnumerable<ScopeId> visible) {
+        ArgumentNullException.ThrowIfNull(visible);
+        return new() { IsAnswered = true, Visible = visible.ToImmutableHashSet() };
+    }
 }

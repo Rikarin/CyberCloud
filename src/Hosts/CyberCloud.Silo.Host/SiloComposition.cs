@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
@@ -52,9 +53,15 @@ public static class SiloComposition {
 
         var builder = OrleansApplication.CreateSilo(
             args,
-            configureCluster: ConfigureCluster,
+            configureCluster: null,
             configureStorage: ConfigureStorage
         );
+
+        // ⚠ Through UseOrleans rather than CreateSilo's configureCluster, because ConfigureCluster
+        // needs the host's environment and CreateSilo hands its callback a bare ISiloBuilder. The
+        // environment decides whether an unconfigured OTP route logs the code (Development) or
+        // refuses (everywhere else) — SiloIdentityComposition.AddSiloIdentity.
+        builder.UseOrleans(silo => ConfigureCluster(silo, builder.Environment));
 
         // ── ⚠ REQUIRED THE MOMENT A PROVIDER MODULE JOINS THE GRAPH, AND ONLY THEN ────────────────
         //
@@ -113,6 +120,10 @@ public static class SiloComposition {
     ///     The cluster wiring: the sending domain, identity and the resource manager.
     /// </summary>
     /// <param name="silo">The silo builder.</param>
+    /// <param name="environment">
+    ///     The host's environment. Decides whether an unconfigured OTP route logs codes (Development)
+    ///     or refuses them — <c>SiloIdentityComposition.AddSiloIdentity</c>.
+    /// </param>
     /// <remarks>
     ///     <para>
     ///         ⚠
@@ -149,9 +160,9 @@ public static class SiloComposition {
     ///         handed the storage options they are configured from.
     ///     </para>
     /// </remarks>
-    static void ConfigureCluster(ISiloBuilder silo) {
+    static void ConfigureCluster(ISiloBuilder silo, IHostEnvironment environment) {
         silo.AddCyberCloudCommunication()
-            .AddSiloIdentity()
+            .AddSiloIdentity(environment)
             // ── docs/plan/07's ReBAC engine — step 3 of every write ────────────────────────────────
             //
             // ⚠ WITHOUT THIS THE ENFORCEMENT SEAM ANSWERED 404 TO EVERYBODY, INCLUDING ITSELF.
@@ -199,7 +210,20 @@ public static class SiloComposition {
                         services.AddOptions<AgentTunnelOptions>().BindConfiguration(AgentTunnelOptions.SectionName);
                     }
                 )
-                .AddCyberCloudResourceManager();
+                .AddCyberCloudResourceManager()
+                // ── The first tenant's prerequisites — docs/plan/05 § The shard map, docs/plan/06 ─────
+                //
+                // ⚠ A STARTUP TASK AND NOT A GRAIN CALL SOMEBODY REMEMBERS TO MAKE. On a fresh run the
+                // shard map has no shards and nobody holds platform:root#operator, so
+                // IScopeManager.CreateTenantAsync fails twice over before a person can sign up;
+                // PlatformBootstrapTask carries both halves and why each is idempotent. It runs at the
+                // silo's Active stage, when grain calls route, and skips itself on a silo with no
+                // durable shard configured.
+                .ConfigureServices(services => services.AddSingleton<PlatformBootstrapTask>())
+                .AddStartupTask(
+                    (services, cancellationToken) =>
+                        services.GetRequiredService<PlatformBootstrapTask>().ExecuteAsync(cancellationToken)
+                );
     }
 
     /// <summary>

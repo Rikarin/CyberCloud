@@ -77,15 +77,62 @@ groups into a JWT produces the header-size failures every large enterprise hits.
 `Check` per request, which is the p99 < 10 ms budget in [00](00-vision-and-principles.md), and is why
 that budget exists.
 
-⚠ **What is served today, and what is not.** `/token` serves the client-credentials grant — a
-service principal presents its id as `client_id` and its vault-held secret, and gets a token the
-gateway validates against `/.well-known/jwks` — and refuses the other four rows of the flow table above
-with an OAuth error naming what each is waiting on (`TokenApi` in the identity host carries the
-list). The server runs in OpenIddict's *degraded mode*: ADR-015's "the stores are grains" means the
-library's own client validation has nothing to read from, so the host validates requests itself and
-OpenIddict handles the protocol, the signing and the discovery document. The signing key is still
-ephemeral, which is the rotation story above left owed to the vault. `aud` is spelled once, as
-`AccessTokenPolicy.Audience`, and the gateway pins it.
+⚠ **What is served today, and what is not.** Three rows of the flow table are served, and a person
+can hold a token. `/authorize` + PKCE mints an authorization code from the fully authenticated
+session cookie; `/token` exchanges it for an access token, an id_token and a refresh token, and
+rotates the refresh token; the client-credentials grant serves service principals as before. The
+server runs in OpenIddict's *degraded mode*: ADR-015's "the stores are grains" means the library's
+own client validation has nothing to read from, so the host validates requests itself
+(`DegradedModeHandlers` in the identity host) and OpenIddict handles the protocol, the signing and
+the discovery document. `aud` is spelled once, as `AccessTokenPolicy.Audience`, and the gateway pins
+it. The decisions that shape the served half, each argued in the type that makes it:
+
+- **One issuer, and the tenant is a request parameter.** An address alone resolves nothing on this
+  platform ([§ Sign-up and tenant creation](#sign-up-and-tenant-creation) refuses a global email
+  index), so `/authorize` and the three first-factor sign-in bodies take `tenant` — a tenant id or a
+  slug — and `TenantHint` resolves it through the platform tenant directory *before* any per-tenant
+  grain is touched, which is what answers the objection that a caller-chosen tenant "would let an
+  unauthenticated caller choose which tenant's lockout counters and email index it probes": a
+  made-up value activates nothing. Absent, the configured tenant applies, or the platform tenant in
+  Development only. Never a tenant in the path or the issuer: OpenIddict serves one issuer and the
+  gateway pins one issuer string, and `tid` carries the tenant on every token. ⚠ And the host is
+  *handed* that string rather than inferring it from the request, on the AppHost as in production:
+  a person's `/authorize` is resumed through the identity app's dev server, whose proxy forwards it
+  with its own `Host` header, and the first dev run minted an authorization code under
+  `http://localhost:4201/` that `/token` on `5101` refused (OpenIddict's ID2088) with every host
+  healthy. `CyberCloudTopology` sets `CyberCloud:Identity:Issuer` to the one string the gateway and
+  the feeds host already validate against.
+- **First-party clients are static.** `cyc-portal` and `cyc-cli` are `ApplicationRegistration`
+  records in the host (`FirstPartyClients`), consulted before a tenant's `IClientIndexGrain` so no
+  tenant can shadow them; `cyc-cli`'s loopback redirect matches any port, RFC 8252 § 7.3. Every
+  other client is the tenant's own, resolved through its index — and answered `consent_required`
+  at `/authorize` until the consent page exists.
+- **The refresh token is OpenIddict's envelope around the session grain's handle.** The exchange
+  opens one `ISessionGrain` per (user, client) — a *token session*, bound to the interactive cookie
+  session by `cyc:isid` — and the refresh token carries its handle as `cyc:rh`. Rotation, one-time
+  use and reuse detection are `ISessionGrain.RefreshAsync`'s; a replay revokes the chain, and a
+  refresh whose cookie session has been signed out revokes the token session on the spot, which is
+  how `/logout` ends every chain a sign-in produced without enumerating them. For the browser client
+  the refresh token lives in `__Host-cyc-refresh`, an `HttpOnly` cookie on this origin — the row in
+  [10 § Authentication inputs](10-gateway-and-api.md#authentication-inputs) — written and read back
+  only when the request's `Origin` is one of the portal's redirect-URI origins; for the CLI it
+  stays in the body. ⚠ Both directions, because the write is the login-CSRF: `Set-Cookie` on a
+  top-level cross-site form `POST` is honoured whatever `SameSite` says, so a `/token` that set the
+  cookie for any origin would let an attacker exchange a code for *their own* account from a page
+  in the victim's browser and have the victim's next silent refresh sign them into the attacker's
+  tenant. `DegradedModeHandlers.ValidateTokenRequest` refuses the browser client's code exchange
+  and body-borne refresh from any other origin before a grain is touched, and
+  `MoveRefreshTokenToCookie` writes the cookie for no other origin even if a response reaches it;
+  `ExtractRefreshTokenFromCookie` is the read side. The access token on the wire is exactly
+  `AccessTokenClaims.Permitted`: OpenIddict's own `scope`, `client_id` and presenter claims are
+  stripped before signing, because `scope` is on the forbidden list and the gateway refuses a token
+  that carries it.
+- **Keys persist on the development run, and nowhere else.** `IdentityHostOptions.DevelopmentKeyDirectory`
+  keeps the ES256 signing key, the encryption key and the data-protection ring on disk under the
+  AppHost's `.identity/`, so a restart does not sign every portal tab out — both keys, because codes
+  and refresh tokens are encrypted with the second. Set outside Development the host refuses to
+  start, naming `CyberCloud.Vault`; unset means ephemeral keys. The rotation story above stays owed
+  to the vault.
 
 ⚠ **The `client_id` → application index degraded mode requires has landed, which is the half #68
 closed toward the person's token path.** `IClientIndexGrain` (`CyberCloud.Tenancy.Contracts`) maps a
@@ -98,24 +145,40 @@ create](06-tenancy-and-resource-model.md) fixes, and where that document sweeps 
 between the write and the confirm with a reaper reminder, `ApplicationGrain` settles itself on its
 next call instead — `ApplicationGrainState.ClientIdConfirmed` is the marker, and an orphan whose
 `client_id` another application has since taken is dropped rather than left as a second registration
-naming one id. **What that unblocks and what is still owed on the person's path** — none of it wired
-yet, so a person still has no token today, and #88 stays open until the story its closing criterion
-names runs end to end:
+naming one id. `ClientResolver` in the identity host is the reader.
 
-- **The `/authorize` + `/token` authorization-code + PKCE handler**, resolving the `client_id`
-  through `IClientIndexGrain`, validating the `redirect_uri` against the registration, minting from
-  the cookie session (`IdentitySessionPrincipal`), consent-free for first-party clients, and opening
-  an `ISessionGrain` for the refresh chain.
-- **The refresh grant**, which OpenIddict issues only to a flow that granted `offline_access` and
-  which `ISessionGrain.RefreshAsync` already rotates with reuse detection — it needs the
-  authorization-code flow above to exist first.
-- **The signing key from the vault.** It is still ephemeral, so every restart invalidates every
-  token; the fix is `CyberCloud.Vault` through the seam docs/plan/18 names, generated once and stored
-  if absent, wired in `Identity.Host` beside `IClientSecretSeam` and `ITotpSecretSeam`.
+**What is still owed on the person's path**, each named where the code refuses it:
+
+- **The consent page.** A tenant-registered client is answered `consent_required` at `/authorize`;
+  first-party clients are consent-free.
+- **One-time use of an authorization code.** Degraded mode has no token store to burn a code in;
+  a code lives five minutes and PKCE binds a replay to the verifier only the legitimate tab holds.
+  A hot-tier code store is the fix. `GrantsOverHttpTests.TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt`
+  pins the binding — and pins the replay succeeding, so the store's landing is visible there.
+- **A confidential client's `client_secret` on the code and refresh grants.**
+  `DegradedModeHandlers.ValidateTokenRequest` refuses a secret from a public client and verifies
+  none from a confidential one. Unreachable while every tenant-registered client is answered
+  `consent_required` at `/authorize`, and to land *with* the consent page: the day a tenant's
+  confidential client can hold a code, anyone holding that code could exchange it.
+- **`/logout` on a bare link.** Any site can sign a person out: the end-session request is a
+  top-level navigation, `Lax` sends the cookie, and `id_token_hint` is ignored. A nuisance, not a
+  breach — a confirmation page, or binding `id_token_hint` and `state` to the cookie's session,
+  closes it.
+- **`/userinfo`.** Not mapped; the portal reads `tid` and `sub` off the access token and `email`
+  and `name` off the id_token.
+- **The signing key from the vault.** `DevelopmentKeyFile` is the development run's answer and
+  refuses to be anything else; the fix is `CyberCloud.Vault` through the seam docs/plan/18 names,
+  wired in `Identity.Host` beside `IClientSecretSeam` and `ITotpSecretSeam`.
 - **An HTTP surface that creates a service principal at a tenant** — `TenantOverHttpTests` still
-  creates one by grain.
-- **The person half of `TenantOverHttpTests`** — passkey sign-in on the identity host → auth-code →
-  token → `GET` through the gateway.
+  creates one by grain, and the client-credentials grant still takes its tenant from configuration
+  rather than from an application registration.
+- ~~The person half of `TenantOverHttpTests`~~ — landed as `PersonOverHttpTests` in
+  `CyberCloud.AppHost.Tests`: sign-up with the code read from the silo's console, `/authorize`,
+  `/token`, the tenant and both scope collections through the gateway, a resource that converges,
+  a refresh from the cookie, a replay refused, `/logout` — against the AppHost's own processes.
+  #88's closing criterion (a person signs in, holds a `cyc.api` token, reads through the gateway,
+  refreshes, survives a restart) was also performed by hand on the dev run, in a browser, on
+  2026-09-15.
 - **Device authorization and token exchange (RFC 8693)** remain owed as before — the device flow
   needs a verification page and a code store, and token exchange has `ITokenExchange` built and
   waiting on `/token` to accept the grant.
@@ -149,6 +212,29 @@ Two paths, and they are different products.
 **Self-serve.** Email + passkey → verify → create tenant → create default subscription and resource
 group → seed ReBAC (`tenant:X#owner@user:Y`) → optionally provision an in-house cluster. A long-running
 operation with a step list ([06](06-tenancy-and-resource-model.md)).
+
+⚠ **What shipped for M1 is a synchronous, re-drivable step list, and the long-running operation is
+still owed.** The chicken and the egg the sentence above hides: a one-time code is minted and
+delivered by a *user's* grain, which lives in a *tenant's* shard, and a self-serve sign-up has
+neither yet. So the pre-tenant state — the address, the pre-allocated tenant, user and subscription
+ids, the enrolment code's keyed digest, and which create steps have run — lives in a platform-tenant,
+hot-tier `ISignUpGrain` keyed `signup/{id:N}` by a random id the identity host hands the browser in
+a data-protected `__Host-cyc-signup` cookie. Never by the address: a sign-up reachable by address is
+the global email index this section refuses. The identity host's `SignUpOrchestrator` then drives
+the create steps in order — tenant (through `IScopeManager.CreateTenantAsync`, as the seeded
+sign-up operator `servicePrincipal:00000000-0000-0000-0000-00000000c1c0`, owned by the new user),
+user and email-index claim, credential, default subscription and default resource group (both
+through `IScopeManager.CreateAsync` *as the new user*, which exercises the owner tuple the way the
+portal would) — recording each in the grain so a retried `complete` resumes rather than duplicates.
+The orchestrator is in the host rather than in the grain because `PlatformCrossTenantAuthorizer`
+denies a platform grain reaching into a tenant, and the host is an Orleans client outside that
+filter. Two things make it possible on a fresh run at all: the silo's `PlatformBootstrapTask` seeds
+the shard map from the configured durable shards and writes `platform:root#operator` for the sign-up
+operator when `CyberCloud:Identity:SelfServeSignUp` is on, and — there being no MTA (#93) — a
+Development-only `DevelopmentOtpDelivery` writes the enrolment code to the silo's log, where the
+Aspire dashboard shows it. The progress UI, the welcome mail and the optional cluster are the part
+of [06 § Tenant lifecycle](06-tenancy-and-resource-model.md)'s operation still owed; the step record
+in the grain is its seed.
 
 **Invited.** An existing tenant owner invites an email into their tenant with a role. The invitee
 either signs in (if they already have a user in *another* tenant — see below) or signs up.
