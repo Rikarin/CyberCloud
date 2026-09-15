@@ -71,17 +71,18 @@ that. Revisit on or before that date; the move is then `.nvmrc`, `.node-version`
 number.
 
 ⚠ **How the pin is enforced, and why the halves differ.** `scripts/check-node.mjs` warns locally
-and fails in CI (`pnpm node:gate`, which `pnpm gates` runs first). `engine-strict` is deliberately
-off in `.npmrc`. The reasoning is that a wall in the developer's path and a wall in CI's path have
-opposite costs: a blocked local install stops work over a version that will build fine, while a
-drifted CI image silently produces artefacts nobody can reproduce. So the warning is the nudge and
-the CI gate is the wall.
+and fails in CI (`pnpm node:gate`, which `pnpm gates` runs first). `engineStrict` is deliberately
+off in `pnpm-workspace.yaml` (it was in `.npmrc` until #87 found that pnpm 11 does not read it
+there — § The Angular pin). The reasoning is that a wall in the developer's path and a wall in
+CI's path have opposite costs: a blocked local install stops work over a version that will build
+fine, while a drifted CI image silently produces artefacts nobody can reproduce. So the warning is
+the nudge and the CI gate is the wall.
 
 ⚠ **That reasoning was tested, and the nudge half failed.** A session of portal work — a layout
 fix, a class-coverage gate, two SSR suites, 73 jest tests — was measured on the host's Node 26 and
 reported as if it were the pinned runtime. The warning had fired. It fired once, before the work,
 minutes and thousands of lines of build output before the figures it applied to. The wall half
-still holds and is not negotiable here: the dev host has **only** Node 26, so `engine-strict=true`
+still holds and is not negotiable here: the dev host has **only** Node 26, so `engineStrict: true`
 would mean the portal could not be installed at all.
 
 The fix is a third mode rather than a fourth wall. `pnpm node:recap`
@@ -97,18 +98,72 @@ the failure to prevent was never "built on the wrong Node" — that is allowed o
 
 ## The Angular pin
 
-**`@angular/*` is pinned to exactly `22.0.8`, and `@angular/cdk` to exactly `22.0.6`.** ⚠ **Since
-`@xui/*` 3.0.0 those numbers are no longer forced by any peer.** They were, and the reason is kept
-here because it is the reason every xUI bump has to re-measure rather than reuse this table.
+**The framework — `@angular/core` and its siblings, `@angular/compiler-cli`, `@angular/cdk` — is
+pinned to exactly `22.1.4`, the version xUI compiled `@xui/*@3.0.0` with.** That is the whole
+rule: the portal runs what xUI is tested against (docs/plan/02 § ADR-017, "The portal does not
+choose the Angular version; it follows xUI"), and `apps/portal/src/app/angular-pin.spec.ts` asserts
+it — every framework entry in `package.json` is one exact version, and that version equals the
+`version: "…"` stamp the Angular compiler leaves in every installed `@xui/*` bundle (237
+declarations across 30 packages at 3.0.0, all `22.1.4`; xUI's `package.json` at the `v3.0.0` tag
+pins `@angular/* 22.1.4` and `@angular/cdk 22.1.4` and says the same). The pin moves when that
+stamp moves, which is on an xUI bump and at no other time.
 
-At `@xui/*` 2.2.x, docs/plan/02 § ADR-017's claim that the peer range is `@angular/*: 22` — "a
-major range" — was not true of every package. `@xui/panel-stack`, `popover`, `tooltip`,
-`breadcrumb` and `overflow-list` peered `"@angular/common": "22.0.8"` **exactly** (five packages;
-an earlier version of this table, measured at 2.2.0, listed four), and `@xui/echarts` peered
-`"@angular/cdk": "22.0.6"` — exact, and a different version again. `@angular/common@22.0.8` peers
-`"@angular/core": "22.0.8"` exactly, so one exact peer dragged the whole framework to a point
-release; with `@angular/*` at the then-head 22.1.1 and `strict-peer-dependencies=true`,
-`pnpm install` failed.
+⚠ **The test is there because nothing else catches a drift.** Angular's linker accepts a range of
+compiler versions, so the portal ran the 22.1.4-stamped 3.0.0 bundles on `22.0.8` for five days with
+a green gate — the linker was fine, the claim in this section was not. Moving Angular ahead of xUI
+also builds. Either direction is a policy breach that the toolchain does not report, so the test
+does, and its failure message names both versions.
+
+**Why 22.1.4 and not the registry head.** On 2026-09-15 the head was 22.1.6 for the framework and
+CDK. xUI has not been built or tested against it; running ahead of xUI would make the portal the
+first consumer to find whatever a point release changed, which is the opposite of what following
+xUI is for. Every version between `22.0.8` and `22.1.4` was skipped for the same reason.
+
+**The tooling — `@angular/cli`, `@angular/build`, `@angular/ssr` — is pinned to `22.0.8`, and it
+is a separate number on purpose.** This section used to say the tooling is kept in step with the
+framework "so there is one number to reason about". #87 tried to keep that promise and could not:
+
+⚠ **`@angular/cli` 22.1.0 through 22.1.4 fail `strictPeerDependencies` on the CLI's own tree.**
+Each of those releases depends on `listr2@10.2.2` and on `@listr2/prompt-adapter-inquirer@4.2.4`,
+and the adapter peers `listr2: "10.2.1"` — exact. Under strict peers the resolution is
+`ERR_PNPM_PEER_DEP_ISSUES` and the install stops; measured at 22.1.4, then at every 22.1.x below it
+by reading the CLI's manifest (`npm view @angular/cli@22.1.N dependencies`). 22.1.5 is the first
+release whose adapter and `listr2` agree (`11.0.0` / `4.2.5`, and 22.1.6 through the 22.1.8 head
+carry the same pair). `@angular/build` peers `@angular/ssr` at its own minor, so the three move
+together, and the highest tooling at or below 22.1.4 that passes is the one the portal already had.
+The framework's move is unaffected — `@angular/build@22.0.8` peers `@angular/compiler-cli` and the
+rest at `^22.0.0` — and the test pins the tooling as one exact version of its own.
+
+**Owed: the tooling to a release xUI's tag pins.** xUI's `v3.0.0` `package.json` pins
+`@angular/cli 22.1.6` and `@angular/ssr 22.1.6` — its own tooling is not in step with its framework
+either. Moving there is a separate change with its own measurements: `@angular/build` 22.1.x is a
+different bundler from 22.0.8 (it builds on `vite@8` and `rolldown@1.2` where 22.0.8 builds on
+`vite@7`; the CLI also drops its `pacote`/`sigstore` fetch stack, and `@angular/compiler-cli`
+22.1.4 already brought Babel 8 into the tree next to jest's Babel 7). A run at 22.1.4 tooling,
+made before the peer failure was found, built both apps and passed every gate, with the portal's
+initial bundle at 730.5 kB raw / 191.1 KB gzipped against 727.4 kB / 191.9 KB at the pins here —
+so the bundler change costs under a kilobyte either way. What is not yet measured is 22.1.6.
+
+⚠ **`strictPeerDependencies` was not in force until #87, and every earlier "under strict peers"
+claim on this page was made with it off.** The setting lived in `.npmrc`, and pnpm 11 — the version
+this workspace has pinned since its first commit — "no longer reads non-auth settings from
+`.npmrc`" (pnpm 11.0 release notes). `pnpm config get strict-peer-dependencies` answered
+`undefined`; the same resolution that now fails printed `[WARN] Issues with peer dependencies found`
+and exited 0. The four settings are in `pnpm-workspace.yaml` now, with the reasoning, and `.npmrc`
+is gone.
+
+### How the pin got here
+
+This section used to give a different reason, and the history is kept because it is the reason every
+xUI bump re-measures rather than reuses.
+
+At `@xui/*` 2.2.x, five packages — `panel-stack`, `popover`, `tooltip`, `breadcrumb` and
+`overflow-list` (an earlier table, measured at 2.2.0, listed four) — peered `"@angular/common":
+"22.0.8"` **exactly**, and `@xui/echarts` peered `"@angular/cdk": "22.0.6"`, exact and a different
+version again. `@angular/common@22.0.8` peers `"@angular/core": "22.0.8"` exactly, so one exact peer
+dragged the whole framework to a point release; with `@angular/*` at the then-head 22.1.1 the
+install was recorded as failing — under a strict-peers setting that, it turned out, was never read,
+so what actually stopped it is not on record. The pin was `22.0.8`/`22.0.6` because a peer said so.
 
 **Re-measured on 2026-09-15 from the registry for `@xui/*@3.0.0`** — all 22 packages the portal
 declares plus `@xui/echarts`, which the charts stub will need — with `npm view @xui/<pkg>@3.0.0
@@ -124,27 +179,13 @@ peerDependencies`, and diffed against 2.2.4 package by package. Every peer that 
 
 Nothing else moved: `clsx ^2.1.1` (`>=2.0.0` in `@xui/core`), `class-variance-authority ^0.7.1`,
 `rxjs ^7.8.0`, `luxon >=3.0.0` and `tailwind-merge >=3.0.0` peer exactly as they did at 2.2.4, and
-the portal's pins satisfy them. **No exact `@angular/*` peer survives in any of the 23 packages**;
-`pnpm install` under `strict-peer-dependencies` reported none unmet.
-
-**So why is the pin still 22.0.8/22.0.6?** Because moving Angular is a different change from
-moving xUI, and this one was xUI's. The gate is green at 22.0.8 under 3.0.0: the 3.0.0 bundles
-carry `version: "22.1.4"` partial-compilation stamps — xUI's checkout pins `@angular/* 22.1.4` and
-`@angular/cli 22.1.6` at the `v3.0.0` tag — with `minVersion` unchanged, and 22.0.8's linker
-accepts them. ⚠ **The earlier justification, "the version xUI's own checkout pins, so the portal
-is running what xUI is tested against", is no longer true and is no longer the reason.** xUI tests
-against 22.1.4. Whoever moves the pin has a free choice inside `22.x` for the first time; the
-principled target is what xUI tests against, not the registry head (22.1.6 framework / 22.1.8
-tooling on 2026-09-15). `pnpm-workspace.yaml`'s single-version comment and
-`libs/charts/src/index.ts`'s dependency note both point here and want the same edit when it
-happens.
+the portal's pins satisfy them. **No exact `@angular/*` peer survives in any of the 23 packages.**
+The xUI bump (#26) kept `22.0.8`/`22.0.6` because moving Angular is a separate change from moving
+xUI; #87 made that change, and `pnpm install` under `strictPeerDependencies` — now actually on —
+reported no unmet peer at 22.1.4, as the table predicts.
 
 **`@ng-icons/*` is pinned to `35.1.0`**, the head of the `35` range `@xui/*@3.0.0` peers on. The
 registry head is `36.0.0`, which is out of range.
-
-The build tooling (`@angular/cli`, `@angular/build`, `@angular/ssr`) is pinned to 22.0.8 as well.
-It versions independently of the framework — the tooling head is 22.1.8 — but keeping the two in
-step means one number to reason about.
 
 ## The pages, and what each one calls
 
@@ -181,13 +222,13 @@ Every one of these fails the build rather than warning. `pnpm gates` runs them i
 which invokes this chain rather than restating it. Locally that target runs `pnpm verify` instead,
 which is `gates` without the Node wall; see § Node above for why that asymmetry is deliberate.
 
-| Gate           | Command          | What it enforces                                                                                                                      |
-| -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Node           | `pnpm node:gate` | The pin above, in CI only                                                                                                             |
-| Lint           | `pnpm lint`      | `ChangeDetectorRef` and web storage are **banned identifiers**; `OnPush` is mandatory; every template string carries an `i18n` marker |
-| Tests          | `pnpm test`      | Components, stores, axe on every route and on every generated form, the pages against a recorded platform, and the conventions suite  |
-| Build + budget | `pnpm build`     | The production build, then `scripts/bundle-budget.mjs`                                                                                |
-| SSR isolation  | `pnpm test:ssr`  | `scripts/ssr-isolation.test.mjs`, run by `pnpm build` once the bundle exists                                                          |
+| Gate           | Command          | What it enforces                                                                                                                                      |
+| -------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node           | `pnpm node:gate` | The pin above, in CI only                                                                                                                             |
+| Lint           | `pnpm lint`      | `ChangeDetectorRef` and web storage are **banned identifiers**; `OnPush` is mandatory; every template string carries an `i18n` marker                 |
+| Tests          | `pnpm test`      | Components, stores, axe on every route and on every generated form, the pages against a recorded platform, the conventions suite, and the Angular pin |
+| Build + budget | `pnpm build`     | The production build, then `scripts/bundle-budget.mjs`                                                                                                |
+| SSR isolation  | `pnpm test:ssr`  | `scripts/ssr-isolation.test.mjs`, run by `pnpm build` once the bundle exists                                                                          |
 
 ### The performance budget
 
@@ -196,8 +237,11 @@ gzips the emitted files and compares real bytes rather than the builder's estima
 
 | Metric                       | Budget   | Actual       |
 | ---------------------------- | -------- | ------------ |
-| Initial JS, gzipped          | < 250 KB | **178.6 KB** |
-| Largest route chunk, gzipped | < 120 KB | **0.5 KB**   |
+| Initial JS, gzipped          | < 250 KB | **191.9 KB** |
+| Largest route chunk, gzipped | < 120 KB | **10.3 KB**  |
+
+Measured by the script itself on 2026-09-15 at the pins § The Angular pin describes; the builder's
+own "estimated transfer size" column is smaller (180.3 KB) and is not what the gate compares.
 
 ⚠ The script also fails when the build emits **no** lazy chunk at all, because that means the lazy
 routes have been inlined and docs/plan/20's "Route-level code splitting is mandatory" has quietly

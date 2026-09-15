@@ -36,10 +36,34 @@ allowBuilds:
 # own. Two copies of @angular/core in one tree is a broken app, and @xui/* peers on @angular/*
 # (docs/plan/02 § ADR-017) leave no room for a second resolution.
 #
-# @angular/* is pinned to 22.0.8 and @angular/cdk to 22.0.6. Those numbers were FORCED at @xui 2.2.x,
-# when @xui/panel-stack, popover, tooltip, breadcrumb and overflow-list peered
-# `"@angular/common": "22.0.8"` and @xui/echarts peered `"@angular/cdk": "22.0.6"` — exact
-# versions. At @xui 3.0.0 every one of those
-# packages peers the `22` major range, so the pins are no longer forced by a peer; they are kept
-# because the gate is green on them and moving Angular is a separate change from moving xUI.
-# See portal/README.md § The Angular pin for the measured table and what unpins them.
+# The framework (@angular/core and its siblings, @angular/compiler-cli, @angular/cdk) is pinned to
+# 22.1.4 — the version xUI compiled @xui/*@3.0.0 with, which every installed @xui bundle stamps and
+# apps/portal/src/app/angular-pin.spec.ts checks. The tooling (@angular/cli, @angular/build,
+# @angular/ssr) is pinned to 22.0.8, separately: it versions on its own cadence, and 22.1.0 through
+# 22.1.4 of the CLI fail strictPeerDependencies on the CLI's own tree. portal/README.md § The
+# Angular pin has the measurements and names the next move.
+
+# ⚠ These four settings lived in .npmrc until 2026-09-15, and pnpm 11 never read them there. pnpm
+# 11.0's release notes: "pnpm no longer reads non-auth settings from `.npmrc`" — registry and auth
+# stay in INI files, everything pnpm-specific moves to this file. The portal has pinned pnpm 11
+# since its first commit, so `strict-peer-dependencies=true` was in force for exactly zero
+# installs: `pnpm config get strict-peer-dependencies` answered `undefined`, and a resolution with
+# an unmet exact peer printed "[WARN] Issues with peer dependencies found" and exited 0. With the
+# key here, the same resolution is ERR_PNPM_PEER_DEP_ISSUES and exit 1, which is what every "under
+# strict peers" claim in the docs had been assuming.
+#
+# strictPeerDependencies: Angular's compiler resolves @angular/* deeply and @xui/* peers on
+# @angular/*; failing the install on an unmet peer surfaces a conflict at `pnpm install` instead of
+# as a runtime "two copies of Angular" failure. autoInstallPeers is off for the same reason — a
+# peer pnpm adds on its own is a version nobody pinned. resolutionMode is pnpm's default, stated so
+# that a change of default cannot move the tree silently.
+strictPeerDependencies: true
+autoInstallPeers: false
+resolutionMode: highest
+
+# engineStrict is deliberately off. The Node major is pinned by .nvmrc / .node-version and
+# enforced as a hard gate by `pnpm node:gate` (scripts/check-node.mjs --strict), which CI runs
+# first; the dev host has only Node 26 installed, so a wall here would mean the portal cannot be
+# installed there at all. The warning half of that arrangement was measured and lost, and
+# `pnpm node:recap` is the answer — see scripts/check-node.mjs's header and README § Node.
+engineStrict: false

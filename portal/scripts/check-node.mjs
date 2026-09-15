@@ -16,13 +16,14 @@
  *
  * ── ⚠ WHY --recap EXISTS: THE NUDGE WAS TESTED AND IT LOST ────────────────────────────────────
  *
- * `.npmrc` argues that "the gate is the wall, the warning is the nudge", and the wall half of that
- * is still right: a refused install on a host where only the wrong Node is available stops all
- * work over a version that builds fine. But the nudge half was measured, and it failed. A whole
- * session of portal work — a layout fix, a class-coverage gate, two SSR suites, 73 jest tests —
- * was gathered on Node 26 and reported as if it were the pinned runtime. The warning had fired.
- * It fired once, at the top, minutes and thousands of lines of `ng build` output before the
- * numbers it applied to, and by the time anyone read a figure the warning was off-screen.
+ * pnpm-workspace.yaml's `engineStrict` note argues that the gate is the wall and the warning is
+ * the nudge, and the wall half of that is still right: a refused install on a host where only the
+ * wrong Node is available stops all work over a version that builds fine. But the nudge half was
+ * measured, and it failed. A whole session of portal work — a layout fix, a class-coverage gate,
+ * two SSR suites, 73 jest tests — was gathered on Node 26 and reported as if it were the pinned
+ * runtime. The warning had fired. It fired once, at the top, minutes and thousands of lines of
+ * `ng build` output before the numbers it applied to, and by the time anyone read a figure the
+ * warning was off-screen.
  *
  * So the fix is not a louder wall, it is a warning that survives to where the numbers are. The
  * failure was never "someone built on the wrong Node" — that is fine and deliberately allowed.

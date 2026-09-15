@@ -145,8 +145,8 @@ partial class Build {
     ///     <c>pnpm</c>, or a failure naming how to get it.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Deliberately not <c>npm</c> or <c>npx</c> as a fallback. portal/.npmrc sets
-    ///     <c>strict-peer-dependencies=true</c> and <c>auto-install-peers=false</c>, and
+    ///     ⚠ Deliberately not <c>npm</c> or <c>npx</c> as a fallback. portal/pnpm-workspace.yaml
+    ///     sets <c>strictPeerDependencies: true</c> and <c>autoInstallPeers: false</c>, and
     ///     portal/README.md § The Angular pin is a page about why the resolved tree has to be
     ///     exactly the one the lockfile describes. A different package manager over this workspace
     ///     resolves a different tree, which is a different gate wearing this one's name.

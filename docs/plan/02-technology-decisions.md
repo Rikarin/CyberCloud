@@ -844,6 +844,26 @@ separate change from moving xUI and the gate is green where it is, not because a
 tag; that is the principled target when the pin moves. `@ng-icons/* = 35.1.0`. The table and the
 reasoning live in portal/README.md § The Angular pin, and it is re-measured on every xUI bump.
 
+⚠ **CORRECTED A FOURTH TIME, 2026-09-15 (#87): the framework is at 22.1.4, the tooling is not, and
+strict peers had never been on.** The framework — `@angular/*`, `@angular/compiler-cli`,
+`@angular/cdk` — moved to `22.1.4`, the version every `@xui/*@3.0.0` bundle stamps as its compiler,
+and `apps/portal/src/app/angular-pin.spec.ts` now asserts that the framework pin equals that stamp,
+so "follows xUI" is a test rather than a sentence. Two things were found on the way:
+
+1. **The tooling stays at `22.0.8`.** `@angular/cli` 22.1.0 through 22.1.4 depend on `listr2@10.2.2`
+   and on `@listr2/prompt-adapter-inquirer@4.2.4`, which peers `listr2` at exactly `10.2.1`; under
+   strict peers that resolution is `ERR_PNPM_PEER_DEP_ISSUES`. 22.1.5 is the first consistent
+   release, and xUI's own tag pins `@angular/cli 22.1.6` — its tooling is not in step with its
+   framework either. The "one number to reason about" policy is withdrawn: the tooling is one exact
+   version of its own (the test pins that too), and moving it to 22.1.6 is owed as a separate
+   change with its own measurements — portal/README.md § The Angular pin has what is already known.
+2. **`strict-peer-dependencies=true` in `portal/.npmrc` was never read.** pnpm 11, pinned since the
+   portal's first commit, reads only registry and auth settings from `.npmrc`; everything else has
+   to be in `pnpm-workspace.yaml`. So the "with `strict-peer-dependencies`, `pnpm install` fails"
+   sentence in the second correction describes a run made with the setting off, and whatever
+   stopped that install is not on record. The four settings are in `pnpm-workspace.yaml` now and
+   the same unmet peer is a hard failure, measured both ways.
+
 So the portal depends on `@xui/*` 3.0.0 (pinned exactly) from the registry at a **pinned** Angular point release. The
 "90 components, one npm package each" claim is confirmed — the checkout carries 92 libraries under
 `libs/ui`, and every component this plan names by hand (`data-table`, `dock-manager`, `omnibar`,
