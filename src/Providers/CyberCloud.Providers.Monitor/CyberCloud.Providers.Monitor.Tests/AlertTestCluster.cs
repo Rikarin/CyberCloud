@@ -4,6 +4,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.ResourceManager.Conformance;
 using Microsoft.Extensions.DependencyInjection;
+using Orleans.Multitenant;
 using Orleans.TestingHost;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -46,6 +47,29 @@ public sealed class ScriptedQuerySeam : IAlertQuerySeam {
     /// <param name="reason">Why.</param>
     public void Fail(string workspacePath, string reason) =>
         scripts[workspacePath] = _ => Result<AlertQueryResult>.Failure(ErrorCode.InternalError, reason);
+
+    /// <summary>
+    ///     Makes every query for a workspace throw, the way a seam over <c>HttpClient</c> does when the
+    ///     store's address does not resolve — the exception a returned failure was standing in for.
+    /// </summary>
+    /// <param name="workspacePath">The workspace's canonical path.</param>
+    /// <param name="error">What is thrown.</param>
+    public void Throw(string workspacePath, Exception error) =>
+        scripts[workspacePath] = _ => throw error;
+
+    /// <summary>
+    ///     Makes every query for a workspace take this long on the silo's clock before answering one
+    ///     value. The evaluator's pass budget reads <c>IClock</c>, so this is a slow store as the grain
+    ///     sees one, with no real waiting.
+    /// </summary>
+    /// <param name="workspacePath">The workspace's canonical path.</param>
+    /// <param name="takes">How long the query takes.</param>
+    /// <param name="value">The value.</param>
+    public void Slow(string workspacePath, TimeSpan takes, double value) =>
+        scripts[workspacePath] = _ => {
+            AlertTestCluster.Clock.Advance(takes);
+            return Result<AlertQueryResult>.Success(new() { Samples = [new() { Labels = "{instance=\"web-1\"}", Value = value }] });
+        };
 
     /// <inheritdoc />
     public Task<Result<AlertQueryResult>> QueryAsync(AlertQuery query, CancellationToken cancellationToken = default) {
@@ -197,9 +221,35 @@ public sealed class AlertTestCluster : IAsyncLifetime {
     // ── The reconciler and the handler, driven directly ───────────────────────────────────────
 
     /// <summary>Runs one reconcile pass of the rule reconciler over a body.</summary>
-    public async Task<ReconcileOutcome> ReconcileAsync(ResourceId id, string body) {
+    /// <param name="id">The rule.</param>
+    /// <param name="body">The desired body.</param>
+    /// <param name="log">Where the pass reports, when a test wants to read what it said.</param>
+    public async Task<ReconcileOutcome> ReconcileAsync(ResourceId id, string body, RecordingLog? log = null) {
         using var desired = JsonDocument.Parse(body);
-        return await Reconciler().ReconcileAsync(Context(id, desired.RootElement), Ct);
+        return await Reconciler().ReconcileAsync(Context(id, desired.RootElement, log), Ct);
+    }
+
+    /// <summary>
+    ///     Deletes a workspace's reminder row out of the silo's own table, behind the grain's back —
+    ///     the state a reminder-table fault after the grain's state write leaves.
+    /// </summary>
+    /// <param name="rule">Any rule on the workspace.</param>
+    /// <remarks>
+    ///     ⚠ The row and not the grain's local timer: <c>GetReminder</c> reads the table, which is
+    ///     what <c>IsArmedAsync</c> and the reconciler go by, and it is the table a restored backup
+    ///     or a lost write would have left empty.
+    /// </remarks>
+    public async Task DropReminderRowAsync(ResourceId rule) {
+        var table = cluster.GetSiloServiceProvider().GetRequiredService<IReminderTable>();
+        var grain = cluster.GrainFactory
+            .ForTenant(rule.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IAlertEvaluatorGrain>(GrainKeys.Resource(MonitorAlertRules.EvaluatorIdFor(rule)));
+
+        var rows = await table.ReadRows(grain.GetGrainId());
+        var row = rows.Reminders.SingleOrDefault(x => x.ReminderName == AlertEvaluatorGrain.ReminderName);
+        row.ShouldNotBeNull("there was no reminder row to drop");
+
+        (await table.RemoveRow(row.GrainId, row.ReminderName, row.ETag)).ShouldBeTrue();
     }
 
     /// <summary>Runs the rule reconciler's delete pass over a body.</summary>
@@ -247,8 +297,8 @@ public sealed class AlertTestCluster : IAsyncLifetime {
 
     MonitorAlertRuleReconciler Reconciler() => new(Clock, Alerts);
 
-    static ReconcileContext Context(ResourceId id, JsonElement desired) =>
-        new(id, MonitorWorkspaces.V2026, desired, null, string.Empty, null, new InMemorySecretVault(), new RecordingLog());
+    static ReconcileContext Context(ResourceId id, JsonElement desired, RecordingLog? log = null) =>
+        new(id, MonitorWorkspaces.V2026, desired, null, string.Empty, null, new InMemorySecretVault(), log ?? new RecordingLog());
 
     sealed class Configurator : ISiloConfigurator {
         public void Configure(ISiloBuilder silo) {

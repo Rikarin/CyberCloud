@@ -309,6 +309,38 @@ owed:
       catalogue's alert volume ever makes that the wrong trade, the seam to swap is IAlertQuerySeam
       (vmalert as the thing that answers) and the reminder is what goes.
     closes: Nothing, unless measured evaluation load says so; recorded because the plan says the other thing.
+  - id: alert-rules-webhook-and-inbox-not-landed
+    says: >
+      docs/plan/16 § Alerts promises fan-out to "email, SMS, WhatsApp, webhook, and a portal inbox".
+      The landed action group is ONE channel of the sending module's ChannelKind — sms, whatsapp,
+      email, push, voice — because the notification goes through IMessageSender and that is the set
+      it sends. A webhook is not a channel the sending module has (its carriers are people-facing
+      and a webhook's authentication is a signature the receiver verifies, not a suppression list),
+      and a portal inbox is not a channel at all: it is a store the portal reads, which the
+      evaluator's own instance history is the nearest thing to — listInstances renders it — with no
+      unread state and no portal page. Neither is in the schema's channel vocabulary, so a tenant
+      cannot ask for either and be silently refused; they cannot ask at all. (2026-09-15, #32 review:
+      the document promised five and the type offers a different five.)
+    closes: >
+      A webhook ChannelKind in the sending module with signed delivery and a receipt, which is that
+      module's design to make; and a portal inbox surface reading the instance history, which is a
+      portal page and an unread marker on the instance, at the api-version that grows the tree.
+  - id: observability-three-of-four-nouns-not-landed
+    says: >
+      Issue #32 names four tenant-facing surfaces — "application-insights-shaped views; an OTel
+      collector as a managed service; managed Grafana; alerts" — and this branch landed the fourth.
+      The other three are not resource types, not charts and not portal pages: docs/plan/16 prices
+      the collector (CyberCloud.Monitor/collectors, 1.0 EM, an allow-listed collector config the
+      reconciler validates before apply) and managed Grafana (CyberCloud.Dashboard/grafanas, 0.8 EM,
+      grafana-operator per tenant with ADR-011's no-embed rule) and does not price the App Insights
+      views at all. The roadmap row is ◐ and counts the row's 3.0 EM as zero for the same reason the
+      Mail row does — one noun of several, no per-noun split to read. Recorded here rather than only
+      in the roadmap's prose so the debt has an id a later branch closes by name. (2026-09-15, #32
+      review: three of the issue's four nouns are not delivered.)
+    closes: >
+      Three landings, each its own branch: CyberCloud.Monitor/collectors with its chart and the
+      component allow-list; CyberCloud.Dashboard/grafanas with grafana-operator and the portal's
+      by-URL embed; and the App Insights-shaped views, which docs/plan/16 must first design.
 
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
 #

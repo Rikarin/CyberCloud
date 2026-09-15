@@ -206,7 +206,8 @@ public static class MonitorAlertRules {
                     "/properties/evaluation/intervalSeconds",
                     SchemaKind.WholeNumber,
                     Description: "How often the condition is evaluated, in seconds. A multiple of 60: the "
-                    + "evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick."
+                    + "evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. "
+                    + "Anything else is refused when the rule is reconciled."
                 ) { Minimum = MinIntervalSeconds, Maximum = MaxIntervalSeconds, DefaultJson = "60" },
                 new(
                     "/properties/evaluation/forSeconds",
@@ -243,7 +244,8 @@ public static class MonitorAlertRules {
                     SchemaKind.Array,
                     Required: true,
                     Description: "Where it goes — addresses or E.164 numbers, one send each, every one "
-                    + "checked against the service's suppression list before dispatch."
+                    + "checked against the service's suppression list before dispatch. At least one and "
+                    + "at most 20; a list outside that is refused when the rule is reconciled."
                 ) { ElementKind = SchemaKind.Text, MinLength = 1, MaxLength = 320, ExampleJson = "[\"oncall@example.com\"]" },
                 new(
                     "/properties/actionGroup/notifyOnResolve",
@@ -455,6 +457,24 @@ public static class MonitorAlertRules {
             );
         }
 
+        // ⚠ THREE REFUSALS THE SCHEMA CANNOT MAKE, AND WHY THEY ARE HERE AND NOT THERE. The
+        // schema vocabulary has no item count and no multiple-of — SchemaProperty's bounds are
+        // per element on an array, and Minimum/Maximum are inclusive ends — so an empty recipient
+        // list, twenty-one recipients and an interval of 90 all pass ResourceSchema.Validate and
+        // land here, where the operation fails with the pointer rather than the PUT. Adding either
+        // constraint to the vocabulary is a registry change with four emitters and the
+        // compatibility gate behind it, and it is the right fix; until it lands, this is the
+        // honest one, and the schema descriptions say the refusal happens at reconcile.
+        var intervalSeconds = Whole(Member(desired, "evaluation", "intervalSeconds"), DefaultIntervalSeconds);
+        if (intervalSeconds % MinIntervalSeconds != 0) {
+            return Refuse(
+                $"The evaluation interval is {intervalSeconds} seconds and must be a multiple of {MinIntervalSeconds}: "
+                + "the evaluator ticks once a minute, and a rule at 90 would be evaluated every 120 seconds "
+                + "and called 90.",
+                "/properties/evaluation/intervalSeconds"
+            );
+        }
+
         var recipients = Strings(Member(desired, "actionGroup", "recipients"))
             .Select(x => x.Trim())
             .Where(x => x.Length > 0)
@@ -489,7 +509,7 @@ public static class MonitorAlertRules {
                     Threshold = Number(Member(desired, "condition", "threshold"), 0d),
                     Lookback = TimeSpan.FromSeconds(Whole(Member(desired, "condition", "lookbackSeconds"), DefaultLookbackSeconds))
                 },
-                Interval = TimeSpan.FromSeconds(Whole(Member(desired, "evaluation", "intervalSeconds"), DefaultIntervalSeconds)),
+                Interval = TimeSpan.FromSeconds(intervalSeconds),
                 For = TimeSpan.FromSeconds(Whole(Member(desired, "evaluation", "forSeconds"), 0)),
                 ActionGroup = new() {
                     ServicePath = servicePath,

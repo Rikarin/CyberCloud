@@ -83,6 +83,13 @@ Evaluated by vmalert against the tenant's data; firing alerts go to `cc.{tenant}
 a notification grain that fans out via [17](17-communication-and-email.md) (email, SMS, WhatsApp,
 webhook, and a portal inbox).
 
+⚠ **Two of those five are not deliverable today, and nothing below this line changes that
+(2026-09-15, #32 review).** The landed action group is one channel of the sending module's own
+`ChannelKind` — `sms`, `whatsapp`, `email`, `push`, `voice` — because the notification goes through
+`IMessageSender` and that is what it sends. A webhook is not a channel the sending module has, and a
+portal inbox is not a channel at all but a store the portal reads; neither landed with #32, and both
+are `charts/managed/monitor-workspace/conformance.yaml § owed`, `alert-rules-webhook-and-inbox-not-landed`.
+
 ⚠ **Alert-rule evaluation is tenant-authored query execution on shared infrastructure.** Query cost
 limits, a per-workspace concurrent-evaluation cap and a max look-back are mandatory from day one, not
 hardening added later.
@@ -114,8 +121,17 @@ suppression built in, so `IAlertEvaluatorGrain` asks a question on a schedule an
 **One grain per workspace, keyed by the workspace's address** — a child's reconcile pass never learns
 its parent's GUID, which is the same fact that keyed the sending module's grains — and its
 single-threaded activation *is* the per-workspace concurrency cap the paragraph above makes mandatory.
-The look-back is a schema maximum; the query's length, the rules a workspace may carry (50) and a
-timeout per query bound its cost. What none of these does is inspect the query.
+The look-back is a schema maximum; the query's length, the rules a workspace may carry (50), a timeout
+per query (10 s) and a budget per pass (15 s) bound its cost. What none of these does is inspect the
+query. ⚠ **The cap is also a queue, and the first version priced it as one query (2026-09-15, #32
+review).** A pass runs in one turn of the activation, so a reconcile pass or a `listInstances` queued
+behind it waits for the whole pass against Orleans' 30-second response timeout; fifty queries at the
+old 30-second timeout could hold it for twenty-five minutes when the store stopped answering. The
+reads interleave now, the pass stops asking at its budget and the rules it did not reach go first on
+the next tick, and the budget plus one query timeout is pinned under the response timeout. A seam that
+*throws* rather than fails — what `HttpClient` does on a refused connection — is recorded on that
+rule and the pass goes on, where it used to end the pass at that rule and leave every rule after it
+unevaluated for as long as the fault lasted.
 
 ⚠ **The action group names the sending service by resource id path — the first property in the
 catalogue with `SchemaFormat.ResourceId`.** [03 § Assembly graph rules](03-repository-layout.md), rule
@@ -126,15 +142,19 @@ provider — and is refused at the pointer when the path is another tenant's, or
 `CyberCloud.Communication/services` resource. Suppression is the sending module's: a recipient on the
 service's list comes back as a refusal, per recipient, recorded on the instance by name.
 
-⚠ **What ✅ on the roadmap row does not mean.** No host registers a real `IAlertQuerySeam`: every
+⚠ **What ◐ on the roadmap row does not mean.** No host registers a real `IAlertQuerySeam`: every
 evaluation in this tree runs against the refusing default, records its sentence on the rule and moves
 nothing — a store that does not answer neither fires nor resolves, deliberately. The real seam — a
 PromQL `/api/v1/query` under the workspace's `accountID`, a SQL query under its database, both resolved
 from the row the workspace publishes — is `charts/managed/monitor-workspace/conformance.yaml § owed`,
 `alert-rules-query-seam-is-refusing`, and it needs a real VictoriaMetrics to be proved against. One
 rule is one instance however many series offend, the schema having no array of objects; the
-per-series shape is the api-version that grows the tree. And `collectors` and managed Grafana are the
-half of #32 this did not take.
+per-series shape is the api-version that grows the tree. And the App Insights-shaped views,
+`collectors` and managed Grafana are the three nouns of #32's four this did not take — each a resource
+type with a chart or a portal surface of its own, priced above at 1.0 and 0.8 EM for the two the
+document prices, and recorded as `charts/managed/monitor-workspace/conformance.yaml § owed`,
+`observability-three-of-four-nouns-not-landed`, so the row's ◐ has an entry behind it and not only
+a sentence.
 
 ## Managed Grafana — `CyberCloud.Dashboard/grafanas` · M2 · 0.8 EM
 

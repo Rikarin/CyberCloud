@@ -13,7 +13,18 @@ namespace CyberCloud.Providers.Monitor;
 ///         idempotent (an upsert of the same spec is a no-op the grain reports as such), no hidden
 ///         state (everything is in <c>ReconcileContext</c> and the two constructor seams), observes
 ///         and never assumes (a second read after the write, compared with
-///         <see cref="MonitorAlertRules.Matches" />), and <c>Converged</c> follows that read.
+///         <see cref="MonitorAlertRules.Matches" />, and the reminder asked for through
+///         <see cref="IAlertControlPlane.IsArmedAsync" />), and <c>Converged</c> follows both reads.
+///     </para>
+///     <para>
+///         ⚠ <b>Two facts make an enabled rule converged, and the first version checked one
+///         (2026-09-15, #32 review).</b> The rule is held — its spec reads back — and its workspace
+///         is armed — a reminder row exists to tick it. The grain writes the two in that order into
+///         two stores, so a reminder-table fault after the state write leaves the first true and
+///         the second false, and a reconciler judging on the spec alone reported that rule
+///         converged on every retry until the grain happened to re-activate. Both passes here ask
+///         both questions: the fast path re-arms through the upsert when a held rule has no row,
+///         and clause 4 stays in progress until the row is there.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The first reconciler in this family with a <see langword="null" />
@@ -58,8 +69,24 @@ public sealed class MonitorAlertRuleReconciler(IClock clock, IAlertControlPlane 
 
         if (held.TryGetValue(out var existing)) {
             if (existing.Spec.SameAs(spec)) {
-                context.Log.Report("ready", $"rule '{context.Id.Name}' already carries the desired condition and action group", 100);
-                return ReconcileOutcome.Converged;
+                // ⚠ HELD IS NOT CONVERGED FOR AN ENABLED RULE; HELD AND ARMED IS (2026-09-15, #32
+                // review). The grain writes its state and then registers its reminder, two calls
+                // into two stores, and a reminder-table fault between them leaves a rule that reads
+                // back as desired and that nothing will ever tick. Judged on the spec alone, every
+                // retry of that rule reported Converged. Asking the second question here is what
+                // makes the retry re-arm: a held rule with no row falls through to the upsert, and
+                // the upsert's ArmOrDisarm registers what the last one could not.
+                var armed = await ArmedAsync(tenantId, evaluatorId, spec, cancellationToken);
+                if (armed.TryGetError(out var armError)) {
+                    return ReconcileOutcome.FromFailure(armError);
+                }
+
+                if (armed.GetValueOrThrow()) {
+                    context.Log.Report("ready", $"rule '{context.Id.Name}' already carries the desired condition and action group", 100);
+                    return ReconcileOutcome.Converged;
+                }
+
+                context.Log.Report("configuring", $"rule '{context.Id.Name}' is held and its workspace's reminder is not armed; re-arming", 20);
             }
         } else if (held.Error!.Code != ErrorCode.ResourceNotFound) {
             return ReconcileOutcome.FromFailure(held.Error);
@@ -88,6 +115,20 @@ public sealed class MonitorAlertRuleReconciler(IClock clock, IAlertControlPlane 
             return ReconcileOutcome.InProgress("the rule reads back and does not yet carry the desired spec", TimeSpan.FromSeconds(5));
         }
 
+        // The second half of clause 4, for the same reason as the first: the arm is observed, not
+        // assumed from the upsert having returned.
+        var ticking = await ArmedAsync(tenantId, evaluatorId, spec, cancellationToken);
+        if (ticking.TryGetError(out var tickError)) {
+            return ReconcileOutcome.FromFailure(tickError);
+        }
+
+        if (!ticking.GetValueOrThrow()) {
+            return ReconcileOutcome.InProgress(
+                "the rule reads back as desired and its workspace's reminder is not armed yet",
+                TimeSpan.FromSeconds(5)
+            );
+        }
+
         context.Log.Report(
             "ready",
             spec.Enabled
@@ -98,6 +139,23 @@ public sealed class MonitorAlertRuleReconciler(IClock clock, IAlertControlPlane 
 
         return ReconcileOutcome.Converged;
     }
+
+    /// <summary>
+    ///     Whether the rule's workspace is being ticked, when the rule needs it to be. A disabled
+    ///     rule needs no reminder and answers <c>true</c> without asking.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A silo with no reminder service answers <c>false</c> forever, so an enabled rule on one
+    ///     never converges — it reads back and is reported in progress until the operation's own
+    ///     timeout fails it. That is the honest answer: no production silo lacks one
+    ///     (<c>SiloComposition</c> wires Redis), both conformance harnesses wire the in-memory one,
+    ///     and a rule that converged on a silo that cannot schedule it would be the false Converged
+    ///     this exists to remove.
+    /// </remarks>
+    async Task<Result<bool>> ArmedAsync(Guid tenantId, Guid evaluatorId, AlertRuleSpec spec, CancellationToken cancellationToken) =>
+        spec.Enabled
+            ? await plane.IsArmedAsync(tenantId, evaluatorId, cancellationToken)
+            : Result<bool>.Success(true);
 
     /// <inheritdoc />
     public async Task<ReconcileOutcome> DeleteAsync(

@@ -129,10 +129,23 @@ public sealed class AlertEvaluatorGrain(
 
     /// <inheritdoc />
     public async Task<Result> RemoveRuleAsync(Guid ruleId) {
-        if (!state.State.Rules.Remove(ruleId)) {
+        if (!state.State.Rules.TryGetValue(ruleId, out var record)) {
             return Result.Failure(ErrorCode.ResourceNotFound, $"This workspace carries no alert rule {ruleId:D}.");
         }
 
+        // ⚠ THE SEND BEFORE THE REMOVE, AND THE IDEMPOTENCY KEY IS WHAT MAKES THAT SAFE. A silo
+        // that dies between the two leaves the rule held and firing, the reconciler's delete pass
+        // re-drives, and the sending module hands back the message it already sent under the
+        // instance's resolve key rather than paging twice — the same argument the type's remarks
+        // make for a fire. Removing first and sending second would lose the instance id the key is
+        // made of.
+        if (record is { State: AlertRuleState.Firing, Open: { } open, Spec.ActionGroup.NotifyOnResolve: true }) {
+            var now = clock.UtcNow;
+            var summary = MonitorAlertRules.Summary(record.Spec, open.Value, now, fired: false) + " — the rule was deleted";
+            _ = await NotifyAsync(record.Spec, open.InstanceId, summary, "resolved");
+        }
+
+        state.State.Rules.Remove(ruleId);
         await state.WriteStateAsync();
         await ArmOrDisarmAsync();
 
@@ -156,14 +169,31 @@ public sealed class AlertEvaluatorGrain(
     /// <inheritdoc />
     public async Task<Result<AlertEvaluationReport>> EvaluateAsync() {
         var now = clock.UtcNow;
-        int evaluated = 0, skipped = 0, fired = 0, resolved = 0, errors = 0;
+        int evaluated = 0, skipped = 0, deferred = 0, fired = 0, resolved = 0, errors = 0;
 
-        // ⚠ BY RULE ID, SO TWO TICKS OVER ONE STATE EVALUATE IN ONE ORDER. Dictionary order is not a
-        // contract, and a test that asserts "the first rule fired before the second was queried"
-        // needs one that is.
-        foreach (var record in state.State.Rules.Values.OrderBy(x => x.Spec.RuleId).ToArray()) {
+        // ⚠ MOST OVERDUE FIRST, THEN BY RULE ID, SO TWO TICKS OVER ONE STATE EVALUATE IN ONE ORDER
+        // AND A RULE THE BUDGET DEFERRED IS THE FIRST ONE ASKED NEXT TIME. Dictionary order is not
+        // a contract, and a test that asserts "the first rule fired before the second was queried"
+        // needs one that is. A null due time is "the next tick", which is as overdue as it gets; a
+        // rule that was evaluated carries now + interval and sorts behind every rule that was not.
+        // Rule id alone was the first order, and under it a store slow enough to exhaust the budget
+        // would have evaluated the same head of the list on every tick and the tail on none.
+        var ordered = state.State.Rules.Values
+            .OrderBy(x => x.NextDueAt ?? DateTimeOffset.MinValue)
+            .ThenBy(x => x.Spec.RuleId)
+            .ToArray();
+
+        foreach (var record in ordered) {
             if (!record.Spec.Enabled || (record.NextDueAt is { } due && due > now)) {
                 skipped++;
+                continue;
+            }
+
+            // ⚠ THE BUDGET, READ FROM THE CLOCK AND NOT FROM `now`, which is the pass's one stamp
+            // and does not move. A rule reached past it keeps its due time, so it is still due on
+            // the next tick and, by the order above, first.
+            if (clock.UtcNow - now >= IAlertEvaluatorGrain.PassBudget) {
+                deferred++;
                 continue;
             }
 
@@ -233,11 +263,25 @@ public sealed class AlertEvaluatorGrain(
             }
         }
 
-        await state.WriteStateAsync();
+        // A pass that asked nothing changed nothing, and a workspace whose every rule is on an
+        // hourly interval should not rewrite its whole history — fifty rules of instances — on the
+        // fifty-nine ticks in between.
+        if (evaluated > 0) {
+            await state.WriteStateAsync();
+        }
+
         var armed = await ArmOrDisarmAsync();
 
         return Result<AlertEvaluationReport>.Success(
-            new() { Evaluated = evaluated, Skipped = skipped, Fired = fired, Resolved = resolved, Errors = errors, Armed = armed }
+            new() {
+                Evaluated = evaluated,
+                Skipped = skipped,
+                Deferred = deferred,
+                Fired = fired,
+                Resolved = resolved,
+                Errors = errors,
+                Armed = armed
+            }
         );
     }
 
@@ -249,6 +293,14 @@ public sealed class AlertEvaluatorGrain(
             // A silo with no reminder service has no row and never will have one, which is exactly
             // what `false` says to the operator asking.
             return Result<bool>.Success(false);
+        } catch (Exception error) when (error is not OperationCanceledException) {
+            // ⚠ NOT `false`. The table exists and could not be read — Redis is away — and the
+            // reconciler that asked would re-arm on `false`, which is one more call into the same
+            // table. A failure is retried on the reconcile loop's schedule instead.
+            return Result<bool>.Failure(
+                ErrorCode.InternalError,
+                $"The reminder table could not say whether workspace {evaluatorId:D}'s evaluator is armed: {error.Message}"
+            );
         }
     }
 
@@ -272,7 +324,20 @@ public sealed class AlertEvaluatorGrain(
 
     // ── The question ─────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Asks the store, under the timeout, and turns a timeout into a failure the rule records.</summary>
+    /// <summary>
+    ///     Asks the store, under the timeout, and turns a timeout or a thrown exception into a
+    ///     failure the rule records.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Nothing a query raises leaves this method (2026-09-15, #32 review).</b> The first
+    ///     version caught its own timeout and nothing else, on the strength of a seam contract that
+    ///     asks for a failure but does not forbid an exception — and a real seam over
+    ///     <c>HttpClient</c> throws <c>HttpRequestException</c> when the store's address does not
+    ///     resolve. One such rule ended the pass at that rule, and every rule sorted after it went
+    ///     unevaluated on every tick the fault lasted, which nothing in this tree could see because
+    ///     the refusing default and the scripted store both return. A thrown query is what a
+    ///     returned failure is: recorded on this rule, and the pass goes on.
+    /// </remarks>
     async Task<Result<AlertQueryResult>> AskAsync(AlertRuleSpec spec, DateTimeOffset now) {
         using var timeout = new CancellationTokenSource(IAlertEvaluatorGrain.QueryTimeout);
 
@@ -296,6 +361,23 @@ public sealed class AlertEvaluatorGrain(
                 + "seconds. The rule keeps its state and is due again next tick — docs/plan/16 § Alerts' "
                 + "query cost limit."
             );
+        } catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(
+                error,
+                "The {Signal} query seam threw for rule {Rule} on workspace {Evaluator} in tenant {Tenant}; "
+                + "the rule records it and keeps its state",
+                spec.Condition.Signal,
+                spec.Name,
+                evaluatorId,
+                tenantId
+            );
+
+            return Result<AlertQueryResult>.Failure(
+                ErrorCode.InternalError,
+                $"The {MonitorAlertRules.Spell(spec.Condition.Signal)} store's query seam threw for rule "
+                + $"'{spec.Name}': {error.GetType().Name}: {error.Message} The rule keeps its state and is "
+                + "due again next tick."
+            );
         }
     }
 
@@ -315,16 +397,29 @@ public sealed class AlertEvaluatorGrain(
         for (var i = 0; i < spec.ActionGroup.Recipients.Length; i++) {
             var recipient = spec.ActionGroup.Recipients[i];
 
-            var sent = await sender.SendAsync(
-                tenantId,
-                new() {
-                    ServiceId = spec.ActionGroup.ServiceId,
-                    Channel = spec.ActionGroup.Channel,
-                    Destination = recipient,
-                    Body = summary,
-                    IdempotencyKey = string.Create(CultureInfo.InvariantCulture, $"alert-{instanceId:N}-{kind}-{i}")
-                }
-            );
+            Result<MessageSnapshot> sent;
+
+            try {
+                sent = await sender.SendAsync(
+                    tenantId,
+                    new() {
+                        ServiceId = spec.ActionGroup.ServiceId,
+                        Channel = spec.ActionGroup.Channel,
+                        Destination = recipient,
+                        Body = summary,
+                        IdempotencyKey = string.Create(CultureInfo.InvariantCulture, $"alert-{instanceId:N}-{kind}-{i}")
+                    }
+                );
+            } catch (Exception error) when (error is not OperationCanceledException) {
+                // ⚠ The same decision AskAsync takes, for the same reason: a sending module that
+                // threw — a response timeout on a busy message grain — must not end the pass for
+                // the rules after this one. What is recorded is honest about what is known: the
+                // send may or may not have gone, and the instance's key makes a re-drive safe.
+                sent = Result<MessageSnapshot>.Failure(
+                    ErrorCode.InternalError,
+                    $"the sending module did not answer ({error.GetType().Name}: {error.Message})"
+                );
+            }
 
             if (outcomes.Length > 0) {
                 outcomes.Append("; ");
@@ -346,6 +441,15 @@ public sealed class AlertEvaluatorGrain(
 
     /// <summary>Arms the reminder while an enabled rule exists and disarms it otherwise.</summary>
     /// <returns>Whether the reminder is armed afterwards.</returns>
+    /// <remarks>
+    ///     ⚠ <b>A reminder-table fault is logged and answered <c>false</c>, and the reconciler is
+    ///     what turns that into a retry (2026-09-15, #32 review).</b> The write that precedes every
+    ///     call here has already happened, so throwing would fail an upsert whose rule is held —
+    ///     and the first version did throw, out of the upsert, leaving a held rule with no row that
+    ///     the next pass judged converged on its spec alone. Now the upsert succeeds, "held" and
+    ///     "armed" are two facts, and <c>MonitorAlertRuleReconciler</c> asks
+    ///     <see cref="IsArmedAsync" /> for the second before it says <c>Converged</c>.
+    /// </remarks>
     async Task<bool> ArmOrDisarmAsync() {
         var wanted = state.State.Rules.Values.Any(x => x.Spec.Enabled);
 
@@ -373,6 +477,17 @@ public sealed class AlertEvaluatorGrain(
                 evaluatorId,
                 tenantId,
                 error.Message
+            );
+
+            return false;
+        } catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(
+                error,
+                "The alert evaluator for workspace {Evaluator} in tenant {Tenant} could not read or write its "
+                + "reminder row. The rules are held; the reconciler re-arms on its next pass, and the next "
+                + "activation arms from state.",
+                evaluatorId,
+                tenantId
             );
 
             return false;

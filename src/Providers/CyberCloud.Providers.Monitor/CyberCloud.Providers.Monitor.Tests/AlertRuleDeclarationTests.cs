@@ -1,5 +1,7 @@
 using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.ResourceManager.Registry;
+using Orleans.Concurrency;
+using Orleans.Configuration;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -111,6 +113,29 @@ public sealed class AlertRuleDeclarationTests {
 
         IAlertEvaluatorGrain.MaxRules.ShouldBeGreaterThan(0);
         IAlertEvaluatorGrain.QueryTimeout.ShouldBeLessThan(IAlertEvaluatorGrain.Tick, "a query that outlives the tick queues the next tick behind it");
+
+        // ⚠ THE PASS, NOT ONE QUERY (2026-09-15, #32 review). The line above reasoned about one
+        // query and the activation runs a whole pass in one turn, so every GetRuleAsync and
+        // listInstances queued behind it waits for the pass — and the tree configures no
+        // ResponseTimeout, so Orleans' default is what they wait against. The budget bounds when the
+        // last query may START; that query then runs to its own timeout; the sum is the longest a
+        // pass holds the activation, and it has to clear the default with the sends still to come.
+        // The default is read off Orleans' own options rather than written as 30, so a version
+        // that changes it changes this test.
+        var responseTimeout = new SiloMessagingOptions().ResponseTimeout;
+        responseTimeout.ShouldBe(TimeSpan.FromSeconds(30), "the arithmetic in IAlertEvaluatorGrain's remarks was done against 30 s");
+        (IAlertEvaluatorGrain.PassBudget + IAlertEvaluatorGrain.QueryTimeout).ShouldBeLessThan(
+            responseTimeout,
+            "a full pass outlives Orleans' response timeout, and every call queued behind it throws into the reconcile loop"
+        );
+        IAlertEvaluatorGrain.PassBudget.ShouldBeLessThan(IAlertEvaluatorGrain.Tick, "a pass that outlives the tick queues the next tick behind it");
+
+        // And the reads are what a reconcile pass and an action call first, so they interleave.
+        foreach (var name in new[] { nameof(IAlertEvaluatorGrain.GetRuleAsync), nameof(IAlertEvaluatorGrain.ListRulesAsync), nameof(IAlertEvaluatorGrain.IsArmedAsync) }) {
+            typeof(IAlertEvaluatorGrain).GetMethod(name)!
+                .GetCustomAttributes(typeof(AlwaysInterleaveAttribute), false)
+                .ShouldNotBeEmpty($"{name} queues behind an evaluation pass");
+        }
     }
 
     [Fact]
@@ -172,6 +197,24 @@ public sealed class AlertRuleDeclarationTests {
         var tooMany = Spec(Rule(), Body(null, [.. Enumerable.Range(0, MonitorAlertRules.MaxRecipients + 1).Select(i => $"r{i}@example.com")]));
         tooMany.IsSuccess.ShouldBeFalse();
         tooMany.Error!.Target.ShouldBe("/properties/actionGroup/recipients");
+    }
+
+    [Fact]
+    public void AnIntervalThatIsNotAMultipleOfTheTickIsRefusedAtThePointer() {
+        // ⚠ The schema says "a multiple of 60" and cannot enforce it — SchemaProperty has no
+        // multiple-of — so 90 passes Validate. Left alone, the evaluator would have run it every
+        // 120 seconds and the observed state would have called it 90.
+        var ninety = MonitorAlertRules.Body(ServicePath(), ["oncall@example.com"], intervalSeconds: 90);
+        using var valid = JsonDocument.Parse(ninety);
+        MonitorAlertRules.Schema2026.Validate(valid.RootElement).IsSuccess.ShouldBeTrue("the schema can refuse it after all, so ToSpec's refusal is redundant");
+
+        var refused = Spec(Rule(), ninety);
+        refused.IsSuccess.ShouldBeFalse();
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Target.ShouldBe("/properties/evaluation/intervalSeconds");
+        refused.Error.Message.ShouldContain("90");
+
+        Spec(Rule(), MonitorAlertRules.Body(ServicePath(), ["oncall@example.com"], intervalSeconds: 300)).IsSuccess.ShouldBeTrue();
     }
 
     [Fact]

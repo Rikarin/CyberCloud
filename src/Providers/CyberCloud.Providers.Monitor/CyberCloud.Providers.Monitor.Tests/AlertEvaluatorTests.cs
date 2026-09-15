@@ -243,6 +243,165 @@ public sealed class AlertEvaluatorTests(AlertTestCluster cluster) {
     }
 
     [Fact]
+    public async Task ASeamThatThrowsFailsThatRuleAndTheRestOfThePassStillRuns() {
+        var service = await cluster.SendingServiceAsync("alerts-throws");
+        var first = AlertTestCluster.Rule("ws-throws", "first");
+        var second = AlertTestCluster.Rule("ws-throws", "second");
+        var workspace = MonitorAlertRules.WorkspaceOf(first).CanonicalPath;
+        const string Recipient = "throws-oncall@example.com";
+
+        await cluster.ConvergedAsync(first, Body(service, Recipient, threshold: 10));
+        await cluster.ConvergedAsync(second, Body(service, Recipient, threshold: 10));
+
+        // ⚠ THE SEAM THROWS RATHER THAN RETURNS — what HttpClient does when vmselect's name does
+        // not resolve. The first version caught only its own timeout, so the pass ended at
+        // whichever rule sorted first and the other was never evaluated on any tick.
+        AlertTestCluster.Queries.Throw(workspace, new HttpRequestException("No such host is known. (vmselect:8481)"));
+
+        var report = await cluster.EvaluateAsync(first);
+        report.Evaluated.ShouldBe(2, "a throwing seam ended the pass at the first rule");
+        report.Errors.ShouldBe(2);
+        report.Fired.ShouldBe(0);
+
+        foreach (var rule in new[] { first, second }) {
+            var held = await cluster.HeldAsync(rule);
+            held.State.ShouldBe(AlertRuleState.Ok);
+            held.LastEvaluatedAt.ShouldBe(AlertTestCluster.Clock.UtcNow);
+            held.LastError.ShouldContain("HttpRequestException");
+            held.LastError.ShouldContain("vmselect:8481");
+        }
+
+        SentTo(Recipient).ShouldBeEmpty();
+
+        // ── And when the name resolves again, both rules are live on the next tick ───────────
+        AlertTestCluster.Clock.Advance(TimeSpan.FromMinutes(1));
+        AlertTestCluster.Queries.Answer(workspace, 50);
+
+        var fired = await cluster.EvaluateAsync(first);
+        fired.Evaluated.ShouldBe(2);
+        fired.Errors.ShouldBe(0);
+        fired.Fired.ShouldBe(2);
+        (await cluster.HeldAsync(second)).LastError.ShouldBeEmpty();
+        SentTo(Recipient).Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task APassStopsAskingAtItsBudgetAndTheDeferredRulesGoFirstNextTick() {
+        var service = await cluster.SendingServiceAsync("alerts-budget");
+        var rules = new[] {
+            AlertTestCluster.Rule("ws-budget", "a"),
+            AlertTestCluster.Rule("ws-budget", "b"),
+            AlertTestCluster.Rule("ws-budget", "c")
+        };
+        var workspace = MonitorAlertRules.WorkspaceOf(rules[0]).CanonicalPath;
+
+        foreach (var rule in rules) {
+            await cluster.ConvergedAsync(rule, Body(service, "budget@example.com", threshold: 1000));
+        }
+
+        // ⚠ EACH QUERY TAKES LONGER THAN THE WHOLE BUDGET, on the clock the grain reads, so a pass
+        // can ask exactly one question. Three passes a minute apart must then evaluate each rule
+        // exactly once — which is only true if the rule a pass could not reach is the first one
+        // the next pass asks. Ordered by rule id alone, the same rule would be asked three times
+        // and two would never be.
+        AlertTestCluster.Queries.Slow(workspace, IAlertEvaluatorGrain.PassBudget + TimeSpan.FromSeconds(5), 1);
+
+        for (var pass = 0; pass < rules.Length; pass++) {
+            var report = await cluster.EvaluateAsync(rules[0]);
+            report.Evaluated.ShouldBe(1, $"pass {pass} asked more than the budget allows");
+            report.Deferred.ShouldBe(rules.Length - 1);
+            report.Skipped.ShouldBe(0);
+
+            AlertTestCluster.Clock.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        var stamps = new List<DateTimeOffset>();
+        foreach (var rule in rules) {
+            var held = await cluster.HeldAsync(rule);
+            held.LastEvaluatedAt.ShouldNotBeNull($"rule '{rule.Name}' was never evaluated in three passes");
+            stamps.Add(held.LastEvaluatedAt.Value);
+        }
+
+        stamps.Distinct().Count().ShouldBe(rules.Length, "one rule was evaluated twice while another waited");
+
+        // ── With a store that answers at once, one pass covers all three ─────────────────────
+        AlertTestCluster.Queries.Answer(workspace, 1);
+        var whole = await cluster.EvaluateAsync(rules[0]);
+        whole.Evaluated.ShouldBe(rules.Length);
+        whole.Deferred.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task ADeletedFiringRuleTellsItsRecipientsItEnded() {
+        var service = await cluster.SendingServiceAsync("alerts-delete");
+        var rule = AlertTestCluster.Rule("ws-delete", "disk-full");
+        var workspace = MonitorAlertRules.WorkspaceOf(rule).CanonicalPath;
+        const string Recipient = "delete-oncall@example.com";
+        var body = Body(service, Recipient, threshold: 90);
+
+        await cluster.ConvergedAsync(rule, body);
+        AlertTestCluster.Queries.Answer(workspace, 97);
+        (await cluster.EvaluateAsync(rule)).Fired.ShouldBe(1);
+        SentTo(Recipient).Count.ShouldBe(1);
+
+        AlertTestCluster.Clock.Advance(TimeSpan.FromMinutes(1));
+        (await cluster.DeleteAsync(rule, body)).IsConverged.ShouldBeTrue();
+
+        // ⚠ The one case with no instance left to write "not notified" on, so the recipient is
+        // told — and told what happened, which is not that the condition cleared.
+        var sent = SentTo(Recipient);
+        sent.Count.ShouldBe(2, "a recipient paged FIRING was never told the rule went away");
+        sent[1].Body.ShouldContain("RESOLVED");
+        sent[1].Body.ShouldContain("disk-full");
+        sent[1].Body.ShouldContain("the rule was deleted");
+
+        // A rule that never fired, or a firing rule whose action group asked for no resolve, says nothing.
+        var quiet = AlertTestCluster.Rule("ws-delete", "quiet");
+        var quietBody = MonitorAlertRules.Body(service, [Recipient], threshold: 90, notifyOnResolve: false);
+        await cluster.ConvergedAsync(quiet, quietBody);
+        (await cluster.EvaluateAsync(quiet)).Fired.ShouldBe(1);
+        (await cluster.DeleteAsync(quiet, quietBody)).IsConverged.ShouldBeTrue();
+        SentTo(Recipient).Count.ShouldBe(3, "a resolve went out for an action group that asked for none");
+    }
+
+    [Fact]
+    public async Task AHeldRuleWithNoReminderRowIsReArmedRatherThanReportedConverged() {
+        var service = await cluster.SendingServiceAsync("alerts-rearm");
+        var rule = AlertTestCluster.Rule("ws-rearm", "cpu-high");
+        var evaluator = MonitorAlertRules.EvaluatorIdFor(rule);
+        var body = Body(service, "rearm@example.com");
+
+        async Task<bool> ArmedAsync() => (await cluster.Alerts.IsArmedAsync(AlertTestCluster.Tenant, evaluator, Ct)).GetValueOrThrow();
+
+        await cluster.ConvergedAsync(rule, body);
+        (await ArmedAsync()).ShouldBeTrue();
+
+        // ⚠ THE STATE A REMINDER-TABLE FAULT AFTER THE STATE WRITE LEAVES: the rule reads back as
+        // desired, and nothing will ever tick it. The first reconciler judged this Converged on
+        // every retry, because it compared the spec and asked nothing else.
+        await cluster.DropReminderRowAsync(rule);
+        (await ArmedAsync()).ShouldBeFalse("the row was dropped and the grain still sees it");
+        (await cluster.HeldAsync(rule)).Spec.Enabled.ShouldBeTrue();
+
+        var log = new RecordingLog();
+        var outcome = await cluster.ReconcileAsync(rule, body, log);
+
+        outcome.IsConverged.ShouldBeTrue(outcome.ToString());
+        (await ArmedAsync()).ShouldBeTrue("the pass said Converged over a rule nothing ticks");
+        log.Entries.ShouldContain(x => x.Detail.Contains("not armed; re-arming", StringComparison.Ordinal));
+
+        // A disabled rule needs no row, so it converges without one and without asking.
+        var disabled = Body(service, "rearm@example.com", enabled: false);
+        await cluster.ConvergedAsync(rule, disabled);
+        (await ArmedAsync()).ShouldBeFalse();
+
+        var quiet = new RecordingLog();
+        var again = await cluster.ReconcileAsync(rule, disabled, quiet);
+        again.IsConverged.ShouldBeTrue(again.ToString());
+        quiet.Entries.ShouldAllBe(x => x.Phase == "ready");
+    }
+
+    [Fact]
     public async Task TheReminderIsArmedWhileAnEnabledRuleExistsAndDisarmedWhenTheLastIsGone() {
         var service = await cluster.SendingServiceAsync("alerts-armed");
         var rule = AlertTestCluster.Rule("ws-armed", "cpu-high");

@@ -357,6 +357,13 @@ public sealed record AlertEvaluationReport {
     /// <summary>Whether the pass left the reminder armed.</summary>
     [Id(5)]
     public bool Armed { get; init; }
+
+    /// <summary>
+    ///     How many rules were due and were not asked, because <see cref="IAlertEvaluatorGrain.PassBudget" />
+    ///     had elapsed when the pass reached them. They stay due and go first next tick.
+    /// </summary>
+    [Id(6)]
+    public int Deferred { get; init; }
 }
 
 /// <summary>One question to a workspace's store, asked by the evaluator through <see cref="IAlertQuerySeam" />.</summary>

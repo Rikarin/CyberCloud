@@ -17446,7 +17446,7 @@
                     "type": "boolean"
                   },
                   "recipients": {
-                    "description": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch.",
+                    "description": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. At least one and at most 20; a list outside that is refused when the rule is reconciled.",
                     "example": [
                       "oncall@example.com"
                     ],
@@ -17544,7 +17544,7 @@
                   },
                   "intervalSeconds": {
                     "default": 60,
-                    "description": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick.",
+                    "description": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. Anything else is refused when the rule is reconciled.",
                     "maximum": 3600,
                     "minimum": 60,
                     "type": "integer"

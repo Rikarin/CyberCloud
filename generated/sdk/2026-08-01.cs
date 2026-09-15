@@ -4644,7 +4644,7 @@ public sealed partial class AlertRuleData {
             [JsonPropertyName("notifyOnResolve")]
             public bool? NotifyOnResolve { get; set; }
 
-            /// <summary>Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch.</summary>
+            /// <summary>Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. At least one and at most 20; a list outside that is refused when the rule is reconciled.</summary>
             /// <remarks>Required on a create.</remarks>
             [JsonPropertyName("recipients")]
             public IList<string> Recipients { get; set; } = new List<string>();
@@ -4692,7 +4692,7 @@ public sealed partial class AlertRuleData {
             [JsonPropertyName("forSeconds")]
             public long? ForSeconds { get; set; }
 
-            /// <summary>How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick.</summary>
+            /// <summary>How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. Anything else is refused when the rule is reconciled.</summary>
             /// <remarks>Defaults to 60 when left unset.</remarks>
             [JsonPropertyName("intervalSeconds")]
             public long? IntervalSeconds { get; set; }

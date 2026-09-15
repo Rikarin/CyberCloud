@@ -9816,7 +9816,7 @@
                   "name": "--interval-seconds",
                   "type": "integer",
                   "required": false,
-                  "summary": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick.",
+                  "summary": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. Anything else is refused when the rule is reconciled.",
                   "jsonPointer": "/properties/evaluation/intervalSeconds",
                   "default": 60
                 },
@@ -9881,7 +9881,7 @@
                   "name": "--recipients",
                   "type": "string",
                   "required": true,
-                  "summary": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch.",
+                  "summary": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. At least one and at most 20; a list outside that is refused when the rule is reconciled.",
                   "jsonPointer": "/properties/actionGroup/recipients",
                   "repeated": true,
                   "example": [
@@ -10223,7 +10223,7 @@
                   "name": "--interval-seconds",
                   "type": "integer",
                   "required": false,
-                  "summary": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick.",
+                  "summary": "How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. Anything else is refused when the rule is reconciled.",
                   "jsonPointer": "/properties/evaluation/intervalSeconds",
                   "default": 60
                 },
@@ -10288,7 +10288,7 @@
                   "name": "--recipients",
                   "type": "string",
                   "required": false,
-                  "summary": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch.",
+                  "summary": "Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. At least one and at most 20; a list outside that is refused when the rule is reconciled.",
                   "jsonPointer": "/properties/actionGroup/recipients",
                   "repeated": true,
                   "example": [

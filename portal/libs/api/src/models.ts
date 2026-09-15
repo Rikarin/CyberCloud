@@ -1638,7 +1638,7 @@ export interface MonitorWorkspacesAlertRulesData {
       channel: MonitorWorkspacesAlertRulesChannel;
       /** Whether the recipients are told when the condition stops holding, as well as when it starts. */
       notifyOnResolve?: boolean;
-      /** Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. */
+      /** Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list before dispatch. At least one and at most 20; a list outside that is refused when the rule is reconciled. */
       recipients: string[];
       /** The CyberCloud.Communication/services resource the notification is sent through, as its full resource id path. It must be in this tenant. */
       service: string;
@@ -1662,7 +1662,7 @@ export interface MonitorWorkspacesAlertRulesData {
     evaluation?: {
       /** How long the condition must hold before the rule fires, in seconds. Zero fires on the first evaluation that meets it; 300 ignores anything shorter than five minutes. */
       forSeconds?: number;
-      /** How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. */
+      /** How often the condition is evaluated, in seconds. A multiple of 60: the evaluator ticks once a minute and a rule at 300 is evaluated on every fifth tick. Anything else is refused when the rule is reconciled. */
       intervalSeconds?: number;
     };
     /** How loud: critical pages somebody, error is looked at today, warning this week, informational is worth knowing. */
