@@ -15,13 +15,14 @@ import { join } from 'node:path';
  *    against is readable from `node_modules`, not from a release note or a checkout.
  * 3. The tooling — `@angular/cli`, `@angular/build`, `@angular/ssr` — is one exact version of its
  *    own. It is published from a different repository on a different cadence, `@angular/build`
- *    peers `@angular/ssr` at its own minor, and README § The Angular pin says why it is not the
- *    framework's number.
+ *    peers `@angular/ssr` at its own minor, and it is not the framework's number: xUI's own tag
+ *    pins its tooling two patch releases past its framework, and README § The Angular pin says
+ *    why the portal could not pin the framework's number even if it wanted to.
  *
  * ⚠ The second claim is a policy, not a compile-time constraint, and this test exists because
- * nothing else would catch a breach. Angular's linker accepts a range of compiler versions — the
- * portal ran 3.0.0's 22.1.4 bundles on 22.0.8 for five days with a green gate — so a drift in
- * either direction builds and passes. When this test fails, one of two things happened: Angular was
+ * nothing else would catch a breach. Angular's linker accepts a range of compiler versions — #26
+ * took 3.0.0's 22.1.4 bundles with the framework still at 22.0.8, and its gate was green — so a
+ * drift in either direction builds and passes. When this test fails, one of two things happened: Angular was
  * moved ahead of xUI, in which case the move is xUI's first (ADR-017), or xUI was bumped to a
  * release compiled by a newer Angular, in which case the pin moves with it and README § The Angular
  * pin is re-measured. The failure message names both versions so the reader knows which.
@@ -98,12 +99,18 @@ describe('The Angular pin', () => {
   });
 
   it('runs the framework xUI compiled against — docs/plan/02 § ADR-017', () => {
-    const pin = frameworkPins[0][1];
     const compiledBy = [...xuiCompilerVersions()];
 
     // One version across every bundle is itself a finding worth keeping: xUI publishes all of its
     // packages from one build, so a second stamp here would mean a partial release.
     expect(compiledBy).toHaveLength(1);
-    expect({ portalPins: pin, xuiCompiledBy: compiledBy[0] }).toEqual({ portalPins: pin, xuiCompiledBy: pin });
+
+    // The portal's side is the whole grouping, not the first entry's version: with only the CDK
+    // drifted to 22.1.6, the first entry says 22.1.4 and a message built from it would report the
+    // framework as pinning the stamp it already pins. The grouping names the package that moved.
+    expect({ portalPins: byVersion(frameworkPins), xuiCompiledBy: compiledBy[0] }).toEqual({
+      portalPins: { [compiledBy[0]]: expect.any(Array) },
+      xuiCompiledBy: compiledBy[0]
+    });
   });
 });

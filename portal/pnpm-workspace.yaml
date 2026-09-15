@@ -39,18 +39,19 @@ allowBuilds:
 # The framework (@angular/core and its siblings, @angular/compiler-cli, @angular/cdk) is pinned to
 # 22.1.4 — the version xUI compiled @xui/*@3.0.0 with, which every installed @xui bundle stamps and
 # apps/portal/src/app/angular-pin.spec.ts checks. The tooling (@angular/cli, @angular/build,
-# @angular/ssr) is pinned to 22.0.8, separately: it versions on its own cadence, and 22.1.0 through
-# 22.1.4 of the CLI fail strictPeerDependencies on the CLI's own tree. portal/README.md § The
-# Angular pin has the measurements and names the next move.
+# @angular/ssr) is pinned to 22.1.6, separately — the version xUI's own v3.0.0 tag pins for its
+# tooling. It versions on its own cadence, and it cannot share the framework's number: 22.1.0
+# through 22.1.4 of the CLI fail strictPeerDependencies on the CLI's own tree. portal/README.md
+# § The Angular pin has the measurements.
 
 # ⚠ These four settings lived in .npmrc until 2026-09-15, and pnpm 11 never read them there. pnpm
-# 11.0's release notes: "pnpm no longer reads non-auth settings from `.npmrc`" — registry and auth
-# stay in INI files, everything pnpm-specific moves to this file. The portal has pinned pnpm 11
-# since its first commit, so `strict-peer-dependencies=true` was in force for exactly zero
-# installs: `pnpm config get strict-peer-dependencies` answered `undefined`, and a resolution with
-# an unmet exact peer printed "[WARN] Issues with peer dependencies found" and exited 0. With the
-# key here, the same resolution is ERR_PNPM_PEER_DEP_ISSUES and exit 1, which is what every "under
-# strict peers" claim in the docs had been assuming.
+# 11.0's release notes, § Configuration: "Only auth and registry settings are read from `.npmrc`
+# files." Registry and auth stay in INI files, everything pnpm-specific moves to this file. The
+# portal has pinned pnpm 11 since its first commit, so `strict-peer-dependencies=true` was in force
+# for exactly zero installs: `pnpm config get strict-peer-dependencies` answered `undefined`, and a
+# resolution with an unmet exact peer printed "[WARN] Issues with peer dependencies found" and
+# exited 0. With the key here, the same resolution is ERR_PNPM_PEER_DEP_ISSUES and exit 1, which is
+# what every "under strict peers" claim in the docs had been assuming.
 #
 # strictPeerDependencies: Angular's compiler resolves @angular/* deeply and @xui/* peers on
 # @angular/*; failing the install on an unmet peer surfaces a conflict at `pnpm install` instead of

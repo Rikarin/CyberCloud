@@ -109,48 +109,62 @@ pins `@angular/* 22.1.4` and `@angular/cdk 22.1.4` and says the same). The pin m
 stamp moves, which is on an xUI bump and at no other time.
 
 ⚠ **The test is there because nothing else catches a drift.** Angular's linker accepts a range of
-compiler versions, so the portal ran the 22.1.4-stamped 3.0.0 bundles on `22.0.8` for five days with
-a green gate — the linker was fine, the claim in this section was not. Moving Angular ahead of xUI
-also builds. Either direction is a policy breach that the toolchain does not report, so the test
-does, and its failure message names both versions.
+compiler versions, so #26 took the 22.1.4-stamped 3.0.0 bundles with the framework still at `22.0.8`
+and its gate was green — the linker was fine, the claim in this section was not, and nothing would
+have said so had #87 not followed two and a half hours later. Moving Angular ahead of xUI also
+builds. Either direction is a policy breach that the toolchain does not report, so the test does,
+and its failure message names the package that moved and the version xUI stamps.
 
 **Why 22.1.4 and not the registry head.** On 2026-09-15 the head was 22.1.6 for the framework and
 CDK. xUI has not been built or tested against it; running ahead of xUI would make the portal the
 first consumer to find whatever a point release changed, which is the opposite of what following
 xUI is for. Every version between `22.0.8` and `22.1.4` was skipped for the same reason.
 
-**The tooling — `@angular/cli`, `@angular/build`, `@angular/ssr` — is pinned to `22.0.8`, and it
-is a separate number on purpose.** This section used to say the tooling is kept in step with the
-framework "so there is one number to reason about". #87 tried to keep that promise and could not:
+**The tooling — `@angular/cli`, `@angular/build`, `@angular/ssr` — is pinned to `22.1.6`, the
+version xUI's `v3.0.0` `package.json` pins for its own tooling, and it is a separate number on
+purpose.** This section used to say the tooling is kept in step with the framework "so there is one
+number to reason about". #87 tried to keep that promise and could not — and xUI does not keep it
+either: its tag pins `@angular/cli 22.1.6` and `@angular/ssr 22.1.6` next to a 22.1.4 framework.
+So the rule for the tooling is the same as for the framework, read from the same file: run what xUI
+runs. The test pins it as one exact version of its own.
 
-⚠ **`@angular/cli` 22.1.0 through 22.1.4 fail `strictPeerDependencies` on the CLI's own tree.**
-Each of those releases depends on `listr2@10.2.2` and on `@listr2/prompt-adapter-inquirer@4.2.4`,
-and the adapter peers `listr2: "10.2.1"` — exact. Under strict peers the resolution is
-`ERR_PNPM_PEER_DEP_ISSUES` and the install stops; measured at 22.1.4, then at every 22.1.x below it
-by reading the CLI's manifest (`npm view @angular/cli@22.1.N dependencies`). 22.1.5 is the first
-release whose adapter and `listr2` agree (`11.0.0` / `4.2.5`, and 22.1.6 through the 22.1.8 head
-carry the same pair). `@angular/build` peers `@angular/ssr` at its own minor, so the three move
-together, and the highest tooling at or below 22.1.4 that passes is the one the portal already had.
-The framework's move is unaffected — `@angular/build@22.0.8` peers `@angular/compiler-cli` and the
-rest at `^22.0.0` — and the test pins the tooling as one exact version of its own.
+⚠ **`@angular/cli` 22.1.0 through 22.1.4 fail `strictPeerDependencies` on the CLI's own tree, so
+the framework's number was never available.** Each of those releases depends on `listr2@10.2.2` and
+on `@listr2/prompt-adapter-inquirer@4.2.4`, and the adapter peers `listr2: "10.2.1"` — exact. Under
+strict peers the resolution is `ERR_PNPM_PEER_DEP_ISSUES` and the install stops; measured at 22.1.4,
+then at every 22.1.x below it by reading the CLI's manifest (`npm view @angular/cli@22.1.N
+dependencies`). 22.1.5 is the first release whose adapter and `listr2` agree (`11.0.0` / `4.2.5`,
+and 22.1.6 through the 22.1.8 head carry the same pair). `@angular/build` peers `@angular/ssr` at
+its own minor, so the three move together. The framework is unaffected — `@angular/build@22.1.6`
+peers `@angular/compiler-cli`, `localize` and `platform-server` at `^22.0.0`.
 
-**Owed: the tooling to a release xUI's tag pins.** xUI's `v3.0.0` `package.json` pins
-`@angular/cli 22.1.6` and `@angular/ssr 22.1.6` — its own tooling is not in step with its framework
-either. Moving there is a separate change with its own measurements: `@angular/build` 22.1.x is a
-different bundler from 22.0.8 (it builds on `vite@8` and `rolldown@1.2` where 22.0.8 builds on
-`vite@7`; the CLI also drops its `pacote`/`sigstore` fetch stack, and `@angular/compiler-cli`
-22.1.4 already brought Babel 8 into the tree next to jest's Babel 7). A run at 22.1.4 tooling,
-made before the peer failure was found, built both apps and passed every gate, with the portal's
-initial bundle at 730.5 kB raw / 191.1 KB gzipped against 727.4 kB / 191.9 KB at the pins here —
-so the bundler change costs under a kilobyte either way. What is not yet measured is 22.1.6.
+**What the move from 22.0.8 tooling cost, measured.** `@angular/build` 22.1.x is a different
+bundler: it builds on `vite@8.1.5` and `rolldown@1.2.0` where 22.0.8 built on `vite@7` and
+`rollup`, and the tree carries a second `rolldown@1.1.5` because that is the one `vite@8.1.5`
+depends on. The lockfile lost 180 package versions and gained 95: 102 packages left — the CLI's
+`pacote`/`sigstore`/`npm-registry-fetch` stack, `rollup` and its 25 platform binaries, `algoliasearch`
+— and 40 entered, 35 of them `rolldown` and `oxc-parser` platform bindings. No install
+script entered the tree (`pnpm ignored-builds`: "Automatically ignored builds during installation:
+None"). The portal's initial bundle is 730.46 kB raw / 191.1 KB gzipped against 727.4 kB / 191.9 KB
+at 22.0.8 tooling: the new bundler emits 3 kB more raw and 0.8 KB less over the wire, which is the
+difference between two bundlers' output and not a regression. The Node range is unchanged
+(`^22.22.3 || ^24.15.0 || >=26.0.0` on `cli` and `build` at 22.1.6, as at 22.0.8).
+
+⚠ **`@angular/ssr` 22.1 strips `Forwarded` and `X-Forwarded-*` from every request unless
+`trustProxyHeaders` says otherwise, and says so on stderr.** `scripts/ssr-identity.test.mjs` sends
+`x-forwarded-for` on purpose, as hostile material that must not reach the render, so its run now
+prints `Received "x-forwarded-for" header but "trustProxyHeaders" was not set up to allow it` before
+the eight checks pass. That is the engine confirming the test's premise, not a failure. Neither
+`server.ts` sets `trustProxyHeaders`; the day one does, it is trusting whatever fronts it to decide
+the request's scheme and host, and the test's header should then be a check rather than a lure.
 
 ⚠ **`strictPeerDependencies` was not in force until #87, and every earlier "under strict peers"
 claim on this page was made with it off.** The setting lived in `.npmrc`, and pnpm 11 — the version
-this workspace has pinned since its first commit — "no longer reads non-auth settings from
-`.npmrc`" (pnpm 11.0 release notes). `pnpm config get strict-peer-dependencies` answered
-`undefined`; the same resolution that now fails printed `[WARN] Issues with peer dependencies found`
-and exited 0. The four settings are in `pnpm-workspace.yaml` now, with the reasoning, and `.npmrc`
-is gone.
+this workspace has pinned since its first commit — reads only registry and auth settings from it:
+"Only auth and registry settings are read from `.npmrc` files." (pnpm 11.0 release notes,
+§ Configuration). `pnpm config get strict-peer-dependencies` answered `undefined`; the same
+resolution that now fails printed `[WARN] Issues with peer dependencies found` and exited 0. The four
+settings are in `pnpm-workspace.yaml` now, with the reasoning, and `.npmrc` is gone.
 
 ### How the pin got here
 
@@ -182,7 +196,7 @@ Nothing else moved: `clsx ^2.1.1` (`>=2.0.0` in `@xui/core`), `class-variance-au
 the portal's pins satisfy them. **No exact `@angular/*` peer survives in any of the 23 packages.**
 The xUI bump (#26) kept `22.0.8`/`22.0.6` because moving Angular is a separate change from moving
 xUI; #87 made that change, and `pnpm install` under `strictPeerDependencies` — now actually on —
-reported no unmet peer at 22.1.4, as the table predicts.
+reported no unmet peer at a 22.1.4 framework with 22.1.6 tooling, as the table predicts.
 
 **`@ng-icons/*` is pinned to `35.1.0`**, the head of the `35` range `@xui/*@3.0.0` peers on. The
 registry head is `36.0.0`, which is out of range.
@@ -237,16 +251,25 @@ gzips the emitted files and compares real bytes rather than the builder's estima
 
 | Metric                       | Budget   | Actual       |
 | ---------------------------- | -------- | ------------ |
-| Initial JS, gzipped          | < 250 KB | **191.9 KB** |
-| Largest route chunk, gzipped | < 120 KB | **10.3 KB**  |
+| Initial JS, gzipped          | < 250 KB | **191.1 KB** |
+| Largest route chunk, gzipped | < 120 KB | **10.4 KB**  |
 
 Measured by the script itself on 2026-09-15 at the pins § The Angular pin describes; the builder's
-own "estimated transfer size" column is smaller (180.3 KB) and is not what the gate compares.
+own "estimated transfer size" column is smaller (178.7 KB) and is not what the gate compares.
 
 ⚠ The script also fails when the build emits **no** lazy chunk at all, because that means the lazy
 routes have been inlined and docs/plan/20's "Route-level code splitting is mandatory" has quietly
 stopped being true. `angular.json` carries a raw-byte budget as a coarse first line of defence; the
 gzip gate is the authoritative one, since gzip is what a CDN serves.
+
+⚠ **The raw-byte budget's warning tier is set where it does not fire on every build.** It has two
+thresholds per app, `maximumWarning` and `maximumError`, and the sentence at the top of § Gates is
+true only of the second. The first had been left behind by the bundle: at 700 kB for the portal and
+340 kB for identity it fired on every production build — master's portal was 723.74 kB, and it is
+730.46 kB / 356.30 kB at the pins here — and a warning that fires on every run is read by nobody.
+#87 moved the tiers to 800 kB / 380 kB, which is a warning again: roughly 70 kB and 25 kB of headroom
+before it speaks, and the error tiers (900 kB / 420 kB) are where they were. Raise the warning when
+the bundle grows for a reason; a warning that is on all the time is the same as none.
 
 ### SSR isolation
 
