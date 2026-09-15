@@ -271,6 +271,8 @@ the one way its medium allows, keeping the document's own member name as the wir
 | **TypeScript** | An inline object type, `persistence?: { … }` | `mode` on it | The member name itself |
 | **`cyc`** | Nothing — a command line has no nesting | `--mode`, and `--persistence-mode` only when a flat name collides | The flag carries the JSON pointer and writes it |
 | **Portal forms** | Nothing — one field per property | One field, keyed on the pointer | The field carries the JSON pointer |
+| **Python** (#40) | A nested dataclass, `{Model}Data.Properties.Persistence`, held by a member `persistence` that is required or `Optional[…] = None` as the document says | `mode` on that class; a wire name that is a keyword is `class_` | An explicit `to_wire`/`from_wire` per class writes and reads the leaf's own name — never reflection over the Python names |
+| **Go** (#40) | A named struct after its parent, `{Model}PropertiesPersistence` — Go has no nested types, and an anonymous one would be repeated at every construction site — held by a field that is a value or a pointer with `omitempty` as the document says | `Mode` on that struct | The `json:"mode"` tag at that depth |
 
 **The read envelope is in the document too, and every surface reads it from there** (#85). A
 resource is read in Azure's envelope — `id`, `name`, `type`, `location`, `provisioningState`,
@@ -288,6 +290,8 @@ write body (`Body`) and what it inherits (`Envelope`), and:
 | **TypeScript** | `{Model}Data`, as above | `{Model}Resource extends Resource, {Model}Data`, with `type` narrowed to the literal; `Resource` and `ProvisioningState` emitted once |
 | **`cyc`** | The flags | Nothing — no `--etag` on `create`, and that absence is asserted |
 | **Portal forms** | The fields | Nothing — no `id` control, likewise asserted |
+| **Python** (#40) | `{Model}Data`, as above | `{Model}Resource` — the five as members, present or `Optional` as `x-cybercloud-read-required` says, plus `data`; `ProvisioningState` a `Literal` emitted once. Flat rather than inherited: a dataclass base with a defaulted member would put `data` after it, which Python refuses |
+| **Go** (#40) | `{Model}Data`, as above | `{Model}Resource` — the `Resource` struct embedded, `Data` as a named field, and an `UnmarshalJSON` that reads the same bytes twice, which is the shape the .NET hand-written half arrived at. ⚠ Not two embedded structs: a `MarshalJSON` on either would be promoted onto the resource and `json.Marshal` of it would silently render one half |
 
 ⚠ **Why one schema with `readOnly` rather than a `{Type}.Resource` the `200` points at.** The
 [§ OpenAPI](#openapi) gate treats every changed scalar in a published document as breaking, and the
@@ -339,10 +343,69 @@ envelope — and #85 put that envelope into the document.
 |---|---|---|
 | **.NET** | M1 | Above |
 | **TypeScript** | M1 | Already generated for the portal (`portal/libs/api`); publishing it is packaging, not work |
-| **Python** | M2 | Generated; `boto3`-shaped resource clients. The second-most-asked-for language in infrastructure |
-| **Go** | M2 | Generated. The language the Terraform provider needs anyway |
+| **Python** | M2 | **Generated (#40, 2026-09-15)** into `generated/sdk-python/`, one subpackage per api-version — `cybercloud.v2026_08_01`. Below for what it is and what it is not yet |
+| **Go** | M2 | **Generated (#40, 2026-09-15)** into `generated/sdk-go/`, one package per api-version — `api20260801` — in one module. The language the Terraform provider needs anyway |
 | **Terraform provider** | M3 | Generated from the same registry. ⚠ Provider-schema generation is not free — CRUD + import + drift + state upgrades is ~1.5 EM even generated |
 | Java, Rust, PHP | P1 | On request |
+
+### Python and Go — what landed with #40
+
+**Both read the published document, not the registry.** That was the one decision the issue said was
+not mechanical, and it is the same one #21 made for the TypeScript client: § Generation's one hop
+puts every client under the compatibility diff over `openapi/`, and an emitter that read the
+registry would describe a member the published contract does not have, with no gate to notice.
+`PythonSdkEmitter` and `GoSdkEmitter` walk the same `DocumentReader` the other three do.
+
+| | Python | Go |
+|---|---|---|
+| A model per schema | A `@dataclass` per object, nested as the wire is (the conventions table above); a `Literal[…]` alias per closed set, so a typo fails the type checker and a value a newer server adds to a read-only vocabulary still parses | A struct per object, one named struct per container; a `string` type with a constant per value, for the same two reasons |
+| One client per api-version | `CyberCloudClient(transport)` with a group per provider — `client.dbforpostgresql.servers`, `client.containerservice.managed_clusters_agent_pools` — the CLI's lower-cased group and the type path snake-cased | `NewClient(transport)` with `client.DBforPostgreSQL.Servers`, `client.ContainerService.ManagedClustersAgentPools` |
+| Request and response | `Request`/`Response` and a `Transport` protocol; `HttpTransport(endpoint, token)` over `urllib` | `Request`/`Response` and a `Transport` interface; `HTTPTransport{Endpoint, Token}` over `net/http` |
+| Operations polling | `begin_create_or_update`, `begin_update`, `begin_delete`, `begin_{action}` return an `Operation[T]`; `poll()` reads once, `wait(on_progress=…)` polls at the server's `Retry-After` until terminal, then reads the resource, or raises with the operation's error | `Begin*` return `*Operation[T]`; `Poll(ctx)`, `Wait(ctx, onProgress)` the same way, `ctx` cancelling the delay |
+| `$skipToken` paging | `list(…, top=…)` returns a `Pager[T]`: iterate the items, or `pages()` for `Page[T]` | `List(…, options)` returns `*Pager[T]`: `More()`, `NextPage(ctx)`, `All(ctx)` |
+| The same error shape | `CyberCloudError` (`code`, `message`, `target`, `details`) and `RequestFailedError(status, error)`; the poll of a Failed operation raises the same | `Error` and `*RequestFailedError{StatusCode, Err}`, `errors.As`-able, with `Code()` |
+| Scopes and operations | `client.tenants`, `client.subscriptions`, `client.resource_groups`, `client.operations` — from the document, no emitter change | `client.Tenants`, `client.Subscriptions`, `client.ResourceGroups`, `client.Operations` |
+
+⚠ **A server-supplied URL is never sent whole, on either.** `Azure-AsyncOperation` and `nextLink` are
+absolute; the poller takes the operation id and the pager takes the link's path and query as
+members — so the transport's own `api-version` replaces the one the link carried rather than being
+appended after it — and both go to the transport's endpoint. A bearer token never follows an origin
+the response chose. The TypeScript client took the id for the same reason; the .NET SDK follows the
+absolute URL and is the one that does.
+
+⚠ **`update` on all three typed SDKs sends the members it cannot leave unset.** A merge patch means
+"what is not set is not changed", and a `{Model}Data` whose required members are values — C#'s
+`required`, a Python field with no default, a Go value field — always carries them. A required
+member that is also immutable, `location`, therefore has to be given its current value on an
+update. The TypeScript client's `Partial<Data>` is the honest shape; the other three share the
+limitation with each other and it is recorded here rather than in three places.
+
+**What is not there, said plainly, in the same terms as § Generation's "hand-written on top".**
+
+- **Credential types and a keychain.** Each transport takes a callable that returns a bearer token
+  and asks it on every request. `CyberCloudCliCredential`'s `$CYC_EXECUTABLE account
+  get-access-token` contract is the obvious first one to write, and nothing here writes it.
+- **Retry.** No backoff, no `Retry-After` on a `429` — only the poller honours `Retry-After`, and
+  only between polls. The .NET pipeline's `RetryHandler` is the model.
+- **Packaging.** `pyproject.toml` and `go.mod` exist so `pip install -e` and `go vet` have something
+  to read; neither package is published anywhere, which is the same state the TypeScript client is
+  in.
+- **A hand-written test suite in either language.** The emitter's tests are
+  `PythonGoSurfaceTests`, in C#, over the fixture document; the checked-in packages were exercised
+  end to end against a fake transport by hand on 2026-09-15 — create → 202 → three polls with
+  progress → read, `$top` and a `$skipToken` `nextLink` with a foreign origin, a `404` with the
+  error body, a scope `PUT`, a delete, and a name with a `/` in it — and that exercise is not
+  checked in, because a test needs a runner and neither toolchain is a build prerequisite.
+
+**The gates.** `Generated surfaces` compares every file byte-for-byte as it does the other three.
+`Generated Python SDK compiles` hands `generated/sdk-python` to `python -m compileall` and, when
+mypy is installed, `mypy --strict`; `Generated Go SDK compiles` hands `generated/sdk-go` to
+`go vet ./...` and `gofmt -l`. ⚠ **Both report ○ with the reason when their toolchain is off `PATH`,
+never ✔** — issue #73's lesson was a surface nothing consumed shipping green, and a tick on a machine
+with no interpreter is that lesson unlearned. On 2026-09-15 the Python row was ✔ over 231 classes
+under Python 3.13 with mypy absent, and the Go row was ○ because `go` was not installed; `go vet`,
+`gofmt -l` and `mypy --strict` were run over the same bytes in containers by hand, and all three
+were clean.
 
 ## OpenAPI
 

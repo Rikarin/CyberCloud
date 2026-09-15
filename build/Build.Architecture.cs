@@ -168,6 +168,10 @@ partial class Build {
             "OpenAPI/CLI/SDK/forms and the portal's TypeScript client regenerate byte-identically from the registry"),
         ("Generated SDK compiles",
             "every generated/sdk/{api-version}.cs is handed to Roslyn against the real CyberCloud.Sdk — the row above compares bytes, and byte-identical is not valid — and no type in it declares one [JsonPropertyName] twice, which compiles and does not serialise. Issues #73 and #79; not in docs/plan/23"),
+        ("Generated Python SDK compiles",
+            "generated/sdk-python is handed to `python -m compileall`, and to `mypy --strict` when mypy is installed; ○ with the reason when python is not on PATH, never ✔. Issue #40; not in docs/plan/23"),
+        ("Generated Go SDK compiles",
+            "generated/sdk-go is handed to `go vet ./...` and `gofmt -l`; ○ with the reason when go is not on PATH, never ✔. Issue #40; not in docs/plan/23"),
         ("Action handlers",
             "every synchronous declared action names an IResourceActionHandler; a long-running one must not — not in docs/plan/23"),
         ("OpenAPI compatibility", "published api-versions diffed; a breaking change fails"),
@@ -265,8 +269,9 @@ partial class Build {
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
-            + "Generated SDK compiles, Action handlers, Analyzer coverage, Plan citations, Code "
-            + "citations, Bundle and Log egress, which that table does not list",
+            + "Generated SDK compiles, Generated Python SDK compiles, Generated Go SDK compiles, "
+            + "Action handlers, Analyzer coverage, Plan citations, Code citations, Bundle and Log "
+            + "egress, which that table does not list",
             ArchitectureGates.Length
         );
 
@@ -280,6 +285,8 @@ partial class Build {
             GateOutcome.Analyzer("No blocking", "CC1001 and CC1002, wider than the doc's 'grain assemblies'"),
             GeneratedSurfacesGate(),
             GeneratedSdkCompilesGate(),
+            GeneratedPythonSdkCompilesGate(),
+            GeneratedGoSdkCompilesGate(),
             ActionHandlerGate(),
             OpenApiCompatibilityGate(),
             LabelsGate(),
@@ -329,7 +336,7 @@ partial class Build {
             };
 
             Log.Information(
-                "  {Marker} {Gate,-22} {Status,-16} {Detail}",
+                "  {Marker} {Gate,-29} {Status,-16} {Detail}",
                 marker,
                 outcome.Gate,
                 outcome.Status,
@@ -1436,9 +1443,9 @@ partial class Build {
             "Generated surfaces",
             Generation.ResourceTypes,
             $"resource type(s) over {Generation.Documents.Count} OpenAPI document(s), "
-            + $"{Generation.Derived.Count} derived file(s) — the cyc verb tree, the .NET SDK and the "
-            + $"portal forms — and {Generation.TypeScript.Count} file(s) of the portal's TypeScript "
-            + "client, all regenerated and compared byte-for-byte",
+            + $"{Generation.Derived.Count} derived file(s) — the cyc verb tree, the .NET SDK, the "
+            + $"portal forms, and the Python and Go SDKs (#40) — and {Generation.TypeScript.Count} "
+            + "file(s) of the portal's TypeScript client, all regenerated and compared byte-for-byte",
             violations
         );
     }
@@ -1560,6 +1567,231 @@ partial class Build {
             + "accepted as declared-but-not-implemented, which is the hand-written half that does "
             + $"not exist yet (docs/plan/21 § Generation); {compiled.Sum(x => x.WireNames)} "
             + "[JsonPropertyName] member(s) read, none declared twice by one type (issue #79)",
+            violations
+        );
+    }
+
+    // ── Gates: the generated Python and Go SDKs compile — issue #40, not in docs/plan/23 ──────
+
+    /// <summary>Where the Python SDK is checked in — <c>PythonSdkEmitter.DirectoryName</c>.</summary>
+    /// <remarks>⚠ A literal, for <see cref="SdkSurfaceDirectory" />'s reason: <c>build/_build.csproj</c> references nothing under <c>src/</c>.</remarks>
+    const string PythonSdkDirectory = "sdk-python";
+
+    /// <summary>Where the Go SDK is checked in — <c>GoSdkEmitter.DirectoryName</c>.</summary>
+    const string GoSdkDirectory = "sdk-go";
+
+    /// <summary>
+    ///     <c>generated/sdk-python</c> compiles under the interpreter, and type-checks under
+    ///     <c>mypy --strict</c> when mypy is installed. Issue #40.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>○ when <c>python</c> is off <c>PATH</c>, never ✔.</b> The row above this one
+    ///         had to be added because a generated surface nothing consumed shipped four defect
+    ///         families green; a Python package nothing interprets is the same state one language
+    ///         over, and a row that said ✔ on a machine with no interpreter would be that state
+    ///         wearing a tick. The detail names the missing tool so the reader knows what to
+    ///         install.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>mypy is the half that catches what <c>compileall</c> cannot.</b> Byte-compiling
+    ///         proves the syntax; it does not prove that <c>client.py</c> names a class
+    ///         <c>models.py</c> declares, nor that a nested class's <c>from_wire</c> returns the
+    ///         type it says — those are import-time and call-time failures. mypy is optional
+    ///         because it is a package rather than the interpreter, and when it is absent the
+    ///         detail says the types were not checked rather than implying they were.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Reads the checked-in package, not the generator's output</b>, for the same
+    ///         reason the .NET row does: "the package in git does not import" is the sentence the
+    ///         gate exists to say.
+    ///     </para>
+    /// </remarks>
+    GateOutcome GeneratedPythonSdkCompilesGate() {
+        const string Gate = "Generated Python SDK compiles";
+        var root = DerivedSurfacesDirectory / PythonSdkDirectory;
+        var files = GeneratedPackageSurface.FilesOf(root, ".py");
+        var classes = GeneratedPackageSurface.Declarations(files, "class ", indented: true);
+
+        if (files.Count == 0) {
+            return GateOutcome.From(Gate, 0, $"file(s) under generated/{PythonSdkDirectory}, so there was nothing to hand to an interpreter", []);
+        }
+
+        if (GeneratedPackageSurface.Resolve("python", out var absent) is not { } python) {
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"of {files.Count} file(s) under generated/{PythonSdkDirectory} checked — {absent}, so the package was "
+                + "not compiled. Install Python 3.10 or later and run again",
+                []
+            );
+        }
+
+        var violations = new List<string>();
+
+        // ⚠ Bytecode goes under artifacts/, never beside the sources: compileall writes __pycache__
+        // next to every module it compiles, and a gate that littered generated/ would make the
+        // Generated surfaces row report a stale file of its own making on the next run.
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal) {
+            ["PYTHONPYCACHEPREFIX"] = ArtifactsDirectory / "pycache",
+            ["PYTHONDONTWRITEBYTECODE"] = "1"
+        };
+
+        // ⚠ Probed before it is used, because "on PATH" is not "runs": Windows ships a python.exe
+        // that opens the Store and exits 9009, and a gate that fed the package to it would report
+        // a compile failure about a machine with no interpreter.
+        var probe = GeneratedPackageSurface.Run(python, "--version", root, environment);
+
+        if (probe.ExitCode != 0) {
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"of {files.Count} file(s) under generated/{PythonSdkDirectory} checked — `python` is on PATH and "
+                + $"exited {probe.ExitCode} on --version, so it is not an interpreter that can compile the package. "
+                + "Install Python 3.10 or later and run again",
+                []
+            );
+        }
+
+        var version = string.Join(" ", probe.Problems).Trim();
+        var compiled = GeneratedPackageSurface.Run(python, $"-m compileall -q -f {root}", root, environment);
+
+        if (compiled.ExitCode != 0) {
+            violations.AddRange(compiled.Problems.Select(x => $"generated/{PythonSdkDirectory} does not compile — {x}"));
+
+            if (!compiled.Problems.Any()) {
+                violations.Add($"`python -m compileall` over generated/{PythonSdkDirectory} exited {compiled.ExitCode} and said nothing");
+            }
+        }
+
+        if (classes == 0) {
+            violations.Add(
+                $"generated/{PythonSdkDirectory} declares no class at all across {files.Count} file(s), so it "
+                + "compiled clean by having nothing in it. A package with no models is a generator that "
+                + "produced nothing, not an SDK that is correct"
+            );
+        }
+
+        var mypy = GeneratedPackageSurface.Run(python, "-m mypy --version", root, environment);
+        var typed = mypy.ExitCode == 0;
+
+        if (typed) {
+            var checkedTypes = GeneratedPackageSurface.Run(
+                python,
+                $"-m mypy --strict --no-error-summary --cache-dir {ArtifactsDirectory / "mypy-cache"} cybercloud",
+                root,
+                environment
+            );
+
+            if (checkedTypes.ExitCode != 0) {
+                violations.AddRange(checkedTypes.Problems.Select(x => $"generated/{PythonSdkDirectory} does not type-check — {x}"));
+
+                if (!checkedTypes.Problems.Any()) {
+                    violations.Add($"`mypy --strict` over generated/{PythonSdkDirectory} exited {checkedTypes.ExitCode} and said nothing");
+                }
+            }
+        }
+
+        return GateOutcome.From(
+            Gate,
+            files.Count,
+            $"file(s) under generated/{PythonSdkDirectory} declaring {classes} class(es), byte-compiled by "
+            + $"`python -m compileall` ({version})"
+            + (typed
+                ? " and type-checked by `mypy --strict`"
+                : "; ⚠ mypy is not installed, so the types were not checked — `pip install mypy` closes that gap"),
+            violations
+        );
+    }
+
+    /// <summary>
+    ///     <c>generated/sdk-go</c> passes <c>go vet ./...</c> and is what <c>gofmt</c> would write.
+    ///     Issue #40.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>○ when <c>go</c> is off <c>PATH</c>, never ✔</b> — the Python row's reasoning,
+    ///         and the toolchain this machine is more likely to lack. <c>go vet</c> compiles every
+    ///         package in the module on the way to its own checks, so one run answers "does it
+    ///         build" and "is anything obviously wrong" together; <c>gofmt -l</c> answers whether a
+    ///         reader's editor would rewrite a generated file on open, which is how a hand edit
+    ///         starts.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>One module, every api-version at once</b> — the opposite of the .NET row's
+    ///         one-compilation-per-file. Each api-version is its own Go package in its own
+    ///         directory, so two versions declaring the same type names is not a collision, and a
+    ///         module that vets as a whole is the shape a consumer imports.
+    ///     </para>
+    /// </remarks>
+    GateOutcome GeneratedGoSdkCompilesGate() {
+        const string Gate = "Generated Go SDK compiles";
+        var root = DerivedSurfacesDirectory / GoSdkDirectory;
+        var files = GeneratedPackageSurface.FilesOf(root, ".go");
+        var types = GeneratedPackageSurface.Declarations(files, "type ", indented: false);
+
+        if (files.Count == 0) {
+            return GateOutcome.From(Gate, 0, $"file(s) under generated/{GoSdkDirectory}, so there was nothing to hand to a compiler", []);
+        }
+
+        if (GeneratedPackageSurface.Resolve("go", out var absent) is not { } go) {
+            return GateOutcome.From(
+                Gate,
+                0,
+                $"of {files.Count} file(s) under generated/{GoSdkDirectory} checked — {absent}, so the module was "
+                + "not vetted. Install Go 1.22 or later and run again",
+                []
+            );
+        }
+
+        var violations = new List<string>();
+
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal) {
+            ["GOCACHE"] = ArtifactsDirectory / "go-build",
+            ["GOFLAGS"] = "-mod=mod",
+            // ⚠ The module has no dependencies and must not acquire one by accident: a proxy lookup
+            // from a build gate is a network call CI would have to allow.
+            ["GOPROXY"] = "off"
+        };
+
+        var vetted = GeneratedPackageSurface.Run(go, "vet ./...", root, environment);
+
+        if (vetted.ExitCode != 0) {
+            violations.AddRange(vetted.Problems.Select(x => $"generated/{GoSdkDirectory} does not vet — {x}"));
+
+            if (!vetted.Problems.Any()) {
+                violations.Add($"`go vet ./...` over generated/{GoSdkDirectory} exited {vetted.ExitCode} and said nothing");
+            }
+        }
+
+        // gofmt ships beside go and is its own executable; a distribution that put one on PATH and
+        // not the other is reported rather than treated as clean.
+        var gofmt = GeneratedPackageSurface.Resolve("gofmt", out _);
+
+        if (gofmt is not null) {
+            var listed = GeneratedPackageSurface.Run(gofmt, "-l .", root, environment);
+
+            violations.AddRange(
+                listed.Problems.Select(x =>
+                    $"generated/{GoSdkDirectory}/{x.Trim().Replace('\\', '/')} is not what gofmt would write. A reader's editor "
+                    + "reformats it on open, which is how a hand edit starts; fix the emitter's spacing, not the file"
+                )
+            );
+        }
+
+        if (types == 0) {
+            violations.Add(
+                $"generated/{GoSdkDirectory} declares no type at all across {files.Count} file(s), so it vetted "
+                + "clean by having nothing in it. A module with no models is a generator that produced "
+                + "nothing, not an SDK that is correct"
+            );
+        }
+
+        return GateOutcome.From(
+            Gate,
+            files.Count,
+            $"file(s) under generated/{GoSdkDirectory} declaring {types} type(s), vetted by `go vet ./...` as one "
+            + "module" + (gofmt is null ? "; ⚠ gofmt was not found beside go, so formatting was not checked" : " and checked by `gofmt -l`"),
             violations
         );
     }

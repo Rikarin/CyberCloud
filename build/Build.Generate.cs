@@ -355,13 +355,18 @@ partial class Build {
                 "Generate: {Count} document(s) regenerate byte-identically and break nothing published; "
                 + "{Client} TypeScript client file(s) for the portal; {Sdk} .NET SDK api-version "
                 + "file(s) declaring {Types} type(s), each compiled on its own against {Assembly}, "
-                + "with {WireNames} [JsonPropertyName] member(s) and none declared twice by one type",
+                + "with {WireNames} [JsonPropertyName] member(s) and none declared twice by one type; "
+                + "{Python} Python SDK file(s) and {Go} Go SDK file(s) written under {Directory}/ and "
+                + "compared byte-for-byte — issue #40; `Architecture` hands each to its own toolchain",
                 report.Documents.Count,
                 report.TypeScript.Count,
                 compiledSdk.Count,
                 compiledSdk.Sum(x => x.Types),
                 SdkAssemblyName,
-                compiledSdk.Sum(x => x.WireNames)
+                compiledSdk.Sum(x => x.WireNames),
+                report.Derived.Count(x => x.Surface == PythonSdkDirectory),
+                report.Derived.Count(x => x.Surface == GoSdkDirectory),
+                DerivedSurfacesDirectory.Name
             );
 
             // ⚠ Zero files is news rather than silence, the same distinction Build.Charts.cs draws:

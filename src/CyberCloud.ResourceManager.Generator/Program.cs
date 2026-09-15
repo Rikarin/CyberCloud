@@ -134,11 +134,12 @@ static class Program {
             Console.WriteLine(
                 derived is { Length: > 0 }
                     ? "Four of ADR-012's five surfaces: the OpenAPI document, the cyc verb tree, the "
-                    + ".NET SDK and the portal forms. The last three are generated from the first — "
-                    + "docs/plan/21 § Generation. ⚠ The Python and Go SDKs and the Terraform "
-                    + "provider are docs/plan/21 § Other SDKs and are not written."
-                    : "OpenAPI only: no --derived-output was given, so the cyc verb tree, the .NET SDK "
-                    + "and the portal forms were not written."
+                    + ".NET SDK and the portal forms, and beside them the Python and Go SDKs (#40). "
+                    + "Everything after the first is generated from the first — docs/plan/21 "
+                    + "§ Generation. ⚠ The Terraform provider is docs/plan/21 § Other SDKs and is "
+                    + "not written."
+                    : "OpenAPI only: no --derived-output was given, so the cyc verb tree, the .NET SDK, "
+                    + "the portal forms and the Python and Go SDKs were not written."
             );
 
             Console.WriteLine(

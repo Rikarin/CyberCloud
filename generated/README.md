@@ -1,4 +1,4 @@
-# `generated/` — ADR-012's other three surfaces
+# `generated/` — ADR-012's other three surfaces, and the Python and Go SDKs beside them
 
 Everything in this directory is **generated and checked in**. Do not edit it. `./build.sh Generate`
 overwrites it, and `./build.sh Architecture` fails on any difference between what is here and what the
@@ -7,13 +7,41 @@ generator produces.
 ⚠ That comparison is **byte-for-byte, which proves the emitter is deterministic and proves nothing
 about whether the output is valid**. For `sdk/` there is a second gate that does — `Generated SDK
 compiles`, issue #73 — and the "What is not here" section below says why it is a Roslyn compilation
-in the build rather than a `.csproj`.
+in the build rather than a `.csproj`. For `sdk-python/` and `sdk-go/` there is one each —
+`Generated Python SDK compiles` and `Generated Go SDK compiles`, issue #40 — and § The two packages
+below says what each runs and what it reports when its toolchain is not installed.
 
 | Directory | Surface | Consumed by |
 |---|---|---|
 | `cli/{api-version}.json` | The `cyc` verb tree — groups, commands, verbs, flags, aliases, exit codes | The hand-written `cyc` host ([21](../docs/plan/21-cli-and-sdks.md) § `cyc` — the CLI) |
 | `sdk/{api-version}.cs` | `{Type}Data` / `{Type}Resource` / `{Type}Collection` and the `Operation<T>` signatures | The hand-written half of the .NET SDK ([21](../docs/plan/21-cli-and-sdks.md) § Generation) |
 | `forms/{api-version}.json` | Portal form schemas — one field per property, with its xUI control | `libs/resource-forms`' schema-renderer ([20](../docs/plan/20-portal.md)) |
+| `sdk-python/cybercloud/v{api_version}/` | A Python package per api-version — dataclass models nested as the wire is, one client per resource type under its provider, `begin_*` pollers, a `$skipToken` pager, the one error shape, and a standard-library transport | Nobody in this repository yet; `pyproject.toml` at the root is what `pip install` would read ([21](../docs/plan/21-cli-and-sdks.md) § Other SDKs) |
+| `sdk-go/api{apiversion}/` | A Go package per api-version — the same shapes, one module (`go.mod` at the root) so `go vet ./...` covers every version at once | Nobody yet; the Terraform provider is the intended first consumer ([21](../docs/plan/21-cli-and-sdks.md) § Other SDKs) |
+
+## The two packages
+
+Both read the **published OpenAPI document**, exactly as the three above do — issue #40's one
+non-mechanical decision, and the same one issue #21 made for the TypeScript client. An emitter that
+read the registry would describe a member the published contract does not have, with no gate to
+notice, because the compatibility diff runs over the document and nothing else.
+
+Each is several files per api-version rather than one, and each file is its own row in the
+`Generated surfaces` comparison, so a drift anywhere names the file. A few files are written once
+for every api-version — `pyproject.toml`, `cybercloud/__init__.py`, `cybercloud/py.typed`,
+`go.mod` — and are attributed to the newest.
+
+⚠ **Neither toolchain is a build prerequisite, and neither gate pretends otherwise.** `Generated
+Python SDK compiles` hands the package to `python -m compileall` and, when mypy is installed, to
+`mypy --strict`; `Generated Go SDK compiles` hands the module to `go vet ./...` and `gofmt -l`. On a
+machine without `python` or `go` on `PATH` the row is **○ Vacuous with the reason in its detail**,
+never ✔ — the lesson of issue #73 was a surface nothing consumed shipping green, and a tick on a
+machine with no interpreter would be that lesson unlearned. Every cache the tools write goes under
+`artifacts/`, so a gate run never leaves a stale file for the row above it to find.
+
+⚠ **What the gate cannot see when mypy is absent.** `compileall` proves syntax. It does not prove
+that `client.py` names a class `models.py` declares, nor that a nested class's `from_wire` returns the
+type it says — those fail at import and at call time. The row's detail says which half ran.
 
 ## Why these are generated *from the OpenAPI document* and not from the registry
 
@@ -23,7 +51,7 @@ on `openapi/` (a breaking change to a published api-version fails CI) therefore 
 surfaces at once. A CLI generated straight from the registry could describe a flag the published
 contract does not have, and no gate would notice.
 
-The corollary: **these three are not diffed for compatibility.** They are a function of a document that
+The corollary: **none of these is diffed for compatibility.** They are a function of a document that
 already was.
 
 ## Why checked in rather than under `artifacts/`
@@ -77,5 +105,9 @@ makes the gateway serve `openapi/` as files. Nothing here is served to anyone.
   it by reading the head of every file *there*. Writing it here and copying it across would make that
   gate inspect a copy, and the copy step would be the one part of the chain nothing checked. The
   `Generated surfaces` gate compares it byte-for-byte alongside the three above.
-- **Python, Go and the Terraform provider.**
-  [21](../docs/plan/21-cli-and-sdks.md) § Other SDKs schedules them for M1–M3.
+- **The Python and Go SDKs' hand-written halves, and the Terraform provider.** The two packages
+  above carry a transport over each language's standard library and a callable that returns a
+  bearer token, and nothing more: no credential types, no retry with `Retry-After` on a `429`, no
+  keychain, and no published package — docs/plan/21 § The .NET SDK's hand-written half, owed here
+  in the same way. [21](../docs/plan/21-cli-and-sdks.md) § Other SDKs records that, and schedules
+  the Terraform provider for M3.
