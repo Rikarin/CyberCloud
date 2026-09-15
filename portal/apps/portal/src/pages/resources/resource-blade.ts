@@ -34,8 +34,9 @@ interface PropertyRow {
  * docs/plan/20 § Information architecture names the left rail — Overview · Activity · Access ·
  * Tags · Locks · Metrics · Logs · Diagnose · Settings — and this is the Overview, with Tags and
  * the Settings entry point (Edit) on it. Activity is `OperationView`, reached from a create or a
- * delete; the rest wait on endpoints that do not exist yet (metrics on docs/plan/16, access on
- * issue #70) and are not stubbed here, because a rail item that opens an empty pane is worse
+ * delete; Access is `AccessBlade` at `…/{name}/access`, over the role-assignment address issue
+ * #70 gave every resource; the rest wait on endpoints that do not exist yet (metrics on
+ * docs/plan/16) and are not stubbed here, because a rail item that opens an empty pane is worse
  * than no rail item.
  *
  * ⚠ **The body is shown as served, and the served body is wrong today.** Issue #72: the gateway
@@ -74,6 +75,9 @@ interface PropertyRow {
         </div>
         @if (resource(); as resource) {
           <div class="flex gap-2">
+            <a xuiButton variant="outline" size="sm" [routerLink]="accessLink()" i18n="@@resourceBlade.access"
+              >Access</a
+            >
             <a xuiButton variant="outline" size="sm" [routerLink]="editLink()" i18n="@@resourceBlade.edit">Edit</a>
             <button
               xuiButton
@@ -256,6 +260,10 @@ export class ResourceBlade {
   protected readonly editLink = computed(() => {
     const address = this.address();
     return address === null ? this.groupLink() : links.edit(address, this.resourceType());
+  });
+  protected readonly accessLink = computed(() => {
+    const address = this.address();
+    return address === null ? this.groupLink() : links.resourceAccess(address, this.resourceType());
   });
 
   protected readonly tagEntries = computed(() => Object.entries(this.resource()?.tags ?? {}));

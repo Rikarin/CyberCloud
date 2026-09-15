@@ -67,6 +67,17 @@ export const links = {
 
   edit: (address: ResourceAddress, resourceType: string) => `${links.resource(address, resourceType)}/edit`,
 
+  /**
+   * The access page — the "Access (ReBAC)" rail item of docs/plan/20 § Information architecture —
+   * on each of the three scopes the portal has a blade for. `/access` is a literal suffix like
+   * `/edit`, so a resource named `access` is still `…/{type}/access` and its access page is
+   * `…/{type}/access/access`.
+   */
+  subscriptionAccess: (subscriptionId: string) => `${links.subscription(subscriptionId)}/access`,
+  resourceGroupAccess: (subscriptionId: string, resourceGroup: string) =>
+    `${links.resourceGroup(subscriptionId, resourceGroup)}/access`,
+  resourceAccess: (address: ResourceAddress, resourceType: string) => `${links.resource(address, resourceType)}/access`,
+
   /** The operation view, and where to go once it succeeds. */
   operation: (operationId: string, then?: string) =>
     `/operations/${seg(operationId)}` + (then === undefined ? '' : `?then=${seg(then)}`)

@@ -88,13 +88,15 @@ section — so a `PUT` naming a user this tenant does not have is a `400`, not a
 
 ⚠ **The role assignment API is not in the generated document, and that is #63's question asked a
 third time.** The reserved namespace is exactly what keeps it out of the registry the emitters read,
-and the scope extension #63 added carries a scope, not an address *on* one. So `cyc`, the SDK and the
-portal are silent about it, as they were about scopes before #63, and a tenant grants a role today by
-hand. The fix has the same shape as #63's — a third non-registry source, emitted for every scope path
-and every resource path as a sub-path, the collection and the item both — and it is owed rather than
-done because it touches all five surfaces at once. #86 added the collection and changed nothing here:
-the portal's role-assignments page can now read what is assigned, through a client it still has to
-write by hand.
+and the scope extension #63 added carries a scope, not an address *on* one. So `cyc` and the SDK are
+silent about it, as they were about scopes before #63, and a tenant grants a role from `cyc` today by
+hand. The portal is the exception, and it is a hand-written one: `RoleAssignmentsApi`
+(`portal/apps/portal/src/app/api/role-assignments.ts`) builds the address and the derived name and
+sends them through the same transport as the generated client, so the access page (#22) grants,
+checks and revokes without waiting on the emitter — and is the one page a regeneration cannot move.
+#86 added the collection and changed nothing here. The fix has the same shape as #63's — a third non-registry source, emitted for every scope path and
+every resource path as a sub-path — and it is owed rather than done because it touches all five
+surfaces at once; when it lands, the portal's three methods become delegations.
 
 ## Request pipeline
 

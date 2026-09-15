@@ -1,9 +1,425 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <xliff version="2.0" xmlns="urn:oasis:names:tc:xliff:document:2.0" srcLang="en-US">
   <file id="ngi18n" original="ng.template">
+    <unit id="api.unreachable">
+      <notes>
+        <note category="location">apps/portal/src/app/api/http-transport.ts:125</note>
+      </notes>
+      <segment>
+        <source>The platform could not be reached.</source>
+      </segment>
+    </unit>
+    <unit id="api.unexpected">
+      <notes>
+        <note category="location">apps/portal/src/app/api/http-transport.ts:126</note>
+      </notes>
+      <segment>
+        <source>The platform answered <ph id="0" equiv="status" disp="failure.status"/> without an error body.</source>
+      </segment>
+    </unit>
+    <unit id="access.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:91,92</note>
+      </notes>
+      <segment>
+        <source>Access control</source>
+      </segment>
+    </unit>
+    <unit id="access.assignHeading">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:100,102</note>
+      </notes>
+      <segment>
+        <source>Assign a role</source>
+      </segment>
+    </unit>
+    <unit id="access.role">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:104,105</note>
+      </notes>
+      <segment>
+        <source>Role</source>
+      </segment>
+    </unit>
+    <unit id="access.principalType">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:126,128</note>
+      </notes>
+      <segment>
+        <source>Principal type</source>
+      </segment>
+    </unit>
+    <unit id="access.principalId">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:141,142</note>
+      </notes>
+      <segment>
+        <source>Principal id</source>
+      </segment>
+    </unit>
+    <unit id="access.principalIdHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:164,166</note>
+      </notes>
+      <segment>
+        <source> The directory&apos;s id for the principal — the 32-digit lowercase form of a GUID, or a name of 1–63 lowercase letters, digits and hyphens. It is not checked against the directory yet. </source>
+      </segment>
+    </unit>
+    <unit id="access.derivedName">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:172,173</note>
+      </notes>
+      <segment>
+        <source>Assignment name</source>
+      </segment>
+    </unit>
+    <unit id="access.derivedNameHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:179,181</note>
+      </notes>
+      <segment>
+        <source> Derived from the three choices — the name is the assignment, so granting it twice is one grant. </source>
+      </segment>
+    </unit>
+    <unit id="access.assign">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:193,194</note>
+      </notes>
+      <segment>
+        <source> Assign role </source>
+      </segment>
+    </unit>
+    <unit id="access.check">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:205,206</note>
+      </notes>
+      <segment>
+        <source> Check </source>
+      </segment>
+    </unit>
+    <unit id="access.outcome.granted">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:220,221</note>
+      </notes>
+      <segment>
+        <source><pc id="0" equivStart="START_TAG_CODE" equivEnd="CLOSE_TAG_CODE" type="other" dispStart="&lt;code&gt;" dispEnd="&lt;/code&gt;"><ph id="1" equiv="INTERPOLATION" disp="{{ outcome.name }}"/></pc> is granted at this scope. </source>
+      </segment>
+    </unit>
+    <unit id="access.outcome.repeated">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:225,227</note>
+      </notes>
+      <segment>
+        <source><pc id="0" equivStart="START_TAG_CODE" equivEnd="CLOSE_TAG_CODE" type="other" dispStart="&lt;code&gt;" dispEnd="&lt;/code&gt;"><ph id="1" equiv="INTERPOLATION" disp="{{ outcome.name }}"/></pc> was already granted here. Nothing changed — a repeated grant is the same assignment. </source>
+      </segment>
+    </unit>
+    <unit id="access.outcome.assigned">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:231,232</note>
+      </notes>
+      <segment>
+        <source><pc id="0" equivStart="START_TAG_CODE" equivEnd="CLOSE_TAG_CODE" type="other" dispStart="&lt;code&gt;" dispEnd="&lt;/code&gt;"><ph id="1" equiv="INTERPOLATION" disp="{{ outcome.name }}"/></pc> is assigned at this scope. </source>
+      </segment>
+    </unit>
+    <unit id="access.outcome.absent">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:236,238</note>
+      </notes>
+      <segment>
+        <source><pc id="0" equivStart="START_TAG_CODE" equivEnd="CLOSE_TAG_CODE" type="other" dispStart="&lt;code&gt;" dispEnd="&lt;/code&gt;"><ph id="1" equiv="INTERPOLATION" disp="{{ outcome.name }}"/></pc> is not assigned at this scope, or is not yours to see: the platform answers the two the same way. </source>
+      </segment>
+    </unit>
+    <unit id="access.outcome.revoked">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:242,243</note>
+      </notes>
+      <segment>
+        <source><pc id="0" equivStart="START_TAG_CODE" equivEnd="CLOSE_TAG_CODE" type="other" dispStart="&lt;code&gt;" dispEnd="&lt;/code&gt;"><ph id="1" equiv="INTERPOLATION" disp="{{ outcome.name }}"/></pc> is revoked at this scope. </source>
+      </segment>
+    </unit>
+    <unit id="access.knownHeading">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:254,256</note>
+      </notes>
+      <segment>
+        <source>Assignments</source>
+      </segment>
+    </unit>
+    <unit id="access.knownNote">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:260,262</note>
+      </notes>
+      <segment>
+        <source> Only what this page has granted or checked. The platform cannot enumerate a scope&apos;s assignments yet (issue #86), so an assignment made elsewhere is not shown here until it is checked. </source>
+      </segment>
+    </unit>
+    <unit id="access.col.role">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:265,266</note>
+      </notes>
+      <segment>
+        <source>Role</source>
+      </segment>
+    </unit>
+    <unit id="access.col.principalType">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:266,267</note>
+      </notes>
+      <segment>
+        <source>Principal type</source>
+      </segment>
+    </unit>
+    <unit id="access.col.principalId">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:267,268</note>
+      </notes>
+      <segment>
+        <source>Principal id</source>
+      </segment>
+    </unit>
+    <unit id="access.col.actions">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:269,270</note>
+      </notes>
+      <segment>
+        <source><pc id="0" equivStart="START_TAG_SPAN" equivEnd="CLOSE_TAG_SPAN" type="other" dispStart="&lt;span class=&quot;sr-only&quot;&gt;" dispEnd="&lt;/span&gt;">Actions</pc></source>
+      </segment>
+    </unit>
+    <unit id="access.removeAsk">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:282,283</note>
+      </notes>
+      <segment>
+        <source>Revoke this role?</source>
+      </segment>
+    </unit>
+    <unit id="access.removeConfirm">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:293,294</note>
+      </notes>
+      <segment>
+        <source> Revoke </source>
+      </segment>
+    </unit>
+    <unit id="access.removeCancel">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:303,304</note>
+      </notes>
+      <segment>
+        <source> Keep it </source>
+      </segment>
+    </unit>
+    <unit id="access.remove">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:318,319</note>
+      </notes>
+      <segment>
+        <source> Remove </source>
+      </segment>
+    </unit>
+    <unit id="access.scope.resource">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:398</note>
+      </notes>
+      <segment>
+        <source>Resource</source>
+      </segment>
+    </unit>
+    <unit id="access.scope.resourceGroup">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:400</note>
+      </notes>
+      <segment>
+        <source>Resource group</source>
+      </segment>
+    </unit>
+    <unit id="access.scope.subscription">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:402</note>
+      </notes>
+      <segment>
+        <source>Subscription</source>
+      </segment>
+    </unit>
+    <unit id="access.principalIdRequired">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:426</note>
+      </notes>
+      <segment>
+        <source>A principal id is required.</source>
+      </segment>
+    </unit>
+    <unit id="access.principalIdInvalid">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:428</note>
+      </notes>
+      <segment>
+        <source>Use 1–63 lowercase letters, digits and hyphens, starting and ending with a letter or digit.</source>
+      </segment>
+    </unit>
+    <unit id="access.emptyTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:445</note>
+      </notes>
+      <segment>
+        <source>No list endpoint yet</source>
+      </segment>
+    </unit>
+    <unit id="access.emptyDescription">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:446</note>
+      </notes>
+      <segment>
+        <source>The API can grant, read and revoke one assignment by name, and cannot yet enumerate what is assigned at a scope — that is issue #86. Assign a role above, or check one to see whether it is granted; either appears here.</source>
+      </segment>
+    </unit>
+    <unit id="access.outcomeTitle.granted">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:464</note>
+      </notes>
+      <segment>
+        <source>Granted</source>
+      </segment>
+    </unit>
+    <unit id="access.outcomeTitle.repeated">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:466</note>
+      </notes>
+      <segment>
+        <source>Already granted</source>
+      </segment>
+    </unit>
+    <unit id="access.outcomeTitle.assigned">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:468</note>
+      </notes>
+      <segment>
+        <source>Assigned</source>
+      </segment>
+    </unit>
+    <unit id="access.outcomeTitle.absent">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:470</note>
+      </notes>
+      <segment>
+        <source>Not assigned</source>
+      </segment>
+    </unit>
+    <unit id="access.outcomeTitle.revoked">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:472</note>
+      </notes>
+      <segment>
+        <source>Revoked</source>
+      </segment>
+    </unit>
+    <unit id="access.outcomeTitle.failed">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:474</note>
+      </notes>
+      <segment>
+        <source>The platform refused the request</source>
+      </segment>
+    </unit>
+    <unit id="access.blade">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:490</note>
+      </notes>
+      <segment>
+        <source>Access</source>
+      </segment>
+    </unit>
+    <unit id="access.role.owner">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:545</note>
+      </notes>
+      <segment>
+        <source>Owner</source>
+      </segment>
+    </unit>
+    <unit id="access.role.contributor">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:547</note>
+      </notes>
+      <segment>
+        <source>Contributor</source>
+      </segment>
+    </unit>
+    <unit id="access.role.reader">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:549</note>
+      </notes>
+      <segment>
+        <source>Reader</source>
+      </segment>
+    </unit>
+    <unit id="access.removeLabel">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:554</note>
+      </notes>
+      <segment>
+        <source>Remove <ph id="0" equiv="name" disp="item.rendered"/></source>
+      </segment>
+    </unit>
+    <unit id="access.role.ownerHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:656</note>
+      </notes>
+      <segment>
+        <source>Read, write, delete, and assign roles. The only role that can delete or purge.</source>
+      </segment>
+    </unit>
+    <unit id="access.role.contributorHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:658</note>
+      </notes>
+      <segment>
+        <source>Read and write, and deliberately not delete — narrower than Azure&apos;s Contributor.</source>
+      </segment>
+    </unit>
+    <unit id="access.role.readerHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:660</note>
+      </notes>
+      <segment>
+        <source>Read only.</source>
+      </segment>
+    </unit>
+    <unit id="access.principalType.user">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:667</note>
+      </notes>
+      <segment>
+        <source>User</source>
+      </segment>
+    </unit>
+    <unit id="access.principalType.servicePrincipal">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:669</note>
+      </notes>
+      <segment>
+        <source>Service principal</source>
+      </segment>
+    </unit>
+    <unit id="access.principalType.managedIdentity">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:671</note>
+      </notes>
+      <segment>
+        <source>Managed identity</source>
+      </segment>
+    </unit>
+    <unit id="access.principalType.group">
+      <notes>
+        <note category="location">apps/portal/src/pages/access/access-blade.ts:673</note>
+      </notes>
+      <segment>
+        <source>Group</source>
+      </segment>
+    </unit>
     <unit id="home.heading">
       <notes>
-        <note category="location">apps/portal/src/pages/home/home.ts:16,17</note>
+        <note category="location">apps/portal/src/pages/home/home.ts:20,21</note>
       </notes>
       <segment>
         <source>Home</source>
@@ -11,10 +427,18 @@
     </unit>
     <unit id="home.body">
       <notes>
-        <note category="location">apps/portal/src/pages/home/home.ts:18,22</note>
+        <note category="location">apps/portal/src/pages/home/home.ts:22,24</note>
       </notes>
       <segment>
         <source> The dashboard is a bespoke page and is not part of the M1 shell. Press Ctrl+K to search. </source>
+      </segment>
+    </unit>
+    <unit id="home.subscriptions">
+      <notes>
+        <note category="location">apps/portal/src/pages/home/home.ts:25,29</note>
+      </notes>
+      <segment>
+        <source>Subscriptions</source>
       </segment>
     </unit>
     <unit id="notFound.heading">
@@ -33,33 +457,1169 @@
         <source> That page does not exist. Press Ctrl+K to search for a resource. </source>
       </segment>
     </unit>
-    <unit id="resourceBlade.pending">
+    <unit id="operation.heading">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:29,33</note>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:68,69</note>
       </notes>
       <segment>
-        <source> The generated form renderer is not part of the M1 shell. </source>
+        <source>Operation</source>
+      </segment>
+    </unit>
+    <unit id="operation.polling">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:76,78</note>
+      </notes>
+      <segment>
+        <source>Polling…</source>
+      </segment>
+    </unit>
+    <unit id="operation.canceledBody">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:92,94</note>
+      </notes>
+      <segment>
+        <source> Cancellation completes rather than abandons: everything already applied has been removed. </source>
+      </segment>
+    </unit>
+    <unit id="operation.noSteps">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:115,118</note>
+      </notes>
+      <segment>
+        <source>No steps reported yet.</source>
+      </segment>
+    </unit>
+    <unit id="operation.open">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:119,121</note>
+      </notes>
+      <segment>
+        <source>Open the resource</source>
+      </segment>
+    </unit>
+    <unit id="operation.progressLabel">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:161</note>
+      </notes>
+      <segment>
+        <source>Operation progress</source>
+      </segment>
+    </unit>
+    <unit id="operation.canceled">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:162</note>
+      </notes>
+      <segment>
+        <source>Canceled</source>
+      </segment>
+    </unit>
+    <unit id="operation.blade">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:178</note>
+      </notes>
+      <segment>
+        <source>Operation</source>
+      </segment>
+    </unit>
+    <unit id="operation.trayTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:244</note>
+      </notes>
+      <segment>
+        <source>Operation <ph id="0" equiv="id" disp="this.operationId().slice(0, 8)"/></source>
+      </segment>
+    </unit>
+    <unit id="operation.trayTitleFor">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:245</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="name" disp="decodeURIComponent(target.split(&apos;/&apos;).at(-1) ?? &apos;&apos;)"/></source>
+      </segment>
+    </unit>
+    <unit id="operation.status.notStarted">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:264</note>
+      </notes>
+      <segment>
+        <source>Not started</source>
+      </segment>
+    </unit>
+    <unit id="operation.status.running">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:266</note>
+      </notes>
+      <segment>
+        <source>Running</source>
+      </segment>
+    </unit>
+    <unit id="operation.status.succeeded">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:268</note>
+      </notes>
+      <segment>
+        <source>Succeeded</source>
+      </segment>
+    </unit>
+    <unit id="operation.status.failed">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:270</note>
+      </notes>
+      <segment>
+        <source>Failed</source>
+      </segment>
+    </unit>
+    <unit id="operation.status.canceled">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:272</note>
+      </notes>
+      <segment>
+        <source>Canceled</source>
+      </segment>
+    </unit>
+    <unit id="operation.failedTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/operations/operation-view.ts:277</note>
+      </notes>
+      <segment>
+        <source>Failed (<ph id="0" equiv="code" disp="code"/>)</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.access">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:77,79</note>
+      </notes>
+      <segment>
+        <source>Access</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.edit">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:80,81</note>
+      </notes>
+      <segment>
+        <source>Edit</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.delete">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:89,90</note>
+      </notes>
+      <segment>
+        <source> Delete </source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.tags">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:116,117</note>
+      </notes>
+      <segment>
+        <source>Tags</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.noTags">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:118,120</note>
+      </notes>
+      <segment>
+        <source>No tags.</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.properties">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:129,130</note>
+      </notes>
+      <segment>
+        <source>Properties</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.noProperties">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:132,134</note>
+      </notes>
+      <segment>
+        <source> The body carries no properties the schema names. </source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.raw">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:148,149</note>
+      </notes>
+      <segment>
+        <source>Raw body</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.deleteBodyRecoverable">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:156,158</note>
+      </notes>
+      <segment>
+        <source> The resource can be restored for <ph id="0" equiv="INTERPOLATION" disp="{{ softDeleteDays() }}"/> days, and is purged after that. Type the resource name to confirm. </source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.deleteBody">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:161,163</note>
+      </notes>
+      <segment>
+        <source> This is permanent: the type declares no soft-delete window. Type the resource name to confirm. </source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.deleteConfirmLabel">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:168,171</note>
+      </notes>
+      <segment>
+        <source>Resource name</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.deleteConfirm">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:189,191</note>
+      </notes>
+      <segment>
+        <source> Delete </source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.deleteCancel">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:199,201</note>
+      </notes>
+      <segment>
+        <source> Keep it </source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.overview">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:308</note>
+      </notes>
+      <segment>
+        <source>Overview</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.deleteTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:309</note>
+      </notes>
+      <segment>
+        <source>Delete this resource?</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.state">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:311</note>
+      </notes>
+      <segment>
+        <source>Provisioning state</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.location">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:312</note>
+      </notes>
+      <segment>
+        <source>Location</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.resourceGroup">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:313</note>
+      </notes>
+      <segment>
+        <source>Resource group</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.etag">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:314</note>
+      </notes>
+      <segment>
+        <source>ETag</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.id">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:315</note>
+      </notes>
+      <segment>
+        <source>Id</source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.unknownType">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:338</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="type" disp="resourceType"/> is not a resource type at api-version <ph id="1" equiv="version" disp="apiVersion"/>.</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.name">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:85,86</note>
+      </notes>
+      <segment>
+        <source>Name</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.nameHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:100,102</note>
+      </notes>
+      <segment>
+        <source> 1–63 lowercase letters, digits and hyphens, starting and ending with a letter or digit. It cannot change later. </source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.parentHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:114,116</note>
+      </notes>
+      <segment>
+        <source> The existing parent this one is created under. </source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.cancel">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:127,129</note>
+      </notes>
+      <segment>
+        <source>Cancel</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.refused">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:162</note>
+      </notes>
+      <segment>
+        <source>The platform refused the create</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.submit">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:163</note>
+      </notes>
+      <segment>
+        <source>Create</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.headingPending">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:176</note>
+      </notes>
+      <segment>
+        <source>Create</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:177</note>
+      </notes>
+      <segment>
+        <source>Create <ph id="0" equiv="type" disp="schema.title"/></source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.blade">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:203</note>
+      </notes>
+      <segment>
+        <source>Create</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.unknownType">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:213</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="type" disp="resourceType"/> is not a resource type at api-version <ph id="1" equiv="version" disp="apiVersion"/>.</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.parent">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:226</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="segment" disp="segment"/> name</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.nameRequired">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:234</note>
+      </notes>
+      <segment>
+        <source>A name is required.</source>
+      </segment>
+    </unit>
+    <unit id="resourceCreate.nameInvalid">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-create.ts:235</note>
+      </notes>
+      <segment>
+        <source>Use 1–63 lowercase letters, digits and hyphens, starting and ending with a letter or digit.</source>
+      </segment>
+    </unit>
+    <unit id="resourceEdit.cancel">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-edit.ts:71,73</note>
+      </notes>
+      <segment>
+        <source>Cancel</source>
+      </segment>
+    </unit>
+    <unit id="resourceEdit.refused">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-edit.ts:120</note>
+      </notes>
+      <segment>
+        <source>The platform refused the change</source>
+      </segment>
+    </unit>
+    <unit id="resourceEdit.submit">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-edit.ts:121</note>
+      </notes>
+      <segment>
+        <source>Save</source>
+      </segment>
+    </unit>
+    <unit id="resourceEdit.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-edit.ts:123</note>
+      </notes>
+      <segment>
+        <source>Edit <ph id="0" equiv="name" disp="this.name()"/></source>
+      </segment>
+    </unit>
+    <unit id="resourceEdit.blade">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-edit.ts:144</note>
+      </notes>
+      <segment>
+        <source>Edit</source>
+      </segment>
+    </unit>
+    <unit id="resourceEdit.unknownType">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-edit.ts:155</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="type" disp="resourceType"/> is not a resource type at api-version <ph id="1" equiv="version" disp="apiVersion"/>.</source>
       </segment>
     </unit>
     <unit id="resources.heading">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:21,23</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:55,56</note>
       </notes>
       <segment>
         <source>Resources</source>
       </segment>
     </unit>
-    <unit id="resources.noSubscription">
+    <unit id="resources.typeLabel">
       <notes>
-        <note category="location">apps/portal/src/pages/resources/resource-list.ts:27,32</note>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:64,66</note>
       </notes>
       <segment>
-        <source> Select a subscription to list resources. </source>
+        <source>Resource type</source>
+      </segment>
+    </unit>
+    <unit id="resources.col.name">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:94,95</note>
+      </notes>
+      <segment>
+        <source>Name</source>
+      </segment>
+    </unit>
+    <unit id="resources.col.state">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:95,96</note>
+      </notes>
+      <segment>
+        <source>Provisioning state</source>
+      </segment>
+    </unit>
+    <unit id="resources.col.location">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:96,97</note>
+      </notes>
+      <segment>
+        <source>Location</source>
+      </segment>
+    </unit>
+    <unit id="resources.col.tags">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:97,98</note>
+      </notes>
+      <segment>
+        <source>Tags</source>
+      </segment>
+    </unit>
+    <unit id="resources.more">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:122,123</note>
+      </notes>
+      <segment>
+        <source> Load more </source>
+      </segment>
+    </unit>
+    <unit id="resources.end">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:125,127</note>
+      </notes>
+      <segment>
+        <source>No further pages.</source>
+      </segment>
+    </unit>
+    <unit id="resources.typePlaceholder">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:160</note>
+      </notes>
+      <segment>
+        <source>Choose a type</source>
+      </segment>
+    </unit>
+    <unit id="resources.pickTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:161</note>
+      </notes>
+      <segment>
+        <source>Choose a resource type</source>
+      </segment>
+    </unit>
+    <unit id="resources.pickDescription">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:162</note>
+      </notes>
+      <segment>
+        <source>The API lists one type per resource group at a time. Pick one to list its resources here.</source>
+      </segment>
+    </unit>
+    <unit id="resources.emptyDescription">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:163</note>
+      </notes>
+      <segment>
+        <source>Nothing of this type is visible to you in this resource group.</source>
+      </segment>
+    </unit>
+    <unit id="resources.blade">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:183</note>
+      </notes>
+      <segment>
+        <source>Resources</source>
+      </segment>
+    </unit>
+    <unit id="resources.unknownType">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:196</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="type" disp="type"/> is not a resource type at api-version <ph id="1" equiv="version" disp="apiVersion"/>.</source>
+      </segment>
+    </unit>
+    <unit id="resources.create">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:272</note>
+      </notes>
+      <segment>
+        <source>Create <ph id="0" equiv="type" disp="form.title"/></source>
+      </segment>
+    </unit>
+    <unit id="resources.emptyTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:276</note>
+      </notes>
+      <segment>
+        <source>No <ph id="0" equiv="plural" disp="form.plural"/> here</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.subheading">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:38,39</note>
+      </notes>
+      <segment>
+        <source>Resource group in</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.access">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:44,46</note>
+      </notes>
+      <segment>
+        <source>Access</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.list">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:47,50</note>
+      </notes>
+      <segment>
+        <source>Resources</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.create">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:63,64</note>
+      </notes>
+      <segment>
+        <source>Create in this group</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.createOne">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:84,86</note>
+      </notes>
+      <segment>
+        <source> Create </source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.overview">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:116</note>
+      </notes>
+      <segment>
+        <source>Overview</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.location">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:118</note>
+      </notes>
+      <segment>
+        <source>Default region</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.type">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:119</note>
+      </notes>
+      <segment>
+        <source>Type</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.id">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:120</note>
+      </notes>
+      <segment>
+        <source>Id</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroupBlade.createLabel">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-group-blade.ts:153</note>
+      </notes>
+      <segment>
+        <source>Create <ph id="0" equiv="type" disp="type.title"/></source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:64,65</note>
+      </notes>
+      <segment>
+        <source>Resource groups</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.new">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:77,79</note>
+      </notes>
+      <segment>
+        <source> New resource group </source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.createHeading">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:84,86</note>
+      </notes>
+      <segment>
+        <source> Create a resource group </source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.name">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:97,98</note>
+      </notes>
+      <segment>
+        <source>Name</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.nameHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:112,113</note>
+      </notes>
+      <segment>
+        <source> 1–63 lowercase letters, digits and hyphens. It is the group&apos;s address and cannot change. </source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.cancel">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:132,133</note>
+      </notes>
+      <segment>
+        <source> Cancel </source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.openLabel">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:141,142</note>
+      </notes>
+      <segment>
+        <source>Open by name</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.open">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:145,147</note>
+      </notes>
+      <segment>
+        <source> Open </source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.refused">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:182</note>
+      </notes>
+      <segment>
+        <source>The platform refused the create</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.submit">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:183</note>
+      </notes>
+      <segment>
+        <source>Create resource group</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.emptyTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:184</note>
+      </notes>
+      <segment>
+        <source>No list endpoint yet</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.emptyDescription">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:185</note>
+      </notes>
+      <segment>
+        <source>The API can create a resource group and read one by name, and cannot yet enumerate a subscription&apos;s groups. Open one by name above.</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.blade">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:194</note>
+      </notes>
+      <segment>
+        <source>Resource groups</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.nameRequired">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:211</note>
+      </notes>
+      <segment>
+        <source>A name is required.</source>
+      </segment>
+    </unit>
+    <unit id="resourceGroups.nameInvalid">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/resource-groups.ts:212</note>
+      </notes>
+      <segment>
+        <source>Use 1–63 lowercase letters, digits and hyphens, starting and ending with a letter or digit.</source>
+      </segment>
+    </unit>
+    <unit id="subscriptionBlade.subheading">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscription-blade.ts:36,38</note>
+      </notes>
+      <segment>
+        <source>Subscription</source>
+      </segment>
+    </unit>
+    <unit id="subscriptionBlade.access">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscription-blade.ts:40,42</note>
+      </notes>
+      <segment>
+        <source>Access</source>
+      </segment>
+    </unit>
+    <unit id="subscriptionBlade.groups">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscription-blade.ts:43,46</note>
+      </notes>
+      <segment>
+        <source>Resource groups</source>
+      </segment>
+    </unit>
+    <unit id="subscriptionBlade.overview">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscription-blade.ts:80</note>
+      </notes>
+      <segment>
+        <source>Overview</source>
+      </segment>
+    </unit>
+    <unit id="subscriptionBlade.displayName">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscription-blade.ts:82</note>
+      </notes>
+      <segment>
+        <source>Display name</source>
+      </segment>
+    </unit>
+    <unit id="subscriptionBlade.type">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscription-blade.ts:83</note>
+      </notes>
+      <segment>
+        <source>Type</source>
+      </segment>
+    </unit>
+    <unit id="subscriptionBlade.location">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscription-blade.ts:84</note>
+      </notes>
+      <segment>
+        <source>Home region</source>
+      </segment>
+    </unit>
+    <unit id="subscriptionBlade.id">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscription-blade.ts:85</note>
+      </notes>
+      <segment>
+        <source>Id</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:64,65</note>
+      </notes>
+      <segment>
+        <source>Subscriptions</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.subheading">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:66,68</note>
+      </notes>
+      <segment>
+        <source> The subscriptions your sign-in grants. The API has no endpoint that lists them. </source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.new">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:77,79</note>
+      </notes>
+      <segment>
+        <source> New subscription </source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.createHeading">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:84,86</note>
+      </notes>
+      <segment>
+        <source> Create a subscription </source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.id">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:97,98</note>
+      </notes>
+      <segment>
+        <source>Subscription id</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.idHint">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:113,114</note>
+      </notes>
+      <segment>
+        <source> A UUID in hyphenated form. It is the subscription&apos;s address and cannot change. </source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.cancel">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:133,134</note>
+      </notes>
+      <segment>
+        <source> Cancel </source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.refused">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:179</note>
+      </notes>
+      <segment>
+        <source>The platform refused the create</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.submit">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:180</note>
+      </notes>
+      <segment>
+        <source>Create subscription</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.emptyTitle">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:181</note>
+      </notes>
+      <segment>
+        <source>No subscriptions known</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.emptyDescription">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:182</note>
+      </notes>
+      <segment>
+        <source>The context bar fills in once the portal holds an access token. Create one above, or open one by id from a link.</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.blade">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:189</note>
+      </notes>
+      <segment>
+        <source>Subscriptions</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.idRequired">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:209</note>
+      </notes>
+      <segment>
+        <source>An id is required.</source>
+      </segment>
+    </unit>
+    <unit id="subscriptions.idInvalid">
+      <notes>
+        <note category="location">apps/portal/src/pages/scopes/subscriptions.ts:210</note>
+      </notes>
+      <segment>
+        <source>Use the hyphenated UUID form, lowercase.</source>
+      </segment>
+    </unit>
+    <unit id="page.needsTenant.body">
+      <notes>
+        <note category="location">apps/portal/src/pages/shared/page-state.ts:89,92</note>
+      </notes>
+      <segment>
+        <source> Nothing is signed in, so there is no tenant to act in. The context bar fills in once the portal holds an access token. </source>
+      </segment>
+    </unit>
+    <unit id="page.needsTenant.title">
+      <notes>
+        <note category="location">apps/portal/src/pages/shared/page-state.ts:96</note>
+      </notes>
+      <segment>
+        <source>No tenant selected</source>
+      </segment>
+    </unit>
+    <unit id="page.loading">
+      <notes>
+        <note category="location">apps/portal/src/pages/shared/page-state.ts:109,111</note>
+      </notes>
+      <segment>
+        <source>Loading…</source>
+      </segment>
+    </unit>
+    <unit id="page.back">
+      <notes>
+        <note category="location">apps/portal/src/pages/shared/page-state.ts:116,118</note>
+      </notes>
+      <segment>
+        <source>Go back</source>
+      </segment>
+    </unit>
+    <unit id="page.failed.notFound">
+      <notes>
+        <note category="location">apps/portal/src/pages/shared/page-state.ts:134</note>
+      </notes>
+      <segment>
+        <source>Not found</source>
+      </segment>
+    </unit>
+    <unit id="page.failed.forbidden">
+      <notes>
+        <note category="location">apps/portal/src/pages/shared/page-state.ts:136</note>
+      </notes>
+      <segment>
+        <source>Not allowed</source>
+      </segment>
+    </unit>
+    <unit id="page.failed.unreachable">
+      <notes>
+        <note category="location">apps/portal/src/pages/shared/page-state.ts:138</note>
+      </notes>
+      <segment>
+        <source>The platform could not be reached</source>
+      </segment>
+    </unit>
+    <unit id="page.failed.generic">
+      <notes>
+        <note category="location">apps/portal/src/pages/shared/page-state.ts:140</note>
+      </notes>
+      <segment>
+        <source>The platform refused the request (<ph id="0" equiv="code" disp="state.code"/>)</source>
+      </segment>
+    </unit>
+    <unit id="forms.required">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:290</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> is required.</source>
+      </segment>
+    </unit>
+    <unit id="forms.integer">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:291</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> must be a whole number.</source>
+      </segment>
+    </unit>
+    <unit id="forms.min">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:293</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> must be at least <ph id="1" equiv="min" disp="String(field.minimum)"/>.</source>
+      </segment>
+    </unit>
+    <unit id="forms.max">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:295</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> must be at most <ph id="1" equiv="max" disp="String(field.maximum)"/>.</source>
+      </segment>
+    </unit>
+    <unit id="forms.minLength">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:297</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> needs at least <ph id="1" equiv="min" disp="String(field.minLength)"/> characters.</source>
+      </segment>
+    </unit>
+    <unit id="forms.maxTags">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:300</note>
+      </notes>
+      <segment>
+        <source>At most <ph id="0" equiv="max" disp="String(field.maxProperties)"/> tags.</source>
+      </segment>
+    </unit>
+    <unit id="forms.maxLength">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:301</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> allows at most <ph id="1" equiv="max" disp="String(field.maxLength)"/> characters.</source>
+      </segment>
+    </unit>
+    <unit id="forms.patternExample">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:304</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> is not in the expected form, for example <ph id="1" equiv="example" disp="String(field.placeholder)"/>.</source>
+      </segment>
+    </unit>
+    <unit id="forms.pattern">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:305</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> is not in the expected form.</source>
+      </segment>
+    </unit>
+    <unit id="forms.oneOf">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:307</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> is not one of the allowed values.</source>
+      </segment>
+    </unit>
+    <unit id="forms.tagLine">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:308</note>
+      </notes>
+      <segment>
+        <source>Write each tag as key=value.</source>
+      </segment>
+    </unit>
+    <unit id="forms.invalid">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/form-model.ts:310</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="label" disp="field.label"/> is not valid.</source>
+      </segment>
+    </unit>
+    <unit id="forms.requiredMark">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:74,76</note>
+      </notes>
+      <segment>
+        <source>required</source>
+      </segment>
+    </unit>
+    <unit id="forms.locked">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:78,80</note>
+      </notes>
+      <segment>
+        <source>(cannot change after create)</source>
+      </segment>
+    </unit>
+    <unit id="forms.listPlaceholder">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:233</note>
+      </notes>
+      <segment>
+        <source>Add a value</source>
+      </segment>
+    </unit>
+    <unit id="forms.tagPlaceholder">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/renderer/form-field-node.ts:239</note>
+      </notes>
+      <segment>
+        <source>key=value</source>
+      </segment>
+    </unit>
+    <unit id="forms.fixErrors">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/renderer/resource-form.ts:57,59</note>
+      </notes>
+      <segment>
+        <source>Fix the fields marked above.</source>
+      </segment>
+    </unit>
+    <unit id="forms.submit">
+      <notes>
+        <note category="location">libs/resource-forms/src/lib/renderer/resource-form.ts:70</note>
+      </notes>
+      <segment>
+        <source>Create</source>
       </segment>
     </unit>
     <unit id="shell.breadcrumbs.label">
       <notes>
-        <note category="location">libs/shell/src/lib/breadcrumbs/shell-breadcrumbs.ts:39</note>
+        <note category="location">libs/shell/src/lib/breadcrumbs/shell-breadcrumbs.ts:50</note>
       </notes>
       <segment>
         <source>Breadcrumb</source>
@@ -67,7 +1627,7 @@
     </unit>
     <unit id="shell.contextBar.tenant">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:38,42</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:37,40</note>
       </notes>
       <segment>
         <source> Tenant </source>
@@ -75,7 +1635,7 @@
     </unit>
     <unit id="shell.contextBar.subscription">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:55,59</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:52,55</note>
       </notes>
       <segment>
         <source> Subscription </source>
@@ -83,7 +1643,7 @@
     </unit>
     <unit id="shell.contextBar.region">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:79</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:75</note>
       </notes>
       <segment>
         <source>Tenant and subscription context</source>
@@ -91,7 +1651,7 @@
     </unit>
     <unit id="shell.contextBar.tenantLabel">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:80</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:76</note>
       </notes>
       <segment>
         <source>Select tenant</source>
@@ -99,7 +1659,7 @@
     </unit>
     <unit id="shell.contextBar.subscriptionLabel">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:81</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:77</note>
       </notes>
       <segment>
         <source>Select subscription</source>
@@ -107,7 +1667,7 @@
     </unit>
     <unit id="shell.contextBar.resolving">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:90</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:86</note>
       </notes>
       <segment>
         <source>Resolving your context</source>
@@ -115,7 +1675,7 @@
     </unit>
     <unit id="shell.contextBar.tenantOnly">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:93</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:89</note>
       </notes>
       <segment>
         <source>Acting in tenant <ph id="0" equiv="tenant" disp="tenant.displayName"/>, no subscription selected</source>
@@ -123,7 +1683,7 @@
     </unit>
     <unit id="shell.contextBar.acting">
       <notes>
-        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:94</note>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:90</note>
       </notes>
       <segment>
         <source>Acting in tenant <ph id="0" equiv="tenant" disp="tenant.displayName"/>, subscription <ph id="1" equiv="subscription" disp="subscription.displayName"/></source>
@@ -171,7 +1731,7 @@
     </unit>
     <unit id="shell.notifications.heading">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:53,56</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:50,53</note>
       </notes>
       <segment>
         <source> Notifications </source>
@@ -179,7 +1739,7 @@
     </unit>
     <unit id="shell.notifications.empty">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:61,63</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:55,57</note>
       </notes>
       <segment>
         <source> No operations yet. </source>
@@ -187,7 +1747,7 @@
     </unit>
     <unit id="shell.notifications.panel">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:100</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:90</note>
       </notes>
       <segment>
         <source>Notifications</source>
@@ -195,7 +1755,7 @@
     </unit>
     <unit id="shell.notifications.triggerEmpty">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:105</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:95</note>
       </notes>
       <segment>
         <source>Notifications</source>
@@ -203,7 +1763,7 @@
     </unit>
     <unit id="shell.notifications.trigger">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:106</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:96</note>
       </notes>
       <segment>
         <source>Notifications, <ph id="0" equiv="count" disp="unread"/> unread</source>
@@ -211,7 +1771,7 @@
     </unit>
     <unit id="shell.notifications.running">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:113</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:101</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="count" disp="running"/> operations in progress</source>
@@ -219,7 +1779,7 @@
     </unit>
     <unit id="shell.notifications.status.running">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:129</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:117</note>
       </notes>
       <segment>
         <source>Running</source>
@@ -227,7 +1787,7 @@
     </unit>
     <unit id="shell.notifications.status.runningPct">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:130</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:118</note>
       </notes>
       <segment>
         <source><ph id="0" equiv="pct" disp="item.percentComplete"/> per cent</source>
@@ -235,7 +1795,7 @@
     </unit>
     <unit id="shell.notifications.status.succeeded">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:132</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:120</note>
       </notes>
       <segment>
         <source>Succeeded</source>
@@ -243,7 +1803,7 @@
     </unit>
     <unit id="shell.notifications.status.failed">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:134</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:122</note>
       </notes>
       <segment>
         <source>Failed</source>
@@ -251,7 +1811,7 @@
     </unit>
     <unit id="shell.notifications.status.cancelled">
       <notes>
-        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:136</note>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:124</note>
       </notes>
       <segment>
         <source>Cancelled</source>

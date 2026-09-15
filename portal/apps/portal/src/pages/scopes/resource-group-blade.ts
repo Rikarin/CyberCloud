@@ -39,9 +39,14 @@ import { NeedsTenant, PageStatus, activeTenantId, load, pageState } from '../sha
             <a class="underline" [routerLink]="subscriptionLink()">{{ subscriptionId() }}</a>
           </p>
         </div>
-        <a xuiButton variant="outline" size="sm" [routerLink]="listLink()" i18n="@@resourceGroupBlade.list"
-          >Resources</a
-        >
+        <div class="flex gap-2">
+          <a xuiButton variant="outline" size="sm" [routerLink]="accessLink()" i18n="@@resourceGroupBlade.access"
+            >Access</a
+          >
+          <a xuiButton variant="outline" size="sm" [routerLink]="listLink()" i18n="@@resourceGroupBlade.list"
+            >Resources</a
+          >
+        </div>
       </div>
 
       <cc-page-status [state]="state()" [retryLink]="groupsLink()" />
@@ -104,6 +109,9 @@ export class ResourceGroupBlade {
   protected readonly subscriptionLink = computed(() => links.subscription(this.subscriptionId()));
   protected readonly groupsLink = computed(() => links.resourceGroups(this.subscriptionId()));
   protected readonly listLink = computed(() => links.resources(this.subscriptionId(), this.resourceGroup()));
+  protected readonly accessLink = computed(() =>
+    links.resourceGroupAccess(this.subscriptionId(), this.resourceGroup())
+  );
 
   protected readonly overviewTitle = $localize`:@@resourceGroupBlade.overview:Overview`;
   protected readonly labels = {
