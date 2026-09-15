@@ -69,6 +69,16 @@ groups into a JWT produces the header-size failures every large enterprise hits.
 `Check` per request, which is the p99 < 10 ms budget in [00](00-vision-and-principles.md), and is why
 that budget exists.
 
+⚠ **What is served today, and what is not.** `/token` serves the client-credentials grant — a
+service principal presents its id as `client_id` and its vault-held secret, and gets a token the
+gateway validates against `/.well-known/jwks` — and refuses the other four rows of the flow table above
+with an OAuth error naming what each is waiting on (`TokenApi` in the identity host carries the
+list). The server runs in OpenIddict's *degraded mode*: ADR-015's "the stores are grains" means the
+library's own client validation has nothing to read from, so the host validates requests itself and
+OpenIddict handles the protocol, the signing and the discovery document. The signing key is still
+ephemeral, which is the rotation story above left owed to the vault. `aud` is spelled once, as
+`AccessTokenPolicy.Audience`, and the gateway pins it.
+
 ## Credentials
 
 | Method | M | Implementation | Notes |
@@ -129,9 +139,18 @@ answer is a client secret in a Kubernetes `Secret`. The good answer:
 ⚠ **Step 5 used to say "the gateway", and that was a defect rather than a wording preference.**
 Step 4 puts the exchange at `/token`, and [§ Hosts](#hosts) above puts `/token` on
 `CyberCloud.Identity.Host`. The gateway serves bearer tokens and mints none — it references
-`OpenIddict.Validation.AspNetCore` and deliberately not `OpenIddict.Server.AspNetCore`, which is the
-package-level expression of that boundary. A gateway that could issue a token would be a second
+`OpenIddict.Validation.SystemNetHttp` and deliberately not `OpenIddict.Server.AspNetCore`, which is
+the package-level expression of that boundary. A gateway that could issue a token would be a second
 authorization server on the origin whose entire job is to accept them.
+
+⚠ **This sentence named `OpenIddict.Validation.AspNetCore` until the gateway actually took the
+reference, and the package it took is a different one for a reason worth keeping.** The gateway's
+stage 2 ([10 § Request pipeline](10-gateway-and-api.md)) is not an ASP.NET Core authentication
+handler: the pipeline resolves its own `ICallerContextResolver`, and the AspNetCore integration would
+register a scheme nothing consults — a second place authentication appears to happen. What stage 2
+needs is the validation core plus the piece that fetches the discovery document and the JWKS over
+`HttpClient`, and that is `OpenIddict.Validation.SystemNetHttp`. The boundary the paragraph above
+draws is unchanged: Validation and never Server.
 
 ⚠ **`managedIdentity` is a third subject type, and it only works because the subject type is a
 claim.** The token minted at step 5 carries `sub_typ: managedIdentity` beside `sub`, so step 6's

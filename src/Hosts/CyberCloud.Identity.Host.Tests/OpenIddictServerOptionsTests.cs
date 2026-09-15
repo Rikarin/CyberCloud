@@ -150,6 +150,85 @@ public sealed class OpenIddictServerOptionsTests {
     }
 
     [Fact]
+    public void TheSigningKeyIsTheAlgorithmTheContractNames() {
+        // ⚠ ES256 by name, from the contract. AddEphemeralSigningKey() with no argument mints RSA,
+        // and a server publishing an RS256 key beside AccessTokenPolicy.SigningAlgorithm = "ES256"
+        // would have every token refused by a gateway that honoured the contract — which is the
+        // gateway this repository ships.
+        var credentials = Options().SigningCredentials;
+
+        credentials.Count.ShouldBe(1, "one signing key; a set is the weakest member of the set");
+        credentials[0].Algorithm.ShouldBe(AccessTokenPolicy.SigningAlgorithm);
+    }
+
+    [Fact]
+    public void DegradedModeIsOnBecauseTheStoresAreGrains() {
+        // ⚠ ADR-015 at the protocol layer. Without this, OpenIddict's built-in validation resolves
+        // the client through a core manager that wants a store, throws "The core services must be
+        // registered" on the first token request, and the host answers 500 — which is what it did
+        // for as long as nothing called /token. DegradedModeHandlers carries the account.
+        Options().EnableDegradedMode.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void EveryEndpointHasTheValidatorDegradedModeDemands() {
+        // ⚠ THE FAILURE FOR A MISSING REQUEST VALIDATOR IS A 500 AT REQUEST TIME, NOT A REFUSAL AT
+        // START-UP. OpenIddict checks for a custom request validator only when a request for that
+        // endpoint arrives, with "No custom … request validation handler was found" — so a server
+        // missing one starts, publishes the endpoint in its discovery document, and throws on the
+        // first caller. Each enabled endpoint's validator is asserted here by the context type
+        // OpenIddict names in that message.
+        //
+        // ⚠ The two token handlers are the exception, and TheOptionsCanBeMaterialisedAtAll is what
+        // found them: with the device flow allowed, OpenIddict's post-configuration refuses the
+        // options themselves unless a custom ValidateTokenContext and GenerateTokenContext handler
+        // exists to hold device and user codes. They are listed here anyway, so this test names the
+        // whole set the degraded mode demands rather than the part that fails late.
+        var custom = Options().Handlers
+            .Where(x => x.Type == OpenIddictServerHandlerType.Custom)
+            .Select(x => x.ContextType)
+            .ToHashSet();
+
+        foreach (var required in new[] {
+                     typeof(OpenIddictServerEvents.ValidateTokenRequestContext),
+                     typeof(OpenIddictServerEvents.ValidateAuthorizationRequestContext),
+                     typeof(OpenIddictServerEvents.ValidateDeviceAuthorizationRequestContext),
+                     typeof(OpenIddictServerEvents.ValidateEndUserVerificationRequestContext),
+                     typeof(OpenIddictServerEvents.ValidateEndSessionRequestContext),
+                     typeof(OpenIddictServerEvents.ValidateTokenContext),
+                     typeof(OpenIddictServerEvents.GenerateTokenContext)
+                 }) {
+            custom.ShouldContain(
+                required,
+                $"no custom IOpenIddictServerHandler<{required.Name}> is registered; in degraded "
+                + "mode the corresponding endpoint answers 500 to its first request"
+            );
+        }
+    }
+
+    [Fact]
+    public void TheIssuerIsTheHostOptionsIssuerWhenOneIsSet() {
+        // ⚠ Pinned on both sides: the gateway refuses a discovery document whose issuer differs from
+        // the one it was configured with, so a host that inferred its issuer from the Host header
+        // behind a proxy would mint tokens the gateway refuses. IdentityHostOptions.Issuer is the
+        // one place a deployment says what this host is called.
+        var configured = new ServiceCollection()
+            .AddLogging()
+            .AddOptions()
+            .Configure<IdentityHostOptions>(x => x.Issuer = "https://id.example.test")
+            .AddIdentityHostOpenIddict()
+            .BuildServiceProvider()
+            .GetRequiredService<IOptions<OpenIddictServerOptions>>()
+            .Value;
+
+        configured.Issuer.ShouldBe(new Uri("https://id.example.test"));
+
+        // And unset means inferred from the request, which is what a developer's 127.0.0.1:port
+        // needs and what a production deployment must not rely on.
+        Options().Issuer.ShouldBeNull();
+    }
+
+    [Fact]
     public void TheScopesSayWhatKindOfTokenItIsAndNeverWhatItMayDo() {
         // ⚠ No `admin`, no `write`, no `*.readwrite`. A scope in a token is a permission in a token,
         // and what a subject may do is a ReBAC Check at the point of use — the same decision as the
@@ -168,5 +247,11 @@ public sealed class OpenIddictServerOptionsTests {
         }
 
         scopes.Distinct(StringComparer.Ordinal).Count().ShouldBe(scopes.Length);
+
+        // ⚠ And the server has been TOLD about them. OpenIddict validates every requested scope
+        // against its registered set and answers invalid_scope for a stranger — which is what the
+        // first real client-credentials request for `cyc.api` got, because the nested class declared
+        // the four and nothing registered them. A constant is not a registration.
+        Options().Scopes.ShouldBe(scopes, ignoreOrder: true);
     }
 }

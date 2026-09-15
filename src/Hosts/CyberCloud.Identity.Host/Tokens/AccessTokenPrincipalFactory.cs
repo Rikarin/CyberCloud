@@ -1,5 +1,6 @@
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Identity.Contracts;
+using OpenIddict.Abstractions;
 using System.Globalization;
 using System.Security.Claims;
 
@@ -46,10 +47,22 @@ namespace CyberCloud.Identity.Host.Tokens;
 ///         has nowhere trustworthy to be recorded. ⚠ The second is minted <i>here</i> and read from
 ///         no request surface anywhere — that is the whole of its security value.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             Every claim is marked for the access token, and a claim without the mark is not in
+///             the JWT.
+///         </b> OpenIddict serializes only the claims whose <i>destination</i> names the access
+///         token and drops the rest without a word — which was invisible while nothing minted a
+///         token, and would have shipped as a token carrying <c>iss</c>, <c>exp</c> and nothing the
+///         gateway reads. The mark is set in one place, on every claim this type builds, so a
+///         fifteenth claim cannot arrive unmarked. <c>NoRolesInTokenTests.EveryClaimIsMarkedForTheAccessToken</c>
+///         is the assertion.
+///     </para>
 /// </remarks>
 public static class AccessTokenPrincipalFactory {
     /// <summary>
-    ///     Builds the principal for an access token.
+    ///     Builds the principal for a user's access token.
     /// </summary>
     /// <param name="session">The session the token belongs to.</param>
     /// <param name="audience">The API that will accept the token.</param>
@@ -95,6 +108,86 @@ public static class AccessTokenPrincipalFactory {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(scopes);
 
+        return Assemble(
+            session.UserId,
+            subjectType,
+            session.TenantId,
+            session.SessionId,
+            session.ClientId,
+            audience,
+            scopes,
+            session.AuthenticatedAt,
+            session.Methods,
+            impersonatedBy
+        );
+    }
+
+    /// <summary>
+    ///     Builds the principal for a service principal's client-credentials token.
+    ///     docs/plan/11 § Protocol's client-credentials row.
+    /// </summary>
+    /// <param name="principal">The service principal that presented a valid credential.</param>
+    /// <param name="clientId">The <c>client_id</c> it presented, which becomes <c>azp</c>.</param>
+    /// <param name="audience">The API that will accept the token.</param>
+    /// <param name="scopes">The granted scopes.</param>
+    /// <param name="authenticatedAt">
+    ///     When the credential was verified — now, for a grant with no session behind it.
+    /// </param>
+    /// <returns>A principal carrying only <see cref="AccessTokenClaims.Permitted" /> claim types.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>No <c>sid</c>, and no impersonation.</b> A client-credentials grant opens no
+    ///         session — there is no refresh chain to revoke and no device to list — so the token
+    ///         names none rather than naming a fresh GUID that nothing could ever look up. And a
+    ///         machine identity is never the subject of docs/plan/06 § Platform administration's
+    ///         "view as tenant", so this path has no way to spell <c>act_sub</c> at all.
+    ///     </para>
+    ///     <para>
+    ///         The subject type is <see cref="SubjectTypes.ServicePrincipal" /> and is not a
+    ///         parameter: the caller has a <see cref="ServicePrincipalDescriptor" /> in hand, and a
+    ///         parameter would only let it say something else.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The built principal carries a claim outside the closed set.</exception>
+    public static ClaimsPrincipal BuildForServicePrincipal(
+        ServicePrincipalDescriptor principal,
+        string clientId,
+        string audience,
+        IReadOnlyList<string> scopes,
+        DateTimeOffset authenticatedAt
+    ) {
+        ArgumentNullException.ThrowIfNull(principal);
+        ArgumentNullException.ThrowIfNull(scopes);
+
+        return Assemble(
+            principal.ServicePrincipalId,
+            SubjectTypes.ServicePrincipal,
+            principal.TenantId,
+            sessionId: null,
+            clientId,
+            audience,
+            scopes,
+            authenticatedAt,
+            [AuthenticationMethod.ClientCredential],
+            impersonatedBy: Guid.Empty
+        );
+    }
+
+    /// <summary>
+    ///     The one place a claim is added. Both public entry points are argument lists for this.
+    /// </summary>
+    static ClaimsPrincipal Assemble(
+        Guid subjectId,
+        string subjectType,
+        Guid tenantId,
+        Guid? sessionId,
+        string clientId,
+        string audience,
+        IReadOnlyList<string> scopes,
+        DateTimeOffset authenticatedAt,
+        IReadOnlyList<AuthenticationMethod> methods,
+        Guid impersonatedBy
+    ) {
         if (SubjectTypes.Ensure(subjectType).TryGetError(out var invalid)) {
             throw new ArgumentException(invalid.Message, nameof(subjectType));
         }
@@ -112,37 +205,48 @@ public static class AccessTokenPrincipalFactory {
             roleType: "urn:cybercloud:roles-are-not-in-the-token"
         );
 
-        identity.AddClaim(new(AccessTokenClaims.Subject, N(session.UserId)));
+        Add(identity, AccessTokenClaims.Subject, N(subjectId));
 
         // ⚠ The subject's TYPE, as its own claim rather than as a prefix on `sub`. The gateway builds
         // a ReBAC SubjectRef out of the pair, and docs/plan/07 § The model makes user:abc and
         // servicePrincipal:abc different subjects — so a token that carried only the id would make
         // every Check a guess. See AccessTokenClaims.SubjectType for why a `type:id` convention on
         // `sub` is the wrong answer even though it needs one fewer claim.
-        identity.AddClaim(new(AccessTokenClaims.SubjectType, subjectType));
+        Add(identity, AccessTokenClaims.SubjectType, subjectType);
 
-        identity.AddClaim(new(AccessTokenClaims.TenantId, N(session.TenantId)));
-        identity.AddClaim(new(AccessTokenClaims.SessionId, N(session.SessionId)));
-        identity.AddClaim(new(AccessTokenClaims.Audience, audience));
-        identity.AddClaim(new(AccessTokenClaims.AuthorizedParty, session.ClientId));
+        Add(identity, AccessTokenClaims.TenantId, N(tenantId));
+
+        if (sessionId is { } session) {
+            Add(identity, AccessTokenClaims.SessionId, N(session));
+        }
+
+        Add(identity, AccessTokenClaims.Audience, audience);
+        Add(identity, AccessTokenClaims.AuthorizedParty, clientId);
 
         // Space-separated, which is what `scp` is on the wire. A repeated claim would serialize as a
         // JSON array, and half the validators in existence read `scp` as a string.
-        identity.AddClaim(new(AccessTokenClaims.Scope, string.Join(' ', scopes)));
+        Add(identity, AccessTokenClaims.Scope, string.Join(' ', scopes));
 
         // ⚠ auth_time comes from the SESSION and not from now. A refresh mints a new token with a new
         // `iat` and carries the original `auth_time` forward, so a step-up rule that says
         // "re-authenticate if it has been more than five minutes" cannot be defeated by refreshing.
         // Recomputing it here would make step-up decorative — see AccessTokenClaims.AuthenticationTime.
-        identity.AddClaim(
-            new(
-                AccessTokenClaims.AuthenticationTime,
-                session.AuthenticatedAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)
-            )
+        //
+        // ⚠ TYPED AS AN INTEGER, OR OPENIDDICT REFUSES THE WHOLE SIGN-IN. Its ValidateSignInDemand
+        // checks the claim's ValueType and throws "The 'auth_time' claim present in the specified
+        // principal is malformed or isn't of the expected type" for a plain string — a 500 from
+        // /token on every grant, found by TenantOverHttpTests on the first token this host ever
+        // minted. The value is the same digits either way; only the type tag differs, and no
+        // assertion on the principal's values could have seen it.
+        Add(
+            identity,
+            AccessTokenClaims.AuthenticationTime,
+            authenticatedAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+            ClaimValueTypes.Integer64
         );
 
-        foreach (var method in session.Methods) {
-            identity.AddClaim(new(AccessTokenClaims.AuthenticationMethods, AmrValue(method)));
+        foreach (var method in methods) {
+            Add(identity, AccessTokenClaims.AuthenticationMethods, AmrValue(method));
         }
 
         // ⚠ Emitted only when there IS an impersonation, and only from this argument. An empty claim
@@ -150,7 +254,7 @@ public static class AccessTokenPrincipalFactory {
         // would have to distinguish "absent" from "empty" to answer "was this impersonated" — which
         // is the question docs/plan/06 § Platform administration exists to make answerable.
         if (impersonatedBy != Guid.Empty) {
-            identity.AddClaim(new(AccessTokenClaims.ImpersonatedBy, N(impersonatedBy)));
+            Add(identity, AccessTokenClaims.ImpersonatedBy, N(impersonatedBy));
         }
 
         var principal = new ClaimsPrincipal(identity);
@@ -164,6 +268,13 @@ public static class AccessTokenPrincipalFactory {
         }
 
         return principal;
+    }
+
+    /// <summary>Adds one claim, marked for the access token — see the ⚠ on the type.</summary>
+    static void Add(ClaimsIdentity identity, string type, string value, string valueType = ClaimValueTypes.String) {
+        var claim = new Claim(type, value, valueType);
+        claim.SetDestinations(OpenIddictConstants.Destinations.AccessToken);
+        identity.AddClaim(claim);
     }
 
     /// <summary>

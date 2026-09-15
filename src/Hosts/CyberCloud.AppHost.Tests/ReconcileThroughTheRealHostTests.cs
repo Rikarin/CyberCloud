@@ -624,6 +624,15 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     ///     <c>ReBacResourceAuthorizer</c>, the same <c>ResourceScopeLockResolver</c>. A test that
     ///     constructed <c>ResourceManagerService</c> itself would be choosing its own seams, which is
     ///     what every other suite does and what this one exists not to do.
+    ///     <para>
+    ///         ⚠ <b>An identity issuer is named because the composition refuses to build without
+    ///         one</b> — https://github.com/Rikarin/CyberCloud/issues/68's guard. This file never
+    ///         sends an HTTP request, so the resolver it registers never fetches anything and the
+    ///         origin can be one nothing listens on; what matters is that the gateway composed here
+    ///         is the gateway that ships, stage 2 included, rather than one with a stage missing that
+    ///         nothing in this file would notice. <see cref="TenantOverHttpTests" /> is where the
+    ///         resolver meets a real identity host.
+    ///     </para>
     /// </remarks>
     static Task<WebApplication> BuildGatewayAsync() =>
         GatewayComposition.BuildAsync(
@@ -631,7 +640,8 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
                 "--environment", "Development",
                 "--urls", "http://127.0.0.1:0",
                 $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort="
-                + CyberCloudResources.SiloOneGatewayPort.ToString(CultureInfo.InvariantCulture)
+                + CyberCloudResources.SiloOneGatewayPort.ToString(CultureInfo.InvariantCulture),
+                "--CyberCloud:Gateway:Identity:Issuer=http://127.0.0.1:1"
             ]
         );
 

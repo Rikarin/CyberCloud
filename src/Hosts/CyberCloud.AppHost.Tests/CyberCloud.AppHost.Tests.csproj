@@ -89,6 +89,18 @@
           the wire types the test names come from the same build the hosts run.
         -->
         <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+        <!--
+          ⚠ THE IDENTITY HOST IS UNDER TEST HERE TOO, AND IT IS THE OTHER HALF OF THE SAME SEAM.
+
+          The gateway's stage 2 validates a bearer token against the key set the identity host
+          publishes, and nothing else in the repository runs the two together: CyberCloud.Identity
+          .Host.Tests deliberately has no TestServer, and CyberCloud.Hosts.Tests composes without
+          starting. TenantOverHttpTests starts IdentityComposition.BuildAsync — the call the identity
+          host's own Program.cs makes — takes a client-credentials token from its /token, and hands
+          it to the gateway configured to trust it. That is the one test in the tree that can say
+          the two hosts agree about what a token is (https://github.com/Rikarin/CyberCloud/issues/68).
+        -->
+        <ProjectReference Include="../CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">

@@ -95,3 +95,35 @@ public sealed class UnavailableTotpSecrets : ITotpSecretSeam {
             )
         );
 }
+
+/// <summary>
+///     The default <see cref="IClientSecretSeam" />: it fails, and says what is not wired.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>The same gap as <see cref="UnavailableTotpSecrets" />, met at the token endpoint.</b> A
+///     service principal's credential is a <see cref="SecretRef" /> into a vault nothing in this
+///     repository provisions yet, so an identity host that does not register a verifier refuses
+///     every client-credentials grant with <c>invalid_client</c> and this sentence in its log. That
+///     is the designed state of a host with no vault rather than a defect: a default that accepted
+///     anything, or compared against a value in configuration, would be a token endpoint minting
+///     control-plane tokens against something an operator could paste.
+/// </remarks>
+public sealed class UnavailableClientSecrets : IClientSecretSeam {
+    /// <inheritdoc />
+    public Task<Result<bool>> VerifyAsync(
+        SecretRef reference,
+        string presented,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<bool>.Failure(
+                ErrorCode.InternalError,
+                $"No client secret verifier is wired, so '{reference}' cannot be read and no "
+                + "client-credentials grant can succeed. docs/plan/11 § Protocol keeps a service "
+                + "principal's secret in the vault behind a SecretRef and never in grain state, so "
+                + "verification needs a reader. Register an IClientSecretSeam over the platform "
+                + "vault (docs/plan/18) — an adapter over CyberCloud.ResourceManager.Contracts' "
+                + "ISecretResolver is the intended one, in a host that already references it."
+            )
+        );
+}

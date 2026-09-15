@@ -30,8 +30,13 @@ namespace CyberCloud.Gateway.Host.Authentication;
 ///         </item>
 ///     </list>
 ///     <para>
-///         The production implementation belongs with the identity host;
-///         <see cref="ICallerContextResolver" />'s remarks list exactly what it needs from it.
+///         The production implementation is <see cref="JwksCallerContextResolver" />, and this type
+///         is registered by no host and no composition: <c>GatewayHarness</c> constructs it directly
+///         for the sibling suite, where a test that drives the nine stages against a substituted
+///         manager has no reason to sign anything. Its one caller outside that suite —
+///         <c>CyberCloud.AppHost.Tests</c>' <c>TenantOverHttpTests</c> — now takes a real token from
+///         the real identity host, which is what closed
+///         https://github.com/Rikarin/CyberCloud/issues/68.
 ///     </para>
 /// </remarks>
 sealed class IssuedTokenCallerContextResolver(IClock clock) : ICallerContextResolver {

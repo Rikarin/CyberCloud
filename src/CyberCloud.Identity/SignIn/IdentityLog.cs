@@ -285,4 +285,41 @@ public static partial class IdentityLog {
         Message = "A one-time code was not sent to user {UserId} in tenant {TenantId}: {Reason}"
     )]
     public static partial void OtpNotSent(ILogger logger, Guid tenantId, Guid userId, string reason);
+
+    /// <summary>A token request's client could not be authenticated.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant the host serves.</param>
+    /// <param name="grantType">The grant the request named.</param>
+    /// <param name="reason">
+    ///     The internal reason, which never reaches the caller — the endpoint answers
+    ///     <c>invalid_client</c> whatever happened, so an unknown client, a disabled one, a wrong
+    ///     secret and an unwired vault all look the same from outside. ⚠ The last of those carries
+    ///     <c>UnavailableClientSecrets</c>' sentence verbatim, because this is the one line an
+    ///     operator whose host has no verifier will see.
+    /// </param>
+    [LoggerMessage(
+        EventId = 1120,
+        Level = LogLevel.Information,
+        Message = "Token request refused in tenant {TenantId} for grant {GrantType}: {Reason}"
+    )]
+    public static partial void TokenRequestRefused(ILogger logger, Guid tenantId, string grantType, string reason);
+
+    /// <summary>An access token was minted.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <param name="subjectType">What kind of subject — <c>user</c>, <c>servicePrincipal</c>, <c>managedIdentity</c>.</param>
+    /// <param name="subjectId">Who.</param>
+    /// <param name="grantType">Which grant produced it.</param>
+    [LoggerMessage(
+        EventId = 1121,
+        Level = LogLevel.Information,
+        Message = "Access token issued to {SubjectType} {SubjectId} in tenant {TenantId} by {GrantType}."
+    )]
+    public static partial void TokenIssued(
+        ILogger logger,
+        Guid tenantId,
+        string subjectType,
+        Guid subjectId,
+        string grantType
+    );
 }

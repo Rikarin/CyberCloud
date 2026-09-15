@@ -331,6 +331,20 @@ public static class AccessTokenPolicy {
     /// </summary>
     public static bool AccessTokensAreRevocable => false;
 
+    /// <summary>
+    ///     The one <c>aud</c> a Cyber Cloud access token carries, and the one the gateway pins.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Pinned on both sides, and that is the reason it lives here.</b> A validator that
+    ///     accepts any audience accepts a token minted for some other relying party, which is item 2
+    ///     of the list in the gateway's <c>ICallerContextResolver</c>. The identity host writes this
+    ///     value into every token it mints and the gateway refuses every token without it; a change
+    ///     to the string is a change to both at once. It is spelled the same as the API scope
+    ///     (<c>IdentityHostOpenIddict.Scopes.Api</c>) on purpose — one name for "the control-plane
+    ///     API" wherever a token names it.
+    /// </remarks>
+    public const string Audience = "cyc.api";
+
     /// <summary>The OIDC discovery document, relative to the identity host's origin.</summary>
     public const string DiscoveryPath = "/.well-known/openid-configuration";
 

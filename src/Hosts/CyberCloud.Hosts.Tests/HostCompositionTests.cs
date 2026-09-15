@@ -328,7 +328,8 @@ public sealed class HostCompositionTests {
             [
                 "--environment", "Development",
                 "--urls", "http://127.0.0.1:0",
-                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}"
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}",
+                IssuerArgument
             ]
         );
 
@@ -546,6 +547,82 @@ public sealed class HostCompositionTests {
             );
     }
 
+    // ── Failure class (e): a seam that exists, is correct, and has no registration ───────────────
+
+    /// <summary>
+    ///     ⚠ The gateway refuses to compose with no identity host to validate tokens against.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>This is https://github.com/Rikarin/CyberCloud/issues/68, as a red test.</b> The
+    ///         deployed gateway registered no <c>ICallerContextResolver</c>, built, started, passed
+    ///         <c>/health</c> and answered <c>500</c> to every real request — and this file was one
+    ///         of two suites composing that exact host and staying green, because
+    ///         <c>UseAutofac()</c> replaces the provider factory <c>ValidateOnBuild</c> belongs to,
+    ///         so nothing resolved the pipeline until the first request did.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Asserted on the message naming the section, not only on the type: an operator meets
+    ///         this exception in a crash loop, and a crash loop that names
+    ///         <c>CyberCloud:Gateway:Identity:Issuer</c> is one they can fix.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheGatewayRefusesToComposeWithoutAnIdentityIssuer() {
+        var thrown = await Should.ThrowAsync<InvalidOperationException>(() =>
+            GatewayComposition.BuildAsync(
+                [
+                    "--environment", "Development",
+                    "--urls", "http://127.0.0.1:0",
+                    $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                    // ⚠ Blanked explicitly, because the shipped appsettings.json carries the
+                    // production origin and this test is about a deployment that removed it.
+                    "--CyberCloud:Gateway:Identity:Issuer="
+                ]
+            )
+        );
+
+        thrown.Message.ShouldContain("ICallerContextResolver");
+        thrown.Message.ShouldContain("CyberCloud:Gateway:Identity:Issuer");
+    }
+
+    /// <summary>
+    ///     ⚠ With an issuer, the gateway's stage 2 is the JWKS validator and not a stand-in.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Checked by the implementation's name, because "something resolves" is exactly the
+    ///         assertion that would pass against the in-process token table the issue warns against
+    ///         — and by reflection, because both the seam and its implementation are <c>internal</c>
+    ///         to the gateway and this suite deliberately sees no internals. Widening
+    ///         <c>InternalsVisibleTo</c> to a second suite for one assertion is the shape the issue
+    ///         asked not to take casually; a type name is a smaller thing to reach for.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Resolving it is also the second half of the guard: the guard checks that a
+    ///         registration exists, and this checks that the registration can be constructed —
+    ///         with the validation service, the clock and the logger its constructor asks for.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheGatewayValidatesBearerTokensAgainstTheIdentityHostsKeySet() {
+        await using var gateway = await BuildGatewayAsync();
+
+        var seam = typeof(GatewayComposition).Assembly
+            .GetType("CyberCloud.Gateway.Host.Authentication.ICallerContextResolver", throwOnError: true)!;
+
+        gateway.Services
+            .GetRequiredService(seam)
+            .GetType()
+            .Name
+            .ShouldBe(
+                "JwksCallerContextResolver",
+                "stage 2 must validate against the identity host's published key set; any other "
+                + "implementation in the composed production gateway is a token table somebody wired "
+                + "by mistake — https://github.com/Rikarin/CyberCloud/issues/68."
+            );
+    }
+
     // ── The hosts, composed the way Program.cs composes them ─────────────────────────────────────
 
     /// <summary>Builds the real silo host.</summary>
@@ -566,13 +643,39 @@ public sealed class HostCompositionTests {
             ]
         );
 
+    /// <summary>
+    ///     The identity host this suite's gateways are told to trust, as the argument that names it.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Supplied the way a deployment supplies it, and not through <c>configure</c>.
+    ///         </b> <c>GatewayComposition.BuildAsync</c> registers stage 2's resolver from
+    ///         <c>CyberCloud:Gateway:Identity:Issuer</c> and refuses to compose without one, so a
+    ///         suite that composes the real gateway has to say which identity host it trusts — and
+    ///         saying it here, in configuration, means every test in this file composes the exact
+    ///         object graph <c>Program.cs</c> composes, resolver included. This file used to build
+    ///         the gateway with no resolver at all, and stayed green, which is the quiet the guard
+    ///         exists to end.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The origin is a port nothing listens on, and that is fine: the resolver fetches the
+    ///         discovery document on the first token it is handed, and nothing in this file sends a
+    ///         request. A suite that did would need the real identity host —
+    ///         <c>CyberCloud.AppHost.Tests</c>' <c>TenantOverHttpTests</c> starts one.
+    ///     </para>
+    /// </remarks>
+    const string IssuerArgument = "--CyberCloud:Gateway:Identity:Issuer=http://127.0.0.1:1";
+
     /// <summary>Builds the real gateway host.</summary>
     static Task<WebApplication> BuildGatewayAsync() =>
         GatewayComposition.BuildAsync(
             [
                 "--environment", "Development",
                 "--urls", "http://127.0.0.1:0",
-                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}"
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                IssuerArgument
             ]
         );
 

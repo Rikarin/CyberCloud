@@ -1,10 +1,14 @@
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Api;
+using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.SignIn;
+using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using OpenIddict.Abstractions;
+using OpenIddict.Server.AspNetCore;
 
 namespace CyberCloud.Identity.Host;
 
@@ -120,9 +124,13 @@ public static class IdentityEndpoints {
     /// <param name="app">The host's route builder.</param>
     /// <remarks>
     ///     ⚠ The OIDC endpoints themselves — <c>/authorize</c>, <c>/token</c>, <c>/userinfo</c>,
-    ///     <c>/device</c>, <c>/logout</c> and <c>/.well-known/*</c> — are OpenIddict's and are not
-    ///     mapped here; <see cref="IdentityHostOpenIddict" /> configures them, and the passthrough
-    ///     options let the handlers below take over where a decision needs our grains.
+    ///     <c>/device</c>, <c>/logout</c> and <c>/.well-known/*</c> — are OpenIddict's;
+    ///     <see cref="IdentityHostOpenIddict" /> configures them, and the passthrough options let a
+    ///     handler here take over where a decision needs our grains. <c>/token</c> is the one that
+    ///     has such a handler today — <see cref="MapToken" />. ⚠ A passthrough with no handler behind
+    ///     it is a <c>404</c>, which is what <c>/token</c> answered for as long as nothing mapped it
+    ///     and the reason https://github.com/Rikarin/CyberCloud/issues/68's gateway had no token
+    ///     to validate.
     ///     <para>
     ///         The <c>/api</c> prefix is what
     ///         <see cref="IdentityHostAuthentication" />'s <c>OnRedirectToLogin</c> keys off to answer
@@ -162,8 +170,72 @@ public static class IdentityEndpoints {
         );
 
         MapSignIn(app);
+        MapToken(app);
 
         return app;
+    }
+
+    /// <summary>
+    ///     Maps the token endpoint's passthrough — the half of <c>/token</c> that mints.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             By the time this runs, OpenIddict has parsed the request and
+    ///             <see cref="DegradedModeHandlers.ValidateClientCredentials" /> has authenticated
+    ///             the client.
+    ///         </b> The passthrough is the tail of OpenIddict's own pipeline, not a route beside it:
+    ///         a request that failed validation was answered with an OAuth error before this lambda
+    ///         existed, so the only thing left to do here is to mint. The authenticated principal
+    ///         travels in the transaction under
+    ///         <see cref="DegradedModeHandlers.ServicePrincipalProperty" />, and a request that
+    ///         arrives without it — which is a request the validator did not run for — is refused
+    ///         rather than re-authenticated, because a second path that authenticates is a second
+    ///         path to get wrong.
+    ///     </para>
+    ///     <para>
+    ///         <c>Results.SignIn</c> with OpenIddict's scheme is what turns a principal into a signed
+    ///         token: the server's sign-in handler serializes it, signs it with the key set the JWKS
+    ///         endpoint publishes, and writes the token response. Nothing here touches a key.
+    ///     </para>
+    /// </remarks>
+    static void MapToken(IEndpointRouteBuilder app) {
+        app.MapPost(
+            IdentityHostOpenIddict.TokenPath,
+            (HttpContext context, TokenApi api) => {
+                var request = context.GetOpenIddictServerRequest()
+                    ?? throw new InvalidOperationException(
+                        "The token endpoint was reached outside OpenIddict's pipeline. "
+                        + "EnableTokenEndpointPassthrough is what routes a validated request here; "
+                        + "a request that did not come through it has not been validated."
+                    );
+
+                var transaction = context.Features.Get<OpenIddictServerAspNetCoreFeature>()?.Transaction;
+
+                if (transaction?.Properties.TryGetValue(DegradedModeHandlers.ServicePrincipalProperty, out var value)
+                    != true
+                    || value is not ServicePrincipalDescriptor principal) {
+                    return Results.Forbid(
+                        new AuthenticationProperties(
+                            new Dictionary<string, string?>(StringComparer.Ordinal) {
+                                [OpenIddictServerAspNetCoreConstants.Properties.Error] =
+                                    OpenIddictConstants.Errors.InvalidClient,
+                                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] =
+                                    TokenApi.InvalidClientDescription
+                            }
+                        ),
+                        [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]
+                    );
+                }
+
+                return Results.SignIn(
+                    api.Mint(principal, request.ClientId ?? string.Empty, request.GetScopes()),
+                    authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme
+                );
+            }
+        );
     }
 
     /// <summary>

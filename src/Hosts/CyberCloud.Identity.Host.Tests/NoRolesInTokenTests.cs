@@ -1,6 +1,8 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Core.Contracts;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Tokens;
+using OpenIddict.Abstractions;
 using System.Security.Claims;
 
 namespace CyberCloud.Identity.Host.Tests;
@@ -52,6 +54,84 @@ public sealed class NoRolesInTokenTests {
                 + "user's groups make the header too big."
             );
         }
+    }
+
+    /// <summary>A service principal that has presented a valid credential.</summary>
+    static readonly ServicePrincipalDescriptor Principal = new() {
+        ServicePrincipalId = Guid.Parse("7c0e3b52-1d4f-4a8b-9e6c-2f1a0b3c4d5e"),
+        TenantId = Session.TenantId,
+        DisplayName = "ci",
+        Enabled = true,
+        CredentialSecretRef = new SecretRef { Path = "tenants/t/sp/ci", Field = "secret" }
+    };
+
+    static readonly DateTimeOffset Now = new(2026, 8, 11, 12, 5, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void EveryClaimIsMarkedForTheAccessToken() {
+        // ⚠ THE CLAIM THAT IS NOT MARKED IS NOT IN THE JWT, AND NOTHING SAYS SO. OpenIddict serializes
+        // only the claims whose destination names the access token and drops the rest silently,
+        // which is invisible to every assertion on the principal — the claim is there — and visible
+        // only to a gateway reading a token with no tid in it. Both entry points, every claim.
+        foreach (var principal in new[] {
+                     AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], SubjectTypes.User, Guid.NewGuid()),
+                     AccessTokenPrincipalFactory.BuildForServicePrincipal(Principal, "ci", "cyc.api", ["cyc.api"], Now)
+                 }) {
+            foreach (var claim in principal.Claims) {
+                claim.GetDestinations()
+                    .ShouldContain(
+                        OpenIddictConstants.Destinations.AccessToken,
+                        $"'{claim.Type}' has no access-token destination, so OpenIddict would leave it "
+                        + "out of the token it signs"
+                    );
+            }
+        }
+    }
+
+    [Fact]
+    public void TheAuthenticationTimeIsTypedAsAnIntegerBecauseOpenIddictChecksTheTag() {
+        // ⚠ Same digits, different ValueType, and the difference is a 500 from /token: OpenIddict's
+        // ValidateSignInDemand refuses a principal whose auth_time carries the default string type.
+        // Every value assertion in this file passed while that was so; the first real token found it.
+        foreach (var principal in new[] {
+                     AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], SubjectTypes.User),
+                     AccessTokenPrincipalFactory.BuildForServicePrincipal(Principal, "ci", "cyc.api", ["cyc.api"], Now)
+                 }) {
+            principal.FindFirst(AccessTokenClaims.AuthenticationTime)!.ValueType.ShouldBe(ClaimValueTypes.Integer64);
+        }
+    }
+
+    [Fact]
+    public void AServicePrincipalTokenNamesItsTypeAndNoSession() {
+        var principal = AccessTokenPrincipalFactory.BuildForServicePrincipal(
+            Principal,
+            Principal.ServicePrincipalId.ToString("N"),
+            "cyc.api",
+            ["cyc.api"],
+            Now
+        );
+
+        // ⚠ The whole reason sub_typ exists: a ReBAC subject is typed, and a token that said `user`
+        // for a machine would make every Check a guess that fails open on a GUID collision.
+        principal.FindFirst(AccessTokenClaims.SubjectType)!.Value.ShouldBe(SubjectTypes.ServicePrincipal);
+        principal.FindFirst(AccessTokenClaims.Subject)!.Value.ShouldBe(Principal.ServicePrincipalId.ToString("N"));
+        principal.FindFirst(AccessTokenClaims.TenantId)!.Value.ShouldBe(Principal.TenantId.ToString("N"));
+        principal.FindFirst(AccessTokenClaims.AuthorizedParty)!.Value.ShouldBe(Principal.ServicePrincipalId.ToString("N"));
+        principal.FindFirst(AccessTokenClaims.AuthenticationMethods)!.Value.ShouldBe("pop");
+        principal.FindFirst(AccessTokenClaims.AuthenticationTime)!.Value.ShouldBe(Now.ToUnixTimeSeconds().ToString());
+
+        // No session — nothing to revoke, nothing to list — and no operator: a machine is never the
+        // subject of "view as tenant".
+        principal.FindFirst(AccessTokenClaims.SessionId).ShouldBeNull();
+        principal.FindFirst(AccessTokenClaims.ImpersonatedBy).ShouldBeNull();
+
+        // The same closed set, on the second entry point.
+        foreach (var claim in principal.Claims) {
+            AccessTokenClaims.Permitted.ShouldContain(claim.Type);
+            AccessTokenClaims.ForbiddenClaims.ShouldNotContain(claim.Type);
+        }
+
+        principal.Claims.Count().ShouldBe(8);
     }
 
     [Fact]
@@ -256,9 +336,15 @@ public sealed class NoRolesInTokenTests {
             .ShouldBe(["SessionDescriptor", "String", "IReadOnlyList`1", "String", "Guid"]);
 
         // Nothing HTTP-shaped reaches it, which is what makes "never accepted from a header" a fact
-        // about the type rather than a rule about its callers.
-        build.GetParameters()
-            .ShouldAllBe(x => !x.ParameterType.FullName!.Contains("Microsoft.AspNetCore", StringComparison.Ordinal));
+        // about the type rather than a rule about its callers — and the same holds for every other
+        // public entry point the type grows, so the second one is covered without being named.
+        foreach (var method in typeof(AccessTokenPrincipalFactory).GetMethods().Where(x => x.DeclaringType == typeof(AccessTokenPrincipalFactory))) {
+            method.GetParameters()
+                .ShouldAllBe(
+                    x => !x.ParameterType.FullName!.Contains("Microsoft.AspNetCore", StringComparison.Ordinal),
+                    $"{method.Name} takes something HTTP-shaped"
+                );
+        }
     }
 
     [Fact]

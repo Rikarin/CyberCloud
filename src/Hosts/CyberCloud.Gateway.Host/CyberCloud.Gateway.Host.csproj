@@ -18,6 +18,16 @@
         CyberCloud.Tenancy              TenantDirectoryCache — the in-process snapshot stage 3 reads.
         CyberCloud.ResourceManager      Stage 8 dispatches to it. docs/plan/08 calls it "a service
                                         held by the gateway".
+        CyberCloud.Identity.Contracts   AccessTokenClaims and AccessTokenPolicy — the claim names,
+                                        the audience and the algorithm a token carries, stated once
+                                        so the identity host and this validator cannot drift. ⚠ It
+                                        references CyberCloud.Authorization.Contracts, and that is
+                                        fine for the reason the ABSENT list below gives: no type from
+                                        it is bound here, so no AssemblyRef row appears.
+        OpenIddict.Validation.SystemNetHttp
+                                        Stage 2. Validates a bearer JWT against the identity host's
+                                        published key set — discovery, JWKS, signature, issuer,
+                                        audience, expiry — from JwksCallerContextResolver.
         Providers.*.Application         ⚠ TWELVE OF THEM, AND RULE 5 IS WHAT MAKES THEM LEGAL —
                                         "the gateway references no provider IMPLEMENTATION assembly,
                                         only .Contracts and .Application". Stage 6 resolves a path
@@ -42,6 +52,13 @@
 
         Any SignalR backplane package — docs/plan/10 § SignalR: "No SignalR backplane product." The
           fan-out is a connection grain plus Orleans streams, which is O(interested), not O(pods).
+
+        OpenIddict.Server.* — docs/plan/11 § Hosts: the gateway serves bearer tokens and mints none.
+          The identity host is the mirror image (it references Server and not Validation), and the
+          two reference sets are the package-level expression of the cookie-versus-bearer boundary.
+          Nor OpenIddict.Validation.AspNetCore, which is an ASP.NET Core authentication handler;
+          stage 2 is not one, and a scheme nothing consults is a second place authentication appears
+          to happen.
     -->
 
     <PropertyGroup>
@@ -60,48 +77,6 @@
         -->
         <NoWarn>$(NoWarn);CA1515</NoWarn>
     </PropertyGroup>
-
-    <ItemGroup Label="The one InternalsVisibleTo beyond the sibling suite">
-        <!--
-          ⚠ WHY THIS EXISTS, AND WHAT WAS REJECTED TO GET HERE. Nothing in this repository could
-          drive an HTTP request through to the REAL resource manager, and the reason was mechanical
-          rather than an oversight: stage 2 resolves ICallerContextResolver, the only implementation
-          that issues a token is IssuedTokenCallerContextResolver, and it is `internal` — so a suite
-          outside this assembly could not mint a token the pipeline accepts and therefore could not
-          make an authenticated request at all. CyberCloud.Gateway.Host.Tests drove the nine stages
-          against a substituted manager; CyberCloud.AppHost.Tests drove the real manager by resolving
-          it from the container. The two met at IResourceManager and neither covered the join, and
-          every route added since inherited that.
-
-          Three shapes were on the table.
-
-          ⚠ A TEST-ONLY ISSUER REGISTERED IN THE COMPOSITION ROOT — rejected, and it is the one to be
-          most careful about, because half of it is already here and looks like an invitation.
-          AddIssuedTokenAuthentication exists and has NO caller anywhere; making the composition root
-          call it would put a seam in production code whose only reason is a test, and a gateway that
-          shipped an in-process token table is a gateway that authenticates against a dictionary.
-          What GatewayComposition.BuildAsync took instead is a `configure` parameter — the deployment
-          supplies its own identity registration, nothing is registered on its behalf, and a host that
-          passes nothing behaves exactly as before.
-
-          ⚠ A REAL IDENTITY HOST IN THE APPHOST TOPOLOGY — the most honest shape, and still the
-          destination. Rejected as the way to unblock this now: CyberCloud.Identity.Host maps no
-          token endpoint (OpenIddict's passthrough is enabled and nothing handles it),
-          AccessTokenPrincipalFactory has no production caller, its signing key is ephemeral, and this
-          gateway has no JWKS validation to meet it with. That is docs/plan/11's M2 work, and holding
-          the M1 exit story hostage to it is how the join stays uncovered for another milestone.
-
-          ⚠ THIS — InternalsVisibleTo for one more TEST assembly. It is the cheapest, and the "widens
-          a security-relevant surface" objection is worth stating rather than waving away: what widens
-          is which test assembly can see this assembly's internals, and nothing about what a deployed
-          gateway does, exposes or accepts. No production consumer gains anything, the issuer stays
-          `internal`, and AddIssuedTokenAuthentication stays uncalled by any host. The cost is that a
-          second suite can now reach in, and the thing bought is the strongest test in the repository:
-          a tenant creating a resource over HTTP, through the nine stages, against the real manager,
-          and seeing it converge in a real cluster.
-        -->
-        <InternalsVisibleTo Include="CyberCloud.AppHost.Tests"/>
-    </ItemGroup>
 
     <ItemGroup>
         <!-- ASP.NET Core, SignalR server, the health-check abstractions. -->
@@ -123,6 +98,12 @@
         -->
         <!-- Stage 5's counters. docs/plan/10 § Request pipeline: "Redis-backed sliding window". -->
         <PackageReference Include="StackExchange.Redis"/>
+        <!--
+          Stage 2. docs/plan/11 § Protocol: "the gateway validates the JWT locally against the
+          published key set". Validation and never Server — see the header. SystemNetHttp is the
+          half that fetches the discovery document and the JWKS; the validation core comes with it.
+        -->
+        <PackageReference Include="OpenIddict.Validation.SystemNetHttp"/>
         <PackageReference Include="Volo.Abp.Autofac"/>
     </ItemGroup>
 
@@ -130,6 +111,12 @@
         <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
         <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
         <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!--
+          The token contract — docs/plan/11 § Protocol's claim set, audience and algorithm, in the
+          form both hosts compile against. AccessTokenPolicy's own remarks: "a change to any of it
+          is a compile-time event on both sides rather than a message somebody missed".
+        -->
+        <ProjectReference Include="../../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
         <!--
           docs/plan/18's OpenBao client. The reference is here rather than on CyberCloud.Silo.Host
           because THIS host is the one that composes the resource manager, and a synchronous action —

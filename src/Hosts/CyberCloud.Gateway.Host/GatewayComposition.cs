@@ -1,3 +1,4 @@
+using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Routing;
@@ -42,27 +43,34 @@ public static class GatewayComposition {
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             <paramref name="configure" /> exists because the identity seam is the one part of
-    ///             this host that no deployment shares.
-    ///         </b> Stage 2 resolves
-    ///         <c>ICallerContextResolver</c>, and there is deliberately no default: a gateway that
-    ///         authenticated nobody and served anyway is the failure
-    ///         <see cref="GatewayServiceCollectionExtensions.AddIssuedTokenAuthentication" />'s
-    ///         remarks refuse to build. What a deployment registers here is a real registration —
-    ///         nothing about this parameter bypasses a stage, relaxes a check or is read anywhere
-    ///         else — and a host that passes nothing gets exactly what it got before this parameter
-    ///         existed.
+    ///             Stage 2's resolver is registered from configuration, and a composition that ends
+    ///             with none registered is refused here rather than discovered at the first request.
+    ///         </b> <c>CyberCloud:Gateway:Identity:Issuer</c> names the identity host, and
+    ///         <see cref="GatewayServiceCollectionExtensions.AddJwksAuthentication" /> registers the
+    ///         resolver that validates against its published key set. A deployment that blanks the
+    ///         section gets an <see cref="InvalidOperationException" /> out of this method naming it —
+    ///         and that is the whole of https://github.com/Rikarin/CyberCloud/issues/68's interim
+    ///         option, taken. Before it, this host registered no <c>ICallerContextResolver</c> at all,
+    ///         built, started, passed <c>/health</c> and <c>/alive</c>, and answered <c>500</c> to
+    ///         every other request; the remark on the old registration method claimed composition
+    ///         "fails to resolve the pipeline at startup", and it was measured false — see the ⚠ on
+    ///         the check itself for why <c>ValidateOnBuild</c> could not have caught it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It is not a test hook, and the distinction is the one worth keeping.</b> A
-    ///         test-only registration living in the composition root would mean production code
-    ///         carrying a seam whose only caller is a test; this is the composition root taking its
-    ///         deployment-specific half as a parameter, which is what lets a test compose the
-    ///         <i>same</i> host as production and differ only where a deployment legitimately
-    ///         differs. Its one caller today is
-    ///         <c>CyberCloud.AppHost.Tests</c>' <c>TenantOverHttpTests</c>; when
-    ///         <c>CyberCloud.Identity.Host</c> issues real tokens, the gateway's own
-    ///         <c>Program.cs</c> becomes the second.
+    ///         ⚠
+    ///         <b>
+    ///             <paramref name="configure" /> is the deployment's half, it runs last, and it is
+    ///             not a test hook.
+    ///         </b> A test-only registration living in the composition root would mean production
+    ///         code carrying a seam whose only caller is a test; this is the composition root taking
+    ///         its deployment-specific half as a parameter — the vault, a region proxy, an
+    ///         <c>ICallerContextResolver</c> for a deployment that has a reason to supply its own —
+    ///         which is what lets a test compose the <i>same</i> host as production and differ only
+    ///         where a deployment legitimately differs. Nothing about the parameter bypasses a stage
+    ///         or relaxes a check; what it registers is a real registration. ⚠ The one caller that
+    ///         used it to supply the identity seam, <c>CyberCloud.AppHost.Tests</c>'
+    ///         <c>TenantOverHttpTests</c>, no longer does: it starts the real identity host and
+    ///         configures this one to trust it, the way a deployment would.
     ///     </para>
     /// </remarks>
     public static async Task<WebApplication> BuildAsync(
@@ -134,8 +142,41 @@ public static class GatewayComposition {
         // not matter because the registry is a factory resolved after all wiring.
         await builder.Services.AddApplicationAsync<GatewayHostModule>();
 
+        // ── Stage 2's resolver — docs/plan/11 § Protocol, docs/plan/10 § Request pipeline ─────────
+        //
+        // ⚠ CONDITIONAL LIKE THE VAULT, AND FOR THE OPPOSITE REASON. The vault's absence leaves a
+        // refusing seam in place and the pod starts; this section's absence leaves NO seam in place,
+        // and the check after `configure` below is what turns that into a start-up failure. There is
+        // no default issuer to fall back to — GatewayIdentityOptions says why — so a pod with the
+        // section blank must not start, and must say which section.
+        var identity = new GatewayIdentityOptions();
+        builder.Configuration.GetSection(GatewayIdentityOptions.SectionName).Bind(identity);
+
+        if (identity.IsConfigured) {
+            builder.Services.AddJwksAuthentication(identity);
+        }
+
         // ⚠ LAST, so a deployment's registration wins over a TryAdd above and loses to nothing.
         configure?.Invoke(builder.Services);
+
+        // ⚠ THE CHECK ValidateOnBuild WOULD HAVE BEEN, IF IT RAN. It does not: CreateClient calls
+        // builder.Host.UseAutofac(), which replaces the service-provider factory, and ValidateOnBuild
+        // belongs to the default one. So a container missing AuthenticateStage's one constructor
+        // argument builds without complaint, GatewayPipeline is resolved per request by the one
+        // middleware, and the first real request — never a health check, which MapGateway routes
+        // around the pipeline — throws. That is a gateway that starts, reports healthy, and serves
+        // nothing; #68 is its record. The registration is checked here by name because it is the
+        // one the pipeline cannot run without and the one no default can honestly fill.
+        if (builder.Services.All(x => x.ServiceType != typeof(ICallerContextResolver))) {
+            throw new InvalidOperationException(
+                "The gateway has no ICallerContextResolver, so stage 2 cannot run and every request "
+                + "would fail — this refusal is instead of a gateway that starts, passes its health "
+                + $"checks and answers 500 to everything else. Set {GatewayIdentityOptions.SectionName}"
+                + ":Issuer to the identity host's origin (the shipped appsettings.json carries it), or "
+                + "register a resolver through BuildAsync's configure parameter. "
+                + "https://github.com/Rikarin/CyberCloud/issues/68"
+            );
+        }
 
         return builder.Build();
     }
