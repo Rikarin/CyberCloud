@@ -122,6 +122,79 @@
       },
       "x-cybercloud-scope-read-only": true
     },
+    "/tenants/{tenantId}/subscriptions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "Scopes_ListSubscriptions",
+        "summary": "List subscriptions.",
+        "description": "Lists the subscriptions in the tenant the token names, one page at a time. The page holds the subscriptions the caller may read — any role on a subscription is enough, and no permission on the tenant itself is needed — so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope": "subscription",
+      "x-cybercloud-scope-type": "CyberCloud.Resources/subscriptions",
+      "x-cybercloud-scope-collection": true
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}": {
       "parameters": [
         {
@@ -243,6 +316,82 @@
           }
         }
       }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "Scopes_ListResourceGroups",
+        "summary": "List resource groups.",
+        "description": "Lists the resource groups in one subscription, one page at a time, filtered to the groups the caller may read. ⚠ 404 when the caller cannot read the subscription, which is the same answer as for a subscription that does not exist — docs/plan/07 § The enforcement seam. Stop when nextLink is absent.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope": "resourceGroup",
+      "x-cybercloud-scope-type": "CyberCloud.Resources/subscriptions/resourceGroups",
+      "x-cybercloud-scope-collection": true
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}": {
       "parameters": [
@@ -23761,6 +23910,28 @@
           "id",
           "name",
           "type"
+        ],
+        "additionalProperties": false
+      },
+      "Scope.List": {
+        "type": "object",
+        "title": "Scope.List",
+        "description": "One page of scopes — a tenant's subscriptions or a subscription's resource groups. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The scopes on this page, ordered by id. Each element is exactly what a GET of that scope returns, member for member.",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          }
+        },
+        "required": [
+          "value"
         ],
         "additionalProperties": false
       },

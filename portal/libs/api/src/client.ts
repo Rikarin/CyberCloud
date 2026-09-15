@@ -148,6 +148,11 @@ export class CyberCloudApi {
     return this.transport.send<ScopeResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}` });
   }
 
+  /** One page of the subscriptions the caller may read. ⚠ A short page never means "that is all there is". */
+  listSubscriptions(tenantId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>> {
+    return this.transport.send<Page<ScopeResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions`, query: CyberCloudApi.pageQuery(page) });
+  }
+
   /** Creates one subscription, or returns the existing one unchanged. */
   /** ⚠ 201 the first time and 200 on a repeat, and no operation to poll. */
   createSubscription(tenantId: string, subscriptionId: string, content: SubscriptionCreateContent): Promise<ApiResponse<ScopeResource>> {
@@ -157,6 +162,11 @@ export class CyberCloudApi {
   /** Reads one resource group. */
   getResourceGroup(tenantId: string, subscriptionId: string, resourceGroupName: string): Promise<ApiResponse<ScopeResource>> {
     return this.transport.send<ScopeResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}` });
+  }
+
+  /** One page of the resource groups the caller may read. ⚠ A short page never means "that is all there is". */
+  listResourceGroups(tenantId: string, subscriptionId: string, page: PageRequest = {}): Promise<ApiResponse<Page<ScopeResource>>> {
+    return this.transport.send<Page<ScopeResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups`, query: CyberCloudApi.pageQuery(page) });
   }
 
   /** Creates one resource group, or returns the existing one unchanged. */

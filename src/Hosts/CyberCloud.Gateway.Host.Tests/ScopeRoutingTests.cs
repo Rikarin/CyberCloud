@@ -243,8 +243,12 @@ public sealed class ScopeRoutingTests {
     // complement `ResourceId.ParsePath` refuses, and the two landed in the same batch. The scope
     // grammar still does not swallow it, which is what this theory was really guarding, and
     // `CollectionRoutingTests` is where that address is asserted positively now.
-    // Three segments: not a scope shape and not a resource one.
-    [InlineData("/tenants/{t}/subscriptions")]
+    //
+    // ⚠ AND A SECOND CASE WENT THE SAME WAY. `/tenants/{t}/subscriptions` — "three segments: not a
+    // scope shape and not a resource one" — is now the SUBSCRIPTION COLLECTION, the third scope
+    // grammar (`ScopeCollectionId`), and `ScopeCollectionRoutingTests` asserts it positively. The
+    // three-segment shape with the wrong literal stays here in its place.
+    [InlineData("/tenants/{t}/resourceGroups")]
     // The literal is wrong.
     [InlineData("/tenant/{t}")]
     // A trailing slash is an empty segment, which both grammars refuse.

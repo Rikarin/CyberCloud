@@ -172,6 +172,10 @@ class SubscriptionsClient:
         raise_for_status(response)
         return ScopeResource.from_wire(wire_of(response))
 
+    def list(self, tenant_id: str, *, top: Optional[int] = None) -> Pager[ScopeResource]:
+        """Lists the subscriptions the caller may read, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions", top, ScopeResource.from_wire)
+
     def create(self, tenant_id: str, subscription_id: str, content: SubscriptionCreateContent) -> ScopeResource:
         """Creates one subscription, or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat, and no operation to poll."""
         response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}", body=content.to_wire()))
@@ -190,6 +194,10 @@ class ResourceGroupsClient:
         response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}"))
         raise_for_status(response)
         return ScopeResource.from_wire(wire_of(response))
+
+    def list(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[ScopeResource]:
+        """Lists the resource groups the caller may read, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups", top, ScopeResource.from_wire)
 
     def create(self, tenant_id: str, subscription_id: str, resource_group_name: str, content: ResourceGroupCreateContent) -> ScopeResource:
         """Creates one resource group, or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat, and no operation to poll."""

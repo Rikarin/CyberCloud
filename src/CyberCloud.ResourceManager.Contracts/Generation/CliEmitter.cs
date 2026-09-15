@@ -223,7 +223,7 @@ public static class CliEmitter {
                 "GET",
                 type,
                 version,
-                PageFlags(type),
+                PageFlags(type.CollectionQuery),
                 longRunning: false,
                 named: false
             );
@@ -474,6 +474,38 @@ public static class CliEmitter {
             );
         }
 
+        // ⚠ EMITTED ONLY WHEN THE DOCUMENT DECLARES THE COLLECTION, as a resource type's `list` is:
+        // the tenant has none, and `cyc scope tenant list` would be a verb whose URL does not exist.
+        if (scope.CollectionPath.Length > 0) {
+            // ⚠ The ancestors' flags and NOT the scope's own --name: the collection path ends on
+            // the parent, so there is no placeholder for a name to fill — the same rule Address
+            // applies to a resource `list`, and the placeholder-per-flag invariant
+            // DerivedSurfaceTests holds every verb to. `cyc scope subscription list` therefore takes
+            // --tenant from the profile and nothing else; `cyc scope resource-group list` takes
+            // --tenant and --subscription, both profile-backed, because a group's subscription is
+            // context in the way the group's own name is not.
+            var list = ScopeVerb(
+                "list",
+                "List the "
+                + scope.DisplayPlural.ToLowerInvariant()
+                + " the caller may read. ⚠ A short page never means \"that is all there is\".",
+                "GET",
+                scope,
+                version,
+                [.. DocumentReader.PlaceholdersOf(scope.CollectionPath).Select(ProfileFlag)],
+                PageFlags(scope.CollectionQuery)
+            );
+
+            list["path"] = scope.CollectionPath;
+
+            // Paged, and the host acts on it — the same pair the resource `list` carries, for the
+            // reasons Command gives on `paged` and `pageFlags`.
+            list["paged"] = true;
+            list["pageFlags"] = new JsonArray { "--all" };
+
+            verbs["list"] = list;
+        }
+
         return new JsonObject {
             ["name"] = Kebab(scope.Kind),
             // ⚠ The Azure-shaped type string, so a scope command answers the same question a
@@ -710,7 +742,10 @@ public static class CliEmitter {
     /// <summary>
     ///     One flag per query parameter the collection <c>GET</c> declares — the paging pair.
     /// </summary>
-    /// <param name="type">The resource type, whose collection path item supplies the parameters.</param>
+    /// <param name="query">
+    ///     The collection path item's declared query parameters — a resource type's or a scope's;
+    ///     the paging pair is one pair across every collection this API has.
+    /// </param>
     /// <remarks>
     ///     <para>
     ///         ⚠
@@ -736,10 +771,10 @@ public static class CliEmitter {
     ///         never have to be derived from each other.
     ///     </para>
     /// </remarks>
-    static ImmutableArray<CliFlag> PageFlags(DocumentType type) {
+    static ImmutableArray<CliFlag> PageFlags(ImmutableArray<DocumentQueryParameter> query) {
         var flags = ImmutableArray.CreateBuilder<CliFlag>();
 
-        foreach (var parameter in type.CollectionQuery) {
+        foreach (var parameter in query) {
             var name = "--" + Kebab(parameter.Name.TrimStart('$'));
 
             // ⚠ THE COLLECTION DECLARES `api-version` TOO, AND IT MUST NOT BECOME A VERB FLAG.

@@ -443,6 +443,56 @@ public sealed class ScopeCommandTests {
         (await host.RunAsync("scope", "tenant", "create", "--output", "none")).ShouldBe((int)ExitCode.Usage);
     }
 
+    /// <summary>
+    ///     ⚠ <b><c>cyc scope subscription list</c> and <c>cyc scope resource-group list</c> page
+    ///     the two scope collections from the profile's context and nothing else.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The collection path ends on the parent, so the verb names no scope of its own: the
+    ///     tenant and the subscription come from the profile, <c>--all</c> follows <c>nextLink</c>
+    ///     as it does on a resource list, and the paging pair goes on the wire with its sigils. A
+    ///     host that filled placeholders from the item verb's table would have demanded a
+    ///     <c>--name</c> that binds to nothing.
+    /// </remarks>
+    [Fact]
+    public async Task TheScopeCollectionsAreListedFromTheProfileAndPaged() {
+        var transport = new ScriptedTransport((_, index) => index switch {
+                0 => Responses.Json(
+                    HttpStatusCode.OK,
+                    """{"value":[{"id":"/tenants/t/subscriptions/s1","name":"One","type":"CyberCloud.Resources/subscriptions"}],"nextLink":"https://api.cybercloud.io/tenants/t/subscriptions?api-version=2026-08-01&$top=1&$skipToken=s1"}"""
+                ),
+                _ => Responses.Json(
+                    HttpStatusCode.OK,
+                    """{"value":[{"id":"/tenants/t/subscriptions/s2","name":"Two","type":"CyberCloud.Resources/subscriptions"}]}"""
+                ),
+            }
+        );
+
+        using var host = TestHost.Create(transport, config: "[default]\ntenant = t\nsubscription = s\n");
+
+        var code = await host.RunAsync("scope", "subscription", "list", "--top", "1", "--all", "--output", "json");
+
+        code.ShouldBe((int)ExitCode.Ok);
+        transport.RequestCount.ShouldBe(2);
+        transport.Requests[0].Method.ShouldBe(HttpMethod.Get);
+        transport.Requests[0].Uri.AbsolutePath.ShouldBe("/tenants/t/subscriptions");
+        transport.Requests[0].Uri.Query.ShouldContain("%24top=1");
+        // ⚠ The second request is the nextLink verbatim — the host follows the URL it was handed
+        // and reassembles nothing, which is why the continuation arrives unencoded here.
+        transport.Requests[1].Uri.PathAndQuery.ShouldBe("/tenants/t/subscriptions?api-version=2026-08-01&$top=1&$skipToken=s1");
+        host.Stdout.ShouldContain("\"One\"");
+        host.Stdout.ShouldContain("\"Two\"");
+
+        var groups = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, """{"value":[]}"""));
+        using var groupHost = TestHost.Create(groups, config: "[default]\ntenant = t\nsubscription = s\n");
+
+        (await groupHost.RunAsync("scope", "resource-group", "list", "--output", "none")).ShouldBe((int)ExitCode.Ok);
+        groups.Requests[0].Uri.AbsolutePath.ShouldBe("/tenants/t/subscriptions/s/resourceGroups");
+
+        // ⚠ And no tenant list at all: the only tenant a request can address is its own.
+        (await groupHost.RunAsync("scope", "tenant", "list", "--output", "none")).ShouldBe((int)ExitCode.Usage);
+    }
+
     [Fact]
     public async Task AScopeVerbOffersNoWaitFlags() {
         using var host = TestHost.Create();

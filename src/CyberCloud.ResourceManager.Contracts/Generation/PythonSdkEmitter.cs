@@ -987,6 +987,19 @@ public static class PythonSdkEmitter {
             .Append("        raise_for_status(response)\n")
             .Append("        return ScopeResource.from_wire(wire_of(response))\n");
 
+        if (scope.CollectionPath.Length > 0) {
+            // Emitted only when the document declares the collection, as a resource type's `list`
+            // is — the tenant has none. The same Pager a resource listing walks, over ScopeResource.
+            var collectionPlaceholders = DocumentReader.PlaceholdersOf(scope.CollectionPath);
+            var collectionParameters = string.Join(", ", collectionPlaceholders.Select(x => Snake(x) + ": str"));
+
+            built.Append("\n    def list(self, ").Append(collectionParameters).Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
+                .Append("*, top: Optional[int] = None) -> Pager[ScopeResource]:\n")
+                .Append("        \"\"\"Lists the ").Append(Docstring(scope.DisplayPlural.ToLowerInvariant()))
+                .Append(" the caller may read, page by page. ⚠ A short page never means \"that is all there is\".\"\"\"\n")
+                .Append("        return Pager(self._transport, ").Append(PathExpression(scope.CollectionPath)).Append(", top, ScopeResource.from_wire)\n");
+        }
+
         if (!scope.Creatable) {
             built.Append("\n    # ⚠ There is no create, and the absence is the contract: a request's tenant is\n")
                 .Append("    # resolved from its token, so a call creating another tenant is refused before routing.\n");

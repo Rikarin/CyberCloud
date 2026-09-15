@@ -1320,6 +1320,37 @@ public static class SdkEmitter {
                 .Append(parameters.Count > 0 ? ",\n        " : "\n        ")
                 .Append("CancellationToken cancellationToken = default);\n");
 
+            if (scope.CollectionPath.Length > 0) {
+                // ⚠ Emitted only when the document declares the collection — the tenant has none,
+                // and a ListTenantsAsync would page a URL the gateway does not serve. The template
+                // is read off the document for the reason CollectionPathTemplate is on a resource
+                // collection: the hand-written half pages what the document says, never a path it
+                // reassembled.
+                var collectionParameters = DocumentReader.PlaceholdersOf(scope.CollectionPath)
+                    .Select(x => "string " + Camel(x))
+                    .ToList();
+
+                built.Append("\n    /// <summary>The collection URL template List")
+                    .Append(name)
+                    .Append("sAsync pages.</summary>\n")
+                    .Append("    public const string ")
+                    .Append(name)
+                    .Append("CollectionPathTemplate = ")
+                    .Append(Quote(scope.CollectionPath))
+                    .Append(";\n")
+                    .Append("\n    /// <summary>The ")
+                    .Append(Escape(scope.DisplayPlural.ToLowerInvariant()))
+                    .Append(" the caller may read, paged.</summary>\n")
+                    .Append("    /// <remarks>⚠ A short page never means \"that is all there is\": the page holds\n")
+                    .Append("    /// what the caller may read and the envelope carries no count.</remarks>\n")
+                    .Append("    public partial AsyncPageable<ScopeResource> List")
+                    .Append(name)
+                    .Append("sAsync(\n        ")
+                    .Append(string.Join(",\n        ", collectionParameters))
+                    .Append(collectionParameters.Count > 0 ? ",\n        " : "\n        ")
+                    .Append("CancellationToken cancellationToken = default);\n");
+            }
+
             if (!scope.Creatable) {
                 // ⚠ SAID IN THE GENERATED FILE, because "there is no create" and "the create was
                 // forgotten" are indistinguishable to somebody reading a class with one method.

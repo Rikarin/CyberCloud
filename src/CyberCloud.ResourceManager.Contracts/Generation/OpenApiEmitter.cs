@@ -104,6 +104,18 @@ public static class OpenApiEmitter {
     /// </remarks>
     public const string ScopeSchema = "Scope";
 
+    /// <summary>
+    ///     The component both scope collections' <c>200</c> bodies point at: one page of
+    ///     <see cref="ScopeSchema" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ One list component for both collections, for the reason there is one
+    ///     <see cref="ScopeSchema" /> for all three items: the element is the same object whichever
+    ///     collection it came from, so a page per kind would be two identical schemas whose only
+    ///     difference is which <c>type</c> value the elements happen to carry.
+    /// </remarks>
+    public const string ScopeListSchema = "Scope.List";
+
     const string SubscriptionCreateSchema = "Scope.SubscriptionCreate";
     const string ResourceGroupCreateSchema = "Scope.ResourceGroupCreate";
 
@@ -201,6 +213,31 @@ public static class OpenApiEmitter {
     /// <summary>The resource group scope's path template.</summary>
     public const string ResourceGroupPathTemplate =
         SubscriptionPathTemplate + "/resourceGroups/{resourceGroupName}";
+
+    /// <summary>The subscription collection's path template — a tenant's subscriptions.</summary>
+    /// <remarks>
+    ///     ⚠ Derived from the item template by cutting its last segment, as
+    ///     <see cref="CollectionPathOf" /> derives a resource collection's, so the two cannot name
+    ///     different ancestors.
+    /// </remarks>
+    public const string SubscriptionCollectionPathTemplate = TenantPathTemplate + "/subscriptions";
+
+    /// <summary>The resource group collection's path template — a subscription's resource groups.</summary>
+    public const string ResourceGroupCollectionPathTemplate = SubscriptionPathTemplate + "/resourceGroups";
+
+    /// <summary>
+    ///     The extension a scope <i>collection</i> path item carries beside <see cref="ScopeExtension" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A discriminator for the reason <c>x-cybercloud-collection</c> is one.</b>
+    ///     <see cref="DocumentReader.ScopesOf" /> keys a scope on <see cref="ScopeExtension" />, and
+    ///     a collection carries that extension too — it has to, so a surface can find which kind it
+    ///     lists. Without this second key the collection would read as a second scope of the same
+    ///     kind: <see cref="CliEmitter" /> would emit two <c>subscription</c> commands into one
+    ///     object and keep the last, <c>FormsEmitter</c> would replace the create form with one that
+    ///     has no body, and <c>DerivedSurfaces</c>' scope count would be off by two.
+    /// </remarks>
+    public const string ScopeCollectionExtension = "x-cybercloud-scope-collection";
 
     /// <summary>The extension a scope path item is recognised by.</summary>
     /// <remarks>
@@ -927,33 +964,42 @@ public static class OpenApiEmitter {
             }
         }
 
-        parameters.Add(
-            new JsonObject {
-                ["name"] = "$top",
-                ["in"] = "query",
-                ["required"] = false,
-                ["description"] =
-                    "How many resources to examine. ⚠ A cap the platform clamps and not a promise: "
-                    + "the filter runs once per member, so this bounds the work and not the number of "
-                    + "results.",
-                ["schema"] = new JsonObject { ["type"] = "integer", ["minimum"] = 1 }
-            }
-        );
-
-        parameters.Add(
-            new JsonObject {
-                ["name"] = "$skipToken",
-                ["in"] = "query",
-                ["required"] = false,
-                ["description"] =
-                    "Where to resume. Take it from the previous page's nextLink rather than "
-                    + "constructing one.",
-                ["schema"] = new JsonObject { ["type"] = "string" }
-            }
-        );
+        foreach (var parameter in PagingParameters()) {
+            parameters.Add(parameter);
+        }
 
         return parameters;
     }
+
+    /// <summary>
+    ///     The paging pair every collection takes: <c>$top</c> and <c>$skipToken</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ One builder for the resource collections and the scope collections, so a client that
+    ///     pages one collection of this API pages every other with no branch — the same sentence
+    ///     <c>DispatchStage</c> makes about reading them.
+    /// </remarks>
+    static JsonObject[] PagingParameters() => [
+        new() {
+            ["name"] = "$top",
+            ["in"] = "query",
+            ["required"] = false,
+            ["description"] =
+                "How many resources to examine. ⚠ A cap the platform clamps and not a promise: "
+                + "the filter runs once per member, so this bounds the work and not the number of "
+                + "results.",
+            ["schema"] = new JsonObject { ["type"] = "integer", ["minimum"] = 1 }
+        },
+        new() {
+            ["name"] = "$skipToken",
+            ["in"] = "query",
+            ["required"] = false,
+            ["description"] =
+                "Where to resume. Take it from the previous page's nextLink rather than "
+                + "constructing one.",
+            ["schema"] = new JsonObject { ["type"] = "string" }
+        }
+    ];
 
     static JsonObject ActionPathItem(
         ResourceTypeRegistration type,
@@ -1060,7 +1106,7 @@ public static class OpenApiEmitter {
     // ── The scope API: the second, non-registry source, and the whole of issue #63 ─────────────
 
     /// <summary>
-    ///     The three scope path items, keyed by path.
+    ///     The three scope path items and the two scope collections, keyed by path.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -1148,8 +1194,98 @@ public static class OpenApiEmitter {
                 "Creates the resource group at this address, or returns the existing one unchanged. "
                 + "⚠ Every resource path names a resource group, so this is the call that has to "
                 + "succeed before any resource can be created at all."
+            ),
+            // ⚠ THE TWO COLLECTIONS, EMITTED THROUGH THE SAME SOURCE — #63's answer applied a
+            // second time. A collection routed by hand and left out of the document would recreate
+            // the state that issue closed: an address the gateway serves and no gate can see break.
+            // See ScopeCollectionPathItem for the shape.
+            [SubscriptionCollectionPathTemplate] = ScopeCollectionPathItem(
+                "subscription",
+                ScopeTypeNames.Subscription,
+                "Subscriptions",
+                [Ref("parameters", "TenantId")],
+                "Lists the subscriptions in the tenant the token names, one page at a time. The "
+                + "page holds the subscriptions the caller may read — any role on a subscription "
+                + "is enough, and no permission on the tenant itself is needed — so a short or "
+                + "empty page means \"that is what you may see\" and never \"that is all there is\". "
+                + "Stop when nextLink is absent."
+            ),
+            [ResourceGroupCollectionPathTemplate] = ScopeCollectionPathItem(
+                "resourceGroup",
+                ScopeTypeNames.ResourceGroup,
+                "Resource groups",
+                [Ref("parameters", "TenantId"), Ref("parameters", "SubscriptionId")],
+                "Lists the resource groups in one subscription, one page at a time, filtered to "
+                + "the groups the caller may read. ⚠ 404 when the caller cannot read the "
+                + "subscription, which is the same answer as for a subscription that does not "
+                + "exist — docs/plan/07 § The enforcement seam. Stop when nextLink is absent."
             )
         };
+
+    /// <summary>Builds one scope collection's path item — a <c>GET</c> and nothing else.</summary>
+    /// <param name="kind">The <see cref="ScopeExtension" /> value: the kind of scope the page holds.</param>
+    /// <param name="typeName">The Azure-shaped type string every element carries.</param>
+    /// <param name="plural">The plural display name.</param>
+    /// <param name="address">The parent's path parameters, in template order.</param>
+    /// <param name="description">The <c>GET</c>'s description.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>No <c>put</c>, no <c>patch</c>, no <c>delete</c>, and their absence is a
+    ///         decision</b>: a scope is created by <c>PUT</c> at its own address, so a write here
+    ///         would be a second way to create one whose id the platform chose — which
+    ///         <c>TenantCreateRequest.TenantId</c>'s remarks say makes every retry a new scope. The
+    ///         gateway answers <c>400</c> with the item address, and this document must not claim
+    ///         otherwise.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both <see cref="ScopeExtension" /> and <see cref="ScopeCollectionExtension" />,
+    ///         and the pair is what keeps this from reading as a fourth scope</b> — the remarks on
+    ///         the second constant. The paging pair is the same two parameters
+    ///         <see cref="CollectionParameters" /> writes for a resource collection, spelled once
+    ///         there and taken from it here, so <c>cyc</c>'s <c>--top</c> and <c>--skip-token</c>
+    ///         are one flag pair across every collection this API has.
+    ///     </para>
+    /// </remarks>
+    static JsonObject ScopeCollectionPathItem(
+        string kind,
+        string typeName,
+        string plural,
+        JsonArray address,
+        string description
+    ) {
+        var parameters = new JsonArray();
+
+        foreach (var parameter in address.ToList()) {
+            address.Remove(parameter);
+            parameters.Add(parameter);
+        }
+
+        parameters.Add(Ref("parameters", "ApiVersion"));
+
+        foreach (var parameter in PagingParameters()) {
+            parameters.Add(parameter);
+        }
+
+        return new JsonObject {
+            ["parameters"] = parameters,
+            ["get"] = new JsonObject {
+                ["operationId"] = "Scopes_List" + SdkEmitter.Pascal(kind) + "s",
+                ["summary"] = "List " + plural.ToLowerInvariant() + ".",
+                ["description"] = description,
+                ["responses"] = new JsonObject {
+                    ["200"] = new JsonObject {
+                        ["description"] = "One page.",
+                        ["content"] = new JsonObject {
+                            ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", ScopeListSchema) }
+                        }
+                    }
+                }.WithErrors()
+            },
+            [ScopeExtension] = kind,
+            ["x-cybercloud-scope-type"] = typeName,
+            [ScopeCollectionExtension] = true
+        };
+    }
 
     /// <summary>Builds one scope's path item.</summary>
     /// <param name="kind">The <see cref="ScopeExtension" /> value.</param>
@@ -1285,6 +1421,39 @@ public static class OpenApiEmitter {
                     }
                 },
                 ["required"] = new JsonArray { "id", "name", "type" },
+                ["additionalProperties"] = false
+            },
+            // ⚠ The same envelope CollectionSchema writes for a resource type, with the same two
+            // members and the same two rules — `value` required, `nextLink` absent on the last
+            // page, no `count` — so a client's pager reads a scope page and a resource page with one
+            // shape. Written here rather than through CollectionSchema because that builder takes a
+            // registration, and a scope has none.
+            [ScopeListSchema] = new JsonObject {
+                ["type"] = "object",
+                ["title"] = ScopeListSchema,
+                ["description"] =
+                    "One page of scopes — a tenant's subscriptions or a subscription's resource "
+                    + "groups. ⚠ The page holds what the caller may read: a listing runs a "
+                    + "permission check per member (docs/plan/07 § The enforcement seam), so a "
+                    + "short or empty page means \"that is what you may see\" and never \"that is "
+                    + "all there is\". Stop when nextLink is absent, never when a page is smaller "
+                    + "than you asked for.",
+                ["properties"] = new JsonObject {
+                    ["nextLink"] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] =
+                            "The absolute URL of the next page. Absent on the last page — there is no "
+                            + "empty-string form, because an empty URL is one a polite client requests."
+                    },
+                    ["value"] = new JsonObject {
+                        ["type"] = "array",
+                        ["description"] =
+                            "The scopes on this page, ordered by id. Each element is exactly what a "
+                            + "GET of that scope returns, member for member.",
+                        ["items"] = Ref("schemas", ScopeSchema)
+                    }
+                },
+                ["required"] = new JsonArray { "value" },
                 ["additionalProperties"] = false
             },
             [SubscriptionCreateSchema] = new JsonObject {

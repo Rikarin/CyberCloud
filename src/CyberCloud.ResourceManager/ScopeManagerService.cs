@@ -252,6 +252,62 @@ public sealed class ScopeManagerService(
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The resource collection's four moves, in the resource collection's order</b> —
+    ///         <c>ResourceManagerService.ListAsync</c> is the shape and this is that shape one level
+    ///         up: the parent grain's own index, ordered ordinally, resumed after the continuation
+    ///         and cut at the page size; one <c>ListObjects</c> for the page; a <c>Check</c> per
+    ///         member when the engine declined; then each survivor rendered by the same code a
+    ///         by-id <c>GET</c> uses, so an element and a read of that element are one shape.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The continuation is the last member <i>examined</i> and not the last one
+    ///         returned.</b> A page made entirely of scopes the caller cannot read must still
+    ///         advance, or a caller with narrow rights in a wide tenant loops on one page forever.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A member whose grain cannot answer is dropped rather than failing the page.</b>
+    ///         The tenant's listing is appended after the subscription grain's create, so the two
+    ///         cannot disagree that way round; but a group mid-delete is removed from the
+    ///         subscription's listing after its record is sealed, so for one moment a name is listed
+    ///         and its grain answers absent. Failing the whole page because somebody else is
+    ///         mid-delete would make the listing unavailable exactly while it is changing.
+    ///     </para>
+    /// </remarks>
+    public async Task<Result<ScopeListPage>> ListAsync(
+        ScopeListRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var parsed = ScopeId.ParsePath(request.ParentPath);
+        if (parsed.TryGetError(out var pathError)) {
+            return Result<ScopeListPage>.Failure(pathError);
+        }
+
+        var parent = parsed.GetValueOrThrow();
+
+        // ⚠ The same tenant comparison Resolve makes for an item, and the same canonical 404: a
+        // cross-tenant collection path that answered "forbidden" would confirm the other tenant's
+        // scope exists, and a listing is the widest such confirmation this API has.
+        if (parent.TenantId != request.Caller.TenantId) {
+            return CollectionNotFound(parent);
+        }
+
+        return parent.Kind switch {
+            ScopeKind.Tenant => await ListSubscriptionsAsync(parent, request, cancellationToken),
+            ScopeKind.Subscription => await ListGroupsAsync(parent, request, cancellationToken),
+            _ => Result<ScopeListPage>.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{parent.Path}' is a resource group, and a resource group has no scope children to "
+                + "list. What is inside it is resources, addressed by type: "
+                + "'/…/resourceGroups/{name}/providers/{namespace}/{type}' — docs/plan/10 § Shape."
+            )
+        };
+    }
+
+    /// <inheritdoc />
     public async Task<Result<ScopeSnapshot>> CreateTenantAsync(
         TenantCreateRequest request,
         CallerContext caller,
@@ -663,6 +719,176 @@ public sealed class ScopeManagerService(
         );
     }
 
+    // ── Lists ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     A tenant's subscriptions.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>No check on the tenant, and the absence is the design rather than a gap.</b> The
+    ///     parent is the tenant the token names, whose existence is not news to the caller, and
+    ///     requiring <c>read</c> on it would hide every subscription from a caller who holds
+    ///     <c>reader</c> on one subscription and nothing on the tenant — which is the ordinary shape
+    ///     of a delegated grant. The per-member filter below is the whole of the authorization, and
+    ///     Azure's <c>GET /subscriptions</c> answers the same question the same way.
+    /// </remarks>
+    async Task<Result<ScopeListPage>> ListSubscriptionsAsync(
+        ScopeId tenantScope,
+        ScopeListRequest request,
+        CancellationToken cancellationToken
+    ) {
+        var listed = await grains
+            .ForTenant(tenantScope.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ITenantGrain>(GrainKeys.Tenant(tenantScope.TenantId))
+            .ListSubscriptionsAsync();
+
+        if (listed.IsFailure) {
+            return CollectionNotFound(tenantScope);
+        }
+
+        // ⚠ ORDERED BY THE ID IN ITS N FORM, ORDINALLY, AND THE ORDER IS WHAT MAKES PAGING WORK. The
+        // continuation is "resume after this id" rather than an index, so the walk needs a total
+        // order two requests agree on without either holding state. The N form is what
+        // ReBacScopeAuthorizer.ObjectOf spells and what the tuple store keys, so a reader comparing
+        // a continuation against a log line sees one spelling.
+        var candidates = listed.GetValueOrThrow()
+            .Select(id => (Key: id.ToString("N", CultureInfo.InvariantCulture), Scope: ScopeId.Subscription(tenantScope.TenantId, id)))
+            .Where(x => string.CompareOrdinal(x.Key, request.Continuation) > 0)
+            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .Take(request.PageSize)
+            .ToArray();
+
+        return await PageAsync(tenantScope, candidates, request, ReadSubscriptionAsync, cancellationToken);
+    }
+
+    /// <summary>
+    ///     A subscription's resource groups.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The check is on the subscription, first, and its refusal is the canonical 404.</b>
+    ///     An empty page under a subscription the caller may not see would confirm the subscription
+    ///     exists; the same sentence as a subscription that does not exist confirms nothing. The
+    ///     explicit <c>GetAsync</c> after it is there because <c>ISubscriptionGrain.ListResourceGroupsAsync</c>
+    ///     answers success with an empty list for a subscription nobody created — the same fact
+    ///     <c>ResourceManagerService.ListAsync</c> records about the group grain — and a check that
+    ///     passed on a direct tuple aimed at an id nothing created would otherwise page an empty
+    ///     collection under an address that is not there.
+    /// </remarks>
+    async Task<Result<ScopeListPage>> ListGroupsAsync(
+        ScopeId subscriptionScope,
+        ScopeListRequest request,
+        CancellationToken cancellationToken
+    ) {
+        var permitted = await authorizer.AuthorizeAsync(
+            subscriptionScope,
+            Permissions.Read,
+            Permissions.Read,
+            request.Caller,
+            cancellationToken: cancellationToken
+        );
+
+        if (permitted.TryGetError(out var denied)) {
+            return Result<ScopeListPage>.Failure(denied);
+        }
+
+        var subscription = grains
+            .ForTenant(subscriptionScope.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(subscriptionScope.SubscriptionId));
+
+        var exists = await subscription.GetAsync();
+        if (exists.IsFailure) {
+            return CollectionNotFound(subscriptionScope);
+        }
+
+        var listed = await subscription.ListResourceGroupsAsync();
+        if (listed.IsFailure) {
+            return CollectionNotFound(subscriptionScope);
+        }
+
+        // Ordered by name, ordinally — a group's name is unique within its subscription by the
+        // grain's own construction, and it is the continuation.
+        var candidates = listed.GetValueOrThrow()
+            .Select(name => (Key: name, Scope: ScopeId.Group(subscriptionScope.TenantId, subscriptionScope.SubscriptionId, name)))
+            .Where(x => string.CompareOrdinal(x.Key, request.Continuation) > 0)
+            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .Take(request.PageSize)
+            .ToArray();
+
+        return await PageAsync(subscriptionScope, candidates, request, ReadGroupAsync, cancellationToken);
+    }
+
+    /// <summary>
+    ///     The filter and the reads, shared by both collections: one <c>ListObjects</c> for the
+    ///     page, a <c>Check</c> per member when the engine declines, then each survivor rendered by
+    ///     the by-id read.
+    /// </summary>
+    /// <param name="parent">The scope the members hang off — what the engine scopes the walk to.</param>
+    /// <param name="candidates">The page, already ordered and cut, with each member's continuation key.</param>
+    /// <param name="request">The request, for the caller and the page size.</param>
+    /// <param name="read">The by-id read for this kind of member.</param>
+    /// <param name="cancellationToken">Cancels the listing.</param>
+    /// <remarks>
+    ///     ⚠ <b>BOTH PERMISSIONS ARE THE READ PERMISSION</b>, so every refusal is a 404 that never
+    ///     reaches the caller: it is a member that is not in the page. There is no third case for a
+    ///     <c>GET</c>, and deliberately no count of what was dropped — <see cref="ScopeListPage" />.
+    ///     ⚠ Not <c>fullyConsistent</c>, for the reason the resource collection is not: docs/plan/07
+    ///     § Consistency reserves that for writes where a stale allow is an incident, and a read is
+    ///     not on that list.
+    /// </remarks>
+    async Task<Result<ScopeListPage>> PageAsync(
+        ScopeId parent,
+        (string Key, ScopeId Scope)[] candidates,
+        ScopeListRequest request,
+        Func<ScopeId, Task<Result<ScopeSnapshot>>> read,
+        CancellationToken cancellationToken
+    ) {
+        var visible = new List<ScopeId>(candidates.Length);
+
+        var readable = candidates.Length > 0
+            ? await authorizer.ListReadableAsync(
+                parent,
+                [.. candidates.Select(x => x.Scope)],
+                Permissions.Read,
+                request.Caller,
+                cancellationToken
+            )
+            : ScopeCollectionVisibility.Unanswered;
+
+        if (readable.IsAnswered) {
+            visible.AddRange(candidates.Select(x => x.Scope).Where(readable.Visible.Contains));
+        } else {
+            foreach (var (_, scope) in candidates) {
+                var authorized = await authorizer.AuthorizeAsync(
+                    scope,
+                    Permissions.Read,
+                    Permissions.Read,
+                    request.Caller,
+                    cancellationToken: cancellationToken
+                );
+
+                if (authorized.IsSuccess) {
+                    visible.Add(scope);
+                }
+            }
+        }
+
+        var items = new List<ScopeSnapshot>(visible.Count);
+
+        foreach (var scope in visible) {
+            var snapshot = await read(scope);
+
+            if (snapshot.IsSuccess) {
+                items.Add(snapshot.GetValueOrThrow());
+            }
+        }
+
+        // ⚠ THE TOKEN IS THE LAST MEMBER EXAMINED AND NOT THE LAST ONE RETURNED — see the remarks
+        // on ListAsync.
+        var continuation = candidates.Length == request.PageSize ? candidates[^1].Key : "";
+
+        return Result<ScopeListPage>.Success(new() { Items = items, Continuation = continuation });
+    }
+
     // ── Shared ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -721,4 +947,13 @@ public sealed class ScopeManagerService(
             // may not see. Two different messages would be the oracle the shared status code closed.
             $"'{scope.Path}' does not exist."
         );
+
+    /// <summary>The canonical absence, for a collection whose parent is not there or not the caller's.</summary>
+    /// <remarks>
+    ///     ⚠ Names the <i>parent</i>, and with the same sentence the authorizer refuses it with, so
+    ///     "the subscription does not exist", "the subscription is another tenant's" and "the caller
+    ///     may not read the subscription" are one answer — which is the property.
+    /// </remarks>
+    static Result<ScopeListPage> CollectionNotFound(ScopeId parent) =>
+        Result<ScopeListPage>.Failure(ErrorCode.ResourceNotFound, $"'{parent.Path}' does not exist.");
 }

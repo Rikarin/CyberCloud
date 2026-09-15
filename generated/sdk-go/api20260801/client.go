@@ -119,6 +119,12 @@ func (c *SubscriptionsClient) Get(ctx context.Context, tenantID, subscriptionID 
 	return &result, nil
 }
 
+// List pages through the subscriptions the caller may read. ⚠ A short page never means "that is all there is".
+func (c *SubscriptionsClient) List(tenantID string, options *ListOptions) *Pager[ScopeResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions"
+	return newPager[ScopeResource](c.transport, path, options)
+}
+
 // Create creates one subscription, or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat, and no operation to poll.
 func (c *SubscriptionsClient) Create(ctx context.Context, tenantID, subscriptionID string, content SubscriptionCreateContent) (*ScopeResource, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID)
@@ -142,6 +148,12 @@ func (c *ResourceGroupsClient) Get(ctx context.Context, tenantID, subscriptionID
 		return nil, err
 	}
 	return &result, nil
+}
+
+// List pages through the resource groups the caller may read. ⚠ A short page never means "that is all there is".
+func (c *ResourceGroupsClient) List(tenantID, subscriptionID string, options *ListOptions) *Pager[ScopeResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups"
+	return newPager[ScopeResource](c.transport, path, options)
 }
 
 // Create creates one resource group, or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat, and no operation to poll.

@@ -264,6 +264,28 @@ public readonly record struct ScopeId(
             : Result<ScopeId>.Success(Group(tenantId, subscriptionId, segments[5]));
     }
 
+    /// <summary>
+    ///     Parses a scope <i>collection</i> path — <c>/tenants/{t}/subscriptions</c> or
+    ///     <c>/tenants/{t}/subscriptions/{s}/resourceGroups</c> — to the scope whose children it
+    ///     lists. Returns <see langword="false" /> for anything else, and never throws.
+    /// </summary>
+    /// <param name="path">The candidate path. May be <see langword="null" />.</param>
+    /// <param name="parent">The tenant or subscription the collection hangs off, on success.</param>
+    /// <remarks>
+    ///     <see cref="ScopeCollectionId.TryParsePath" /> with the wrapper removed, for a caller that
+    ///     holds the parent's address and asks the parent's grain — which is every caller, because a
+    ///     scope collection has no grain of its own.
+    /// </remarks>
+    public static bool TryParseCollectionParent(string? path, out ScopeId parent) {
+        if (ScopeCollectionId.TryParsePath(path, out var collection)) {
+            parent = collection.Parent;
+            return true;
+        }
+
+        parent = default;
+        return false;
+    }
+
     /// <inheritdoc />
     public override string ToString() => Path;
 
