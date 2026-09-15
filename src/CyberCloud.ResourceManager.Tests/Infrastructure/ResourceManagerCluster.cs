@@ -62,12 +62,29 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     /// </remarks>
     public static ConcurrentDictionary<Guid, bool> Hidden { get; } = new();
 
+    /// <summary>
+    ///     Whether <see cref="ListReadableAsync" /> answers, or declines so the listing asks per
+    ///     member. Off by default.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Off by default so that every listing test written against the per-member filter
+    ///     still exercises it</b> — that path is the fallback the real seam takes past its cap, and
+    ///     a suite that only ever ran the batch path would have the fallback rotting untested. The
+    ///     cases that turn this on are the ones about the batch path itself.
+    /// </remarks>
+    public static bool AnswersCollections { get; set; }
+
+    /// <summary>Every <c>(parentResourceId, candidates)</c> pair the listing asked about, in order.</summary>
+    public static ConcurrentQueue<(Guid Parent, int Candidates)> CollectionsAsked { get; } = new();
+
     /// <summary>Lets everything through again.</summary>
     public static void Reset() {
         Granted.Clear();
         Asked.Clear();
         Hidden.Clear();
+        CollectionsAsked.Clear();
         Restricted = false;
+        AnswersCollections = false;
     }
 
     /// <summary>Grants exactly these permissions and refuses everything else.</summary>
@@ -116,6 +133,29 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
         }
 
         return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist."));
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     When <see cref="AnswersCollections" /> is on, the answer is every candidate that is not in
+    ///     <see cref="Hidden" /> — the same verdict <see cref="AuthorizeAsync" /> would give one at a
+    ///     time, given in one go, which is the whole claim about the batch path a double can make.
+    /// </remarks>
+    public Task<CollectionVisibility> ListReadableAsync(
+        ResourceCollectionId collection,
+        Guid parentResourceId,
+        IReadOnlyCollection<Guid> candidates,
+        string readPermission,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    ) {
+        CollectionsAsked.Enqueue((parentResourceId, candidates.Count));
+
+        return Task.FromResult(
+            AnswersCollections
+                ? CollectionVisibility.Of(candidates.Where(x => !Hidden.ContainsKey(x)))
+                : CollectionVisibility.Unanswered
+        );
     }
 }
 

@@ -168,6 +168,120 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
         );
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    ///     <para>
+    ///         One <c>ListObjects</c> per collection page, scoped to the object the page's members
+    ///         hang off — the resource group, or the parent resource of a nested collection — at
+    ///         depth 1. That is what turns "a <c>Check</c> per member, to a distinct activation
+    ///         keyed on that resource's GUID" (issue #10) into a walk that reads the caller's own
+    ///         index, the groups they are in and the chain down to the scope, and never touches a
+    ///         member's grain.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Every way this can fail to answer is the fallback, not a refusal.</b> A walk past
+    ///         <c>AuthorizationLimits.MaxListObjects</c>, a schema the walk cannot evaluate, a store
+    ///         that is down — each returns <see cref="CollectionVisibility.Unanswered" /> and the
+    ///         listing asks per member, which is exactly what it did before this method existed.
+    ///         Answering "nothing readable" instead would turn an engine outage into an empty page
+    ///         that is indistinguishable from an empty group, and that is the one answer this seam
+    ///         is never allowed to fake.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The walk is asked with the page size at its cap and paged to the end</b>, so the
+    ///         answer covers the whole scope rather than the first thousand ids of it. Each page is
+    ///         its own walk; with the scope bound the walk is a handful of reads, so paging it costs
+    ///         less than a single member's <c>Check</c> did.
+    ///     </para>
+    /// </remarks>
+    public async Task<CollectionVisibility> ListReadableAsync(
+        ResourceCollectionId collection,
+        Guid parentResourceId,
+        IReadOnlyCollection<Guid> candidates,
+        string readPermission,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(caller);
+        ArgumentException.ThrowIfNullOrWhiteSpace(readPermission);
+
+        var subject = SubjectRef.Create(caller.SubjectType, caller.SubjectId);
+        if (subject.TryGetError(out var subjectError)) {
+            logger.LogError(
+                "The caller {Caller} is not a ReBAC subject: {Message}. Listing per member.",
+                caller,
+                subjectError.Message
+            );
+
+            return CollectionVisibility.Unanswered;
+        }
+
+        var within = parentResourceId == Guid.Empty
+            ? CyberCloud.Authorization.Contracts.ObjectRef.Of(ResourceGroupObjectType, GroupObjectId(collection.Member("a")))
+            : CyberCloud.Authorization.Contracts.ObjectRef.Of(ResourceObjectType, parentResourceId);
+
+        var grain = grains.ForTenant(collection.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IListObjectsGrain>(GrainKeys.ListObjects(subject.GetValueOrThrow().Type, subject.GetValueOrThrow().Id));
+
+        HashSet<Guid> readable = [];
+        var continuation = string.Empty;
+
+        do {
+            var listed = await grain.ListObjectsAsync(
+                new() {
+                    ObjectType = ResourceObjectType,
+                    Permission = readPermission,
+                    Within = within,
+                    WithinDepth = 1,
+                    PageSize = ListObjectsRequest.MaxPageSize,
+                    Continuation = continuation
+                }
+            );
+
+            if (listed.TryGetError(out var listError)) {
+                logger.LogError(
+                    "Listing what {Caller} may '{Permission}' within '{Within}' failed rather than answering: "
+                    + "{Message}. Listing per member.",
+                    caller,
+                    readPermission,
+                    within,
+                    listError.Message
+                );
+
+                return CollectionVisibility.Unanswered;
+            }
+
+            var page = listed.GetValueOrThrow();
+
+            if (page.Outcome != ListObjectsOutcome.Complete) {
+                logger.LogInformation(
+                    "Listing what {Caller} may '{Permission}' within '{Within}' hit a cap ({Outcome}: {Detail}). "
+                    + "Listing per member.",
+                    caller,
+                    readPermission,
+                    within,
+                    page.Outcome,
+                    page.CapDetail
+                );
+
+                return CollectionVisibility.Unanswered;
+            }
+
+            foreach (var listedObject in page.Objects) {
+                if (Guid.TryParseExact(listedObject.Id, "N", out var id)) {
+                    readable.Add(id);
+                }
+            }
+
+            continuation = page.Continuation;
+        } while (continuation.Length > 0);
+
+        readable.IntersectWith(candidates);
+
+        return CollectionVisibility.Of(readable);
+    }
+
     /// <summary>
     ///     The check grain for a resource, or for its parent group when the resource does not exist.
     /// </summary>

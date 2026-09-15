@@ -17,11 +17,12 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         names.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Top" /> is a cap this endpoint enforces and not a hint.</b> ReBAC's
-///         <c>ListObjects</c> is M2 (docs/plan/07), so a listing is a <c>Check</c> <i>per member</i>
-///         — see <c>IResourceManager.ListAsync</c>. An uncapped page therefore makes the cost of one
-///         request a number the caller chooses, which is the shape of every enumeration endpoint that
-///         has ever been used as an amplifier.
+///         ⚠ <b><see cref="Top" /> is a cap this endpoint enforces and not a hint.</b> A listing is
+///         one <c>ListObjects</c> per page, and a <c>Check</c> <i>per member</i> whenever the engine
+///         declines to answer — see <c>IResourceManager.ListAsync</c> — and a resource read per
+///         member either way. An uncapped page therefore makes the cost of one request a number the
+///         caller chooses, which is the shape of every enumeration endpoint that has ever been used
+///         as an amplifier.
 ///     </para>
 /// </remarks>
 [GenerateSerializer]

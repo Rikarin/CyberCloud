@@ -182,10 +182,12 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         This is the case the endpoint exists to be safe for. ReBAC's <c>ListObjects</c> is M2,
-    ///         so the filter is a <c>Check</c> per member — <c>IResourceManager.ListAsync</c>'s
-    ///         remarks cost it — and without one a listing is a way to read the names of resources
-    ///         the caller has no permission on.
+    ///         This is the case the endpoint exists to be safe for. The filter is one
+    ///         <c>ListObjects</c> per page with a <c>Check</c> per member behind it —
+    ///         <c>IResourceManager.ListAsync</c>'s remarks cost both — and without one a listing is
+    ///         a way to read the names of resources the caller has no permission on. This case runs
+    ///         the fallback; <see cref="WhenTheCollectionIsAnsweredNoMemberIsCheckedAndTheScopeIsTheParent" />
+    ///         runs the batch path against the same hidden member.
     ///     </para>
     ///     <para>
     ///         ⚠
@@ -222,17 +224,20 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>The filter is asked once per member and never once per group.</b>
+    ///     ⚠ <b>When the engine does not answer for the collection, the filter is asked once per
+    ///     member and never once per group.</b>
     /// </summary>
     /// <remarks>
     ///     The cheap wrong implementation is one check against the resource group, which every
     ///     member of a group the caller holds any role on passes. It would look like a working
     ///     filter and would filter nothing —
     ///     <see cref="AMemberTheCallerCannotReadIsNotInThePageAndIsNotCountedInIt" /> catches it, and
-    ///     this asserts the mechanism directly so the failure names itself.
+    ///     this asserts the mechanism directly so the failure names itself. This is the fallback
+    ///     path — <c>ReBacResourceAuthorizer.ListReadableAsync</c> declines past its cap — and the
+    ///     double declines by default so the fallback stays exercised.
     /// </remarks>
     [Fact]
-    public async Task TheFilterAsksOncePerMember() {
+    public async Task TheFilterAsksOncePerMemberWhenTheCollectionIsNotAnswered() {
         ResourceManagerCluster.ResetDoubles();
         var group = "listing-f";
         await Group(Address("count-a", group));
@@ -242,11 +247,91 @@ public sealed class CollectionListingTests(ResourceManagerCluster cluster) {
         }
 
         SwitchableAuthorizer.Asked.Clear();
+        SwitchableAuthorizer.CollectionsAsked.Clear();
 
         var page = await List(Collection(Address("count-a", group)));
 
         page.Resources.Length.ShouldBe(3);
+        SwitchableAuthorizer.CollectionsAsked.Count.ShouldBe(1, "the collection is asked about first");
         SwitchableAuthorizer.Asked.Count.ShouldBe(3, "one Check per member examined, and no more");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>When the engine answers for the collection, no member is checked at all, and the
+    ///     answer is scoped to the object the members hang off.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         This is the change issue #37 asks for: one <c>ListObjects</c> intersection in place of
+    ///         a <c>Check</c> per member. Both halves are asserted — the per-member seam is not
+    ///         reached, and a hidden member is still absent — because a batch path that leaked what
+    ///         the per-member path hid would be a regression dressed as an optimization.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The scope is <see cref="Guid.Empty" /> for a top-level collection and the parent's
+    ///         GUID for a nested one.</b> The engine scopes its walk to that object at depth 1, so a
+    ///         nested listing that passed the group instead would find the parent's children two
+    ///         levels down — and list nothing. Asserted on the double's record of what it was handed.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task WhenTheCollectionIsAnsweredNoMemberIsCheckedAndTheScopeIsTheParent() {
+        ResourceManagerCluster.ResetDoubles();
+        var group = "listing-i";
+        await Group(Address("batch-a", group));
+
+        var created = new List<Guid>();
+        foreach (var name in new[] { "batch-a", "batch-b", "batch-c" }) {
+            var accepted = await Create(Address(name, group));
+            accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
+            created.Add(accepted.GetValueOrThrow().Resource.Id);
+        }
+
+        var child = Child("batch-a", "batch-child", group);
+        (await CreateChild(child)).IsSuccess.ShouldBeTrue();
+
+        SwitchableAuthorizer.AnswersCollections = true;
+        SwitchableAuthorizer.Hidden[created[1]] = true;
+        SwitchableAuthorizer.Asked.Clear();
+        SwitchableAuthorizer.CollectionsAsked.Clear();
+
+        var page = await List(Collection(Address("batch-a", group)));
+
+        page.Resources.Select(x => x.Name).ShouldBe(["batch-a", "batch-c"]);
+        SwitchableAuthorizer.Asked.ShouldBeEmpty("the engine answered for the page, so no member was checked");
+
+        SwitchableAuthorizer.CollectionsAsked.TryDequeue(out var topLevel).ShouldBeTrue();
+        topLevel.Parent.ShouldBe(Guid.Empty, "a top-level collection hangs off the resource group");
+        topLevel.Candidates.ShouldBe(3);
+
+        var children = await List(Collection(child));
+
+        children.Resources.Select(x => x.Name).ShouldBe(["batch-child"]);
+        SwitchableAuthorizer.CollectionsAsked.TryDequeue(out var nested).ShouldBeTrue();
+        nested.Parent.ShouldBe(created[0], "a nested collection hangs off its parent resource");
+        nested.Candidates.ShouldBe(1);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>An empty page asks the engine nothing.</b>
+    /// </summary>
+    /// <remarks>
+    ///     A walk for a page with no candidates would be a walk whose answer cannot matter, paid on
+    ///     every listing of an empty group — and on every resumed listing past its last member,
+    ///     which <c>test/CyberCloud.Isolation</c> relies on being byte-identical to a filtered one.
+    /// </remarks>
+    [Fact]
+    public async Task AnEmptyPageAsksTheEngineNothing() {
+        ResourceManagerCluster.ResetDoubles();
+        await Group(Address("empty-a", "listing-j"));
+
+        SwitchableAuthorizer.AnswersCollections = true;
+        SwitchableAuthorizer.CollectionsAsked.Clear();
+
+        var page = await List(Collection(Address("empty-a", "listing-j")));
+
+        page.Resources.ShouldBeEmpty();
+        SwitchableAuthorizer.CollectionsAsked.ShouldBeEmpty();
     }
 
     // ── Paging ─────────────────────────────────────────────────────────────────────────────────

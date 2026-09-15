@@ -55,6 +55,22 @@ public sealed class PermissiveAuthorizer : IResourceAuthorizer {
                 : Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist.")
         );
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Never answers, so a listing asks <see cref="AuthorizeAsync" /> per member — which is the
+    ///     rule this double reproduces, applied once per row. A conformance run has no tuple set for
+    ///     a walk to read, and a double that invented one would be asserting its author's beliefs.
+    /// </remarks>
+    public Task<CollectionVisibility> ListReadableAsync(
+        ResourceCollectionId collection,
+        Guid parentResourceId,
+        IReadOnlyCollection<Guid> candidates,
+        string readPermission,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(CollectionVisibility.Unanswered);
 }
 
 /// <summary>An <see cref="ILockResolver" /> a test can set an inherited lock on.</summary>
