@@ -69,6 +69,13 @@
         <!-- IGrainFactory.ForTenant — every grain reference in this assembly goes through it. -->
         <PackageReference Include="Orleans.Multitenant"/>
         <!--
+          ⚠ IRemindable and TickStatus are NOT in Microsoft.Orleans.Server — CyberCloud.ResourceManager's
+          .csproj carries the nuspec check. SignUpGrain is IRemindable: the reminder is how an abandoned
+          self-serve sign-up clears itself out of the hot tier after SignUpPolicy.Lifetime. Which
+          reminder STORAGE the silo uses is the host's choice and is not decided here.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <!--
           ⚠ NOT IN docs/plan/02's DEPENDENCY REGISTER. See the block in Directory.Packages.props for
           what was surveyed and why this one won; the short version is that .NET ships no Argon2,
           NSec cannot express p=4, and docs/plan/11 § Credentials specifies p=4. That document's own

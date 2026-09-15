@@ -219,3 +219,36 @@ public enum AuthenticationMethod {
     /// </remarks>
     EmailOtp = 6
 }
+
+/// <summary>
+///     The create steps a self-serve sign-up runs, in order — docs/plan/11 § Sign-up and tenant
+///     creation's "verify → create tenant → …", as <c>ISignUpGrain</c> records them.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>The numbering is the order, and the order is the design.</b> Tenant before user, because
+///     the user grain is stored in the tenant's shard; user before credential, because a credential
+///     is a method on the user; subscription before resource group, because the group's parent edge
+///     names the subscription. The orchestrator in the identity host runs them ascending and skips
+///     any the grain already recorded, which is what makes a retried <c>complete</c> resume rather
+///     than create a second tenant. Reordering the members reorders the retry, silently.
+/// </remarks>
+[Alias("CyberCloud.Identity.SignUpStep")]
+public enum SignUpStep {
+    /// <summary>The tenant exists, is owned by the new user and is in the directory.</summary>
+    TenantCreated = 1,
+
+    /// <summary>The user exists in the tenant and holds the email-index claim.</summary>
+    UserCreated = 2,
+
+    /// <summary>The passkey or password is enrolled on the user.</summary>
+    CredentialSet = 3,
+
+    /// <summary>The default subscription exists, created as the new user.</summary>
+    SubscriptionCreated = 4,
+
+    /// <summary>The default resource group exists, created as the new user.</summary>
+    ResourceGroupCreated = 5,
+
+    /// <summary>The sign-up is done. The grain refuses every further step.</summary>
+    Completed = 6
+}

@@ -3,9 +3,11 @@ using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.Host.Api;
 using CyberCloud.Identity.Host.Credentials;
+using CyberCloud.Identity.Host.SignUp;
 using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
+using CyberCloud.ResourceManager;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -99,6 +101,26 @@ public static class IdentityHostServices {
         services.TryAddSingleton<IPasskeyService, Fido2PasskeyService>();
         services.TryAddSingleton<PasskeyChallengeCookie>();
         services.TryAddSingleton<SignInApi>();
+
+        // ── Self-serve sign-up — docs/plan/11 § Sign-up and tenant creation ──────────────────────
+        //
+        // ⚠ THE RESOURCE MANAGER, IN THE IDENTITY HOST, AND AFTER THE IDENTITY REGISTRATIONS. Sign-up
+        // ends by creating a tenant, a subscription and a resource group, and the seam that creates
+        // them is IScopeManager — docs/plan/06 § The hierarchy — whose registration lives in one
+        // place for the reason ResourceManagerSiloBuilderExtensions gives: it names the authorization
+        // engine, and a second copy of that list is a second place to forget the IScopeAuthorizer. The
+        // feeds host is the precedent for a client host making this one call. It is a TryAdd list, so
+        // it comes AFTER the identity registrations above: IClock and IPasswordHasher are ours and
+        // must stay ours, and the manager's own IClock default would otherwise win by ordering.
+        //
+        // What it registers and never resolves here — DriftScanner, ReconcileDriver, the provider
+        // registry — is the same arrangement the gateway lives with, and an IProviderRegistry with no
+        // provider is never asked for by anything on the scope path.
+        services.AddCyberCloudResourceManager();
+
+        services.TryAddSingleton<SignUpTicketCookie>();
+        services.TryAddSingleton<SignUpOrchestrator>();
+        services.TryAddSingleton<SignUpApi>();
 
         return services;
     }

@@ -104,11 +104,17 @@ namespace CyberCloud.Identity.Host;
 ///         </item>
 ///     </list>
 ///     <para>
-///         <b>What the sign-up page needs:</b> offer a passkey first and a password second, on the
-///         same screen, with the passkey as the primary action. The response to
-///         <c>POST /api/signup</c> is <see cref="UniformFailures.SignUp" /> whether or not the
-///         address was free — the mail that follows is what differs, and it goes to the address
-///         either way.
+///         <b>What the sign-up page needs:</b> three steps on one route — the address
+///         (<c>POST /api/signup/begin</c>, which answers <c>sent: true</c> for every address and
+///         sets the ticket cookie), the six-digit code (<c>POST /api/signup/verify</c>), and the
+///         names plus a credential, with a passkey as the primary action
+///         (<c>POST /api/signup/passkey/begin</c> → <c>navigator.credentials.create()</c> →
+///         <c>POST /api/signup/complete</c>) and "use a password instead" as the link beneath it.
+///         On <c>succeeded</c> the page navigates, full-page, to the response's <c>returnUrl</c>,
+///         which is the original <c>/authorize</c> request with <c>tenant=&lt;new tenant&gt;</c>
+///         set. ⚠ On a development run the code is in the silo's console in the Aspire dashboard
+///         rather than in a mailbox — there is no MTA (#93) — and the page says so.
+///         <see cref="MapSignUp" /> carries the endpoint-level rules.
 ///     </para>
 ///     <para>
 ///         <b>What the consent page needs:</b> the client's display name, the scopes requested, and
@@ -170,10 +176,116 @@ public static class IdentityEndpoints {
         );
 
         MapSignIn(app);
+        MapSignUp(app);
         MapToken(app);
 
         return app;
     }
+
+    /// <summary>
+    ///     Maps the self-serve sign-up endpoints — docs/plan/11 § Sign-up and tenant creation.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Four routes, one ticket, and the ticket is the only thing that names a sign-up.</b>
+    ///         <c>begin</c> issues <c>__Host-cyc-signup</c> — <see cref="SignUpTicketCookie" /> — and
+    ///         the other three read it. A call without one answers <c>401</c> with no body, which
+    ///         is the one status-code variation on the whole interactive surface and the one a page
+    ///         can act on: the sign-up is gone (expired, or another tab completed it), start again.
+    ///         Under <c>/api</c> so that is a <c>401</c> and not a redirect.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The passkey challenge takes the same cookie the sign-in ceremony does</b>, stamped
+    ///         <see cref="PasskeyChallengeKind.Registration" /> so neither endpoint can answer the
+    ///         other's. It is taken — read and deleted — on <c>complete</c> whatever credential the
+    ///         body carries, for the reason the sign-in pair gives: a nonce that survives an attempt
+    ///         is not a nonce.
+    ///     </para>
+    ///     <para>
+    ///         The decisions are <see cref="SignUpApi" />'s and the create steps are
+    ///         <c>SignUpOrchestrator</c>'s; what is left here is what needs an <c>HttpContext</c> —
+    ///         the two cookies, the caller's address, and the session cookie on success.
+    ///     </para>
+    /// </remarks>
+    static void MapSignUp(IEndpointRouteBuilder app) {
+        app.MapPost(
+            "/api/signup/begin",
+            async (
+                SignUpBeginRequest? request,
+                HttpContext context,
+                SignUpApi api,
+                SignUpTicketCookie tickets,
+                CancellationToken cancellationToken
+            ) => {
+                var result = await api.BeginAsync(request, tickets.Take(context), cancellationToken);
+
+                if (result.Ticket is { } ticket) {
+                    tickets.Issue(context, ticket);
+                }
+
+                return Results.Ok(result.Body);
+            }
+        );
+
+        app.MapPost(
+            "/api/signup/verify",
+            async (SignUpVerifyRequest? request, HttpContext context, SignUpApi api, SignUpTicketCookie tickets) =>
+                Answer(await api.VerifyAsync(request, tickets.Take(context)))
+        );
+
+        app.MapPost(
+            "/api/signup/passkey/begin",
+            async (
+                SignUpPasskeyBeginRequest? request,
+                HttpContext context,
+                SignUpApi api,
+                SignUpTicketCookie tickets,
+                PasskeyChallengeCookie challenges
+            ) => {
+                var result = await api.BeginPasskeyAsync(request, tickets.Take(context));
+
+                if (result.Challenge is { } challenge) {
+                    challenges.Issue(context, challenge);
+                }
+
+                return Answer(result);
+            }
+        );
+
+        app.MapPost(
+            "/api/signup/complete",
+            async (
+                SignUpCompleteRequest? request,
+                HttpContext context,
+                SignUpApi api,
+                SignUpTicketCookie tickets,
+                PasskeyChallengeCookie challenges,
+                CancellationToken cancellationToken
+            ) => {
+                var result = await api.CompleteAsync(
+                    request,
+                    tickets.Take(context),
+                    challenges.Take(context),
+                    Describe(context),
+                    cancellationToken
+                );
+
+                if (result.Principal is { } principal) {
+                    await context.SignInAsync(IdentityHostAuthentication.SchemeName, principal);
+                }
+
+                if (result.ClearTicket) {
+                    SignUpTicketCookie.Clear(context);
+                }
+
+                return Answer(result);
+            }
+        );
+    }
+
+    /// <summary>A sign-up decision as a response: <c>401</c> with no body, or <c>200</c> with its body.</summary>
+    static IResult Answer(SignUpApiResult result) => result.Unauthorized ? Results.Unauthorized() : Results.Ok(result.Body);
 
     /// <summary>
     ///     Maps the token endpoint's passthrough — the half of <c>/token</c> that mints.
@@ -239,7 +351,7 @@ public static class IdentityEndpoints {
     }
 
     /// <summary>
-    ///     Maps the interactive sign-in and sign-up endpoints the pages call.
+    ///     Maps the interactive sign-in endpoints the pages call.
     /// </summary>
     /// <param name="app">The host's route builder.</param>
     /// <remarks>
@@ -286,12 +398,6 @@ public static class IdentityEndpoints {
                 context,
                 await api.SignInWithPasswordAsync(request, Describe(context), cancellationToken)
             )
-        );
-
-        app.MapPost(
-            "/api/signup",
-            async (SignUpRequest? request, SignInApi api, CancellationToken cancellationToken) =>
-                Results.Ok((await api.SignUpAsync(request, cancellationToken)).Response)
         );
 
         // ── The passkey pair ───────────────────────────────────────────────────────────────────

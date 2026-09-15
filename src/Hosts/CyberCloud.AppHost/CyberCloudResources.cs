@@ -53,6 +53,12 @@ public static class CyberCloudResources {
     /// </summary>
     public const string PlatformShard = "platform00";
 
+    /// <summary>
+    ///     The region a self-serve sign-up homes its tenant to and places its default resource group
+    ///     in. This laptop is one region, and this is its name.
+    /// </summary>
+    public const string DefaultRegion = "local";
+
     /// <summary>Silo 1's silo-to-silo port. Also the cluster's primary-silo endpoint.</summary>
     public const int SiloOnePort = 11111;
 

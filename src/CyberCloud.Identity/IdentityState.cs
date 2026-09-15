@@ -353,3 +353,93 @@ public sealed class SessionGrainState {
     [Id(13)]
     public List<AuthenticationMethod> Methods { get; set; } = [];
 }
+
+/// <summary>
+///     <c>SignUpGrain</c>'s hot-tier state — everything a self-serve sign-up holds before the tenant
+///     exists. docs/plan/11 § Sign-up and tenant creation.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>The code is not here, for the reason <see cref="OtpChallengeState" /> gives</b> — and
+///         CC1005 would not have stopped it being here either, because <c>Code</c> is not one of the
+///         four banned suffixes. What is stored is <see cref="Digest" />, the keyed digest
+///         <c>OtpCodeProtector</c> produces under the silo's pepper, exactly as it is for a user's
+///         challenge. <c>SignUpGrainTests.TheCodeIsNowhereInGrainState</c> is the same reflective
+///         assertion <c>OtpIssuanceTests.TheCodeIsNowhereInGrainState</c> makes for a user.
+///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             Hot rather than durable, unlike <see cref="OtpChallengeState" />, and the difference
+///             is what is lost.
+///         </b> A user's burnt challenge must survive a hot-tier loss because a replay of an
+///         observed code lets somebody into an account that exists. A sign-up that has not
+///         completed owns nothing: losing it means the person starts again at the address step, and
+///         a replayed enrolment code against a sign-up the tier has forgotten finds no grain to
+///         answer it. So this is the same trade <see cref="SessionGrainState" /> makes for the same
+///         reason.
+///     </para>
+///     <para>
+///         ⚠ Every collection is <c>{ get; set; }</c> over a concrete type —
+///         <see cref="UserGrainState" />'s remarks say what a get-only collection costs under
+///         System.Text.Json.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.SignUpGrainState")]
+public sealed class SignUpGrainState {
+    /// <summary>The address being enrolled, normalized. Empty until <c>BeginAsync</c>.</summary>
+    [Id(0)]
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary>The tenant this sign-up will create. Allocated at <c>BeginAsync</c>.</summary>
+    [Id(1)]
+    public Guid TenantId { get; set; }
+
+    /// <summary>The user that will own it. Allocated at <c>BeginAsync</c>.</summary>
+    [Id(2)]
+    public Guid UserId { get; set; }
+
+    /// <summary>The default subscription's id. Allocated at <c>BeginAsync</c>.</summary>
+    [Id(3)]
+    public Guid SubscriptionId { get; set; }
+
+    /// <summary>When the sign-up began.</summary>
+    [Id(4)]
+    public DateTimeOffset StartedAt { get; set; }
+
+    /// <summary>When the whole sign-up stops being resumable — <see cref="SignUpPolicy.Lifetime" /> after start.</summary>
+    [Id(5)]
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
+    ///     <c>OtpCodeProtector.Digest</c> of the outstanding enrolment code, or empty when there is
+    ///     none. ⚠ Never the code — see the type's remarks.
+    /// </summary>
+    [Id(6)]
+    public string Digest { get; set; } = string.Empty;
+
+    /// <summary>When the outstanding code was issued. <see cref="OtpPolicy.ResendCooldown" /> is measured from here.</summary>
+    [Id(7)]
+    public DateTimeOffset ChallengeIssuedAt { get; set; }
+
+    /// <summary>When the outstanding code stops being answerable. <see cref="OtpPolicy.Lifetime" /> after issue.</summary>
+    [Id(8)]
+    public DateTimeOffset ChallengeExpiresAt { get; set; }
+
+    /// <summary>How many answers the outstanding code has taken. At <see cref="OtpPolicy.MaxAttempts" /> it is burnt.</summary>
+    [Id(9)]
+    public int Attempts { get; set; }
+
+    /// <summary>When codes were sent, for <see cref="OtpPolicy.MaxIssuesPerWindow" /> — pruned as <see cref="UserGrainState.OtpIssuedAt" /> is.</summary>
+    [Id(10)]
+    public List<DateTimeOffset> OtpIssuedAt { get; set; } = [];
+
+    /// <summary>Whether the address has been proven.</summary>
+    [Id(11)]
+    public bool Verified { get; set; }
+
+    /// <summary>The create steps that have completed, in the order they ran.</summary>
+    [Id(12)]
+    public List<SignUpStep> CompletedSteps { get; set; } = [];
+}

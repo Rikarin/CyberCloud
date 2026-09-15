@@ -105,4 +105,30 @@ public sealed class IdentityHostOptions {
     ///     assertion, which is the correct behaviour for a host nobody has configured.
     /// </remarks>
     public IList<string> Origins { get; } = ["https://localhost:5001"];
+
+    /// <summary>
+    ///     Whether <c>/api/signup/*</c> is open. <c>false</c> answers every call with
+    ///     <c>SignUpApi.ClosedMessage</c> and touches nothing.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Three processes read this key and they have to agree.</b> The silos'
+    ///     <c>PlatformBootstrapTask</c> writes the <c>platform:root#operator</c> grant sign-up
+    ///     creates tenants under only when it is set; this host opens the endpoints only when it is
+    ///     set. A host with it on beside silos with it off refuses every completion with "something
+    ///     went wrong" — the operator check inside <c>IScopeManager.CreateTenantAsync</c> fails and
+    ///     the seam says no more. The AppHost sets it on all three from one constant.
+    /// </remarks>
+    public bool SelfServeSignUp { get; set; }
+
+    /// <summary>
+    ///     The region a self-serve sign-up homes its tenant to and places its default resource group
+    ///     in. <c>local</c> on the AppHost.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Required when <see cref="SelfServeSignUp" /> is on: a tenant is homed to exactly one
+    ///     region at creation and a resource group's region has no platform-wide default —
+    ///     <c>ScopeManagerService</c> refuses both without one. Empty leaves every completion failing
+    ///     at the first create with a sentence naming this setting.
+    /// </remarks>
+    public string DefaultRegion { get; set; } = string.Empty;
 }

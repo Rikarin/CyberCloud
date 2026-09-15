@@ -580,6 +580,56 @@ public sealed record Invitation {
 }
 
 /// <summary>
+///     What a self-serve sign-up holds between its first request and its last —
+///     <c>ISignUpGrain.GetAsync</c>'s answer.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>No code, no digest, no attempt count.</b> The code is the credential and the digest is
+///     its storable form; neither leaves the grain, for the reason <see cref="OtpPolicy" />'s fourth
+///     property gives. What the identity host needs is the three ids it will create things under,
+///     whether the address has been proven, and which create steps already ran.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.SignUpDescriptor")]
+public sealed record SignUpDescriptor {
+    /// <summary>The sign-up's own id — the grain key, and what the ticket cookie carries.</summary>
+    [Id(0)]
+    public Guid SignupId { get; init; }
+
+    /// <summary>The address being enrolled, normalized.</summary>
+    [Id(1)]
+    public string Email { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     The tenant that will be created. ⚠ Allocated at <c>BeginAsync</c> so that a retried
+    ///     completion re-drives <i>one</i> tenant rather than minting another —
+    ///     <c>TenantCreateRequest.TenantId</c>'s remarks.
+    /// </summary>
+    [Id(2)]
+    public Guid TenantId { get; init; }
+
+    /// <summary>The user that will own it. Allocated at <c>BeginAsync</c>, for the same reason.</summary>
+    [Id(3)]
+    public Guid UserId { get; init; }
+
+    /// <summary>The default subscription's id. Allocated at <c>BeginAsync</c>, for the same reason.</summary>
+    [Id(4)]
+    public Guid SubscriptionId { get; init; }
+
+    /// <summary>Whether the enrolment code has been answered correctly.</summary>
+    [Id(5)]
+    public bool Verified { get; init; }
+
+    /// <summary>The create steps that have completed, in the order they ran.</summary>
+    [Id(6)]
+    public List<SignUpStep> CompletedSteps { get; set; } = [];
+
+    /// <summary>When the sign-up stops being resumable and the grain forgets it.</summary>
+    [Id(7)]
+    public DateTimeOffset ExpiresAt { get; init; }
+}
+
+/// <summary>
 ///     A failure that carries no information about whether the account exists.
 /// </summary>
 /// <remarks>
@@ -602,13 +652,6 @@ public static class UniformFailures {
     /// </summary>
     public const string PasswordReset =
         "If that address has an account, a reset link is on its way to it.";
-
-    /// <summary>
-    ///     The one answer to a self-serve sign-up. Both a free address and a taken one produce it —
-    ///     the mail that follows is what differs, and it goes to the address either way.
-    /// </summary>
-    public const string SignUp =
-        "Check that address for a message telling you what to do next.";
 
     /// <summary>
     ///     The one answer to "send me a one-time code".

@@ -545,3 +545,99 @@ public interface ISessionGrain : IGrainWithStringKey {
     /// <summary>Drops this activation.</summary>
     Task DeactivateAsync();
 }
+
+/// <summary>
+///     A self-serve sign-up in progress — the state that exists before the tenant does.
+///     docs/plan/11 § Sign-up and tenant creation.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Kind</b> Entity · <b>Tier</b> <b>Hot</b> · <b>Key</b> <c>signup/{signupId:N}</c>,
+///         qualified by the <b>platform</b> tenant. Build it with <c>GrainKeys.SignUp</c>.
+///     </para>
+///     <para>
+///         ⚠ <b>The chicken and the egg this grain exists to resolve.</b> A one-time code is minted,
+///         recorded and delivered by <see cref="IUserGrain.IssueOtpAsync" />, inside a user grain,
+///         which lives in a tenant's shard — <see cref="OtpPolicy" /> carries the four properties
+///         that put it there. A self-serve sign-up has no user and no tenant yet, and the tenant is
+///         what has to be created <i>after</i> the address is proven, not before. So the enrolment
+///         code needs a grain that exists before either does: this one, in the platform tenant, keyed
+///         by a random id handed to the browser in a protected cookie. All four of
+///         <see cref="OtpPolicy" />'s properties hold here exactly as they do in
+///         <see cref="IUserGrain" />: single-threaded compare-and-burn, state that survives a host
+///         restart, per-signup attempt and issue limits, and a keyed digest under the silo's pepper.
+///     </para>
+///     <para>
+///         ⚠ <b>Keyed by a random id and never by the address, so it is not a global email index.</b>
+///         docs/plan/11 § Sign-up and tenant creation refuses one — "the thing we do not have and do
+///         not want" — and a sign-up grain reachable by address would be exactly that, on the hottest
+///         unauthenticated path there is. Two sign-ups for one address are two grains; the per-tenant
+///         <c>IEmailIndexGrain</c> claim at completion is what settles which one wins.
+///     </para>
+///     <para>
+///         ⚠ <b>Hot, because losing one costs a person one form.</b> docs/plan/05 § Hot: a sign-up
+///         that has not completed owns nothing durable, and a person whose in-progress sign-up
+///         vanished starts again at the address step. The tenant, the user, the subscription and the
+///         resource group are created in <i>their</i> tiers by the orchestrator in the identity host;
+///         this grain only remembers which of those steps already ran, so a retried
+///         <c>complete</c> resumes rather than duplicates. The grain expires fifteen minutes after
+///         <see cref="BeginAsync" /> through a reminder that deactivates and clears it.
+///     </para>
+///     <para>
+///         ⚠ <b>The orchestration is not here, and the reason is the cross-tenant rule.</b>
+///         <c>PlatformCrossTenantAuthorizer</c> denies a platform-tenant grain reaching into a tenant,
+///         so a grain that created the tenant's user would be refused by the same filter that keeps
+///         every other platform grain out. The identity host is an Orleans <i>client</i>, for which
+///         <c>ScopeManagerService</c> already runs the same cross-tenant sequence on
+///         <c>IScopeManager.CreateTenantAsync</c>'s behalf; the orchestrator lives beside it. The
+///         full long-running operation with a progress UI docs/plan/06 § Tenant lifecycle describes
+///         is still owed, and the step record here is its seed.
+///     </para>
+/// </remarks>
+[Alias("CyberCloud.Identity.ISignUpGrain")]
+public interface ISignUpGrain : IGrainWithStringKey {
+    /// <summary>
+    ///     Starts the sign-up: allocates the tenant, user and subscription ids, mints an enrolment
+    ///     code, records its keyed digest and hands the code to <see cref="IOtpDeliverySeam" />.
+    /// </summary>
+    /// <param name="email">The address, already normalized by the caller and re-normalized here.</param>
+    /// <returns>
+    ///     Success once the challenge is recorded <i>and</i> the message accepted; carries no code.
+    ///     ⚠ A second call inside <see cref="OtpPolicy.ResendCooldown" /> redelivers the same code, a
+    ///     later one mints a fresh code, and more than <see cref="OtpPolicy.MaxIssuesPerWindow" />
+    ///     inside <see cref="OtpPolicy.IssueWindow" /> is refused — the same rules
+    ///     <see cref="IUserGrain.IssueOtpAsync" /> applies, for the same reasons.
+    /// </returns>
+    Task<Result> BeginAsync(string email);
+
+    /// <summary>Answers the enrolment challenge, and burns it.</summary>
+    /// <param name="candidate">What was typed.</param>
+    /// <returns>
+    ///     <c>true</c> at most once per issued code, and only while the challenge is live and has
+    ///     attempts left. ⚠ A wrong code, an expired one, a burnt one and a sign-up that never began
+    ///     are one <c>false</c>, for the reason <see cref="IUserGrain.RedeemOtpAsync" /> gives.
+    /// </returns>
+    Task<Result<bool>> VerifyAsync(string candidate);
+
+    /// <summary>What the sign-up holds — ids, whether the address is proven, and which steps ran.</summary>
+    Task<Result<SignUpDescriptor>> GetAsync();
+
+    /// <summary>
+    ///     Records that a create step completed, so a retried completion skips it.
+    /// </summary>
+    /// <param name="completed">The step that ran.</param>
+    /// <remarks>
+    ///     ⚠ Recorded <b>after</b> the step's own write returned, never before. The other order
+    ///     would let a crash between the two leave a step marked done that never ran, and the
+    ///     retry would then skip creating the very thing the next step depends on. Refused before
+    ///     <see cref="VerifyAsync" /> has answered <c>true</c>: nothing may be created for an
+    ///     address nobody has proven.
+    /// </remarks>
+    Task<Result> RecordStepAsync(SignUpStep completed);
+
+    /// <summary>Marks the sign-up complete. Every step after it is refused.</summary>
+    Task<Result> CompleteAsync();
+
+    /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
+    Task DeactivateAsync();
+}

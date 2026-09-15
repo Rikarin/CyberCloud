@@ -169,6 +169,25 @@ public sealed class AppHostTopologyTests {
     }
 
     [Fact]
+    public async Task SelfServeSignUpIsOneDecisionOnAllThreeSides() {
+        var built = Model();
+
+        // ⚠ Three processes read CyberCloud:Identity:SelfServeSignUp and they have to agree: the
+        // silos' PlatformBootstrapTask writes the platform:root#operator grant sign-up creates
+        // tenants under only when it is on, and the identity host opens /api/signup/* only when it
+        // is on. A host with it on beside silos with it off refuses every completion with
+        // "something went wrong" — IdentityHostOptions.SelfServeSignUp.
+        foreach (var name in new[] { CyberCloudResources.SiloOne, CyberCloudResources.SiloTwo, CyberCloudResources.Identity }) {
+            var environment = await built.EnvironmentOf(name);
+            environment[CyberCloudTopology.SelfServeSignUpVariable].ShouldBe("true", $"{name} is one of the three");
+        }
+
+        // And the region a signed-up tenant is homed to, without which the first create step refuses.
+        var identity = await built.EnvironmentOf(CyberCloudResources.Identity);
+        identity["CyberCloud__Identity__DefaultRegion"].ShouldBe(CyberCloudResources.DefaultRegion);
+    }
+
+    [Fact]
     public async Task TheGatewayAnnouncesItselfAndNotProduction() {
         var built = Model();
         var gateway = await built.EnvironmentOf(CyberCloudResources.Gateway);

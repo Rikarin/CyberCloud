@@ -15,6 +15,9 @@ namespace CyberCloud.Identity.Host.Api;
 //
 // ⚠ There is no request type carrying a tenant. See IdentityHostOptions for why the tenant is
 // configured rather than asked for.
+//
+// The sign-up surface — /api/signup/begin, /verify, /passkey/begin and /complete — has its own
+// records in SignUpContracts.cs, because none of its four bodies shares a shape with a sign-in.
 
 /// <summary>The body of <c>POST /api/signin/begin</c>.</summary>
 /// <param name="Email">The address typed. Sent as-is; this host normalizes it.</param>
@@ -47,16 +50,6 @@ public sealed record SignInPasswordRequest(
     string? Email,
     [property: JsonPropertyName("password")]
     string? Password,
-    [property: JsonPropertyName("returnUrl")]
-    string? ReturnUrl
-);
-
-/// <summary>The body of <c>POST /api/signup</c>.</summary>
-/// <param name="Email">The address typed.</param>
-/// <param name="ReturnUrl">Where to go afterwards.</param>
-public sealed record SignUpRequest(
-    [property: JsonPropertyName("email")]
-    string? Email,
     [property: JsonPropertyName("returnUrl")]
     string? ReturnUrl
 );
@@ -127,8 +120,9 @@ public sealed record SecondFactorRequest(
 
 /// <summary>
 ///     What every credential endpoint answers — <c>/api/signin/password</c>,
-///     <c>/api/signin/passkey/complete</c>, <c>/api/signin/totp</c>,
-///     <c>/api/signin/recovery-code</c> and <c>/api/signup</c>.
+///     <c>/api/signin/passkey/complete</c>, <c>/api/signin/totp</c> and
+///     <c>/api/signin/recovery-code</c>. The sign-up surface has its own shapes —
+///     <c>SignUpContracts.cs</c>.
 /// </summary>
 /// <param name="Succeeded">Whether the caller is now authenticated.</param>
 /// <param name="SecondFactorRequired">
@@ -141,8 +135,7 @@ public sealed record SecondFactorRequest(
 ///     same-origin path or <c>/</c>, never the caller's string.
 /// </param>
 /// <param name="Message">
-///     What to render on failure, verbatim — <c>UniformFailures.SignIn</c> or
-///     <c>UniformFailures.SignUp</c>. Empty on success.
+///     What to render on failure, verbatim — <c>UniformFailures.SignIn</c>. Empty on success.
 /// </param>
 public sealed record SignInResultResponse(
     [property: JsonPropertyName("succeeded")]

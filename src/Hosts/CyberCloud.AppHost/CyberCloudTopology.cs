@@ -24,6 +24,13 @@ namespace CyberCloud.AppHost;
 ///     </para>
 /// </remarks>
 public static class CyberCloudTopology {
+    /// <summary>
+    ///     <c>CyberCloud:Identity:SelfServeSignUp</c>, as an environment variable — the silo's
+    ///     <c>PlatformBootstrapTask.SelfServeSignUpKey</c> and the identity host's
+    ///     <c>IdentityHostOptions.SelfServeSignUp</c> both read it.
+    /// </summary>
+    public const string SelfServeSignUpVariable = "CyberCloud__Identity__SelfServeSignUp";
+
     /// <summary>Declares every resource of the local platform on <paramref name="builder" />.</summary>
     /// <param name="builder">A fresh builder; nothing is expected to be on it yet.</param>
     public static void Compose(IDistributedApplicationBuilder builder) {
@@ -228,6 +235,13 @@ public static class CyberCloudTopology {
             .WithReference(nats)
             .WithObjectStore()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
+            // ⚠ Self-serve sign-up is a decision three processes have to agree on, and this is the first
+            // of the three. On a silo it makes PlatformBootstrapTask write the platform:root#operator
+            // grant sign-up creates tenants under; on the identity host it opens /api/signup/*. Both
+            // silos carry it because either may be the one that starts first, and the task is
+            // idempotent. There is no MTA on this run (#93): the enrolment code goes to the silo's
+            // console instead — DevelopmentOtpDelivery, read in the dashboard.
+            .WithEnvironment(SelfServeSignUpVariable, "true")
             .WithOrleansPorts(CyberCloudResources.SiloOnePort, CyberCloudResources.SiloOneGatewayPort)
             // ⚠ The endpoint is declared, not inherited. Aspire reads a project's endpoints from its
             // launchSettings.json, and this host deliberately has none: it is launched by Aspire, by
@@ -247,6 +261,7 @@ public static class CyberCloudTopology {
             .WithReference(nats)
             .WithObjectStore()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
+            .WithEnvironment(SelfServeSignUpVariable, "true")
             .WithOrleansPorts(CyberCloudResources.SiloTwoPort, CyberCloudResources.SiloTwoGatewayPort)
             .WithEnvironment(
                 "CyberCloud__Cluster__LocalhostPrimarySiloPort",
@@ -286,6 +301,10 @@ public static class CyberCloudTopology {
             // would be refused with "origin not allowed" and nothing in that message names this line.
             // `localhost` is a secure context to every browser, so plain http is fine for the ceremony.
             .WithEnvironment("CyberCloud__Identity__Origins__0", $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}")
+            // The third of the three (see silo-one), plus the region a signed-up tenant is homed to and
+            // its default resource group is placed in. `local` is the region this laptop is.
+            .WithEnvironment(SelfServeSignUpVariable, "true")
+            .WithEnvironment("CyberCloud__Identity__DefaultRegion", CyberCloudResources.DefaultRegion)
             .WithHttpEndpoint(CyberCloudResources.IdentityPort, isProxied: false)
             .WithHttpHealthCheck("/health")
             .WaitFor(siloOne);

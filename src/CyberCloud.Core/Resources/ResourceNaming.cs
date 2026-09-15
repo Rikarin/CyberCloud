@@ -79,6 +79,60 @@ public static class ResourceNaming {
     }
 
     /// <summary>
+    ///     Turns a human-facing name into the one candidate for a slug under the rule — lower-case
+    ///     ASCII letters and digits kept, every other run of characters collapsed to one hyphen,
+    ///     hyphens trimmed from both ends.
+    /// </summary>
+    /// <param name="displayName">What the person typed — <c>"Contoso Ltd."</c>, say.</param>
+    /// <returns>
+    ///     The candidate — <c>"contoso-ltd"</c> for the example — which may still be empty or too
+    ///     long. ⚠ Not validated here: pass it to <see cref="Validate" /> next, whose sentence names
+    ///     what is wrong and is the one the person reads.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>ASCII only, and that is the rule rather than a shortcut.</b> The slug becomes a
+    ///         tenant's DNS label (docs/plan/11 § Hosts gives tenants subdomains), and the rule
+    ///         above already admits nothing outside <c>[a-z0-9-]</c>. Folding <c>É</c> to <c>e</c>
+    ///         would be a transliteration table nobody agrees on, and the same U+212A KELVIN SIGN
+    ///         trap <c>GrainKeys.NormalizeEmail</c> records: two different names would slug to one
+    ///         label. A name with no ASCII letters or digits slugs to the empty string, which
+    ///         <see cref="Validate" /> refuses with a sentence asking for one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Case is folded here and rejected by the rule</b>, and that is the right way
+    ///         round: the rule is about what is <i>stored</i>, and this is the one place a person's
+    ///         mixed-case organisation name is turned into a candidate for storing. Nothing else in
+    ///         the platform may lower-case a name on the way in.
+    ///     </para>
+    /// </remarks>
+    public static string Slugify(string? displayName) {
+        if (string.IsNullOrEmpty(displayName)) {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(displayName.Length);
+        var pendingHyphen = false;
+
+        foreach (var c in displayName) {
+            var folded = c is >= 'A' and <= 'Z' ? (char)(c + 32) : c;
+
+            if (folded is >= 'a' and <= 'z' or >= '0' and <= '9') {
+                if (pendingHyphen && builder.Length > 0) {
+                    builder.Append('-');
+                }
+
+                builder.Append(folded);
+                pendingHyphen = false;
+            } else {
+                pendingHyphen = true;
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
     ///     Returns a description of the first thing wrong with <paramref name="name" />, or
     ///     <see langword="null" /> if it is valid.
     /// </summary>

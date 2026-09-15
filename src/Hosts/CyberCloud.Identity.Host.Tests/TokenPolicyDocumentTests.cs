@@ -169,8 +169,9 @@ public sealed class TokenPolicyDocumentTests {
         // these, and a rename on one side of that pair produces a 404 at runtime rather than a build
         // error — the same hazard the [JsonPropertyName] attributes on the request records exist for.
         foreach (var route in new[] {
-                     "/api/signin/begin", "/api/signin/password", "/api/signup", "/api/signin/passkey/begin",
-                     "/api/signin/passkey/complete"
+                     "/api/signin/begin", "/api/signin/password", "/api/signin/passkey/begin",
+                     "/api/signin/passkey/complete", "/api/signup/begin", "/api/signup/verify",
+                     "/api/signup/passkey/begin", "/api/signup/complete"
                  }) {
             mapped.ShouldContain(route, $"the identity page calls {route}");
         }
