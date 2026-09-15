@@ -1,3 +1,4 @@
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 using System.Collections.Immutable;
 using System.Text.Json;
 
@@ -141,6 +142,20 @@ public readonly record struct ReconcileContext(
     ///     </para>
     /// </remarks>
     public IClusterConnectionSink ClusterConnections { get; init; } = new RefusingClusterConnectionSink();
+
+    /// <summary>
+    ///     The agent-tunnel side of the fabric — arm, status, revoke — for the one type whose product
+    ///     is an agent rather than an object in a cluster.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Defaults to <see cref="UnavailableAgentTunnels" />, which fails by name, for the reason
+    ///     <see cref="ClusterConnections" /> defaults to a sink that throws: a default that answered
+    ///     "no heartbeat yet" would let a connected cluster sit <c>Creating</c> forever in a host that
+    ///     forgot the seam, with the reconciler's own log blaming the tenant's agent.
+    ///     <c>ReconcileDriver</c> always supplies the host's; a context built by hand says otherwise
+    ///     here.
+    /// </remarks>
+    public IAgentTunnels Agents { get; init; } = new UnavailableAgentTunnels();
 }
 
 /// <summary>
@@ -193,7 +208,10 @@ public readonly record struct ObserveContext(
     JsonElement Desired,
     string Namespace,
     IKubeClusterConnection? Cluster
-);
+) {
+    /// <summary>The agent-tunnel seam, as on <see cref="ReconcileContext.Agents" /> and with the same default.</summary>
+    public IAgentTunnels Agents { get; init; } = new UnavailableAgentTunnels();
+}
 
 /// <summary>
 ///     Where a reconciler says the things <see cref="ReconcileOutcome" /> has no case for.

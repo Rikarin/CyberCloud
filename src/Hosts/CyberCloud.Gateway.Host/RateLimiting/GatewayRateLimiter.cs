@@ -56,8 +56,9 @@ readonly record struct RateLimitDecision(
 ///         <i>"sign-in, token, discovery"</i>, but docs/plan/10 § Request pipeline puts
 ///         authentication at stage 2 and rate limiting at stage 5. A request with a bad token is
 ///         therefore refused before it is ever counted, so on any route that requires a token the
-///         bucket is unreachable by construction. It is reachable here only for the two anonymous
-///         routes of docs/plan/10 § Shape (see <c>AuthenticateStage.IsAnonymous</c>) — and the
+///         bucket is unreachable by construction. It is reachable here only for the three anonymous
+///         routes of docs/plan/10 § Shape (see <c>AuthenticateStage.IsAnonymous</c>; the third,
+///         the agent tunnel, authenticates at its endpoint after this stage has counted it) — and the
 ///         bucket's own rationale names sign-in and token, which docs/plan/10 § Request pipeline
 ///         puts on the <i>identity host</i>, not here. The row probably belongs to that host and to
 ///         Envoy's per-IP shed rather than to this table.

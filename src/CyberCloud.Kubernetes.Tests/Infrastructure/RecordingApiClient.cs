@@ -69,18 +69,33 @@ public sealed class RecordingApiClient : IKubeApiClient {
     /// </remarks>
     public Exception? ThrowOnApply { get; set; }
 
+    /// <summary>
+    ///     Awaited before every apply answers — a gate, so a tunnel test can hold one request open
+    ///     while proving another is not held with it. <see langword="null" /> answers immediately.
+    /// </summary>
+    public Func<Task>? BeforeApply { get; set; }
+
+    /// <summary>Every apply, in order, as the command arrived.</summary>
+    public List<KubeCommand> Applies { get; } = [];
+
     /// <inheritdoc />
-    public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
+    public async Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(command);
 
         if (ThrowOnApply is not null) {
             throw ThrowOnApply;
         }
 
-        return Task.FromResult(
-            NextApply
-            ?? Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target })
-        );
+        lock (Applies) {
+            Applies.Add(command);
+        }
+
+        if (BeforeApply is { } gate) {
+            await gate();
+        }
+
+        return NextApply
+            ?? Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target });
     }
 
     /// <inheritdoc />

@@ -63,6 +63,9 @@ sealed class DispatchStage(
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
             // pipeline's job for it was stages 1 to 5.
             RouteKind.Hub => null,
+            // An agent's upgrade leaves the same way a hub's does: the endpoint after the pipeline
+            // admits it or answers 401 — AgentTunnelEndpoint.
+            RouteKind.AgentTunnel => null,
             RouteKind.OpenApi => OpenApi(context),
             // A constant, and the only plain-text body this gateway writes. No caller, no tenant, no
             // grain — SecurityTxt's remarks say why it is embedded rather than read at start-up.

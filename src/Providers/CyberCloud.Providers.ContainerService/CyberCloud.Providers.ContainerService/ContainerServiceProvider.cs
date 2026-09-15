@@ -87,6 +87,14 @@ public sealed class ContainerServiceProvider : IResourceProvider {
     /// <summary>The pool type's CLI alias.</summary>
     public const string PoolShortName = "nodepool";
 
+    /// <summary>The connected-cluster type's CLI alias — <c>cyc byo create …</c>.</summary>
+    /// <remarks>
+    ///     ⚠ Not <c>arc</c>, which is the Azure product's name and docs/plan/21 § Grammar's alias
+    ///     table does not carry. <c>byo</c> is what docs/plan/09 § Cluster connections calls the
+    ///     row — "BYO clusters behind NAT" — and what docs/plan/24's M2 exit criterion calls it.
+    /// </remarks>
+    public const string ConnectedShortName = "byo";
+
     /// <inheritdoc />
     public string ProviderNamespace => ManagedClusters.ProviderNamespace;
 
@@ -202,7 +210,47 @@ public sealed class ContainerServiceProvider : IResourceProvider {
             )
             .Chart(AgentPools.ChartName)
             .SupportsTags()
-            .RequiresCluster(AgentPools.ClusterIdPointer);
+            .RequiresCluster(AgentPools.ClusterIdPointer)
+            // ── The third type, #36: the cluster the tenant brought ─────────────────────────────
+            //
+            // ⚠ NO .Chart, NO .RequiresCluster, AND ONE METER — EACH ABSENCE IS THE TYPE.
+            //
+            //   .Chart      — charts/agent exists, and the TENANT installs it, in a cluster this
+            //                 platform never renders into. A chart binding here would make
+            //                 Build.Charts rewrite that chart's values.yaml from this schema, and
+            //                 the agent's values (a tunnel endpoint, a token, a cluster id) are not
+            //                 this resource's properties. The chart carries its own conformance.yaml
+            //                 and is checked by ChartAnnotationTests like every other, unbound.
+            //   RequiresCluster — the resource IS the cluster. Its id becomes the clusterId other
+            //                 resources are placed in, once the agent's first heartbeat has made it
+            //                 Succeeded and ReconcileDriver has attached the AgentInitiated
+            //                 connection under it.
+            //   Meters      — QuotaMeter.Clusters, because a connected cluster is a cluster in the
+            //                 quota's sense (five per subscription by default), and Resources. No
+            //                 vCPU, memory or storage: the platform runs nothing in it and reserves
+            //                 nothing for it. The agent pod is the tenant's own capacity.
+            .ResourceType(ConnectedClusters.TypePath)
+            .ApiVersion(ConnectedClusters.V2026, ConnectedClusters.Schema2026)
+            .Reconciler<ConnectedClusterReconciler>()
+            .Meters(QuotaMeter.Clusters, QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                ConnectedClusters.ListInstallCommandAction,
+                ActionKind.Post,
+                ConnectedClusters.ListInstallCommandPermission,
+                secret: true,
+                response: ConnectedClusters.ListInstallCommandResponse,
+                handler: typeof(ConnectedClusterInstallCommandHandler)
+            )
+            .Display(
+                "Connected Kubernetes cluster",
+                "Connected Kubernetes clusters",
+                shortName: ConnectedShortName,
+                summary: "A cluster you run yourself — on-prem, behind NAT, anywhere with outbound "
+                + "HTTPS — reached through an agent you install in it. Create it, run the install "
+                + "command it gives you, and place resources in it once it reports Succeeded."
+            )
+            .SupportsTags();
     }
 
     // ── What a cluster draws ───────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 using CyberCloud.Core.Time;
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Drift;
@@ -131,6 +132,9 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<ISecretWriter, UnavailableSecretWriter>();
         services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
         services.TryAddSingleton<IClusterConnectionRegistrar, UnavailableClusterConnectionRegistrar>();
+        // The agent-tunnel seam (#36). A host with a silo registers GrainAgentTunnels first; the
+        // default refuses by name, as the two cluster seams above do.
+        services.TryAddSingleton<IAgentTunnels, UnavailableAgentTunnels>();
         services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
         // ⚠ THE CONNECTION-BACKED ONE, AND IT IS STILL FAIL-CLOSED. It reads through
         // IClusterConnectionFactory, whose own default answers null for every cluster — so a host

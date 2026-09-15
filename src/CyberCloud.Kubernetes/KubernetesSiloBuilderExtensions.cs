@@ -43,10 +43,15 @@ public static class KubernetesSiloBuilderExtensions {
 
                 services.TryAddSingleton<IClock, SystemClock>();
                 services.TryAddSingleton<IClusterOperatorAuthority, DenyClusterOperatorAuthority>();
+                // ⚠ WITH THE GRAIN FACTORY, so that an AgentInitiated descriptor resolves to a
+                // tunnel route rather than to the refusal a silo-less factory gives. A host that
+                // registers its own factory (the silo, with a kubeconfig resolver) has to pass it
+                // too, or every connected cluster it hosts is unreachable by name.
                 services.TryAddSingleton<IKubeApiClientFactory>(sp =>
                     new KubeApiClientFactory(
                         sp.GetRequiredService<IClock>(),
-                        sp.GetService<ILogger<KubeApiClientFactory>>()
+                        sp.GetService<ILogger<KubeApiClientFactory>>(),
+                        sp.GetRequiredService<IGrainFactory>()
                     )
                 );
 

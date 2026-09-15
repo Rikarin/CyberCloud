@@ -1,0 +1,59 @@
+# The Cyber Cloud agent — what the install command sets, and nothing a tenant should need to edit.
+#
+# ⚠ HAND-WRITTEN, UNLIKE EVERY charts/managed/ values.yaml. No resource type names this chart, so
+# Build.Charts does not rewrite the @param rows from a schema — see Chart.yaml for why the binding
+# would be wrong. The annotation format is the same and values.schema.json is still generated from
+# this file and diffed; what differs is who the author is.
+#
+# ⚠ THE THREE VALUES THE INSTALL COMMAND SETS ARE THE THREE THAT MATTER. listInstallCommand on the
+# connected cluster answers with a `helm upgrade --install` that passes platform.tunnelEndpoint,
+# cluster.id and cluster.enrollmentToken with --set-string. Everything else is a default a tenant
+# can leave alone.
+
+## @param platform {object} Where the agent dials.
+platform:
+  ## @param tunnelEndpoint {string} The WebSocket URL of the platform's gateway — wss://{gateway}/agent/v1/tunnel. The cluster needs outbound HTTPS to it and nothing inbound; the install command fills it in.
+  ## @required
+  tunnelEndpoint: ""
+
+## @param cluster {object} Which connected cluster this agent is.
+cluster:
+  ## @param id {string} The connected-cluster resource's id, in 8-4-4-4-12 form, from the install command. The platform binds the tunnel to it at the gateway, so an agent presenting another cluster's id with this cluster's credential is refused.
+  ## @required
+  id: ""
+  ## @param enrollmentToken {string} The one-time token from listInstallCommand. It admits exactly one connection; the agent exchanges it for a credential it keeps in a Secret and never needs the token again. Leave it empty on a later upgrade — an agent that already holds its credential ignores it.
+  ## @secret
+  enrollmentToken: ""
+  ## @param credentialSecretName {string} The Secret, in the release namespace, the agent stores its credential in. The Role in rbac.yaml grants the agent that Secret and no other.
+  credentialSecretName: cybercloud-agent-credential
+
+## @param agent {object} How the agent behaves.
+agent:
+  ## @param heartbeatSeconds {integer} How often the agent reports in until the platform's welcome says — the welcome carries the resource's own heartbeatSeconds, the same value the install command sets here, and the agent adopts it on every connection. The platform calls a cluster Degraded after ninety seconds without a heartbeat, so a value above thirty leaves fewer than three chances for a packet to arrive.
+  ## @range 5..60
+  heartbeatSeconds: 15
+  ## @param maxReconnectSeconds {integer} The longest the agent waits between dial attempts. It starts at one second and doubles up to this.
+  ## @range 1..600
+  maxReconnectSeconds: 60
+  ## @param logLevel {string} The agent's minimum log level.
+  ## @enum Debug | Information | Warning
+  logLevel: Information
+
+## @param image {object} The agent image.
+image:
+  ## @param reference {string} The image to run. ⚠ By digest in any real deployment — docs/plan/18 § Platform security, "a pinned digest, never a tag" — which is what the install command passes when the platform has one. The default is a tag so that a development install has something to pull.
+  reference: ghcr.io/rikarin/cybercloud/cybercloud-agent-host:latest
+  ## @param pullPolicy {string} The kubelet's pull policy.
+  ## @enum IfNotPresent | Always
+  pullPolicy: IfNotPresent
+
+## @param resources {object} What the one agent pod requests and is limited to.
+resources:
+  ## @param cpu {string} CPU, as a Kubernetes quantity. The agent relays frames and runs one API call per request; it is idle between reconciles.
+  cpu: 100m
+  ## @param memory {string} Memory, as a Kubernetes quantity.
+  memory: 128Mi
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

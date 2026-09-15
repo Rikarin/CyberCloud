@@ -3,6 +3,7 @@ using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Apply;
 using CyberCloud.Kubernetes.Connections;
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -47,17 +48,32 @@ public sealed class SharedTestClock : IClock {
     public void Advance(TimeSpan by) => UtcNow += by;
 }
 
-/// <summary>An <see cref="IKubeApiClientFactory" /> that hands out one shared fake.</summary>
-public sealed class FakeApiClientFactory : IKubeApiClientFactory {
-    /// <summary>The client every connection gets. Static so the test and the silo share it.</summary>
+/// <summary>
+///     An <see cref="IKubeApiClientFactory" /> that hands out one shared fake for every kubeconfig
+///     connection — and the real tunnel route for an agent-initiated one.
+/// </summary>
+/// <remarks>
+///     ⚠ The <see cref="ClusterConnectionKind.AgentInitiated" /> branch is the production factory's,
+///     not a fake: <c>AgentTunnelGrainTests</c> drives a connection grain through
+///     <c>TunnelKubeApiClient</c>, <c>GrainTunnelRoute</c> and <c>AgentTunnelGrain</c> to a real
+///     <c>TunnelAgent</c>, and a fake here would make that suite a test of the fake.
+/// </remarks>
+/// <param name="grains">The silo's grain factory, for the tunnel route.</param>
+/// <param name="clock">The clock the production factory stamps drift events with.</param>
+public sealed class FakeApiClientFactory(IGrainFactory grains, IClock clock) : IKubeApiClientFactory {
+    /// <summary>The client every kubeconfig connection gets. Static so the test and the silo share it.</summary>
     public static RecordingApiClient Client { get; } = new();
+
+    readonly KubeApiClientFactory production = new(clock, grains: grains);
 
     /// <inheritdoc />
     public Task<Result<IKubeApiClient>> ConnectAsync(
         ClusterConnectionDescriptor descriptor,
         CancellationToken cancellationToken = default
     ) =>
-        Task.FromResult(Result<IKubeApiClient>.Success(Client));
+        descriptor.Kind == ClusterConnectionKind.AgentInitiated
+            ? production.ConnectAsync(descriptor, cancellationToken)
+            : Task.FromResult(Result<IKubeApiClient>.Success(Client));
 }
 
 /// <summary>Captures log lines so a test can assert that an edge was logged.</summary>
@@ -142,6 +158,19 @@ public interface IKubeReacherGrain : IGrainWithStringKey {
     Task<string?> MyTenantAsync();
 
     /// <summary>
+    ///     Calls <c>IAgentTunnelGrain.ExchangeAsync</c> directly — the route a tenant grain would take
+    ///     to drive somebody else's cluster if the tunnel grain let it.
+    /// </summary>
+    /// <param name="clusterId">The cluster.</param>
+    [Alias("TunnelExchange")]
+    Task<string> ReachTunnelExchangeAsync(Guid clusterId);
+
+    /// <summary>Calls <c>IAgentTunnelGrain.GetStatusAsync</c> from inside a tenant.</summary>
+    /// <param name="clusterId">The cluster.</param>
+    [Alias("TunnelStatus")]
+    Task<string> ReachTunnelStatusAsync(Guid clusterId);
+
+    /// <summary>
     ///     Invokes <b>every</b> method on <c>IClusterConnectionGrain</c> and returns the names of
     ///     any that did not refuse.
     /// </summary>
@@ -221,6 +250,24 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain {
 
     /// <inheritdoc />
     public Task<string?> MyTenantAsync() => Task.FromResult(this.GetTenantId());
+
+    /// <inheritdoc />
+    public async Task<string> ReachTunnelExchangeAsync(Guid clusterId) {
+        var outcome = await GrainFactory
+            .GetGrain<IAgentTunnelGrain>(GrainKeys.ClusterConnection(clusterId))
+            .ExchangeAsync(TunnelFrame.Request(0, "ping", "{}"));
+
+        return outcome.IsSuccess ? "ok" : $"<{outcome.Error!.Code}>";
+    }
+
+    /// <inheritdoc />
+    public async Task<string> ReachTunnelStatusAsync(Guid clusterId) {
+        var outcome = await GrainFactory
+            .GetGrain<IAgentTunnelGrain>(GrainKeys.ClusterConnection(clusterId))
+            .GetStatusAsync();
+
+        return outcome.IsSuccess ? (outcome.GetValueOrThrow().Armed ? "armed" : "unarmed") : $"<{outcome.Error!.Code}>";
+    }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> ProbeUncheckedMethodsAsync(

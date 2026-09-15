@@ -58,6 +58,18 @@ CyberCloud.Authorization.Grains.SubjectRelationsGrain
 # How to reach a tenant's cluster. The informer cursors on this grain are the cheap thing kept so
 # the expensive thing — the informer cache — can be rebuilt; see ClusterConnectionState.
 CyberCloud.Kubernetes.Connections.ClusterConnectionGrain
+#
+# AgentTunnelGrain is the connected cluster's other half (docs/plan/09 § Cluster connections, the
+# AgentInitiated row, #36): who owns the cluster, the hash of the enrollment token that admits its
+# agent, the hash of the credential that agent was handed in exchange, and when it last heartbeated.
+# docs/plan/05 § Choosing a tier's test — "can this be rebuilt" — answers no in the direction that
+# matters: the credential's plaintext exists in exactly one place, a Secret in the TENANT's cluster,
+# and losing its hash means every connected cluster's agent presents a credential the platform no
+# longer recognises. The "rebuild" is the tenant re-running listInstallCommand and re-installing the
+# agent, on every cluster, after a platform incident — a customer-visible outage rather than a cache
+# miss. The session — the socket, the requests in flight — is in memory and is NOT durable; a lost
+# session is one reconnect, which the agent does on its own.
+CyberCloud.Kubernetes.Tunnel.AgentTunnelGrain
 
 # ── Resource manager — docs/plan/08 ────────────────────────────────────────────────────────────
 # The tenant's declared intent, and the record of what is being done about it.

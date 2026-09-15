@@ -1,0 +1,29 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# Nothing was forked. Build.Charts requires this file only under charts/managed/; it is here because
+# a chart with no provenance is indistinguishable from one somebody forked and forgot, whichever
+# directory it sits in.
+
+vendored: none
+upstream: https://github.com/Rikarin/CyberCloud
+
+# The image this chart runs is this repository's own src/Hosts/CyberCloud.Agent.Host, built by
+# Build.Images with every other host under src/Hosts. There is no upstream operator, no CRD, and no
+# third-party image.
+image-source: src/Hosts/CyberCloud.Agent.Host
+
+reviewed: 2026-09-15
+
+# ── What the design was checked against ────────────────────────────────────────────────────────
+#
+# ⚠ THE SHAPE IS THE ONE EVERY "CONNECT YOUR OWN CLUSTER" PRODUCT CONVERGED ON, and none of their code
+# is here: a one-time registration token exchanged for a long-lived credential the agent keeps in a
+# Secret in its own namespace; one outbound WebSocket; requests multiplexed down it by correlation id;
+# a heartbeat that is what "connected" means on the platform's side. What differs from those products
+# is the WIRE: this agent serves seven typed operations (TunnelOperations) rather than proxying HTTP,
+# so the platform cannot send this cluster a request a reconciler could not have expressed.
+#
+# ⚠ THE TRANSPORT IS A WEBSOCKET AND docs/plan/09 NAMED gRPC. That section's correction carries the
+# argument; the short form is that the gateway already terminates WebSockets, Directory.Packages.props
+# admits no package without an ADR, and a NAT'd corporate egress that downgrades to HTTP/1.1 breaks a
+# bidirectional gRPC stream and not a WebSocket.

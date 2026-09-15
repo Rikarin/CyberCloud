@@ -720,6 +720,44 @@ export interface ContainerRegistryRegistriesListCredentialsResult {
   username: string;
 }
 
+/** Connected Kubernetes cluster. A cluster you run yourself — on-prem, behind NAT, anywhere with outbound HTTPS — reached through an agent you install in it. Create it, run the install command it gives you, and place resources in it once it reports Succeeded. */
+export interface ContainerServiceConnectedClustersData {
+  /** The region the cluster is billed in. ⚠ Where the cluster physically is is the tenant's business; this is the region whose gateway the agent dials and whose silos hold the connection. */
+  location: string;
+  /** The connected cluster's own settings. */
+  properties?: {
+    /** What the cluster runs — k3s, kubeadm, OpenShift, a hosted service. Informational: the agent works against any conformant API server and nothing here changes what it does. */
+    distribution?: string;
+    /** How often the agent reports in. Read when listInstallCommand is called: the command passes it to the chart and the platform repeats it in the welcome the agent adopts on every connection. A change after that takes effect on the next listInstallCommand — no re-install; the running agent adopts it on its next connection. ⚠ The platform calls a cluster Degraded after ninety seconds without a heartbeat (docs/plan/09 § Cluster connections), so a value above thirty leaves fewer than three chances for a packet to arrive. */
+    heartbeatSeconds?: number;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Connected Kubernetes cluster, as the API returns it. */
+export interface ContainerServiceConnectedClustersResource {
+  /** The resource's fully qualified id. */
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'CyberCloud.ContainerService/connectedClusters';
+  readonly properties?: ContainerServiceConnectedClustersData['properties'];
+}
+
+/** What listInstallCommand returns. ⚠ Secret material — never log or persist this. */
+export interface ContainerServiceConnectedClustersListInstallCommandResult {
+  /** The chart reference the command installs: the OCI reference this deployment publishes the agent chart under, or charts/agent — the path in a checkout of the CyberCloud repository — when it has not published one, in which case run the command from that checkout. */
+  chart: string;
+  /** The helm command to run against the cluster being connected, with the one-time token inline. Run it from a workstation with cluster-admin on that cluster; the platform needs nothing from the cluster's side. */
+  command: string;
+  /** When the token stops being accepted, RFC 3339. Twenty-four hours from the call; ask again for a fresh one. */
+  expiresAt: string;
+  /** The one-time enrollment token, separately, for an install that does not use helm. It admits exactly one agent connection and is spent by it. */
+  token: string;
+  /** The WebSocket URL the agent dials — wss://{gateway}/agent/v1/tunnel. The cluster needs outbound HTTPS to it and nothing inbound. */
+  tunnelEndpoint: string;
+}
+
 /** The values /properties/version accepts. ⚠ Closed: the write path refuses anything else. */
 export type ContainerServiceManagedClustersVersion =
   | '1.32'

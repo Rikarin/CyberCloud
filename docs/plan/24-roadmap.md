@@ -376,8 +376,9 @@ stopped being. So the recount is no longer only prose: `RoadmapReconciliationTes
 `CyberCloud.ResourceManager.Contracts.Tests`, reads the published document and this page and fails when
 they disagree — on the set of types, on **each phase row's count against the types that row names**, on
 their sum, on the **Total**, and on the number printed under the command above. Publishing a
-twenty-third type now turns a test red with the roadmap named in the message, rather than leaving a plan
-that gets re-planned from memory.
+twenty-fifth type now turns a test red with the roadmap named in the message, rather than leaving a plan
+that gets re-planned from memory — as the twenty-fourth did, on 2026-09-15, until this table was
+recounted in the same commit.
 
 ⚠ **The per-row half of that was prose before it was an assertion, and only for a day.** As first
 published this paragraph claimed the per-phase counts were checked when the test compared their *sum*

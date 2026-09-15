@@ -23,22 +23,29 @@ sealed class AuthenticateStage(ICallerContextResolver resolver) : IGatewayStage 
     public GatewayStage Stage => GatewayStage.Authenticate;
 
     /// <summary>
-    ///     The two routes docs/plan/10 § Shape serves without a token.
+    ///     The three routes docs/plan/10 § Shape serves without an identity-host token.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>An anonymous route is not an unlimited one.</b> These two are the only requests that
-    ///     reach stage 5 with no tenant, which is what makes docs/plan/10 § Rate limiting's
+    ///     ⚠ <b>An anonymous route is not an unlimited one.</b> These three are the only requests
+    ///     that reach stage 5 with no tenant, which is what makes docs/plan/10 § Rate limiting's
     ///     <i>
     ///         per IP,
     ///         unauthenticated
     ///     </i> bucket reachable at all — see the defect note in
-    ///     <c>GatewayRateLimiter</c>. Both are public documents by design: the OpenAPI document is
-    ///     the generated API surface, and <c>/.well-known</c> holds the RFC 9116 <c>security.txt</c>
-    ///     today and the OIDC discovery document once it is proxied — none of them says anything
-    ///     about a tenant.
+    ///     <c>GatewayRateLimiter</c>. The first two are public documents by design: the OpenAPI
+    ///     document is the generated API surface, and <c>/.well-known</c> holds the RFC 9116
+    ///     <c>security.txt</c> today and the OIDC discovery document once it is proxied — neither
+    ///     says anything about a tenant. The third, <c>/agent</c>, is anonymous to <i>this</i> stage
+    ///     and authenticated at its endpoint, as the comment on it says.
     /// </remarks>
     public static bool IsAnonymous(PathString path) =>
-        path.StartsWithSegments("/openapi") || path.StartsWithSegments("/.well-known");
+        path.StartsWithSegments("/openapi")
+        || path.StartsWithSegments("/.well-known")
+        // ⚠ Anonymous to THIS stage only. An agent authenticates with a per-cluster credential the
+        // tunnel grain checks at the endpoint — docs/plan/09 § Cluster connections, "the tunnel
+        // identity is bound to the cluster resource id at the gateway" — and a JWT from the identity
+        // host is not a thing a pod in a tenant's cluster holds.
+        || path.StartsWithSegments("/agent");
 
     /// <inheritdoc />
     public async Task<GatewayOutcome?> RunAsync(

@@ -1,6 +1,7 @@
 using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Conformance;
@@ -122,6 +123,15 @@ public static class ConformanceState<TSource>
     /// </remarks>
     public static NamespaceEnsurer Namespaces { get; } = new(Clock);
 
+    /// <summary>
+    ///     The agent-tunnel seam, for the one type whose product is an agent —
+    ///     <see cref="FakeAgentTunnels" /> says what it does and does not prove.
+    /// </summary>
+    public static FakeAgentTunnels Agents { get; } = new(Clock);
+
+    /// <summary>What the driver attached after a converging pass reported a connection.</summary>
+    public static RecordingClusterConnectionRegistrar Registrar { get; } = new();
+
     /// <summary>Puts every piece back to its default.</summary>
     public static void Reset() {
         Cluster.Reset();
@@ -130,6 +140,8 @@ public static class ConformanceState<TSource>
         Locks.Reset();
         Changes.Reset();
         Relations.Reset();
+        Agents.Reset();
+        Registrar.Reset();
 
         // ⚠ AFTER Cluster.Reset, and the order is the whole point: the memo describes the cluster,
         // and the cluster has just been emptied.
@@ -508,7 +520,8 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
             new ActionDispatcher(
                 Handlers(),
                 new FakeClusterConnectionFactory(World),
-                Vault
+                Vault,
+                ConformanceState<TSource>.Agents
             ),
             NullLogger<ResourceManagerService>.Instance
         );
@@ -659,6 +672,13 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // from measuring itself.
                     services.AddSingleton<ISecretResolver>(ConformanceState<TSource>.Vault);
                     services.AddSingleton<ISecretWriter>(ConformanceState<TSource>.Vault);
+
+                    // ⚠ THE AGENT SEAM AND THE REGISTRAR, both before AddCyberCloudResourceManager's
+                    // TryAdd defaults. CyberCloud.ContainerService/connectedClusters is the first type
+                    // whose converging pass REPORTS a connection in a Docker-free run, and the
+                    // refusing registrar would fail that pass for the harness's reason.
+                    services.AddSingleton<IAgentTunnels>(ConformanceState<TSource>.Agents);
+                    services.AddSingleton<IClusterConnectionRegistrar>(ConformanceState<TSource>.Registrar);
 
                     // The provider, exactly as AddCyberCloudProvider<T> registers one: the provider
                     // itself, and the reconciler as a SINGLETON BY CONCRETE TYPE — clause 2 makes one

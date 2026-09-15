@@ -1,3 +1,4 @@
+using CyberCloud.Kubernetes.Contracts.Tunnel;
 using System.Text.Json;
 
 namespace CyberCloud.ResourceManager.Contracts;
@@ -54,7 +55,14 @@ public readonly record struct ActionContext(
     string Namespace,
     IKubeClusterConnection? Cluster,
     ISecretResolver Secrets
-);
+) {
+    /// <summary>
+    ///     The agent-tunnel seam — what <c>listInstallCommand</c> mints through. Defaults to
+    ///     <see cref="UnavailableAgentTunnels" />, as <see cref="ReconcileContext.Agents" /> does and
+    ///     for the same reason; <c>ActionDispatcher</c> supplies the host's.
+    /// </summary>
+    public IAgentTunnels Agents { get; init; } = new UnavailableAgentTunnels();
+}
 
 /// <summary>
 ///     Runs one declared action on a resource. docs/plan/08 § The provider registry.

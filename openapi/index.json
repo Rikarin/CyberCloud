@@ -356,6 +356,19 @@
       }
     },
     {
+      "type": "CyberCloud.ContainerService/connectedClusters",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Connected Kubernetes cluster",
+        "plural": "Connected Kubernetes clusters",
+        "alias": "byo",
+        "summary": "A cluster you run yourself — on-prem, behind NAT, anywhere with outbound HTTPS — reached through an agent you install in it. Create it, run the install command it gives you, and place resources in it once it reports Succeeded.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.ContainerService/managedClusters",
       "apiVersions": [
         "2026-08-01"

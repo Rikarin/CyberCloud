@@ -5,8 +5,19 @@ charts/
 ├── platform/         # Cyber Cloud itself: silo, gateway, identity, ingest, worker, portal
 ├── bundle/           # what we install into a managed cluster: operators, CNI, monitoring   ← exists
 ├── managed/          # one chart per managed service — the catalogue
+├── agent/            # ⚠ the TENANT installs this, into a cluster we cannot reach (09, #36)   ← exists
 └── tenant-cluster/   # ⚠ CORRECTED — see below; these live in managed/ instead
 ```
+
+> ⚠ **`agent/` landed 2026-09-15 (#36) and is the first chart outside `managed/` on purpose.** A
+> `managed/` chart is rendered *by* the platform *into* a cluster and `Build.Charts` rewrites its
+> `@param` block from the resource type's schema. `agent/` is the other direction — the tenant renders
+> it with `helm` into a cluster the platform has never seen, and what it configures (a tunnel endpoint,
+> a one-time token, a cluster id) is nobody's resource properties. So `CyberCloud.ContainerService/
+> connectedClusters` names no chart, the agent's `values.yaml` is hand-written and annotated like every
+> other, `values.schema.json` is still generated from it and diffed, and it carries `SOURCE` and
+> `conformance.yaml` although the build requires neither here. The `§ owed` in that manifest is where
+> "what needs a real NAT'd cluster" lives.
 
 > ⚠ **CORRECTED 2026-08-13 by `CyberCloud.ContainerService/managedClusters`.** The Cluster API +
 > Kamaji + KubeVirt templates are `charts/managed/kubernetes` and `charts/managed/kubernetes-agentpool`,

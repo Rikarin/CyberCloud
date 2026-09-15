@@ -40,4 +40,28 @@ public sealed class KubernetesOptions {
     ///     transition cannot share a process with a loop that is quietly repairing it.
     /// </remarks>
     public bool RunHealthTimer { get; set; } = true;
+
+    /// <summary>
+    ///     How long a request down an agent tunnel waits for the agent's answer before it is failed
+    ///     — docs/plan/09 § Cluster connections, the <c>AgentInitiated</c> row.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Shorter than <c>ReconcileDriver.PassBudget</c> on purpose. A reconcile pass is bounded at
+    ///     thirty seconds and a grain call carries no token, so a request that could wait longer than
+    ///     the pass would outlive the caller that wanted it. Twenty seconds leaves the pass a
+    ///     failure to report rather than a timeout to be reported about.
+    /// </remarks>
+    public TimeSpan TunnelRequestTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    ///     How often a connected cluster's agent is told to heartbeat when the resource did not say.
+    ///     Fifteen seconds, so that the ninety-second staleness window holds six of them and one
+    ///     lost packet is not a <c>Degraded</c> cluster.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A fallback, not the value. The resource's own <c>heartbeatSeconds</c> reaches the tunnel
+    ///     grain through <c>AgentArmRequest.HeartbeatInterval</c> at <c>listInstallCommand</c> and is
+    ///     what the welcome carries; this applies only to a tunnel armed with none.
+    /// </remarks>
+    public TimeSpan AgentHeartbeatInterval { get; set; } = TimeSpan.FromSeconds(15);
 }
