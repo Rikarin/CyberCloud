@@ -103,10 +103,12 @@ table above.
 than a new one.** `CyberCloud.Authorization` is a reserved namespace — `ProviderRegistry.Build`
 refuses a provider that claims it, because on a resource group the assignment address is a
 well-formed resource path and the gateway routes it first — so ADR-012's emitters, which read the
-registry and the scope extension #63 added, know nothing of it. `openapi/`, `cyc`, the SDK and the
-portal are silent about it exactly as they were about scopes before #63, and the fix is the same
-shape: a third non-registry source for the emitters. [10](10-gateway-and-api.md) § Shape records the
-gap.
+registry and the scope extension #63 added, know nothing of it. `openapi/`, `cyc` and the SDK are
+silent about it exactly as they were about scopes before #63, and the fix is the same shape: a third
+non-registry source for the emitters. [10](10-gateway-and-api.md) § Shape records the gap. The portal
+reaches the address by hand in the meantime — its access page (#22) grants, checks and revokes over a
+hand-written `RoleAssignmentsApi` that derives the name exactly as `RoleAssignmentName` does, and it
+cannot list, because the collection `GET` is #86's.
 
 ⚠ **`purge` is the sixth permission, added at `SchemaVersion` 2, and how it came to be missing is the
 more useful half.** [08](08-resource-manager.md) § Soft delete gives a purge its own permission —

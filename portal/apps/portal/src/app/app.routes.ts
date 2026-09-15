@@ -24,6 +24,12 @@ import { Routes } from '@angular/router';
  * ⚠ The four resource routes are told apart by segment count alone — three, four, five and six
  * segments after `providers/` — so `…/{name}/edit` cannot be read as a child named `edit`. A
  * second nesting level would break that, and would need a literal segment to disambiguate.
+ * `…/{name}/access` sits beside `…/{name}/edit` at four and six segments on the same argument,
+ * and the router tells the two literals apart.
+ *
+ * **The access page is a `/access` suffix on every scope that has a blade** — the subscription,
+ * the resource group, and the resource — because a role assignment is an extension address on
+ * every scope (docs/plan/10 § Shape) and the page is the same page with a different scope.
  */
 export const appRoutes: Routes = [
   {
@@ -43,6 +49,11 @@ export const appRoutes: Routes = [
     title: 'Subscription'
   },
   {
+    path: 'subscriptions/:subscriptionId/access',
+    loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
+    title: 'Access'
+  },
+  {
     path: 'subscriptions/:subscriptionId/resourceGroups',
     loadComponent: () => import('../pages/scopes/resource-groups').then(m => m.ResourceGroups),
     title: 'Resource groups'
@@ -51,6 +62,11 @@ export const appRoutes: Routes = [
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup',
     loadComponent: () => import('../pages/scopes/resource-group-blade').then(m => m.ResourceGroupBlade),
     title: 'Resource group'
+  },
+  {
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/access',
+    loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
+    title: 'Access'
   },
   {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/resources',
@@ -80,6 +96,11 @@ export const appRoutes: Routes = [
     title: 'Edit'
   },
   {
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:name/access',
+    loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
+    title: 'Access'
+  },
+  {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:parent/:childType/:name',
     loadComponent: () => import('../pages/resources/resource-blade').then(m => m.ResourceBlade)
   },
@@ -87,6 +108,11 @@ export const appRoutes: Routes = [
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:parent/:childType/:name/edit',
     loadComponent: () => import('../pages/resources/resource-edit').then(m => m.ResourceEdit),
     title: 'Edit'
+  },
+  {
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/:provider/:type/:parent/:childType/:name/access',
+    loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
+    title: 'Access'
   },
   {
     path: 'operations/:operationId',

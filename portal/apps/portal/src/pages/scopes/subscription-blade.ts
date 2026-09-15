@@ -35,9 +35,14 @@ import { NeedsTenant, PageStatus, activeTenantId, load, pageState } from '../sha
           <h1 class="text-lg font-semibold">{{ scope()?.name ?? subscriptionId() }}</h1>
           <p class="text-foreground-muted mt-1 text-sm" i18n="@@subscriptionBlade.subheading">Subscription</p>
         </div>
-        <a xuiButton color="primary" size="sm" [routerLink]="groupsLink()" i18n="@@subscriptionBlade.groups"
-          >Resource groups</a
-        >
+        <div class="flex gap-2">
+          <a xuiButton variant="outline" size="sm" [routerLink]="accessLink()" i18n="@@subscriptionBlade.access"
+            >Access</a
+          >
+          <a xuiButton color="primary" size="sm" [routerLink]="groupsLink()" i18n="@@subscriptionBlade.groups"
+            >Resource groups</a
+          >
+        </div>
       </div>
 
       <cc-page-status [state]="state()" [retryLink]="backLink" />
@@ -70,6 +75,7 @@ export class SubscriptionBlade {
   });
 
   protected readonly groupsLink = computed(() => links.resourceGroups(this.subscriptionId()));
+  protected readonly accessLink = computed(() => links.subscriptionAccess(this.subscriptionId()));
   protected readonly backLink = links.subscriptions();
   protected readonly overviewTitle = $localize`:@@subscriptionBlade.overview:Overview`;
   protected readonly labels = {

@@ -18,15 +18,19 @@ import { OPERATION_POLL_MS } from './operations/operation-view';
  * the real form document served at `/forms/{apiVersion}.json`, and `HttpTestingController`
  * playing the gateway — and exercises what each page does: the create blade's `PUT` and its
  * hand-off to the operation view, the operation view's poll to `Succeeded`, the blade's read and
- * its two-step delete, the list's `skipToken` paging, and the two scope creates. Each request is
- * asserted by method, path and body, because a page that sends the right verb to the wrong path
- * is the failure the generated client's per-type methods exist to prevent.
+ * its two-step delete, the list's `skipToken` paging, the two scope creates, and the access page's
+ * grant, check and revoke over the one hand-written address. Each request is asserted by method,
+ * path and body, because a page that sends the right verb to the wrong path is the failure the
+ * generated client's per-type methods exist to prevent — and, for the access page, the failure
+ * nothing generated can prevent.
  */
 const TENANT = 't-acme';
 const SUBSCRIPTION = '0f9a1c2e-4b7d-4e3a-9c1d-2b6f8a7e5d43';
 const GROUP = 'example-rg';
 const OPERATION = '9c1d2b6f-8a7e-5d43-0f9a-1c2e4b7d4e3a';
 const WIDGET_PATH = `/api/tenants/${TENANT}/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/providers/CyberCloud.Sample/widgets`;
+const ROLE_ASSIGNMENTS = '/providers/CyberCloud.Authorization/roleAssignments';
+const RITA = '7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d';
 const V = `api-version=${apiVersion}`;
 
 const document = readFileSync(
@@ -474,6 +478,219 @@ describe('the portal pages, signed in', () => {
       await settle();
 
       expect(host().textContent).toContain('No Widgets here');
+    });
+  });
+
+  describe('the access page', () => {
+    const GROUP_SCOPE = `/api/tenants/${TENANT}/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}`;
+
+    /** What `ResponseBodies.RoleAssignment` writes for a name at a scope. */
+    function served(scope: string, name: string) {
+      const [role, principalType, ...id] = name.split('-');
+      return {
+        id: `${scope}${ROLE_ASSIGNMENTS}/${name}`,
+        name,
+        type: 'CyberCloud.Authorization/roleAssignments',
+        properties: { scope, principalId: id.join('-'), principalType, roleDefinitionId: role }
+      };
+    }
+
+    const rows = (): string[] =>
+      [...host().querySelectorAll<HTMLElement>('xui-tr[data-assignment]')].map(
+        tr => tr.getAttribute('data-assignment') ?? ''
+      );
+    const outcome = (): string | null => host().querySelector('[data-outcome]')?.getAttribute('data-outcome') ?? null;
+
+    it('derives the name from the three choices, and passes the accessibility gate', async () => {
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/access`);
+
+      expect(host().querySelector('h1')?.textContent?.trim()).toBe('Access control');
+      expect(host().textContent).toContain('No list endpoint yet');
+      expect(host().textContent).toContain('issue #86');
+      expect(host().querySelector('[data-assignment-name]')?.getAttribute('data-assignment-name')).toBe('');
+
+      type('#cc-access-principal-id', RITA);
+      await settle();
+      expect(host().querySelector('[data-assignment-name]')?.getAttribute('data-assignment-name')).toBe(
+        `reader-user-${RITA}`
+      );
+
+      // The role is a radio; `-` in the id belongs to the id and never to the split.
+      host().querySelector<HTMLInputElement>('input[type=radio][value=contributor]')?.click();
+      type('#cc-access-principal-id', 'eng-platform');
+      await settle();
+      expect(host().querySelector('[data-assignment-name]')?.getAttribute('data-assignment-name')).toBe(
+        'contributor-user-eng-platform'
+      );
+
+      const results = await axe.run(host(), WCAG_22_AA);
+      expect(results.violations.map(v => `${v.id}: ${v.help}`)).toEqual([]);
+    });
+
+    it('refuses to send an id the platform would refuse, and says why on the field', async () => {
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/access`);
+
+      type('#cc-access-principal-id', 'Rita');
+      click('Assign role');
+      await settle();
+
+      http.expectNone(r => r.method === 'PUT');
+      expect(host().querySelector('#cc-access-principal-id-error')?.textContent).toContain('1–63 lowercase');
+    });
+
+    it('grants on a resource group: PUT to the derived address, 201, a row, and 200 on a repeat', async () => {
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/access`);
+
+      type('#cc-access-principal-id', RITA);
+      click('Assign role');
+      await settle();
+
+      const name = `reader-user-${RITA}`;
+      const put = http.expectOne(r => r.method === 'PUT' && r.url === `${GROUP_SCOPE}${ROLE_ASSIGNMENTS}/${name}`);
+      expect(put.request.params.get('api-version')).toBe(apiVersion);
+      expect(put.request.body).toEqual({ principalId: RITA, principalType: 'user', roleDefinitionId: 'reader' });
+      put.flush(served(GROUP_SCOPE.slice(4), name), { status: 201, statusText: 'Created' });
+      await settle();
+
+      expect(outcome()).toBe('granted');
+      expect(rows()).toEqual([name]);
+      expect(router.url).toContain('/access');
+
+      click('Assign role');
+      await settle();
+      http
+        .expectOne(r => r.method === 'PUT' && r.url === `${GROUP_SCOPE}${ROLE_ASSIGNMENTS}/${name}`)
+        .flush(served(GROUP_SCOPE.slice(4), name), { status: 200, statusText: 'OK' });
+      await settle();
+
+      expect(outcome()).toBe('repeated');
+      // One row: the same name is the same assignment.
+      expect(rows()).toEqual([name]);
+    });
+
+    it('checks by name: a 404 is "not assigned", a 200 is a row', async () => {
+      await open(`/subscriptions/${SUBSCRIPTION}/access`);
+      const scope = `/tenants/${TENANT}/subscriptions/${SUBSCRIPTION}`;
+      const name = `reader-user-${RITA}`;
+
+      type('#cc-access-principal-id', RITA);
+      click('Check');
+      await settle();
+
+      http
+        .expectOne(r => r.method === 'GET' && r.url === `/api${scope}${ROLE_ASSIGNMENTS}/${name}`)
+        .flush(
+          { error: { code: 'ResourceNotFound', message: `'${scope}${ROLE_ASSIGNMENTS}/${name}' does not exist.` } },
+          { status: 404, statusText: 'Not Found' }
+        );
+      await settle();
+
+      expect(outcome()).toBe('absent');
+      expect(rows()).toEqual([]);
+
+      click('Check');
+      await settle();
+      http
+        .expectOne(r => r.method === 'GET' && r.url === `/api${scope}${ROLE_ASSIGNMENTS}/${name}`)
+        .flush(served(scope, name));
+      await settle();
+
+      expect(outcome()).toBe('assigned');
+      expect(rows()).toEqual([name]);
+    });
+
+    it('revokes only after a second click, on a child resource with the parent in the address', async () => {
+      await open(
+        `/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/providers/CyberCloud.ContainerService/managedClusters/c1/agentPools/p1/access`
+      );
+      const scope = `/tenants/${TENANT}/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/providers/CyberCloud.ContainerService/managedClusters/c1/agentPools/p1`;
+      const name = `reader-user-${RITA}`;
+
+      type('#cc-access-principal-id', RITA);
+      click('Assign role');
+      await settle();
+      http
+        .expectOne(r => r.method === 'PUT' && r.url === `/api${scope}${ROLE_ASSIGNMENTS}/${name}`)
+        .flush(served(scope, name), { status: 201, statusText: 'Created' });
+      await settle();
+      expect(rows()).toEqual([name]);
+
+      click('Remove');
+      await settle();
+      http.expectNone(r => r.method === 'DELETE');
+      expect(host().textContent).toContain('Revoke this role?');
+
+      click('Keep it');
+      await settle();
+      expect(host().textContent).not.toContain('Revoke this role?');
+
+      click('Remove');
+      await settle();
+      click('Revoke');
+      await settle();
+
+      http
+        .expectOne(r => r.method === 'DELETE' && r.url === `/api${scope}${ROLE_ASSIGNMENTS}/${name}`)
+        .flush(null, { status: 204, statusText: 'No Content' });
+      await settle();
+
+      expect(outcome()).toBe('revoked');
+      expect(rows()).toEqual([]);
+      expect(host().textContent).toContain('No list endpoint yet');
+    });
+
+    it('shows the platform refusal, and the 404-never-403 wording on a check', async () => {
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/access`);
+
+      type('#cc-access-principal-id', RITA);
+      click('Assign role');
+      await settle();
+      http
+        .expectOne(r => r.method === 'PUT')
+        .flush(
+          { error: { code: 'Forbidden', message: 'assignRole is not held on this scope.' } },
+          { status: 403, statusText: 'Forbidden' }
+        );
+      await settle();
+
+      expect(outcome()).toBe('failed');
+      expect(host().textContent).toContain('assignRole is not held on this scope.');
+      expect(rows()).toEqual([]);
+    });
+
+    it('is reached from the three blades', async () => {
+      await open(`/subscriptions/${SUBSCRIPTION}`);
+      http
+        .expectOne(r => r.method === 'GET')
+        .flush({ id: 'x', name: 'Acme', type: 'CyberCloud.Resources/subscriptions' });
+      await settle();
+      click('Access');
+      await settle();
+      expect(router.url).toBe(`/subscriptions/${SUBSCRIPTION}/access`);
+
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}`);
+      await serveForms();
+      http
+        .expectOne(r => r.method === 'GET')
+        .flush({ id: 'x', name: GROUP, type: 'CyberCloud.Resources/subscriptions/resourceGroups' });
+      await settle();
+      click('Access');
+      await settle();
+      expect(router.url).toBe(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/access`);
+
+      await open(`/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/providers/CyberCloud.Sample/widgets/w1`);
+      await serveForms();
+      http
+        .expectOne(r => r.method === 'GET' && r.url === `${WIDGET_PATH}/w1`)
+        .flush({ id: 'x', name: 'w1', type: 'CyberCloud.Sample/widgets', properties: {} });
+      await settle();
+      click('Access');
+      await settle();
+      expect(router.url).toBe(
+        `/subscriptions/${SUBSCRIPTION}/resourceGroups/${GROUP}/providers/CyberCloud.Sample/widgets/w1/access`
+      );
+      expect(host().textContent).toContain('Resource');
+      expect(host().querySelector('h1')?.textContent?.trim()).toBe('Access control');
     });
   });
 
