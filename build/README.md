@@ -19,7 +19,7 @@ build/
 ├── ArchitectureFacts.cs      # ⚠ not a Build partial — see below
 ├── CodeSurface.cs            # ⚠ likewise: every type and member this repository compiles
 ├── WireContract.cs           # ⚠ likewise: the [Id(n)] manifests under build/wire
-├── GeneratedSdkSurface.cs    # ⚠ likewise: generated/sdk/*.cs through Roslyn (issue #73)
+├── GeneratedSdkSurface.cs    # ⚠ likewise: generated/sdk/*.cs through Roslyn (issue #73), and its wire names (#79)
 ├── CoverageReport.cs         # ⚠ likewise: Cobertura in, per-assembly line rates out
 └── TargetPreconditions.cs    # ⚠ likewise: "blocked here, and here is what to install"
 ```
@@ -33,7 +33,8 @@ thing: what a report says is checkable without running a build. `GeneratedSdkSur
 newest and the only one that reads **source** rather than metadata — it hands each
 `generated/sdk/{api-version}.cs` to Roslyn, because "is this valid C#" is a question only a C#
 compiler answers and the `Generated surfaces` row had been answering "are the bytes the same"
-instead. The rule that still holds is the one
+instead. It also reads what the compiler only parses: every `[JsonPropertyName]`, refused when one
+type declares a name twice, because a file that compiles is not a file that serialises (#79). The rule that still holds is the one
 that matters: **one partial per target, named after it** — no target's logic lives anywhere but its
 own `Build.<Target>.cs`.
 

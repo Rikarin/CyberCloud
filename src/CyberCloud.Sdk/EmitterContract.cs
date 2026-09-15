@@ -31,7 +31,18 @@ namespace CyberCloud.Sdk;
 ///             <description>
 ///                 The body. Properties from the type's schema; nullable reference types honouring
 ///                 <c>required</c>; a constructor taking the required members and init-only setters for
-///                 the rest. Serialisation is <b>source-generated</b>
+///                 the rest.
+///                 ⚠
+///                 <b>
+///                     In the shape the wire has: a nested <c>partial</c> class per container, named
+///                     <c>{Name}Data</c> — <c>{Type}Data.PropertiesData.PersistenceData</c> — so
+///                     that every leaf's <c>[JsonPropertyName]</c> is its own name.
+///                 </b> Until issue #79 the emitter flattened every leaf onto one class, and the
+///                 nested leaves then carried wire names that collided with the top-level ones —
+///                 fourteen duplicates over eight types, compiling, and a <c>System.Text.Json</c>
+///                 throw on first use. docs/plan/21 § Generation's conventions table is the
+///                 statement; <c>CyberCloud.Sdk.Tests/StandIn/WidgetStandIn.cs</c> is the instance,
+///                 and it moved in the same commit. Serialisation is <b>source-generated</b>
 ///                 <c>System.Text.Json</c> — a <c>[JsonSerializable]</c> entry in a generated
 ///                 <c>JsonSerializerContext</c>, in the same shape as
 ///                 <see cref="SdkJsonContext" />. ⚠ No reflection-based

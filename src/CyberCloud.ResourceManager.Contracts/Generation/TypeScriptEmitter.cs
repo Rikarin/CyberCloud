@@ -541,7 +541,11 @@ public static class TypeScriptEmitter {
     ///     ⚠
     ///     <b>
     ///         Nested inline rather than flattened into a dotted name, which is the opposite of what
-    ///         <c>CliEmitter</c> does — and both are right for their surface.
+    ///         <c>CliEmitter</c> does — and both are right for their surface. ⚠ It is also what
+    ///         <c>SdkEmitter</c> does since issue #79, and NOT what it did before: the .NET SDK
+    ///         flattened the same document onto one class, so the two clients disagreed about the
+    ///         shape of the API's bodies, and this one was right. docs/plan/21 § Generation's
+    ///         conventions table holds all four surfaces to the document's shape.
     ///     </b> A command line has no
     ///     nesting, so a flag has to be <c>--sku-name</c>; a JSON body does, and a portal that
     ///     assembled <c>{ properties: { sku: { name } } }</c> out of flat fields would be

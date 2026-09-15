@@ -38,19 +38,26 @@ public sealed partial class WidgetData {
     public string Location { get; init; }
 
     [JsonPropertyName("properties")]
-    public WidgetProperties? Properties { get; init; }
-}
+    public PropertiesData? Properties { get; init; }
 
-/// <summary>The widget's own settings.</summary>
-public sealed partial class WidgetProperties {
-    [JsonPropertyName("clusterId")]
-    public string ClusterId { get; init; } = string.Empty;
+    // ⚠ A NESTED CLASS PER CONTAINER, NAMED `{Name}Data`, AND THIS IS THE {Type}Data ROW OF
+    // EmitterContract.cs § 1 SINCE ISSUE #79. The body is nested on the wire and so is the model:
+    // a leaf is declared inside the class its parent declares, so `[JsonPropertyName]` is the
+    // leaf's own name at every depth. Until 2026-09-15 this was a top-level `WidgetProperties`,
+    // which SdkEmitter never emitted — it flattened every leaf onto one class, and the nested
+    // leaves carried wire names that collided (fourteen of them, over eight types). The stand-in
+    // mirrors the emitted shape rather than describing it, for the header's reason.
+    /// <summary>The widget's own settings.</summary>
+    public sealed partial class PropertiesData {
+        [JsonPropertyName("clusterId")]
+        public string ClusterId { get; init; } = string.Empty;
 
-    [JsonPropertyName("message")]
-    public string Message { get; init; } = string.Empty;
+        [JsonPropertyName("message")]
+        public string Message { get; init; } = string.Empty;
 
-    [JsonPropertyName("enabled")]
-    public bool? Enabled { get; init; }
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; init; }
+    }
 }
 
 /// <summary>

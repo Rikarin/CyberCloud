@@ -259,6 +259,34 @@ and buys idiomatic output, our `Operation<T>` shape, and no vendored template la
 (`GetConnectionStringAsync`), and the tests. Everything else is regenerated per release and never
 edited.
 
+#### What the emitters agree on
+
+**The OpenAPI document is the shape.** A body is nested on the wire —
+`{"location":…,"properties":{"persistence":{"mode":"AOF"}}}` — and each surface renders that nesting
+the one way its medium allows, keeping the document's own member name as the wire name at every depth:
+
+| Surface | A container (`/properties/persistence`) | A leaf (`/properties/persistence/mode`) | Wire name |
+|---|---|---|---|
+| **.NET SDK** | A nested `partial` class, `{Model}Data.PropertiesData.PersistenceData`, held by a property `Persistence` that is `required` or nullable as the document says and never initialised | `Mode` on that class | `[JsonPropertyName("mode")]` — the leaf's own name, correct because the class nests |
+| **TypeScript** | An inline object type, `persistence?: { … }` | `mode` on it | The member name itself |
+| **`cyc`** | Nothing — a command line has no nesting | `--mode`, and `--persistence-mode` only when a flat name collides | The flag carries the JSON pointer and writes it |
+| **Portal forms** | Nothing — one field per property | One field, keyed on the pointer | The field carries the JSON pointer |
+
+⚠ **The .NET row said something else until 2026-09-15, and the difference was a defect.** The SDK
+flattened every leaf onto one class, so `/properties/persistence/mode` was `PersistenceMode` with
+`[JsonPropertyName("mode")]` — the same wire name as the top-level `mode`, on one type.
+`generated/sdk/2026-08-01.cs` carried **fourteen** such duplicates across eight types; it compiled, so
+the *Generated SDK compiles* gate (#73) was green over it, and `System.Text.Json` would have thrown on
+the first serialisation of each type. The TypeScript client had nested from the start, so the two
+generated clients disagreed about the shape of one API's bodies (#79). The gate now reads every
+`[JsonPropertyName]` off the checked-in file and refuses a name declared twice by one type, which is
+the check a compiler cannot make.
+
+⚠ **The worked example in § The .NET SDK is the brief's sketch, not the emitted shape.** A generated
+body is `new PostgresServerData { Location = "eu-central", Properties = new() { … } }` — the
+`properties` envelope is a container like any other, because the document says it is, and #72 is the
+open question of what the server puts inside it.
+
 ## Other SDKs
 
 | Language | M | How |
