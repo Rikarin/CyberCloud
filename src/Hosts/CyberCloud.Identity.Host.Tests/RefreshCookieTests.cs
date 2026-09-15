@@ -75,7 +75,7 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
 
     [Fact]
     public async Task OnlyBrowserClientsGetTheCookie() {
-        var handler = new DegradedModeHandlers.MoveRefreshTokenToCookie();
+        var handler = Handler();
 
         // The portal: the token moves out of the body and into the cookie.
         var (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-portal");
@@ -108,7 +108,7 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
 
     [Fact]
     public async Task ARefusedRefreshClearsTheCookieAndARefusedRequestDoesNot() {
-        var handler = new DegradedModeHandlers.MoveRefreshTokenToCookie();
+        var handler = Handler();
 
         // invalid_grant on a refresh: the chain refused the cookie, so the browser should stop
         // presenting it.
@@ -135,13 +135,66 @@ public sealed class RefreshCookieTests(IdentityHostFixture fixture) {
         http.Response.Headers.SetCookie.ToString().ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task AForeignOriginGetsNoCookieAndNoToken() {
+        var handler = Handler();
+
+        // ⚠ THE WRITE SIDE OF THE ORIGIN RULE. A Set-Cookie on a top-level cross-site form POST is
+        // honoured whatever SameSite says, so a token response for the browser client from a page
+        // on another origin would plant that page's refresh token in the person's browser — and
+        // the person's next silent refresh would sign them into the attacker's tenant.
+        // ValidateTokenRequest refuses such a request first; this handler is the second lock, and
+        // if a response for one ever reaches it the token goes nowhere: not into the cookie, and
+        // not into a body the portal's token is never in.
+        foreach (var origin in new[] { "http://evil.example", "http://localhost:5100", "null", "" }) {
+            var (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-planted", origin: origin);
+
+            await handler.HandleAsync(context);
+
+            http.Response.Headers.SetCookie.ToString().ShouldBeEmpty($"a cookie was written for Origin '{origin}'");
+            context.Response.RefreshToken.ShouldBeNull($"the body kept the token for Origin '{origin}'");
+
+            (context, http) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.RefreshToken, refreshToken: "rt-planted", origin: origin);
+
+            await handler.HandleAsync(context);
+
+            http.Response.Headers.SetCookie.ToString().ShouldBeEmpty($"a cookie was written on a refresh for Origin '{origin}'");
+            context.Response.RefreshToken.ShouldBeNull();
+        }
+
+        // The portal's own origin, the same response: the cookie, as ever.
+        var (own, ownHttp) = Apply(FirstPartyClients.Portal, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-mine");
+
+        await handler.HandleAsync(own);
+
+        ownHttp.Response.Headers.SetCookie.ToString().ShouldStartWith("__Host-cyc-refresh=rt-mine;");
+        own.Response.RefreshToken.ShouldBeNull();
+
+        // The CLI has no origin and no cookie; the rule is the browser client's alone.
+        var (cli, cliHttp) = Apply(FirstPartyClients.Cli, OpenIddictConstants.GrantTypes.AuthorizationCode, refreshToken: "rt-cli", origin: "");
+
+        await handler.HandleAsync(cli);
+
+        cliHttp.Response.Headers.SetCookie.ToString().ShouldBeEmpty();
+        cli.Response.RefreshToken.ShouldBe("rt-cli");
+    }
+
+    DegradedModeHandlers.MoveRefreshTokenToCookie Handler() =>
+        new(fixture.Services.GetRequiredService<FirstPartyClients>());
+
+    /// <summary>A token response about to be written, for a request from <paramref name="origin" /> — the portal's by default.</summary>
     (OpenIddictServerEvents.ApplyTokenResponseContext Context, HttpContext Http) Apply(
         string clientId,
         string grantType,
         string? refreshToken = null,
-        string? error = null
+        string? error = null,
+        string origin = IdentityHostFixture.PortalOrigin
     ) {
         var http = new DefaultHttpContext();
+
+        if (origin.Length > 0) {
+            http.Request.Headers.Origin = origin;
+        }
 
         var transaction = new OpenIddictServerTransaction {
             Request = new OpenIddictRequest { ClientId = clientId, GrantType = grantType },

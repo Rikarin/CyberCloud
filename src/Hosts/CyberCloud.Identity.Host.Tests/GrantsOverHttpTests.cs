@@ -12,7 +12,8 @@ namespace CyberCloud.Identity.Host.Tests;
 /// <summary>
 ///     The person's path, over HTTP, against the real host: a password and a delivered code on the
 ///     sign-in API, <c>/authorize</c> with the cookie, <c>/token</c> with PKCE, the refresh cookie
-///     and its <c>Origin</c> rule, the replay, a restart on the same keys, and <c>/logout</c>.
+///     and its <c>Origin</c> rule on both sides, the verifier as the one thing binding a code to
+///     its tab, the replay, a restart on the same keys, and <c>/logout</c>.
 ///     docs/plan/11 § Protocol, § Sessions and revocation; docs/plan/10 § Authentication inputs.
 /// </summary>
 /// <remarks>
@@ -21,8 +22,8 @@ namespace CyberCloud.Identity.Host.Tests;
 ///         cookie the exchange set; the replay needs the cookie the refresh retired; the sign-out
 ///         needs a session to end. Splitting the steps into independent facts would mean repeating
 ///         the sign-in and the exchange in each, and asserting the same cookie four times. The
-///         independent facts — an unregistered redirect URI, a foreign origin — are their own tests
-///         below.
+///         independent facts — an unregistered redirect URI, a foreign origin on either side of
+///         the cookie, the PKCE checks — are their own tests below, over <see cref="SignInAsync" />.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Every assertion here is one a browser would have made and nothing else could.</b>
@@ -369,6 +370,102 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
     }
 
     [Fact]
+    public async Task ACodeExchangeFromAForeignOriginPlantsNoCookie() {
+        // ⚠ THE LOGIN-CSRF. An attacker who signed in as THEMSELVES holds a code and its verifier.
+        // A form on their page, POSTed top-level from the victim's browser, would exchange it here
+        // — and Set-Cookie on a top-level cross-site POST is honoured whatever SameSite says, so
+        // the attacker's refresh cookie would land in the victim's browser and the victim's next
+        // silent refresh would sign them into the attacker's tenant. The portal's state check on
+        // /auth/callback never sees this path; the Origin header, which a page cannot forge, is
+        // what refuses it — before a token session is opened.
+        using var browser = await SignInAsync();
+        var (verifier, challenge) = BrowserClient.Pkce();
+        var code = await CodeAsync(browser, challenge, "s-foreign");
+
+        browser.Origin = "http://evil.example";
+
+        using var refused = await Exchange(browser, code, verifier);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync(Ct));
+
+        var body = await BrowserClient.JsonAsync(refused, Ct);
+
+        body.GetProperty("error").GetString().ShouldBe("invalid_request");
+        body.GetProperty("error_description").GetString().ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
+        BrowserClient.SetCookieHeader(refused, RefreshCookie.Name).ShouldBeNull("a refresh cookie was planted from a foreign origin");
+        BrowserClient.Header(refused, "Access-Control-Allow-Origin").ShouldBeNull();
+        body.TryGetProperty("access_token", out _).ShouldBeFalse();
+
+        // The same code from the portal's own origin: exchanged, cookie set. Nothing about the code
+        // was consumed by the refusal, because nothing was minted.
+        browser.Origin = IdentityHostFixture.PortalOrigin;
+
+        using var exchanged = await Exchange(browser, code, verifier);
+
+        exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, await exchanged.Content.ReadAsStringAsync(Ct));
+        browser.Cookies.ShouldContainKey(RefreshCookie.Name);
+
+        // And the body-borne refresh is refused from a foreign origin too — an attacker's own
+        // token in an attacker's own form is the same shape as the CLI's — with no rotation, so
+        // the honest chain is untouched.
+        var refreshToken = browser.Cookies[RefreshCookie.Name];
+
+        browser.Origin = "http://evil.example";
+
+        using var refusedRefresh = await browser.PostFormAsync(
+            IdentityHostOpenIddict.TokenPath,
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["grant_type"] = "refresh_token",
+                ["client_id"] = FirstPartyClients.Portal,
+                ["refresh_token"] = refreshToken
+            },
+            Ct
+        );
+
+        refusedRefresh.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await BrowserClient.JsonAsync(refusedRefresh, Ct)).GetProperty("error_description").GetString().ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
+        BrowserClient.SetCookieHeader(refusedRefresh, RefreshCookie.Name).ShouldBeNull("a refresh cookie was written, or cleared, from a foreign origin");
+
+        browser.Origin = IdentityHostFixture.PortalOrigin;
+
+        using var stillLive = await Refresh(browser);
+
+        stillLive.StatusCode.ShouldBe(HttpStatusCode.OK, "the refused request rotated the chain, so the honest refresh read as a replay");
+    }
+
+    [Fact]
+    public async Task TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt() {
+        // ⚠ One-time use of an authorization code is owed (no code store in degraded mode), so the
+        // verifier check is the ONLY thing binding a code to the tab that requested it — and it is
+        // OpenIddict's ValidateCodeVerifier, which DegradedModeHandlers' remarks say survives
+        // degraded mode without a filter. This test is what makes that claim cost something: an
+        // OpenIddict upgrade or a handler-order change that dropped it would fail here, not in a
+        // browser.
+        using var browser = await SignInAsync();
+        var (verifier, challenge) = BrowserClient.Pkce();
+        var code = await CodeAsync(browser, challenge, "s-pkce");
+
+        var (wrongVerifier, _) = BrowserClient.Pkce();
+
+        await ShouldRefuse(Exchange(browser, code, wrongVerifier), "invalid_grant", "a wrong code_verifier was accepted");
+        await ShouldRefuse(Exchange(browser, code, verifier: null), "invalid_request", "a missing code_verifier was accepted");
+        await ShouldRefuse(Exchange(browser, code, verifier, redirectUri: "http://localhost:4200/elsewhere"), "invalid_grant", "a redirect_uri other than the one the code was issued for was accepted");
+        await ShouldRefuse(Exchange(browser, code, verifier, clientId: FirstPartyClients.Cli), "invalid_grant", "a client other than the code's presenter was accepted");
+
+        // The right verifier, from the right client, to the right URI: the token.
+        using var exchanged = await Exchange(browser, code, verifier);
+
+        exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, await exchanged.Content.ReadAsStringAsync(Ct));
+
+        // ⚠ And the replay succeeds — the owed one-time use, pinned so its landing is visible: when
+        // this assertion fails, a code store burns codes, and this block and the owed entry in
+        // docs/plan/11 § Protocol go together.
+        using var replayed = await Exchange(browser, code, verifier);
+
+        replayed.StatusCode.ShouldBe(HttpStatusCode.OK, "one-time use of authorization codes landed; retire this assertion and the owed entry with it");
+    }
+
+    [Fact]
     public async Task ARefreshWithNoCookieIsTheMissingParameterAnswerThePortalsFirstLoadExpects() {
         using var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.PortalOrigin);
 
@@ -421,6 +518,72 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>A tab on the portal's origin, signed in with the password and the delivered code.</summary>
+    async Task<BrowserClient> SignInAsync() {
+        var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.PortalOrigin);
+
+        using var password = await browser.PostJsonAsync(
+            "/api/signin/password",
+            new { email = IdentityHostFixture.Email, password = IdentityHostFixture.Password, returnUrl = "/", tenant = IdentityHostFixture.Slug },
+            Ct
+        );
+
+        (await BrowserClient.JsonAsync(password, Ct)).GetProperty("succeeded").GetBoolean().ShouldBeTrue();
+
+        using var send = await browser.PostJsonAsync("/api/signin/otp/send", new { returnUrl = "/" }, Ct);
+
+        var code = fixture.Otp.LastCode;
+        code.ShouldNotBeNull("the silo delivered no code through IOtpDeliverySeam");
+
+        using var otp = await browser.PostJsonAsync("/api/signin/otp", new { code, returnUrl = "/" }, Ct);
+
+        var second = await BrowserClient.JsonAsync(otp, Ct);
+
+        second.GetProperty("succeeded").GetBoolean().ShouldBeTrue(second.GetRawText());
+        second.GetProperty("secondFactorRequired").GetBoolean().ShouldBeFalse();
+
+        return browser;
+    }
+
+    /// <summary>The authorization code <c>/authorize</c> mints for a signed-in tab.</summary>
+    static async Task<string> CodeAsync(BrowserClient browser, string challenge, string state) {
+        using var authorized = await browser.GetAsync(AuthorizePath(challenge, state, tenant: IdentityHostFixture.Slug), Ct);
+
+        authorized.StatusCode.ShouldBe(HttpStatusCode.Redirect, await authorized.Content.ReadAsStringAsync(Ct));
+
+        return BrowserClient.Query(BrowserClient.Location(authorized))["code"];
+    }
+
+    /// <summary>The code exchange, with every parameter the portal sends unless a test says otherwise.</summary>
+    static Task<HttpResponseMessage> Exchange(
+        BrowserClient browser,
+        string code,
+        string? verifier,
+        string redirectUri = IdentityHostFixture.PortalRedirectUri,
+        string clientId = FirstPartyClients.Portal
+    ) {
+        var form = new Dictionary<string, string>(StringComparer.Ordinal) {
+            ["grant_type"] = "authorization_code",
+            ["client_id"] = clientId,
+            ["redirect_uri"] = redirectUri,
+            ["code"] = code
+        };
+
+        if (verifier is not null) {
+            form["code_verifier"] = verifier;
+        }
+
+        return browser.PostFormAsync(IdentityHostOpenIddict.TokenPath, form, Ct);
+    }
+
+    static async Task ShouldRefuse(Task<HttpResponseMessage> pending, string error, string because) {
+        using var response = await pending;
+        var body = await response.Content.ReadAsStringAsync(Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, because + ": " + body);
+        JsonDocument.Parse(body).RootElement.GetProperty("error").GetString().ShouldBe(error, because);
+    }
 
     static string AuthorizePath(string challenge, string state, string tenant, string redirectUri = IdentityHostFixture.PortalRedirectUri) =>
         IdentityHostOpenIddict.AuthorizationPath

@@ -48,8 +48,16 @@ namespace CyberCloud.Identity.Host;
 ///         at <c>/api/signin/otp</c> both work today. <c>/userinfo</c> is not mapped — the portal
 ///         reads <c>tid</c> and <c>sub</c> off the access token and <c>email</c> and <c>name</c> off
 ///         the id_token. One-time use of an authorization code is not enforced: it needs a hot-tier
-///         code store, and PKCE binds a replayed code to the verifier only the legitimate tab holds.
-///         The device flow and token exchange keep their <c>temporarily_unavailable</c> answers.
+///         code store, and PKCE binds a replayed code to the verifier only the legitimate tab holds
+///         — <c>GrantsOverHttpTests.TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt</c> is what
+///         keeps that binding from being dropped by an upgrade. <c>/logout</c> ends the session on
+///         any top-level navigation that carries the cookie, so any site can sign a person out with
+///         a link: the standard RP-initiated-logout weakness, closed by a confirmation page or by
+///         binding <c>id_token_hint</c> and <c>state</c> to the session, neither of which is built.
+///         A confidential client's <c>client_secret</c> is not verified on the code and refresh
+///         grants — unreachable today, because every tenant-registered client is answered
+///         <c>consent_required</c>, and to be closed with the consent page, not after it. The
+///         device flow and token exchange keep their <c>temporarily_unavailable</c> answers.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -483,6 +491,15 @@ public static class IdentityEndpoints {
     ///         <c>post_logout_redirect_uri</c> that <c>DegradedModeHandlers.ValidateEndSessionRequest</c>
     ///         matched against the registration, with <c>state</c> echoed. A navigation, not a
     ///         <c>fetch</c>, so the cookie's <c>SameSite=Lax</c> lets it through.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Which means any site can sign a person out.</b> A link or a redirect to this
+    ///         path from anywhere is a top-level navigation, <c>Lax</c> sends the cookie, and
+    ///         <c>id_token_hint</c> is ignored — so the sign-out happens. It is the standard
+    ///         RP-initiated-logout weakness and a nuisance rather than a breach: the attacker gains
+    ///         no session, and the person's next load starts a sign-in. Owed, with the rest of the
+    ///         list in the type's remarks: a confirmation page, or an <c>id_token_hint</c> and
+    ///         <c>state</c> the handler binds to the cookie's session before it revokes anything.
     ///     </para>
     /// </remarks>
     static void MapLogout(IEndpointRouteBuilder app) {

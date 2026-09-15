@@ -114,11 +114,19 @@ it. The decisions that shape the served half, each argued in the type that makes
   refresh whose cookie session has been signed out revokes the token session on the spot, which is
   how `/logout` ends every chain a sign-in produced without enumerating them. For the browser client
   the refresh token lives in `__Host-cyc-refresh`, an `HttpOnly` cookie on this origin — the row in
-  [10 § Authentication inputs](10-gateway-and-api.md#authentication-inputs) — read back only when
-  the request's `Origin` is one of the portal's redirect-URI origins; for the CLI it stays in the
-  body. The access token on the wire is exactly `AccessTokenClaims.Permitted`: OpenIddict's own
-  `scope`, `client_id` and presenter claims are stripped before signing, because `scope` is on the
-  forbidden list and the gateway refuses a token that carries it.
+  [10 § Authentication inputs](10-gateway-and-api.md#authentication-inputs) — written and read back
+  only when the request's `Origin` is one of the portal's redirect-URI origins; for the CLI it
+  stays in the body. ⚠ Both directions, because the write is the login-CSRF: `Set-Cookie` on a
+  top-level cross-site form `POST` is honoured whatever `SameSite` says, so a `/token` that set the
+  cookie for any origin would let an attacker exchange a code for *their own* account from a page
+  in the victim's browser and have the victim's next silent refresh sign them into the attacker's
+  tenant. `DegradedModeHandlers.ValidateTokenRequest` refuses the browser client's code exchange
+  and body-borne refresh from any other origin before a grain is touched, and
+  `MoveRefreshTokenToCookie` writes the cookie for no other origin even if a response reaches it;
+  `ExtractRefreshTokenFromCookie` is the read side. The access token on the wire is exactly
+  `AccessTokenClaims.Permitted`: OpenIddict's own `scope`, `client_id` and presenter claims are
+  stripped before signing, because `scope` is on the forbidden list and the gateway refuses a token
+  that carries it.
 - **Keys persist on the development run, and nowhere else.** `IdentityHostOptions.DevelopmentKeyDirectory`
   keeps the ES256 signing key, the encryption key and the data-protection ring on disk under the
   AppHost's `.identity/`, so a restart does not sign every portal tab out — both keys, because codes
@@ -145,7 +153,17 @@ naming one id. `ClientResolver` in the identity host is the reader.
   first-party clients are consent-free.
 - **One-time use of an authorization code.** Degraded mode has no token store to burn a code in;
   a code lives five minutes and PKCE binds a replay to the verifier only the legitimate tab holds.
-  A hot-tier code store is the fix.
+  A hot-tier code store is the fix. `GrantsOverHttpTests.TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt`
+  pins the binding — and pins the replay succeeding, so the store's landing is visible there.
+- **A confidential client's `client_secret` on the code and refresh grants.**
+  `DegradedModeHandlers.ValidateTokenRequest` refuses a secret from a public client and verifies
+  none from a confidential one. Unreachable while every tenant-registered client is answered
+  `consent_required` at `/authorize`, and to land *with* the consent page: the day a tenant's
+  confidential client can hold a code, anyone holding that code could exchange it.
+- **`/logout` on a bare link.** Any site can sign a person out: the end-session request is a
+  top-level navigation, `Lax` sends the cookie, and `id_token_hint` is ignored. A nuisance, not a
+  breach — a confirmation page, or binding `id_token_hint` and `state` to the cookie's session,
+  closes it.
 - **`/userinfo`.** Not mapped; the portal reads `tid` and `sub` off the access token and `email`
   and `name` off the id_token.
 - **The signing key from the vault.** `DevelopmentKeyFile` is the development run's answer and

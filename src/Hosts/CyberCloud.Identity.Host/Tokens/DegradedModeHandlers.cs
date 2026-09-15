@@ -197,7 +197,9 @@ public static class DegradedModeHandlers {
     ///         the cookie. The browser sets <c>Origin</c> on every cross-origin <c>POST</c> and a
     ///         page cannot forge it, so an origin outside the portal's redirect-URI origins is
     ///         refused here with <c>invalid_request</c> and nothing else happens.
-    ///         <c>TokenApiTests.ACookieBorneRefreshFromAForeignOriginNeverReachesAGrain</c>.
+    ///         <c>TokenApiTests.ACookieBorneRefreshFromAForeignOriginNeverReachesAGrain</c>. This
+    ///         is the read side; <see cref="ValidateTokenRequest" /> guards the write side, for the
+    ///         requests that carry their token in the body or exchange a code.
     ///     </para>
     ///     <para>
     ///         A request that carries <c>refresh_token</c> in its body is not this handler's — the
@@ -260,7 +262,25 @@ public static class DegradedModeHandlers {
     /// </summary>
     /// <param name="api">The client-credentials decision.</param>
     /// <param name="clients">The client resolver.</param>
+    /// <param name="firstParty">The first-party registrations, for the origin allow-list.</param>
     /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A browser client's token request is refused unless its <c>Origin</c> is one of
+    ///         that client's redirect-URI origins — the code exchange and the body-borne refresh
+    ///         both, not only the cookie-borne refresh.</b> The cookie is written by
+    ///         <see cref="MoveRefreshTokenToCookie" /> into whichever browser made the request, and
+    ///         <c>Set-Cookie</c> on a top-level cross-site form <c>POST</c> is honoured whatever
+    ///         <c>SameSite</c> says. Without this rule an attacker holding a code and its verifier
+    ///         — or a refresh token — for <i>their own</i> account could form-post it to
+    ///         <c>/token</c> from a page in the victim's browser, plant their refresh cookie there,
+    ///         and the victim's next silent refresh would sign the victim into the attacker's
+    ///         tenant: the login-CSRF that makes everything typed afterwards land where the
+    ///         attacker can read it. The portal's <c>state</c> check on <c>/auth/callback</c> never
+    ///         sees that path. The browser sets <c>Origin</c> on every cross-origin <c>POST</c> and
+    ///         a page cannot forge it, so the check refuses before a token session is opened or a
+    ///         chain rotated. <c>GrantsOverHttpTests.ACodeExchangeFromAForeignOriginPlantsNoCookie</c>
+    ///         and <c>TokenApiTests.ABrowserClientsTokenRequestFromAForeignOriginIsRefused</c>.
+    ///     </para>
     ///     <para>
     ///         ⚠ Ordered after OpenIddict's <c>ValidateAuthentication</c>, which is what decrypts the
     ///         code or the refresh token and puts its principal on the context — so a token this
@@ -283,7 +303,10 @@ public static class DegradedModeHandlers {
     ///         would read as a replay and revoke the chain.
     ///     </para>
     /// </remarks>
-    public sealed class ValidateTokenRequest(TokenApi api, IClientResolver clients) : IOpenIddictServerHandler<ValidateTokenRequestContext> {
+    public sealed class ValidateTokenRequest(TokenApi api, IClientResolver clients, FirstPartyClients firstParty) : IOpenIddictServerHandler<ValidateTokenRequestContext> {
+        /// <summary>The refusal, verbatim, for a browser client's request from an origin that is not its own.</summary>
+        public const string OriginNotAllowed = "The request's origin is not allowed to use this client.";
+
         /// <summary>The registration.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ValidateTokenRequestContext>()
@@ -355,6 +378,21 @@ public static class DegradedModeHandlers {
                 return;
             }
 
+            // ⚠ A confidential client's secret is NOT verified here — owed with the consent page.
+            // Unreachable until then: every tenant-registered client is answered consent_required
+            // at /authorize (AuthorizeApi), so no code or refresh token is ever minted for one. The
+            // consent page must not land without the secret check landing beside it, or a
+            // confidential client's code would be exchangeable by anyone holding it.
+
+            // ⚠ The browser client, from any origin but its own: refused before a grain is touched.
+            // See the type's remarks — this is the write side of the cookie rule, and
+            // ExtractRefreshTokenFromCookie is the read side.
+            if (FirstPartyClients.IsBrowserClient(client.ClientId) && !IsFirstPartyOrigin(context)) {
+                context.Reject(OpenIddictConstants.Errors.InvalidRequest, OriginNotAllowed);
+
+                return;
+            }
+
             var grant = context.Request.IsRefreshTokenGrantType() ? GrantType.RefreshToken : GrantType.AuthorizationCode;
 
             if (!client.AllowedGrants.Contains(grant)) {
@@ -365,12 +403,17 @@ public static class DegradedModeHandlers {
 
             context.Transaction.Properties[ClientProperty] = client;
         }
+
+        bool IsFirstPartyOrigin(ValidateTokenRequestContext context) =>
+            context.Transaction.GetHttpRequest() is { } http
+            && firstParty.AllowedOrigins.Contains(http.Headers.Origin.ToString(), StringComparer.Ordinal);
     }
 
     /// <summary>
     ///     Moves a browser client's refresh token out of the JSON body and into
     ///     <c>__Host-cyc-refresh</c>; clears that cookie when a browser client's refresh failed.
     /// </summary>
+    /// <param name="clients">The first-party registrations, for the origin allow-list.</param>
     /// <remarks>
     ///     <para>
     ///         ⚠ Runs before OpenIddict's <c>ProcessJsonResponse</c> writes the body, and edits the
@@ -380,12 +423,23 @@ public static class DegradedModeHandlers {
     ///         <c>RefreshCookieTests.OnlyBrowserClientsGetTheCookie</c>.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>The cookie is written only for a request whose <c>Origin</c> is the browser
+    ///         client's own — the second lock on the login-CSRF <see cref="ValidateTokenRequest" />
+    ///         refuses first.</b> That validator is what answers a foreign origin, so a token
+    ///         response for one should never reach this handler; if one does — a handler reordered,
+    ///         a validator dropped — the refresh token is handed to nobody: not to the cookie, which
+    ///         would plant it in the victim's browser, and not to the body, which the portal's
+    ///         token is never in. An attacker's own tokens in an attacker's own page cost nothing;
+    ///         the cookie in someone else's browser is the whole attack.
+    ///         <c>RefreshCookieTests.AForeignOriginGetsNoCookieAndNoToken</c>.
+    ///     </para>
+    ///     <para>
     ///         The clearing half: a refresh that answered an error for a browser client is a cookie
     ///         the browser should stop presenting — a revoked chain will refuse it every time, and a
     ///         portal that keeps sending it keeps getting <c>invalid_grant</c> instead of a sign-in.
     ///     </para>
     /// </remarks>
-    public sealed class MoveRefreshTokenToCookie : IOpenIddictServerHandler<ApplyTokenResponseContext> {
+    public sealed class MoveRefreshTokenToCookie(FirstPartyClients clients) : IOpenIddictServerHandler<ApplyTokenResponseContext> {
         /// <summary>The registration — before the JSON body is written.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
             OpenIddictServerHandlerDescriptor.CreateBuilder<ApplyTokenResponseContext>()
@@ -398,13 +452,18 @@ public static class DegradedModeHandlers {
         public ValueTask HandleAsync(ApplyTokenResponseContext context) {
             ArgumentNullException.ThrowIfNull(context);
 
-            if (context.Transaction.GetHttpRequest()?.HttpContext.Response is not { } response
+            if (context.Transaction.GetHttpRequest() is not { HttpContext.Response: { } response } http
                 || !FirstPartyClients.IsBrowserClient(context.Request?.ClientId)) {
                 return default;
             }
 
             if (!string.IsNullOrEmpty(context.Response.RefreshToken)) {
-                RefreshCookie.Issue(response, context.Response.RefreshToken);
+                // ⚠ Never in the body for the browser client, and in the cookie only for its own
+                // origin — see the type's remarks.
+                if (clients.AllowedOrigins.Contains(http.Headers.Origin.ToString(), StringComparer.Ordinal)) {
+                    RefreshCookie.Issue(response, context.Response.RefreshToken);
+                }
+
                 context.Response.RefreshToken = null;
 
                 return default;

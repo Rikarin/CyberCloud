@@ -87,7 +87,7 @@ because an empty page under it would confirm the subscription exists. A `PUT`, `
 `/tenants` collection, because the only tenant a request can address is its own. Both are emitted
 through the same scope source as the items — `x-cybercloud-scope` plus
 `x-cybercloud-scope-collection` — so `cyc scope subscription list`, `cyc scope resource-group list`,
-the four SDKs' list methods and the portal's generated client all learn them from the document. A
+the three SDKs' list methods and the portal's generated client all learn them from the document. A
 collection routed by hand and left out of it would recreate the state #63 closed: an address the
 gateway serves where the compatibility gate cannot see it break.
 
@@ -262,7 +262,7 @@ that slept through a deploy catches up rather than showing stale state forever.
 
 | Caller | Credential | Notes |
 |---|---|---|
-| Portal | Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie scoped to the identity host | Access token never in `localStorage`. The cookie is `__Host-cyc-refresh`, `SameSite=Lax`, and the identity host reads it back only when the request's `Origin` is one of the portal's registered redirect-URI origins — `Lax` lets a same-site subdomain's `POST` carry it, and the `Origin` check is what refuses that ([11 § Protocol](11-identity.md#protocol)) |
+| Portal | Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie scoped to the identity host | Access token never in `localStorage`. The cookie is `__Host-cyc-refresh`, `SameSite=Lax`, and the identity host both writes it and reads it back only when the request's `Origin` is one of the portal's registered redirect-URI origins — `Lax` lets a same-site subdomain's `POST` carry it, and a top-level cross-site form `POST` would have its `Set-Cookie` honoured whatever `SameSite` says; the `Origin` check is what refuses both ([11 § Protocol](11-identity.md#protocol)) |
 | CLI | Device code, or client credentials for CI | Token cached in the OS keychain |
 | SDK | `TokenCredential` — the Azure SDK shape, so the mental model transfers | |
 | Service principal | Client credentials, or a certificate | |

@@ -17,7 +17,9 @@ namespace CyberCloud.Identity.Host.Tests;
 
 /// <summary>
 ///     The code exchange and the refresh — the half of <see cref="TokenApi" /> that opens, rotates
-///     and revokes session grains — plus the tenant hint and the cookie extractor's origin rule.
+///     and revokes session grains — plus the tenant hint and the <c>Origin</c> rule on both sides
+///     of the refresh cookie: the extractor that reads it and the validator that guards its
+///     writing.
 /// </summary>
 /// <remarks>
 ///     ⚠ Real grains, on purpose. "The chain is revoked" and "the token session is tracked on the
@@ -193,6 +195,57 @@ public sealed partial class TokenApiTests {
         context.Request!.RefreshToken.ShouldBe("from-the-keychain");
     }
 
+    [Fact]
+    public async Task ABrowserClientsTokenRequestFromAForeignOriginIsRefused() {
+        // ⚠ The write side of the rule the extractor above enforces on the read side. A code
+        // exchange or a body-borne refresh for the portal from any origin but the portal's would
+        // end in MoveRefreshTokenToCookie planting the resulting cookie in whichever browser sent
+        // the request — the login-CSRF DegradedModeHandlers.ValidateTokenRequest's remarks describe
+        // — so the validator refuses it before a token session is opened. The same handler that
+        // answers the code grant answers the body-borne refresh, so one principal covers both.
+        var handler = new DegradedModeHandlers.ValidateTokenRequest(
+            Api,
+            fixture.Services.GetRequiredService<IClientResolver>(),
+            fixture.Services.GetRequiredService<FirstPartyClients>()
+        );
+        var (code, _) = await CodeAsync();
+
+        foreach (var origin in new[] { "http://evil.example", "http://localhost:5100", "null", "" }) {
+            var context = Validate(origin, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Portal }, code: code);
+
+            await handler.HandleAsync(context);
+
+            context.IsRejected.ShouldBeTrue($"a code exchange for the portal from Origin '{origin}' was validated");
+            context.Error.ShouldBe(OpenIddictConstants.Errors.InvalidRequest);
+            context.ErrorDescription.ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
+            context.Transaction.Properties.ShouldNotContainKey(DegradedModeHandlers.ClientProperty);
+
+            context = Validate(origin, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.RefreshToken, ClientId = FirstPartyClients.Portal, RefreshToken = "from-a-form" }, refresh: code);
+
+            await handler.HandleAsync(context);
+
+            context.IsRejected.ShouldBeTrue($"a body-borne refresh for the portal from Origin '{origin}' was validated");
+            context.ErrorDescription.ShouldBe(DegradedModeHandlers.ValidateTokenRequest.OriginNotAllowed);
+        }
+
+        // The portal's own origin: validated, client resolved, and the passthrough gets to mint.
+        var own = Validate(IdentityHostFixture.PortalOrigin, new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Portal }, code: code);
+
+        await handler.HandleAsync(own);
+
+        own.IsRejected.ShouldBeFalse(own.ErrorDescription);
+        own.Transaction.Properties[DegradedModeHandlers.ClientProperty].ShouldBeOfType<ApplicationRegistration>().ClientId.ShouldBe(FirstPartyClients.Portal);
+
+        // The CLI, from a process with no Origin: not a browser client, and not this rule's. That
+        // the code was minted for the portal is OpenIddict's ValidateAuthorizedParty to refuse,
+        // later in the same pipeline — GrantsOverHttpTests.TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt.
+        var cli = Validate("", new OpenIddictRequest { GrantType = OpenIddictConstants.GrantTypes.AuthorizationCode, ClientId = FirstPartyClients.Cli }, code: code);
+
+        await handler.HandleAsync(cli);
+
+        cli.IsRejected.ShouldBeFalse(cli.ErrorDescription);
+    }
+
     // ── The tenant hint ────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -295,6 +348,29 @@ public sealed partial class TokenApiTests {
         );
 
         return (decision.ShouldBeOfType<AuthorizeDecision.IssueCode>().Principal, outcome.SessionId);
+    }
+
+    /// <summary>
+    ///     A token request at the validation stage — after OpenIddict decrypted the code or the
+    ///     refresh token and put its principal on the context — from a page on <paramref name="origin" />.
+    /// </summary>
+    OpenIddictServerEvents.ValidateTokenRequestContext Validate(string origin, OpenIddictRequest request, ClaimsPrincipal? code = null, ClaimsPrincipal? refresh = null) {
+        var http = new DefaultHttpContext();
+
+        if (origin.Length > 0) {
+            http.Request.Headers.Origin = origin;
+        }
+
+        var transaction = new OpenIddictServerTransaction {
+            Request = request,
+            Options = fixture.Services.GetRequiredService<IOptions<OpenIddictServerOptions>>().Value,
+            Logger = NullLogger.Instance,
+            EndpointType = OpenIddictServerEndpointType.Token
+        };
+
+        transaction.Properties[typeof(HttpRequest).FullName!] = new WeakReference<HttpRequest>(http.Request);
+
+        return new(transaction) { AuthorizationCodePrincipal = code, RefreshTokenPrincipal = refresh };
     }
 
     OpenIddictServerEvents.ExtractTokenRequestContext Extract(HttpContext http, OpenIddictRequest request) {

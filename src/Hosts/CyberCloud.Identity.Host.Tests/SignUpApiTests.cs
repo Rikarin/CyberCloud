@@ -289,26 +289,37 @@ public sealed class SignUpApiTests {
     }
 
     [Fact]
-    public async Task AnEmptyPasswordIsRefusedWithTheGrainsSentenceAfterTheTenantExists() {
+    public async Task AnEmptyPasswordIsRefusedBeforeAnythingIsCreated() {
         var harness = new SignUpApiHarness();
         var ticket = await harness.VerifiedSignUpAsync();
 
-        var result = await harness.Api.CompleteAsync(
-            new("Rene", "Contoso", new(SignUpCredential.PasswordKind, null, ""), "/"),
-            ticket,
-            null,
-            Context,
-            Ct
-        );
+        foreach (var password in new[] { "", null }) {
+            var result = await harness.Api.CompleteAsync(
+                new("Rene", "Contoso", new(SignUpCredential.PasswordKind, null, password), "/"),
+                ticket,
+                null,
+                Context,
+                Ct
+            );
 
-        var body = result.Body.ShouldBeOfType<SignUpCompleteResponse>();
-        body.Succeeded.ShouldBeFalse();
-        body.Message.ShouldBe("A password is required.", "the credential step's own sentence, verbatim");
+            var body = result.Body.ShouldBeOfType<SignUpCompleteResponse>();
+            body.Succeeded.ShouldBeFalse();
+            body.Message.ShouldBe(SignUpApi.PasswordRequiredMessage);
+            result.ClearTicket.ShouldBeFalse();
+        }
 
-        // The tenant and the user exist and are recorded, so the retry with a password resumes at
-        // the credential step rather than creating a second tenant.
-        harness.Grains.SignUps[ticket.SignupId].Steps.ShouldBe([SignUpStep.TenantCreated, SignUpStep.UserCreated]);
-        result.ClearTicket.ShouldBeFalse();
+        // ⚠ Refused at step a, beside the passkey check, and not at the credential step: a refusal
+        // after the tenant and the user exist would leave a tenant holding the slug with a
+        // credential-less user, the retry would resume at the credential step so the organisation
+        // name could no longer change, and an abandoned attempt would hold the slug for good.
+        harness.Scopes.TenantCreates.ShouldBeEmpty("a tenant was created for a credential that cannot be set");
+        harness.Grains.SignUps[ticket.SignupId].Steps.ShouldBeEmpty();
+
+        // The ticket is still good: the same complete, with a password, creates everything.
+        var completed = await harness.Api.CompleteAsync(Password(), ticket, null, Context, Ct);
+
+        completed.Body.ShouldBeOfType<SignUpCompleteResponse>().Succeeded.ShouldBeTrue();
+        harness.Scopes.TenantCreates.Count.ShouldBe(1);
     }
 
     [Fact]

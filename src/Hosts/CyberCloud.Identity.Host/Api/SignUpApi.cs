@@ -94,6 +94,9 @@ public sealed class SignUpApi(
     /// <summary>A create step failed. The ticket stays valid and <c>complete</c> resumes at that step.</summary>
     public const string StepFailedMessage = "Something went wrong creating your organisation. Try again.";
 
+    /// <summary>A password sign-up with no password — refused before anything is created.</summary>
+    public const string PasswordRequiredMessage = "A password is required.";
+
     /// <summary>The query parameter the rewritten return URL carries the new tenant in.</summary>
     public const string TenantParameter = "tenant";
 
@@ -301,6 +304,18 @@ public sealed class SignUpApi(
 
             case SignUpCredential.PasswordKind:
                 password = request.Credential.Password ?? string.Empty;
+
+                // ⚠ The one rule UserGrain.SetPasswordAsync enforces, checked here for the reason
+                // the passkey is verified here: the credential step runs after the tenant and the
+                // user exist, and a refusal there would leave a tenant holding the slug with a
+                // credential-less user — the retry resumes at the credential step, so the person
+                // could no longer change the organisation name, and an abandoned attempt would
+                // reserve the slug until the sweep that is still owed. Nothing is created for a
+                // credential that cannot be set.
+                if (password.Length == 0) {
+                    return Failed(returnUrl, PasswordRequiredMessage);
+                }
+
                 break;
 
             default:
