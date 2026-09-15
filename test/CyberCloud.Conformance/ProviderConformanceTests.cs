@@ -139,7 +139,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         // ⚠ Compared canonically rather than as text. The grain stores a canonical superset and
         // projects it down per api-version, so a body whose properties arrived in a different order
         // must read back equal — otherwise "idempotent" would depend on the client's serializer.
-        Canonical(snapshot.Properties).ShouldBe(Canonical(Body()));
+        Canonical(snapshot.Body).ShouldBe(Canonical(Body()));
         snapshot.Etag.ShouldNotBeNullOrEmpty();
         snapshot.ApiVersion.ShouldBe(Case.ApiVersion);
     }

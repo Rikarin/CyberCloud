@@ -636,7 +636,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
                 "the same resource came back, not a new one — the GUID is the identity"
             );
 
-        read.GetValueOrThrow().Properties.ShouldContain("\"size\":4");
+        read.GetValueOrThrow().Body.ShouldContain("\"size\":4");
 
         (await cluster.Index(address).GetAsync()).GetValueOrThrow()
             .State.ShouldBe(IndexEntryState.Confirmed);
@@ -1045,7 +1045,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         // ⚠ The size the CREATE wrote, not one the action supplied — the restore re-applies the stored
         // body, so the POST carried no desired state of its own and could not have.
-        read.GetValueOrThrow().Properties.ShouldContain("\"size\":6");
+        read.GetValueOrThrow().Body.ShouldContain("\"size\":6");
 
         // ── And the other verb, on the same resource, from the same door ────────────────────────
         var deletedAgain = await Delete(address);

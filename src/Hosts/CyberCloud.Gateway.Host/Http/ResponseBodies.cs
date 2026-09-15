@@ -7,13 +7,46 @@ namespace CyberCloud.Gateway.Host.Http;
 ///     The success bodies. Hand-written, for the same reason <see cref="ErrorBody" /> is.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A resource's <c>properties</c> is <i>already</i> JSON text and is written raw.</b>
-///     <see cref="ResourceSnapshot.Properties" /> is the projection the registry produced for the
-///     caller's api-version; re-serializing it through an object model would mean parsing and
-///     re-emitting, which loses number formatting and property order and is how a response drifts
-///     from the schema it was validated against.
+///     <para>
+///         ⚠ <b>A resource's body is <i>already</i> JSON text and its members are written raw.</b>
+///         <see cref="ResourceSnapshot.Body" /> is the projection the registry produced for the
+///         caller's api-version; re-serializing it through an object model would mean parsing and
+///         re-emitting, which loses number formatting and property order and is how a response
+///         drifts from the schema it was validated against.
+///     </para>
+///     <para>
+///         ⚠ <b>And it is the whole document, not the inner <c>properties</c> slice.</b> The grain
+///         writes every declared pointer at its full path, so the body of a type declaring
+///         <c>/location</c> and <c>/properties/message</c> is
+///         <c>{"location":…,"properties":{"message":…}}</c> — exactly the body the published OpenAPI
+///         document describes. This writer used to nest that document under a <c>properties</c>
+///         member of its own and served <c>properties.properties.message</c> with <c>location</c>
+///         twice (issue #72). It went unseen because the gateway suite's substitute manager
+///         hand-wrote a snapshot in the shape this file expected; the substitute now builds its
+///         snapshot from the real projection, and
+///         <c>ResourceBodyShapeTests.TheBodyIsTheProjectedDocumentSplicedIntoTheEnvelope</c> reads
+///         the served result back the way the SDK does.
+///     </para>
 /// </remarks>
 static class ResponseBodies {
+    /// <summary>
+    ///     The names the envelope owns. A body member with one of these names is skipped rather than
+    ///     written a second time.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><c>location</c> is the one that is actually both.</b> Every published type declares
+    ///     <c>/location</c> as a required, immutable body property — that is how a caller states it
+    ///     on a write — and the write path copies the value into
+    ///     <see cref="ResourceSnapshot.Location" /> at the same time, so the projected body carries
+    ///     it too. The envelope's copy is the one served: it is the manager's own record, the value
+    ///     placement and the resource-graph projection read, and it is what the Azure envelope puts
+    ///     beside <c>id</c>, <c>name</c> and <c>type</c>. The other five are here so that the rule is
+    ///     a rule rather than a special case, and so a schema that ever declared <c>/etag</c> could
+    ///     not make the response carry two.
+    /// </remarks>
+    static readonly HashSet<string> EnvelopeMembers = new(StringComparer.Ordinal) {
+        "id", "name", "type", "location", "provisioningState", "etag", "tags"
+    };
     /// <summary>Renders a resource.</summary>
     /// <param name="snapshot">The projected snapshot.</param>
     public static string Resource(ResourceSnapshot snapshot) {
@@ -91,19 +124,34 @@ static class ResponseBodies {
 
     /// <summary>The one resource object, written into whichever document is being built.</summary>
     /// <remarks>
-    ///     ⚠ One writer for both callers. Two copies would be two chances for a resource read on its
-    ///     own and the same resource inside a listing to disagree about their own shape.
+    ///     <para>
+    ///         ⚠ One writer for both callers. Two copies would be two chances for a resource read on
+    ///         its own and the same resource inside a listing to disagree about their own shape.
+    ///     </para>
+    ///     <para>
+    ///         The envelope first — <c>id</c>, <c>name</c>, <c>type</c>, <c>location</c>,
+    ///         <c>provisioningState</c>, <c>etag</c> — then every member of the projected body that
+    ///         the envelope does not already own, then <c>tags</c>. <c>location</c> is omitted when
+    ///         the manager holds none, as <see cref="Scope" /> omits it, rather than served as
+    ///         <c>""</c>: an empty string is not a region, and the published document lists no type
+    ///         without one. Nothing is invented on the body's behalf either — a projection with no
+    ///         <c>properties</c> member serves none, which is what the document, where
+    ///         <c>properties</c> is optional, already allows.
+    ///     </para>
     /// </remarks>
     static void WriteResource(Utf8JsonWriter writer, ResourceSnapshot snapshot) {
         writer.WriteStartObject();
         writer.WriteString("id", snapshot.Path);
         writer.WriteString("name", snapshot.Name);
         writer.WriteString("type", snapshot.Type);
-        writer.WriteString("location", snapshot.Location);
+
+        if (snapshot.Location.Length > 0) {
+            writer.WriteString("location", snapshot.Location);
+        }
+
         writer.WriteString("provisioningState", snapshot.ProvisioningState.ToString());
         writer.WriteString("etag", snapshot.Etag);
-        writer.WritePropertyName("properties");
-        WriteRaw(writer, snapshot.Properties);
+        WriteBodyMembers(writer, snapshot.Body);
 
         if (!snapshot.Tags.IsEmpty) {
             writer.WritePropertyName("tags");
@@ -215,21 +263,38 @@ static class ResponseBodies {
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    static void WriteRaw(Utf8JsonWriter writer, string json) {
-        if (json.Length == 0) {
-            writer.WriteStartObject();
-            writer.WriteEndObject();
+    /// <summary>
+    ///     Splices the projected body's members into the object being written, raw, skipping the
+    ///     names in <see cref="EnvelopeMembers" />.
+    /// </summary>
+    /// <param name="writer">A writer positioned inside the resource object.</param>
+    /// <param name="body">The projected body, as the grain rendered it.</param>
+    static void WriteBodyMembers(Utf8JsonWriter writer, string body) {
+        if (body.Length == 0) {
             return;
         }
 
+        JsonDocument document;
         try {
-            using var document = JsonDocument.Parse(json);
-            document.RootElement.WriteTo(writer);
+            document = JsonDocument.Parse(body);
         } catch (JsonException) {
-            // Grain state that is not JSON is a platform fault, not a caller's. An empty object
+            // Grain state that is not JSON is a platform fault, not a caller's. The envelope alone
             // keeps the response parseable; the fault goes to the trace, never to the body.
-            writer.WriteStartObject();
-            writer.WriteEndObject();
+            return;
+        }
+
+        using (document) {
+            if (document.RootElement.ValueKind != JsonValueKind.Object) {
+                return;
+            }
+
+            foreach (var member in document.RootElement.EnumerateObject()) {
+                if (EnvelopeMembers.Contains(member.Name)) {
+                    continue;
+                }
+
+                member.WriteTo(writer);
+            }
         }
     }
 }

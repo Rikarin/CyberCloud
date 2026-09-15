@@ -94,8 +94,8 @@ public sealed class PostgresSecretTests {
 
     // ⚠ A FOURTH TEST WAS HERE AND IT IS GONE ON PURPOSE. It projected a desired body through
     // ResourceSchema.Project and asserted nothing was withheld. That method has been deleted: it was
-    // the unreachable twin of ResourceGrain.Project, and its secret drop is now
-    // ResourceManagerService.ReadablePointers, asserted end to end by
+    // the unreachable twin of the grain's projection (ResourceProjection.Project), and its secret
+    // drop is now ResourceManagerService.ReadablePointers, asserted end to end by
     // CyberCloud.ResourceManager.Tests.WritePathTests.ASecretPropertyIsNeverProjectedBackToTheCaller.
     //
     // What the deleted test actually pinned — this type withholds nothing on a read because it declares
