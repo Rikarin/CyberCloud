@@ -965,10 +965,15 @@ The list-and-search path, and it is separate from the write path on purpose.
 `resource-changed` → a projector → a per-tenant ClickHouse table:
 
 ```
-resource_id, tenant_id, subscription_id, resource_group, provider, type, name,
+resource_id, tenant_id, subscription_id, resource_group, provider, type, name, path,
 api_version, provisioning_state, location, cluster_id, tags Map(String,String),
 created_at, modified_at, desired_hash, version
 ```
+
+`path` arrived with the watch fan-out of
+[§ The cross-resource seam](#the-cross-resource-seam-what-one-provider-may-see-of-another-and-why-it-is-read-only)
+and is not derivable from the columns before it: a child's path names its parents and `name` is the
+leaf alone. A projector that keys on it gets the address a `GET` takes for free.
 
 Portal lists, filters, tag queries, "show me every Postgres in this subscription", and the M3 resource
 graph API all read this. **It is eventually consistent and the portal shows that** — a freshly created
@@ -1066,10 +1071,15 @@ protected resource, under its own id, never into it.
 **Implementation over contracts, enforced.** The view returns `ResourceSnapshot` and Kubernetes
 `ObjectRef` — the other provider's public *contract* (its schema) and nothing from its assembly. Rule
 2 still forbids the assembly reference, and a new rule 8 in the Assembly graph gate fails a provider
-that names the manager's grain interfaces (`IResourceGrain`, `IResourceIndexGrain`,
-`IResourceGroupGrain`, `IQuotaGrain`, `IResourceManager`, the authorizers, the ReBAC grains) from
-the two contracts assemblies it legitimately references — the road that used to be "a review
-failure, not a compile one" is now watched from the type table.
+that names the manager's grain interfaces, entry points or write seams (`IResourceGrain`,
+`IResourceIndexGrain`, `IResourceGroupGrain`, `IQuotaGrain`, `IResourceManager`, the authorizers,
+`IRoleAssignmentStore` and the ReBAC writers) from the two contracts assemblies it legitimately
+references — the road that used to be "a review failure, not a compile one" is now watched from the
+type table. The same rule keeps a provider off the *implementation* assembly, where
+`ResourceViews.For(owner)` lives: only a `.Application` may reference `CyberCloud.ResourceManager`,
+for the registration call and nothing else, because the view is safe exactly as long as
+`ReconcileDriver` is the only caller that chooses the owner
+([03 § Assembly graph rules](03-repository-layout.md) has the probe that found this).
 
 **What it costs.**
 
@@ -1077,9 +1087,15 @@ failure, not a compile one" is now watched from the type table.
   grain hop to the resource, inside the reconciler's 30-second budget; forty views in one pass spend
   it, and the reconciler returns `InProgress` between batches. `RenderedObjectsAsync` adds a
   namespace listing on the target's cluster.
-- Every accepted write of a watched type costs one watch-index read plus one consistent check and one
-  grain call per subscriber in that subscription, on the request path — bounded by construction to
-  the resources that asked, and never failing the write.
+- Every accepted write of *every* registered type — watched or not — costs one call to the
+  `idx/watch` grain for its (subscription, type) on the request path, and the first such call for a
+  pair activates the grain, which is a durable read that then answers an empty list; the fan-out has
+  no cheaper way to learn that nobody is watching. A watched type adds one fully consistent check and
+  one grain call per subscriber in that subscription — bounded by construction to the resources that
+  asked. A refused or failed delivery is a log line and the write stands; a grain call that *throws*
+  inside the fan-out propagates out of step 11 as any other grain call on the path does, after the
+  write is durable, and `ResourceManagerService.EmitAsync` says so beside the call — a transport fault
+  is not a watcher's problem to hide.
 - A new grain, `IResourceWatchGrain` at `idx/watch/{sha256(subscriptionId + type)[..16]}`,
   durable ([05 § Choosing a tier](05-state-and-storage.md): the enumeration has no second home, and
   a fan-out that read an empty set after a silo restart would deliver nothing and report nothing

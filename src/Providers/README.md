@@ -2463,9 +2463,16 @@ resource as the ReBAC subject, `resource:{id}`, and the grant is an ordinary rol
 `CrossResourceViewTests.TheViewHasNoMemberThatCouldWrite` keeps it so. `ctx.Watch.SubscribeAsync(type)`
 is how it hears about changes to resources of a type in its own subscription, on its next pass.
 What it may **not** do is reach the grains behind the view — `IResourceGrain`, `IResourceIndexGrain`,
-`IResourceGroupGrain`, `IQuotaGrain`, `IResourceManager` — and rule 8 of the Assembly graph gate
-fails the build if it names one. Both assemblies that carry those interfaces are ones a provider
-legitimately references, so rule 2 could not see this and rule 8 reads the type table instead.
+`IResourceGroupGrain`, `IQuotaGrain`, `IResourceManager` — or the seams the manager writes through
+without a caller — `IRoleAssignmentStore`, `IScopeRelationWriter`, `IResourceRelationWriter`,
+`IResourceChangedSink` — and rule 8 of the Assembly graph gate fails the build if it names one. Both
+assemblies that carry those interfaces are ones a provider legitimately references, so rule 2 could
+not see this and rule 8 reads the type table instead. Nor may it reference `CyberCloud.ResourceManager`
+itself, the implementation, where `ResourceViews.For(owner)` binds a view to whichever owner it is
+handed: rule 8 fails the `ProjectReference` from an implementation or `.Contracts` project, and lets
+`.Application` name `ResourceManagerSiloBuilderExtensions` from it and nothing else. A reconciler
+takes `IClock`, its own contracts and what `ReconcileContext` hands it; a constructor that asks for
+anything the manager registers is the shape the gate refuses.
 
 What a provider *may* reference is `module-layering.txt`, which is rule 7: `CyberCloud.Core`,
 `CyberCloud.Kubernetes`, `CyberCloud.ResourceManager` and `CyberCloud.Tenancy`, and nothing else. A

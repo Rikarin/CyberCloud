@@ -162,8 +162,14 @@ CyberCloud.ObjectStorage -> CyberCloud.ResourceManager
 # CyberCloud.ResourceManager.Contracts, which every family already reaches, so the seam adds no line
 # below and never will: a provider that wants another provider's resource gets a ResourceId into its
 # desired body and asks the view. What the seam did add is rule 8 in the Assembly graph gate, which
-# fails a provider that names the manager's grain interfaces directly — the road this file cannot
-# see (the paragraph above, "WHAT THIS FILE CANNOT SEE") is now watched from the type table.
+# fails a provider that names the manager's grain interfaces or write seams directly — the road this
+# file cannot see (the paragraph above, "WHAT THIS FILE CANNOT SEE") is now watched from the type
+# table. ⚠ And the CyberCloud.ResourceManager line each family carries below is WIDER than the family
+# needs: it is there for the .Application's AddCyberCloudProvider call, and it would also let the
+# implementation project take a ProjectReference on the manager and call ResourceViews.For(anybody).
+# This file cannot say "the .Application project only" — a module is a family — so rule 8 says it:
+# an implementation or .Contracts project that references CyberCloud.ResourceManager fails the gate,
+# whatever this file allows.
 #
 # ⚠ THE TWELVE FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
 # COINCIDENCE. docs/plan/25 § R1 asks what a provider costs the platform; four edges, the same four

@@ -375,13 +375,16 @@ Enforced by `Build.Architecture`, failing the build on violation:
    acyclic. A module is an assembly name truncated to its first two dotted segments, so
    `CyberCloud.Identity` and `CyberCloud.Identity.Contracts` are one; a provider's module is its
    family. `src/Hosts` and `cli/` are out of scope — rules 4 and 5 are what constrain a host.
-8. No `Providers.*` assembly names the resource manager's grain interfaces or entry points —
-   `IResourceGrain`, `IOperationGrain`, `IResourceIndexGrain`, `IResourceGroupGrain`,
-   `ISubscriptionGrain`, `IQuotaGrain`, `IResourceManager`, the two authorizers and the ReBAC grains;
-   `build/Build.Architecture.cs` § `ManagerOnlyTypes` is the list. A provider reaches another
-   provider's resource through `IResourceView` and `IResourceWatch` on `ReconcileContext`
-   ([08 § What the resource manager deliberately does not do](08-resource-manager.md)), and through
-   nothing else.
+8. No `Providers.*` assembly names the resource manager's grain interfaces, entry points or the
+   seams its write path calls — `IResourceGrain`, `IOperationGrain`, `IResourceIndexGrain`,
+   `IResourceGroupGrain`, `ISubscriptionGrain`, `IQuotaGrain`, `IResourceManager`, the two
+   authorizers, the ReBAC writers and the role-assignment store, the changed sink, the connection
+   factory and registrar; `build/Build.Architecture.cs` § `ManagerOnlyTypes` is the list. And none
+   but a `.Application` assembly references `CyberCloud.ResourceManager` itself — the implementation
+   — with that one naming only `ResourceManagerSiloBuilderExtensions`, the registration call. A
+   provider reaches another provider's resource through `IResourceView` and `IResourceWatch` on
+   `ReconcileContext` ([08 § What the resource manager deliberately does not
+   do](08-resource-manager.md)), and through nothing else.
 
 ⚠ **Rule 8 was added on 2026-09-18 (issue #90), and it is the rule that rule 2 could not be.** Rule 2
 is about assembly references, and a provider *legitimately* references
@@ -392,9 +395,29 @@ platform can be read and written, so until rule 8 the only thing between a recon
 either from a reconciler is a review failure, not a compile one."* The cross-resource seam gave a
 provider a sanctioned way to read another resource, and a sanctioned way is only a boundary if the
 unsanctioned way fails the build. Rule 8 reads the `TypeRef` table — an interface has no `const` to
-inline, so a grain call always leaves a row — and it has no project-file half because it needs none.
-What it cannot see is a string-keyed reflection call, and nothing static can; CC1006 and the
-`ForTenant` discipline stand between a provider and that.
+inline, so a grain call always leaves a row. What it cannot see is a string-keyed reflection call,
+and nothing static can; CC1006 and the `ForTenant` discipline stand between a provider and that.
+
+⚠ **Rule 8's first draft was defeated in one project line, the day it was written.** The type list
+reaches into the two contracts assemblies. The *implementation* assembly, `CyberCloud.ResourceManager`,
+is one a provider may also reference — rule 7 declares the module for every family, because every
+`.Application` calls `AddCyberCloudProvider` from it — and it carries `ResourceViews.For(owner)`,
+whose whole design is that `ReconcileDriver` alone chooses the owner. The review of #90 added a
+`ProjectReference` on it to `CyberCloud.Providers.Sample`, called `views.For(victim).View.ReadAsync(target)`,
+and watched rule 8 stay green: `ResourceViews` is public and not a grain. Listing it would have
+closed one probe and left `ResourceManagerService`, `ReBacRoleAssignmentStore` and every other public
+class of that assembly for the next, so the second half of the rule is about the assembly and is
+derived rather than listed: an implementation or `.Contracts` assembly takes no edge to it at all,
+read over the declared `ProjectReference` set as rule 2 is, and a `.Application` assembly names one
+type from it. The same review found the contracts assembly's *write* seams — `IRoleAssignmentStore`,
+`IScopeRelationWriter`, `IResourceRelationWriter`, `IResourceChangedSink` — off the list although
+each is a DI singleton a reconciler can take by constructor and none takes a caller; after #90 a
+`resource:` subject is a real principal, so a reconciler granting itself `reader` on its own
+subscription was a two-line class. Every seam the manager registers that `ReconcileContext` does not
+hand a pass is on the list now. The three `CyberCloud.Authorization.Contracts` grains the first draft
+listed are gone from it: no provider family declares an edge to that module in `module-layering.txt`,
+so rule 7 already fails a provider that binds any of its six grains, and a list of three of them said
+the wrong thing about the other three.
 
 ⚠ **Rule 7 was added on 2026-08-12 and rules 2 and 4 changed with it. All three were holes found by
 constructing a violation and watching the gate stay green**, which is the only way any of them could

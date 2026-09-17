@@ -138,6 +138,56 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
     }
 
     [Fact]
+    public async Task ADeletedWatcherIsDroppedFromTheIndexByTheFirstChangeItCannotBeHanded() {
+        // ⚠ Deleting a resource does not unsubscribe it — the delete path knows nothing about what
+        // the resource watched. The index is pruned lazily: the first fan-out that finds the
+        // watcher's grain answering ResourceNotFound drops the entry, and the tenant's write that
+        // triggered the fan-out is not disturbed by the failed delivery.
+        var watcher = await VictimResourceAsync(Widgets, "watch-dead");
+        var watched = await VictimResourceAsync(Probes, "watch-dead-target");
+
+        (await cluster.Views.For(watcher).Watch.SubscribeAsync(Probes.Type, TestContext.Current.CancellationToken))
+            .IsSuccess.ShouldBeTrue();
+
+        // Granted BEFORE the delete, because a grant to a resource is answered by the resource grain
+        // and a grant to a gone one is refused — and because the fan-out checks the grant before it
+        // tries the delivery. A dead watcher that was never granted is skipped by the check and
+        // never pruned; this test is about the one that was.
+        await GrantReaderToResourceAsync(watcher.Id);
+
+        var index = cluster.For(IsolationCluster.Victim)
+            .GetGrain<IResourceWatchGrain>(GrainKeys.WatchIndex(IsolationCluster.VictimSubscription, Probes.Type));
+
+        (await index.ListAsync()).GetValueOrThrow().ShouldContain(x => x.ResourceId == watcher.Id, "the subscription was not indexed");
+
+        // ── The watcher goes: a widget has no soft-delete window, so its grain is cleared ────────
+        var deleted = await cluster.Manager.DeleteAsync(
+            new() { Path = watcher.Path, ApiVersion = Widgets.ApiVersion, Caller = IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser) },
+            TestContext.Current.CancellationToken
+        );
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+        await DriveAsync(IsolationCluster.Victim, deleted.GetValueOrThrow().OperationId);
+
+        var gone = await cluster.For(IsolationCluster.Victim).GetGrain<IResourceGrain>(GrainKeys.Resource(watcher.Id)).GetReconcileInputAsync();
+        gone.IsFailure.ShouldBeTrue("the fixture's delete left the watcher's grain in place, so nothing here is dead");
+
+        // Still indexed: nothing on the delete path touched the watch list.
+        (await index.ListAsync()).GetValueOrThrow().ShouldContain(x => x.ResourceId == watcher.Id, "the delete path unsubscribed, which this test says it does not");
+
+        // ── The change: delivered to nobody, refused by the dead grain, and the write stands ──────
+        var accepted = await PatchAsync(watched, Probes, IsolationCluster.Victim, IsolationCluster.VictimUser);
+        accepted.IsSuccess.ShouldBeTrue("a dead watcher's failed delivery disturbed the tenant's own write: " + accepted.Error?.Message);
+
+        (await index.ListAsync()).GetValueOrThrow().ShouldNotContain(x => x.ResourceId == watcher.Id, "the dead watcher was not pruned from the index");
+
+        // And the next change costs the dead watcher nothing — the list is what the fan-out reads.
+        var again = await PatchAsync(watched, Probes, IsolationCluster.Victim, IsolationCluster.VictimUser, "eu-north");
+        again.IsSuccess.ShouldBeTrue(again.Error?.Message);
+        (await index.ListAsync()).GetValueOrThrow().ShouldNotContain(x => x.ResourceId == watcher.Id);
+    }
+
+    [Fact]
     public async Task AWatcherIsNotToldAboutItsOwnWrites() {
         var watcher = await VictimResourceAsync(Widgets, "watch-self");
 
@@ -175,15 +225,19 @@ public sealed class ResourceWatchTests(IsolationCluster cluster) {
 
         // Driven to a terminal state so a second write in the same test is not refused as
         // concurrent. The fan-out has already run by the time WriteAsync returned.
-        var operation = cluster.For(tenant).GetGrain<IOperationGrain>(GrainKeys.Operation(accepted.GetValueOrThrow().OperationId));
+        await DriveAsync(tenant, accepted.GetValueOrThrow().OperationId);
+
+        return accepted;
+    }
+
+    async Task DriveAsync(Guid tenant, Guid operationId) {
+        var operation = cluster.For(tenant).GetGrain<IOperationGrain>(GrainKeys.Operation(operationId));
 
         for (var i = 0; i < 6; i++) {
             if ((await operation.DriveAsync()).GetValueOrThrow().IsTerminal) {
-                break;
+                return;
             }
         }
-
-        return accepted;
     }
 
     async Task GrantReaderToResourceAsync(Guid resourceId) {

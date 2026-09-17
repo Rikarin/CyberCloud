@@ -1,7 +1,9 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Reconcile;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Reflection;
@@ -190,6 +192,47 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
     }
 
     [Fact]
+    public async Task RenderedObjectsOfATargetOnAClusterThisHostCannotReachFailRatherThanAnsweringNothing() {
+        var reader = await VictimResourceAsync(Widgets, "unreachable-reader");
+        var target = await VictimResourceAsync(Probes, "unreachable-target");
+
+        var granted = await GrantReaderToResourceAsync(
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription,
+            reader.Id,
+            IsolationCluster.VictimUser
+        );
+
+        granted.IsSuccess.ShouldBeTrue(granted.Error?.Message);
+
+        // ⚠ THE SAME VIEW OVER A HOST WITH NO CONNECTION TO THE TARGET'S CLUSTER — the placement is
+        // real, the connection is not. A snapshot needs no cluster and still reads; the rendered
+        // objects cannot be listed, and the answer has to be a failure and not an empty list. A vault
+        // that believed the empty list would snapshot nothing and report a backup.
+        var unconnected = new ResourceViews(
+            cluster.Registry,
+            cluster.Grains,
+            new ReBacResourceAuthorizer(cluster.Grains, NullLogger<ReBacResourceAuthorizer>.Instance),
+            new NoClusterConnectionFactory(),
+            new ConformanceClock(),
+            NullLogger<ResourceViews>.Instance
+        );
+
+        var (view, _) = unconnected.For(reader);
+
+        var read = await view.ReadAsync(target, TestContext.Current.CancellationToken);
+        read.IsSuccess.ShouldBeTrue(read.Error?.Message);
+        read.GetValueOrThrow().ClusterId.ShouldBe(IsolationCluster.ClusterId, "the target is placed, so the list has somewhere to fail");
+
+        var rendered = await view.RenderedObjectsAsync(target, TestContext.Current.CancellationToken);
+
+        rendered.IsFailure.ShouldBeTrue("a cluster this host cannot reach answered an empty list of rendered objects");
+        rendered.Error!.Code.ShouldBe(ErrorCode.InternalError);
+        rendered.Error.Message.ShouldContain("no connection");
+        rendered.Error.Message.ShouldContain(IsolationCluster.ClusterId.ToString("D", CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
     public void TheViewHasNoMemberThatCouldWrite() {
         // ⚠ "A write attempt has no API to call" is a claim about the interface, so it is asserted on
         // the interface: two methods, each taking an address and a token and nothing else — no body,
@@ -211,13 +254,18 @@ public sealed class CrossResourceViewTests(IsolationCluster cluster) {
             );
         }
 
-        // And the seam a reconciler is handed exposes nothing that writes a resource, either.
-        typeof(ReconcileContext).GetProperties()
-            .Select(x => x.PropertyType)
-            .ShouldNotContain(typeof(IResourceManager));
-        typeof(ReconcileContext).GetProperties()
-            .Select(x => x.PropertyType)
-            .ShouldNotContain(typeof(IResourceGrain));
+        // And the seam a reconciler is handed exposes nothing that writes a resource — or a grant.
+        // ⚠ The three writers are here since the review of #90: after it a `resource:` subject is a
+        // real principal, so a context that carried IRoleAssignmentStore would let a pass grant
+        // itself reader on its own subscription, and rule 8 of the Assembly graph gate is what keeps
+        // a reconciler from taking the same seam by constructor instead.
+        var handed = typeof(ReconcileContext).GetProperties().Select(x => x.PropertyType).ToList();
+
+        handed.ShouldNotContain(typeof(IResourceManager));
+        handed.ShouldNotContain(typeof(IResourceGrain));
+        handed.ShouldNotContain(typeof(IRoleAssignmentStore));
+        handed.ShouldNotContain(typeof(IScopeRelationWriter));
+        handed.ShouldNotContain(typeof(IResourceRelationWriter));
     }
 
     [Fact]

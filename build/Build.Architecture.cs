@@ -623,43 +623,91 @@ partial class Build {
         // named in the message.
         //
         // ⚠ READ FROM THE TypeRef TABLE, NOT FROM AssemblyRef. An interface has no const to inline,
-        // so a grain call always leaves a TypeRef row — this rule has no equivalent of rule 2's
-        // project-file half because it needs none. What it cannot see is a provider reaching the
+        // so a grain call always leaves a TypeRef row. What it cannot see is a provider reaching the
         // same grain through a string-keyed reflection call, and nothing static can; CC1006 and the
         // ForTenant discipline are what stand between a provider and that.
-        var reachable = providers
-            .Where(x => x.ReferencedTypes.Count > 0)
-            .ToList();
-
+        //
+        // ⚠ THE TYPE LIST ALONE WAS DEFEATED IN ONE PROJECT LINE, AND THAT IS WHY THIS RULE HAS A
+        // SECOND HALF. The review of #90 added `<ProjectReference Include="…/CyberCloud.ResourceManager
+        // .csproj"/>` to CyberCloud.Providers.Sample — a reference rule 7 permits, because every
+        // family's .Application already declares the module to call AddCyberCloudProvider — and a
+        // class taking ResourceViews by constructor called `views.For(victim).View.ReadAsync(target)`.
+        // It compiled, it read as the victim, and this rule stayed green: ResourceViews is public,
+        // it is not a grain interface, and the owner it binds a view to is whatever the caller
+        // passes, which is safe only while the caller is ReconcileDriver. Listing ResourceViews would
+        // have closed that one probe and left ResourceManagerService, ReBacRoleAssignmentStore and
+        // every other public class of the implementation assembly for the next one. So the second
+        // half is about the implementation ASSEMBLY, and it is derived where the first half is
+        // spelled out, because here the legitimate surface is one type: a Providers.* assembly that
+        // is not .Application takes no edge to CyberCloud.ResourceManager at all — over InTreeEdges,
+        // so as in rule 2 the declaration is the violation — and a .Application assembly names
+        // ResourceManagerSiloBuilderExtensions from it and nothing else.
+        //
+        // ⚠ THE SAME REVIEW FOUND THAT THE WRITE SEAMS OF THE CONTRACTS ASSEMBLY WERE NOT ON THE
+        // LIST. IRoleAssignmentStore.GrantAsync takes no caller; it is a DI singleton; a reconciler
+        // is resolved from DI with whatever constructor it declares (ReconcileDriver, `GetService(
+        // registration.ReconcilerType)`). So `X(IRoleAssignmentStore store)` could grant `reader` on
+        // its own subscription to `resource:{self}` and then read everything in it through the very
+        // seam this rule guards — the #90 grant made a `resource:` subject mean something, and
+        // nothing measured who could write one. Every seam AddCyberCloudResourceManager registers
+        // from the contracts assembly that ReconcileContext does not hand a pass is now on the list.
         Rule(
             8,
-            "No Providers.* assembly names the resource manager's grain interfaces or entry points; "
-            + "another resource is reached through IResourceView and IResourceWatch on ReconcileContext.",
-            reachable.Count,
-            reachable.SelectMany(provider => provider.ReferencedTypes
+            "No Providers.* assembly names the resource manager's grain interfaces, entry points or the "
+            + "seams its write path calls; none but a .Application assembly references CyberCloud.ResourceManager "
+            + "itself, and that one names only its registration call. Another resource is reached through "
+            + "IResourceView and IResourceWatch on ReconcileContext.",
+            providers.Count,
+            providers.SelectMany(provider => provider.ReferencedTypes
                     .Where(reference => ManagerOnlyTypes.Contains(reference.Type))
                     .Select(reference =>
                         $"{provider.Name} names {reference.Type} from {reference.Assembly}; read another resource "
                         + "through ReconcileContext.View and hear about it through ReconcileContext.Watch — the "
-                        + "write path's steps and the grains behind them are the manager's alone"
+                        + "write path's steps, the seams it calls and the grains behind them are the manager's alone"
                     )
-            )
+                )
+                .Concat(providers.SelectMany(ManagerImplementationViolations))
         );
 
         return GateOutcome.From("Assembly graph", inspected, "rule candidate(s) across 8 rules", violations);
     }
 
     /// <summary>
-    ///     The types rule 8 forbids a provider to name: every grain the manager owns, the two scope
-    ///     grains whose steps in the write path are the manager's, the quota grain, the manager's
-    ///     entry point, and the two authorization seams docs/plan/07 § The enforcement seam says a
-    ///     provider never calls.
+    ///     The types rule 8 forbids a provider to name, all in the two contracts assemblies a
+    ///     provider legitimately references: every grain the manager owns, the two scope grains
+    ///     whose steps in the write path are the manager's, the quota grain, the manager's three
+    ///     entry points, the two authorization seams docs/plan/07 § The enforcement seam says a
+    ///     provider never calls, and every other seam <c>AddCyberCloudResourceManager</c> registers
+    ///     that <c>ReconcileContext</c> does not hand a pass.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Full metadata names, spelled out rather than derived</b>, so that the rule's reach
-    ///     is a diff somebody reviews. Deriving it as "every <c>I*Grain</c> in these two assemblies"
-    ///     would catch <c>IResourceReconciler</c>'s neighbours on the day one is added and nobody
-    ///     notices, and would miss <c>IResourceManager</c>, which is not a grain.
+    ///     <para>
+    ///         ⚠ <b>Full metadata names, spelled out rather than derived</b>, so that the rule's
+    ///         reach is a diff somebody reviews. Deriving it as "every <c>I*Grain</c> in these two
+    ///         assemblies" would catch <c>IResourceReconciler</c>'s neighbours on the day one is
+    ///         added and nobody notices, and would miss <c>IResourceManager</c>, which is not a grain.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The test for a seam is whether a pass is handed it.</b> <c>ISecretResolver</c>,
+    ///         <c>ISecretWriter</c>, <c>IObjectStore</c>, <c>IClusterConnectionSink</c>,
+    ///         <c>IReconcileLog</c>, <c>IResourceView</c> and <c>IResourceWatch</c> are members of
+    ///         <c>ReconcileContext</c>, so a reconciler names them by using what it was given and they
+    ///         are not here. The rest — the ReBAC writers, the role-assignment store, the changed
+    ///         sink, the lock and policy seams, the connection factory and registrar, the inventories
+    ///         and the principal directory — are what the manager calls on a tenant's behalf, none
+    ///         takes a caller, and each is a DI singleton a reconciler could take by constructor.
+    ///         That last combination is the finding: after #90 a <c>resource:</c> subject is a real
+    ///         principal, so <c>IRoleAssignmentStore.GrantAsync</c> from a reconciler is a grant to
+    ///         itself that no user asked for.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No <c>CyberCloud.Authorization.Contracts</c> entry, on purpose.</b> The list once
+    ///         named three of that assembly's six grains, and the review of #90 found the three
+    ///         redundant rather than load-bearing: no provider family declares an edge to
+    ///         <c>CyberCloud.Authorization</c> in <c>module-layering.txt</c>, so rule 7 already fails
+    ///         any provider that binds any of the six. The line to refuse in review is one that would
+    ///         declare that edge; a half-list here would only suggest the other half was allowed.
+    ///     </para>
     /// </remarks>
     static readonly HashSet<string> ManagerOnlyTypes = new(StringComparer.Ordinal) {
         "CyberCloud.ResourceManager.Contracts.IResourceGrain",
@@ -667,19 +715,77 @@ partial class Build {
         "CyberCloud.ResourceManager.Contracts.IResourceWatchGrain",
         "CyberCloud.ResourceManager.Contracts.IParkedResourceRegistryGrain",
         "CyberCloud.ResourceManager.Contracts.IExpirySweeperGrain",
+        "CyberCloud.ResourceManager.Contracts.IConnectionGrain",
         "CyberCloud.ResourceManager.Contracts.IResourceManager",
         "CyberCloud.ResourceManager.Contracts.IScopeManager",
         "CyberCloud.ResourceManager.Contracts.IRoleAssignmentManager",
         "CyberCloud.ResourceManager.Contracts.IResourceAuthorizer",
         "CyberCloud.ResourceManager.Contracts.IScopeAuthorizer",
+        "CyberCloud.ResourceManager.Contracts.IResourceRelationWriter",
+        "CyberCloud.ResourceManager.Contracts.IScopeRelationWriter",
+        "CyberCloud.ResourceManager.Contracts.IRoleAssignmentStore",
+        "CyberCloud.ResourceManager.Contracts.IResourceChangedSink",
+        "CyberCloud.ResourceManager.Contracts.ILockResolver",
+        "CyberCloud.ResourceManager.Contracts.IPolicyEvaluator",
+        "CyberCloud.ResourceManager.Contracts.IClusterConnectionFactory",
+        "CyberCloud.ResourceManager.Contracts.IClusterConnectionRegistrar",
+        "CyberCloud.ResourceManager.Contracts.IClusterObjectInventory",
+        "CyberCloud.ResourceManager.Contracts.INamespaceInventory",
+        "CyberCloud.ResourceManager.Contracts.IPrincipalDirectory",
         "CyberCloud.Tenancy.Contracts.IResourceIndexGrain",
         "CyberCloud.Tenancy.Contracts.IResourceGroupGrain",
         "CyberCloud.Tenancy.Contracts.ISubscriptionGrain",
-        "CyberCloud.Tenancy.Contracts.IQuotaGrain",
-        "CyberCloud.Authorization.Contracts.ICheckGrain",
-        "CyberCloud.Authorization.Contracts.ITupleStoreGrain",
-        "CyberCloud.Authorization.Contracts.IListObjectsGrain"
+        "CyberCloud.Tenancy.Contracts.IQuotaGrain"
     };
+
+    /// <summary>The manager's implementation assembly, which rule 8's second half is about.</summary>
+    const string ManagerAssembly = "CyberCloud.ResourceManager";
+
+    /// <summary>
+    ///     The one type a provider's <c>.Application</c> assembly may name from
+    ///     <see cref="ManagerAssembly" />: the class that carries <c>AddCyberCloudProvider</c>, which
+    ///     is how a module registers its provider — docs/plan/03 § Providers, and the
+    ///     <c>SampleApplicationModule</c> remarks on why that is the module's one job.
+    /// </summary>
+    const string ManagerRegistrationType = "CyberCloud.ResourceManager.ResourceManagerSiloBuilderExtensions";
+
+    /// <summary>
+    ///     Rule 8's second half, for one provider assembly: an edge to the manager's implementation
+    ///     from anything but <c>.Application</c>, or a type named from it by <c>.Application</c>
+    ///     that is not the registration call.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Two different measures for the two kinds of assembly, and the split is where the
+    ///     legitimate use is.</b> An implementation or <c>.Contracts</c> assembly has no reason to
+    ///     see the manager at all, so for those the edge is the violation, read the way rule 2 reads
+    ///     it — a <c>ProjectReference</c> whose only use the compiler erased still declares the
+    ///     dependency. A <c>.Application</c> assembly must reference it, for one static class, so
+    ///     for those the type table is what can tell the registration call from
+    ///     <c>ResourceViews.For(anybody)</c>.
+    /// </remarks>
+    IEnumerable<string> ManagerImplementationViolations(AssemblyFacts provider) {
+        if (provider.Name.EndsWith(".Application", StringComparison.Ordinal)) {
+            return provider.ReferencedTypes
+                .Where(reference => string.Equals(reference.Assembly, ManagerAssembly, StringComparison.Ordinal)
+                    && !string.Equals(reference.Type, ManagerRegistrationType, StringComparison.Ordinal)
+                )
+                .Select(reference =>
+                    $"{provider.Name} names {reference.Type} from {ManagerAssembly}; a provider's .Application "
+                    + $"assembly reaches the manager's implementation for {ManagerRegistrationType} and nothing "
+                    + "else — everything else in that assembly binds a view, a write or a grain to whatever "
+                    + "owner the caller names, and only ReconcileDriver may name one"
+                );
+        }
+
+        return InTreeEdges(provider)
+            .Where(edge => string.Equals(edge.To, ManagerAssembly, StringComparison.Ordinal))
+            .Select(edge =>
+                $"{provider.Name} {edge.How} {ManagerAssembly}, the manager's implementation; a provider "
+                + "references CyberCloud.ResourceManager.Contracts and reaches another resource through "
+                + "ReconcileContext.View — ResourceViews.For(owner) reads as whichever owner it is handed, "
+                + "and that is safe only while ReconcileDriver is the one handing it"
+            );
+    }
 
     // ── The edges the rules are about ─────────────────────────────────────────────────────────
 
