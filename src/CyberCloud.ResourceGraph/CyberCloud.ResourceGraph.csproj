@@ -1,0 +1,82 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/08 § The resource-graph projection, docs/plan/04 § Streams — issue #54's stream and
+      projection half. Two things live here and nothing else: the IResourceChangedSink that puts a
+      resource-changed event on NATS JetStream under the subject grammar docs/plan/04 names, and the
+      projector that consumes the stream on a silo and writes the flattened row into the tenant's
+      ClickHouse database.
+
+      ⚠ NATS.Client.JetStream DIRECTLY, AND NOT Microsoft.Orleans.Streaming.NATS, AND THE REASON IS
+      MEASURED RATHER THAN PREFERRED. Directory.Packages.props § Orleans pins the Orleans provider at
+      $(OrleansVersion)-alpha.1 and says it is a prerelease no project references. Re-checked on
+      2026-09-17 against the NuGet flat-container index: fourteen versions published, from
+      10.0.0-alpha.1 to 10.3.1-alpha.1, and EVERY ONE carries an `-alpha.1` suffix — there has never
+      been a stable release to move to. Three more things decide it once that is known:
+
+        • The producer is the GATEWAY. ResourceManagerService is "a service held by the gateway"
+          (docs/plan/08 § The write path, end to end) and the gateway is an Orleans CLIENT
+          (docs/plan/03 § Hosts), so an Orleans stream would need the provider composed on the
+          client side as well as the silo's, and Orleans.Multitenant's AddMultitenantStreams is an
+          ISiloBuilder extension with no client half.
+        • The Orleans provider pulls NATS.Net [2.7.2,), a different client family from the
+          NATS.Client.Core/.JetStream 3.1.0 pair docs/plan/02 § Data, transport, Kubernetes pins, and
+          CentralPackageTransitivePinningEnabled would then hold two majors of one client in one
+          process for an alpha's benefit.
+        • What the projection needs from the transport is a DURABLE, REPLAYABLE log with
+          at-least-once delivery and per-subject order — which is JetStream itself. The Orleans
+          stream abstraction adds pub-sub fan-out to grains, and the consumer here is a hosted
+          service, not a grain.
+
+      ADR-005 (docs/plan/02) names "a hand-rolled adapter over NATS.Client.JetStream" as the fallback.
+      This is that fallback, and it is smaller than the word adapter suggests: one publish with a
+      message id, one durable consumer. If the Orleans provider ever ships without the suffix, the
+      subject grammar and the event are already what its multitenant stream id would carry, and the
+      sink is the one class that would change.
+
+      ⚠ NO .Contracts PAIR, following CyberCloud.ObjectStorage and CyberCloud.Vault: the seam this
+      implements — IResourceChangedSink — lives in CyberCloud.ResourceManager.Contracts, and a
+      contracts assembly of its own would be a second place to declare it.
+
+      ⚠ NO ClickHouse CLIENT PACKAGE, DELIBERATELY. ClickHouse speaks HTTP on 8123: a statement is a
+      POST body, a result is a FORMAT the query names, and a credential is two headers. The three
+      statements this projector needs — a CREATE DATABASE, a CREATE TABLE and an INSERT … FORMAT
+      JSONEachRow — do not justify a driver, its version trap, its licence row and its transitive
+      pins; and no other assembly holds a ClickHouse connection to share (the Monitor workspace
+      publishes its database NAME into a ConfigMap and connects to nothing —
+      charts/managed/monitor-workspace/conformance.yaml § owed, clickhouse-ttl-is-published-not-applied).
+      ClickHouseClient is a page of HttpClient, the way S3ObjectStore is a page of HMACs.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="NATS.Client.Core"/>
+        <PackageReference Include="NATS.Client.JetStream"/>
+        <!--
+          IGrainFactory.ForTenant — the projector reads the tenant's ICheckGrain for the access column.
+          BackgroundService, IConfiguration binding and ILogger arrive through it, as they do for
+          every other module: Microsoft.Orleans.Core carries Hosting.Abstractions and the binder.
+        -->
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <!-- IResourceChangedSink and ResourceChangedEvent. -->
+        <ProjectReference Include="../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <!--
+          ICheckGrain.ListRoleAssignmentsAsync, which is what fills the access column — the
+          role-assignment view over the parent chain, docs/plan/07 § Azure RBAC, expressed in it.
+          ⚠ module-layering.txt carries CyberCloud.ResourceGraph → CyberCloud.Authorization; the
+          resource manager's contracts deliberately do NOT reference authorization (their .csproj
+          says why), so this edge is this module's own and not inherited.
+        -->
+        <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

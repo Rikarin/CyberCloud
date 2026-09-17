@@ -979,6 +979,107 @@ redirected to a list, and does not see it.
 Access filtering on this table comes from the denormalized column maintained by
 [`ListObjects`](07-rebac-authorization.md), not from a per-row `Check`.
 
+⚠ **BUILT (issue #54, the stream and projection half), and four sentences above are now history
+rather than description.** What landed is `CyberCloud.ResourceGraph`, one module with no
+`.Contracts` pair for the reason the vault and the object store have none: it implements
+`IResourceChangedSink`, which already lives in `CyberCloud.ResourceManager.Contracts`.
+
+- **The transport is NATS JetStream through `NATS.Client.JetStream` directly, and not
+  `Microsoft.Orleans.Streaming.NATS`.** The Orleans provider was re-checked against the NuGet index
+  on 2026-09-17: fourteen versions from `10.0.0-alpha.1` to `10.3.1-alpha.1`, every one with an
+  `-alpha.1` suffix, so there has never been a stable release to move to. Three more facts settle it
+  once that is known, and they are written on `CyberCloud.ResourceGraph.csproj`: the producer is the
+  **gateway** (step 11 runs in `ResourceManagerService`, "a service held by the gateway", and the
+  gateway is an Orleans client with no `AddMultitenantStreams`); the provider pulls `NATS.Net 2.x`
+  against the pinned `NATS.Client.* 3.1.0`; and what a projection needs from its transport is a
+  durable, replayable, per-subject-ordered log, which is JetStream itself. `OrleansApplication`'s
+  `.AddMultitenantStreams(StreamProviders.Events, …)` stays the commented seam it was; the day the
+  provider ships without the suffix, the subject grammar and the event are already what its stream id
+  would carry and `NatsResourceChangedSink` is the one class that changes.
+- **The stream is `cc-resource-changed`, one per cluster, capturing `cc.*.res.>`; the tenant is a
+  subject token, not a stream.** The subject is `cc.{tenant:N}.res.{provider}.{type}.{id:N}` as
+  [04 § Streams](04-orleans-topology.md) names it, with the provider and type tokens *spelled* rather
+  than copied — see that section's correction for why a dot in `CyberCloud.Storage` forced it. The
+  publisher stamps `{resourceId:N}.{version}` as the JetStream message id, so a retried publish is one
+  message; the stream's duplicate window is two minutes and its retention seven days, because the
+  projection is a materialized view and the stream is its replay buffer, not the record.
+- **The table is the one above plus three columns, and the engine is the idempotency.**
+  `tenant_{tenantId:N}.resource_graph`, `ReplacingMergeTree(version) ORDER BY resource_id`, created
+  by the projector on a tenant's first event with `IF NOT EXISTS` and remembered per process — the
+  first thing in this tree that applies SQL to the region's ClickHouse, which
+  `charts/managed/monitor-workspace/conformance.yaml § owed` had recorded nothing did. The three
+  extra columns: `change LowCardinality(String)` (the event kind, so "what happened in the last
+  hour" is a query), `is_deleted UInt8` (a `Deleted` event writes a tombstone row rather than
+  issuing a mutation), and `access Array(String)`. Two rows for one resource collapse to the highest
+  `version` at merge time and `FINAL` collapses them before it; the projector also drops any event
+  at or below the version it can read, so a replay of a thousand events is a thousand reads and no
+  writes. `ProjectionRoundTripTests.AReplayAndAReorderedEventAreDroppedAndTheTableHoldsTheLatestVersion`
+  replays the same bytes under fresh message ids against a real NATS and a real ClickHouse and holds
+  the row at its version.
+- **`version` is the grain's count, and until #54 every event said 0.** `ResourceGrainState.Version`
+  was incremented on every write and never reached the snapshot, so the write path had nothing to put
+  on the event; `ResourceSnapshot.Version` (appended at `[Id(18)]`) carries it now. The etag is a
+  fresh GUID per write and orders nothing, which corrects 04 § Streams' "a monotonic `Version` from
+  the grain's etag".
+- **The stream has two producers, and one of them is new.** The write path emits `Created`,
+  `Updated` and `Deleting` at step 11 from the gateway; `OperationGrain` emits `StateChanged` when
+  a reconcile reaches a terminal state and `Deleted` when the teardown clears the grain — the
+  transition a list cares about most, `Creating → Succeeded`, told nobody before. Both go through
+  `ResourceChangedEvents.From`, so the columns cannot drift between them. The `Deleted` event takes
+  the version after the last one the grain counted, read just before the clear, so a `Deleting` or
+  `StateChanged` that lands late is dropped rather than resurrecting the row.
+  `WritePathTests.TheSiloEmitsTheTerminalTransitionAndTheTeardownAsLaterVersions` pins the four
+  events, their order and their strictly increasing versions.
+- **"A consumer per tenant" is where the row lands, not how it is pulled.** One durable JetStream
+  consumer, `resource-graph`, shared by every silo, so a message is projected once however many silos
+  run; the tenant is the second subject token and is routed before the body is decoded, the access
+  column is read through `IGrainFactory.ForTenant` under it, and a body whose tenant disagrees with
+  its subject is terminated and logged, never projected. A consumer per tenant would need a tenant
+  list nothing holds. The projector runs as a hosted service on every silo and on no gateway; the
+  gateway publishes only.
+- **The access column holds grantees, not members, and it is filled from the role-assignment view
+  rather than from `ListObjects`.** `ICheckGrain.ListRoleAssignmentsAsync(includeInherited: true)`
+  reports every principal with a role at the resource, its group, its subscription or its tenant —
+  on `CyberCloudSchema` every role rewrites down to `reader` and `read` is `Rel(reader)`, so that view
+  is exactly the set that can read. A group stays `group:{id}#member`; the list query expands the
+  *caller* into their closed usersets from `IMembershipIndexGrain` in one read and asks
+  `hasAny(access, [caller, …usersets])`. That is the two halves `ListObjectsEvaluator` already uses,
+  on a column instead of a walk — and the reason the column is not "recomputed from `ListObjects`"
+  as [07 § ListObjects](07-rebac-authorization.md) wrote is that `ListObjects` answers the other
+  direction (given a subject, which objects); filling one row from it would mean running it for
+  every subject in the tenant. `ProjectionRoundTripTests.ACreatedEventBecomesTheRowWithItsColumnsAndItsReaders`
+  writes the three tuples a real create leaves and reads back an inherited owner and a direct
+  userset, and not the user who was granted nothing.
+- **The configuration is `CyberCloud:ResourceGraph`, and Aspire's `ConnectionStrings:nats` fills
+  the NATS half.** A gateway with a NATS URL publishes; a silo with a NATS URL and a ClickHouse
+  endpoint projects; either without stays on `LoggingResourceChangedSink`, which is the shape every
+  host had until #54 and still a supported one. The AppHost gives the gateway `WithReference(nats)` —
+  the line without which the stream carries only the silo-side transitions — and stands up the
+  region's ClickHouse as a container, the same image `ProjectionRoundTripTests` uses.
+
+⚠ **Owed, and this is the list that closes the second half of #54.**
+
+- **The query API.** Nothing reads the table but the tests. The resource graph API — SQL over the
+  flattened table, paged, with the access filter above — is the issue's other half and is not here.
+  `ClickHouseResourceGraphStore.ReadAsync` is one row by id, which is the seed of it and not it.
+- **The access column moves on resource changes only.** A role assigned on a group after its
+  resources were projected reaches each row when that resource next changes, not when the role is
+  written. What closes it: a consumer of the tuple store's writes — the same `IRelationWriteInterceptor`
+  seam the Leopard index maintainer hangs on — that re-reads the view for every resource under the
+  changed scope and re-inserts the row at the same version with the new column. The row's version
+  must not move for that, so the engine needs a second ordering key or the recompute writes
+  `version + 0` and relies on insert order; decide before building.
+- **The silo's two events are best-effort in the same sense the gateway's are.** A silo that dies
+  between `CompleteAsync` and the publish loses the `StateChanged`; the next change repairs the row.
+  A stream that is the record rather than a replay buffer would want the publish inside the grain's
+  write, which is the Orleans stream provider's shape and the reason the seam is kept.
+- **Portal SignalR fan-out, the audit sink and billing** are listed as consumers in 04 § Streams and
+  none of them consumes yet. The stream, the subject grammar and the JSON wire form are theirs to
+  subscribe to; the projector is the first consumer, not the only one.
+- **A read-then-write version check between two silos is a race the engine resolves and the check
+  does not.** Both may insert; `FINAL` shows the higher. Acceptable for a projection; recorded so
+  nobody reads the check as a guarantee.
+
 ## Errors
 
 One shape, everywhere, Azure's:

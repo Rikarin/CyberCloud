@@ -48,6 +48,13 @@
         -->
         <ProjectReference Include="../../CyberCloud.ObjectStorage/CyberCloud.ObjectStorage.csproj"/>
         <!--
+          docs/plan/08 § The resource-graph projection (#54) — the resource-changed publisher over
+          NATS JetStream and the projector that consumes it into ClickHouse, registered only when
+          CyberCloud:ResourceGraph (or Aspire's ConnectionStrings:nats) is configured. Without it the
+          resource manager's logging sink stays and nothing projects, which is a supported shape.
+        -->
+        <ProjectReference Include="../../CyberCloud.ResourceGraph/CyberCloud.ResourceGraph.csproj"/>
+        <!--
           docs/plan/17's sending domain. Orleans DISCOVERS grains by scanning referenced assemblies,
           so this line is what puts CyberCloud.Communication's seven grain types in the silo; the
           AddCyberCloudCommunication() call in Program.cs is what registers the services their

@@ -124,6 +124,13 @@ public static class OrleansApplication {
                 //   .AddMultitenantStreams(StreamProviders.Events, NatsStreamProvider.Configure)
                 //   .AddMultitenantCommunicationSeparation(_ => new PlatformCrossTenantAuthorizer())
                 //
+                // ⚠ The streams line stays a seam AFTER the resource-changed stream landed (#54).
+                // Microsoft.Orleans.Streaming.NATS has never shipped without an -alpha suffix
+                // (Directory.Packages.props § Orleans), and the stream's producer is the gateway, an
+                // Orleans client this method does not build — so CyberCloud.ResourceGraph speaks
+                // JetStream directly and a host registers it from its own composition root, beside
+                // the object store. docs/plan/04 § Streams carries the correction.
+                //
                 // ⚠ AddMultitenantCommunicationSeparation is the one that matters and it is NOT here.
                 // docs/plan/04 § Silo composition calls it "not optional"; its argument is an
                 // ICrossTenantAuthorizer and authorization is CyberCloud.Authorization's (ADR-007), so

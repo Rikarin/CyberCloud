@@ -5,6 +5,7 @@ using CyberCloud.Kubernetes;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.ObjectStorage;
+using CyberCloud.ResourceGraph;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
@@ -105,6 +106,25 @@ public static class SiloComposition {
 
         if (objectStorage.IsConfigured) {
             builder.Services.AddS3ObjectStore(objectStorage);
+        }
+
+        // ── The resource-changed stream and its projection — docs/plan/08 § The resource-graph projection ──
+        //
+        // ⚠ CONDITIONAL, LIKE THE TWO ABOVE, AND IN TWO STEPS. A silo with a NATS URL publishes the
+        // silo-side half of the stream (OperationGrain's StateChanged and Deleted) through the NATS
+        // sink; a silo with a ClickHouse endpoint as well runs the projector that consumes the whole
+        // stream into the tenant's table. Unconfigured leaves the resource manager's logging sink in
+        // place and nothing projects — which the dev run without NATS is, and which is honest: a
+        // list would come from the grain, not from a table that is silently empty. Misconfigured
+        // is not unconfigured: a plain-http ClickHouse without AllowInsecureTransport throws out of
+        // AddResourceGraphProjector here, so the pod does not start. AddSingleton, so the order
+        // against ConfigureCluster's TryAdd does not matter.
+        var resourceGraph = ResourceGraphOptions.Bind(builder.Configuration);
+
+        if (resourceGraph.IsProjectorConfigured) {
+            builder.Services.AddResourceGraphProjector(resourceGraph);
+        } else if (resourceGraph.IsPublisherConfigured) {
+            builder.Services.AddResourceChangedPublisher(resourceGraph);
         }
 
         // ⚠ Required, and not optional. CreateSilo calls builder.Host.UseAutofac(), and ABP's

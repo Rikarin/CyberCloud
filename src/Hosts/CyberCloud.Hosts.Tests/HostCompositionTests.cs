@@ -963,6 +963,70 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     ⚠ The resource-changed stream has two ends and the two hosts hold different ones. The
+    ///     gateway publishes — step 11 runs in its process — so a NATS URL gives it the NATS sink and
+    ///     nothing consumes there; a silo with a NATS URL and a ClickHouse endpoint publishes the
+    ///     silo-side transitions and runs the projector. Neither configured is the logging sink and no
+    ///     projector, on both. docs/plan/08 § The resource-graph projection, issue #54.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         By concrete type, for the reason the object-store test gives: the logging sink
+    ///         resolves perfectly well, and a gateway left with it answers every <c>PUT</c> correctly
+    ///         while the projection learns nothing about creates — a list that is silently missing
+    ///         every new resource, with nothing in any log but a line that says <c>resource-changed</c>
+    ///         and names no stream.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Nothing here connects to NATS or ClickHouse: composition builds the sink and the
+    ///         projector, it does not run them. <c>ConnectionStrings:nats</c> is the key the AppHost's
+    ///         <c>WithReference(nats)</c> writes, and the gateway is given exactly that and nothing
+    ///         under <c>CyberCloud:ResourceGraph</c>, so this also holds that the fallback reads.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheGatewayPublishesResourceChangedAndTheSiloProjectsItOnlyWhenTheStreamIsConfigured() {
+        await using var bareGateway = await BuildGatewayAsync();
+        await using var bareSilo = await BuildSiloAsync();
+
+        bareGateway.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<LoggingResourceChangedSink>();
+        bareSilo.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<LoggingResourceChangedSink>();
+        bareSilo.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>().ShouldBeNull("a silo with no stream has nothing to project");
+
+        await using var gateway = await GatewayComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                IssuerArgument,
+                "--ConnectionStrings:nats=nats://127.0.0.1:1"
+            ]
+        );
+
+        await using var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                "--ConnectionStrings:nats=nats://127.0.0.1:1",
+                "--CyberCloud:ResourceGraph:ClickHouseEndpoint=http://127.0.0.1:1",
+                "--CyberCloud:ResourceGraph:AllowInsecureTransport=true"
+            ]
+        );
+
+        gateway.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<CyberCloud.ResourceGraph.NatsResourceChangedSink>();
+        gateway.Services.GetService<CyberCloud.ResourceGraph.ResourceGraphProjector>().ShouldBeNull("the gateway publishes and does not project");
+
+        silo.Services.GetRequiredService<IResourceChangedSink>().ShouldBeOfType<CyberCloud.ResourceGraph.NatsResourceChangedSink>();
+        silo.Services.GetRequiredService<CyberCloud.ResourceGraph.ResourceGraphProjector>();
+        silo.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>()
+            .ShouldContain(x => x is CyberCloud.ResourceGraph.ResourceGraphProjector, "the projector is a hosted service, or it never consumes");
+        silo.Services.GetRequiredService<CyberCloud.ResourceGraph.IResourceAccessResolver>()
+            .ShouldBeOfType<CyberCloud.ResourceGraph.ReBacResourceAccessResolver>("the access column is filled by the engine and not a double");
+    }
+
+    /// <summary>
     ///     A complete <c>CyberCloud:ObjectStorage</c> section, as the arguments that spell it. ⚠ The
     ///     credential is a placeholder for a store nothing connects to.
     /// </summary>

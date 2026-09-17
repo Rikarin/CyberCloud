@@ -143,6 +143,27 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 CyberCloud.ObjectStorage -> CyberCloud.Core
 CyberCloud.ObjectStorage -> CyberCloud.ResourceManager
 
+# ── The resource graph — docs/plan/08 § The resource-graph projection, docs/plan/04 § Streams ────
+# CyberCloud.ResourceGraph (#54) is the resource-changed stream's publisher over NATS JetStream and
+# the projector that consumes it into a per-tenant ClickHouse table. The first two edges are the
+# vault's and the object store's, for the same reason: IResourceChangedSink lives in
+# CyberCloud.ResourceManager.Contracts and the logging default in CyberCloud.ResourceManager, and
+# the reverse edge would be a cycle. The Tenancy edge is ProvisioningState, which the row carries
+# and which lives in CyberCloud.Tenancy.Contracts (the resource manager's own contracts say why).
+#
+# ⚠ THE AUTHORIZATION EDGE IS THE ONE TO READ TWICE. CyberCloud.ResourceManager.Contracts
+# deliberately does NOT reference CyberCloud.Authorization.Contracts, so that a provider cannot
+# name the engine (docs/plan/07 § The enforcement seam). This module is not a provider: it fills
+# the projection's access column from ICheckGrain.ListRoleAssignmentsAsync — the role-assignment
+# view over the parent chain — which is the object-to-subjects question the column asks, and the
+# one ReBacRoleAssignmentStore already reads for the same reason. CyberCloud.Identity and
+# CyberCloud.ResourceManager hold the same edge; this is the third module to, and it takes it for
+# a read.
+CyberCloud.ResourceGraph -> CyberCloud.Authorization
+CyberCloud.ResourceGraph -> CyberCloud.Core
+CyberCloud.ResourceGraph -> CyberCloud.ResourceManager
+CyberCloud.ResourceGraph -> CyberCloud.Tenancy
+
 # ── Providers — docs/plan/03 § The .Contracts split ────────────────────────────────────────────
 # A provider declares a ProjectReference on CyberCloud.ResourceManager.Contracts and
 # CyberCloud.Kubernetes.Contracts and nothing else; the CyberCloud.Core and CyberCloud.Tenancy edges

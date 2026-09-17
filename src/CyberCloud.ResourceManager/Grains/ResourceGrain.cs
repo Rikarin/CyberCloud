@@ -421,7 +421,8 @@ public sealed class ResourceGrain(
             ModifiedAt = state.State.ModifiedAt,
             LastFailure = state.State.LastFailure,
             OperationId = state.State.OperationId,
-            Lock = state.State.Lock
+            Lock = state.State.Lock,
+            Version = state.State.Version
         };
     }
 

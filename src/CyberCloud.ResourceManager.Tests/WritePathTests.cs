@@ -523,6 +523,55 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         change.ProvisioningState.ShouldBe(ProvisioningState.Creating);
         change.DesiredHash.ShouldStartWith("sha256:");
         change.StreamNamespace.ShouldBe($"cc.{ResourceManagerCluster.Tenant:N}.res");
+
+        // ⚠ THE GRAIN'S COUNT, NOT ZERO. Until #54 every event went out with Version = 0, so a
+        // projector keyed on (resource_id, version) would have dropped every event after the first.
+        change.Version.ShouldBeGreaterThan(0, "the event carries ResourceGrainState.Version through ResourceSnapshot.Version");
+        change.ResourceId.ShouldBe(accepted.GetValueOrThrow().Resource.Id);
+
+        // docs/plan/04 § Streams' grammar, with the provider's dot and the type folded into tokens
+        // so the tenant, provider, type and id sit at fixed positions.
+        change.Subject.ShouldBe($"cc.{ResourceManagerCluster.Tenant:N}.res.cybercloud_testing.widgets.{change.ResourceId:N}");
+    }
+
+    [Fact]
+    public async Task TheSiloEmitsTheTerminalTransitionAndTheTeardownAsLaterVersions() {
+        // docs/plan/04 § Streams names "IResourceGrain on every state transition" as the producer;
+        // until #54 only the gateway's half existed and Creating → Succeeded told nobody. The
+        // operation grain now emits StateChanged when the reconcile lands and Deleted when the grain
+        // is cleared, each at a version above the one before, so the projection can order them.
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.Address("transitions");
+
+        var accepted = await Write(address);
+        accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
+        var resourceId = accepted.GetValueOrThrow().Resource.Id;
+
+        await Converge(accepted.GetValueOrThrow());
+
+        var deleted = await cluster.Manager.DeleteAsync(
+            new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
+            TestContext.Current.CancellationToken
+        );
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        var teardown = cluster.Operation(ResourceManagerCluster.Tenant, deleted.GetValueOrThrow().OperationId);
+        (await teardown.DriveAsync()).GetValueOrThrow().State.ShouldBe(OperationState.Succeeded);
+
+        var emitted = RecordingChangeSink.Published.Where(x => x.ResourceId == resourceId).ToList();
+
+        emitted.Select(x => x.Change).ShouldBe(
+            [ResourceChangeKind.Created, ResourceChangeKind.StateChanged, ResourceChangeKind.Deleting, ResourceChangeKind.Deleted],
+            "the gateway's two and the silo's two, in the order the resource lived them"
+        );
+
+        emitted[1].ProvisioningState.ShouldBe(ProvisioningState.Succeeded, "StateChanged carries the state the reconcile reached");
+        emitted[3].ProvisioningState.ShouldBe(ProvisioningState.Deleting, "Deleted carries the last state the grain held");
+
+        // Strictly increasing, so a consumer that holds one can drop everything at or below it.
+        emitted.Select(x => x.Version).ShouldBe(emitted.Select(x => x.Version).Order().ToList());
+        emitted.Select(x => x.Version).Distinct().Count().ShouldBe(4, "no two transitions share a version");
+        emitted.ShouldAllBe(x => x.Subject == emitted[0].Subject, "one resource is one subject for its whole life");
     }
 
     [Fact]

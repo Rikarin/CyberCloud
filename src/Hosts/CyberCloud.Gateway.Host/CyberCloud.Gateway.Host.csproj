@@ -145,6 +145,15 @@
         -->
         <ProjectReference Include="../../CyberCloud.Vault/CyberCloud.Vault.csproj"/>
         <!--
+          docs/plan/08 § The resource-graph projection (#54) — the resource-changed PUBLISHER, and
+          only the publisher. ResourceManagerService emits step 11's event in THIS process, so the
+          NATS sink has to be registered here for any event to reach the stream; the projector that
+          consumes it runs on the silos, because it reads a tenant's check grain for every row.
+          GatewayComposition calls AddResourceChangedPublisher only when CyberCloud:ResourceGraph
+          (or Aspire's ConnectionStrings:nats) is configured.
+        -->
+        <ProjectReference Include="../../CyberCloud.ResourceGraph/CyberCloud.ResourceGraph.csproj"/>
+        <!--
           docs/plan/17's sending domain, for the same reason CyberCloud.Vault is here: four of
           CyberCloud.Communication/services' synchronous actions — send, status, checkSuppression,
           listSuppressions — are served inside ResourceManagerService.ActionAsync in THIS process, and

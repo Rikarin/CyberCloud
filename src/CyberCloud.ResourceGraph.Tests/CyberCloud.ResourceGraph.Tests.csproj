@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The resource-changed stream and the resource-graph projection — issue #54's tests.
+
+        SubjectGrammarTests         — docs/plan/04 § Streams' subject, token by token: a provider's dot
+                                      and a child type's slash fold into one token each, the tenant is
+                                      always the second token and reads back, and no name can widen a
+                                      filter
+        ResourceChangedJsonTests    — the event survives the wire as JSON: enums by name, the tag map,
+                                      the timestamps, and the two computed properties left out
+        ClickHouseRowJsonTests      — a row round-trips ClickHouse's own JSONEachRow spelling of a
+                                      DateTime64 and a quoted UInt64
+        ProjectionRoundTripTests    — the whole path against a REAL NATS with JetStream and a REAL
+                                      ClickHouse, both in containers, with the projector running as a
+                                      hosted service inside a TestCluster silo whose authorization
+                                      grains fill the access column: publish through the sink, read the
+                                      row back; replay the same version and a lower one and hold one
+                                      row; a Deleted event tombstones; a retried publish is one message
+
+      ⚠ The container suite needs a Docker daemon, like CyberCloud.ObjectStorage.Tests' SeaweedFS. It
+      is the only evidence in the tree that the subject grammar, the JetStream declaration, the
+      ClickHouse DDL and the JSONEachRow spelling agree with the real servers; the Docker-free tests
+      prove agreement with this repository's own reading of their documentation, which is not the
+      same thing.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+        <PackageReference Include="NATS.Client.JetStream"/>
+    </ItemGroup>
+
+    <ItemGroup Label="A real NATS and a real ClickHouse — docs/plan/23 § Test layers">
+        <!-- The generic ContainerBuilder: there is no Testcontainers.Nats or .ClickHouse pinned here. -->
+        <PackageReference Include="Testcontainers"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.ResourceGraph/CyberCloud.ResourceGraph.csproj"/>
+        <!-- The real CheckGrain and TupleStoreGrain, so the access column is filled by the engine and not a double. -->
+        <ProjectReference Include="../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

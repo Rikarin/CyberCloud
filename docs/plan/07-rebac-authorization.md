@@ -515,7 +515,9 @@ whose index grain runs N+1 fails at step 6, after both halves landed; the journa
 the index is behind the forward half for that tuple — the deny direction — and the sweeper applies
 it once the fleet converges. The check cache keys on the schema version and rides the window; the
 index has no per-version copy to key on. And the **resource-graph access column** § ListObjects says
-the walk maintains is still maintained by nothing.
+the walk maintains is maintained since #54 — by the projection's consumer, on every resource change,
+from the role-assignment view rather than from the walk, and not yet on a relation change; see
+[08 § The resource-graph projection](08-resource-manager.md) for what it holds and what it owes.
 
 ## ListObjects — the expensive one
 
@@ -582,8 +584,12 @@ depth 0 — the index is not a hop, so a chain of twenty nested groups is listed
 used to be cut. "Would satisfy that interface unchanged" was wrong: a reverse entry carries no
 subject, so a closed entry `c#parent@group:platform#member` handed back for `group:eng` would have
 read as `eng` being `c`'s parent, and the tupleset rule needs the record verbatim. The
-resource-graph access column this section says `ListObjects` maintains is still maintained by
-nothing. See § The Leopard index below.
+resource-graph access column this section says `ListObjects` maintains is maintained since #54 by
+the projector in `CyberCloud.ResourceGraph`, and by `ICheckGrain.ListRoleAssignmentsAsync` rather
+than by this walk — the column needs the object-to-subjects direction, and this walk answers the
+other one. The membership index's subject-to-usersets read happens where the paragraph above puts
+it, on the list query, once per caller. See § The Leopard index below and
+[08 § The resource-graph projection](08-resource-manager.md).
 
 ## The enforcement seam
 
