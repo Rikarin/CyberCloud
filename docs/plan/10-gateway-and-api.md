@@ -258,6 +258,25 @@ the tenant's relation-version stream and drops now-unauthorized interests.
 **Reconnect** uses SignalR's automatic reconnect plus a `since` version on resubscribe, so a portal tab
 that slept through a deploy catches up rather than showing stale state forever.
 
+⚠ **A browser opens a hub with a ticket, never with the bearer token in the URL.** Stage 2 reads the
+`Authorization` header and nothing else, and a browser cannot put a header on a WebSocket; the SignalR
+client's own convention fills the gap with `?access_token=<bearer>`, which puts a ten-minute token in
+every proxy log and browser history on the path. So the portal asks `POST /hubs/{hub}/ticket` — an
+ordinary authenticated request, counted as the write it is — for a *ticket*: 32 random bytes, bound to
+the claims of the request that minted it and to that one hub, good for thirty seconds or until the
+token behind it expires, and redeemable once. The upgrade is `GET /hubs/{hub}?ticket=…` with no
+header; stage 2 redeems the ticket and parks the same claims the header would have, so stage 3 builds
+the same caller and the hub sees no difference. A ticket is read only on the exact hub path — never on
+the ticket route, so a ticket cannot mint the next ticket — and only when the header is absent, so it
+is never a second chance for a refused token. The store is Redis where the rate-limit counters are and
+in-process otherwise, for the same reason: N pods, and the pod that minted is not the pod the socket
+lands on. `HubTickets` in the gateway carries the rest; `HubTicketOverHttpTests` drives it through
+Kestrel and a real upgrade. ⚠ The portal skips SignalR's negotiate for the same reason it cannot
+reuse a URL to reconnect: the ticket is spent by whichever request reaches the gateway first, so the
+upgrade has to be that request, and a reconnect mints again. The negotiate route itself,
+`/hubs/{hub}/negotiate`, routes to its hub now; until the ticket landed it was looked up as a hub
+named `resources/negotiate` and answered 404 to every client that negotiated.
+
 ## Authentication inputs
 
 | Caller | Credential | Notes |

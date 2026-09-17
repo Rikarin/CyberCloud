@@ -62,10 +62,12 @@ namespace CyberCloud.Providers.Terminal;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>AND WHAT IT RETURNS IS NOT A SESSION — IT IS THE ADDRESS OF ONE.</b> The bytes flow
-///         over <c>/hubs/terminal</c> to docs/plan/19's session grain, which does not exist:
-///         <c>TerminalHub.SendAsync</c> throws by name today. So a client that calls <c>connect</c>
-///         gets a running pod and a hub that refuses it. That is the honest state of this row and it
-///         is written here rather than discovered by whoever builds the panel.
+///         over <c>/hubs/terminal</c> to docs/plan/19's session grain, which does not exist: every
+///         method on <c>TerminalHub</c> — <c>Attach</c>, <c>Send</c>, <c>Resize</c> — throws by name
+///         today. So a client that calls <c>connect</c> gets a running pod and a hub that refuses it.
+///         The panel exists now — the portal's terminal blade, which opens the hub with a gateway
+///         ticket and shows this refusal in the pane — so the honest state is visible where a person
+///         would look for a prompt, and closing it is the grain and nothing on either side of it.
 ///     </para>
 /// </remarks>
 public sealed class CloudConsoleSessionHandler : IResourceActionHandler {

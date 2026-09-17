@@ -67,6 +67,13 @@ in portal code is a code-review failure.
 that creates, deletes or costs money does not — it shows the operation's real progress. An optimistic
 "deleted!" that later fails is how trust is lost.
 
+⚠ **A hub is opened with a ticket, and the bearer token is never in a URL.** The portal holds its
+token in memory and puts it in a header; a WebSocket has no header, so every hub connection starts
+with `POST /hubs/{hub}/ticket` and opens the socket with the thirty-second, single-use value that comes
+back — [10 § SignalR](10-gateway-and-api.md#signalr). `HubTicketsApi` is the one place the portal
+builds a socket address, and its spec sabotages the property. The cloud terminal is the first hub the
+portal opens this way; the three live-update hubs will use the same call.
+
 ## SSR
 
 Server-side rendered with hydration, for three reasons and not for SEO:

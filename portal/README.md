@@ -268,18 +268,19 @@ Issue #22's M1 pages, each a lazy route over the generated client (`libs/api`) a
 form document (`generated/forms/{apiVersion}.json`, staged into `/forms/` by `scripts/sync-forms.mjs`
 before every build and serve):
 
-| Route                                                          | Page                 | Calls                                                                                                                                                                   |
-| -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/subscriptions`                                               | list + create        | `GET /tenants/{t}/subscriptions` through `ScopeCollections` (a delegation to the generated `listSubscriptions`), then `createSubscription`                              |
-| `/subscriptions/{s}`                                           | subscription blade   | `getSubscription`                                                                                                                                                       |
-| `…/resourceGroups`                                             | list + create + open | `GET …/subscriptions/{s}/resourceGroups` through `ScopeCollections`, then `createResourceGroup`; open by name stays for a group the caller may act in but not enumerate |
-| `…/resourceGroups/{g}`                                         | resource group blade | `getResourceGroup`, plus a create and a list link per top-level type from the form document                                                                             |
-| `…/resourceGroups/{g}/resources?type=`                         | resource list        | `list{Type}` (#10), paged by `$skipToken`                                                                                                                               |
-| `…/resourceGroups/{g}/create/{ns}/{type}[/{child}]`            | create blade         | the generated form, then `createOrUpdate{Type}` → the operation view                                                                                                    |
-| `…/providers/{ns}/{type}/{name}`                               | resource blade       | `get{Type}`; delete is `delete{Type}` after the name is typed back → the operation view                                                                                 |
-| `…/providers/{ns}/{type}/{name}/edit`                          | edit blade           | `get{Type}`, then a full `createOrUpdate{Type}` with the immutable fields locked and still sent                                                                         |
-| `/operations/{id}?then=`                                       | operation view       | `getOperation`, polled until terminal; every poll feeds `NotificationsStore`                                                                                            |
-| `/subscriptions/{s}/access`, `…/{g}/access`, `…/{name}/access` | access page          | `RoleAssignmentsApi` — `PUT`/`GET`/`DELETE {scope}/providers/CyberCloud.Authorization/roleAssignments/{name}` (#70), by hand; no list (#86)                             |
+| Route                                                          | Page                 | Calls                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/subscriptions`                                               | list + create        | `GET /tenants/{t}/subscriptions` through `ScopeCollections` (a delegation to the generated `listSubscriptions`), then `createSubscription`                                                                                                                                    |
+| `/subscriptions/{s}`                                           | subscription blade   | `getSubscription`                                                                                                                                                                                                                                                             |
+| `…/resourceGroups`                                             | list + create + open | `GET …/subscriptions/{s}/resourceGroups` through `ScopeCollections`, then `createResourceGroup`; open by name stays for a group the caller may act in but not enumerate                                                                                                       |
+| `…/resourceGroups/{g}`                                         | resource group blade | `getResourceGroup`, plus a create and a list link per top-level type from the form document                                                                                                                                                                                   |
+| `…/resourceGroups/{g}/resources?type=`                         | resource list        | `list{Type}` (#10), paged by `$skipToken`                                                                                                                                                                                                                                     |
+| `…/resourceGroups/{g}/create/{ns}/{type}[/{child}]`            | create blade         | the generated form, then `createOrUpdate{Type}` → the operation view                                                                                                                                                                                                          |
+| `…/providers/{ns}/{type}/{name}`                               | resource blade       | `get{Type}`; delete is `delete{Type}` after the name is typed back → the operation view                                                                                                                                                                                       |
+| `…/providers/{ns}/{type}/{name}/edit`                          | edit blade           | `get{Type}`, then a full `createOrUpdate{Type}` with the immutable fields locked and still sent                                                                                                                                                                               |
+| `/operations/{id}?then=`                                       | operation view       | `getOperation`, polled until terminal; every poll feeds `NotificationsStore`                                                                                                                                                                                                  |
+| `/subscriptions/{s}/access`, `…/{g}/access`, `…/{name}/access` | access page          | `RoleAssignmentsApi` — `PUT`/`GET`/`DELETE {scope}/providers/CyberCloud.Authorization/roleAssignments/{name}` (#70), by hand; no list (#86)                                                                                                                                   |
+| `…/resourceGroups/{g}/terminal?console=`                       | cloud shell          | `listCloudTerminal`, or the generated form and `createOrUpdateCloudTerminal` when the group has none; then `connectCloudTerminal`, `HubTicketsApi` (`POST /hubs/terminal/ticket`, by hand), the socket into an `xterm.js` pane, `terminateCloudTerminal` after a second click |
 
 ⚠ **The verb names are derived from the form's `title`**, exactly as `TypeScriptEmitter` derives
 them from the type's display name, and `apps/portal/src/app/api/resource-verbs.spec.ts` asserts the
@@ -297,6 +298,19 @@ generated client, so the token, the api-version and the error mapping are owned 
 emitter learns the address, the three methods become delegations. The page grants, checks and
 revokes; it cannot list, because the collection answers 400 (#86), and its table holds only what it
 granted or checked in the visit, labelled as exactly that.
+
+⚠ **The cloud shell is the second page with a hand-written call, and again the reason is the
+address.** A hub is not a resource type, so no emitter sees `POST /hubs/{hub}/ticket`.
+`apps/portal/src/app/api/hub-tickets.ts` mints the thirty-second, single-use ticket the gateway
+redeems on the WebSocket upgrade and builds the socket address on this origin —
+docs/plan/10 § SignalR — and its spec sabotages the property the ticket exists for: the bearer token
+is never in a URL. `apps/portal/src/app/terminal/` holds the session driver (`connect` → ticket →
+socket → `Attach`, bytes both ways, a fresh ticket on every reconnect) and the pane over `@xterm/xterm`,
+both loaded with the terminal's own chunk and never on the server; `@microsoft/signalr` is the hub
+client, opened with `skipNegotiation` because the ticket is spent by whichever request reaches the
+gateway first. ⚠ The pane will show the hub refusing by name: docs/plan/19's session grain is not
+built, and `charts/managed/cloud-shell/conformance.yaml § owed` carries what the grain will find
+waiting on both sides of it.
 
 ⚠ **Every page renders a "no tenant" state until the sign-in has loaded one.** `TenantContextStore`
 is filled by `AuthFlow.ensureContext` once a token is accepted — from the callback, or from the

@@ -1,5 +1,7 @@
 using CyberCloud.Gateway.Host.Authentication;
 using CyberCloud.Gateway.Host.Http;
+using CyberCloud.Gateway.Host.Hubs;
+using CyberCloud.Identity.Validation;
 
 namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 
@@ -7,14 +9,28 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 ///     Stage 2 — the credential becomes claims. docs/plan/10 § Request pipeline.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The claims are parked, not applied.</b> This stage does not set
-///     <see cref="GatewayRequestContext.Caller" />; stage 3 does, after it has resolved the tenant
-///     and refused every request whose path, header, query or body disagrees. Splitting them means
-///     there is no window in which a caller context exists that has not been through the tenant
-///     check — and it means the tenant check has exactly one place to live rather than being
-///     "wherever the token is read".
+///     <para>
+///         ⚠ <b>The claims are parked, not applied.</b> This stage does not set
+///         <see cref="GatewayRequestContext.Caller" />; stage 3 does, after it has resolved the tenant
+///         and refused every request whose path, header, query or body disagrees. Splitting them means
+///         there is no window in which a caller context exists that has not been through the tenant
+///         check — and it means the tenant check has exactly one place to live rather than being
+///         "wherever the token is read".
+///     </para>
+///     <para>
+///         ⚠ <b>Two credentials, one of them derived from the other, and the second is read from the
+///         query string on exactly one shape of request.</b> <see cref="ICallerContextResolver" />
+///         reads the <c>Authorization</c> header and nothing else, and its remarks say why: anything
+///         else is a caller-controlled surface inside authentication. A browser's WebSocket upgrade
+///         has no header to read, so for a request that is exactly a hub's path, carries no header and
+///         carries <c>?ticket=</c>, the claims come from <see cref="IHubTicketStore" /> instead — claims
+///         this same stage produced seconds earlier for the request that minted the ticket, so nothing
+///         is established here that a header did not establish first. <c>HubTickets</c> carries the
+///         argument; what is stated here is the ordering: the header is tried first and, when present,
+///         decides alone, so a ticket is never a second chance for a refused token.
+///     </para>
 /// </remarks>
-sealed class AuthenticateStage(ICallerContextResolver resolver) : IGatewayStage {
+sealed class AuthenticateStage(ICallerContextResolver resolver, IHubTicketStore tickets) : IGatewayStage {
     /// <summary>Where stage 2 leaves the claims for stage 3.</summary>
     /// <remarks>An <c>HttpContext.Items</c> key rather than a field, so the stage stays a singleton.</remarks>
     public const string ClaimsItemKey = "cybercloud.token-claims";
@@ -57,6 +73,27 @@ sealed class AuthenticateStage(ICallerContextResolver resolver) : IGatewayStage 
         var resolved = await resolver.ResolveAsync(context.Http.Request, cancellationToken);
 
         if (resolved.TryGetError(out var error)) {
+            if (HubTickets.IsRedeemableOn(context.Http.Request, out var hub, out var ticket)) {
+                var redeemed = await tickets.RedeemAsync(ticket, hub, cancellationToken);
+
+                if (redeemed is { } claims) {
+                    context.Http.Items[ClaimsItemKey] = claims;
+                    return null;
+                }
+
+                // The same 401 an absent header gets, with a reason that says which credential was
+                // read. ⚠ Not "expired" versus "spent" versus "another hub's": a ticket is thirty
+                // seconds of opaque bytes, and the distinction would tell a holder of a leaked URL
+                // which of the three it was.
+                return GatewayOutcome.Failure(
+                        StatusCodes.Status401Unauthorized,
+                        BearerTokenErrors.Unauthenticated(
+                            "the hub ticket was not accepted; mint another with POST /hubs/" + hub + "/ticket"
+                        )
+                    )
+                    .WithHeader("WWW-Authenticate", "Bearer");
+            }
+
             if (IsAnonymous(context.Http.Request.Path)) {
                 // No claims parked. Stage 3 leaves the caller empty and stage 5 counts the request
                 // against the per-IP bucket instead of a tenant's.

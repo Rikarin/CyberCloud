@@ -749,6 +749,38 @@ public sealed class HostCompositionTests {
             );
     }
 
+    /// <summary>
+    ///     ⚠ The composed gateway resolves its pipeline, stages and all, before the first request.
+    /// </summary>
+    /// <remarks>
+    ///     The #68 shape one more time, generalised: <c>UseAutofac()</c> means <c>ValidateOnBuild</c>
+    ///     never runs, so a stage whose constructor gained a dependency nobody registered — stage 2
+    ///     and stage 8 both take the hub ticket store now — is a gateway that starts, reports healthy
+    ///     and answers <c>500</c> to everything. Resolving <c>GatewayPipeline</c> here is the check
+    ///     <c>ValidateOnBuild</c> would have been, and the store is asserted to be the in-process one
+    ///     when nothing registered Redis, because the refusing alternative for a ticket is no store at
+    ///     all.
+    /// </remarks>
+    [Fact]
+    public async Task TheGatewayResolvesItsPipelineAndAnInProcessTicketStoreWithoutRedis() {
+        await using var gateway = await BuildGatewayAsync();
+        var assembly = typeof(GatewayComposition).Assembly;
+
+        var pipeline = assembly.GetType("CyberCloud.Gateway.Host.Pipeline.GatewayPipeline", throwOnError: true)!;
+        gateway.Services.GetRequiredService(pipeline).ShouldNotBeNull();
+
+        var store = assembly.GetType("CyberCloud.Gateway.Host.Hubs.IHubTicketStore", throwOnError: true)!;
+        gateway.Services
+            .GetRequiredService(store)
+            .GetType()
+            .Name
+            .ShouldBe(
+                "InMemoryHubTicketStore",
+                "with no IConnectionMultiplexer registered the ticket store is the one-pod one, by the "
+                + "same rule the rate-limit counters follow — GatewayServiceCollectionExtensions."
+            );
+    }
+
     // ── The hosts, composed the way Program.cs composes them ─────────────────────────────────────
 
     /// <summary>Builds the real silo host.</summary>

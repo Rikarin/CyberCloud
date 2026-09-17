@@ -152,13 +152,46 @@ public sealed class MetricsHub(IGrainFactory grains, IConcurrencyLimiter limiter
 ///     </i>
 /// </summary>
 /// <remarks>
-///     ⚠ <b>No interest set and no connection grain, deliberately.</b> A terminal is one caller and
-///     one session, so there is nothing to fan out and an interest set would be a subscription of
-///     size one with an authorization re-check attached. The session grain is docs/plan/19's and does
-///     not exist yet; what is here is the hub's shape and its authorization seam, so that wiring the
-///     session grain is an implementation rather than a redesign.
+///     <para>
+///         ⚠ <b>No interest set and no connection grain, deliberately.</b> A terminal is one caller
+///         and one session, so there is nothing to fan out and an interest set would be a subscription
+///         of size one with an authorization re-check attached. The session grain is docs/plan/19's
+///         and does not exist yet; what is here is the hub's shape and its authorization seam, so that
+///         wiring the session grain is an implementation rather than a redesign.
+///     </para>
+///     <para>
+///         ⚠ <b>The shape is now the whole client contract, and the portal is written against it.</b>
+///         Three methods a client invokes — <see cref="Attach" />, <see cref="Send" /> and
+///         <see cref="Resize" /> — and one it receives, <see cref="TerminalProtocol.Output" />. The
+///         portal's terminal blade opens the socket with a <c>HubTickets</c> ticket, calls
+///         <c>Attach</c> with the <c>sessionId</c> the console's <c>connect</c> action returned and the
+///         pane's size, pumps keystrokes through <c>Send</c>, and paints every <c>Output</c>. Every
+///         method throws the same <see cref="HubException" /> today, naming the grain that is owed,
+///         and the portal shows that message in the pane — which is the honest state of the row, and
+///         a better one than a pane that looks connected to nothing.
+///         <c>TerminalHubTests.TheWireNamesAreTheFourThePortalSpeaks</c> and the portal's
+///         <c>terminal-session.spec.ts</c> both pin the names below, so the two sides cannot drift
+///         apart while the middle is being built.
+///     </para>
 /// </remarks>
 public sealed class TerminalHub : Hub {
+    /// <summary>
+    ///     Joins a session: replays its output ring buffer, then streams live output as
+    ///     <see cref="TerminalProtocol.Output" /> until the socket closes. docs/plan/19 § Architecture.
+    /// </summary>
+    /// <param name="sessionId">The session <c>connect</c> returned — the shell pod's own UID.</param>
+    /// <param name="columns">The pane's width in cells, so the first frame is laid out for the pane it lands in.</param>
+    /// <param name="rows">The pane's height in cells.</param>
+    /// <exception cref="HubException">Always, until docs/plan/19's session grain exists — see <see cref="Send" />.</exception>
+    [HubMethodName(TerminalProtocol.Attach)]
+    public Task Attach(string sessionId, int columns, int rows) {
+        _ = sessionId;
+        _ = columns;
+        _ = rows;
+
+        throw Owed();
+    }
+
     /// <summary>Sends a chunk of input to the session. Binary, unbuffered.</summary>
     /// <param name="sessionId">The terminal session.</param>
     /// <param name="data">The bytes the user typed.</param>
@@ -166,13 +199,54 @@ public sealed class TerminalHub : Hub {
     ///     Always, until docs/plan/19's session grain exists. ⚠ Failing loudly rather than accepting
     ///     and dropping: a terminal that silently swallows input is worse than one that is closed.
     /// </exception>
-    public Task SendAsync(string sessionId, byte[] data) {
+    [HubMethodName(TerminalProtocol.Send)]
+    public Task Send(string sessionId, byte[] data) {
         _ = sessionId;
         _ = data;
 
-        throw new HubException(
+        throw Owed();
+    }
+
+    /// <summary>Tells the shell its window changed size, so a full-screen program redraws for it.</summary>
+    /// <param name="sessionId">The terminal session.</param>
+    /// <param name="columns">The new width in cells.</param>
+    /// <param name="rows">The new height in cells.</param>
+    /// <exception cref="HubException">Always, until docs/plan/19's session grain exists — see <see cref="Send" />.</exception>
+    [HubMethodName(TerminalProtocol.Resize)]
+    public Task Resize(string sessionId, int columns, int rows) {
+        _ = sessionId;
+        _ = columns;
+        _ = rows;
+
+        throw Owed();
+    }
+
+    static HubException Owed() =>
+        new(
             "The cloud terminal's session grain is docs/plan/19 and is not implemented. The hub is "
             + "mapped so the route and its authorization seam exist; the data plane is owed."
         );
-    }
+}
+
+/// <summary>
+///     The names on the wire between the portal's terminal pane and <see cref="TerminalHub" />.
+/// </summary>
+/// <remarks>
+///     Constants rather than the methods' own names, because SignalR binds by string and the
+///     portal is TypeScript: a rename on one side is a hub method the other side cannot find, and a
+///     <c>HubMethodName</c> that reads a constant keeps the C# name free to follow its own
+///     conventions while the wire name stays put.
+/// </remarks>
+public static class TerminalProtocol {
+    /// <summary>Client → hub: join a session and start receiving <see cref="Output" />.</summary>
+    public const string Attach = "Attach";
+
+    /// <summary>Client → hub: bytes typed.</summary>
+    public const string Send = "Send";
+
+    /// <summary>Client → hub: the pane changed size.</summary>
+    public const string Resize = "Resize";
+
+    /// <summary>Hub → client: bytes the shell printed, as one <c>byte[]</c> argument.</summary>
+    public const string Output = "Output";
 }

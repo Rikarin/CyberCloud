@@ -78,6 +78,15 @@ export const links = {
     `${links.resourceGroup(subscriptionId, resourceGroup)}/access`,
   resourceAccess: (address: ResourceAddress, resourceType: string) => `${links.resource(address, resourceType)}/access`,
 
+  /**
+   * The cloud shell for a resource group — docs/plan/20 § The pages that are not generated. A
+   * console to open goes in `?console=`, the way the list page carries its type; absent, the page
+   * opens the group's first.
+   */
+  terminal: (subscriptionId: string, resourceGroup: string, console?: string) =>
+    `${links.resourceGroup(subscriptionId, resourceGroup)}/terminal` +
+    (console === undefined ? '' : `?console=${seg(console)}`),
+
   /** The operation view, and where to go once it succeeds. */
   operation: (operationId: string, then?: string) =>
     `/operations/${seg(operationId)}` + (then === undefined ? '' : `?then=${seg(then)}`)

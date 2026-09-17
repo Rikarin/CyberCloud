@@ -1,7 +1,9 @@
 using CyberCloud.Gateway.Host.Http;
+using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Routing;
 using CyberCloud.Gateway.Host.WellKnown;
+using CyberCloud.Identity.Validation;
 using System.Globalization;
 
 namespace CyberCloud.Gateway.Host.Pipeline.Stages;
@@ -37,6 +39,7 @@ sealed class DispatchStage(
     IScopeManager scopes,
     IRoleAssignmentManager roles,
     IOperationReader operations,
+    IHubTicketStore tickets,
     GatewayOptions options
 )
     : IGatewayStage {
@@ -64,6 +67,10 @@ sealed class DispatchStage(
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
             // pipeline's job for it was stages 1 to 5.
             RouteKind.Hub => null,
+            // The ticket that hub's WebSocket will carry — minted here, from the claims stage 2
+            // parked, because this process is the one that validated them. HubTickets says why it is
+            // the gateway's and not the console's connect action's.
+            RouteKind.HubTicket => await HubTicketAsync(context, cancellationToken),
             // An agent's upgrade leaves the same way a hub's does: the endpoint after the pipeline
             // admits it or answers 401 — AgentTunnelEndpoint.
             RouteKind.AgentTunnel => null,
@@ -560,6 +567,30 @@ sealed class DispatchStage(
                     GatewayHeaders.RetryAfter,
                     accepted.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture)
                 );
+
+    async Task<GatewayOutcome> HubTicketAsync(GatewayRequestContext context, CancellationToken cancellationToken) {
+        if (context.Http.Items[AuthenticateStage.ClaimsItemKey] is not TokenClaims claims) {
+            // Unreachable through the pipeline: stage 2 answers 401 before a request with no claims
+            // gets this far, and the ticket route is not one of the anonymous three. Refusing rather
+            // than minting from an empty caller, because a ticket with no tenant behind it would be
+            // the one thing this route must never hand out.
+            return GatewayOutcome.Failure(
+                    StatusCodes.Status401Unauthorized,
+                    BearerTokenErrors.Unauthenticated("a hub ticket needs the caller's own token")
+                )
+                .WithHeader("WWW-Authenticate", "Bearer");
+        }
+
+        var ticket = await tickets.IssueAsync(claims, context.Route.HubName, cancellationToken);
+
+        // ⚠ Cache-Control: no-store, for the reason a `secret: true` action's response carries it:
+        // this body is a credential, thirty seconds of one, and a proxy that kept it would hand the
+        // next requester somebody else's hub.
+        return new GatewayOutcome {
+                StatusCode = StatusCodes.Status200OK, Json = HubTickets.Body(ticket, context.Route.HubName)
+            }
+            .WithHeader(GatewayHeaders.CacheControl, "no-store");
+    }
 
     static GatewayOutcome OpenApi(GatewayRequestContext context) =>
         new() {

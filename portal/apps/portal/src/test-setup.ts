@@ -6,6 +6,7 @@ import '@angular/localize/init';
 
 import { setupZonelessTestEnv } from 'jest-preset-angular/setup-env/zoneless';
 import { webcrypto } from 'node:crypto';
+import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from 'node:util';
 
 // ── docs/plan/20 § Live updates ─────────────────────────────────────────────────────────────
 // "the templates are `OnPush` and zoneless". The test environment has to be zoneless too, or a
@@ -20,4 +21,13 @@ setupZonelessTestEnv();
 // checks it against RFC 7636's appendix B vector, which would catch a stand-in that was not.
 if (globalThis.crypto.subtle === undefined) {
   Object.defineProperty(globalThis.crypto, 'subtle', { value: webcrypto.subtle, configurable: true });
+}
+
+// ── docs/plan/19 § Architecture ─────────────────────────────────────────────────────────────
+// The terminal session turns keystrokes into UTF-8 for the hub with `TextEncoder`, which every
+// browser has and jsdom 26 still does not expose. Node's is the same WHATWG interface, so it
+// stands in, exactly as `crypto.subtle` does above.
+if (globalThis.TextEncoder === undefined) {
+  Object.defineProperty(globalThis, 'TextEncoder', { value: NodeTextEncoder, configurable: true });
+  Object.defineProperty(globalThis, 'TextDecoder', { value: NodeTextDecoder, configurable: true });
 }

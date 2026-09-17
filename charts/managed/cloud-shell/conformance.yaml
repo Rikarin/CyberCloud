@@ -130,14 +130,24 @@ owed:
     says: >
       docs/plan/19 § Architecture's ITerminalSessionGrain — the exec stream, the resize channel, the
       output ring buffer for reconnect and the idle timer — is NOT BUILT, and it is the largest single
-      thing this row owes. What exists today is: the gateway maps /hubs/terminal and TerminalHub.SendAsync
-      throws by name; this provider's connect action starts the pod and returns the sessionId and hub
-      path a client needs. So a caller can obtain a running shell and a hub that refuses it. ⚠ THE
-      REFUSAL IS DELIBERATE AND IS BETTER THAN THE ALTERNATIVE — that hub's own remarks say "a terminal
-      that silently swallows input is worse than one that is closed" — but it means docs/plan/24's M1
-      exit story step 6 is not passable end to end. Closing it is a grain that speaks the Kubernetes
-      exec protocol (SPDY/WebSocket) through the cluster connection, plus the hub method that pumps
-      bytes into it.
+      thing this row owes. What exists today is everything on either side of it: this provider's
+      connect action starts the pod and returns the sessionId and hub path; the gateway maps
+      /hubs/terminal, mints the short-lived ticket a browser opens it with (POST /hubs/{hub}/ticket —
+      HubTickets, docs/plan/10 § SignalR) and declares the hub's whole client contract (TerminalHub:
+      Attach, Send, Resize, and Output back), every method of which throws by name; and the portal's
+      terminal blade (issue #22) lists a group's consoles or creates one, calls connect, mints the
+      ticket, opens the socket, attaches an xterm.js pane, and reconnects with a fresh ticket when the
+      socket drops — showing the hub's refusal in the pane. So a person can reach a running shell's
+      address from the portal and be told, where the prompt would be, that the data plane is owed.
+      ⚠ THE REFUSAL IS DELIBERATE AND IS BETTER THAN THE ALTERNATIVE — that hub's own remarks say "a
+      terminal that silently swallows input is worse than one that is closed" — but it means
+      docs/plan/24's M1 exit story step 6 is not passable end to end. Closing it is a grain that speaks
+      the Kubernetes exec protocol (SPDY/WebSocket) through the cluster connection, and the three hub
+      methods pumping into it. ⚠ WHAT THE GRAIN WILL FIND WAITING: the portal sends and expects byte[]
+      as base64 on the JSON hub protocol, calls Attach with the pane's size, and treats a different
+      sessionId on reconnect as a reclaimed pod — the three assumptions to keep when the middle lands.
+      IKubeClusterConnection has no exec surface today, and adding one — over the agent tunnel for an
+      AgentInitiated cluster — is the first thing the grain needs.
   - id: connect-cannot-see-its-caller
     says: >
       A console's whole security argument is "the shell runs as YOU", and nothing checks that the

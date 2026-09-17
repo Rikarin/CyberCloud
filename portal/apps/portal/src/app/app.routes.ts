@@ -90,6 +90,14 @@ export const appRoutes: Routes = [
     title: 'Access'
   },
   {
+    // The cloud shell — a literal segment beside `resources`, `create` and `access`, so a
+    // provider named `terminal` cannot shadow it: a resource path always has `providers/` next.
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/terminal',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/terminal/terminal-blade').then(m => m.TerminalBlade),
+    title: 'Cloud shell'
+  },
+  {
     path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/resources',
     canActivate: [authGuard],
     loadComponent: () => import('../pages/resources/resource-list').then(m => m.ResourceList),

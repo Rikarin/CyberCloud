@@ -125,6 +125,20 @@ enum RouteKind {
     /// <summary>One of the four hubs. docs/plan/10 § SignalR.</summary>
     Hub,
 
+    /// <summary>
+    ///     <c>POST /hubs/{hub}/ticket</c> — mints the short-lived ticket a browser opens that hub's
+    ///     WebSocket with. docs/plan/10 § SignalR, <c>HubTickets</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Routed apart from <see cref="Hub" /> so that it is <i>counted</i> and <i>dispatched</i>
+    ///     where a hub request is neither.</b> A hub handshake is exempt from the request-count buckets
+    ///     and leaves the pipeline for SignalR; a ticket mint is an ordinary authenticated write that
+    ///     stage 8 answers itself, and exempting it would make "mint tickets in a loop" the one
+    ///     uncounted request on the host. It carries no <c>api-version</c>, for the reason the hub it
+    ///     opens carries none. <c>POST</c> only: a <c>GET</c> that minted would be a link that mints.
+    /// </remarks>
+    HubTicket,
+
     /// <summary>The generated document, per api-version.</summary>
     OpenApi,
 
@@ -175,7 +189,7 @@ enum RouteKind {
 /// <param name="Resource">The resource, for <see cref="RouteKind.Resource" /> and <see cref="RouteKind.Action" />.</param>
 /// <param name="Action">The action name, for <see cref="RouteKind.Action" />.</param>
 /// <param name="OperationId">The operation, for <see cref="RouteKind.Operation" />.</param>
-/// <param name="HubName">The hub, for <see cref="RouteKind.Hub" />.</param>
+/// <param name="HubName">The hub, for <see cref="RouteKind.Hub" /> and <see cref="RouteKind.HubTicket" />.</param>
 /// <param name="Scope">
 ///     The scope, for <see cref="RouteKind.Scope" />. ⚠ Its tenant is the <i>token's</i> too, and for
 ///     the same reason — see the remarks on this type.
@@ -291,11 +305,31 @@ static class GatewayRouter {
         ArgumentNullException.ThrowIfNull(method);
 
         if (path.StartsWith(HubPrefix, StringComparison.Ordinal)) {
-            var hub = path[HubPrefix.Length..].TrimEnd('/');
+            // `/hubs/{hub}`, `/hubs/{hub}/negotiate` and `/hubs/{hub}/ticket`, and nothing else. The
+            // first two are the hub — SignalR's negotiate is an HTTP POST on the hub's own path plus
+            // a segment, and a router that did not know the segment answered 404 to every client
+            // that negotiated. The third mints the ticket the WebSocket then carries; HubTickets says
+            // why it is its own kind.
+            var rest = path[HubPrefix.Length..].TrimEnd('/');
+            var slash = rest.IndexOf('/', StringComparison.Ordinal);
+            var hub = slash < 0 ? rest : rest[..slash];
+            var segment = slash < 0 ? "" : rest[(slash + 1)..];
 
-            return HubNames.IsKnown(hub)
-                ? Result<GatewayRoute>.Success(new(RouteKind.Hub, default, "", Guid.Empty, hub))
-                : Result<GatewayRoute>.Failure(GatewayErrors.NotFound(path));
+            if (!HubNames.IsKnown(hub)) {
+                return Result<GatewayRoute>.Failure(GatewayErrors.NotFound(path));
+            }
+
+            if (segment.Length == 0 || string.Equals(segment, HubTickets.NegotiateSegment, StringComparison.Ordinal)) {
+                return Result<GatewayRoute>.Success(new(RouteKind.Hub, default, "", Guid.Empty, hub));
+            }
+
+            if (string.Equals(segment, HubTickets.RouteSegment, StringComparison.Ordinal)) {
+                return HttpMethods.IsPost(method)
+                    ? Result<GatewayRoute>.Success(new(RouteKind.HubTicket, default, "", Guid.Empty, hub))
+                    : Result<GatewayRoute>.Failure(GatewayErrors.NotFound(path));
+            }
+
+            return Result<GatewayRoute>.Failure(GatewayErrors.NotFound(path));
         }
 
         if (path.StartsWith(OperationsPrefix, StringComparison.Ordinal)) {
@@ -608,7 +642,13 @@ static class GatewayRouter {
         ArgumentNullException.ThrowIfNull(query);
 
         if (path.StartsWith(HubPrefix, StringComparison.Ordinal)) {
-            return RequestClass.Hub;
+            // ⚠ The ticket route is the one path under the prefix that is NOT exempt. It is an
+            // ordinary authenticated POST answered by stage 8 — RouteKind.HubTicket says why — so it
+            // is counted as the write it is. The test is on the last segment alone, for the reason
+            // the rest of this method is a prefix test: no routing before stage 6.
+            return path.EndsWith("/" + HubTickets.RouteSegment, StringComparison.Ordinal)
+                ? RequestClass.Write
+                : RequestClass.Hub;
         }
 
         // docs/plan/10 § Rate limiting: "Counting a 30-second long-poll as one request against a
