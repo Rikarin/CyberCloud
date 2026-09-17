@@ -26,6 +26,29 @@ public abstract record AuthorizeDecision {
     /// <summary>Send the person to the sign-in page, and bring them back here afterwards.</summary>
     /// <param name="Location">The absolute or same-origin URL of the page, with <c>returnUrl</c> set.</param>
     public sealed record SignIn(string Location) : AuthorizeDecision;
+
+    /// <summary>
+    ///     Send the person to the consent page, which posts their answer back to <c>/authorize</c>.
+    /// </summary>
+    /// <param name="Location">The absolute or same-origin URL of the page, with <c>returnUrl</c> set.</param>
+    public sealed record Consent(string Location) : AuthorizeDecision;
+}
+
+/// <summary>
+///     What the consent page posted back to <c>/authorize</c>, when it did.
+/// </summary>
+/// <remarks>
+///     ⚠ Read only off a <c>POST</c> from the page's own origin — <c>IdentityEndpoints.MapAuthorize</c>
+///     decides whether a request carries one at all. A <c>consent=allow</c> in the query string of
+///     a <c>GET</c> is a link anybody could have sent the person, and it is ignored: consent is what
+///     the person clicked on a page this host served, not a parameter a client can pre-fill.
+/// </remarks>
+public enum ConsentDecision {
+    /// <summary>The person allowed the client the scopes it asked for.</summary>
+    Allow,
+
+    /// <summary>The person declined. The client hears <c>access_denied</c>.</summary>
+    Deny
 }
 
 /// <summary>
@@ -68,10 +91,18 @@ public abstract record AuthorizeDecision {
 ///         because that is what the client asked to be told. Otherwise it is the sign-in page.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Consent is only free for a first-party client.</b> A tenant-registered client gets
-///         <c>consent_required</c> until the consent page exists (owed —
-///         <c>IdentityEndpoints</c>' remarks), because minting a code for a third party without
-///         asking the person is worse than refusing to.
+///         ⚠ <b>Consent is only free for a first-party client.</b> The portal and the CLI are the
+///         platform's own pages; every other client is a tenant's, and a code for it is minted only
+///         once the person has said yes — on this request, through the consent page's <c>POST</c>
+///         back to <c>/authorize</c> (<see cref="ConsentDecision.Allow" />), or earlier, as a grant
+///         <c>IConsentGrain</c> holds per (person, client) that covers every scope this request asks
+///         for. A grant that covers fewer scopes is a fresh question, not a partial yes;
+///         <c>prompt=consent</c> asks even when a grant covers everything, as OIDC Core § 3.1.2.1
+///         says it should; <see cref="ConsentDecision.Deny" /> is <c>access_denied</c> to the
+///         client, RFC 6749 § 4.1.2.1; and <c>prompt=none</c> with nothing on record is
+///         <c>consent_required</c>, because that is what the client asked to be told. The grant is
+///         written before the code is minted, so a crash between the two costs a second prompt and
+///         never a code nobody agreed to.
 ///     </para>
 ///     <para>
 ///         Returns values, for the reason <c>SignInApi</c> gives.
@@ -84,6 +115,15 @@ public sealed class AuthorizeApi(
 ) {
     /// <summary>The page an unauthenticated <c>/authorize</c> lands on, under <see cref="IdentityHostOptions.SignInPageBaseUri" />.</summary>
     public const string SignInPagePath = "/signin";
+
+    /// <summary>The page a tenant-registered client's <c>/authorize</c> lands on, under the same base.</summary>
+    public const string ConsentPagePath = "/consent";
+
+    /// <summary>The form field the consent page posts its answer in: <c>allow</c> or <c>deny</c>.</summary>
+    public const string ConsentParameter = "consent";
+
+    /// <summary>What the client hears when the person declined.</summary>
+    public const string ConsentDeniedDescription = "The person declined to authorize this client.";
 
     readonly IdentityHostOptions options = options.Value;
 
@@ -99,6 +139,10 @@ public sealed class AuthorizeApi(
     ///     absolute URL — <see cref="ReturnUrl.Sanitize" /> would refuse the latter and the person
     ///     would land on <c>/</c> with no request to resume.
     /// </param>
+    /// <param name="consent">
+    ///     What the consent page posted back, or <see langword="null" /> when this request carries
+    ///     no answer — every <c>GET</c>, and a <c>POST</c> from anywhere but the page's origin.
+    /// </param>
     /// <param name="cancellationToken">Cancels the grain call.</param>
     public async Task<AuthorizeDecision> DecideAsync(
         OpenIddictRequest request,
@@ -106,6 +150,7 @@ public sealed class AuthorizeApi(
         ApplicationRegistration client,
         ClaimsPrincipal? user,
         string pathAndQuery,
+        ConsentDecision? consent = null,
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(request);
@@ -132,17 +177,6 @@ public sealed class AuthorizeApi(
             return NotSignedIn(promptNone, pathAndQuery, "session-not-live");
         }
 
-        // ⚠ First-party clients are the platform's own pages; everything else needs the consent page
-        // that does not exist yet, and answers so rather than minting a code nobody agreed to.
-        if (!FirstPartyClients.IsFirstParty(client.ClientId)) {
-            GrantLog.AuthorizationRequestRefused(logger, tenantId, OpenIddictConstants.Errors.ConsentRequired, "consent-page-owed");
-
-            return new AuthorizeDecision.Refuse(
-                OpenIddictConstants.Errors.ConsentRequired,
-                "This client needs the person's consent, and the consent page is not built yet. docs/plan/11 § Protocol."
-            );
-        }
-
         var profile = await tenant.GetGrain<IUserGrain>(GrainKeys.User(userId)).GetAsync();
 
         if (profile.TryGetError(out _)) {
@@ -156,11 +190,95 @@ public sealed class AuthorizeApi(
             .Where(x => client.AllowedScopes.Contains(x, StringComparer.Ordinal))
             .ToList();
 
+        // ⚠ First-party clients are the platform's own pages and are consent-free by registration;
+        // everything else is a tenant's, and needs the person's yes — see the type's remarks.
+        if (!FirstPartyClients.IsFirstParty(client.ClientId)) {
+            var consented = await ConsentAsync(request, tenantId, userId, client, scopes, promptNone, pathAndQuery, consent);
+
+            if (consented is not null) {
+                return consented;
+            }
+        }
+
         GrantLog.AuthorizationCodeIssued(logger, tenantId, userId, sessionId);
 
         return new AuthorizeDecision.IssueCode(
             TokenApi.BuildCodePrincipal(WithCookieMethods(session.GetValueOrThrow(), user!), profile.GetValueOrThrow(), client, scopes)
         );
+    }
+
+    /// <summary>
+    ///     The consent half of the decision, for a tenant-registered client: the answer the page
+    ///     posted, the grant on record, or where to send the person. <see langword="null" /> means
+    ///     the person has consented and the code may be minted.
+    /// </summary>
+    async Task<AuthorizeDecision?> ConsentAsync(
+        OpenIddictRequest request,
+        Guid tenantId,
+        Guid userId,
+        ApplicationRegistration client,
+        List<string> scopes,
+        bool promptNone,
+        string pathAndQuery,
+        ConsentDecision? consent
+    ) {
+        var grant = grains.ForTenant(TenantHint.Qualifier(tenantId))
+            .GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(tenantId, userId, client.ClientId));
+
+        switch (consent) {
+            case ConsentDecision.Deny:
+                GrantLog.AuthorizationRequestRefused(logger, tenantId, OpenIddictConstants.Errors.AccessDenied, "consent-denied");
+
+                return new AuthorizeDecision.Refuse(OpenIddictConstants.Errors.AccessDenied, ConsentDeniedDescription);
+
+            case ConsentDecision.Allow: {
+                // ⚠ Written before the code is minted, never after: a crash between the two costs a
+                // second prompt, and the other order could mint a code from a grant that was never
+                // recorded.
+                var granted = await grant.GrantAsync(userId, client.ClientId, scopes);
+
+                if (granted.TryGetError(out var failed)) {
+                    GrantLog.AuthorizationRequestRefused(logger, tenantId, OpenIddictConstants.Errors.ServerError, "consent-not-recorded");
+
+                    return new AuthorizeDecision.Refuse(OpenIddictConstants.Errors.ServerError, failed.Message);
+                }
+
+                GrantLog.ConsentGranted(logger, tenantId, userId, client.ApplicationId);
+
+                return null;
+            }
+        }
+
+        var recorded = await grant.GetAsync();
+
+        if (recorded.IsSuccess && recorded.GetValueOrThrow().Covers(scopes) && !request.HasPromptValue(OpenIddictConstants.PromptValues.Consent)) {
+            return null;
+        }
+
+        if (promptNone) {
+            GrantLog.AuthorizationRequestRefused(logger, tenantId, OpenIddictConstants.Errors.ConsentRequired, "consent-not-on-record");
+
+            return new AuthorizeDecision.Refuse(OpenIddictConstants.Errors.ConsentRequired, "The person has not consented to this client.");
+        }
+
+        return new AuthorizeDecision.Consent(ConsentLocation(pathAndQuery));
+    }
+
+    /// <summary>
+    ///     Where a person whose consent a tenant-registered client needs goes: the consent page,
+    ///     with this request as the return URL.
+    /// </summary>
+    /// <param name="pathAndQuery">This request's path and query.</param>
+    /// <remarks>
+    ///     The query is kept byte for byte, <c>prompt=login</c> included — the page posts every pair
+    ///     back with its answer, and the answer is what stops <c>prompt=consent</c> from asking
+    ///     twice; <c>prompt=login</c> cannot reach here, because a person who has not signed in
+    ///     never sees the consent page.
+    /// </remarks>
+    public string ConsentLocation(string pathAndQuery) {
+        var returnUrl = ReturnUrl.Sanitize(pathAndQuery);
+
+        return options.SignInPageBaseUri.TrimEnd('/') + ConsentPagePath + "?returnUrl=" + Uri.EscapeDataString(returnUrl);
     }
 
     /// <summary>

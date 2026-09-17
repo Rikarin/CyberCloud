@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System.Globalization;
 
-namespace CyberCloud.Gateway.Host.RateLimiting;
+namespace CyberCloud.ServiceDefaults.RateLimiting;
 
 /// <summary>
 ///     The sliding window of docs/plan/10 § Request pipeline, as one Lua script per request.
@@ -23,13 +23,14 @@ namespace CyberCloud.Gateway.Host.RateLimiting;
 ///     <para>
 ///         ⚠ <b>It fails OPEN, and the direction is a decision rather than an oversight.</b> Redis
 ///         being unreachable is a platform fault, and failing closed converts it into a total outage
-///         of the API for every tenant — a rate limiter is a protection against abuse, not a
-///         correctness control, and nothing below it depends on it having run. Every failure is
+///         of the API for every tenant, and of sign-up and sign-in for every person — a rate limiter
+///         is a protection against abuse, not a correctness control, and nothing below it depends on
+///         it having run. Every failure is
 ///         logged at warning with the key, so "the limiter was down" is answerable after the fact
 ///         rather than inferred from a bill.
 ///     </para>
 /// </remarks>
-sealed class RedisRateLimitCounters(
+public sealed class RedisRateLimitCounters(
     IConnectionMultiplexer redis,
     IClock clock,
     ILogger<RedisRateLimitCounters> logger

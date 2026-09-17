@@ -1,6 +1,7 @@
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Identity.Host.RateLimiting;
 using CyberCloud.Identity.Host.Tests.Infrastructure;
 using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.SignIn;
@@ -12,9 +13,11 @@ namespace CyberCloud.Identity.Host.Tests;
 /// <summary>
 ///     The person's path, over HTTP, against the real host: a password and a delivered code on the
 ///     sign-in API, <c>/authorize</c> with the cookie, <c>/token</c> with PKCE, the refresh cookie
-///     and its <c>Origin</c> rule on both sides, the verifier as the one thing binding a code to
-///     its tab, the replay, a restart on the same keys, and <c>/logout</c>.
-///     docs/plan/11 § Protocol, § Sessions and revocation; docs/plan/10 § Authentication inputs.
+///     and its <c>Origin</c> rule on both sides, the verifier and the one-time-use record binding a
+///     code to its tab, the replay of both, a restart on the same keys, <c>/logout</c>,
+///     <c>/userinfo</c>, the consent page's round trip for a tenant's client, its secret, and the
+///     per-IP buckets. docs/plan/11 § Protocol, § Sessions and revocation, § Credentials;
+///     docs/plan/10 § Authentication inputs.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -461,12 +464,12 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
     [Fact]
     public async Task TheVerifierIsWhatBindsACodeToTheTabThatAskedForIt() {
-        // ⚠ One-time use of an authorization code is owed (no code store in degraded mode), so the
-        // verifier check is the ONLY thing binding a code to the tab that requested it — and it is
-        // OpenIddict's ValidateCodeVerifier, which DegradedModeHandlers' remarks say survives
-        // degraded mode without a filter. This test is what makes that claim cost something: an
-        // OpenIddict upgrade or a handler-order change that dropped it would fail here, not in a
-        // browser.
+        // ⚠ The verifier check is OpenIddict's ValidateCodeVerifier, which DegradedModeHandlers'
+        // remarks say survives degraded mode without a filter. This test is what makes that claim
+        // cost something: an OpenIddict upgrade or a handler-order change that dropped it would fail
+        // here, not in a browser. It was the ONLY binding until #94's code store; it is still the
+        // one that refuses a stolen code BEFORE it is burnt, so a thief's attempt costs the
+        // legitimate tab nothing.
         using var browser = await SignInAsync();
         var (verifier, challenge) = BrowserClient.Pkce();
         var code = await CodeAsync(browser, challenge, "s-pkce");
@@ -478,17 +481,75 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         await ShouldRefuse(Exchange(browser, code, verifier, redirectUri: "http://localhost:4200/elsewhere"), "invalid_grant", "a redirect_uri other than the one the code was issued for was accepted");
         await ShouldRefuse(Exchange(browser, code, verifier, clientId: FirstPartyClients.Cli), "invalid_grant", "a client other than the code's presenter was accepted");
 
-        // The right verifier, from the right client, to the right URI: the token.
+        // ⚠ Four refusals, and the code is still unburnt: every one of them is answered before
+        // TokenApi.MintForCodeAsync runs, so a thief guessing verifiers cannot spend the code the
+        // legitimate tab is about to present. The right verifier, from the right client, to the
+        // right URI: the token.
         using var exchanged = await Exchange(browser, code, verifier);
 
         exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, await exchanged.Content.ReadAsStringAsync(Ct));
 
-        // ⚠ And the replay succeeds — the owed one-time use, pinned so its landing is visible: when
-        // this assertion fails, a code store burns codes, and this block and the owed entry in
-        // docs/plan/11 § Protocol go together.
+        // And once: AReplayedCodeIsRefusedAndRevokesTheSessionTheFirstExchangeOpened is the replay.
+        await ShouldRefuse(Exchange(browser, code, verifier), "invalid_grant", "a code was exchanged twice");
+    }
+
+    [Fact]
+    public async Task AReplayedCodeIsRefusedAndRevokesTheSessionTheFirstExchangeOpened() {
+        // ⚠ RFC 6749 § 4.1.2, both halves: "MUST deny the request" and "SHOULD revoke all tokens
+        // previously issued based on that authorization code". The second half is the one worth a
+        // test — a store that only refused the replay would leave whoever exchanged the code FIRST
+        // holding a live session, which under the hostile reading is the thief.
+        using var browser = await SignInAsync();
+        var (verifier, challenge) = BrowserClient.Pkce();
+        var code = await CodeAsync(browser, challenge, "s-replay");
+
+        using var exchanged = await Exchange(browser, code, verifier);
+
+        var tokens = await BrowserClient.JsonAsync(exchanged, Ct);
+
+        exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, tokens.GetRawText());
+
+        var tokenSessionId = Guid.ParseExact(BrowserClient.Payload(tokens.GetProperty("access_token").GetString()!).GetProperty(AccessTokenClaims.SessionId).GetString()!, "N");
+        var tokenSession = fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId));
+
+        (await tokenSession.IsLiveAsync()).GetValueOrThrow().ShouldBeTrue();
+        browser.Cookies.ShouldContainKey(RefreshCookie.Name);
+
+        // ── The replay: the same code, the same verifier, the same tab. ─────────────────────────
         using var replayed = await Exchange(browser, code, verifier);
 
-        replayed.StatusCode.ShouldBe(HttpStatusCode.OK, "one-time use of authorization codes landed; retire this assertion and the owed entry with it");
+        replayed.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await replayed.Content.ReadAsStringAsync(Ct));
+
+        var body = await BrowserClient.JsonAsync(replayed, Ct);
+
+        body.GetProperty("error").GetString().ShouldBe("invalid_grant");
+        body.GetProperty("error_description").GetString().ShouldBe(TokenApi.CodeReplayedDescription);
+        body.TryGetProperty("access_token", out _).ShouldBeFalse();
+
+        // ⚠ THE ASSERTION THAT MATTERS: the session the FIRST exchange opened is dead, and so is the
+        // refresh chain the portal is holding for it.
+        (await tokenSession.IsLiveAsync()).GetValueOrThrow().ShouldBeFalse("the replay was refused but the first exchange's session survived");
+        (await tokenSession.GetAsync()).GetValueOrThrow().RevokedBecause.ShouldBe(RevocationReason.AuthorizationCodeReuseDetected);
+
+        using var refreshed = await Refresh(browser);
+
+        refreshed.StatusCode.ShouldBe(HttpStatusCode.BadRequest, "the refresh chain of a session revoked for code reuse still rotated");
+        (await BrowserClient.JsonAsync(refreshed, Ct)).GetProperty("error").GetString().ShouldBe("invalid_grant");
+
+        // The interactive session is untouched — it is the token session that died — so the person
+        // is one /authorize away from a fresh code, which mints and exchanges once more.
+        var (verifier2, challenge2) = BrowserClient.Pkce();
+        var code2 = await CodeAsync(browser, challenge2, "s-replay-2");
+
+        using var exchangedAgain = await Exchange(browser, code2, verifier2);
+
+        exchangedAgain.StatusCode.ShouldBe(HttpStatusCode.OK, await exchangedAgain.Content.ReadAsStringAsync(Ct));
+
+        // ⚠ The record itself is not asserted on by key: the code is an encrypted envelope and its
+        // id (oi_tkn_id) is inside it, readable by nobody but this server — which is the point of
+        // keying the store by the id rather than by the code (GrainKeys.AuthorizationCode). The
+        // refusal above and the dead session are what the record exists for;
+        // AuthorizationCodeReuseTests drives the grain directly.
     }
 
     [Fact]
@@ -533,6 +594,7 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         document.GetProperty("authorization_endpoint").GetString().ShouldBe(origin + IdentityHostOpenIddict.AuthorizationPath);
         document.GetProperty("token_endpoint").GetString().ShouldBe(origin + IdentityHostOpenIddict.TokenPath);
         document.GetProperty("end_session_endpoint").GetString().ShouldBe(origin + IdentityHostOpenIddict.EndSessionPath);
+        document.GetProperty("userinfo_endpoint").GetString().ShouldBe(origin + IdentityHostOpenIddict.UserInfoPath, "OIDC Core § 5.3 wants /userinfo advertised, and #94 mapped it");
         document.GetProperty("jwks_uri").GetString().ShouldBe(origin + AccessTokenPolicy.JsonWebKeySetPath);
         document.GetProperty("code_challenge_methods_supported").EnumerateArray().Select(x => x.GetString()).ShouldBe(["S256"]);
 
@@ -543,15 +605,354 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         grants.ShouldContain("client_credentials");
     }
 
+    [Fact]
+    public async Task UserInfoAnswersTheSessionsClaimsAndDiesWithTheSession() {
+        using var browser = await SignInAsync();
+        var (verifier, challenge) = BrowserClient.Pkce();
+        var code = await CodeAsync(browser, challenge, "s-userinfo");
+
+        using var exchanged = await Exchange(browser, code, verifier);
+
+        var tokens = await BrowserClient.JsonAsync(exchanged, Ct);
+
+        exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, tokens.GetRawText());
+
+        var accessToken = tokens.GetProperty("access_token").GetString()!;
+        var access = BrowserClient.Payload(accessToken);
+
+        // ── No token: RFC 6750's challenge, and nothing a client could read as claims. ─────────
+        using var anonymous = await browser.GetAsync(IdentityHostOpenIddict.UserInfoPath, Ct);
+
+        anonymous.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        anonymous.Headers.WwwAuthenticate.ToString().ShouldContain("Bearer");
+
+        // ── The token: sub MUST match the id_token's; name and email come from the user grain, as
+        //    the id_token was minted from it; tid and sub_typ so a relying party can build the
+        //    subject reference the gateway builds. Cross-origin from the portal, with CORS headers.
+        browser.Bearer = accessToken;
+
+        using var userinfo = await browser.GetAsync(IdentityHostOpenIddict.UserInfoPath, Ct);
+
+        var claims = await BrowserClient.JsonAsync(userinfo, Ct);
+
+        userinfo.StatusCode.ShouldBe(HttpStatusCode.OK, claims.GetRawText());
+        BrowserClient.Header(userinfo, "Access-Control-Allow-Origin").ShouldBe(IdentityHostFixture.PortalOrigin);
+        claims.GetProperty("sub").GetString().ShouldBe(access.GetProperty(AccessTokenClaims.Subject).GetString());
+        claims.GetProperty("sub").GetString().ShouldBe(BrowserClient.Payload(tokens.GetProperty("id_token").GetString()!).GetProperty("sub").GetString(), "OIDC Core § 5.3.2: the sub MUST match the id_token's");
+        claims.GetProperty(AccessTokenClaims.TenantId).GetString().ShouldBe(IdentityHostFixture.Tenant.ToString("N"));
+        claims.GetProperty(AccessTokenClaims.SubjectType).GetString().ShouldBe(SubjectTypes.User);
+        claims.GetProperty("name").GetString().ShouldBe(IdentityHostFixture.DisplayName);
+        claims.GetProperty("email").GetString().ShouldBe(BrowserClient.Payload(tokens.GetProperty("id_token").GetString()!).GetProperty("email").GetString(), "the id_token and /userinfo were minted from the same grain");
+        claims.GetProperty("email").GetString().ShouldEndWith("@grants.example");
+        claims.EnumerateObject().Select(x => x.Name).ShouldBe(["sub", AccessTokenClaims.TenantId, AccessTokenClaims.SubjectType, "name", "email"], "the userinfo shape changed");
+
+        // POST works too — OIDC Core § 5.3.1.
+        using var posted = await browser.PostFormAsync(IdentityHostOpenIddict.UserInfoPath, new Dictionary<string, string>(StringComparer.Ordinal), Ct);
+
+        posted.StatusCode.ShouldBe(HttpStatusCode.OK, await posted.Content.ReadAsStringAsync(Ct));
+
+        // ── The session dies: the JWT has minutes left, and /userinfo says invalid_token anyway.
+        //    That is the one thing this endpoint knows that the token does not.
+        var tokenSessionId = Guid.ParseExact(access.GetProperty(AccessTokenClaims.SessionId).GetString()!, "N");
+
+        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId)).RevokeAsync(RevocationReason.AdminAction))
+            .IsSuccess.ShouldBeTrue();
+
+        using var afterRevoke = await browser.GetAsync(IdentityHostOpenIddict.UserInfoPath, Ct);
+
+        afterRevoke.StatusCode.ShouldBe(HttpStatusCode.Unauthorized, "a revoked session still answered /userinfo");
+        afterRevoke.Headers.WwwAuthenticate.ToString().ShouldContain("invalid_token");
+
+        // A token this server did not sign is OpenIddict's to refuse, before the passthrough.
+        browser.Bearer = accessToken[..^4] + "AAAA";
+
+        using var forged = await browser.GetAsync(IdentityHostOpenIddict.UserInfoPath, Ct);
+
+        forged.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ATenantClientNeedsConsentAndGetsACodeOnceItIsGiven() {
+        // A client registered IN the tenant — resolved through its index, not the static list — is
+        // not consent-free. The person is sent to the consent page; the page reads what to render
+        // from /api/consent and posts the answer back to /authorize; deny is access_denied to the
+        // client, allow is a code, and the allowance is on record for next time.
+        using var browser = await SignInAsync();
+        var (verifier, challenge) = BrowserClient.Pkce();
+        var authorize = AuthorizePath(challenge, "s-consent", tenant: IdentityHostFixture.Slug, redirectUri: IdentityHostFixture.TenantPublicClientRedirectUri, clientId: IdentityHostFixture.TenantPublicClient);
+
+        // ── 1. Nothing on record: to the consent page, with the request as the return URL. ─────
+        using var asked = await browser.GetAsync(authorize, Ct);
+
+        asked.StatusCode.ShouldBe(HttpStatusCode.Redirect, await asked.Content.ReadAsStringAsync(Ct));
+
+        var consentPage = BrowserClient.Location(asked);
+
+        consentPage.GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath);
+        BrowserClient.Query(consentPage)["returnUrl"].ShouldBe(authorize);
+
+        // ── 2. What the page renders: the REGISTERED name, and the scopes. ─────────────────────
+        using var described = await browser.GetAsync("/api/consent?returnUrl=" + Uri.EscapeDataString(authorize), Ct);
+
+        var page = await BrowserClient.JsonAsync(described, Ct);
+
+        described.StatusCode.ShouldBe(HttpStatusCode.OK, page.GetRawText());
+        page.GetProperty("ready").GetBoolean().ShouldBeTrue(page.GetRawText());
+        page.GetProperty("clientName").GetString().ShouldBe(IdentityHostFixture.TenantPublicClientName);
+        page.GetProperty("scopes").EnumerateArray().Select(x => x.GetString()).ShouldBe(Scope.Split(' '));
+        page.GetProperty("returnUrl").GetString().ShouldBe(authorize);
+
+        // A request /authorize would refuse is not described either — the page renders nothing for
+        // a redirect URI the registration does not carry, so a phisher's link has no page.
+        using var refusedPage = await browser.GetAsync("/api/consent?returnUrl=" + Uri.EscapeDataString(authorize.Replace(Uri.EscapeDataString(IdentityHostFixture.TenantPublicClientRedirectUri), Uri.EscapeDataString("https://evil.example/cb"), StringComparison.Ordinal)), Ct);
+
+        (await BrowserClient.JsonAsync(refusedPage, Ct)).GetProperty("ready").GetBoolean().ShouldBeFalse();
+
+        // ── 3. consent=allow anywhere but the page's POST is no answer. ────────────────────────
+        using var linked = await browser.GetAsync(authorize + "&consent=allow", Ct);
+
+        BrowserClient.Location(linked).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath, "a GET link pre-filled consent");
+
+        var form = BrowserClient.Query(new Uri("http://x" + authorize));
+
+        browser.Origin = "http://evil.example";
+
+        using var foreignPost = await browser.PostFormAsync(IdentityHostOpenIddict.AuthorizationPath, WithConsent(form, "allow"), Ct);
+
+        BrowserClient.Location(foreignPost).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath, "a form on another origin granted consent with the person's cookie");
+
+        // ── 4. Deny, from the page: access_denied at the registered redirect URI, state echoed. ─
+        browser.Origin = IdentityHostFixture.SignInPageBaseUri;
+
+        using var denied = await browser.PostFormAsync(IdentityHostOpenIddict.AuthorizationPath, WithConsent(form, "deny"), Ct);
+
+        denied.StatusCode.ShouldBe(HttpStatusCode.Redirect, await denied.Content.ReadAsStringAsync(Ct));
+
+        var deniedAt = BrowserClient.Location(denied);
+
+        deniedAt.GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.TenantPublicClientRedirectUri);
+        BrowserClient.Query(deniedAt)["error"].ShouldBe("access_denied");
+        BrowserClient.Query(deniedAt)["state"].ShouldBe("s-consent");
+        BrowserClient.Query(deniedAt).ShouldNotContainKey("code");
+
+        // ── 5. Allow, from the page: the code, exchanged by the tenant client. ─────────────────
+        using var allowed = await browser.PostFormAsync(IdentityHostOpenIddict.AuthorizationPath, WithConsent(form, "allow"), Ct);
+
+        allowed.StatusCode.ShouldBe(HttpStatusCode.Redirect, await allowed.Content.ReadAsStringAsync(Ct));
+
+        var callback = BrowserClient.Location(allowed);
+
+        callback.GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.TenantPublicClientRedirectUri);
+        BrowserClient.Query(callback)["state"].ShouldBe("s-consent");
+
+        using var client = new BrowserClient(fixture.BaseAddress, "https://acme.example");
+        using var exchanged = await Exchange(client, BrowserClient.Query(callback)["code"], verifier, redirectUri: IdentityHostFixture.TenantPublicClientRedirectUri, clientId: IdentityHostFixture.TenantPublicClient);
+
+        var tokens = await BrowserClient.JsonAsync(exchanged, Ct);
+
+        exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, tokens.GetRawText());
+        BrowserClient.Payload(tokens.GetProperty("access_token").GetString()!).GetProperty(AccessTokenClaims.AuthorizedParty).GetString().ShouldBe(IdentityHostFixture.TenantPublicClient);
+        tokens.TryGetProperty("refresh_token", out _).ShouldBeTrue("a tenant client is not the browser client, so its refresh token stays in the body");
+        BrowserClient.SetCookieHeader(exchanged, RefreshCookie.Name).ShouldBeNull();
+
+        // ── 6. On record: the next request mints without asking; prompt=consent asks again. ───
+        var (_, challenge2) = BrowserClient.Pkce();
+
+        using var again = await browser.GetAsync(AuthorizePath(challenge2, "s-consent-2", tenant: IdentityHostFixture.Slug, redirectUri: IdentityHostFixture.TenantPublicClientRedirectUri, clientId: IdentityHostFixture.TenantPublicClient), Ct);
+
+        BrowserClient.Location(again).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.TenantPublicClientRedirectUri, "a consent on record still asked");
+        BrowserClient.Query(BrowserClient.Location(again)).ShouldContainKey("code");
+
+        using var reprompted = await browser.GetAsync(AuthorizePath(challenge2, "s-consent-3", tenant: IdentityHostFixture.Slug, redirectUri: IdentityHostFixture.TenantPublicClientRedirectUri, clientId: IdentityHostFixture.TenantPublicClient) + "&prompt=consent", Ct);
+
+        BrowserClient.Location(reprompted).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath, "prompt=consent did not ask");
+
+        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, signedInUserId, IdentityHostFixture.TenantPublicClient)).GetAsync())
+            .GetValueOrThrow().Scopes.ShouldBe(Scope.Split(' '));
+    }
+
+    [Fact]
+    public async Task AConfidentialClientMustPresentItsSecretOnTheCodeAndRefreshGrants() {
+        // ⚠ The review's low finding, closed with the consent page because that is what made a
+        // tenant client's code mintable at all: a confidential client's redirect URI may be a
+        // server nobody else can read, so a code lifted from a log must still be useless without
+        // the secret — RFC 6749 § 4.1.3 and § 6. One sentence for missing, wrong and unreadable.
+        using var browser = await SignInAsync();
+        var (verifier, challenge) = BrowserClient.Pkce();
+        var authorize = AuthorizePath(challenge, "s-secret", tenant: IdentityHostFixture.Slug, redirectUri: IdentityHostFixture.TenantConfidentialClientRedirectUri, clientId: IdentityHostFixture.TenantConfidentialClient);
+
+        using var asked = await browser.GetAsync(authorize, Ct);
+
+        BrowserClient.Location(asked).GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath);
+
+        browser.Origin = IdentityHostFixture.SignInPageBaseUri;
+
+        using var allowed = await browser.PostFormAsync(IdentityHostOpenIddict.AuthorizationPath, WithConsent(BrowserClient.Query(new Uri("http://x" + authorize)), "allow"), Ct);
+
+        var code = BrowserClient.Query(BrowserClient.Location(allowed))["code"];
+
+        using var server = new BrowserClient(fixture.BaseAddress, "https://acme.example");
+
+        // No secret, a wrong secret: invalid_client, the same sentence, and the code is NOT burnt —
+        // the check runs at validation, before TokenApi consumes anything, so a thief's guesses
+        // cost the client nothing.
+        await ShouldRefuseClient(Exchange(server, code, verifier, redirectUri: IdentityHostFixture.TenantConfidentialClientRedirectUri, clientId: IdentityHostFixture.TenantConfidentialClient), "a confidential client exchanged a code with no secret");
+        await ShouldRefuseClient(Exchange(server, code, verifier, redirectUri: IdentityHostFixture.TenantConfidentialClientRedirectUri, clientId: IdentityHostFixture.TenantConfidentialClient, clientSecret: "not-it"), "a confidential client exchanged a code with a wrong secret");
+
+        using var exchanged = await Exchange(server, code, verifier, redirectUri: IdentityHostFixture.TenantConfidentialClientRedirectUri, clientId: IdentityHostFixture.TenantConfidentialClient, clientSecret: IdentityHostFixture.TenantConfidentialClientSecret);
+
+        var tokens = await BrowserClient.JsonAsync(exchanged, Ct);
+
+        exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, tokens.GetRawText());
+
+        var refreshToken = tokens.GetProperty("refresh_token").GetString()!;
+
+        // The refresh grant too, and a refused refresh rotates nothing — the honest one afterwards
+        // still works.
+        await ShouldRefuseClient(RefreshInBody(server, refreshToken, IdentityHostFixture.TenantConfidentialClient), "a confidential client refreshed with no secret");
+        await ShouldRefuseClient(RefreshInBody(server, refreshToken, IdentityHostFixture.TenantConfidentialClient, clientSecret: "not-it"), "a confidential client refreshed with a wrong secret");
+
+        using var refreshed = await RefreshInBody(server, refreshToken, IdentityHostFixture.TenantConfidentialClient, clientSecret: IdentityHostFixture.TenantConfidentialClientSecret);
+
+        refreshed.StatusCode.ShouldBe(HttpStatusCode.OK, await refreshed.Content.ReadAsStringAsync(Ct));
+
+        // And a PUBLIC client that sends a secret is misconfigured in a way worth refusing.
+        var (verifier2, challenge2) = BrowserClient.Pkce();
+        var publicCode = await CodeAsync(browser, challenge2, "s-public-secret");
+
+        await ShouldRefuseClient(Exchange(browser, publicCode, verifier2, clientSecret: "a-spa-with-a-secret"), "a public client presenting a secret was accepted", "A public client must not send a client_secret.");
+    }
+
+    [Fact]
+    public async Task ThePerIpLimitOnSignUpBeginTripsAndRecovers() {
+        // ⚠ Per IP, so the answer depends on nothing in the body: a made-up address and a real one
+        // are counted alike and refused alike, which is the uniform-failure property kept under
+        // the limit — IdentityRateLimits' remarks. Every request here comes from 127.0.0.1.
+        using var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+        var bucket = IdentityRateLimits.SignUpBegin;
+
+        string? firstBody = null;
+
+        for (var i = 0; i < bucket.Limit; i++) {
+            using var admitted = await browser.PostJsonAsync("/api/signup/begin", new { email = i % 2 == 0 ? IdentityHostFixture.Email : $"nobody-{i}@grants.example", returnUrl = "/" }, Ct);
+
+            admitted.StatusCode.ShouldBe(HttpStatusCode.OK, $"request {i + 1} of {bucket.Limit} was refused inside the window");
+
+            var body = await admitted.Content.ReadAsStringAsync(Ct);
+
+            (firstBody ??= body).ShouldBe(body, "the answer inside the limit differed between a real address and a made-up one");
+        }
+
+        // The (limit + 1)th: 429, Retry-After, one sentence — for a real address and for garbage.
+        foreach (var email in new[] { IdentityHostFixture.Email, "not-an-address" }) {
+            using var refused = await browser.PostJsonAsync("/api/signup/begin", new { email, returnUrl = "/" }, Ct);
+
+            refused.StatusCode.ShouldBe((HttpStatusCode)429);
+            refused.Headers.RetryAfter.ShouldNotBeNull();
+            refused.Headers.RetryAfter!.Delta!.Value.ShouldBeGreaterThan(TimeSpan.Zero);
+            refused.Headers.RetryAfter.Delta.Value.ShouldBeLessThanOrEqualTo(bucket.Window);
+
+            var body = await BrowserClient.JsonAsync(refused, Ct);
+
+            body.GetProperty("message").GetString().ShouldBe(IdentityRateLimits.RefusedMessage);
+            body.GetProperty("retryAfterSeconds").GetInt32().ShouldBe((int)Math.Ceiling(refused.Headers.RetryAfter.Delta.Value.TotalSeconds));
+            BrowserClient.SetCookieHeader(refused, "__Host-cyc-signup").ShouldBeNull("a refused begin issued a sign-up ticket");
+        }
+
+        // ── Recovers: the window slides, and the oldest request leaves it. ─────────────────────
+        fixture.Clock.Advance(bucket.Window + TimeSpan.FromSeconds(1));
+
+        using var recovered = await browser.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+
+        recovered.StatusCode.ShouldBe(HttpStatusCode.OK, "the limit did not recover once the window passed");
+        (await recovered.Content.ReadAsStringAsync(Ct)).ShouldBe(firstBody);
+    }
+
+    [Fact]
+    public async Task ThePerIpLimitOnCodeVerifyTripsAcrossSignUpsAndRecovers() {
+        // The grain caps guesses per code; this bucket caps them per caller across codes, so a
+        // caller cannot buy more guesses by opening more sign-ups. A call with no ticket is the
+        // cheapest guess there is — a body-less 401 — and it is counted like any other.
+        using var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+        var bucket = IdentityRateLimits.CodeVerify;
+
+        // Sign-up is closed on this fixture, so each guess is the closed sentence in a 200 — counted
+        // all the same, because the filter runs before the handler reads anything.
+        for (var i = 0; i < bucket.Limit; i++) {
+            using var counted = await browser.PostJsonAsync("/api/signup/verify", new { code = "000000" }, Ct);
+
+            counted.StatusCode.ShouldBe(HttpStatusCode.OK, $"guess {i + 1} of {bucket.Limit} was refused inside the window");
+        }
+
+        using var refused = await browser.PostJsonAsync("/api/signup/verify", new { code = "000000" }, Ct);
+
+        refused.StatusCode.ShouldBe((HttpStatusCode)429);
+        (await BrowserClient.JsonAsync(refused, Ct)).GetProperty("message").GetString().ShouldBe(IdentityRateLimits.RefusedMessage);
+
+        // ⚠ One bucket for every code-verify endpoint: the sign-in OTP endpoint is full too, for
+        // this address, though it was never called — that is what "across codes" means.
+        using var otp = await browser.PostJsonAsync("/api/signin/otp", new { code = "000000", returnUrl = "/" }, Ct);
+
+        otp.StatusCode.ShouldBe(HttpStatusCode.Unauthorized, "an anonymous caller is a 401 before it is counted — filters run after authorization");
+
+        fixture.Clock.Advance(bucket.Window + TimeSpan.FromSeconds(1));
+
+        using var recovered = await browser.PostJsonAsync("/api/signup/verify", new { code = "000000" }, Ct);
+
+        recovered.StatusCode.ShouldBe(HttpStatusCode.OK, "the limit did not recover once the window passed");
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>A tab on the portal's origin, signed in with the password and the delivered code.</summary>
+    /// <summary>The request's pairs as the consent page posts them back, plus its answer.</summary>
+    static Dictionary<string, string> WithConsent(Dictionary<string, string> request, string answer) =>
+        new(request, StringComparer.Ordinal) { [AuthorizeApi.ConsentParameter] = answer };
+
+    /// <summary>A body-borne refresh — the CLI's and a tenant client's shape.</summary>
+    static Task<HttpResponseMessage> RefreshInBody(BrowserClient client, string refreshToken, string clientId, string? clientSecret = null) {
+        var form = new Dictionary<string, string>(StringComparer.Ordinal) {
+            ["grant_type"] = "refresh_token",
+            ["client_id"] = clientId,
+            ["refresh_token"] = refreshToken
+        };
+
+        if (clientSecret is not null) {
+            form["client_secret"] = clientSecret;
+        }
+
+        return client.PostFormAsync(IdentityHostOpenIddict.TokenPath, form, Ct);
+    }
+
+    static async Task ShouldRefuseClient(Task<HttpResponseMessage> pending, string because, string description = DegradedModeHandlers.ValidateTokenRequest.ClientNotAuthenticated) {
+        using var response = await pending;
+        var body = await response.Content.ReadAsStringAsync(Ct);
+
+        // RFC 6749 § 5.2: invalid_client MAY be a 401, and OpenIddict makes it one.
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized, because + ": " + body);
+
+        var json = JsonDocument.Parse(body).RootElement;
+
+        json.GetProperty("error").GetString().ShouldBe("invalid_client", because);
+        json.GetProperty("error_description").GetString().ShouldBe(description, because);
+    }
+
+    /// <summary>The person the last <see cref="SignInAsync" /> signed in, and their address.</summary>
+    Guid signedInUserId;
+
+    /// <summary>
+    ///     A tab on the portal's origin, signed in with the password and the delivered code — as a
+    ///     fresh person each time, for the reason <c>IdentityHostFixture.CreatePersonAsync</c> gives.
+    ///     <see cref="signedInUserId" /> says who.
+    /// </summary>
     async Task<BrowserClient> SignInAsync() {
         var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.PortalOrigin);
+        var email = $"person-{Guid.NewGuid():N}@grants.example";
+
+        signedInUserId = await fixture.CreatePersonAsync(email);
 
         using var password = await browser.PostJsonAsync(
             "/api/signin/password",
-            new { email = IdentityHostFixture.Email, password = IdentityHostFixture.Password, returnUrl = "/", tenant = IdentityHostFixture.Slug },
+            new { email, password = IdentityHostFixture.Password, returnUrl = "/", tenant = IdentityHostFixture.Slug },
             Ct
         );
 
@@ -587,7 +988,8 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         string code,
         string? verifier,
         string redirectUri = IdentityHostFixture.PortalRedirectUri,
-        string clientId = FirstPartyClients.Portal
+        string clientId = FirstPartyClients.Portal,
+        string? clientSecret = null
     ) {
         var form = new Dictionary<string, string>(StringComparer.Ordinal) {
             ["grant_type"] = "authorization_code",
@@ -598,6 +1000,10 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
 
         if (verifier is not null) {
             form["code_verifier"] = verifier;
+        }
+
+        if (clientSecret is not null) {
+            form["client_secret"] = clientSecret;
         }
 
         return browser.PostFormAsync(IdentityHostOpenIddict.TokenPath, form, Ct);
@@ -611,10 +1017,10 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         JsonDocument.Parse(body).RootElement.GetProperty("error").GetString().ShouldBe(error, because);
     }
 
-    static string AuthorizePath(string challenge, string state, string tenant, string redirectUri = IdentityHostFixture.PortalRedirectUri) =>
+    static string AuthorizePath(string challenge, string state, string tenant, string redirectUri = IdentityHostFixture.PortalRedirectUri, string clientId = FirstPartyClients.Portal) =>
         IdentityHostOpenIddict.AuthorizationPath
         + "?response_type=code"
-        + "&client_id=" + FirstPartyClients.Portal
+        + "&client_id=" + clientId
         + "&redirect_uri=" + Uri.EscapeDataString(redirectUri)
         + "&scope=" + Uri.EscapeDataString(Scope)
         + "&state=" + state

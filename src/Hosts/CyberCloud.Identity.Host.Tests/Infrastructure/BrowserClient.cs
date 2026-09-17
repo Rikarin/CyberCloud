@@ -43,6 +43,12 @@ public sealed class BrowserClient : IDisposable {
     /// <summary>The origin every request claims to come from.</summary>
     public string Origin { get; set; }
 
+    /// <summary>
+    ///     An access token to send as <c>Authorization: Bearer</c> on every request, or
+    ///     <see langword="null" /> for none — the portal calling <c>/userinfo</c>.
+    /// </summary>
+    public string? Bearer { get; set; }
+
     /// <summary>The cookies the tab holds, by name.</summary>
     public IReadOnlyDictionary<string, string> Cookies => jar;
 
@@ -89,6 +95,10 @@ public sealed class BrowserClient : IDisposable {
         }
 
         request.Headers.Add("Origin", Origin);
+
+        if (Bearer is { } bearer) {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        }
 
         var response = await http.SendAsync(request, cancellationToken);
 

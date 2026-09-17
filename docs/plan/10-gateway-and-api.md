@@ -203,6 +203,15 @@ already understands those headers.
 instead** (connections per tenant, streams per connection). Counting a 30-second long-poll as one
 request against a 5-minute window is how you accidentally rate-limit your own portal.
 
+⚠ **The per-IP row's rationale names endpoints the identity host serves, and that host counts them
+now.** Sign-in and token are not on this origin ([§ Request pipeline](#request-pipeline) puts them on
+`CyberCloud.Identity.Host`), so on this table the row reaches only the anonymous routes of
+[§ Shape](#shape). The sliding-window counters behind every bucket here moved to
+`CyberCloud.ServiceDefaults.RateLimiting` (#94) so that host could count through the same window
+arithmetic with its own buckets — [11 § Credentials](11-identity.md#credentials) says which endpoints
+and which numbers. One counter implementation, two hosts' worth of buckets, no second window that
+resets on a boundary.
+
 ## API versioning
 
 `?api-version=2026-08-01`, required, on every request. Missing → `400` naming the current version.

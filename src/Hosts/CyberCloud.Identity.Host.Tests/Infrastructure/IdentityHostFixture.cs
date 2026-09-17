@@ -2,6 +2,7 @@ using CyberCloud.Authorization;
 using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
+using CyberCloud.Core.Time;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.ServiceDefaults;
@@ -15,6 +16,8 @@ using Orleans.Multitenant;
 using Orleans.TestingHost;
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Volo.Abp;
 
 namespace CyberCloud.Identity.Host.Tests.Infrastructure;
@@ -54,6 +57,24 @@ namespace CyberCloud.Identity.Host.Tests.Infrastructure;
 ///         read the code a sign-in's second factor sent — the same seam a deployment wires over
 ///         Communication and the development run wires to the silo console.
 ///     </para>
+///     <para>
+///         Two tenant-registered clients live in the tenant beside the person, created the way a
+///         tenant administrator's registration would create them — <c>IApplicationGrain.CreateAsync</c>,
+///         which claims the client index: <see cref="TenantPublicClient" />, a public client with
+///         PKCE and nothing else, and <see cref="TenantConfidentialClient" />, whose secret lives
+///         behind a <c>SecretRef</c> that <see cref="DictionarySecrets" /> — the host's
+///         <c>IClientSecretSeam</c> here, registered the way a deployment registers its vault
+///         adapter — answers for. Both exist so the consent page, the code store and the secret
+///         check can be driven for a client that is not the platform's own.
+///     </para>
+///     <para>
+///         ⚠ The host reads its clock through <see cref="Clock" />, a <see cref="ShiftableClock" />
+///         that follows the wall clock plus an offset a test may move forward. It exists for the
+///         per-IP rate limit's "recovers" half: the window is minutes long and a test cannot wait
+///         it out, so it advances the clock the counters read. Forward only, and shared by every
+///         suite in the collection — a test that shifts it leaves it shifted, which nothing here
+///         minds because nothing compares the host's clock to the silo's.
+///     </para>
 /// </remarks>
 public sealed class IdentityHostFixture : IAsyncLifetime {
     /// <summary>The one tenant in the directory.</summary>
@@ -86,11 +107,35 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
     /// <summary>The portal's redirect URI, from the development default.</summary>
     public const string PortalRedirectUri = "http://localhost:4200/auth/callback";
 
+    /// <summary>A tenant-registered public client — a third party's dashboard, say.</summary>
+    public const string TenantPublicClient = "acme-dashboard";
+
+    /// <summary>What the consent page shows for <see cref="TenantPublicClient" />.</summary>
+    public const string TenantPublicClientName = "Acme dashboard";
+
+    /// <summary>Where <see cref="TenantPublicClient" /> receives its codes.</summary>
+    public const string TenantPublicClientRedirectUri = "https://acme.example/cb";
+
+    /// <summary>A tenant-registered confidential client — a third party's server, say.</summary>
+    public const string TenantConfidentialClient = "acme-server";
+
+    /// <summary>Where <see cref="TenantConfidentialClient" /> receives its codes.</summary>
+    public const string TenantConfidentialClientRedirectUri = "https://acme.example/server/cb";
+
+    /// <summary>The confidential client's secret, as <see cref="DictionarySecrets" /> holds it.</summary>
+    public const string TenantConfidentialClientSecret = "acme-server-secret-7c1e";
+
+    /// <summary>The vault handle the confidential client's registration names.</summary>
+    public static SecretRef TenantConfidentialClientSecretRef { get; } = new() { Path = "tenants/grants-tests/apps/acme-server", Field = "client_secret" };
+
     TestCluster cluster = null!;
     WebApplication host = null!;
 
     /// <summary>The person.</summary>
     public Guid UserId { get; private set; }
+
+    /// <summary>The host's clock — see the type's remarks.</summary>
+    public ShiftableClock Clock { get; } = new();
 
     /// <summary>Every code the silo delivered, newest last.</summary>
     public CapturingOtpDelivery Otp { get; } = new();
@@ -124,6 +169,7 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
         await RegisterTenantAsync(Tenant, Slug);
         await RegisterTenantAsync(OtherTenant, OtherSlug);
         UserId = await CreatePersonAsync();
+        await CreateTenantClientsAsync();
 
         host = await StartHostAsync();
     }
@@ -177,7 +223,12 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
             // is what verifies. Both are cheapened for the reason CyberCloud.Identity.Tests cheapens
             // theirs: the cost parameters are not what these suites are about, and Argon2id's defaults
             // would add seconds to every sign-in.
-            services => services.AddSingleton<IPasswordHasher>(new Argon2idPasswordHasher(CheapArgon2))
+            services => {
+                services.AddSingleton<IPasswordHasher>(new Argon2idPasswordHasher(CheapArgon2));
+                // What a deployment registers here: its vault adapter. This one knows one secret.
+                services.AddSingleton<IClientSecretSeam>(new DictionarySecrets(TenantConfidentialClientSecretRef, TenantConfidentialClientSecret));
+                services.AddSingleton<IClock>(Clock);
+            }
         );
 
         await started.Services.GetRequiredService<IAbpApplicationWithExternalServiceProvider>().InitializeAsync(started.Services);
@@ -197,19 +248,70 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
         registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
     }
 
-    async Task<Guid> CreatePersonAsync() {
-        var userId = Guid.NewGuid();
-        var index = For(Tenant).GetGrain<IEmailIndexGrain>(GrainKeys.EmailIndex(Tenant, Email));
+    Task<Guid> CreatePersonAsync() => CreatePersonAsync(Email);
 
-        (await index.TryClaimAsync(Email, userId)).IsSuccess.ShouldBeTrue();
+    /// <summary>
+    ///     Creates another person in the tenant, with <see cref="Password" /> and
+    ///     <see cref="DisplayName" />, the way sign-up does — the index claim, the user, the
+    ///     confirmation, the credential.
+    /// </summary>
+    /// <param name="email">A fresh address. Two people cannot share one in a tenant.</param>
+    /// <remarks>
+    ///     ⚠ For a suite that signs in more than <c>OtpPolicy.MaxIssuesPerWindow</c> times: the grain
+    ///     caps delivered codes per person per window, so the fifth sign-in of one person inside
+    ///     fifteen minutes gets no fresh code and its second factor fails uniformly. Each sign-in
+    ///     that needs a code signs in somebody new.
+    /// </remarks>
+    public async Task<Guid> CreatePersonAsync(string email) {
+        var userId = Guid.NewGuid();
+        var index = For(Tenant).GetGrain<IEmailIndexGrain>(GrainKeys.EmailIndex(Tenant, email));
+
+        (await index.TryClaimAsync(email, userId)).IsSuccess.ShouldBeTrue();
 
         var user = For(Tenant).GetGrain<IUserGrain>(GrainKeys.User(userId));
 
-        (await user.CreateAsync(Email, DisplayName, UserStatus.Active)).IsSuccess.ShouldBeTrue();
+        (await user.CreateAsync(email, DisplayName, UserStatus.Active)).IsSuccess.ShouldBeTrue();
         (await index.ConfirmAsync(userId)).IsSuccess.ShouldBeTrue();
         (await user.SetPasswordAsync(Password)).IsSuccess.ShouldBeTrue();
 
         return userId;
+    }
+
+    async Task CreateTenantClientsAsync() {
+        var created = await For(Tenant)
+            .GetGrain<IApplicationGrain>(GrainKeys.Application(Guid.NewGuid()))
+            .CreateAsync(
+                new ApplicationRegistration {
+                    ApplicationId = Guid.NewGuid(),
+                    TenantId = Tenant,
+                    ClientId = TenantPublicClient,
+                    DisplayName = TenantPublicClientName,
+                    RedirectUris = [TenantPublicClientRedirectUri],
+                    AllowedGrants = [GrantType.AuthorizationCode, GrantType.RefreshToken],
+                    AllowedScopes = ["openid", "profile", "offline_access", "cyc.api"],
+                    IsPublicClient = true
+                }
+            );
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        var confidential = await For(Tenant)
+            .GetGrain<IApplicationGrain>(GrainKeys.Application(Guid.NewGuid()))
+            .CreateAsync(
+                new ApplicationRegistration {
+                    ApplicationId = Guid.NewGuid(),
+                    TenantId = Tenant,
+                    ClientId = TenantConfidentialClient,
+                    DisplayName = "Acme server",
+                    RedirectUris = [TenantConfidentialClientRedirectUri],
+                    AllowedGrants = [GrantType.AuthorizationCode, GrantType.RefreshToken],
+                    AllowedScopes = ["openid", "profile", "offline_access", "cyc.api"],
+                    IsPublicClient = false,
+                    ClientSecretRef = TenantConfidentialClientSecretRef
+                }
+            );
+
+        confidential.IsSuccess.ShouldBeTrue(confidential.Error?.Message);
     }
 
     /// <summary>Cheap Argon2id, for the reason <c>CyberCloud.Identity.Tests</c> gives.</summary>
@@ -222,6 +324,11 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
         public void Configure(ISiloBuilder silo) {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
+
+            // The code store clears itself through a reminder, and RegisterOrUpdateReminder throws —
+            // inside the exchange, as a 500 — on a silo with no reminder service. The production silo
+            // has UseRedisReminderService; this is its in-memory stand-in.
+            silo.UseInMemoryReminderService();
 
             silo.ConfigureServices(services => {
                     // FIRST, so the module's TryAdd keeps them.
@@ -253,6 +360,41 @@ public sealed class CapturingOtpDelivery : IOtpDeliverySeam {
 
         return Task.FromResult(Result.Success);
     }
+}
+
+/// <summary>
+///     The wall clock plus an offset a test moves forward — what the host reads as <see cref="IClock" />.
+/// </summary>
+public sealed class ShiftableClock : IClock {
+    TimeSpan offset;
+
+    /// <inheritdoc />
+    public DateTimeOffset UtcNow => DateTimeOffset.UtcNow + offset;
+
+    /// <summary>Moves the host's clock forward by <paramref name="by" />. Forward only.</summary>
+    /// <param name="by">How far.</param>
+    public void Advance(TimeSpan by) {
+        if (by < TimeSpan.Zero) {
+            throw new ArgumentOutOfRangeException(nameof(by), "The host's clock moves forward only.");
+        }
+
+        offset += by;
+    }
+}
+
+/// <summary>
+///     An <see cref="IClientSecretSeam" /> holding one secret behind one handle — what a deployment's
+///     vault adapter answers for a registered confidential client, compared in constant time.
+/// </summary>
+public sealed class DictionarySecrets(SecretRef known, string secret) : IClientSecretSeam {
+    /// <inheritdoc />
+    public Task<Result<bool>> VerifyAsync(SecretRef reference, string presented, CancellationToken cancellationToken = default) =>
+        Task.FromResult(
+            Result<bool>.Success(
+                reference == known
+                && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(presented ?? string.Empty), Encoding.UTF8.GetBytes(secret))
+            )
+        );
 }
 
 /// <summary>The one collection every suite that needs the host joins.</summary>

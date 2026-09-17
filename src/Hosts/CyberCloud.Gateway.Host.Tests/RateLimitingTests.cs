@@ -1,5 +1,6 @@
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.RateLimiting;
+using CyberCloud.ServiceDefaults.RateLimiting;
 using CyberCloud.Gateway.Host.Routing;
 using CyberCloud.Gateway.Host.Tests.Infrastructure;
 using NSubstitute;

@@ -155,6 +155,9 @@ export default tseslint.config(
             // either breaks autofill rather than localising anything.
             'autocomplete',
             'inputmode',
+            // ⚠ `method="post"` on the consent page's native form (#94): an HTTP verb the browser
+            // reads, not copy. `action` is bound, so it is never a static string here.
+            'method',
             // ARIA whose value is a keyword, not prose.
             'aria-hidden',
             'aria-live',

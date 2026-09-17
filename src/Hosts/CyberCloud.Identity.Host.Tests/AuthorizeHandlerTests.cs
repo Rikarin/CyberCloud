@@ -44,7 +44,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     public async Task AFullyAuthenticatedCookieYieldsACodeForAFirstPartyClient() {
         var (cookie, session) = await SignedInAsync();
 
-        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, Ct);
+        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, cancellationToken: Ct);
 
         var code = decision.ShouldBeOfType<AuthorizeDecision.IssueCode>();
 
@@ -68,7 +68,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
         var described = (await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(session)).GetAsync()).GetValueOrThrow();
 
-        var code = (await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, Ct))
+        var code = (await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, cancellationToken: Ct))
             .ShouldBeOfType<AuthorizeDecision.IssueCode>();
 
         // ⚠ The grain's AuthenticatedAt, typed as an integer — OpenIddict refuses the sign-in
@@ -92,7 +92,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
             SignInOutcome.Success(fixture.UserId, session, AuthenticationMethod.Password, secondFactorRequired: true)
         );
 
-        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, pending, Path, Ct);
+        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, pending, Path, cancellationToken: Ct);
 
         var signIn = decision.ShouldBeOfType<AuthorizeDecision.SignIn>();
 
@@ -106,7 +106,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
         // The same person, the same live session — asked to authorize a request that resolved to a
         // tenant the cookie was not issued for.
-        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.OtherTenant, Portal, cookie, Path, Ct);
+        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.OtherTenant, Portal, cookie, Path, cancellationToken: Ct);
 
         decision.ShouldBeOfType<AuthorizeDecision.SignIn>();
     }
@@ -119,7 +119,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
         (await fixture.For(IdentityHostFixture.Tenant).GetGrain<ISessionGrain>(GrainKeys.Session(session)).RevokeAsync(RevocationReason.AdminAction))
             .IsSuccess.ShouldBeTrue();
 
-        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, Ct);
+        var decision = await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, cancellationToken: Ct);
 
         decision.ShouldBeOfType<AuthorizeDecision.SignIn>();
     }
@@ -128,7 +128,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     public async Task PromptNoneWithoutASessionIsLoginRequired() {
         var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
 
-        var decision = await Api.DecideAsync(Request(prompt: "none"), IdentityHostFixture.Tenant, Portal, anonymous, Path + "&prompt=none", Ct);
+        var decision = await Api.DecideAsync(Request(prompt: "none"), IdentityHostFixture.Tenant, Portal, anonymous, Path + "&prompt=none", cancellationToken: Ct);
 
         var refused = decision.ShouldBeOfType<AuthorizeDecision.Refuse>();
 
@@ -139,7 +139,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     public async Task PromptLoginSendsEvenASignedInPersonToSignIn() {
         var (cookie, _) = await SignedInAsync();
 
-        var decision = await Api.DecideAsync(Request(prompt: "login"), IdentityHostFixture.Tenant, Portal, cookie, Path + "&prompt=login", Ct);
+        var decision = await Api.DecideAsync(Request(prompt: "login"), IdentityHostFixture.Tenant, Portal, cookie, Path + "&prompt=login", cancellationToken: Ct);
 
         var signIn = decision.ShouldBeOfType<AuthorizeDecision.SignIn>();
 
@@ -210,22 +210,68 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
     [Fact]
     public async Task ATenantRegisteredClientCannotConsentFreeItsWayToACode() {
         var (cookie, _) = await SignedInAsync();
+        var clientId = "acme-dashboard-" + Guid.NewGuid().ToString("N")[..8];
 
         var thirdParty = new ApplicationRegistration {
             ApplicationId = Guid.NewGuid(),
             TenantId = IdentityHostFixture.Tenant,
-            ClientId = "acme-dashboard",
+            ClientId = clientId,
             RedirectUris = ["https://acme.example/cb"],
             AllowedGrants = [GrantType.AuthorizationCode],
             AllowedScopes = [.. FirstPartyClients.AllScopes],
             IsPublicClient = true
         };
 
-        var decision = await Api.DecideAsync(Request(clientId: "acme-dashboard"), IdentityHostFixture.Tenant, thirdParty, cookie, Path, Ct);
+        var request = Request(clientId: clientId);
+        var path = Path.Replace("client_id=cyc-portal", "client_id=" + clientId, StringComparison.Ordinal);
 
-        // Owed: the consent page. Until it exists, a third party is told so rather than handed a
-        // code the person never agreed to.
-        decision.ShouldBeOfType<AuthorizeDecision.Refuse>().Error.ShouldBe(OpenIddictConstants.Errors.ConsentRequired);
+        // ── 1. Nothing on record: the consent page, with this request as the return URL. ───────
+        var asked = await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct);
+
+        var consent = asked.ShouldBeOfType<AuthorizeDecision.Consent>();
+
+        consent.Location.ShouldStartWith(IdentityHostFixture.SignInPageBaseUri + AuthorizeApi.ConsentPagePath + "?returnUrl=");
+        Uri.UnescapeDataString(consent.Location.Split("returnUrl=")[1]).ShouldBe(path);
+
+        // ⚠ A consent=allow that arrived any way but the page's POST is no answer — the endpoint
+        // passes null for a GET, and null is what this call passes. prompt=none with nothing on
+        // record is consent_required, because that is what the client asked to be told.
+        (await Api.DecideAsync(Request(clientId: clientId, prompt: "none"), IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct))
+            .ShouldBeOfType<AuthorizeDecision.Refuse>()
+            .Error.ShouldBe(OpenIddictConstants.Errors.ConsentRequired);
+
+        // ── 2. Deny: access_denied to the client, nothing recorded. ────────────────────────────
+        var denied = await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, ConsentDecision.Deny, Ct);
+
+        denied.ShouldBeOfType<AuthorizeDecision.Refuse>().Error.ShouldBe(OpenIddictConstants.Errors.AccessDenied);
+        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId)).GetAsync())
+            .IsFailure.ShouldBeTrue("a denial was recorded as a grant");
+
+        // ── 3. Allow: the grant is recorded first and the code minted second. ──────────────────
+        var allowed = await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, ConsentDecision.Allow, Ct);
+
+        allowed.ShouldBeOfType<AuthorizeDecision.IssueCode>().Principal.GetPresenters().ShouldBe([clientId]);
+
+        var recorded = await fixture.For(IdentityHostFixture.Tenant).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId)).GetAsync();
+
+        recorded.GetValueOrThrow().Scopes.ShouldBe(["openid", "profile", "offline_access", "cyc.api"]);
+
+        // ── 4. On record: the next request is consent-free; a wider one, or prompt=consent, asks. ─
+        (await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct))
+            .ShouldBeOfType<AuthorizeDecision.IssueCode>();
+
+        (await Api.DecideAsync(Request(clientId: clientId, prompt: "consent"), IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct))
+            .ShouldBeOfType<AuthorizeDecision.Consent>();
+
+        (await fixture.For(IdentityHostFixture.Tenant).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(IdentityHostFixture.Tenant, fixture.UserId, clientId)).RevokeAsync())
+            .IsSuccess.ShouldBeTrue();
+
+        (await Api.DecideAsync(request, IdentityHostFixture.Tenant, thirdParty, cookie, path, cancellationToken: Ct))
+            .ShouldBeOfType<AuthorizeDecision.Consent>("a revoked consent still minted a code");
+
+        // And the portal never sees any of this: consent-free by registration.
+        (await Api.DecideAsync(Request(), IdentityHostFixture.Tenant, Portal, cookie, Path, cancellationToken: Ct))
+            .ShouldBeOfType<AuthorizeDecision.IssueCode>();
     }
 
     // ── The validator ──────────────────────────────────────────────────────────────────────────

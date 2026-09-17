@@ -569,6 +569,88 @@ public class GrainKeysTests {
         Should.Throw<ArgumentException>(() => GrainKeys.ClientIndex(Tenant, clientId));
     }
 
+    // ── The two #94 shapes: the code store and the consent grant — docs/plan/11 § Protocol ────
+
+    [Fact]
+    public void TheAuthorizationCodeShapeIsCodeSlashId() {
+        // ⚠ Keyed by the code's jti and never by the code — GrainKeys.AuthorizationCode's remarks.
+        GrainKeys.AuthorizationCode(Resource).ShouldBe("code/0a1b2c3d4e5f40718293a4b5c6d7e8f9");
+
+        var parsed = GrainKeys.Parse(GrainKeys.AuthorizationCode(Resource)).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.AuthorizationCode);
+        parsed.Id.ShouldBe(Resource);
+        parsed.ToString().ShouldBe(GrainKeys.AuthorizationCode(Resource));
+
+        // The same GUID under every other two-segment prefix is a different key, and the D form is
+        // not accepted — the canonicity rule every other GUID shape is held to.
+        GrainKeys.AuthorizationCode(Resource).ShouldNotBe(GrainKeys.Session(Resource));
+        GrainKeys.Parse("code/" + Resource.ToString("D")).IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void AConsentGrantIsOneActivationPerPersonAndClientInOneTenant() {
+        var alice = Guid.Parse("a11ce000-0000-4000-8000-000000000001");
+        var bob = Guid.Parse("b0b00000-0000-4000-8000-000000000002");
+
+        var key = GrainKeys.ConsentGrant(Tenant, alice, "crm");
+
+        key.ShouldStartWith("consent/");
+        key.Length.ShouldBe("consent/".Length + GrainKeys.DigestLength);
+
+        // A different person, a different client, or the same pair in another tenant is another
+        // grant; the client id is compared byte for byte, as ClientIndex compares it.
+        key.ShouldNotBe(GrainKeys.ConsentGrant(Tenant, bob, "crm"));
+        key.ShouldNotBe(GrainKeys.ConsentGrant(Tenant, alice, "erp"));
+        key.ShouldNotBe(GrainKeys.ConsentGrant(Subscription, alice, "crm"));
+        key.ShouldNotBe(GrainKeys.ConsentGrant(Tenant, alice, "CRM"));
+        key.ShouldBe(GrainKeys.ConsentGrant(Tenant, alice, "crm"));
+    }
+
+    [Fact]
+    public void TheConsentGrantShapeRoundTripsToItsDigestAndRefusesAnythingElse() {
+        var key = GrainKeys.ConsentGrant(Tenant, Resource, "crm");
+
+        var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.ConsentGrant);
+        parsed.Digest.Length.ShouldBe(GrainKeys.DigestLength);
+        parsed.Id.ShouldBe(Guid.Empty);
+        parsed.ToString().ShouldBe(key);
+
+        // ⚠ The one two-segment shape whose payload is a digest: a GUID after `consent/` is not a
+        // key, and neither is upper-case hex or a digest of the wrong length.
+        GrainKeys.Parse("consent/" + Resource.ToString("N")).IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("consent/" + parsed.Digest.ToUpperInvariant()).IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("consent/" + parsed.Digest[..8]).IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("consent/" + parsed.Digest + "/extra").IsFailure.ShouldBeTrue();
+
+        // And a client id a key cannot carry throws here as it does at ClientIndex.
+        Should.Throw<ArgumentException>(() => GrainKeys.ConsentGrant(Tenant, Resource, "with\nnewline"));
+        Should.Throw<ArgumentException>(() => GrainKeys.ConsentGrant(Tenant, Resource, ""));
+    }
+
+    [Fact]
+    public void TheTwoNewShapesCollideWithNoneOfTheOthers() {
+        // The property the whole file is about, extended to the two #94 shapes: over the corpus, no
+        // string one of them mints is minted by any other factory, and both survive qualification.
+        foreach (var id in Corpus.ResourceIds(300, 9400)) {
+            var code = GrainKeys.AuthorizationCode(id.Id);
+            var consent = GrainKeys.ConsentGrant(id.TenantId, id.Id, id.Name);
+
+            GrainKeys.IsTenantQualificationSafe(code).ShouldBeTrue();
+            GrainKeys.IsTenantQualificationSafe(consent).ShouldBeTrue();
+
+            foreach (var other in Corpus.EveryGrainKeyShapeFor(id)) {
+                other.ShouldNotBe(code);
+                other.ShouldNotBe(consent);
+            }
+
+            GrainKeys.Parse(code).GetValueOrThrow().Kind.ShouldBe(GrainKeyKind.AuthorizationCode);
+            GrainKeys.Parse(consent).GetValueOrThrow().Kind.ShouldBe(GrainKeyKind.ConsentGrant);
+        }
+    }
+
     // ── The email index: hash(tenantId + normalized email), per tenant ────────────────────────
 
     [Fact]

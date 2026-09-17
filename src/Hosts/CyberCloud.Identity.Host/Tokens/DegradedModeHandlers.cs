@@ -1,11 +1,13 @@
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Api;
+using CyberCloud.Identity.SignIn;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
 using OpenIddict.Server.AspNetCore;
+using System.Globalization;
 using System.Security.Claims;
 using static OpenIddict.Server.OpenIddictServerEvents;
 
@@ -85,6 +87,7 @@ public static class DegradedModeHandlers {
         MoveRefreshTokenToCookie.Descriptor,
         ValidateEndSessionRequest.Descriptor,
         KeepAccessTokenToTheClosedSet.Descriptor,
+        StampAuthorizationCodeId.Descriptor,
         RefuseDeviceAuthorizationRequests.Descriptor,
         RefuseEndUserVerificationRequests.Descriptor,
         RefuseDeviceCodeStorage.GenerateDescriptor,
@@ -320,16 +323,47 @@ public static class DegradedModeHandlers {
     ///         exchange say otherwise would be letting it move a code between tenants.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>A confidential client authenticates on the code and refresh grants, and the
+    ///         check is here rather than in the passthrough.</b> RFC 6749 § 4.1.3 and § 6: a client
+    ///         that was issued credentials MUST authenticate at the token endpoint, and the reason
+    ///         is the code — a confidential client's redirect URI may be a server nobody but the
+    ///         client can read, so anyone who lifts a code from a log or a <c>Referer</c> should
+    ///         still be unable to exchange it without the secret. <see cref="ApplicationRegistration.ClientSecretRef" />
+    ///         is a vault handle and never the secret (docs/plan/11 § The object model), so the
+    ///         check goes through <see cref="IClientSecretSeam" /> — the same seam the
+    ///         client-credentials grant verifies a service principal through — and refuses with one
+    ///         <c>invalid_client</c> sentence whatever went wrong, so an unauthenticated caller does
+    ///         not learn whether the secret was wrong, missing or unreadable.
+    ///         <c>GrantsOverHttpTests.AConfidentialClientMustPresentItsSecretOnTheCodeAndRefreshGrants</c>.
+    ///         Landed with the consent page (#94), which is what made a tenant-registered client's
+    ///         code mintable at all.
+    ///     </para>
+    ///     <para>
     ///         ⚠ The grain calls — is the sign-in still live, rotate the chain — are not here but in
     ///         the passthrough (<c>IdentityEndpoints.MapToken</c> → <see cref="TokenApi" />), after
     ///         every check that could still refuse the request. A rotation followed by a refusal
     ///         would leave the client holding a retired generation, and its next honest refresh
-    ///         would read as a replay and revoke the chain.
+    ///         would read as a replay and revoke the chain. The secret check is the one exception
+    ///         that reads the vault: it is a read, not a rotation, and it has to happen before either.
     ///     </para>
     /// </remarks>
-    public sealed class ValidateTokenRequest(TokenApi api, IClientResolver clients, FirstPartyClients firstParty) : IOpenIddictServerHandler<ValidateTokenRequestContext> {
+    /// <param name="secrets">The vault seam a confidential client's secret is checked through.</param>
+    /// <param name="logger">Where the reason a confidential client was refused goes — the caller never sees it.</param>
+    public sealed class ValidateTokenRequest(
+        TokenApi api,
+        IClientResolver clients,
+        FirstPartyClients firstParty,
+        IClientSecretSeam secrets,
+        ILogger<ValidateTokenRequest> logger
+    ) : IOpenIddictServerHandler<ValidateTokenRequestContext> {
         /// <summary>The refusal, verbatim, for a browser client's request from an origin that is not its own.</summary>
         public const string OriginNotAllowed = "The request's origin is not allowed to use this client.";
+
+        /// <summary>
+        ///     The one refusal a confidential client gets when its secret is missing, wrong or
+        ///     unreadable — RFC 6749 § 5.2's <c>invalid_client</c>, and nothing more specific.
+        /// </summary>
+        public const string ClientNotAuthenticated = "The client could not be authenticated.";
 
         /// <summary>The registration.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
@@ -402,11 +436,45 @@ public static class DegradedModeHandlers {
                 return;
             }
 
-            // ⚠ A confidential client's secret is NOT verified here — owed with the consent page.
-            // Unreachable until then: every tenant-registered client is answered consent_required
-            // at /authorize (AuthorizeApi), so no code or refresh token is ever minted for one. The
-            // consent page must not land without the secret check landing beside it, or a
-            // confidential client's code would be exchangeable by anyone holding it.
+            // ⚠ A confidential client authenticates, or nothing else happens — see the type's remarks.
+            // Before the origin check and the grant check, because those two say what the request
+            // may do, and who is asking comes first. One sentence for every failure: the caller is
+            // unauthenticated, and "wrong secret" beside "no such secret" is an oracle.
+            if (!client.IsPublicClient) {
+                var grantName = context.Request.GrantType ?? string.Empty;
+
+                if (string.IsNullOrEmpty(context.Request.ClientSecret)) {
+                    RefuseClient(tenantId, grantName, "client-secret-missing");
+                    context.Reject(OpenIddictConstants.Errors.InvalidClient, ClientNotAuthenticated);
+
+                    return;
+                }
+
+                if (client.ClientSecretRef.IsEmpty) {
+                    RefuseClient(tenantId, grantName, "client-has-no-credential");
+                    context.Reject(OpenIddictConstants.Errors.InvalidClient, ClientNotAuthenticated);
+
+                    return;
+                }
+
+                var verified = await secrets.VerifyAsync(client.ClientSecretRef, context.Request.ClientSecret, context.CancellationToken);
+
+                if (verified.TryGetError(out var unavailable)) {
+                    // ⚠ Verbatim: this is the sentence naming the missing IClientSecretSeam
+                    // registration, and the log is the only place an operator will read it.
+                    RefuseClient(tenantId, grantName, unavailable.Message);
+                    context.Reject(OpenIddictConstants.Errors.InvalidClient, ClientNotAuthenticated);
+
+                    return;
+                }
+
+                if (!verified.GetValueOrThrow()) {
+                    RefuseClient(tenantId, grantName, "client-secret-rejected");
+                    context.Reject(OpenIddictConstants.Errors.InvalidClient, ClientNotAuthenticated);
+
+                    return;
+                }
+            }
 
             // ⚠ The browser client, from any origin but its own: refused before a grain is touched.
             // See the type's remarks — this is the write side of the cookie rule, and
@@ -431,6 +499,9 @@ public static class DegradedModeHandlers {
         bool IsFirstPartyOrigin(ValidateTokenRequestContext context) =>
             context.Transaction.GetHttpRequest() is { } http
             && firstParty.AllowedOrigins.Contains(http.Headers.Origin.ToString(), StringComparer.Ordinal);
+
+        void RefuseClient(Guid tenantId, string grantType, string reason) =>
+            IdentityLog.TokenRequestRefused(logger, tenantId, grantType, reason);
     }
 
     /// <summary>
@@ -645,6 +716,55 @@ public static class DegradedModeHandlers {
             || string.Equals(claim.Type, OpenIddictConstants.Claims.Private.Presenter, StringComparison.Ordinal)
             || (!claim.Type.StartsWith(OpenIddictConstants.Claims.Prefixes.Private, StringComparison.Ordinal)
                 && !AccessTokenClaims.Permitted.Contains(claim.Type));
+    }
+
+    // ── The authorization code's id ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Gives every authorization code a token id before it is signed, so the exchange can burn
+    ///     it in <c>IAuthorizationCodeGrain</c>. RFC 6749 § 4.1.2, docs/plan/11 § Protocol.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>In degraded mode a code has no id at all, and that is the whole reason this
+    ///         handler exists.</b> OpenIddict's <c>CreateTokenEntry</c> is what sets the token id,
+    ///         and it carries <c>RequireDegradedModeDisabled</c> — it writes the token store, which
+    ///         this host does not have. Its <c>AttachTokenMetadata</c> stamps a fresh <c>jti</c> on
+    ///         an <i>access</i> token and on nothing else. So a code minted by this server was a
+    ///         self-contained envelope with no name, and "has this code been exchanged" had nothing
+    ///         to key on. This handler sets <c>oi_tkn_id</c> on the code's principal; the JWT carries
+    ///         it, <c>ValidateIdentityModelToken</c> puts it back on the principal at the exchange,
+    ///         and <see cref="TokenApi.MintForCodeAsync" /> reads it with <c>GetTokenId()</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Before <c>AttachTokenSubject</c>, for the reason <see cref="KeepAccessTokenToTheClosedSet" />
+    ///         gives: that handler clones the principal into the security token descriptor, and a
+    ///         claim added afterwards is never signed. Only the code: the refresh token and the
+    ///         access token minted at the exchange are built from principals OpenIddict clones with
+    ///         <c>oi_tkn_id</c> excluded, so the id names one code and nothing downstream of it.
+    ///     </para>
+    /// </remarks>
+    public sealed class StampAuthorizationCodeId : IOpenIddictServerHandler<GenerateTokenContext> {
+        /// <summary>The registration — before the subject is cloned into the token descriptor.</summary>
+        public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
+            OpenIddictServerHandlerDescriptor.CreateBuilder<GenerateTokenContext>()
+                .UseSingletonHandler<StampAuthorizationCodeId>()
+                .SetOrder(OpenIddictServerHandlers.Protection.AttachTokenSubject.Descriptor.Order - 600)
+                .SetType(OpenIddictServerHandlerType.Custom)
+                .Build();
+
+        /// <inheritdoc />
+        public ValueTask HandleAsync(GenerateTokenContext context) {
+            ArgumentNullException.ThrowIfNull(context);
+
+            if (context.TokenType is OpenIddictConstants.TokenTypeIdentifiers.Private.AuthorizationCode
+                && context.Principal is { } principal
+                && string.IsNullOrEmpty(principal.GetTokenId())) {
+                principal.SetTokenId(Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
+            }
+
+            return default;
+        }
     }
 
     // ── The device flow, still owed ────────────────────────────────────────────────────────────

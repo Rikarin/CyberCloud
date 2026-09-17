@@ -450,6 +450,22 @@ public sealed class IdentityCluster : IAsyncLifetime {
     public IServicePrincipalGrain ServicePrincipal(Guid servicePrincipalId, Guid? tenant = null) =>
         For(tenant ?? Tenant).GetGrain<IServicePrincipalGrain>(GrainKeys.ServicePrincipal(servicePrincipalId));
 
+    /// <summary>The one-time-use record of an authorization code — <c>code/{codeId:N}</c>.</summary>
+    /// <param name="codeId">The code's <c>jti</c>.</param>
+    /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
+    public IAuthorizationCodeGrain AuthorizationCode(Guid codeId, Guid? tenant = null) =>
+        For(tenant ?? Tenant).GetGrain<IAuthorizationCodeGrain>(GrainKeys.AuthorizationCode(codeId));
+
+    /// <summary>A person's consent to one client — <c>consent/{digest}</c>.</summary>
+    /// <param name="userId">The person.</param>
+    /// <param name="clientId">The client.</param>
+    /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
+    public IConsentGrain Consent(Guid userId, string clientId, Guid? tenant = null) {
+        var id = tenant ?? Tenant;
+
+        return For(id).GetGrain<IConsentGrain>(GrainKeys.ConsentGrant(id, userId, clientId));
+    }
+
     /// <summary>A managed-identity grain.</summary>
     /// <param name="managedIdentityId">Which identity.</param>
     /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
@@ -546,6 +562,10 @@ public sealed class IdentityCluster : IAsyncLifetime {
         public void Configure(ISiloBuilder silo) {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
+
+            // AuthorizationCodeGrain registers a reminder at consumption, and RegisterOrUpdateReminder
+            // throws — late, inside the grain call — on a silo with no reminder service.
+            silo.UseInMemoryReminderService();
 
             silo.ConfigureServices(services => {
                     // FIRST, so the module's TryAdd keeps them.

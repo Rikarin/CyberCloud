@@ -672,3 +672,55 @@ public static class UniformFailures {
     public static Result<SignInOutcome> RejectSignIn() =>
         Result<SignInOutcome>.Failure(ErrorCode.AuthorizationFailed, SignIn);
 }
+
+/// <summary>
+///     What <see cref="IAuthorizationCodeGrain.ConsumeAsync" /> answers.
+/// </summary>
+/// <param name="FirstUse">Whether this call is the one that consumed the code.</param>
+/// <param name="TokenSessionId">
+///     The token session recorded against the code: the caller's own on the first use, the first
+///     caller's on every later one — which is the session a replay must revoke.
+/// </param>
+/// <param name="ConsumedAt">When the code was consumed.</param>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.CodeConsumption")]
+public sealed record CodeConsumption(
+    [property: Id(0)] bool FirstUse,
+    [property: Id(1)] Guid TokenSessionId,
+    [property: Id(2)] DateTimeOffset ConsumedAt
+);
+
+/// <summary>
+///     A person's consent to one client, as <see cref="IConsentGrain" /> holds it.
+/// </summary>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.ConsentGrant")]
+public sealed record ConsentGrant {
+    /// <summary>The person who consented.</summary>
+    [Id(0)]
+    public Guid UserId { get; init; }
+
+    /// <summary>The <c>client_id</c> they consented to.</summary>
+    [Id(1)]
+    public string ClientId { get; init; } = string.Empty;
+
+    /// <summary>Every scope allowed so far — the union of every <see cref="IConsentGrain.GrantAsync" />.</summary>
+    [Id(2)]
+    public List<string> Scopes { get; set; } = [];
+
+    /// <summary>When consent was first given.</summary>
+    [Id(3)]
+    public DateTimeOffset GrantedAt { get; init; }
+
+    /// <summary>When the scope set last widened.</summary>
+    [Id(4)]
+    public DateTimeOffset UpdatedAt { get; init; }
+
+    /// <summary>Whether every one of <paramref name="requested" /> is on record.</summary>
+    /// <param name="requested">The scopes an authorization request asks for.</param>
+    public bool Covers(IEnumerable<string> requested) {
+        ArgumentNullException.ThrowIfNull(requested);
+
+        return requested.All(x => Scopes.Contains(x, StringComparer.Ordinal));
+    }
+}

@@ -1,5 +1,6 @@
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.Routing;
+using CyberCloud.ServiceDefaults.RateLimiting;
 using System.Collections.Immutable;
 using System.Globalization;
 
@@ -60,8 +61,11 @@ readonly record struct RateLimitDecision(
 ///         routes of docs/plan/10 § Shape (see <c>AuthenticateStage.IsAnonymous</c>; the third,
 ///         the agent tunnel, authenticates at its endpoint after this stage has counted it) — and the
 ///         bucket's own rationale names sign-in and token, which docs/plan/10 § Request pipeline
-///         puts on the <i>identity host</i>, not here. The row probably belongs to that host and to
-///         Envoy's per-IP shed rather than to this table.
+///         puts on the <i>identity host</i>, not here. The row belongs to that host and to Envoy's
+///         per-IP shed rather than to this table — and since #94 the identity host carries its own
+///         per-IP buckets (<c>IdentityRateLimits</c>, on <c>/api/signup/begin</c> and the
+///         code-verify endpoints) over the same <see cref="IRateLimitCounters" /> this limiter
+///         counts through, which is why the counters moved to <c>CyberCloud.ServiceDefaults</c>.
 ///     </para>
 /// </remarks>
 sealed class GatewayRateLimiter(IRateLimitCounters counters) {

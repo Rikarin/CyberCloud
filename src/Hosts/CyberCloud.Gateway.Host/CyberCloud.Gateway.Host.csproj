@@ -96,7 +96,12 @@
           .TheGatewayDeclaresNoGrainInterfaceAndNoGrainImplementation is the gate; this line's absence
           is the second, cheaper one.
         -->
-        <!-- Stage 5's counters. docs/plan/10 § Request pipeline: "Redis-backed sliding window". -->
+        <!--
+          Stage 5's counters. docs/plan/10 § Request pipeline: "Redis-backed sliding window". The
+          counters themselves live in CyberCloud.ServiceDefaults.RateLimiting since #94, so the
+          identity host can count through them too; this reference is for the IConnectionMultiplexer
+          the registration keys on — Redis when a deployment registered one, in process otherwise.
+        -->
         <PackageReference Include="StackExchange.Redis"/>
         <!--
           ⚠ OpenIddict.Validation.SystemNetHttp IS NO LONGER REFERENCED HERE DIRECTLY, AND THE

@@ -3,17 +3,20 @@ using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.Host.Api;
 using CyberCloud.Identity.Host.Credentials;
+using CyberCloud.Identity.Host.RateLimiting;
 using CyberCloud.Identity.Host.SignUp;
 using CyberCloud.Identity.Host.Tokens;
 using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
 using CyberCloud.ResourceManager;
+using CyberCloud.ServiceDefaults.RateLimiting;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace CyberCloud.Identity.Host;
 
@@ -98,7 +101,23 @@ public static class IdentityHostServices {
         services.TryAddSingleton<FirstPartyClients>();
         services.TryAddSingleton<IClientResolver, ClientResolver>();
         services.TryAddSingleton<AuthorizeApi>();
+        services.TryAddSingleton<ConsentApi>();
         services.TryAddSingleton<DevelopmentKeyFile>();
+
+        // ── The per-IP buckets — docs/plan/11 § Credentials' "global per-IP limit" ───────────────
+        //
+        // ⚠ The same pair the gateway registers, on the same rule: Redis when a deployment has put an
+        // IConnectionMultiplexer in the container, in process otherwise. Shared through
+        // CyberCloud.ServiceDefaults.RateLimiting so the window arithmetic is written once; what is
+        // this host's is the buckets (IdentityRateLimits) and the 429 they answer. TryAdd, so a test
+        // can hand the limiter counters over a clock it drives.
+        if (services.Any(x => x.ServiceType == typeof(IConnectionMultiplexer))) {
+            services.TryAddSingleton<IRateLimitCounters, RedisRateLimitCounters>();
+        } else {
+            services.TryAddSingleton<IRateLimitCounters, InMemoryRateLimitCounters>();
+        }
+
+        services.TryAddSingleton<IdentityRateLimiter>();
 
         // ⚠ The data-protection key ring follows the signing keys onto disk when a development key
         // directory is configured, and for the same reason: it protects the session cookie and the

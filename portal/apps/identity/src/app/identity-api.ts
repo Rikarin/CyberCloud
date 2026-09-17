@@ -134,6 +134,33 @@ export function signUpIsClosed(response: object): response is SignUpClosedRespon
   return 'succeeded' in response && response.succeeded === false && 'message' in response;
 }
 
+/** What `GET /api/consent` answers — what the consent page renders, and nothing more. */
+export interface ConsentPageResponse {
+  /** Whether there is a request to consent to. When false, `message` says why. */
+  ready: boolean;
+
+  /**
+   * The client's display name, from its registration.
+   *
+   * ⚠ **Never from the `/authorize` query string.** That string is a link anybody can send, and a
+   * page that rendered a name out of it would let a phisher call their client "Cyber Cloud portal".
+   * The server resolves the name from the registration and this page renders what it is handed.
+   */
+  clientName: string;
+
+  /** The scopes the request asks for, cut to what the client may have. */
+  scopes: string[];
+
+  /**
+   * The `/authorize` request the page posts its answer to — a same-origin path, sanitized by the
+   * server and sanitized again here before it becomes a form action.
+   */
+  returnUrl: string;
+
+  /** What to render when `ready` is false, verbatim. */
+  message: string;
+}
+
 /**
  * The identity host's JSON endpoints, as this app calls them.
  *
@@ -305,5 +332,19 @@ export class IdentityApi {
    */
   redeemRecoveryCode(code: string, returnUrl: string): Observable<SignInResultResponse> {
     return this.#http.post<SignInResultResponse>('/api/signin/recovery-code', { code, returnUrl });
+  }
+
+  /**
+   * Asks what the consent page should render for the `/authorize` request it was sent with.
+   *
+   * ⚠ Read-only, and the person's answer does not go through this client at all: the page posts
+   * `consent=allow` or `consent=deny` back to `/authorize` as a full-page form, with the request's
+   * own parameters, so the server answers the client in the response mode it asked for. A `fetch`
+   * would swallow that redirect.
+   *
+   * @param returnUrl The `/authorize` path and query, already sanitized.
+   */
+  describeConsent(returnUrl: string): Observable<ConsentPageResponse> {
+    return this.#http.get<ConsentPageResponse>('/api/consent', { params: { returnUrl } });
   }
 }

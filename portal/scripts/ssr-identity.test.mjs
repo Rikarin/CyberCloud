@@ -98,20 +98,27 @@ const fetchPage = path =>
     body: await r.text()
   }));
 
-const [signIn, signUp] = await Promise.all([
+const [signIn, signUp, consent] = await Promise.all([
   // ⚠ The query string carries credential-shaped values too, because a page that reflected
   // `returnUrl` or an unexpected `password` parameter into the DOM would be the same leak by a
   // different route.
   fetchPage('/signin?returnUrl=%2Fafter&password=QUERYPASSWORD&code=123456'),
-  fetchPage('/signup?returnUrl=%2Fafter')
+  fetchPage('/signup?returnUrl=%2Fafter'),
+  // ⚠ The consent page's return URL is an /authorize request naming a client. Server-side it must
+  // render neither the client id out of the query (a phisher's link names any client it likes; the
+  // name comes from /api/consent, in the browser, from the registration) nor the description
+  // itself — fetching that on the server would run without the cookie and cache the answer into
+  // the transfer state.
+  fetchPage('/consent?returnUrl=%2Fauthorize%3Fclient_id%3DQUERYCLIENT%26state%3DQUERYSTATE%26code_challenge%3Dc')
 ]);
 
 const pages = [
   ['signin', signIn],
-  ['signup', signUp]
+  ['signup', signUp],
+  ['consent', consent]
 ];
 
-check('both pages render server-side without throwing', () => {
+check('all three pages render server-side without throwing', () => {
   // ⚠ A 500 here is almost always an `@xui/*` component that touches the DOM during construction.
   // The message names the likely cause so the next person does not have to rediscover it.
   for (const [label, page] of pages) {
@@ -129,6 +136,19 @@ check('the rendered pages actually contain their form, not an empty shell', () =
   assert.match(signIn.body, /Sign in/, 'the sign-in page rendered no heading');
   assert.match(signIn.body, /type="email"/, 'the sign-in page rendered no email field');
   assert.match(signUp.body, /Create an account/, 'the sign-up page rendered no heading');
+  assert.match(consent.body, /Allow access\?/, 'the consent page rendered no heading');
+});
+
+check('the consent page renders nothing out of the authorization request server-side', () => {
+  // The form, its hidden fields and the client's name arrive in the browser, from /api/consent; the
+  // server-rendered document carries the heading and a waiting sentence. A client id or a state
+  // from the query in this HTML would be the page printing a link's own claims about itself.
+  assert.ok(
+    !consent.body.includes('QUERYCLIENT'),
+    'the client id from the query reached the server-rendered consent page'
+  );
+  assert.ok(!consent.body.includes('QUERYSTATE'), 'the state from the query reached the server-rendered consent page');
+  assert.ok(!/<form/i.test(consent.body), 'the consent form was rendered server-side, before /api/consent answered');
 });
 
 check('no credential material reaches the rendered document', () => {

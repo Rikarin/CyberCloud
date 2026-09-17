@@ -312,8 +312,27 @@ CyberCloud.Identity.Grains.ServicePrincipalGrain
 # longer bound to.
 CyberCloud.Identity.Grains.ManagedIdentityGrain
 #
+# ConsentGrain is a person's standing consent to one tenant-registered OAuth client, and the scopes
+# it covers — docs/plan/11 § Protocol, the consent page (#94). Losing one is SAFE in the direction
+# that matters (the person is asked again rather than a client being trusted it should not be), so
+# the tier question is not loss tolerance but shape: docs/plan/05 § Hot holds "session-shaped state,
+# which is bounded by concurrent activity, not by tenant size", and consent grants are bounded by
+# users × clients, which is tenant size. A hot-tier FLUSHALL would also re-prompt every third-party
+# integration in every tenant at once, which is a loss a person notices even though it is not one
+# that reverses a permission. Revocation empties the record rather than deleting it, so a revoked
+# client is asked from scratch.
+CyberCloud.Identity.Grains.ConsentGrain
+#
 # ⚠ SessionGrain is deliberately ABSENT. docs/plan/05 § Hot lists sessions among what the hot tier
 # holds: losing one costs a sign-in, which is a warm-up rather than a loss. It is also the
 # highest-write-rate object in the identity module — every refresh rotation is a write — so putting
 # it on a synchronously-replicated shard would make the refresh endpoint the slowest thing in the
 # platform, for state whose loss tolerance is a re-authentication.
+#
+# ⚠ AuthorizationCodeGrain is ABSENT for the same reason, and more so. It records that one
+# authorization code has been exchanged, and by which token session, so a second exchange is refused
+# and the first one's session revoked (RFC 6749 § 4.1.2, #94). The record protects nothing once the
+# code it names has expired — five minutes — and the grain clears itself then; losing the tier early
+# costs one replay window on the codes in flight at that moment, each still bound to its verifier by
+# PKCE. Session-shaped, bounded by concurrent sign-ins, and written once per sign-in on the path a
+# person is waiting on.
