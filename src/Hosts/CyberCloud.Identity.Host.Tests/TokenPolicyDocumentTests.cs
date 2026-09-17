@@ -249,7 +249,8 @@ public sealed class TokenPolicyDocumentTests {
                 ["/api/signup/begin"] = IdentityRateLimits.SignUpBegin.Name,
                 ["/api/signup/verify"] = IdentityRateLimits.CodeVerify.Name,
                 ["/api/signin/otp"] = IdentityRateLimits.CodeVerify.Name,
-                ["/api/signin/totp"] = IdentityRateLimits.CodeVerify.Name
+                ["/api/signin/totp"] = IdentityRateLimits.CodeVerify.Name,
+                ["/api/signin/recovery-code"] = IdentityRateLimits.CodeVerify.Name
             },
             ignoreOrder: true
         );

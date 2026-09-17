@@ -430,9 +430,13 @@ public static class IdentityEndpoints {
     ///         the uniform answer rather than inside it.</b> <c>begin</c> issues a code per call and
     ///         the grain caps issues per <i>sign-up</i>, so a caller minting sign-ups was uncapped;
     ///         <c>verify</c> is a guess per call and the grain caps attempts per <i>code</i>. The
-    ///         filter counts the connection's address before the body is read, so the <c>429</c>
-    ///         says nothing about the address in the body — <see cref="IdentityRateLimits" />
+    ///         filter decides on the connection's address and on nothing in the body, so the
+    ///         <c>429</c> says nothing about the address in the body — <see cref="IdentityRateLimits" />
     ///         carries the argument, and its window is what a flood buys before the answer changes.
+    ///         ⚠ "Nothing in the body" is not "before the body": an endpoint filter runs after
+    ///         parameter binding, so the JSON has been deserialized by the time it counts, and a body
+    ///         that does not deserialize is a <c>400</c> from the binder that is never counted. What
+    ///         holds, and what the test pins, is that the decision does not depend on it.
     ///     </para>
     /// </remarks>
     static void MapSignUp(IEndpointRouteBuilder app) {
@@ -948,19 +952,22 @@ public static class IdentityEndpoints {
             .RequireAuthorization()
             .RateLimited(IdentityRateLimits.CodeVerify);
 
+        // In the code-verify bucket with the other three, for the reason IdentityRateLimits gives:
+        // it takes a code, and the rule is every route that does.
         app.MapPost(
-            "/api/signin/recovery-code",
-            async (
-                SecondFactorRequest? request,
-                HttpContext context,
-                SignInApi api,
-                CancellationToken cancellationToken
-            ) => await IssueAsync(
-                context,
-                await api.RedeemRecoveryCodeAsync(request, context.User, cancellationToken)
+                "/api/signin/recovery-code",
+                async (
+                    SecondFactorRequest? request,
+                    HttpContext context,
+                    SignInApi api,
+                    CancellationToken cancellationToken
+                ) => await IssueAsync(
+                    context,
+                    await api.RedeemRecoveryCodeAsync(request, context.User, cancellationToken)
+                )
             )
-        )
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .RateLimited(IdentityRateLimits.CodeVerify);
     }
 
     /// <summary>
@@ -994,9 +1001,11 @@ public static class IdentityEndpoints {
     ///     <para>
     ///         ⚠ <c>RemoteIpAddress</c> and not an <c>X-Forwarded-For</c> header. A caller sets their
     ///         own headers, so trusting one would let an attacker pick which device record their
-    ///         session is filed under. Behind a proxy the correct fix is
-    ///         <c>UseForwardedHeaders</c> with a configured known-proxy list, which is a deployment
-    ///         decision this file must not pre-empt by reading the header directly.
+    ///         session is filed under. Behind a proxy the correct fix is the forwarded-headers
+    ///         middleware with a known-proxy list, which is what
+    ///         <c>CyberCloud:Identity:TrustedProxies</c> configures and
+    ///         <c>IdentityComposition.MapIdentityHost</c> runs before anything here — this file
+    ///         must not pre-empt it by reading the header directly.
     ///     </para>
     /// </remarks>
     static SignInContext Describe(HttpContext context) =>

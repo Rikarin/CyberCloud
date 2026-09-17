@@ -49,6 +49,12 @@ public sealed class BrowserClient : IDisposable {
     /// </summary>
     public string? Bearer { get; set; }
 
+    /// <summary>
+    ///     An <c>X-Forwarded-For</c> to send on every request, or <see langword="null" /> for none —
+    ///     what an ingress in front of the host would stamp, or what a caller claims.
+    /// </summary>
+    public string? ForwardedFor { get; set; }
+
     /// <summary>The cookies the tab holds, by name.</summary>
     public IReadOnlyDictionary<string, string> Cookies => jar;
 
@@ -98,6 +104,10 @@ public sealed class BrowserClient : IDisposable {
 
         if (Bearer is { } bearer) {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        }
+
+        if (ForwardedFor is { } forwardedFor) {
+            request.Headers.Add("X-Forwarded-For", forwardedFor);
         }
 
         var response = await http.SendAsync(request, cancellationToken);

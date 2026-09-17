@@ -197,16 +197,27 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
     ///     Stops the host and starts a new one on the same key directory — a process restart, as
     ///     far as every issued token and cookie is concerned.
     /// </summary>
-    public async Task RestartHostAsync() {
+    /// <param name="settings">
+    ///     Command-line settings for the new host on top of the fixture's own, as
+    ///     <c>--CyberCloud:Identity:Name=value</c> pairs. A test that passes any restarts again
+    ///     without them when it is done, because the host is shared by the collection.
+    /// </param>
+    /// <remarks>
+    ///     ⚠ A restart also empties the per-IP buckets: the counters are in process. A test that
+    ///     needs an empty bucket advances <see cref="Clock" /> past the window instead, which is
+    ///     cheaper and does not disturb the sessions other tests hold.
+    /// </remarks>
+    public async Task RestartHostAsync(params string[] settings) {
         await host.StopAsync(CancellationToken.None);
         await host.DisposeAsync();
 
-        host = await StartHostAsync();
+        host = await StartHostAsync(settings);
     }
 
-    async Task<WebApplication> StartHostAsync() {
+    async Task<WebApplication> StartHostAsync(params string[] settings) {
         var started = await IdentityComposition.BuildAsync(
             [
+                .. settings,
                 "--environment", "Development",
                 // ⚠ The same port on a restart. The issuer is inferred from the request (no Issuer is
                 // configured here, as on a developer's 127.0.0.1:port), and a refresh token names the

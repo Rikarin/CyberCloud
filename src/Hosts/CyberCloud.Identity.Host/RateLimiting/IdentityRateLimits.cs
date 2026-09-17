@@ -38,11 +38,15 @@ public readonly record struct IdentityRateLimitBucket(string Name, int Limit, Ti
 ///         call — a mail per call, once #93 lands an MTA — and the grain behind it caps issues per
 ///         sign-up, not per caller, so a caller minting sign-ups is uncapped without this.
 ///         <see cref="SignUpBegin" /> is that cap. The code-verify endpoints — <c>/api/signup/verify</c>,
-///         <c>/api/signin/otp</c> and <c>/api/signin/totp</c> — each let a code be guessed, and the
-///         grain behind each caps attempts per <i>code</i>; <see cref="CodeVerify" /> caps them per
-///         caller, across codes, so a caller cannot buy more guesses by opening more sign-ups. The
-///         password endpoint is not here: <c>ILockoutCounter</c> already backs it off per account
-///         and the dummy hash makes each attempt cost a caller what it costs the platform.
+///         <c>/api/signin/otp</c>, <c>/api/signin/totp</c> and <c>/api/signin/recovery-code</c> —
+///         each take a code a caller can guess at, and the grain behind each caps attempts per
+///         <i>code</i> or per person; <see cref="CodeVerify" /> caps them per caller, across codes,
+///         so a caller cannot buy more guesses by opening more sign-ups. A recovery code is ten
+///         characters and unguessable in practice, and it is in the bucket anyway, because "every
+///         route that takes a code" is a rule a reader can check and "every route that takes a
+///         short code" is a judgement they would have to re-make. The password endpoint is not here:
+///         <c>ILockoutCounter</c> already backs it off per account and the dummy hash makes each
+///         attempt cost a caller what it costs the platform.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The numbers are per address, and an address is sometimes an office.</b> Ten sign-ups
@@ -54,9 +58,12 @@ public readonly record struct IdentityRateLimitBucket(string Name, int Limit, Ti
 ///     </para>
 ///     <para>
 ///         The counters are <see cref="IRateLimitCounters" /> — the gateway's sliding window, shared
-///         through <c>CyberCloud.ServiceDefaults</c> — so a Redis-backed deployment counts across
-///         replicas and a <c>dotnet run</c> counts in process; the identity host registers the same
-///         pair the gateway does, on the same rule.
+///         through <c>CyberCloud.ServiceDefaults</c>. The identity host registers the same pair the
+///         gateway does, on the same rule: Redis when the container holds an
+///         <c>IConnectionMultiplexer</c>, in process otherwise. ⚠ No host composition in this
+///         repository registers one yet, so today every deployment counts per replica — N replicas
+///         are N times each budget — and the Redis branch is there for the host change that wires
+///         the multiplexer, the same change <c>ILockoutCounter</c>'s registration is waiting on.
 ///     </para>
 /// </remarks>
 public static class IdentityRateLimits {
@@ -123,12 +130,23 @@ public readonly record struct IdentityRateLimitDecision(bool Allowed, int RetryA
 /// </summary>
 /// <param name="counters">The sliding window — Redis across replicas, in process on a development run.</param>
 /// <remarks>
-///     ⚠ <c>RemoteIpAddress</c> and not <c>X-Forwarded-For</c>, for the reason
-///     <c>IdentityEndpoints.Describe</c> gives: a caller sets their own headers, and a limit keyed by
-///     one would be a limit the caller chooses the key for. Behind a proxy the fix is
-///     <c>UseForwardedHeaders</c> with a known-proxy list, which is a deployment decision. A request
-///     with no address at all — a test server's in-memory transport — is counted under one shared
-///     key rather than admitted uncounted.
+///     <para>
+///         ⚠ <c>RemoteIpAddress</c> and not <c>X-Forwarded-For</c>, for the reason
+///         <c>IdentityEndpoints.Describe</c> gives: a caller sets their own headers, and a limit
+///         keyed by one would be a limit the caller chooses the key for. Behind the ingress
+///         docs/plan/10 puts in front of every host, <c>RemoteIpAddress</c> is the ingress's address
+///         for everybody — one bucket for the whole platform, which a hostile caller fills for
+///         everyone in ten requests — and the fix is not here but in front: the forwarded-headers
+///         middleware, which <c>IdentityComposition.MapIdentityHost</c> runs first when
+///         <c>CyberCloud:Identity:TrustedProxies</c> names the ingress, rewrites
+///         <c>RemoteIpAddress</c> to the address the ingress appended before this type reads it.
+///         <see cref="IdentityHostOptions.TrustedProxies" /> argues the list and
+///         <see cref="TrustedProxies" /> why the middleware is conditional.
+///     </para>
+///     <para>
+///         A request with no address at all — a test server's in-memory transport — is counted
+///         under one shared key rather than admitted uncounted.
+///     </para>
 /// </remarks>
 public sealed class IdentityRateLimiter(IRateLimitCounters counters) {
     /// <summary>Counts one request and decides.</summary>

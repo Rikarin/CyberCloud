@@ -214,6 +214,15 @@ naming one id. `ClientResolver` in the identity host is the reader.
 - **Device authorization and token exchange (RFC 8693)** remain owed as before — the device flow
   needs a verification page and a code store, and token exchange has `ITokenExchange` built and
   waiting on `/token` to accept the grant.
+- **`displayName` on the tenant body.** `ScopeManagerService.ReadTenantAsync` renders the slug as
+  `name` and `ScopeSnapshot` carries no display name, so `GET /tenants/{t}` has none and the
+  portal's context bar (`portal/libs/shell`, `context-bar.ts`) shows `contoso` rather than
+  "Contoso". `TenantDescriptor.DisplayName` holds the value; what is owed is the property on the
+  snapshot and the scope body (`ScopeBodyProperties.DisplayName` is already the name the
+  subscription body uses), the emitter's schema and the regenerated clients, and the bar reading it.
+  #94's item 11, carried here so it is tracked somewhere; the same issue's items 9 and 10 — the
+  sign-up long-running operation with its progress UI, and the welcome mail — are
+  [§ Sign-up and tenant creation](#sign-up-and-tenant-creation)'s owed paragraph.
 
 ## Credentials
 
@@ -236,19 +245,36 @@ is a denial-of-service amplifier.
 ⚠ **The per-IP limit is the identity host's, not the gateway's, and it counts through the gateway's
 counters.** [10 § Rate limiting](10-gateway-and-api.md)'s *per IP, unauthenticated* row names sign-in
 and token, which live here; `IdentityRateLimits` (#94) carries two buckets over the sliding-window
-counters that moved to `CyberCloud.ServiceDefaults.RateLimiting` so both hosts count the same way
-(Redis across replicas, in process on a `dotnet run`): `/api/signup/begin`, ten per ten minutes per
-address, because each call issues a code and the grain caps issues per *sign-up* rather than per
-caller; and the code-verify endpoints — `/api/signup/verify`, `/api/signin/otp`, `/api/signin/totp` —
-sixty per minute per address, because each call is a guess and the grain caps guesses per *code*.
+counters that moved to `CyberCloud.ServiceDefaults.RateLimiting` so both hosts count the same way:
+`/api/signup/begin`, ten per ten minutes per address, because each call issues a code and the grain
+caps issues per *sign-up* rather than per caller; and the code-verify endpoints — `/api/signup/verify`,
+`/api/signin/otp`, `/api/signin/totp` and `/api/signin/recovery-code` — sixty per minute per address,
+because each call is a guess and the grain caps guesses per *code* (a recovery code is unguessable
+in practice and is in the bucket anyway, so the rule stays "every route that takes a code").
 Per IP and nothing finer, on purpose: a limit keyed by the address in the body would be a second
 answer for an address somebody is hammering, which is the enumeration the next paragraph forbids.
-The `429` depends on the connection's address alone, the body is never read to decide it, a made-up
-address and a real one are refused alike, and the uniform answers below the limit are untouched.
-The password endpoint carries no bucket — the lockout counter and the dummy hash are its. The
-accepted risk beside this: an unknown `tenant` hint on `/api/signin/*` is answered before the 250 ms
-floor (`SignInApi` argues it — slugs are public names, the lookup is one platform-grain call), which
-#94 recorded as a decision rather than an oversight.
+The `429` depends on the connection's address alone and on nothing in the body, a made-up address
+and a real one are refused alike, and the uniform answers below the limit are untouched. The
+password endpoint carries no bucket — the lockout counter and the dummy hash are its. The accepted
+risk beside this: an unknown `tenant` hint on `/api/signin/*` is answered before the 250 ms floor
+(`SignInApi` argues it — slugs are public names, the lookup is one platform-grain call), which #94
+recorded as a decision rather than an oversight.
+
+⚠ **"Per address" is only true once the deployment has named its ingress.** Behind the Envoy
+[10 § Shape](10-gateway-and-api.md#shape) puts in front of every host, the connection's address is
+the ingress's for everybody, and both buckets become platform-wide caps — ten requests from one
+hostile caller would close sign-up for everyone. `CyberCloud:Identity:TrustedProxies` (addresses or
+CIDR blocks; `IdentityHostOptions` argues it) is the list of proxies whose `X-Forwarded-For` the host
+believes; set, `IdentityComposition.MapIdentityHost` runs the forwarded-headers middleware first and
+the address every bucket — and the hashed `SignInContext.ClientAddress` — sees is the one Envoy
+appended. Unset, the header is a caller's claim and is ignored, which is right on the development run
+and wrong on every deployment. The middleware is conditional rather than always on because the
+options `AddServiceDefaults` leaves behind have both known lists cleared, and cleared lists believe
+the header from anywhere — a rate-limit key the caller picks (`TrustedProxies` carries that). The
+gateway's own per-IP row has the same shape and no knob yet. ⚠ And the counters count per replica
+today: the Redis pair is registered when the container holds an `IConnectionMultiplexer`, and no host
+composition in this repository registers one — N replicas are N× each budget, the same gap
+`ILockoutCounter`'s registration names.
 
 **Enumeration.** Sign-in, password reset and sign-up return the same response and take the same time
 whether or not the account exists. The reset email is the only signal, and it goes to the address

@@ -10,12 +10,14 @@ using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
 using CyberCloud.ResourceManager;
 using CyberCloud.ServiceDefaults.RateLimiting;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace CyberCloud.Identity.Host;
@@ -118,6 +120,15 @@ public static class IdentityHostServices {
         }
 
         services.TryAddSingleton<IdentityRateLimiter>();
+
+        // ⚠ PostConfigure, not Configure: AddServiceDefaults' Configure clears both known lists, and
+        // entries a delegate put there before it ran would be cleared with them. Nothing here decides
+        // whether the middleware runs — TrustedProxies.AreConfigured does, in MapIdentityHost — this
+        // only makes the options right for when it does. Read through IOptions rather than from the
+        // `options` bound above, so a registration made through IdentityComposition's configure seam
+        // is seen. A bad entry throws when the middleware is constructed, which is start-up.
+        services.AddOptions<ForwardedHeadersOptions>()
+            .PostConfigure<IOptions<IdentityHostOptions>>((forwarded, identity) => TrustedProxies.Apply(forwarded, identity.Value));
 
         // ⚠ The data-protection key ring follows the signing keys onto disk when a development key
         // directory is configured, and for the same reason: it protects the session cookie and the

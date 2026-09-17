@@ -1,6 +1,7 @@
 using CyberCloud.ServiceDefaults;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace CyberCloud.Identity.Host;
 
@@ -113,6 +114,16 @@ public static class IdentityComposition {
     /// </remarks>
     public static WebApplication MapIdentityHost(this WebApplication app) {
         ArgumentNullException.ThrowIfNull(app);
+
+        // ⚠ FIRST, and only when a deployment has named its ingress. Everything after this reads
+        // Connection.RemoteIpAddress as the caller — the two per-IP buckets and the address the
+        // sign-in record hashes — and behind Envoy that is the ingress's address for everybody until
+        // this middleware has swapped in the one Envoy appended to X-Forwarded-For. Why it is
+        // conditional rather than always on is on TrustedProxies: the options ServiceDefaults leaves
+        // behind believe the header from anywhere.
+        if (TrustedProxies.AreConfigured(app.Services.GetRequiredService<IOptions<IdentityHostOptions>>().Value)) {
+            app.UseForwardedHeaders();
+        }
 
         // ⚠ CORS before authentication, because /token is served INSIDE UseAuthentication —
         // OpenIddict's handler answers it there — and the CORS middleware has to have seen the

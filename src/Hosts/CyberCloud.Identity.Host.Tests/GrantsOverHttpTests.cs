@@ -831,6 +831,8 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         using var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
         var bucket = IdentityRateLimits.SignUpBegin;
 
+        EmptyTheBucket(bucket);
+
         string? firstBody = null;
 
         for (var i = 0; i < bucket.Limit; i++) {
@@ -876,8 +878,11 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         using var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
         var bucket = IdentityRateLimits.CodeVerify;
 
+        EmptyTheBucket(bucket);
+
         // Sign-up is closed on this fixture, so each guess is the closed sentence in a 200 — counted
-        // all the same, because the filter runs before the handler reads anything.
+        // all the same, because the filter decides on the address and never on what the handler
+        // makes of the body.
         for (var i = 0; i < bucket.Limit; i++) {
             using var counted = await browser.PostJsonAsync("/api/signup/verify", new { code = "000000" }, Ct);
 
@@ -902,7 +907,90 @@ public sealed class GrantsOverHttpTests(IdentityHostFixture fixture) {
         recovered.StatusCode.ShouldBe(HttpStatusCode.OK, "the limit did not recover once the window passed");
     }
 
+    [Fact]
+    public async Task TheForwardedAddressCountsOnlyWhenTheDeploymentNamesItsProxy() {
+        // ⚠ The whole of IdentityHostOptions.TrustedProxies, both halves. Behind the ingress every
+        // connection is from one address, and a bucket keyed by it is one bucket for the platform;
+        // named, the ingress's X-Forwarded-For is the key. Unnamed, the header is a caller's claim
+        // and it changes nothing — which is also what keeps a caller from choosing their own key.
+        var bucket = IdentityRateLimits.SignUpBegin;
+
+        EmptyTheBucket(bucket);
+
+        // ── The fixture's host names no proxy: a different X-Forwarded-For on every request is
+        // still one address, 127.0.0.1, and the (limit + 1)th is refused. ────────────────────────
+        using var claimant = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+
+        for (var i = 0; i < bucket.Limit; i++) {
+            claimant.ForwardedFor = $"203.0.113.{i + 1}";
+
+            using var counted = await claimant.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+
+            counted.StatusCode.ShouldBe(HttpStatusCode.OK, $"request {i + 1} of {bucket.Limit} was refused inside the window");
+        }
+
+        claimant.ForwardedFor = "203.0.113.200";
+
+        using var refusedDespiteTheHeader = await claimant.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+
+        refusedDespiteTheHeader.StatusCode.ShouldBe((HttpStatusCode)429, "a caller's own X-Forwarded-For bought a fresh bucket on a host that names no proxy");
+
+        // ── The same host, told that 127.0.0.1 is its ingress: the header is the address. ──────
+        await fixture.RestartHostAsync($"--{IdentityHostOptions.SectionName}:TrustedProxies:0=127.0.0.1");
+
+        try {
+            using var office = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri) { ForwardedFor = "198.51.100.10" };
+
+            for (var i = 0; i < bucket.Limit; i++) {
+                using var counted = await office.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+
+                counted.StatusCode.ShouldBe(HttpStatusCode.OK, $"request {i + 1} of {bucket.Limit} was refused inside the window");
+            }
+
+            using var refused = await office.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+
+            refused.StatusCode.ShouldBe((HttpStatusCode)429, "the forwarded address filled its bucket and was not refused");
+
+            // Another person behind the same ingress is another bucket — the property the platform
+            // needs — and a request with no header at all is the ingress's own, and its own bucket.
+            using var neighbour = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri) { ForwardedFor = "198.51.100.11" };
+            using var admitted = await neighbour.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+
+            admitted.StatusCode.ShouldBe(HttpStatusCode.OK, "one forwarded address's full bucket refused another's");
+
+            using var direct = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+            using var admittedDirect = await direct.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+
+            admittedDirect.StatusCode.ShouldBe(HttpStatusCode.OK, "a request with no forwarded header was counted under a forwarded address");
+
+            // ⚠ One hop: a caller who puts their own entry BEFORE the one the ingress appends is
+            // counted under the ingress's entry, the rightmost — the filled one.
+            using var spoofer = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri) { ForwardedFor = "203.0.113.99, 198.51.100.10" };
+            using var refusedSpoof = await spoofer.PostJsonAsync("/api/signup/begin", new { email = IdentityHostFixture.Email, returnUrl = "/" }, Ct);
+
+            refusedSpoof.StatusCode.ShouldBe((HttpStatusCode)429, "an entry the caller put before the ingress's own was read as the address");
+        } finally {
+            // The collection shares the host; leave it as the fixture started it.
+            await fixture.RestartHostAsync();
+        }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Moves the host's clock past <paramref name="bucket" />'s window, so 127.0.0.1 starts it
+    ///     empty.
+    /// </summary>
+    /// <param name="bucket">The bucket the test is about to fill.</param>
+    /// <remarks>
+    ///     ⚠ Every test in the collection is 127.0.0.1, and every <see cref="SignInAsync" /> posts
+    ///     <c>/api/signin/otp</c> — a code-verify request, counted. A test that fills a bucket to its
+    ///     limit and expects the (limit + 1)th to be the first refusal is therefore wrong by however
+    ///     many sign-ins the last minute held, and passes or fails on xunit's ordering. This was
+    ///     found by running <c>ThePerIpLimitOnCodeVerifyTripsAcrossSignUpsAndRecovers</c> after any
+    ///     sign-in test: "guess 60 of 60 was refused inside the window".
+    /// </remarks>
+    void EmptyTheBucket(IdentityRateLimitBucket bucket) => fixture.Clock.Advance(bucket.Window + TimeSpan.FromSeconds(1));
 
     /// <summary>The request's pairs as the consent page posts them back, plus its answer.</summary>
     static Dictionary<string, string> WithConsent(Dictionary<string, string> request, string answer) =>
