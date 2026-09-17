@@ -143,6 +143,20 @@ public static class KubeLabels {
     ///         that desired state does not live in the target cluster's etcd is about where the truth
     ///         is, and the truth stays in the grain.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Two costs of keeping it on the object, named so nobody discovers them in
+    ///         production.</b> First, size: the API server caps an object's annotations at 256 KiB in
+    ///         total, and every co-writer's whole fragment sits there — a peering's is a few hundred
+    ///         bytes, so a <c>Vpc</c> holds hundreds before the cap bites, but a co-writer that stored
+    ///         a large slice would be refused by the API server on the <i>next</i> co-writer's apply,
+    ///         which is the one that carries the union. Second, lifetime: a fragment is withdrawn by
+    ///         its co-writer and by nothing else. The builder refuses a corrupt one rather than
+    ///         pruning it and never drops a stale one, so a fragment left by a co-writer whose grain
+    ///         vanished without withdrawing is re-applied by every other co-writer of that object,
+    ///         forever. <c>DriftScanner</c> is the one thing that finds it — a fragment whose writer
+    ///         no grain owns is an orphan finding naming the slice — and removing it is a person's
+    ///         call, as an orphan object's is.
+    ///     </para>
     /// </remarks>
     public const string FragmentAnnotationPrefix = Prefix + "/fragment.";
 
@@ -227,6 +241,44 @@ public static class KubeLabels {
     /// </remarks>
     public static string CoWriterFieldManager(string ownerTypeValue, string ownerIdValue) =>
         "cybercloud/" + ownerTypeValue + "/" + ownerIdValue;
+
+    /// <summary>
+    ///     Reads the owner back out of a <see cref="CoWriterFieldManager" /> name — the inverse, for
+    ///     the checks that ask whether a command's manager names the owner the command claims.
+    /// </summary>
+    /// <param name="manager">A field manager name.</param>
+    /// <param name="ownerTypeValue">The owner's <see cref="ResourceType" /> label value the name carries.</param>
+    /// <param name="ownerId">The owner's GUID the name carries.</param>
+    /// <returns>
+    ///     <c>true</c> when the name is <c>cybercloud/{ownerType}/{ownerId}</c> with a non-empty type
+    ///     and a parseable, non-empty GUID. An owner's own <c>cybercloud/{provider}</c> has one segment
+    ///     after the prefix and is <c>false</c>.
+    /// </returns>
+    public static bool TryReadCoWriterFieldManager(string? manager, out string ownerTypeValue, out Guid ownerId) {
+        ownerTypeValue = string.Empty;
+        ownerId = Guid.Empty;
+
+        const string prefix = "cybercloud/";
+
+        if (manager is null || !manager.StartsWith(prefix, StringComparison.Ordinal)) {
+            return false;
+        }
+
+        var rest = manager.AsSpan(prefix.Length);
+        var slash = rest.IndexOf('/');
+
+        if (slash <= 0 || rest[(slash + 1)..].IndexOf('/') >= 0) {
+            return false;
+        }
+
+        if (!Guid.TryParseExact(rest[(slash + 1)..], "D", out ownerId) || ownerId == Guid.Empty) {
+            ownerId = Guid.Empty;
+            return false;
+        }
+
+        ownerTypeValue = rest[..slash].ToString();
+        return true;
+    }
 
     /// <summary>
     ///     The six of <see cref="Mandatory" /> whose value cannot change for the life of a resource

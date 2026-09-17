@@ -181,6 +181,28 @@ public sealed class KubeApiClient(
         var priorVersion = existing.ValueOrDefault?.ResourceVersion ?? string.Empty;
         var priorJson = existing.ValueOrDefault?.Json;
 
+        if (command.IsCoOwned) {
+            // ⚠ THE CLAIM IS CHECKED HERE, AGAINST THE OBJECT, BECAUSE THIS IS THE ONE PLACE THAT HAS
+            // READ IT. OwnerResourceId switches the seven-label guard off for the command — the labels
+            // are the owner's — and a command that merely SAID it was co-owned would otherwise be an
+            // unlabelled body under any manager onto any object. The shape check is the agent's too
+            // (KubeCommandJson.FromJson) and costs nothing to repeat; the live check is only possible
+            // here: the object's resource-id label is the owner, the command's manager has to be the
+            // one derived from it, and the tenant on the object has to be the command's. A name taken
+            // by another resource between a co-writer's read and its apply is what it catches.
+            var shape = command.CheckCoOwnedShape();
+            if (shape.TryGetError(out var shapeError)) {
+                return Result<ApplyOutcome>.Failure(shapeError);
+            }
+
+            if (existedBefore) {
+                var owner = command.CheckCoOwnedAgainst(existing.GetValueOrThrow());
+                if (owner.TryGetError(out var ownerError)) {
+                    return Result<ApplyOutcome>.Failure(ownerError);
+                }
+            }
+        }
+
         if (command.IsCoOwned && !existedBefore) {
             // ⚠ A CO-WRITER NEVER CREATES THE OWNER'S OBJECT, AND THE API SERVER WOULD LET IT.
             // Measured against rancher/k3s:v1.35.7-k3s1 in CoOwnedApplyTests: an apply patch whose

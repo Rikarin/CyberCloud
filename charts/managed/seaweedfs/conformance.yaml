@@ -312,7 +312,14 @@ owed:
       providers' resources by id through CyberCloud.ResourceManager — the seam
       `filer-is-a-single-point-of-failure` above names as untested. And the `backup` row above
       records why this account cannot even be its own destination. It is a provider namespace of its
-      own, after that seam, and it is not started.
+      own, after that seam, and it is not started. ⚠ #89's co-owned apply (docs/plan/09 § A second
+      writer on an object) was checked against this row, as that issue asked, and does NOT close it:
+      that mode is a second WRITER onto an object this tenant owns — provider-blind, so a vault could
+      co-write a fragment onto a Storage or Compute object — and what a vault needs first is a READER
+      of other providers' resources by id, which is a different seam. Nor can a vault annotate
+      another resource's object through it (a Velero `backup.velero.io/backup-volumes` on somebody
+      else's pod is fragment metadata, refused by name); the protected type renders that from a
+      property of its own, or the backend selects by label.
   - id: customer-managed-keys
     says: >
       The third third of #30. docs/plan/15 § The resource model: "customer-managed keys from the

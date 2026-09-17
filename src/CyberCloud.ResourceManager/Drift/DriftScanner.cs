@@ -12,7 +12,12 @@ namespace CyberCloud.ResourceManager.Drift;
 /// <param name="ResourcePath">Its address.</param>
 /// <param name="DesiredHash">
 ///     The hash of its desired body, which is what the objects carry as
-///     <c>cybercloud.io/reconcile-hash</c> — docs/plan/09 § The command builder.
+///     <c>cybercloud.io/reconcile-hash</c> — docs/plan/09 § The command builder. ⚠ For a resource
+///     that co-writes rather than owns — a peering — it is the hash of its <i>fragment</i>, which is
+///     what <c>ApplyOutcome.ReconcileHash</c> reports from a co-owned apply and what the object
+///     carries as <c>cybercloud.io/fragment-hash.{writer}</c>; the owner's hash is over the owner's
+///     body and would never match. One member serves both because no resource in the tree does both:
+///     the day one owns objects and co-writes others, this gains a second hash.
 /// </param>
 /// <param name="ProvisioningState">
 ///     ⚠ Load-bearing for the diff. A resource in <see cref="ProvisioningState.Creating" /> whose
@@ -51,6 +56,19 @@ public readonly record struct ExpectedResource(
 ///         build, and the half that is missing is named rather than stubbed silently.
 ///     </para>
 ///     <para>
+///         ⚠ <b>A second writer on an object joins on a second key.</b> Issue #89's co-owned apply
+///         (docs/plan/09 § A second writer on an object) puts a peering's slice on its parent's
+///         <c>Vpc</c> under <c>cybercloud.io/fragment.{writer}</c> beside the owner's labels, so a
+///         co-writing resource owns no object carrying its resource-id label. The join therefore
+///         runs twice: the resource-id label finds what a resource owns, and
+///         <see cref="ClusterObjectRecord.Fragments" /> finds what it co-writes. A co-writer with
+///         neither is a stray; one whose <c>fragment-hash.{writer}</c> differs from its desired
+///         hash is diverged; and a fragment whose writer no grain owns is an orphan naming the
+///         slice rather than the object — the objects are their owners' and stay — which is the one
+///         place a fragment left behind by a co-writer that never withdrew is found, because the
+///         apply path carries every stored fragment forward verbatim and prunes none.
+///     </para>
+///     <para>
 ///         ⚠ <b>The scan reports; it does not repair.</b> "Pokes only what diverged" is a second step
 ///         — re-driving the affected resources — and it is deliberately not here: a repair loop that
 ///         acted on a partial inventory would delete objects it merely failed to see. Reporting first
@@ -78,6 +96,7 @@ public sealed class DriftScanner(IClock clock) {
         ImmutableArray<ExpectedResource> expected
     ) {
         var byResource = new Dictionary<Guid, List<ClusterObjectRecord>>();
+        var byWriter = new Dictionary<Guid, List<(ClusterObjectRecord Record, FragmentRecord Fragment)>>();
 
         foreach (var record in objects.IsDefault ? [] : objects) {
             // ⚠ NOT EVERY LABELLED OBJECT BELONGS TO A RESOURCE, and the join below assumes one does.
@@ -99,6 +118,20 @@ public sealed class DriftScanner(IClock clock) {
             }
 
             list.Add(record);
+
+            // ⚠ THE SECOND JOIN KEY. A co-writing resource — a peering — owns no object at all: its
+            // slice rides on its parent's Vpc under a fragment annotation keyed by ITS GUID, beside
+            // the owner's labels. Joining on the resource-id label alone would find nothing for it
+            // and call every converged peering a stray, forever. So each fragment is indexed by its
+            // writer too, and a resource is looked up in both.
+            foreach (var fragment in record.Fragments.IsDefault ? [] : record.Fragments) {
+                if (!byWriter.TryGetValue(fragment.Writer, out var slices)) {
+                    slices = [];
+                    byWriter[fragment.Writer] = slices;
+                }
+
+                slices.Add((record, fragment));
+            }
         }
 
         var known = new HashSet<Guid>();
@@ -107,7 +140,10 @@ public sealed class DriftScanner(IClock clock) {
         foreach (var resource in expected.IsDefault ? [] : expected) {
             known.Add(resource.ResourceId);
 
-            if (!byResource.TryGetValue(resource.ResourceId, out var owned) || owned.Count == 0) {
+            byResource.TryGetValue(resource.ResourceId, out var owned);
+            byWriter.TryGetValue(resource.ResourceId, out var coWritten);
+
+            if ((owned is null || owned.Count == 0) && (coWritten is null || coWritten.Count == 0)) {
                 // ⚠ A resource that is mid-flight is not a stray. Creating means the reconciler has
                 // not applied yet; Deleting means it is on its way out and its objects going is the
                 // goal. Reporting either would produce a scan whose findings are mostly its own
@@ -120,8 +156,8 @@ public sealed class DriftScanner(IClock clock) {
                             ResourcePath = resource.ResourcePath,
                             Objects = [],
                             Detail = $"'{resource.ResourcePath}' is {resource.ProvisioningState} and no "
-                                + "labelled object on this cluster carries its resource-id. Its objects "
-                                + "were deleted outside the platform."
+                                + "labelled object on this cluster carries its resource-id or its "
+                                + "fragment. Its objects were deleted outside the platform."
                         }
                     );
                 }
@@ -129,20 +165,34 @@ public sealed class DriftScanner(IClock clock) {
                 continue;
             }
 
-            var diverged = owned
+            var diverged = (owned ?? [])
                 .Where(x => !string.Equals(x.ReconcileHash, resource.DesiredHash, StringComparison.Ordinal))
-                .ToImmutableArray();
+                .Select(x => x.Target)
+                .ToList();
 
-            if (diverged.Length > 0) {
+            // ⚠ A co-writer's slice is judged by ITS hash, not the object's. The object's
+            // reconcile-hash is the owner's, over the owner's body; the co-writer's is
+            // fragment-hash.{writer}, over its fragment alone — which is what its ExpectedResource
+            // carries as DesiredHash. Comparing a peering against the Vpc's hash would report every
+            // peering as diverged the moment its parent re-rendered anything.
+            diverged.AddRange(
+                (coWritten ?? [])
+                    .Where(x => !string.Equals(x.Fragment.Hash, resource.DesiredHash, StringComparison.Ordinal))
+                    .Select(x => x.Record.Target)
+            );
+
+            if (diverged.Count > 0) {
+                var total = (owned?.Count ?? 0) + (coWritten?.Count ?? 0);
+
                 findings.Add(
                     new() {
                         Kind = DriftKind.Diverged,
                         ResourceId = resource.ResourceId,
                         ResourcePath = resource.ResourcePath,
-                        Objects = [.. diverged.Select(x => x.Target)],
-                        Detail = $"{diverged.Length.ToString(CultureInfo.InvariantCulture)} of "
-                            + $"{owned.Count.ToString(CultureInfo.InvariantCulture)} objects carry a "
-                            + $"reconcile-hash other than '{resource.DesiredHash}'."
+                        Objects = [.. diverged],
+                        Detail = $"{diverged.Count.ToString(CultureInfo.InvariantCulture)} of "
+                            + $"{total.ToString(CultureInfo.InvariantCulture)} objects carry a "
+                            + $"reconcile-hash or fragment-hash other than '{resource.DesiredHash}'."
                     }
                 );
             }
@@ -164,6 +214,34 @@ public sealed class DriftScanner(IClock clock) {
                     Detail = $"{pair.Value.Count.ToString(CultureInfo.InvariantCulture)} labelled "
                         + $"objects carry resource-id {pair.Key:D} and no resource grain owns it. They "
                         + "are running and nothing is metering them."
+                }
+            );
+        }
+
+        foreach (var pair in byWriter) {
+            if (known.Contains(pair.Key)) {
+                continue;
+            }
+
+            // ⚠ THE OTHER ORPHAN, AND THE ONLY THING THAT EVER FINDS IT. A co-writer withdraws its
+            // fragment on teardown; a co-writer whose grain vanished without withdrawing — a silo
+            // lost mid-delete, grain state wiped by hand — leaves a fragment that every other
+            // co-writer's apply carries forward verbatim, forever, because the union is what keeps
+            // the shared manager from pruning anyone. Nothing in the apply path prunes it (a
+            // fragment is refused when corrupt, never dropped when stale), so the scan is where it
+            // is named. The objects are the OWNER's and are not orphaned; the finding says which
+            // slice is.
+            findings.Add(
+                new() {
+                    Kind = DriftKind.Orphan,
+                    ResourceId = pair.Key,
+                    ResourcePath = pair.Value[0].Fragment.Path,
+                    Objects = [.. pair.Value.Select(x => x.Record.Target)],
+                    Detail = $"{pair.Value.Count.ToString(CultureInfo.InvariantCulture)} object(s) carry "
+                        + $"a fragment of resource {pair.Key:D}'s and no resource grain owns it. The "
+                        + "objects are their owners'; the fragment is a slice no co-writer will ever "
+                        + "withdraw, re-applied by every other co-writer of the same object until it "
+                        + "is removed by hand."
                 }
             );
         }

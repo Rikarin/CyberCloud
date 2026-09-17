@@ -459,6 +459,66 @@ public sealed class SuiteRejectionTests {
     }
 
     [Fact]
+    public async Task TheFakeRefusesACoOwnedCommandRatherThanReplacingTheOwnersObjectWithTheFragment() {
+        // ⚠ THE CALIBRATION FOR THE FAKE'S ONE REFUSAL, so that the guard the comment in
+        // FakeKubeCluster describes is a guard a test would miss. The fake stores a body verbatim.
+        // A co-writer's command is a fragment, no labels, the live resourceVersion — and stored
+        // verbatim it would REPLACE the owner's labelled object with an unlabelled slice, over which
+        // a Docker-free peering case would then go green. Until the fake keeps per-manager field
+        // ownership (charts/managed/kube-ovn-vpc/conformance.yaml § owed), the case has to fail
+        // here, with the reason, and the owner's object has to be exactly what it was.
+        var world = new FakeKubeCluster(ConformanceIds.Cluster);
+
+        var owner = new ResourceId(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            Probes.Type,
+            "hub",
+            Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000f1")
+        );
+
+        var coWriter = new ResourceId(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            Probes.Type,
+            "to-spoke",
+            Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000f2")
+        );
+
+        var ns = ReconcileDriver.NamespaceFor(owner);
+        var target = new ObjectRef { Kind = Probes.Kind, Namespace = ns, Name = owner.Name };
+
+        (await KubeCommand.For(world)
+            .WithTenantId(owner.TenantId)
+            .WithResourceId(owner)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .WithApiVersion(Probes.V2026)
+            .ObjectJson("""{ "spec": { "egress": [ { "to": "anywhere" } ] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+
+        var before = world.Read(target).ShouldNotBeNull();
+        var live = (await world.GetAsync(target, TestContext.Current.CancellationToken)).GetValueOrThrow();
+
+        var refused = await KubeCommand.For(world)
+            .WithTenantId(coWriter.TenantId)
+            .WithResourceId(coWriter)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .CoWriting(live)
+            .ObjectJson("""{ "spec": { "peerings": [ { "remote": "spoke" } ] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        refused.IsFailure.ShouldBeTrue("the fake cannot model a second writer and must say so rather than store the fragment");
+        refused.Error!.Message.ShouldContain("does not model a second writer");
+        refused.Error.Message.ShouldContain("CoOwnedApplyTests");
+
+        world.Read(target).ShouldBe(before, "the owner's object is exactly what it was — nothing was replaced");
+    }
+
+    [Fact]
     public async Task ACustomResourceKeepsItsEmptyObjectBecauseThatIsAPresenceFlag() {
         // ⚠ THE OTHER SIDE OF THE BOUNDARY, AND IT IS HERE BECAUSE THE FIRST VERSION OF THE STRIP GOT
         // IT WRONG AND THREE FAMILIES SAID SO IN ONE RUN.

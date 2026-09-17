@@ -277,6 +277,45 @@ public sealed class CoOwnedApplyTests(K3sFixture k3s) {
     }
 
     [Fact]
+    public async Task ANameTakenByAnotherResourceAfterTheReadIsRefusedAndNothingIsWritten() {
+        // ⚠ THE #89 REVIEW'S CASE. The owner deletes its object; another resource creates one under
+        // the same name; the co-writer applies from the read it made before either. The API server
+        // cannot tell — the new object has a resourceVersion of its own and the apply body's stale
+        // one is only older, which is a 409 the loop would answer by reading again and then
+        // co-writing onto the new owner's object as if it were the old one. The client compares the
+        // command's owner with the live object's resource-id label before the PATCH and refuses by
+        // name, and the answer is Conflict rather than Stale because reading again is not the repair.
+        var token = TestContext.Current.CancellationToken;
+        const string name = "coowned-name-taken";
+
+        var owner = Owner(name);
+        var usurper = Owner(name + "-usurper");
+        var a = Peering(owner, "to-a", "aaaaaaaa-0000-4000-8000-00000000000a");
+        var target = new ObjectRef { Kind = ConfigMaps, Namespace = K3sFixture.Namespace, Name = name };
+
+        await k3s.Api.ApplyAsync(OwnerCommand(owner, name, ("base", "owner")), token);
+        var live = (await k3s.Api.GetAsync(target, token)).GetValueOrThrow();
+
+        (await k3s.Api.DeleteAsync(target, CascadePolicy.Background, token)).IsSuccess.ShouldBeTrue();
+        (await k3s.Api.ApplyAsync(OwnerCommand(usurper, name, ("base", "usurper")), token)).GetValueOrThrow()
+            .Result.ShouldBe(ApplyResult.Created);
+
+        var refused = await k3s.Api.ApplyAsync(CoOwnedCommand(a, live, """{ "data": { "a": "from-a" } }"""), token);
+
+        refused.IsFailure.ShouldBeTrue("the object under that name is not the one the command was built against");
+        refused.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        refused.Error.Message.ShouldContain(KubeLabels.GuidValue(owner.Id));
+        refused.Error.Message.ShouldContain(KubeLabels.GuidValue(usurper.Id));
+
+        (await Data(name, "a")).ShouldBeNull("nothing was written onto the usurper's object");
+        (await Data(name, "base")).ShouldBe("usurper");
+        (await ManagersOf(name)).ShouldNotContain(
+            KubeLabels.CoWriterFieldManager(KubeLabels.ResourceTypeValue(owner.Type), KubeLabels.GuidValue(owner.Id)),
+            "the old owner's co-writer manager never touched the new object"
+        );
+    }
+
+    [Fact]
     public async Task TheApiServerDoesNotHoldTheLockAgainstAnAbsentObjectWhichIsWhyTheClientRefuses() {
         // ⚠ THE MEASUREMENT BEHIND KubeApiClient's co-owned refusal. If the server refused an apply
         // that carried a resourceVersion against an object that is not there, the client's check

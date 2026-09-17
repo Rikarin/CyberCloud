@@ -190,6 +190,8 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
             // ownership, which is the property CoOwnedApplyTests holds against a real k3s; until
             // this fake has it, a case that co-writes fails here with the reason rather than
             // passing over a replacement. charts/managed/kube-ovn-vpc/conformance.yaml § owed.
+            // Calibrated by SuiteRejectionTests.TheFakeRefusesACoOwnedCommandRatherThanReplacingTheOwnersObjectWithTheFragment,
+            // so removing this branch turns a test red rather than a peering case quietly green.
             return Task.FromResult(
                 Result<ApplyOutcome>.Failure(
                     ErrorCode.InternalError,

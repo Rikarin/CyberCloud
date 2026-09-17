@@ -648,6 +648,223 @@ public sealed class CoOwnedCommandBuilderTests {
         refused.Error!.Message.ShouldContain("co-owned");
     }
 
+    [Fact]
+    public void TheAgentRefusesAnOrdinaryCommandThatMerelyClaimsAnOwner() {
+        // ⚠ THE HOLE THE #89 REVIEW NAMED. Setting ownerResourceId on a command switched the agent's
+        // seven-label check off, and "no labels" was the only thing it asked of the co-owned shape —
+        // so a control-plane bug that set the field on an ordinary command, labels dropped, would
+        // have applied an unlabelled body under the owner's own manager onto any object by name.
+        // The agent now asks for the shape the builder produces: this one has the ordinary manager
+        // and no resourceVersion, and is refused on the first.
+        var ordinary = KubeCommand.For(new RecordingConnection())
+            .WithTenantId(Owner.TenantId)
+            .WithResourceId(Owner)
+            .WithKind(Vpcs)
+            .ObjectJson("""{ "metadata": { "name": "hub-vpc" }, "spec": { "namespaces": [ "tenant-space" ] } }""")
+            .Build();
+
+        var wire = JsonNode.Parse(KubeCommandJson.ToJson(ordinary))!.AsObject();
+        wire["ownerResourceId"] = KubeLabels.GuidValue(PeeringA.Id);
+        wire["labels"] = new JsonObject();
+
+        var refused = KubeCommandJson.FromJson(wire.ToJsonString());
+
+        refused.IsFailure.ShouldBeTrue("an ordinary command with an owner stamped on it is not a co-owned command");
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain("field manager");
+        refused.Error.Message.ShouldContain("KubeLabels.CoWriterFieldManager");
+    }
+
+    [Fact]
+    public void TheAgentRefusesACoOwnedCommandWhoseManagerIsNotDerivedFromTheOwnerItClaims() {
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+        var wire = JsonNode.Parse(KubeCommandJson.ToJson(command))!.AsObject();
+
+        // The right shape of name, the wrong owner in it.
+        wire["fieldManager"] = KubeLabels.CoWriterFieldManager(KubeLabels.ResourceTypeValue(Owner.Type), KubeLabels.GuidValue(PeeringB.Id));
+
+        var refused = KubeCommandJson.FromJson(wire.ToJsonString());
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain(KubeLabels.GuidValue(Owner.Id), customMessage: "the message names the owner the manager should be derived from");
+    }
+
+    [Fact]
+    public void TheAgentRefusesACoOwnedCommandWithoutTheLiveResourceVersion() {
+        // Without the version there is no optimistic lock, and two co-writers racing onto one
+        // object would each apply a union computed from a version the other replaced.
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+        var wire = JsonNode.Parse(KubeCommandJson.ToJson(command))!.AsObject();
+
+        var body = JsonNode.Parse(wire["body"]!.GetValue<string>())!.AsObject();
+        body["metadata"]!.AsObject().Remove("resourceVersion");
+        wire["body"] = body.ToJsonString();
+
+        var refused = KubeCommandJson.FromJson(wire.ToJsonString());
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("resourceVersion");
+    }
+
+    [Fact]
+    public void TheAgentRefusesAnApplyThatCarriesNoFragmentBookkeepingOfItsOwn() {
+        // A hash with no fragment annotation beside it is a slice the next co-writer's union will
+        // not include — the prune the mode exists to prevent, arriving by the wire.
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+        var wire = JsonNode.Parse(KubeCommandJson.ToJson(command))!.AsObject();
+
+        wire["annotations"]!.AsObject().Remove(KubeLabels.FragmentAnnotation(PeeringA.Id));
+
+        var refused = KubeCommandJson.FromJson(wire.ToJsonString());
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("fragment bookkeeping");
+    }
+
+    [Fact]
+    public void TheAgentRefusesACoOwnedCommandWhoseBodyCarriesLabels() {
+        // The wire's `labels` map is empty and the body smuggles them in instead: the same claim on
+        // the owner's identity, one level down.
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+        var wire = JsonNode.Parse(KubeCommandJson.ToJson(command))!.AsObject();
+
+        var body = JsonNode.Parse(wire["body"]!.GetValue<string>())!.AsObject();
+        body["metadata"]!.AsObject()["labels"] = new JsonObject { [KubeLabels.ResourceId] = KubeLabels.GuidValue(PeeringA.Id) };
+        wire["body"] = body.ToJsonString();
+
+        var refused = KubeCommandJson.FromJson(wire.ToJsonString());
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("metadata.labels");
+    }
+
+    [Fact]
+    public async Task AWithdrawalRoundTripsThroughTheTunnelWithNoBookkeepingOfItsOwn() {
+        // The other shape the builder produces: no hash, none of its own three annotations, the
+        // others' carried. The agent's check has to admit it, or every teardown is refused at the
+        // agent and a peering can never be deleted.
+        var connection = new RecordingConnection();
+
+        await KubeCommand.For(connection)
+            .WithTenantId(PeeringA.TenantId)
+            .WithResourceId(PeeringA)
+            .WithKind(Vpcs)
+            .CoWriting(LiveVpc(WithFragmentOf(PeeringA, PeeringB)))
+            .DeleteAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        var withdrawal = connection.Applied.ShouldHaveSingleItem();
+        withdrawal.ReconcileHash.ShouldBeEmpty();
+
+        var back = KubeCommandJson.FromJson(KubeCommandJson.ToJson(withdrawal));
+
+        back.IsSuccess.ShouldBeTrue(back.Error?.Message);
+        back.GetValueOrThrow().Annotations.Keys.ShouldContain(KubeLabels.FragmentAnnotation(PeeringB.Id));
+        back.GetValueOrThrow().Annotations.Keys.ShouldNotContain(KubeLabels.FragmentAnnotation(PeeringA.Id));
+    }
+
+    [Fact]
+    public void AWithdrawalThatKeepsItsOwnBookkeepingIsRefused() {
+        // No hash says "withdrawal"; its own fragment annotation still present says "apply". A
+        // command that is both withdraws nothing, and the agent says so rather than guessing.
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+        var wire = JsonNode.Parse(KubeCommandJson.ToJson(command))!.AsObject();
+
+        wire["reconcileHash"] = string.Empty;
+
+        var refused = KubeCommandJson.FromJson(wire.ToJsonString());
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("withdrawal");
+    }
+
+    // ── Against the live object — the client's half of the check ───────────────────────────────
+
+    [Fact]
+    public void TheBuildersOwnCommandPassesBothChecksAgainstTheObjectItWasBuiltFrom() {
+        var live = LiveVpc(WithFragmentOf(PeeringB));
+        var command = CoWrite(PeeringA, live).Build();
+
+        command.CheckCoOwnedShape().IsSuccess.ShouldBeTrue(command.CheckCoOwnedShape().Error?.Message);
+        command.CheckCoOwnedAgainst(live).IsSuccess.ShouldBeTrue(command.CheckCoOwnedAgainst(live).Error?.Message);
+    }
+
+    [Fact]
+    public void AnOrdinaryCommandPassesBothChecksBecauseNeitherApplies() {
+        var ordinary = KubeCommand.For(new RecordingConnection())
+            .WithTenantId(Owner.TenantId)
+            .WithResourceId(Owner)
+            .WithKind(Vpcs)
+            .ObjectJson("""{ "metadata": { "name": "hub-vpc" }, "spec": {} }""")
+            .Build();
+
+        ordinary.CheckCoOwnedShape().IsSuccess.ShouldBeTrue();
+        ordinary.CheckCoOwnedAgainst(LiveVpc()).IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ANameTakenByAnotherResourceBetweenTheReadAndTheApplyIsAConflictNamingBoth() {
+        // ⚠ The replaced-owner case: the command was built from a read of the owner's object, the
+        // owner deleted it, and another resource created one under the same name. The command's
+        // claim and the object's label disagree, and the client that read the object a moment
+        // before the PATCH is the only thing placed to notice.
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+
+        var replacement = JsonNode.Parse(LiveVpc().Json)!.AsObject();
+        replacement["metadata"]!["labels"]![KubeLabels.ResourceId] = KubeLabels.GuidValue(PeeringB.Id);
+        var taken = LiveVpc() with { Json = replacement.ToJsonString() };
+
+        var refused = command.CheckCoOwnedAgainst(taken);
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        refused.Error.Message.ShouldContain(KubeLabels.GuidValue(Owner.Id));
+        refused.Error.Message.ShouldContain(KubeLabels.GuidValue(PeeringB.Id));
+    }
+
+    [Fact]
+    public void AnObjectInAnotherTenantFailsTheLiveCheckEvenWhenTheOwnerMatches() {
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+        var elsewhere = LiveVpc(tenant: Guid.Parse("0d0d0d0d-0d0d-4d0d-8d0d-0d0d0d0d0d0d"));
+
+        var refused = command.CheckCoOwnedAgainst(elsewhere);
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("across a tenant");
+    }
+
+    [Fact]
+    public void AManagerThatIsNotTheOneDerivedFromTheObjectFailsTheLiveCheck() {
+        // The shape check accepts any cybercloud/{type}/{ownerId} for the claimed owner; the type
+        // half is the object's to confirm, because the shape alone cannot know it.
+        var command = CoWrite(PeeringA, LiveVpc()).Build();
+
+        var retyped = JsonNode.Parse(LiveVpc().Json)!.AsObject();
+        retyped["metadata"]!["labels"]![KubeLabels.ResourceType] = "cybercloud.network_somethingelse";
+        var live = LiveVpc() with { Json = retyped.ToJsonString() };
+
+        var refused = command.CheckCoOwnedAgainst(live);
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Message.ShouldContain("cybercloud/cybercloud.network_somethingelse/");
+    }
+
+    [Fact]
+    public void TheManagerNameRoundTripsAndTheOwnersOwnDoesNotParse() {
+        KubeLabels.TryReadCoWriterFieldManager(
+            KubeLabels.CoWriterFieldManager("cybercloud.network_virtualnetworks", KubeLabels.GuidValue(Owner.Id)),
+            out var type,
+            out var id
+        ).ShouldBeTrue();
+
+        type.ShouldBe("cybercloud.network_virtualnetworks");
+        id.ShouldBe(Owner.Id);
+
+        KubeLabels.TryReadCoWriterFieldManager("cybercloud/cybercloud.network", out _, out _).ShouldBeFalse("the owner's own manager has one segment");
+        KubeLabels.TryReadCoWriterFieldManager("cybercloud/a/b/" + KubeLabels.GuidValue(Owner.Id), out _, out _).ShouldBeFalse("three segments is not the shape");
+        KubeLabels.TryReadCoWriterFieldManager("cybercloud/type/not-a-guid", out _, out _).ShouldBeFalse();
+        KubeLabels.TryReadCoWriterFieldManager("cybercloud/type/" + KubeLabels.GuidValue(Guid.Empty), out _, out _).ShouldBeFalse("an empty owner is no owner");
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────
 
     static string Spec(KubeCommand command) => JsonNode.Parse(command.Body)!["spec"]!.ToJsonString();

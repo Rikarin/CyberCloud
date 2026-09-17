@@ -208,15 +208,41 @@ owed:
       co-writer's apply is refused rather than re-creating it (⚠ the API server would create it — the
       optimistic lock does not hold against an absent object, measured — so KubeApiClient refuses on
       its read-before-write, and the window between that read and the PATCH is the one thing not
-      closed). ReconcileContext.CoWriter is the seam a peering reconciler reaches it through, with the
-      read-then-apply loop inside; IProviderCaseSource.Siblings is the harness member that creates
-      the second network (on the case SOURCE beside Ancestors, not on ProviderConformanceCase, for
-      the reason Ancestors is — an omitted sibling is not a quietly skipped assertion, it is a
-      convergence that fails with the reconciler's own words). ⚠ WHAT REMAINS, all of it this
-      provider's or the Docker-free harness's: (1) the `peerings` type — schema, reconciler over
-      ReconcileContext.CoWriter onto both Vpcs, a `{remoteVpc, localConnectIP}` entry and the routes
-      per exchanged range, teardown by withdrawal on both; (2) FakeKubeCluster stores a body verbatim
-      and therefore REFUSES a co-owned command by name — a Docker-free peering case needs it to keep
+      closed). ⚠ THE OWNER IS A CLAIM AND IS CHECKED TWICE (the #89 review found the agent asking
+      nothing of a co-owned frame but "no labels"): KubeCommand.CheckCoOwnedShape — the manager
+      derived from the owner named, the resourceVersion in the body, the fragment bookkeeping present
+      on an apply and absent on a withdrawal — runs at the tunnel agent and again in KubeApiClient,
+      and KubeCommand.CheckCoOwnedAgainst compares the command's owner, tenant and manager with the
+      object the client has just read, so a name taken by another resource between a co-writer's read
+      and its apply is a Conflict naming both owners rather than a fragment onto the wrong object
+      (CoOwnedApplyTests.ANameTakenByAnotherResourceAfterTheReadIsRefusedAndNothingIsWritten). ⚠ DRIFT
+      JOINS ON A SECOND KEY: a peering owns no object carrying its resource-id label, so DriftScanner
+      reads each object's fragment annotations (ClusterObjectRecord.Fragments) and judges a co-writer
+      by its fragment-hash — a converged peering is not a stray, a changed fragment is diverged, and a
+      fragment whose writer no grain owns is an orphan naming the slice, which is the only place a
+      fragment left behind by a co-writer that never withdrew is found; the apply path carries every
+      stored fragment forward and prunes none, under the API server's 256 KiB cap on an object's
+      annotations. ReconcileContext.CoWriter is the seam a peering reconciler reaches it through, with
+      the read-then-apply loop inside — its withdrawal is Unchanged, and applies nothing, when the
+      object carries no fragment of the co-writer's; IProviderCaseSource.Siblings is the harness
+      member that creates the second network (on the case SOURCE beside Ancestors, not on
+      ProviderConformanceCase, for the reason Ancestors is — an omitted sibling is not a quietly
+      skipped assertion, it is a convergence that fails with the reconciler's own words).
+      ⚠ CHECKED AGAINST #30, as the issue asked — docs/plan/09 § A second writer on an object, the
+      closing paragraph: the mode is provider-blind (nothing in it asks which provider owns the
+      object; tenant-id is the one boundary read off it), so a vault co-writing a fragment onto a
+      Storage or Compute object in its own tenant could use it unchanged, and it still does not
+      answer #30, whose seam is a cross-provider READ of resources by id — `backup-vaults` in
+      charts/managed/seaweedfs/conformance.yaml — plus two things that do not carry: a vault cannot
+      annotate another resource's object through this mode (fragment metadata is refused by name),
+      and ProviderTestCluster.Siblings refuses a sibling from another provider because the suite
+      registers one. ⚠ WHAT REMAINS, all of it this provider's or the Docker-free harness's: (1) the
+      `peerings` type — schema, reconciler over ReconcileContext.CoWriter onto both Vpcs, a
+      `{remoteVpc, localConnectIP}` entry and the routes per exchanged range, teardown by withdrawal
+      on both; (2) FakeKubeCluster stores a body verbatim and therefore REFUSES a co-owned command by
+      name — calibrated in
+      SuiteRejectionTests.TheFakeRefusesACoOwnedCommandRatherThanReplacingTheOwnersObjectWithTheFragment
+      so the guard cannot be removed unnoticed — and a Docker-free peering case needs it to keep
       per-manager field ownership, or the case runs only in the cluster-backed lane; (3) the harness
       empties the fake cluster between assertions, so a sibling's Vpc is not there to write onto when
       a test starts — the harness would have to re-materialise the world after a Reset, and
@@ -224,9 +250,12 @@ owed:
       gap so it flips the day it closes; (4) the shared suite's ownership assertions — every applied
       object carries the seven labels, teardown removes the objects, drift is repaired by re-creating
       them — presume the type OWNS what it applies, and a co-writing type needs a branch that reads
-      its fragment instead. Nor can the parent fold in children it cannot list, and a child that
-      writes a sidecar and waits for the parent never converges: DriftScanner "reports; it does not
-      repair" — unchanged.
+      its fragment instead; (5) no production caller builds DriftScanner's ExpectedResource yet, so
+      the co-writer's join is proven in DriftScannerTests, and the only inventory that reads fragment
+      annotations off a real API server is the cluster-conformance suite's
+      ListBackedClusterObjectInventory — no host runs a scan. Nor can the parent fold in children
+      it cannot list, and a child that writes a sidecar and waits for the parent never converges:
+      DriftScanner "reports; it does not repair" — unchanged.
   - id: security-group-rules-are-arrays-of-objects
     says: >
       `virtualNetworks/securityGroups` is OWED rather than refused, and it is the one of docs/plan/14's

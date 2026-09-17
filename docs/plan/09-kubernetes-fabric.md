@@ -218,9 +218,34 @@ to the **co-owned** mode, whose rules are:
   `CoOwnedApplyTests.TheApiServerDoesNotHoldTheLockAgainstAnAbsentObjectWhichIsWhyTheClientRefuses`.
   A co-writer that created the owner's object would create it under the owner's name with none of
   the seven labels and none of the owner's spec. So `KubeApiClient` refuses a co-owned apply whose
-  read-before-write found nothing (`KubeCommand.OwnerResourceId` marks the command), and the tunnel
-  agent refuses a co-owned command that carries labels. The window between that read and the `PATCH`
-  remains, and is the one thing here the API server does not close.
+  read-before-write found nothing (`KubeCommand.OwnerResourceId` marks the command). The window
+  between that read and the `PATCH` remains, and is the one thing here the API server does not close.
+- **The owner is a claim, and it is checked twice rather than trusted.** `OwnerResourceId` switches
+  the seven-label guard off for the command — the labels are the owner's and stay on the object — so
+  a command that merely *said* it was co-owned would be an unlabelled body under any manager onto any
+  object, and the #89 review found the agent asking nothing more of it than "no labels".
+  `KubeCommand.CheckCoOwnedShape` is what replaces the guard: no labels on the wire or in the body,
+  the manager derived from the owner the command names, `metadata.resourceVersion` in the body, every
+  annotation one of the three per-fragment keys, the fragment bookkeeping present on an apply and
+  absent on a withdrawal, `Force` off. The tunnel agent runs it on every co-owned frame
+  (`KubeCommandJson.FromJson`), and `KubeApiClient` runs it again and then
+  `KubeCommand.CheckCoOwnedAgainst` on the object it has just read: the live `resource-id` is the
+  owner the command claims, the live `tenant-id` is the command's, and the manager is the one derived
+  from the live labels. A name taken by another resource between a co-writer's read and its apply is
+  what the second catches — a failure rather than an outcome, `ErrorCode.Conflict` naming both
+  owners, because reading again is not the repair; measured in
+  `CoOwnedApplyTests.ANameTakenByAnotherResourceAfterTheReadIsRefusedAndNothingIsWritten`.
+- **Drift joins on a second key.** A co-writer owns no object carrying its `resource-id` label, so
+  the per-cluster scan of [08](08-resource-manager.md) — a hash join on that label — would call every
+  converged peering a stray, forever. `ClusterObjectRecord.Fragments` carries each object's
+  `fragment.{writer}` annotations with the hash and path beside them, and `DriftScanner` looks a
+  resource up under both keys: a co-writer with neither is a stray, one whose `fragment-hash.{writer}`
+  differs from its desired hash — the hash of its *fragment*, which is what a co-owned apply reports —
+  is diverged, and a fragment whose writer no grain owns is an orphan naming the slice rather than the
+  object. That last one is the only place a fragment left by a co-writer that vanished without
+  withdrawing is ever found: the apply path carries every stored fragment forward verbatim and prunes
+  none, and the API server's 256 KiB cap on an object's annotations is the ceiling that bookkeeping
+  lives under (`KubeLabels.FragmentAnnotationPrefix`).
 
 A child reconciler reaches this through `ReconcileContext.CoWriter` — `ApplyFragmentAsync` and
 `WithdrawFragmentAsync` over the pass's own connection, read-then-apply with the stale retry inside
@@ -236,6 +261,33 @@ verbatim and so *refuses* a co-owned command by name rather than replacing the o
 fragment, and `ConformanceState.Reset` empties the fake cluster between assertions, so a sibling's
 *objects* are gone when a test starts. A Docker-free peering case needs both closed;
 `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `peerings-need-a-second-writer-on-the-vpc`.
+
+⚠ **Checked against #30, which is the same shape from the other side — and it is a different seam.**
+Issue #89 asked that a design answering the cross-*object* case (a peering onto two `Vpc`s) be held
+against the cross-*provider* one (#30: a `RecoveryServices/vaults` reconciler that must reach
+Storage's and Compute's resources, which [`src/Providers/README.md` § Hard rule](../../src/Providers/README.md)
+forbids by assembly reference). Held against it, the co-owned mode comes out **provider-blind and
+resource-blind**, and that is checked rather than assumed: nothing in `CoWriting`, `KubeApiClient`
+or the two checks above asks which provider owns the object — the manager is named for the owner's
+`resource-type` label whatever its namespace, and the only boundary read off the object is
+`tenant-id` — so a vault that had to co-write a fragment onto a Storage or Compute *object* in its
+own tenant could use this mode unchanged. Three things do **not** carry over, and they are why #30
+stays owed on its own seam rather than closing here. First, a vault mostly has to *read*: enumerate
+the resources a policy protects and learn what objects they render, and `CoWriting` takes an
+`ObjectRef` the caller already knows — a peering derives its parent's from its own address, the way
+`NatGateways.VpcRefOf` does, and that derivation is per-provider knowledge a vault cannot reference.
+The resource-level read across providers, through `CyberCloud.ResourceManager` by id, is what
+`charts/managed/seaweedfs/conformance.yaml § owed`, `backup-vaults` names and this does not build.
+Second, what a Velero-style backend wants on another resource's object is *metadata* —
+`backup.velero.io/backup-volumes` on a pod — and the co-owned mode refuses fragment metadata and
+`WithAnnotations` by name, because an annotation under the shared manager that is not in the merged
+fragment is pruned by the next co-writer; so a vault cannot annotate somebody else's object through
+this seam, and that is the right answer: the protected type renders the annotation from a property of
+its own, or the backend selects by label without touching the object. Third, the harness:
+`ProviderTestCluster.Siblings` refuses a sibling from another provider because the suite registers
+one provider, so a cross-provider case has no fixture today — the same gap as the seam, from the
+test's side. In one line: #89 answers "a second writer on an object this tenant owns", #30 needs "a
+reader of resources this provider does not", and neither design constrains the other.
 
 ## Observing: informers, not polling
 

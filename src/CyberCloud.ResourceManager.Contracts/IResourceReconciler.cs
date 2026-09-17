@@ -197,7 +197,10 @@ public readonly record struct ReconcileContext(
     ///         server-side apply against the pass's own cluster connection, so the default over
     ///         <see cref="Cluster" /> is the complete implementation, a hand-built context gets a
     ///         working one for free, and a pass with no cluster gets <see cref="NoClusterCoWriter" />,
-    ///         which fails by name.
+    ///         which fails by name. Derived on every read rather than once in the constructor, so a
+    ///         context built without a cluster and given one later — <c>with { Cluster = … }</c> —
+    ///         co-writes through the cluster it has now, not the refusal it was born with; a
+    ///         co-writer a caller supplied stays supplied.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>What a co-writer still has to know on its own: the owner's object's name.</b> The
@@ -209,8 +212,12 @@ public readonly record struct ReconcileContext(
     ///         reports <c>InProgress</c> rather than creating it.
     ///     </para>
     /// </remarks>
-    public IKubeCoWriter CoWriter { get; init; } =
-        Cluster is null ? new NoClusterCoWriter() : new KubeCoWriter(Cluster);
+    public IKubeCoWriter CoWriter {
+        get => coWriter ?? (Cluster is null ? new NoClusterCoWriter() : new KubeCoWriter(Cluster));
+        init => coWriter = value;
+    }
+
+    readonly IKubeCoWriter? coWriter;
 }
 
 /// <summary>

@@ -123,6 +123,24 @@ public sealed class KubeCoWriterTests {
     }
 
     [Fact]
+    public async Task WithdrawingWhenThereIsNoFragmentOfOursIsUnchangedAndAppliesNothing() {
+        // ⚠ The second pass of a delete, after the first already withdrew — or a peering that
+        // never got as far as applying. The builder's bare-Result DeleteAsync cannot tell "withdrew"
+        // from "nothing to withdraw", so the seam decides on the read: no fragment annotation of
+        // this writer's on the object means nothing to take back, and no PATCH is sent.
+        var cluster = new ScriptedConnection { Live = Live("41", withOwnFragment: false) };
+        var writer = new KubeCoWriter(cluster);
+
+        var result = await writer.WithdrawFragmentAsync(Peering, Target, TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        result.GetValueOrThrow().Result.ShouldBe(ApplyResult.Unchanged);
+        result.GetValueOrThrow().Message.ShouldContain("nothing to withdraw");
+        cluster.Applied.ShouldBeEmpty("a withdrawal with nothing to withdraw writes nothing");
+        cluster.Deleted.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task AStaleWithdrawalIsReadAgainToo() {
         var cluster = new ScriptedConnection { Live = Live("41", withOwnFragment: true), StaleTimes = 1 };
         var writer = new KubeCoWriter(cluster);

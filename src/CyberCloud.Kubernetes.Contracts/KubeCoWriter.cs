@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 namespace CyberCloud.Kubernetes.Contracts;
 
@@ -59,10 +60,21 @@ public interface IKubeCoWriter {
     /// <param name="target">The owner's object.</param>
     /// <param name="cancellationToken">The reconcile's token.</param>
     /// <returns>
-    ///     The withdrawal's outcome. An object that is already gone is
-    ///     <see cref="ApplyResult.Unchanged" /> with a message saying so: the owner's delete wins,
-    ///     and a fragment on an object that no longer exists is as withdrawn as it can be.
+    ///     The withdrawal's outcome: <see cref="ApplyResult.Updated" /> when this co-writer's fragment
+    ///     was on the object and is now off it, <see cref="ApplyResult.Unchanged" /> when there was
+    ///     none to take back. An object that is already gone is <see cref="ApplyResult.Unchanged" />
+    ///     too, with a message saying so: the owner's delete wins, and a fragment on an object that
+    ///     no longer exists is as withdrawn as it can be.
     /// </returns>
+    /// <remarks>
+    ///     ⚠ The no-op is decided on the read, not on the apply. The builder's co-owned
+    ///     <c>DeleteAsync</c> answers a bare <c>Result</c>, which collapses "withdrew it" and "there
+    ///     was nothing to withdraw" into one success, so a reconciler asking whether its teardown did
+    ///     anything — the second pass of a delete, after the first already withdrew — would hear
+    ///     <see cref="ApplyResult.Updated" /> every time. The live object's
+    ///     <c>cybercloud.io/fragment.{writer}</c> annotation is what says whether there is a
+    ///     fragment to take back, and when it is absent nothing is applied.
+    /// </remarks>
     Task<Result<ApplyOutcome>> WithdrawFragmentAsync(
         ResourceId writer,
         ObjectRef target,
@@ -130,6 +142,18 @@ public sealed class KubeCoWriter(IKubeClusterConnection cluster) : IKubeCoWriter
                 }
             ),
             attempt: async (live, ct) => {
+                if (!CarriesFragmentOf(live, writer.Id)) {
+                    return Result<ApplyOutcome>.Success(
+                        new() {
+                            Result = ApplyResult.Unchanged,
+                            Target = target,
+                            ResourceVersion = live.ResourceVersion,
+                            Message = $"'{target}' carries no fragment of resource {writer.Id:D}'s; there is "
+                                + "nothing to withdraw and nothing was applied."
+                        }
+                    );
+                }
+
                 var withdrawn = await KubeCommand.For(cluster)
                     .WithTenantId(writer.TenantId)
                     .WithResourceId(writer)
@@ -160,6 +184,26 @@ public sealed class KubeCoWriter(IKubeClusterConnection cluster) : IKubeCoWriter
             },
             cancellationToken
         );
+    }
+
+    /// <summary>Whether the object carries <paramref name="writer" />'s fragment annotation.</summary>
+    /// <param name="live">The object as read.</param>
+    /// <param name="writer">The co-writer's GUID.</param>
+    static bool CarriesFragmentOf(KubeObject live, Guid writer) {
+        try {
+            using var document = JsonDocument.Parse(live.Json);
+
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("metadata", out var metadata)
+                && metadata.ValueKind == JsonValueKind.Object
+                && metadata.TryGetProperty("annotations", out var annotations)
+                && annotations.ValueKind == JsonValueKind.Object
+                && annotations.TryGetProperty(KubeLabels.FragmentAnnotation(writer), out _);
+        } catch (JsonException) {
+            // Not this method's refusal to make: the builder refuses an unparseable live object by
+            // name, and answering "no fragment" here would turn that refusal into a silent no-op.
+            return true;
+        }
     }
 
     async Task<Result<ApplyOutcome>> RunAsync(

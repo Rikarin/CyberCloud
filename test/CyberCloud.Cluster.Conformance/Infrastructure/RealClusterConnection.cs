@@ -243,8 +243,35 @@ public sealed class ListBackedClusterObjectInventory(
             // finding. KubeLabels.IsGroupScoped is the test; ClusterObjectRecord's remarks say why
             // the member is `required`.
             ResourceType = Text(labels, KubeLabels.ResourceType),
-            Target = new() { Kind = kind, Namespace = Text(metadata, "namespace"), Name = Text(metadata, "name") }
+            Target = new() { Kind = kind, Namespace = Text(metadata, "namespace"), Name = Text(metadata, "name") },
+            Fragments = Fragments(annotations)
         };
+    }
+
+    /// <summary>
+    ///     One <see cref="FragmentRecord" /> per <c>cybercloud.io/fragment.{writer}</c> annotation,
+    ///     with the writer's hash and path read from the two keys beside it.
+    /// </summary>
+    static ImmutableArray<FragmentRecord> Fragments(JsonElement annotations) {
+        if (annotations.ValueKind != JsonValueKind.Object) {
+            return [];
+        }
+
+        var fragments = ImmutableArray.CreateBuilder<FragmentRecord>();
+
+        foreach (var annotation in annotations.EnumerateObject()) {
+            if (KubeLabels.TryReadFragmentWriter(annotation.Name, out var writer)) {
+                fragments.Add(
+                    new(
+                        writer,
+                        Text(annotations, KubeLabels.FragmentHashAnnotation(writer)),
+                        Text(annotations, KubeLabels.FragmentPathAnnotation(writer))
+                    )
+                );
+            }
+        }
+
+        return fragments.ToImmutable();
     }
 
     static string Text(JsonElement element, string property) =>

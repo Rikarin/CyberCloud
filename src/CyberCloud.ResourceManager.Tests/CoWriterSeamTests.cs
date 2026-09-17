@@ -57,6 +57,30 @@ public sealed class CoWriterSeamTests {
     }
 
     [Fact]
+    public async Task AContextGivenAClusterAfterConstructionCoWritesThroughThatCluster() {
+        // ⚠ "Derived from Cluster" has to mean the cluster the context HAS, not the one it was
+        // constructed with. A context built without a connection and handed one by `with` would
+        // otherwise keep the refusal it was born with, and the remark would be true only at
+        // construction. No driver builds a context that way today; this is what keeps it from
+        // mattering when one does.
+        var connection = new RefusingConnection();
+        var context = Context(null) with { Cluster = connection };
+
+        context.CoWriter.ShouldBeOfType<KubeCoWriter>();
+
+        await context.CoWriter.ApplyFragmentAsync(
+            context.Id,
+            new() { Kind = new() { Group = "", Version = "v1", Kind = "ConfigMap", Plural = "configmaps" }, Namespace = Namespace, Name = "x" },
+            """{ "data": { "k": "v" } }""",
+            TestContext.Current.CancellationToken
+        );
+
+        connection.Reads.ShouldBe(1, "the co-writer follows the cluster the context has now");
+
+        (Context(connection) with { Cluster = null }).CoWriter.ShouldBeOfType<NoClusterCoWriter>("and the other direction");
+    }
+
+    [Fact]
     public void ACallerMayStillSupplyItsOwn() {
         var theirs = new NoClusterCoWriter();
 
