@@ -98,11 +98,14 @@ public static class KubeJson {
     ///     <para>
     ///         ⚠ <b>Equality here was a measured bug, not a style preference.</b> A real CRD's
     ///         <c>+kubebuilder:default</c> puts fields in the stored object that nobody applied, so an
-    ///         equality comparison against a rendered spec fails against a real cluster and passes
-    ///         everywhere else. It passed everywhere else because the Docker-free harness derives its
-    ///         CRD stub from <c>ProviderConformanceCase.Objects</c> and a derived stub has no
-    ///         defaults — an OpenSearch bug of exactly this shape left that suite 27 of 27 green and
-    ///         was caught only by a hand-written unit test.
+    ///         equality comparison against a rendered spec fails against a real cluster and passed
+    ///         everywhere else. It passed everywhere else because, until issue #91, the Docker-free
+    ///         harness derived its CRD stub from <c>ProviderConformanceCase.Objects</c> and a derived
+    ///         stub has no defaults — an OpenSearch bug of exactly this shape left that suite 27 of
+    ///         27 green and was caught only by a hand-written unit test. The fake applies the
+    ///         committed definition's defaults now (<c>FakeKubeCluster.Admit</c>), so that shape is
+    ///         red in the Docker-free suite too; the rule stands because the server adds more than
+    ///         defaults.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>An empty expectation is satisfied by an absent key</b>, on the same argument as

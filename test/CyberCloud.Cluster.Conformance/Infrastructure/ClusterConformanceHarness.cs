@@ -572,8 +572,9 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Installs a minimal <c>CustomResourceDefinition</c> for every custom kind the case's
-    ///     resource owns, so that the API server serves a REST path for it.
+    ///     Installs a <c>CustomResourceDefinition</c> for every custom kind the case's resource owns,
+    ///     so that the API server serves a REST path for it — the operator's real definition when
+    ///     <c>charts/bundle/*/crds/</c> commits one, and a minimal open stub otherwise.
     /// </summary>
     /// <param name="raw">The raw client.</param>
     /// <param name="cancellationToken">The harness's token.</param>
@@ -605,16 +606,33 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     ///         provider nothing.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What this is NOT: the operator's real CRD, and not the operator.</b> The schema
-    ///         is <c>x-kubernetes-preserve-unknown-fields</c>, so it validates nothing — this suite's
-    ///         four criteria are about REST addressability, server-side apply under our field
-    ///         manager, admission of the seven labels, and conflict parsing, none of which need the
-    ///         upstream schema. It deliberately does not vendor Strimzi's 8 000-line CRD: a copy of
-    ///         an upstream file that nothing checks is drift with a version number on it, and the
-    ///         facts that ARE relied on are pinned in <c>charts/managed/kafka/SOURCE</c> where a
-    ///         human reads them. What no CRD can supply is the controller: nothing in this suite
-    ///         writes <c>status.conditions</c>, which is why every provider's readiness assertion is
-    ///         owed in its <c>conformance.yaml</c> rather than made here.
+    ///         ⚠ <b>The REAL definition when one is committed, since issue #91 — and the argument
+    ///         that kept it out is answered rather than forgotten.</b> Until 2026-09-17 every kind
+    ///         got a stub whose schema was <c>x-kubernetes-preserve-unknown-fields</c>, on the
+    ///         reasoning that this suite's criteria — REST addressability, server-side apply under
+    ///         our field manager, admission of the seven labels, conflict parsing — need no upstream
+    ///         schema, and that "a copy of an upstream file that nothing checks is drift with a
+    ///         version number on it". Both halves were true and the conclusion was wrong:
+    ///         <c>charts/managed/seaweedfs-bucket</c> rendered three fields in a shape the real
+    ///         definition refuses, for a month, under a green suite, because the only API server
+    ///         that ever saw the object had been told to accept anything. What answers the drift
+    ///         objection is that the copy IS checked now: <c>charts/bundle/crds.sh</c> writes it
+    ///         from the release the component pins and the <c>Definitions</c> gate re-fetches and
+    ///         compares bytes. So a kind with a committed definition gets that definition, verbatim,
+    ///         and the API server validates the reconciler's output as an operator's cluster would.
+    ///         A kind without one still gets the stub, and
+    ///         <c>ProviderConformanceTests.EveryCustomKindTheCaseRendersHasACommittedDefinition</c>
+    ///         is what keeps a shipping provider out of that branch.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A conversion webhook in a committed definition is installed as written and never
+    ///         called.</b> Cluster API's definitions name <c>capi-webhook-service</c>, which no bare
+    ///         k3s has; the API server accepts the definition regardless and invokes the webhook only
+    ///         for a request at a version other than the storage version. Every chart renders the
+    ///         storage version — the coverage half of the Bundle gate is what keeps that true — so
+    ///         nothing here reaches the webhook. What no definition can supply is the controller:
+    ///         nothing in this suite writes <c>status.conditions</c>, which is why every provider's
+    ///         readiness assertion is owed in its <c>conformance.yaml</c> rather than made here.
     ///     </para>
     /// </remarks>
     static async Task EnsureCustomResourceDefinitionsAsync(
@@ -695,6 +713,29 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         }
 
         foreach (var (kind, isClusterScoped) in kinds) {
+            // ⚠ The committed definition first, read from the working tree as CommittedDefinitions
+            // reads it for the fake, so the two lanes install the same bytes. KubernetesYaml is the
+            // client's own reader; the file is the document `crds.sh` wrote, unchanged.
+            if (CommittedDefinitions.Find(kind) is { } committed) {
+                var real = KubernetesYaml.Deserialize<V1CustomResourceDefinition>(
+                    await File.ReadAllTextAsync(
+                        Path.Combine(CommittedDefinitions.RepositoryRoot, committed.File),
+                        cancellationToken
+                    ).ConfigureAwait(false)
+                );
+
+                // A `helm.sh/resource-policy: keep` or a cert-manager annotation is inert on a bare
+                // k3s; what is NOT inert is a `metadata.resourceVersion` or a status block, which a
+                // create refuses — neither is in a file the script writes, and this strips them anyway
+                // so a hand-edited definition fails on its schema rather than on its bookkeeping.
+                real.Metadata.ResourceVersion = null;
+                real.Status = null;
+
+                await CreateDefinitionAsync(raw, real, cancellationToken).ConfigureAwait(false);
+
+                continue;
+            }
+
             var definition = new V1CustomResourceDefinition {
                 ApiVersion = "apiextensions.k8s.io/v1",
                 Kind = "CustomResourceDefinition",
@@ -725,16 +766,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                 }
             };
 
-            try {
-                await raw.ApiextensionsV1
-                    .CreateCustomResourceDefinitionAsync(definition, cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
-            } catch (k8s.Autorest.HttpOperationException ex)
-                when (ex.Response?.StatusCode == System.Net.HttpStatusCode.Conflict) {
-                    // Two harnesses share one k3s — the lifecycle fixture and the silo-kill test — and
-                    // both install the same definitions. A 409 is the other one having won, which is the
-                    // desired end state.
-                }
+            await CreateDefinitionAsync(raw, definition, cancellationToken).ConfigureAwait(false);
         }
 
         // ⚠ A CRD is served by the API server ASYNCHRONOUSLY: `Established` is a condition the
@@ -745,6 +777,27 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             await WaitUntilEstablishedAsync(raw, kind.Plural + "." + kind.Group, cancellationToken)
                 .ConfigureAwait(false);
         }
+    }
+
+    /// <summary>Creates one definition, treating "already there" as done.</summary>
+    /// <param name="raw">The raw client.</param>
+    /// <param name="definition">The definition — committed or stub.</param>
+    /// <param name="cancellationToken">The harness's token.</param>
+    static async Task CreateDefinitionAsync(
+        IKubernetes raw,
+        V1CustomResourceDefinition definition,
+        CancellationToken cancellationToken
+    ) {
+        try {
+            await raw.ApiextensionsV1
+                .CreateCustomResourceDefinitionAsync(definition, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        } catch (k8s.Autorest.HttpOperationException ex)
+            when (ex.Response?.StatusCode == System.Net.HttpStatusCode.Conflict) {
+                // Two harnesses share one k3s — the lifecycle fixture and the silo-kill test — and
+                // both install the same definitions. A 409 is the other one having won, which is the
+                // desired end state.
+            }
     }
 
     /// <summary>Whether the API server already serves a REST path for this kind.</summary>

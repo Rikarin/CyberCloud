@@ -18906,7 +18906,7 @@
                 "properties": {
                   "destinationPath": {
                     "default": "",
-                    "description": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.",
+                    "description": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.",
                     "example": "s3://tenant-bucket/postgres",
                     "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
                     "type": "string"

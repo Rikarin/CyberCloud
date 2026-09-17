@@ -34,6 +34,9 @@
 //   * a managed chart rendering a group no component serves, OR a pin that stopped
 //     serving one, OR two components claiming the same group/version                      → Coverage
 //   * one commit that both bumps a pin and edits a managed template                       → Ordering
+//   * a chart renders an operator-owned kind with no committed definition under
+//     charts/bundle/<component>/crds/, or a definition is committed that nothing renders  → Definitions
+//     (build/Build.Definitions.cs, offline half; the byte comparison with the release is its own row)
 
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
@@ -209,6 +212,7 @@ partial class Build {
         violations.AddRange(RosterViolations(components));
         violations.AddRange(DependencyViolations(components));
         violations.AddRange(CoverageViolations(components, rendered));
+        violations.AddRange(DefinitionViolations(components));
         violations.AddRange(OrderingViolations(out var orderingDetail));
 
         return new(
@@ -220,7 +224,8 @@ partial class Build {
             + $"group/version(s) and recording "
             + $"{components.Sum(x => ReadBundleSequence(x.File, "images").Count)} image digest(s); "
             + $"{chartsInspected} chart(s) rendering {rendered.Count} "
-            + $"non-built-in group/version(s); {orderingDetail}",
+            + $"non-built-in group/version(s), with {ReadCommittedDefinitions(out _).Count} committed "
+            + $"definition(s) under crds/; {orderingDetail}",
             violations
         );
     }

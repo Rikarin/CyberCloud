@@ -3095,7 +3095,7 @@ public sealed partial class PostgreSQLServerData {
         /// <summary>Backup to the tenant's object store, using CloudNativePG's barman-cloud.</summary>
         public sealed partial class BackupData {
 
-            /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.</summary>
+            /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.</summary>
             /// <remarks>Defaults to "" when left unset.</remarks>
             [JsonPropertyName("destinationPath")]
             public string? DestinationPath { get; set; }

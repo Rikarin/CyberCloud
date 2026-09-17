@@ -260,6 +260,15 @@ public sealed class SuiteRejectionTests {
         // and Network went red for a reason that does not exist outside FakeKubeCluster.
         //
         // So the strip is scoped to built-in groups, and this is what holds the scope in place.
+        //
+        // ⚠ THE BODY IS A KAFKA THE REAL STRIMZI DEFINITION ADMITS, SINCE ISSUE #91. Until then it
+        // was `{ "cruiseControl": {}, "listeners": [] }` and the fake echoed it; the fake now
+        // validates every kind committed under charts/bundle/*/crds/, and Strimzi's schema requires
+        // `spec.kafka.listeners` with at least one entry and declares no `spec.listeners` at all —
+        // so the old body is refused, which is the point of that issue and not a regression here.
+        // The empty array that stands for "an empty collection survives" is `spec.kafka.template.pod.tolerations`
+        // — declared, an array, and empty, exactly as `cruiseControl: {}` is declared, an object, and
+        // empty.
         var world = new FakeKubeCluster(ConformanceIds.Cluster);
 
         var address = new ResourceId(
@@ -283,7 +292,19 @@ public sealed class SuiteRejectionTests {
             .InNamespace(ns)
             .WithKind(custom)
             .WithApiVersion(Probes.V2026)
-            .ObjectJson("""{ "spec": { "cruiseControl": {}, "listeners": [] } }""")
+            .ObjectJson(
+                """
+                {
+                  "spec": {
+                    "kafka": {
+                      "listeners": [{ "name": "plain", "port": 9092, "type": "internal", "tls": false }],
+                      "template": { "pod": { "tolerations": [] } }
+                    },
+                    "cruiseControl": {}
+                  }
+                }
+                """
+            )
             .ApplyAsync(TestContext.Current.CancellationToken);
 
         applied.IsSuccess.ShouldBeTrue(applied.Error?.Message);
@@ -297,7 +318,8 @@ public sealed class SuiteRejectionTests {
             + "a harness that deletes it makes a converging provider look broken"
         );
 
-        spec["listeners"].ShouldNotBeNull("a custom resource's empty array survives for the same reason");
+        spec["kafka"]!["template"]!["pod"]!["tolerations"]
+            .ShouldNotBeNull("a custom resource's empty array survives for the same reason");
     }
 
     [Fact]

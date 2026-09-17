@@ -13,8 +13,10 @@ This directory is that job. It is what turns a bare Kubernetes cluster into one 
 > form of "the k3s the cluster suite starts has no `<X>` operator", and each read it as a limitation
 > of the test harness. It was not a harness limitation. It was this directory not existing. The same
 > sentence appears in `test/CyberCloud.Cluster.Conformance`'s own remarks — *"the platform cluster
-> installs its CRDs from `charts/bundle/` long before a tenant creates one"* — which is why the
-> harness derives CRD stubs rather than installing real ones.
+> installs its CRDs from `charts/bundle/` long before a tenant creates one"* — which is why that
+> harness derived CRD stubs rather than installing real ones, until issue #91 showed what an open
+> stub costs and this directory started committing the real definitions (§ The definitions the
+> harness validates against).
 
 ## This directory holds no Helm charts
 
@@ -29,7 +31,10 @@ bundle component has no resource type and no tenant-facing configuration surface
 failure mode is a schema drift no API depends on.
 
 So a component is a directory holding **one file**, `component.yaml`, describing an install that
-somebody else's chart or manifest performs.
+somebody else's chart or manifest performs — plus, since issue #91, a `crds/` directory when a
+managed chart renders a kind the component serves, holding the real definition of each such kind as
+the pinned release renders it (§ The definitions the harness validates against). Those files are
+written by a script and checked by two gates; nobody edits them by hand.
 
 > ⚠ **`SOURCE` is one file in `charts/managed/` and zero files here, and the difference is a real
 > one rather than a shortcut.** A managed chart has two separable questions — *where did these
@@ -116,6 +121,58 @@ That check is not decoration. It is what the ordering rule reduces to:
 Write a `serves:` line only for a group/version you read off the definitions the pin installs. It is
 a claim the build tests, not an inventory of what a chart contains — `prometheus-operator-crds`
 installs `monitoring.coreos.com/v1alpha1` and does not claim it, because nothing here renders one.
+
+## The definitions the harness validates against
+
+Beside each component that a managed chart renders against sits `crds/`, holding the **real**
+`CustomResourceDefinition` of every kind that chart renders — the document as the pinned release
+renders it, byte for byte, one file per definition named `<plural>.<group>.yaml`. Fourteen components
+carry twenty-six of them; six carry none, because nothing under `charts/managed/` renders a kind they
+serve.
+
+```bash
+./charts/bundle/crds.sh                          # fetch every pinned release and compare bytes
+./charts/bundle/crds.sh --refresh                # rewrite crds/ from the pinned releases — run this on a pin bump
+./charts/bundle/crds.sh --component kube-ovn     # one component. Repeatable
+./charts/bundle/crds.sh --wanted                 # print the kinds charts render, per component, fetch nothing
+```
+
+> ⚠ **Why these exist — issue #91.** Every reconciler renders its custom resource in C#, and for a
+> month the only API server most of them ever met was `FakeKubeCluster`, which held whatever it was
+> handed; the cluster-backed suite derived a stub per kind whose schema was
+> `x-kubernetes-preserve-unknown-fields`. So `charts/managed/seaweedfs-bucket` rendered `clusterRef`
+> as a string, `versioning` as a boolean and `quota` as a string from 2026-08-12 to 2026-09-15, and
+> twenty-eight green assertions per run said nothing, because "the object matches what was applied"
+> was true by construction. Since 2026-09-18 `FakeKubeCluster` validates every apply against these
+> files (`test/CyberCloud.Conformance` § `StructuralSchema`: required, type, enum, undeclared fields,
+> bounds, patterns, associative-list keys, defaults, with `x-kubernetes-preserve-unknown-fields`
+> honoured), `ClusterConformanceHarness` installs them into k3s instead of a stub, and the first run
+> over every family found `charts/managed/postgres` rendering a `destinationPath: ""` that
+> CloudNativePG refuses — `charts/managed/postgres/conformance.yaml` § owed,
+> `backup-destination-is-not-filled-in`.
+
+> ⚠ **Only the kinds a chart renders, and the set is derived, not declared.** `crds.sh --wanted` reads
+> every `apiVersion` + `kind` pair out of `charts/managed/*/templates/` — the same scan the Bundle
+> gate's coverage check performs — and keeps the pairs whose group/version a component `serves:`.
+> Strimzi ships ten definitions and `charts/managed/kafka` renders two; committing the lot would be
+> megabytes of schema nothing reads. A kind a chart starts rendering is a kind the script starts
+> wanting, and the Bundle gate fails the build until `--refresh` has written it.
+
+> ⚠ **Two gates, because "consistent with the tree" and "consistent with the release" are different
+> questions.** The **Bundle** row checks offline that every operator-owned kind a chart renders has a
+> committed definition under the component that serves it, at the version the chart renders, and
+> that nothing else is committed. The **Definitions** row runs `crds.sh` — fetching every pinned
+> release, rendering it with the component's own `values:` through `helm template --include-crds`,
+> and comparing bytes — and reports ○ rather than ✔ when there is no Git bash, no `helm`, or no
+> network. A copy that drifted from the release would have the harness refusing what an *old*
+> operator refuses, which is the same hole one layer down.
+
+> ⚠ **What the fake still cannot see, so a green run is read for what it is.** `x-kubernetes-validations`
+> — CEL rules such as the Bucket's "versioning cannot return to Off" — need an evaluator this
+> repository does not have, and a transition rule needs the old object besides. `format` is not
+> checked beyond the type. An operator's admission webhook is not a definition and is not here. The
+> cluster-backed lane on a real k3s evaluates the CEL rules; the webhook stays for a cluster with the
+> operator installed. `bundle.yaml` § owed, `the-fake-does-not-evaluate-cel-rules`.
 
 ## The ordering rule, and which half a machine enforces
 

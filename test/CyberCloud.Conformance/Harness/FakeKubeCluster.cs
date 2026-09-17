@@ -9,14 +9,29 @@ namespace CyberCloud.Conformance.Harness;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>What this does not prove, stated first so it is not assumed.</b> It is a dictionary,
-///         not Kubernetes. It does not validate a manifest, does not run admission, does not do
-///         field-level server-side-apply ownership, and its <see cref="ApplyResult.Conflict" /> is
-///         a switch a test flips rather than a field another manager took. Everything that needs a
-///         real API server lives in <c>CyberCloud.Cluster.Conformance</c>, which runs the same
+///         ⚠ <b>What this does not prove, stated first so it is not assumed.</b> It is a dictionary
+///         with one schema check in front of it, not Kubernetes. It does not run admission
+///         webhooks, does not evaluate a definition's CEL rules, does not do field-level
+///         server-side-apply ownership, and its <see cref="ApplyResult.Conflict" /> is a switch a
+///         test flips rather than a field another manager took. Everything that needs a real API
+///         server lives in <c>CyberCloud.Cluster.Conformance</c>, which runs the same
 ///         <c>ProviderConformanceCase</c> against a k3s container — including the conflict, which is
 ///         there produced by a second field manager and the API server's own 409 rather than by
 ///         <see cref="ConflictOn" />.
+///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             It DOES validate a custom resource against the operator's real definition, since
+///             issue #91, and that is the one place it stopped being an echo for custom kinds.
+///         </b> <see cref="Admit" /> looks the kind up in <see cref="CommittedDefinitions" /> — the
+///         definitions <c>charts/bundle/crds.sh</c> commits from the release each bundle component
+///         pins — checks the version, plural and scope are served, applies the definition's
+///         defaults, and validates the body with <see cref="StructuralSchema" />. A refusal is a
+///         failed <see cref="Result" /> carrying the code <c>KubeFailures.Classify</c> would give the
+///         real answer and the API server's own sentence. Before that existed,
+///         <c>charts/managed/seaweedfs-bucket</c> rendered three fields in the wrong shape for a
+///         month under twenty-eight green assertions per run.
 ///     </para>
 ///     <para>
 ///         What it <i>does</i> prove is the half that is about <b>us</b>: that a reconciler applies
@@ -225,14 +240,24 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
             );
         }
 
+        // ⚠ THE REAL DEFINITION'S SCHEMA, WHEN ONE IS COMMITTED, AND THIS IS WHERE THE FAKE STOPS
+        // BEING A DICTIONARY. Issue #91: every custom resource was echoed for a month while three of
+        // one chart's fields were the wrong shape. See Admit.
+        var admitted = Admit(command.Target, command.Body);
+
+        if (admitted.TryGetError(out var refused)) {
+            return Task.FromResult(Result<ApplyOutcome>.Failure(refused.Code, refused.Message));
+        }
+
         var key = Key(command.Target);
         var existed = objects.ContainsKey(key);
         var unchanged = existed && hashes.TryGetValue(key, out var previous) && previous == command.ReconcileHash;
 
         // ⚠ A BUILT-IN OBJECT IS STORED WITHOUT ITS EMPTY COLLECTIONS, AND THAT IS THE ONE PLACE THIS
-        // STOPS BEING AN ECHO. A custom resource is echoed, because that is what a real API server
-        // does to one. See DropEmptyCollections' remarks.
-        objects[key] = WithUid(DropEmptyCollections(command.Target, command.Body), key);
+        // STOPS BEING AN ECHO. A custom resource is echoed — after the definition's defaults, when it
+        // has one — because that is what a real API server does to one. See DropEmptyCollections'
+        // remarks.
+        objects[key] = WithUid(DropEmptyCollections(command.Target, admitted.GetValueOrThrow()), key);
         hashes[key] = command.ReconcileHash;
         addresses[key] = command.Target;
 
@@ -426,6 +451,102 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         return Task.FromResult(Result.Success);
     }
 
+    /// <summary>
+    ///     What the API server does to an applied custom resource before it stores it: checks the
+    ///     kind is served at that version and scope, applies the definition's defaults, and validates
+    ///     the body against its structural schema. A built-in, or a custom kind with no committed
+    ///     definition, is echoed unchanged.
+    /// </summary>
+    /// <param name="target">Which object, whose group, version, kind, plural and scope are checked.</param>
+    /// <param name="body">The body the command carried.</param>
+    /// <returns>The body to store — defaulted when a definition applied — or the refusal.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the half of issue #91 that lives in the fake.</b> Until it existed the
+    ///         only schema a Docker-free conformance run ever met was none: <c>charts/managed/seaweedfs-bucket</c>
+    ///         rendered <c>clusterRef</c> as a string, <c>versioning</c> as a boolean and <c>quota</c>
+    ///         as a string from 2026-08-12 to 2026-09-15, and twenty-eight green assertions per run
+    ///         said nothing, because "the object matches what was applied" was true by construction.
+    ///         <see cref="CommittedDefinitions" /> holds the operator's real definition, fetched from
+    ///         the release the bundle pins, and <see cref="StructuralSchema" /> refuses what the
+    ///         operator's API server would refuse.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The codes are the ones <c>KubeFailures.Classify</c> would give the real answer.</b>
+    ///         A version the definition does not serve, a plural that is not its REST path, or a
+    ///         namespace on a cluster-scoped kind is a <c>404</c> with no object in it, which
+    ///         <c>Classify</c> reads as <see cref="ErrorCode.InvalidResourceType" /> — "the kind is
+    ///         missing from the cluster, not the object". A schema violation is the <c>422</c> or the
+    ///         typed-patch <c>500</c>, both <see cref="ErrorCode.InvalidRequestBody" />, and the
+    ///         message keeps the cluster's own sentence because that sentence is what names the
+    ///         field. A reconciler is judged on reading the code rather than retrying; the wording is
+    ///         for the person reading the red test.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Echo, not refusal, for a kind with no committed definition</b> — and the reason
+    ///         that is not the hole it looks like. A real API server answers 404 for an unserved
+    ///         kind, and a fake that did the same would refuse every test in the tree that applies a
+    ///         made-up kind to exercise the driver rather than a provider. What keeps a provider out
+    ///         of that gap is
+    ///         <c>ProviderConformanceTests.EveryCustomKindTheCaseRendersHasACommittedDefinition</c>,
+    ///         which fails a case whose <c>Objects</c> name a custom kind nothing under
+    ///         <c>charts/bundle/*/crds/</c> defines.
+    ///     </para>
+    /// </remarks>
+    Result<string> Admit(ObjectRef target, string body) {
+        if (CommittedDefinitions.Find(target.Kind) is not { } definition) {
+            return Result<string>.Success(body);
+        }
+
+        var cluster = clusterId.ToString("D", System.Globalization.CultureInfo.InvariantCulture);
+
+        if (!definition.Versions.TryGetValue(target.Kind.Version, out var version)
+            || !string.Equals(definition.Plural, target.Kind.Plural, StringComparison.Ordinal)
+            || definition.IsClusterScoped != target.IsClusterScoped) {
+            var served = string.Join(", ", definition.Versions.Keys.OrderBy(x => x, StringComparer.Ordinal));
+
+            return Result<string>.Failure(
+                ErrorCode.InvalidResourceType,
+                $"Cluster {cluster} does not serve {target.Kind.ApiVersion} {target.Kind.Kind} (as "
+                + $"{target.Kind.Plural}{(target.IsClusterScoped ? ", cluster-scoped" : ", namespaced")}), so "
+                + $"{target} cannot be applied. {definition.File} serves {definition.Kind} as "
+                + $"{definition.Plural}.{definition.Group} at {served}, "
+                + $"{(definition.IsClusterScoped ? "cluster-scoped" : "namespaced")}. The kind is missing "
+                + "from the cluster, not the object: install or upgrade the operator that provides it, then retry."
+            );
+        }
+
+        if (JsonNode.Parse(body) is not JsonObject document) {
+            return Result<string>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"Cluster {cluster} refused to apply {target} because the body is not a JSON object. The object was not written."
+            );
+        }
+
+        var causes = StructuralSchema.Admit(definition, version, document);
+
+        if (causes.Count == 0) {
+            return Result<string>.Success(document.ToJsonString());
+        }
+
+        // An undeclared field fails the typed-patch step before validation runs, and the API server
+        // reports only that; the shape is KubeFailures.TypedPatchFailurePrefix, which this
+        // repository measured as a 500 rather than a 422. Everything else is the 422's sentence.
+        var undeclared = causes.Where(x => x.EndsWith(": field not declared in schema", StringComparison.Ordinal)).ToList();
+
+        var message = undeclared.Count > 0
+            ? $"Cluster {cluster} refused to apply {target} because the API server could not type-check the "
+            + $"object the platform rendered: failed to create typed patch object ({target.Namespace}/{target.Name}; "
+            + $"{target.Kind.ApiVersion}, Kind={target.Kind.Kind}): {string.Join("; ", undeclared)}. The object was "
+            + "not written. This is a fault in the platform rather than in the request — a field the operator's "
+            + $"definition ({definition.File}) does not declare."
+            : $"Cluster {cluster} refused to apply {target}: {StructuralSchema.Describe(definition, target.Name, causes)}. "
+            + "The object was not written. This is a decision made by the cluster's own admission control, not a "
+            + $"fault in the platform — the message above comes from the operator's definition, {definition.File}.";
+
+        return Result<string>.Failure(ErrorCode.InvalidRequestBody, message);
+    }
+
     static Dictionary<string, string> LabelsOf(string json) {
         var labels = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -561,12 +682,13 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     ///         <c>omitempty</c> also drops an empty string, a zero number and a <see langword="false" />
     ///         boolean, and this drops none of those — which fields carry the tag lives in Go struct
     ///         tags this repository does not have, and guessing would break comparisons that are
-    ///         correct. Nor does it model the other direction at all: a real server ADDS a CRD's
-    ///         <c>+kubebuilder:default</c>, a <c>status</c> and <c>managedFields</c>, and this harness
-    ///         derives its CRD stub from <c>ProviderConformanceCase.Objects</c>, so a derived stub has
-    ///         no defaults and an equality-instead-of-containment bug still passes here. That one is
-    ///         covered by <c>CyberCloud.Cluster.Conformance</c> and by <c>KubeJson.Contains</c>, and
-    ///         by nothing in this class.
+    ///         correct. Nor does it model most of the other direction: a real server ADDS a
+    ///         <c>status</c> and <c>managedFields</c>, and this adds neither. What it does add, since
+    ///         issue #91, is a committed definition's <c>default</c>s — <see cref="Admit" /> applies
+    ///         them before it validates — so an equality-instead-of-containment bug against a
+    ///         defaulted field is red here as it is against k3s. The rest is covered by
+    ///         <c>CyberCloud.Cluster.Conformance</c> and by <c>KubeJson.Contains</c>, and by nothing
+    ///         in this class.
     ///     </para>
     /// </remarks>
     static string DropEmptyCollections(ObjectRef target, string body) {
@@ -585,7 +707,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     ///     added since is under a <c>.k8s.io</c> suffix, and that suffix is reserved, so a provider's
     ///     own CRD group cannot collide with this test.
     /// </remarks>
-    static bool IsBuiltIn(string group) =>
+    public static bool IsBuiltIn(string group) =>
         group.Length == 0
         || group.EndsWith(".k8s.io", StringComparison.Ordinal)
         || group is "apps" or "batch" or "autoscaling" or "policy" or "extensions";

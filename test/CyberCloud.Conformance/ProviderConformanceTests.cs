@@ -218,6 +218,70 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     }
 
     [Fact]
+    public void EveryCustomKindTheCaseRendersHasACommittedDefinition() {
+        // ⚠ THE FLOOR UNDER ISSUE #91. FakeKubeCluster validates a custom resource against the
+        // operator's real definition WHEN ONE IS COMMITTED under charts/bundle/*/crds/, and echoes it
+        // — accepts any shape — when none is. That echo is the state every custom kind was in while
+        // charts/managed/seaweedfs-bucket rendered three fields in the wrong shape for a month, so
+        // a provider must not be able to stay in it: every custom kind this case or its ancestors
+        // render has to be a kind crds.sh has written a definition for, at the version and plural and
+        // scope the case addresses it by. The fix for a red run is `./charts/bundle/crds.sh --refresh`
+        // after the chart under charts/managed/ renders the kind — the script derives what to fetch
+        // from the templates, so a kind a provider renders and no chart declares is a second finding.
+        var address = ProviderTestCluster<TSource>.Address("definitions").WithId(Guid.NewGuid());
+        var ns = ReconcileDriver.NamespaceFor(address);
+
+        var rendered = ProviderTestCluster<TSource>.Ancestors
+            .Select((ancestor, level) => ancestor.Objects(
+                    new ResourceId(
+                        address.TenantId,
+                        address.SubscriptionId,
+                        address.ResourceGroup,
+                        ancestor.Type,
+                        ConformanceIds.AncestorName(level),
+                        Guid.NewGuid(),
+                        string.Join('/', Enumerable.Range(0, level).Select(ConformanceIds.AncestorName))
+                    ),
+                    ns
+                )
+            )
+            .Aggregate(Case.Objects(address, ns).AsEnumerable(), (all, next) => all.Concat(next))
+            .Where(x => !FakeKubeCluster.IsBuiltIn(x.Kind.Group))
+            .DistinctBy(x => x.Kind.ApiVersion + "|" + x.Kind.Kind + "|" + x.Kind.Plural + "|" + x.IsClusterScoped)
+            .ToList();
+
+        foreach (var target in rendered) {
+            var definition = CommittedDefinitions.Find(target.Kind);
+
+            definition.ShouldNotBeNull(
+                $"{Case.DisplayName} renders {target.Kind} and no file under charts/bundle/*/crds/ defines "
+                + $"{target.Kind.Kind} in {target.Kind.Group}. Without it FakeKubeCluster echoes whatever the "
+                + "reconciler renders and this suite proves nothing about the shape — the state issue #91 "
+                + "found a live defect in. Make sure a chart under charts/managed/ renders the kind, then run "
+                + "`./charts/bundle/crds.sh --refresh` and commit what it writes."
+            );
+
+            definition.Versions.ContainsKey(target.Kind.Version).ShouldBeTrue(
+                $"{Case.DisplayName} renders {target.Kind} and {definition.File} serves it only at "
+                + $"{string.Join(", ", definition.Versions.Keys.OrderBy(x => x, StringComparer.Ordinal))}. "
+                + "A real API server would answer 404 for the version the reconciler addresses."
+            );
+
+            definition.Plural.ShouldBe(
+                target.Kind.Plural,
+                $"{Case.DisplayName} addresses {target.Kind.Kind} as `{target.Kind.Plural}` and {definition.File} "
+                + $"serves it as `{definition.Plural}`. The plural is the REST path; the wrong one is a 404."
+            );
+
+            definition.IsClusterScoped.ShouldBe(
+                target.IsClusterScoped,
+                $"{Case.DisplayName} renders {target.Kind.Kind} {(target.IsClusterScoped ? "cluster-scoped" : "namespaced")} "
+                + $"and {definition.File} declares scope {(definition.IsClusterScoped ? "Cluster" : "Namespaced")}."
+            );
+        }
+    }
+
+    [Fact]
     public async Task AnUnknownApiVersionIsRefusedAndTheErrorNamesTheOnesThatExist() {
         // docs/plan/08 § The provider registry: api-versions are dates and they are immutable. There
         // is no "latest", so a caller who guesses must be told what to ask for.

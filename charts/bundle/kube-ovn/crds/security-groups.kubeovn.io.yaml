@@ -1,0 +1,157 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: security-groups.kubeovn.io
+spec:
+  group: kubeovn.io
+  names:
+    kind: SecurityGroup
+    listKind: SecurityGroupList
+    plural: security-groups
+    shortNames:
+    - sg
+    singular: security-group
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              allowSameGroupTraffic:
+                description: Allow traffic between pods in the same security group
+                type: boolean
+              egressRules:
+                description: Egress traffic rules for the security group
+                items:
+                  properties:
+                    ipVersion:
+                      description: IP version (IPv4 or IPv6)
+                      type: string
+                    localAddress:
+                      description: Local address or CIDR
+                      type: string
+                    policy:
+                      description: Policy action (allow, pass or deny)
+                      type: string
+                    portRangeMax:
+                      description: End of port range (1-65535)
+                      type: integer
+                    portRangeMin:
+                      description: Start of port range (1-65535)
+                      type: integer
+                    priority:
+                      description: Rule priority (1-16384)
+                      type: integer
+                    protocol:
+                      description: Protocol (tcp, udp, icmp, or all)
+                      type: string
+                    remoteAddress:
+                      description: Remote address or CIDR
+                      type: string
+                    remoteSecurityGroup:
+                      description: Remote security group name
+                      type: string
+                    remoteType:
+                      description: Type of remote (address, cidr, or securityGroup)
+                      type: string
+                    sourcePortRangeMax:
+                      description: End of source port range (1-65535)
+                      type: integer
+                    sourcePortRangeMin:
+                      description: Start of source port range (1-65535)
+                      type: integer
+                  type: object
+                type: array
+              ingressRules:
+                description: Ingress traffic rules for the security group
+                items:
+                  properties:
+                    ipVersion:
+                      description: IP version (IPv4 or IPv6)
+                      type: string
+                    localAddress:
+                      description: Local address or CIDR
+                      type: string
+                    policy:
+                      description: Policy action (allow, pass or deny)
+                      type: string
+                    portRangeMax:
+                      description: End of port range (1-65535)
+                      type: integer
+                    portRangeMin:
+                      description: Start of port range (1-65535)
+                      type: integer
+                    priority:
+                      description: Rule priority (1-16384)
+                      type: integer
+                    protocol:
+                      description: Protocol (tcp, udp, icmp, or all)
+                      type: string
+                    remoteAddress:
+                      description: Remote address or CIDR
+                      type: string
+                    remoteSecurityGroup:
+                      description: Remote security group name
+                      type: string
+                    remoteType:
+                      description: Type of remote (address, cidr, or securityGroup)
+                      type: string
+                    sourcePortRangeMax:
+                      description: End of source port range (1-65535)
+                      type: integer
+                    sourcePortRangeMin:
+                      description: Start of source port range (1-65535)
+                      type: integer
+                  type: object
+                type: array
+              tier:
+                description: ACL tier to which the rules are added
+                type: integer
+            type: object
+          status:
+            properties:
+              allowSameGroupTraffic:
+                description: Current allow same group traffic setting
+                type: boolean
+              egressLastSyncSuccess:
+                description: Last egress sync success status
+                type: boolean
+              egressMd5:
+                description: MD5 hash of egress rules
+                type: string
+              ingressLastSyncSuccess:
+                description: Last ingress sync success status
+                type: boolean
+              ingressMd5:
+                description: MD5 hash of ingress rules
+                type: string
+              portGroup:
+                description: OVN port group name
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -247,3 +247,31 @@ owed:
       SupportsSoftDelete(7) from this type until one of the two exists, on the same argument
       PostgresProvider already makes in its own remarks: "a recovery window the platform does not
       honour is a promise made" to a tenant who will find out when they use it.
+  - id: backup-destination-is-not-filled-in
+    says: >
+      ⚠ FOUND BY #91 ON THE FIRST CONFORMANCE RUN THAT VALIDATED AGAINST CLOUDNATIVEPG'S REAL
+      DEFINITION, AND IT WAS EVERY DEFAULT-BODIED SERVER. The schema defaults backup.enabled to true
+      and destinationPath to "" — "Empty means the platform fills it in from the tenant's default
+      bucket", the description said — and ClusterJson rendered the pair as
+      `spec.backup.barmanObjectStore.destinationPath: ""`, which
+      charts/bundle/cloudnative-pg/crds/clusters.postgresql.cnpg.io.yaml refuses with `minLength: 1`.
+      Nothing fills it in: no code reads a tenant's default bucket, and there is no such bucket to
+      read. FakeKubeCluster echoed the object, so twelve assertions per run were green over a Cluster
+      no API server would have stored; against a cluster the bundle installed, every server created
+      with the defaults would have failed its first pass with the operator's field named and no hint
+      that the tenant's own property was the one to set.
+      WHAT CLOSED THE REFUSAL: PostgresServerReconciler asks PostgresServers.BackupDestinationProblem
+      before it applies anything and fails the pass — terminal, InvalidRequestBody, target
+      /properties/backup/destinationPath — with a sentence naming both moves that fix it: name an
+      s3://bucket/prefix, or set backup.enabled false. The description now says so, and
+      PostgresServers.Body names a destination so every suite converges a body the definition admits.
+      PostgresReconcilerTests.BackupsOnWithNoDestinationAreRefusedBeforeAnythingIsAppliedAndNameTheProperty
+      pins the refusal, the empty apply list, and the no-backup body rendering no backup block.
+      WHAT IS STILL OWED: the promise. A tenant who takes the defaults gets a refused operation
+      rather than a backed-up server, and the "default bucket" it names does not exist. Closing it is
+      either a platform-owned object store the reconciler can address on the tenant's behalf — a
+      CyberCloud.Storage/accounts the platform creates, with credentials the Cluster can mount —
+      which is docs/plan/15's work and not this chart's, or a new api-version whose default is
+      backup.enabled: false, which trades a refusal for a silence and is the worse trade on a
+      database. The default stays as published because a default is part of an immutable
+      api-version's contract; what changed is what the empty string means.

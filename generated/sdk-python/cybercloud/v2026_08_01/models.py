@@ -2638,7 +2638,7 @@ class PostgreSQLServerData:
         class Backup:
             """Backup to the tenant's object store, using CloudNativePG's barman-cloud."""
 
-            # Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.
+            # Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.
             destination_path: Optional[str] = None
             # Whether continuous backup and WAL archiving run.
             enabled: Optional[bool] = None

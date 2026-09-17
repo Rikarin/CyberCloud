@@ -463,6 +463,36 @@ public sealed class PostgresReconcilerTests {
     }
 
     [Fact]
+    public async Task BackupsOnWithNoDestinationAreRefusedBeforeAnythingIsAppliedAndNameTheProperty() {
+        // ⚠ ISSUE #91's FINDING FOR THIS FAMILY. The schema's own defaults — backup.enabled true,
+        // destinationPath "" — rendered `spec.backup.barmanObjectStore.destinationPath: ""`, which
+        // CloudNativePG's definition refuses (minLength 1), and FakeKubeCluster echoed for a month.
+        // The refusal is the reconciler's now, before the apply, terminal, and it names the tenant's
+        // property rather than the operator's field.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId, backupDestination: string.Empty));
+
+        var outcome = await Reconcile(connection, desired.RootElement);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeFalse("the body says the same thing on every pass");
+        outcome.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        outcome.Error.Target.ShouldBe("/properties/backup/destinationPath");
+        outcome.Error.Message.ShouldContain("/properties/backup/enabled to false");
+        connection.Applied.ShouldBeEmpty("a refused server must leave no half-built Cluster behind");
+
+        // Backups off and no destination is a body the definition admits: no backup block at all.
+        var body = JsonNode.Parse(PostgresServers.Body(ClusterId, backupDestination: string.Empty))!.AsObject();
+        body["properties"]!["backup"]!["enabled"] = false;
+        using var withoutBackups = JsonDocument.Parse(body.ToJsonString());
+
+        await Reconcile(connection, withoutBackups.RootElement);
+
+        connection.Applied.ShouldNotBeEmpty();
+        Spec(connection.Applied[0].Body).ContainsKey("backup").ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task AsynchronousReplicationRendersNoSynchronousBlockAtAll() {
         // ⚠ The CRD has no "asynchronous" member — asynchronous IS the absence of the block. Writing
         // an empty one would put the field under this field manager's ownership forever under

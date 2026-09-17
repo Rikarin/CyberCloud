@@ -37,8 +37,10 @@ inherited-review: charts/managed/seaweedfs/SOURCE, reviewed 2026-08-12
 # ⚠ RE-READ 2026-09-15 AGAINST `api/v1/bucket_types.go` AT seaweedfs-operator-0.1.38 — THE TAG
 # charts/bundle/seaweedfs-operator PINS — AND THE PARAGRAPH ABOVE WAS RIGHT TO BE WORRIED. THREE OF THE
 # FOUR RENDERED FIELDS HAD THE WRONG SHAPE, and every Bucket this chart rendered for a month would have
-# been refused by the real CRD's schema. The stub the cluster suite derives has an open schema, which
-# is why a month of green runs met no refusal. What the struct actually says:
+# been refused by the real CRD's schema. The stub the cluster suite derived had an open schema, which
+# is why a month of green runs met no refusal — issue #91 closed that: the real definition is
+# committed at charts/bundle/seaweedfs-operator/crds/buckets.seaweed.seaweedfs.com.yaml and both
+# suites validate against it. What the struct actually says:
 #
 #   * `clusterRef` is `BucketClusterRef{name string (required, minLength 1), namespace string}` —
 #     an OBJECT. Rendered `clusterRef: {name: …}` now.

@@ -268,9 +268,26 @@ owed:
       was ever Enabled, which a pure function of the body cannot. Closing it is a three-state
       property on a new api-version, or Immutable on the flag at the same new date.
   - id: rendered-shape-was-never-checked-against-the-real-crd
+    status: closed
+    closed: 2026-09-18
     says: >
-      ⚠ THE FINDING BEHIND THE THREE CORRECTIONS OF 2026-09-15, AND IT IS THE HARNESS'S RATHER THAN
-      THIS TYPE'S. ProviderConformanceCase's remarks say it in as many words — a derived stub "does
+      ⚠ CLOSED BY #91, AND NOT IN THE SHAPE THE PARAGRAPH BELOW PREDICTED. It asked for "a case
+      [that] may carry the operator's real CRD beside the derived stub" — a per-provider member, which
+      is the RequiredCrds design ProviderConformanceCase's remarks reject for being under-declarable.
+      What landed is derived instead: charts/bundle/crds.sh reads every kind charts/managed/ renders,
+      fetches the real definition from the release the component pins, and commits it as
+      charts/bundle/seaweedfs-operator/crds/buckets.seaweed.seaweedfs.com.yaml; FakeKubeCluster
+      validates EVERY apply against the committed definition (test/CyberCloud.Conformance
+      § StructuralSchema — the three corrections are the regression pin, StructuralSchemaTests, and
+      each is refused with the field named); ClusterConformanceHarness installs the same bytes into
+      k3s instead of the open stub; and two gate rows hold the files to the tree (Bundle) and to the
+      pinned release (Definitions, byte for byte, ○ offline). The first run over every family found
+      one more of this class — charts/managed/postgres/conformance.yaml § owed,
+      `backup-destination-is-not-filled-in` — and none in the other thirteen. What the fake still
+      cannot see is the definition's CEL rules, `versioning-cannot-be-turned-off` above among them;
+      charts/bundle/bundle.yaml § owed, `the-fake-does-not-evaluate-cel-rules`.
+      WHAT IT WAS: ⚠ THE FINDING BEHIND THE THREE CORRECTIONS OF 2026-09-15, AND IT IS THE HARNESS'S
+      RATHER THAN THIS TYPE'S. ProviderConformanceCase's remarks say it in as many words — a derived stub "does
       NOT prove the rendered spec satisfies the operator's schema. Nothing in this repository checks
       that today" — and this chart is the first in the tree for which that gap held a live defect:
       every Bucket rendered between 2026-08-12 and 2026-09-15 would have been refused by the real

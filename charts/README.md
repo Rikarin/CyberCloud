@@ -71,7 +71,10 @@ group to satisfy the check.
 > form of "the k3s the cluster suite starts has no `<X>` operator" and read it as a limitation of the
 > test harness. It was not. `test/CyberCloud.Cluster.Conformance` says the same thing in its own
 > remarks — *"the platform cluster installs its CRDs from `charts/bundle/` long before a tenant creates
-> one"* — which is why that harness derives CRD stubs rather than installing real ones.
+> one"* — which is why that harness derived CRD stubs rather than installing real ones, until issue
+> #91: the real definitions are committed under `charts/bundle/<component>/crds/` now, the fake API
+> server validates every apply against them, and the cluster lane installs them —
+> `charts/bundle/README.md` § The definitions the harness validates against.
 
 **Nothing under `bundle/` has a `Chart.yaml`, and that is a decision rather than an omission.** The
 `Build.Charts` pipeline above exists to describe *a resource type's configuration surface*; a bundle

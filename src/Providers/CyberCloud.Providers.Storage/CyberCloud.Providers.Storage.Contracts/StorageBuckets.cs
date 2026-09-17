@@ -480,7 +480,7 @@ public static class StorageBuckets {
             // ⚠ AN OBJECT, NOT A STRING — CORRECTED 2026-09-15. This rendered `clusterRef: "media"`
             // for a month on evidence charts/managed/seaweedfs-bucket/SOURCE itself labelled weak,
             // and api/v1/bucket_types.go at operator 0.1.38 spells BucketClusterRef as
-            // {name, namespace}. The stub CRD the cluster suite derives has an open schema, which is
+            // {name, namespace}. The stub CRD the cluster suite derived had an open schema (until issue #91), which is
             // why a month of green runs never met the refusal a real operator's CRD gives every
             // Bucket rendered the old way.
             ["clusterRef"] = new JsonObject { ["name"] = ClusterRefOf(id) },

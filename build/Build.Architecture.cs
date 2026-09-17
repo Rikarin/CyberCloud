@@ -183,7 +183,9 @@ partial class Build {
         ("Code citations",
             "every <c>…Tests</c> and <c>…Tests.Method</c> in a tracked file names something this repository compiles — not in docs/plan/23"),
         ("Bundle",
-            "every charts/bundle/ component declares a complete pin on ADR-011's allow-list, and every group/version charts/managed/ renders is served by exactly one of them — not in docs/plan/23"),
+            "every charts/bundle/ component declares a complete pin on ADR-011's allow-list, every group/version charts/managed/ renders is served by exactly one of them, and every operator-owned kind a chart renders has its real definition committed under that component's crds/ — not in docs/plan/23"),
+        ("Definitions",
+            "every charts/bundle/*/crds/*.yaml is byte-identical to the release its component pins, fetched by charts/bundle/crds.sh; ○ with the reason when offline or without helm, never ✔. Issue #91; not in docs/plan/23"),
         ("Log egress",
             "only CyberCloud.ServiceDefaults binds a Serilog type, and no appsettings file declares a sink, so SecretScrubbingSink wraps every one — not in docs/plan/23")
     ];
@@ -270,8 +272,8 @@ partial class Build {
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
             + "Generated SDK compiles, Generated Python SDK compiles, Generated Go SDK compiles, "
-            + "Action handlers, Analyzer coverage, Plan citations, Code citations, Bundle and Log "
-            + "egress, which that table does not list",
+            + "Action handlers, Analyzer coverage, Plan citations, Code citations, Bundle, Definitions "
+            + "and Log egress, which that table does not list",
             ArchitectureGates.Length
         );
 
@@ -294,6 +296,7 @@ partial class Build {
             PlanCitationGate(),
             CodeCitationGate(),
             BundleGate(),
+            DefinitionsGate(),
             LogEgressGate()
         };
 
